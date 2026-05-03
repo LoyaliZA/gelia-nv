@@ -13,6 +13,10 @@ return new class extends Migration
     {
         Schema::create('catalogo_procesos', function (Blueprint $table) {
             $table->id();
+            // Ej: CAMBIO DE LISTA, ASIGNAR CLIENTE NUEVO
+            $table->string('nombre')->unique();
+            $table->string('descripcion')->nullable();
+            $table->boolean('activo')->default(true);
             $table->timestamps();
         });
     }

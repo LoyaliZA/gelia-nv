@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class SolicitudTag extends Model
+{
+    use SoftDeletes;
+
+    // Explicitamos la tabla ya que Laravel en plural podría buscar "solicitud_tags"
+    protected $table = 'solicitudes_tags';
+
+    protected $fillable = [
+        'cliente_id',
+        'vendedor_id',
+        'catalogo_proceso_id',
+        'catalogo_estado_solicitud_id',
+        'monto_cotizado',
+        'pago_confirmado',
+        'observaciones_vendedor'
+    ];
+
+    protected $casts = [
+        'monto_cotizado' => 'decimal:2',
+        'pago_confirmado' => 'boolean',
+    ];
+
+    // Relaciones (BelongsTo) hacia los catálogos y entidades
+    public function cliente(): BelongsTo { return $this->belongsTo(Cliente::class); }
+    public function vendedor(): BelongsTo { return $this->belongsTo(User::class, 'vendedor_id'); }
+    public function proceso(): BelongsTo { return $this->belongsTo(CatalogoProceso::class, 'catalogo_proceso_id'); }
+    public function estado(): BelongsTo { return $this->belongsTo(CatalogoEstadoSolicitud::class, 'catalogo_estado_solicitud_id'); }
+
+    /**
+     * Relación: Una solicitud tiene un historial de auditorías
+     */
+    public function auditorias(): HasMany
+    {
+        return $this->hasMany(AuditoriaSolicitud::class, 'solicitud_id');
+    }
+}
