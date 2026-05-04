@@ -44,24 +44,17 @@ class StoreSolicitudRequest extends FormRequest
                 $numeroCliente = $this->input('numero_cliente');
                 $procesoId = $this->input('catalogo_proceso_id');
 
-                if (!$numeroCliente || !$procesoId) {
-                    return;
-                }
+                if (!$numeroCliente || !$procesoId) return;
 
                 $cliente = Cliente::where('numero_cliente', $numeroCliente)->first();
                 $proceso = CatalogoProceso::find($procesoId);
 
-                if ($cliente && $proceso) {
-                    $esProcesoNormal = in_array($proceso->nombre, [
-                        'ASIGNAR CLIENTE REACTIVADO',
-                        'ASIGNAR CLIENTE REACTIVADO Y CAMBIO DE LISTA'
-                    ]);
-
-                    // Validar la regla de negocio
-                    if ($cliente->es_heredado && $esProcesoNormal) {
+                if ($cliente && $proceso && $cliente->es_heredado) {
+                    // Validamos explícitamente usando la palabra clave de reactivación normal
+                    if ($proceso->nombre === 'ASIGNAR CLIENTE REACTIVADO' || $proceso->nombre === 'ASIGNAR CLIENTE REACTIVADO Y CAMBIO DE LISTA') {
                         $validator->errors()->add(
                             'catalogo_proceso_id',
-                            'Alerta: Este es un cliente heredado. No puede seleccionar una reactivación normal, debe seleccionar la opción correspondiente a Heredados.'
+                            'ALERTA: Este es un cliente heredado. Por favor, selecciona el proceso específico para clientes heredados.'
                         );
                     }
                 }

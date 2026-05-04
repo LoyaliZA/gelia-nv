@@ -14,22 +14,22 @@ class ListarSolicitudesService
      *
      * @param User|null $usuario El usuario autenticado (puede ser nulo si no hay sesión)
      * @param array $filtros Filtros provenientes de la URL
-     * @return LengthAwarePaginator
+     * @param bool $paginar Define si el resultado debe ser paginado (true) o la colección completa (false)
+     * @return LengthAwarePaginator|\Illuminate\Database\Eloquent\Collection
      */
-    public function ejecutar(?User $usuario, array $filtros = []): LengthAwarePaginator
+    public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
     {
         $query = SolicitudTag::with(['cliente', 'vendedor', 'proceso', 'estado'])
             ->orderBy('created_at', 'desc'); 
 
-        // Lógica de aislamiento por roles (Verificamos que $usuario no sea nulo primero)
         if ($usuario && $usuario->hasRole('Vendedor')) {
             $query->where('vendedor_id', $usuario->id);
         }
 
-        // Aplicación de filtros dinámicos
         $this->aplicarFiltros($query, $filtros);
 
-        return $query->paginate(15);
+        // Si es para la web, paginamos. Si es para exportar a Excel, traemos todo.
+        return $paginar ? $query->paginate(15) : $query->get();
     }
 
     /**
@@ -37,16 +37,49 @@ class ListarSolicitudesService
      */
     private function aplicarFiltros(Builder $query, array $filtros): void
     {
+        // Filtro por Estado
         if (!empty($filtros['estado_id'])) {
             $query->where('catalogo_estado_solicitud_id', $filtros['estado_id']);
         }
 
-        if (!empty($filtros['cliente_numero'])) {
+        // Filtro por Tipo de Proceso
+        if (!empty($filtros['proceso_id'])) {
+            $query->where('catalogo_proceso_id', $filtros['proceso_id']);
+        }
+
+        // Filtro por Vendedora (Útil para Encargada/Auxiliar)
+        if (!empty($filtros['vendedor_id'])) {
+            $query->where('vendedor_id', $filtros['vendedor_id']);
+        }
+
+        // Filtro por Fecha Exacta o Rango
+        if (!empty($filtros['fecha_inicio']) && !empty($filtros['fecha_fin'])) {
+            $query->whereBetween('created_at', [$filtros['fecha_inicio'] . ' 00:00:00', $filtros['fecha_fin'] . ' 23:59:59']);
+        } elseif (!empty($filtros['fecha_inicio'])) {
+            $query->whereDate('created_at', $filtros['fecha_inicio']);
+        }
+
+        // Filtro por Mes
+        if (!empty($filtros['mes'])) {
+            $query->whereMonth('created_at', $filtros['mes']);
+            if (!empty($filtros['anio'])) {
+                $query->whereYear('created_at', $filtros['anio']);
+            }
+        }
+
+        // Filtro en Relaciones (Cliente)
+        if (!empty($filtros['cliente_numero']) || !empty($filtros['cliente_nombre']) || isset($filtros['es_heredado'])) {
             $query->whereHas('cliente', function ($q) use ($filtros) {
-                $q->where('numero_cliente', $filtros['cliente_numero']);
+                if (!empty($filtros['cliente_numero'])) {
+                    $q->where('numero_cliente', 'like', '%' . $filtros['cliente_numero'] . '%');
+                }
+                if (!empty($filtros['cliente_nombre'])) {
+                    $q->where('nombre', 'like', '%' . $filtros['cliente_nombre'] . '%');
+                }
+                if (isset($filtros['es_heredado']) && $filtros['es_heredado'] !== '') {
+                    $q->where('es_heredado', clone $filtros['es_heredado']);
+                }
             });
         }
-        
-        // Aquí se pueden agregar más filtros como fechas, vendedoras específicas, etc.
     }
 }

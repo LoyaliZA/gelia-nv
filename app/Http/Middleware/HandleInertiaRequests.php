@@ -35,15 +35,14 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
-        
-        $configuracion = $user ? ConfiguracionUsuario::where('user_id', $user->id)->first() : null;
+        $configuracion = $user ? \App\Models\ConfiguracionUsuario::where('user_id', $user->id)->first() : null;
 
         return [
             ...parent::share($request),
             'auth' => [
                 'user' => $user ? array_merge($user->toArray(), [
-                    // Extraemos los nombres de los roles usando Spatie
                     'roles' => $user->getRoleNames(), 
+                    'permissions' => $user->getAllPermissions()->pluck('name'), // Permisos atómicos inyectados
                 ]) : null,
                 'tema_visual' => $configuracion ? $configuracion->tema_visual : null,
             ],
