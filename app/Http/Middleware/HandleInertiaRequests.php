@@ -36,13 +36,15 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
         
-        // Obtenemos la configuración si existe
         $configuracion = $user ? ConfiguracionUsuario::where('user_id', $user->id)->first() : null;
 
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $user,
+                'user' => $user ? array_merge($user->toArray(), [
+                    // Extraemos los nombres de los roles usando Spatie
+                    'roles' => $user->getRoleNames(), 
+                ]) : null,
                 'tema_visual' => $configuracion ? $configuracion->tema_visual : null,
             ],
             'flash' => [

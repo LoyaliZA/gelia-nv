@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GELIA</title>
     
+    <!-- Aquí inyectamos las rutas de Laravel para que React las pueda usar -->
+    @routes
+
     <!-- Directivas esenciales de Vite e Inertia -->
     @viteReactRefresh
     @vite(['resources/css/app.css', 'resources/js/app.jsx'])
