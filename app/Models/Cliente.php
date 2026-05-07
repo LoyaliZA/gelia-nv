@@ -9,26 +9,25 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Cliente extends Model
 {
-    use SoftDeletes; // Permite borrado lógico
+    use SoftDeletes;
 
-    // Variables seguras para asignación masiva
     protected $fillable = [
         'numero_cliente',
         'nombre',
         'lista_actual_id',
         'vendedor_id',
+        'vendedor_original_id', // Agregado a la asignación masiva
         'monto_venta_actual',
         'es_heredado'
     ];
 
-    // Casteo de variables para asegurar el tipo de dato
     protected $casts = [
         'monto_venta_actual' => 'decimal:2',
         'es_heredado' => 'boolean',
     ];
 
     /**
-     * Relación: Un cliente pertenece a un vendedor (Usuario)
+     * Relación: La vendedora que atiende actualmente al cliente.
      */
     public function vendedor(): BelongsTo
     {
@@ -36,16 +35,18 @@ class Cliente extends Model
     }
 
     /**
-     * Relación: Un cliente pertenece a una lista de descuento
+     * Relación: La vendedora que prospectó originalmente al cliente (Para cálculo de comisiones residuales).
      */
+    public function vendedorOriginal(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'vendedor_original_id');
+    }
+
     public function listaDescuento(): BelongsTo
     {
         return $this->belongsTo(CatalogoListaDescuento::class, 'lista_actual_id');
     }
 
-    /**
-     * Relación: Un cliente puede tener muchas solicitudes
-     */
     public function solicitudes(): HasMany
     {
         return $this->hasMany(SolicitudTag::class);

@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 
@@ -13,41 +12,66 @@ class RolesSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Población de permisos granulares
+        // 1. POBLACIÓN DE PERMISOS POR MÓDULOS (Nomenclatura modulo.accion)
         $permisos = [
-            'crear_solicitud',
-            'confirmar_pago',
-            'verificar_auxiliar',
-            'ejecutar_tags',
-            'gestionar_usuarios',
-            'cargar_clientes_masivo',
-            'ver_auditoria'
+            // Módulo: Solicitudes
+            'solicitudes.ver_listado',
+            'solicitudes.ver_detalle',
+            'solicitudes.crear',
+            'solicitudes.editar',
+            'solicitudes.verificar',
+            'solicitudes.reportar',
+            
+            // Módulo: Clientes
+            'clientes.ver',
+            'clientes.crear',
+            'clientes.carga_masiva',
+            
+            // Módulo: Usuarios y Configuración
+            'configuracion.ver_auditoria',
+            'usuarios.gestionar',
         ];
 
         foreach ($permisos as $permiso) {
             Permission::firstOrCreate(['name' => $permiso]);
         }
 
-        // 2. Creación de Roles y asignación de paquetes de permisos
+        // 2. ROLES DE JERARQUÍA (Estructura de RRHH)
         $roleSuperAdmin = Role::firstOrCreate(['name' => 'Super Admin']);
         $roleSuperAdmin->givePermissionTo(Permission::all());
 
         $roleAdmin = Role::firstOrCreate(['name' => 'Administrador']);
         $roleAdmin->givePermissionTo(Permission::all());
 
-        $roleVendedor = Role::firstOrCreate(['name' => 'Vendedor']);
-        $roleVendedor->givePermissionTo(['crear_solicitud', 'confirmar_pago']);
+        $roleGerente = Role::firstOrCreate(['name' => 'Gerente']);
+        $roleGerente->givePermissionTo([
+            'solicitudes.ver_listado',
+            'solicitudes.ver_detalle',
+            'solicitudes.reportar',
+            'configuracion.ver_auditoria'
+        ]);
 
-        $roleEncargado = Role::firstOrCreate(['name' => 'Encargado de TAGS']);
-        $roleEncargado->givePermissionTo(['ejecutar_tags', 'ver_auditoria']);
+        $roleColaborador = Role::firstOrCreate(['name' => 'Colaborador']);
+        // El colaborador por defecto tiene permisos mínimos de visualización
+        $roleColaborador->givePermissionTo([
+            'solicitudes.ver_listado'
+        ]);
 
-        $roleAuxiliar = Role::firstOrCreate(['name' => 'Auxiliar']);
-        $roleAuxiliar->givePermissionTo(['verificar_auxiliar', 'ver_auditoria', 'cargar_clientes_masivo']);
+        // 3. ROLES OPERATIVOS (Grupos de Permisos Funcionales)
+        $grupoVendedor = Role::firstOrCreate(['name' => 'Grupo: Vendedor']);
+        $grupoVendedor->givePermissionTo([
+            'solicitudes.crear',
+            'clientes.ver',
+            'clientes.crear'
+        ]);
 
-        $roleContador = Role::firstOrCreate(['name' => 'Contador']);
-        // Asignar permisos futuros de contabilidad aquí
+        $grupoVerificador = Role::firstOrCreate(['name' => 'Grupo: Verificador']);
+        $grupoVerificador->givePermissionTo([
+            'solicitudes.verificar',
+            'solicitudes.ver_detalle'
+        ]);
 
-        // 3. Crear usuario Super Admin (Entorno de pruebas)
+        // 4. CREACIÓN DE USUARIO PRUEBA
         $superAdmin = User::firstOrCreate(
             ['email' => 'realloyal1a@gmail.com'],
             [

@@ -1,269 +1,383 @@
 import React, { useState, useEffect } from 'react';
 import { Head, useForm } from '@inertiajs/react';
-import { animate } from 'animejs';
+import { animate } from 'animejs/animation';
 import { 
     Users, UserPlus, Search, Edit3, Trash2, 
-    ShieldCheck, X, Briefcase, Key
+    ShieldCheck, X, Briefcase, Key, Check, MapPin, 
+    Mail, User, ShieldAlert, ChevronRight, Lock, Smartphone, Save
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
-export default function Usuarios({ auth, usuarios = [] }) {
+export default function Usuarios({ auth, usuarios = [], departamentos = [], roles = [], todosLosPermisos = [] }) {
+    // --- SECCIÓN: ESTADOS LOCALES ---
     const [busqueda, setBusqueda] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [usuarioEditando, setUsuarioEditando] = useState(null);
 
-    // 1. SIMULACIÓN DE CATÁLOGOS
-    const catalogoRoles = [
-        { id: 2, name: 'Administrador' },
-        { id: 3, name: 'Vendedor' },
-        { id: 4, name: 'Encargado de TAGS' },
-        { id: 5, name: 'Auxiliar' },
-        { id: 6, name: 'Contador' }
-    ];
-
-    const catalogoPermisos = [
-        { id: 'verificar_solicitud', label: 'Verificar Solicitudes' },
-        { id: 'gestionar_tags', label: 'Ejecutar TAGS' },
-        { id: 'confirmar_pago', label: 'Confirmar Pagos' },
-        { id: 'cargar_clientes_masivo', label: 'Carga Masiva Wizerp' },
-        { id: 'configurar_comisiones', label: 'Ajustar Tabuladores' }
-    ];
-
-    // 2. DATOS SIMULADOS
-    const datosSimulados = usuarios.length > 0 ? usuarios : [
-        {
-            id: 1,
-            name: 'Monica Camacho',
-            email: 'admin@moondev.com',
-            telefono: '9931234567',
-            roles: [5, 6],
-            permisos: ['cargar_clientes_masivo', 'configurar_comisiones']
-        },
-        {
-            id: 2,
-            name: 'Gabriel Admin',
-            email: 'realloyal1a@gmail.com',
-            telefono: '0000000000',
-            roles: [2],
-            permisos: ['confirmar_pago']
-        }
-    ];
-
+    // --- SECCIÓN: FORMULARIO DE INERTIA CON LIMPIEZA DE ESPACIOS ---
     const { data, setData, post, put, processing, reset } = useForm({
         name: '',
+        apellido_paterno: '',
+        apellido_materno: '',
+        username: '',
         email: '',
+        password: '',
         telefono: '',
-        roles: [],
-        permisos: [],
+        area_id: '',
+        roles_asignados: [], 
+        permisos_individuales: [] 
     });
+    
+    // --- LÓGICA DE PERMISOS BLINDADA ---
+    const permisoHeredado = (permisoName) => {
+        const asignados = data.roles_asignados || [];
+        return (roles || [])
+            .filter(r => asignados.includes(r.name))
+            .some(r => (r.permissions || []).some(p => p.name === permisoName));
+    };
 
+    const permisosAgrupados = (todosLosPermisos || []).reduce((acc, p) => {
+        const modulo = p?.name?.split('.')[0] || 'Otros';
+        if (!acc[modulo]) acc[modulo] = [];
+        acc[modulo].push(p);
+        return acc;
+    }, {});
+
+    // --- ANIMACIONES ---
     useEffect(() => {
-        animate('.fade-up', {
-            translateY: [20, 0],
+        animate('.fade-in-user', {
             opacity: [0, 1],
+            translateY: [10, 0],
+            delay: (el, i) => i * 50,
             easing: 'easeOutExpo',
-            duration: 700,
-            delay: (el, i) => i * 100
+            duration: 600
         });
-    }, [busqueda]);
+    }, [usuarios]);
 
-    const openModal = (usuario = null) => {
+    // --- FILTRADO ---
+    const usuariosFiltrados = (usuarios || []).filter(user => 
+        (user.name || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+        (user.email || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+        (user.username && user.username.toLowerCase().includes(busqueda.toLowerCase()))
+    );
+
+    const rolesJerarquia = (roles || []).filter(rol => rol?.name && !rol.name.includes('Grupo:'));
+
+    // --- MANEJADORES DE EVENTOS ---
+    const abrirModal = (usuario = null) => {
+        setUsuarioEditando(usuario);
         if (usuario) {
-            setUsuarioEditando(usuario);
             setData({
-                name: usuario.name,
-                email: usuario.email,
-                telefono: usuario.telefono || '',
-                roles: usuario.roles || [],
-                permisos: usuario.permisos || [],
+                name: (usuario.name || '').trim(),
+                apellido_paterno: (usuario.apellido_paterno || '').trim(),
+                apellido_materno: (usuario.apellido_materno || '').trim(),
+                username: (usuario.username || '').trim(),
+                email: (usuario.email || '').trim(),
+                password: '', 
+                telefono: (usuario.telefono || '').trim(),
+                area_id: usuario.area_id || '',
+                roles_asignados: usuario.roles ? usuario.roles.map(r => r.name) : [],
+                permisos_individuales: usuario.permissions ? usuario.permissions.map(p => p.name) : []
             });
         } else {
-            setUsuarioEditando(null);
             reset();
         }
         setShowModal(true);
     };
 
-    const handleArrayChange = (campo, id) => {
-        const nuevoArray = data[campo].includes(id)
-            ? data[campo].filter(item => item !== id)
-            : [...data[campo], id];
-        setData(campo, nuevoArray);
-    };
-
-    const submit = (e) => {
-        e.preventDefault();
+    const cerrarModal = () => {
         setShowModal(false);
+        setTimeout(() => reset(), 300); 
     };
 
-    const usuariosFiltrados = datosSimulados.filter(u => 
-        u.name.toLowerCase().includes(busqueda.toLowerCase()) || 
-        u.email.toLowerCase().includes(busqueda.toLowerCase())
-    );
+    const toggleRol = (rolName) => {
+        const actuales = data.roles_asignados || [];
+        const nuevosRoles = actuales.includes(rolName)
+            ? actuales.filter(r => r !== rolName)
+            : [...actuales, rolName];
+        setData('roles_asignados', nuevosRoles);
+    };
+
+    const togglePermisoIndividual = (permisoName) => {
+        if (permisoHeredado(permisoName)) return;
+        const actuales = data.permisos_individuales || [];
+        const nuevosPermisos = actuales.includes(permisoName)
+            ? actuales.filter(p => p !== permisoName)
+            : [...actuales, permisoName];
+        setData('permisos_individuales', nuevosPermisos);
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        const actuales = data.permisos_individuales || [];
+        const permisosLimpios = actuales.filter(p => !permisoHeredado(p));
+        const payload = { ...data, permisos_individuales: permisosLimpios };
+
+        if (usuarioEditando) {
+            put(route('admin.usuarios.update', usuarioEditando.id), payload, {
+                onSuccess: () => cerrarModal()
+            });
+        } else {
+            post(route('admin.usuarios.store'), payload, {
+                onSuccess: () => cerrarModal()
+            });
+        }
+    };
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Gestión de Usuarios | GELIANV" />
+            <Head title="Directorio de Usuarios" />
 
-            <div className="max-w-7xl mx-auto p-6 md:p-12 space-y-12">
-                <header className="fade-up space-y-4 flex flex-col md:flex-row justify-between items-start md:items-center">
+            <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+                {/* --- HEADER PROTEGIDO EN CARD --- */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 theme-surface border-2 theme-border p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-sm fade-in-user">
                     <div>
-                        <div className="flex items-center space-x-3">
-                            <span className="h-1.5 w-12 bg-pink-500 rounded-full"></span>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-pink-600">Matriz de Acceso</p>
-                        </div>
-                        <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase text-zinc-900 leading-tight">
-                            GESTIÓN DE <span className="text-pink-500">USUARIOS</span>
+                        <h1 className="text-2xl font-black theme-text-main flex items-center gap-3 italic uppercase tracking-tighter">
+                            <Users className="w-6 h-6 md:w-8 md:h-8" style={{ color: 'var(--color-primario)' }} />
+                            Directorio y Accesos
                         </h1>
+                        <p className="theme-text-muted text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80">
+                            Gestión centralizada de personal, identidad y permisos operativos
+                        </p>
                     </div>
-                    <button onClick={() => openModal()} className="flex items-center gap-3 px-8 py-4 bg-zinc-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-105 transition-all">
-                        <UserPlus className="w-4 h-4" /> Registrar Nuevo_
-                    </button>
-                </header>
 
-                <div className="fade-up relative w-full md:w-1/3">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                    <input type="text" placeholder="Buscar..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-white border border-zinc-200 rounded-2xl text-zinc-900 font-bold focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none transition-all text-xs" />
-                </div>
-
-                {/* LISTADO DE USUARIOS - 100% BLANCO */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {usuariosFiltrados.map((u) => (
-                        <div key={u.id} className="fade-up bg-white border border-zinc-200 rounded-[3rem] p-8 hover:border-pink-500 transition-all flex flex-col shadow-sm">
-                            <div className="flex items-start justify-between mb-6">
-                                <div className="w-16 h-16 bg-pink-50 rounded-2xl border border-pink-100 flex items-center justify-center font-black text-xl italic text-pink-500 uppercase">
-                                    {u.name.substring(0, 2)}
-                                </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => openModal(u)} className="p-3 bg-zinc-100 rounded-xl hover:text-pink-500 hover:bg-pink-50 transition-colors">
-                                        <Edit3 className="w-4 h-4 text-zinc-600" />
-                                    </button>
-                                    <button className="p-3 bg-zinc-100 rounded-xl hover:text-red-500 hover:bg-red-50 transition-colors">
-                                        <Trash2 className="w-4 h-4 text-zinc-600" />
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <h3 className="text-xl font-black italic text-zinc-900 uppercase tracking-tighter truncate">{u.name}</h3>
-                            <p className="text-[10px] text-zinc-500 font-bold italic mb-6 truncate">{u.email}</p>
-                            
-                            <div className="space-y-5 mt-auto">
-                                <div>
-                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-2">Roles Asignados_</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {u.roles.length > 0 ? u.roles.map(rId => {
-                                            const roleName = catalogoRoles.find(r => r.id === rId)?.name;
-                                            return <span key={`r-${rId}`} className="px-3 py-1.5 bg-pink-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg">{roleName}</span>
-                                        }) : <span className="text-[10px] italic text-zinc-400">Sin roles</span>}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-2">Permisos Extra_</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {u.permisos.length > 0 ? u.permisos.map(pId => {
-                                            const permName = catalogoPermisos.find(p => p.id === pId)?.label;
-                                            return <span key={`p-${pId}`} className="px-3 py-1 border border-emerald-500/30 bg-emerald-50 text-emerald-600 text-[9px] font-bold uppercase tracking-wider rounded-lg">{permName}</span>
-                                        }) : <span className="text-[10px] italic text-zinc-400">Sin permisos</span>}
-                                    </div>
-                                </div>
-                            </div>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                        <div className="relative flex-1 md:w-72">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
+                            <input
+                                type="text"
+                                placeholder="BUSCAR POR NOMBRE O CORREO..."
+                                className="w-full pl-11 pr-4 py-3 rounded-2xl theme-element border theme-border text-[11px] font-bold uppercase tracking-wider theme-text-main outline-none transition-all focus:ring-1 focus:ring-transparent"
+                                style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                value={busqueda}
+                                onChange={(e) => setBusqueda(e.target.value)}
+                            />
                         </div>
-                    ))}
+                        <button
+                            type="button"
+                            onClick={() => abrirModal()}
+                            className="text-white dark:text-black px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 flex justify-center items-center gap-2 shadow-lg"
+                            style={{ backgroundColor: 'var(--color-primario)' }}
+                        >
+                            <UserPlus className="w-4 h-4" /> Nuevo Ingreso
+                        </button>
+                    </div>
                 </div>
 
-                {/* MODAL CORREGIDO - SIN OSCUROS, ALINEADO PERFECTO */}
-                {showModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/40 backdrop-blur-sm">
-                        <div className="bg-white border border-zinc-200 rounded-[3rem] w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl fade-up overflow-hidden">
-                            
-                            {/* HEADER */}
-                            <div className="flex-shrink-0 p-8 border-b border-zinc-100 flex justify-between items-center bg-white">
-                                <div>
-                                    <h2 className="text-2xl font-black italic text-zinc-900 uppercase tracking-tighter flex items-center">
-                                        <ShieldCheck className="w-6 h-6 mr-3 text-pink-500" /> Matriz de Identidad
-                                    </h2>
-                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mt-1 ml-9">
-                                        Estructura Muchos a Muchos: Roles y Permisos
-                                    </p>
+                {/* --- LISTADO --- */}
+                <div className="grid grid-cols-1 gap-4">
+                    {usuariosFiltrados.length === 0 ? (
+                        <div className="text-center py-16 theme-surface border-2 border-dashed theme-border rounded-[2rem]">
+                            <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
+                            <h3 className="text-lg font-black italic uppercase theme-text-main">No hay coincidencias</h3>
+                        </div>
+                    ) : (
+                        usuariosFiltrados.map((usuario) => (
+                            <div 
+                                key={usuario.id} 
+                                className="fade-in-user theme-surface rounded-[2rem] p-6 border-2 theme-border flex flex-col md:flex-row items-center justify-between gap-6 transition-all group hover:shadow-md"
+                            >
+                                <div className="flex items-center gap-5 w-full md:w-auto">
+                                    <div className="w-14 h-14 rounded-full flex items-center justify-center border-[3px] shadow-sm transition-colors bg-white dark:bg-[#1A1A1A]" style={{ borderColor: 'var(--color-primario)' }}>
+                                        <span className="text-xl font-black italic" style={{ color: 'var(--color-primario)' }}>
+                                            {(usuario.name || 'U').charAt(0).toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <h3 className="theme-text-main font-black text-sm uppercase italic tracking-tighter leading-none">
+                                            {(usuario.name || '').trim()} {(usuario.apellido_paterno || '').trim()}
+                                        </h3>
+                                        <div className="flex flex-wrap items-center gap-4 mt-2">
+                                            <span className="flex items-center gap-1 theme-text-muted text-[10px] font-bold uppercase tracking-widest">
+                                                <MapPin className="w-3 h-3" style={{ color: 'var(--color-primario)' }}/> {usuario.area?.departamento?.nombre || 'Sin Depto'}
+                                            </span>
+                                            <span className="flex items-center gap-1 theme-text-muted text-[10px] font-bold tracking-wider">
+                                                <Mail className="w-3 h-3" style={{ color: 'var(--color-primario)' }}/> {usuario.email}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <button onClick={() => setShowModal(false)} className="p-3 bg-zinc-50 rounded-2xl hover:text-pink-500 transition-colors">
-                                    <X className="w-6 h-6 text-zinc-500" />
+
+                                <div className="flex flex-wrap gap-2 justify-center md:justify-end w-full md:w-auto flex-1">
+                                    {(usuario.roles || []).map(rol => (
+                                        <span key={rol.id} className="text-[9px] font-black uppercase tracking-widest theme-element px-3 py-1.5 rounded-xl theme-text-main border theme-border">
+                                            {rol.name}
+                                        </span>
+                                    ))}
+                                    {usuario.permissions && usuario.permissions.length > 0 && (
+                                        <span className="text-[9px] font-black uppercase tracking-widest bg-orange-500/10 text-orange-600 px-3 py-1.5 rounded-xl border border-orange-200 dark:border-orange-800 flex items-center gap-1">
+                                            <ShieldAlert className="w-3 h-3" /> +{usuario.permissions.length} Especial
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-2 w-full md:w-auto justify-end">
+                                    <button type="button" onClick={() => abrirModal(usuario)} className="p-3 rounded-xl theme-element theme-text-main hover:text-white transition-colors border theme-border hover:border-transparent group/btn" onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primario)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = ''}>
+                                        <Edit3 className="w-5 h-5" />
+                                    </button>
+                                    <button type="button" className="p-3 rounded-xl theme-element theme-text-main hover:text-white transition-colors border theme-border hover:bg-red-500 hover:border-transparent">
+                                        <Trash2 className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* --- MODAL --- */}
+                {showModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md bg-black/40">
+                        <div className="absolute inset-0" onClick={cerrarModal}></div>
+                        <div className="relative w-full max-w-4xl theme-surface rounded-[2.5rem] border-2 theme-border shadow-2xl overflow-hidden flex flex-col modal-pop" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
+                            <div className="p-6 md:p-8 border-b theme-border flex justify-between items-center bg-transparent shrink-0">
+                                <h2 className="text-xl font-black italic uppercase tracking-tighter theme-text-main flex items-center gap-3 leading-none">
+                                    <ShieldCheck className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
+                                    {usuarioEditando ? 'Ajustar Perfil Completo' : 'Alta de Nuevo Colaborador'}
+                                </h2>
+                                <button type="button" onClick={cerrarModal} className="theme-text-muted hover:theme-text-main transition-colors p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5">
+                                    <X className="w-6 h-6" />
                                 </button>
                             </div>
 
-                            {/* BODY Y FOOTER DENTRO DEL FORM PARA EVITAR DESCUADRE */}
-                            <form onSubmit={submit} className="flex flex-col min-h-0 h-full">
-                                
-                                {/* CONTENEDOR SCROLLABLE */}
-                                <div className="flex-1 overflow-y-auto bg-white p-10">
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 text-left">
-                                        
-                                        {/* COLUMNA 1 */}
-                                        <div className="space-y-6">
-                                            <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Users className="w-4 h-4 mr-2"/> Perfil_</h3>
-                                            <div className="space-y-5">
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase text-zinc-500 ml-1 italic">Nombre_</label>
-                                                    <input value={data.name} onChange={e => setData('name', e.target.value)} type="text" className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-bold outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all text-sm" />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase text-zinc-500 ml-1 italic">Email_</label>
-                                                    <input value={data.email} onChange={e => setData('email', e.target.value)} type="email" className="w-full p-4 bg-zinc-50 border border-zinc-200 rounded-xl text-zinc-900 font-bold outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all text-sm" />
-                                                </div>
+                            <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1 min-h-0 space-y-10">
+                                {/* IDENTIDAD */}
+                                <div>
+                                    <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-4 flex items-center gap-2 border-b theme-border pb-2">
+                                        <User className="w-4 h-4" style={{ color: 'var(--color-primario)' }} /> Identidad Personal
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Nombre(s) *</label>
+                                            <div className="relative">
+                                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
+                                                <input value={data.name} onChange={e => setData('name', e.target.value)} type="text" className="w-full pl-11 pr-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none focus:ring-1 focus:ring-transparent transition-all" style={{ '--tw-ring-color': 'var(--color-primario)' }} />
                                             </div>
                                         </div>
-
-                                        {/* COLUMNA 2 */}
-                                        <div className="space-y-6">
-                                            <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Briefcase className="w-4 h-4 mr-2"/> Roles de Sistema_</h3>
-                                            <div className="space-y-3">
-                                                {catalogoRoles.map((rol) => (
-                                                    <label key={`r-${rol.id}`} className={`flex items-center gap-4 p-4 border rounded-xl cursor-pointer transition-all select-none ${data.roles.includes(rol.id) ? 'border-pink-500 bg-pink-50' : 'border-zinc-200 bg-white hover:border-pink-300'}`}>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={data.roles.includes(rol.id)}
-                                                            onChange={() => handleArrayChange('roles', rol.id)}
-                                                            className="w-5 h-5 rounded border-zinc-300 text-pink-500 focus:ring-pink-500 cursor-pointer"
-                                                        />
-                                                        <span className={`text-xs font-black uppercase tracking-tighter ${data.roles.includes(rol.id) ? 'text-pink-600' : 'text-zinc-700'}`}>{rol.name}</span>
-                                                    </label>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Ap. Paterno *</label>
+                                            <input value={data.apellido_paterno} onChange={e => setData('apellido_paterno', e.target.value)} type="text" className="w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none transition-all" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Ap. Materno</label>
+                                            <input value={data.apellido_materno} onChange={e => setData('apellido_materno', e.target.value)} type="text" className="w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none transition-all" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Teléfono / WhatsApp</label>
+                                            <div className="relative">
+                                                <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
+                                                <input value={data.telefono} onChange={e => setData('telefono', e.target.value)} type="text" className="w-full pl-11 pr-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none transition-all" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Área Organizacional *</label>
+                                            <select value={data.area_id} onChange={e => setData('area_id', e.target.value)} className="w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none appearance-none" style={{ '--tw-ring-color': 'var(--color-primario)' }}>
+                                                <option value="">Selecciona Área...</option>
+                                                {(departamentos || []).map(depto => (
+                                                    <optgroup key={depto.id} label={depto.nombre}>
+                                                        {(depto.areas || []).map(area => (
+                                                            <option key={area.id} value={area.id}>{area.nombre}</option>
+                                                        ))}
+                                                    </optgroup>
                                                 ))}
-                                            </div>
+                                            </select>
                                         </div>
-
-                                        {/* COLUMNA 3 */}
-                                        <div className="space-y-6">
-                                            <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em] mb-4 flex items-center"><Key className="w-4 h-4 mr-2"/> Permisos Extra_</h3>
-                                            <div className="space-y-3">
-                                                {catalogoPermisos.map((perm) => (
-                                                    <label key={`p-${perm.id}`} className={`flex items-center gap-4 p-4 border rounded-xl cursor-pointer transition-all select-none ${data.permisos.includes(perm.id) ? 'border-emerald-500 bg-emerald-50' : 'border-zinc-200 bg-white hover:border-emerald-300'}`}>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={data.permisos.includes(perm.id)}
-                                                            onChange={() => handleArrayChange('permisos', perm.id)}
-                                                            className="w-5 h-5 rounded border-zinc-300 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
-                                                        />
-                                                        <span className={`text-xs font-black uppercase tracking-tighter ${data.permisos.includes(perm.id) ? 'text-emerald-600' : 'text-zinc-700'}`}>{perm.label}</span>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </div>
-
                                     </div>
                                 </div>
 
-                                {/* FOOTER ANCLADO ABAJO */}
-                                <div className="flex-shrink-0 p-8 border-t border-zinc-100 flex justify-end gap-4 bg-zinc-50 rounded-b-[3rem]">
-                                    <button type="button" onClick={() => setShowModal(false)} className="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-900 transition-colors">
-                                        Cancelar_
-                                    </button>
-                                    <button type="submit" disabled={processing} className="px-10 py-4 bg-zinc-900 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg hover:bg-black transition-colors">
-                                        Sincronizar Matriz_
-                                    </button>
+                                {/* CREDENCIALES */}
+                                <div>
+                                    <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-4 flex items-center gap-2 border-b theme-border pb-2">
+                                        <Lock className="w-4 h-4" style={{ color: 'var(--color-primario)' }} /> Credenciales
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Correo Electrónico *</label>
+                                            <div className="relative">
+                                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
+                                                <input value={data.email} onChange={e => setData('email', e.target.value)} type="email" className="w-full pl-11 pr-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none transition-all" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Contraseña</label>
+                                            <div className="relative">
+                                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
+                                                <input value={data.password} onChange={e => setData('password', e.target.value)} type="password" placeholder={usuarioEditando ? "Dejar en blanco para conservar actual" : "Asignar contraseña"} className="w-full pl-11 pr-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none transition-all" />
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
-                            </form>
+                                {/* ROLES */}
+                                <div>
+                                    <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-4 flex items-center gap-2 border-b theme-border pb-2">
+                                        <Briefcase className="w-4 h-4" style={{ color: 'var(--color-primario)' }} /> Roles y Jerarquías
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-2">Asignación Principal_</p>
+                                        <div className="flex flex-wrap gap-3">
+                                            {rolesJerarquia.map(rol => (
+                                                <button
+                                                    key={rol.id} type="button" onClick={() => toggleRol(rol.name)}
+                                                    className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 transition-all flex items-center gap-2 ${data.roles_asignados?.includes(rol.name) ? 'shadow-md text-white' : 'theme-element theme-border theme-text-muted'}`}
+                                                    style={data.roles_asignados?.includes(rol.name) ? { borderColor: 'var(--color-primario)', backgroundColor: 'var(--color-primario)' } : {}}
+                                                >
+                                                    {data.roles_asignados?.includes(rol.name) && <Check className="w-3 h-3" />}
+                                                    {rol.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* PERMISOS */}
+                                {todosLosPermisos && todosLosPermisos.length > 0 && (
+                                    <div>
+                                        <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-4 flex items-center gap-2 border-b theme-border pb-2">
+                                            <Key className="w-4 h-4" style={{ color: 'var(--color-primario)' }} /> Permisos Atómicos
+                                        </h3>
+                                        <p className="text-[10px] theme-text-muted mb-4 font-bold tracking-widest">
+                                            INDICADORES: <span className="text-blue-500 mx-1">AZUL</span> herencia de rol. <span className="text-orange-500 mx-1">NARANJA</span> excepción directa.
+                                        </p>
+                                        <div className="space-y-2">
+                                            {Object.entries(permisosAgrupados).map(([modulo, permisosDeModulo]) => (
+                                                <details key={modulo} className="group theme-element rounded-2xl overflow-hidden border theme-border">
+                                                    <summary className="p-4 cursor-pointer flex justify-between items-center select-none outline-none">
+                                                        <div className="flex items-center gap-3">
+                                                            <ShieldCheck className="w-4 h-4 theme-text-muted" />
+                                                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-main italic">Módulo: {modulo}</span>
+                                                        </div>
+                                                        <ChevronRight className="w-4 h-4 group-open:rotate-90 transition-transform duration-300 theme-text-muted" />
+                                                    </summary>
+                                                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 border-t theme-border">
+                                                        {(permisosDeModulo || []).map(permiso => {
+                                                            const isHeredado = permisoHeredado(permiso.name);
+                                                            const isDirecto = (data.permisos_individuales || []).includes(permiso.name);
+                                                            return (
+                                                                <button 
+                                                                    key={permiso.id} type="button" disabled={isHeredado}
+                                                                    onClick={() => togglePermisoIndividual(permiso.name)} 
+                                                                    className={`flex justify-between items-center px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isHeredado ? 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 opacity-90' : isDirecto ? 'border-orange-500 bg-orange-500/10 text-orange-600' : 'theme-border theme-text-muted'}`}
+                                                                >
+                                                                    <span>{permiso.name.split('.')[1].replace('_', ' ')}</span>
+                                                                    {isHeredado ? <ShieldCheck className="w-3 h-3" /> : isDirecto && <Check className="w-3 h-3" />}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </details>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="p-6 md:p-8 border-t theme-border bg-transparent shrink-0">
+                                <button type="button" onClick={handleSubmit} disabled={processing} className="w-full text-white dark:text-black py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.2em] italic shadow-xl flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                                    <Save className="w-5 h-5" />
+                                    {processing ? 'Procesando Datos...' : 'Confirmar Guardado Completo'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

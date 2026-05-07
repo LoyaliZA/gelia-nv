@@ -5,14 +5,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use App\Models\CatalogoSexo;
 use Spatie\Permission\Traits\HasRoles;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class User extends Authenticatable
 {
     use HasFactory, Notifiable, HasRoles;
 
-    // Sintaxis que Laravel sí entiende para empaquetar los datos a React
+    // --- SECCIÓN: CAMPOS PERMITIDOS ---
     protected $fillable = [
         'name',
         'username',
@@ -23,7 +23,8 @@ class User extends Authenticatable
         'telefono',
         'edad',
         'foto_perfil',
-        'catalogo_sexo_id'
+        'catalogo_sexo_id',
+        'area_id' // Agregado para permitir la asignación organizacional
     ];
 
     protected $hidden = [
@@ -31,6 +32,7 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    // --- SECCIÓN: CONVERSIÓN DE DATOS ---
     protected function casts(): array
     {
         return [
@@ -39,8 +41,30 @@ class User extends Authenticatable
         ];
     }
 
-    public function sexo()
+    // --- SECCIÓN: RELACIONES ---
+
+    /**
+     * Relación con el sexo del usuario.
+     */
+    public function sexo(): BelongsTo
     {
         return $this->belongsTo(CatalogoSexo::class, 'catalogo_sexo_id');
+    }
+
+    /**
+     * Relación: Un usuario pertenece a un Área.
+     */
+    public function area(): BelongsTo
+    {
+        return $this->belongsTo(Area::class);
+    }
+
+    /**
+     * Acceso directo al Departamento (Atributo dinámico).
+     * Permite hacer $user->departamento
+     */
+    public function getDepartamentoAttribute()
+    {
+        return $this->area ? $this->area->departamento : null;
     }
 }

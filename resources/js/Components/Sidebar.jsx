@@ -1,222 +1,243 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { animate, createScope } from 'animejs';
+import { animate } from 'animejs/animation';
 import { Link, useForm } from '@inertiajs/react';
 import { 
-    Menu, X, Moon, Sun, Search, Bell, 
+    Menu, X, Moon, Sun, Bell, Home, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight, 
     Settings, Database, Users, LogOut, Link as LinkIcon
 } from 'lucide-react';
 
-export default function Sidebar({ isDarkMode, toggleTheme, user, permissions }) {
+export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left' }) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isConfigExpanded, setIsConfigExpanded] = useState(false);
-    const [searchOpen, setSearchOpen] = useState(false);
-    const searchInputRef = useRef(null);
-
+    
+    // --- RADAR MÓVIL ---
+    const [isMobile, setIsMobile] = useState(false);
+    
     const root = useRef(null);
-    const scope = useRef(null);
+    const widgetRef = useRef(null);
+    const menuRef = useRef(null);
+    const menuContentRef = useRef(null);
     const { post } = useForm(); 
 
+    // Detectar tamaño de pantalla al montar y redimensionar
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        handleResize(); // Chequeo inicial
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // --- LÓGICA DE POSICIONAMIENTO RESPONSIVA ---
+    // Si es celular, forzamos 'mobile_bottom'. Si no, respetamos el layout elegido.
+    const effectiveLayout = isMobile ? 'mobile_bottom' : layout;
+    
+    const isFixed = effectiveLayout === 'fixed';
+    const isRight = effectiveLayout === 'floating_right';
+    const isMobileMode = effectiveLayout === 'mobile_bottom';
+
     const initial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
-    const avatarContent = user?.foto_perfil ? (
-        <img src={`/storage/${user.foto_perfil}`} alt="Perfil" className="w-full h-full object-cover rounded-full" />
-    ) : (
-        <span style={{ color: 'var(--color-primario, #ec4899)' }} className="font-bold text-xs">{initial}</span>
+
+    const avatarContent = (
+        <div className="flex items-center justify-center w-full h-full bg-transparent">
+            <span className="font-black text-lg leading-none select-none" style={{ color: 'var(--color-primario)' }}>
+                {initial}
+            </span>
+        </div>
     );
 
     const can = (permission) => permissions?.includes(permission);
 
+    // ANIMACIÓN DE REVELADO INICIAL
     useEffect(() => {
-        if (searchOpen && searchInputRef.current) searchInputRef.current.focus();
-    }, [searchOpen]);
+        animate(root.current, { y: [20, 0], opacity: [0, 1] }, { duration: 1000, easing: 'easeOutExpo', delay: 100 });
+    }, []);
 
-    useEffect(() => {
-        scope.current = createScope({ root }).add((self) => {
-            self.add('toggleMainMenu', (isOpen) => {
-                const el = document.querySelector('.floating-menu');
-                if (!el) return; 
-
-                if (isOpen) {
-                    el.classList.remove('border-transparent', 'pointer-events-none');
-                    el.classList.add(isDarkMode ? 'border-[#333]' : 'border-gray-200');
-                    
-                    // Truco: Forzamos 'auto' invisiblemente para saber cuánto debe medir realmente
-                    el.style.height = 'auto';
-                    const targetHeight = el.scrollHeight;
-                    el.style.height = '0px';
-
-                    animate(el, {
-                        height: [0, targetHeight], 
-                        opacity: [0, 1],
-                        easing: 'outElastic(1, .8)',
-                        duration: 800,
-                        complete: () => { el.style.height = 'auto'; }, // AnimeJS usa 'complete'
-                        onComplete: () => { el.style.height = 'auto'; } // Framer Motion usa 'onComplete' (cubrimos ambas)
-                    });
-                } else {
-                    // Fijamos la altura en píxeles antes de colapsar para que la animación no se rompa
-                    el.style.height = el.offsetHeight + 'px';
-                    
-                    animate(el, {
-                        height: 0,
-                        opacity: 0,
-                        easing: 'inQuad',
-                        duration: 300,
-                        complete: () => {
-                            el.classList.add('border-transparent', 'pointer-events-none');
-                            el.style.height = '0px';
-                        },
-                        onComplete: () => {
-                            el.classList.add('border-transparent', 'pointer-events-none');
-                            el.style.height = '0px';
-                        }
-                    });
-                }
-            });
-
-            self.add('toggleSubMenu', (isExpanded) => {
+    // LÓGICA PRINCIPAL DEL MENÚ (Apertura y Cierre)
+    const handleMenuToggle = () => {
+        const nextState = !isMenuOpen;
+        setIsMenuOpen(nextState);
+        
+        if (menuRef.current && menuContentRef.current) {
+            if (nextState) {
+                menuRef.current.classList.remove('pointer-events-none');
+                
                 const subMenu = document.querySelector('.sub-menu-config');
-                if (!subMenu) return; 
+                if (isConfigExpanded && subMenu) subMenu.style.height = 'auto';
 
-                if (isExpanded) {
-                    animate('.chevron-config', { rotate: 90, duration: 300, easing: 'outExpo' });
-                    
-                    subMenu.style.height = 'auto';
-                    const targetHeight = subMenu.scrollHeight;
-                    subMenu.style.height = '0px';
-
-                    animate(subMenu, { 
-                        height: [0, targetHeight], 
-                        opacity: [0, 1], 
-                        easing: 'outExpo', 
-                        duration: 400,
-                        complete: () => { subMenu.style.height = 'auto'; },
-                        onComplete: () => { subMenu.style.height = 'auto'; }
-                    });
+                if (isFixed) {
+                    // Animación Lateral (Solo Fijo en PC)
+                    menuContentRef.current.style.width = '300px';
+                    animate(menuRef.current, { width: [0, 300], opacity: [0, 1] }, { duration: 600, easing: 'easeOutExpo' });
                 } else {
-                    animate('.chevron-config', { rotate: 0, duration: 300, easing: 'outExpo' });
-                    
-                    subMenu.style.height = subMenu.offsetHeight + 'px';
-
-                    animate(subMenu, { 
-                        height: 0, 
-                        opacity: 0, 
-                        easing: 'outExpo', 
-                        duration: 300,
-                        complete: () => { subMenu.style.height = '0px'; },
-                        onComplete: () => { subMenu.style.height = '0px'; }
+                    // Animación Vertical (Pastilla Flotante PC y Móvil Inferior)
+                    const targetHeight = menuContentRef.current.scrollHeight;
+                    animate(menuRef.current, { height: [0, targetHeight], opacity: [0, 1] }, { 
+                        duration: 600, 
+                        easing: 'easeOutExpo',
+                        complete: () => { menuRef.current.style.height = 'auto'; }
                     });
                 }
-            });
-        });
-        return () => scope.current.revert();
-    }, [isDarkMode]);
+            } else {
+                if (isFixed) {
+                    // Cierre Lateral
+                    animate(menuRef.current, { width: 0, opacity: 0 }, { duration: 300, easing: 'easeInQuad', complete: () => menuRef.current.classList.add('pointer-events-none') });
+                } else {
+                    // Cierre Vertical
+                    menuRef.current.style.height = `${menuRef.current.offsetHeight}px`;
+                    animate(menuRef.current, { height: 0, opacity: 0 }, { duration: 300, easing: 'easeInQuad', complete: () => menuRef.current.classList.add('pointer-events-none') });
+                }
+            }
+        }
+    };
 
-    useEffect(() => { 
-        if (scope.current && isMenuOpen) scope.current.methods.toggleMainMenu(isMenuOpen); 
-    }, [isMenuOpen]);
+    // LÓGICA DEL SUBMENÚ ADMINISTRACIÓN
+    useEffect(() => {
+        const subMenu = document.querySelector('.sub-menu-config');
+        if (subMenu && menuRef.current && isMenuOpen) {
+            
+            animate(subMenu, { height: isConfigExpanded ? [0, subMenu.scrollHeight] : 0, opacity: isConfigExpanded ? [0, 1] : 0 }, { duration: 400, easing: 'easeOutExpo' });
+            animate('.chevron-config', { rotate: isConfigExpanded ? 90 : 0 }, { duration: 300 });
 
-    useEffect(() => { 
-        if (scope.current) scope.current.methods.toggleSubMenu(isConfigExpanded); 
-    }, [isConfigExpanded]);
+            // Solo recalculamos la altura total si es Flotante (PC o Móvil). Si es Fijo, la altura siempre es 100vh.
+            if (!isFixed) {
+                const currentMenuHeight = menuRef.current.offsetHeight;
+                subMenu.style.height = isConfigExpanded ? 'auto' : '0px';
+                const newMenuHeight = menuContentRef.current.scrollHeight;
+                subMenu.style.height = isConfigExpanded ? '0px' : 'auto';
+
+                animate(menuRef.current, { height: [currentMenuHeight, newMenuHeight] }, { 
+                    duration: 400, 
+                    easing: 'easeOutExpo',
+                    complete: () => { menuRef.current.style.height = 'auto'; }
+                });
+            }
+        }
+    }, [isConfigExpanded, isFixed, isMenuOpen]);
+
+    // --- CONSTRUCCIÓN DINÁMICA DE CLASES CSS ---
+    
+    // Contenedor NAV
+    let navClasses = "fixed z-50 flex ";
+    if (isMobileMode) navClasses += "bottom-6 left-1/2 -translate-x-1/2 flex-col-reverse items-center w-max"; 
+    else if (isFixed) navClasses += "top-0 left-0 h-screen flex-row";
+    else navClasses += `top-6 flex-col ${isRight ? 'right-6 items-end' : 'left-6 items-start'}`;
+
+    // Pastilla / Barra
+    let widgetClasses = "theme-surface theme-border sidebar-glass flex ";
+    if (isFixed) widgetClasses += "flex-col items-center py-6 w-20 h-full border-r rounded-none";
+    else widgetClasses += "items-center p-1.5 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.12)]";
+
+    // Contenedor del Menú Expandido
+    let menuClasses = "floating-menu border shadow-2xl overflow-hidden pointer-events-none theme-surface theme-border sidebar-glass ";
+    if (isFixed) menuClasses += "ml-0 rounded-r-[2.5rem] rounded-l-none border-l-0";
+    else if (isMobileMode) menuClasses += "mb-4 rounded-[2rem] w-[90vw] max-w-[320px]"; // Abre hacia arriba en móvil
+    else menuClasses += "mt-4 rounded-[2.5rem] w-[300px]";
 
     return (
-        <nav ref={root} className="fixed top-6 left-6 z-50 flex flex-col items-start">
-            
-            {/* WIDGET SUPERIOR CORREGIDO */}
-            <div className={`backdrop-blur-md rounded-full flex items-center p-1.5 shadow-sm transition-colors duration-300 border ${isDarkMode ? 'bg-[#141414]/90 border-[#333]' : 'bg-white/90 border-gray-200'}`}>
-                <button onClick={() => setIsMenuOpen(!isMenuOpen)} className={`p-2 ml-1 mr-2 rounded-full transition-colors ${isDarkMode ? 'text-white hover:bg-[#2A2A2A]' : 'text-black hover:bg-gray-100'}`}>
+        <nav ref={root} className={navClasses} style={{ opacity: 0 }}>
+            {/* WIDGET SUPERIOR / BARRA LATERAL / PASTILLA MÓVIL */}
+            <div ref={widgetRef} className={widgetClasses}>
+                <button onClick={handleMenuToggle} className={`rounded-full transition-colors theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none ${isFixed ? 'p-3 mb-8' : 'p-2.5 mx-1'}`}>
                     {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                 </button>
 
-                <div className={`flex items-center px-3 border-l space-x-3 ${isDarkMode ? 'border-[#333]' : 'border-gray-200'}`}>
-                    <button onClick={toggleTheme} className={`transition-colors ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}>
-                        {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                    </button>
+                {/* Controles de la pastilla */}
+                <div className={`flex theme-border ${isFixed ? 'flex-col items-center space-y-8 pt-8 border-t w-full' : 'items-center px-3 sm:px-4 border-l space-x-3 sm:space-x-5'}`}>
                     
-                    <div className="flex items-center">
-                        <div className={`overflow-hidden transition-all duration-300 ease-out ${searchOpen ? 'w-[200px] ml-2' : 'w-0'}`}>
-                            <input 
-                                ref={searchInputRef}
-                                type="text" 
-                                placeholder="Buscar..." 
-                                className={`w-full bg-transparent border-none focus:ring-0 text-sm p-0 ${isDarkMode ? 'text-white placeholder-gray-500' : 'text-black placeholder-gray-400'}`}
-                            />
-                        </div>
-                        <button onClick={() => setSearchOpen(!searchOpen)} className={`transition-colors ${searchOpen ? 'text-pink-500 ml-2' : (isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black')}`}>
-                            <Search className="w-4 h-4" />
-                        </button>
-                    </div>
+                    {/* Ocultamos el botón "Home" en celular para ahorrar espacio */}
+                    <Link href={route('dashboard')} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none hidden sm:block">
+                        <Home className="w-5 h-5" />
+                    </Link>
 
-                    <button className={`relative transition-colors ml-1 mr-2 ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}>
-                        <Bell className="w-4 h-4" />
-                        <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full border border-pink-500 ${isDarkMode ? 'bg-black' : 'bg-white'}`}></span>
+                    <button onClick={() => window.history.back()} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+
+                    <button onClick={toggleTheme} className="transition-transform active:scale-90 hover:scale-110 outline-none" style={{ color: 'var(--color-primario)' }}>
+                        {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                    </button>
+
+                    <button className="relative transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
+                        <Bell className="w-5 h-5" />
+                        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 theme-surface" style={{ backgroundColor: 'var(--color-primario)' }}></span>
                     </button>
 
                     <Link 
                         href={route('profile.edit')} 
-                        className={`w-9 h-9 rounded-full flex items-center justify-center cursor-pointer overflow-hidden hover:ring-2 hover:ring-pink-500 transition-all border ${isDarkMode ? 'bg-[#1A1A1A] border-[#333]' : 'bg-white border-gray-200'}`}
+                        className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all border theme-element theme-border hover:border-transparent outline-none group ${isFixed ? 'w-12 h-12 mt-4' : 'w-9 h-9 sm:w-10 sm:h-10'}`}
+                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--color-primario)'}
+                        onMouseLeave={(e) => e.currentTarget.style.borderColor = ''}
                     >
-                        {avatarContent}
+                        {user?.foto_perfil ? (
+                            <img src={`/storage/${user.foto_perfil}`} alt="Perfil" className="w-full h-full object-cover rounded-full transition-transform group-hover:scale-110" />
+                        ) : avatarContent}
                     </Link>
                 </div>
             </div>
 
-            {/* MENÚ DESPLEGABLE CORREGIDO */}
-            {isMenuOpen && (
-                <div className={`floating-menu mt-2 border border-transparent rounded-3xl shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#141414]' : 'bg-white'}`} style={{ width: '280px' }}>
-                    <div className="p-3 flex flex-col space-y-1 overflow-y-auto max-h-[80vh] scrollbar-hide">
-                        
-                        <Link href={route('dashboard')} className={`flex items-center justify-between w-full px-4 py-3 rounded-2xl transition-all duration-300 ring-1 border ${isDarkMode ? 'bg-[#1A1A1A] border-transparent text-white ring-[#333]' : 'bg-white border-black text-black ring-black'}`}>
-                            <div className="flex items-center">
-                                <LayoutDashboard className="w-4 h-4 mr-3 text-pink-500" />
-                                <span className="text-sm font-medium uppercase italic font-black tracking-tighter">Panel Principal_</span>
-                            </div>
+            {/* MENÚ DESPLEGABLE */}
+            <div 
+                ref={menuRef}
+                className={menuClasses} 
+                style={{ 
+                    width: isFixed ? 0 : '', // En móvil y flotante el ancho lo maneja Tailwind
+                    height: isFixed ? '100vh' : 0, 
+                    opacity: 0 
+                }}
+            >
+                {/* max-h-[60vh] asegura que en celulares pequeños el menú sea deslizable si hay muchos botones */}
+                <div ref={menuContentRef} className={`p-5 flex flex-col space-y-2 overflow-y-auto custom-scrollbar ${isFixed ? 'w-[300px] h-full pt-10' : 'max-h-[65vh] sm:max-h-none'}`}>
+                    <span className="text-[11px] font-black tracking-[0.3em] px-5 mb-3 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
+                        ACCESOS_
+                    </span>
+
+                    <Link href={route('dashboard')} className="flex items-center justify-between w-full px-6 py-4 rounded-[1.5rem] transition-all border border-transparent theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none" onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--color-primario)'} onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}>
+                        <div className="flex items-center">
+                            <LayoutDashboard className="w-4 h-4 mr-4" style={{ color: 'var(--color-primario)' }} />
+                            <span className="text-xs font-black uppercase italic tracking-tighter">Panel Principal_</span>
+                        </div>
+                    </Link>
+
+                    {can('crear_solicitud') && (
+                        <Link href={route('solicitudes.index')} className="flex items-center w-full px-6 py-4 rounded-[1.5rem] transition-all border border-transparent theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none">
+                            <Briefcase className="w-4 h-4 mr-4" />
+                            <span className="text-xs font-black uppercase italic tracking-tighter">Solicitudes_</span>
                         </Link>
+                    )}
 
-                        {can('crear_solicitud') && (
-                            <Link href={route('solicitudes.index')} className={`flex items-center justify-between w-full px-4 py-3 rounded-2xl transition-all duration-300 border border-transparent ${isDarkMode ? 'text-gray-400 hover:border-[#333] hover:text-white' : 'text-gray-600 hover:border-gray-300 hover:text-black'}`}>
+                    {can('gestionar_usuarios') && (
+                        <div className="mt-3 pt-3 border-t theme-border">
+                            <button onClick={() => setIsConfigExpanded(!isConfigExpanded)} className="flex items-center justify-between w-full px-6 py-4 rounded-[1.5rem] transition-all theme-text-muted hover:theme-text-main outline-none">
                                 <div className="flex items-center">
-                                    <Briefcase className="w-4 h-4 mr-3" />
-                                    <span className="text-sm font-medium uppercase italic font-black tracking-tighter">Solicitudes_</span>
+                                    <Settings className="w-4 h-4 mr-4" />
+                                    <span className="text-xs font-black uppercase italic tracking-tighter">Administración_</span>
                                 </div>
-                            </Link>
-                        )}
+                                <ChevronRight className="w-3 h-3 chevron-config transition-transform" />
+                            </button>
 
-                        {can('gestionar_usuarios') && (
-                            <div className={`mt-2 pt-2 border-t ${isDarkMode ? 'border-[#333]' : 'border-gray-200'}`}>
-                                <button 
-                                    onClick={() => setIsConfigExpanded(!isConfigExpanded)}
-                                    className={`flex items-center justify-between w-full px-4 py-3 rounded-2xl transition-all duration-300 ${isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-                                >
-                                    <div className="flex items-center">
-                                        <Settings className="w-4 h-4 mr-3" />
-                                        <span className="text-sm font-black uppercase italic tracking-tighter">Administración_</span>
-                                    </div>
-                                    <ChevronRight className="w-3 h-3 chevron-config" />
-                                </button>
-
-                                <div className="sub-menu-config overflow-hidden h-0 opacity-0 px-2 space-y-1">
-                                    <Link href={route('admin.enlaces')} className={`flex items-center w-full px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-gray-50'}`}>
-                                        <LinkIcon className="w-3.5 h-3.5 mr-3" /> Generar Enlaces
-                                    </Link>
-                                    <Link href={route('admin.clientes')} className={`flex items-center w-full px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-gray-50'}`}>
-                                        <Database className="w-3.5 h-3.5 mr-3" /> Base de Clientes
-                                    </Link>
-                                    <Link href={route('admin.usuarios')} className={`flex items-center w-full px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-gray-50'}`}>
-                                        <Users className="w-3.5 h-3.5 mr-3" /> Usuarios
-                                    </Link>
-                                </div>
+                            <div className="sub-menu-config overflow-hidden h-0 opacity-0 px-4 space-y-1">
+                                <Link href={route('admin.enlaces')} className="flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none">
+                                    <LinkIcon className="w-3.5 h-3.5 mr-4" /> Generar Enlaces
+                                </Link>
+                                <Link href={route('admin.clientes')} className="flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none">
+                                    <Database className="w-3.5 h-3.5 mr-4" /> Base de Clientes
+                                </Link>
+                                <Link href={route('admin.usuarios')} className="flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none">
+                                    <Users className="w-3.5 h-3.5 mr-4" /> Usuarios
+                                </Link>
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        <button onClick={() => post(route('logout'))} className={`mt-4 flex items-center w-full px-4 py-3 rounded-2xl transition-all duration-300 border border-transparent text-red-600 ${isDarkMode ? 'hover:bg-red-900/20' : 'hover:bg-red-50'}`}>
-                            <LogOut className="w-4 h-4 mr-3" />
-                            <span className="text-sm font-black uppercase italic tracking-widest">Cerrar Sesión_</span>
+                    <div className="mt-auto pt-6">
+                        <button onClick={() => post(route('logout'))} className="flex items-center w-full px-6 py-4 rounded-[1.5rem] transition-all text-red-500 font-black hover:bg-red-500/10 outline-none">
+                            <LogOut className="w-4 h-4 mr-4" />
+                            <span className="text-xs font-black uppercase italic tracking-widest">Cerrar Sesión_</span>
                         </button>
                     </div>
                 </div>
-            )}
+            </div>
         </nav>
     );
 }
