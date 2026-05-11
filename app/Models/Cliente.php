@@ -18,7 +18,8 @@ class Cliente extends Model
         'vendedor_id',
         'vendedor_original_id', // Agregado a la asignación masiva
         'monto_venta_actual',
-        'es_heredado'
+        'es_heredado',
+        'catalogo_tipo_clientes_id', // Agregado a la asignación masiva
     ];
 
     protected $casts = [
@@ -50,5 +51,10 @@ class Cliente extends Model
     public function solicitudes(): HasMany
     {
         return $this->hasMany(SolicitudTag::class);
+    }
+
+    public function tipo(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoTipoCliente::class, 'catalogo_tipo_clientes_id');
     }
 }

@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { animate } from 'animejs';
+import { animate } from 'animejs/animation';
 import { Link, useForm, usePage } from '@inertiajs/react';
-import {
+import { 
     Menu, X, Moon, Sun, Bell, Home, ArrowLeft,
-    LayoutDashboard, Briefcase, ChevronRight,
+    LayoutDashboard, Briefcase, ChevronRight, 
     Settings, Database, Users, LogOut, Link as LinkIcon,
     FolderTree, Calculator
 } from 'lucide-react';
@@ -23,18 +23,14 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isConfigExpanded, setIsConfigExpanded] = useState(isAdminActive);
+    
     const [isMobile, setIsMobile] = useState(false);
-
     const root = useRef(null);
     const widgetRef = useRef(null);
     const menuRef = useRef(null);
     const menuContentRef = useRef(null);
-    const subMenuRef = useRef(null);
-    const { post } = useForm();
-
-    // --- ESTILOS INICIALES BLINDADOS (Previene conflictos React vs AnimeJS en el F5) ---
-    const initialMenuStyle = useRef({ opacity: 0, height: layout === 'fixed' ? '100vh' : '0px', width: layout === 'fixed' ? '0px' : '' });
-    const initialSubMenuStyle = useRef({ opacity: isAdminActive ? 1 : 0, height: isAdminActive ? 'auto' : '0px' });
+    const subMenuRef = useRef(null); // Ref para calcular el tamaño del submenú
+    const { post } = useForm(); 
 
     useEffect(() => {
         if (isAdminActive) setIsConfigExpanded(true);
@@ -62,86 +58,87 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const isRight = effectiveLayout === 'floating_right';
     const isMobileMode = effectiveLayout === 'mobile_bottom';
 
-    // --- LÓGICA DE PERMISOS BLINDADA ---
-    const can = (permission) => {
-        const isSuperAdmin = user?.roles?.includes('Super Admin');
-        const hasPermission = permissions?.includes(permission);
-        return isSuperAdmin || hasPermission;
-    };
-
+    const can = (permission) => permissions?.includes(permission);
     const showAdminMenu = ADMIN_MENU_CONFIG.some(item => can(item.permission));
 
     useEffect(() => {
         if (root.current) {
-            animate(root.current, { y: [10, 0], opacity: [0, 1], duration: 400, ease: 'outExpo' });
+            animate(root.current, { y: [10, 0], opacity: [0, 1], duration: 400, easing: 'easeOutExpo' });
         }
     }, []);
 
-    // --- ANIMACIONES CORREGIDAS (Sintaxis AnimeJS V4 con onComplete) ---
+    // --- LÓGICA DE ANIMACIÓN ELÁSTICA (SIN CONFLICTOS DE CSS) ---
     const handleMenuToggle = () => {
         const nextState = !isMenuOpen;
         setIsMenuOpen(nextState);
-
+        
         if (menuRef.current && menuContentRef.current) {
             if (nextState) {
-                // Preparamos el submenú visualmente si le toca estar abierto
+                menuRef.current.classList.remove('pointer-events-none');
+                
+                // Aseguramos que el submenú esté visible si corresponde antes de medir
                 if (isConfigExpanded && subMenuRef.current) {
+                    subMenuRef.current.style.display = 'block';
                     subMenuRef.current.style.height = 'auto';
                     subMenuRef.current.style.opacity = 1;
                 }
 
                 if (isFixed) {
-                    animate(menuRef.current, { width: [0, 300], opacity: [0, 1], duration: 350, ease: 'outExpo' });
+                    menuContentRef.current.style.width = '300px';
+                    animate(menuRef.current, { width: [0, 300], opacity: [0, 1], duration: 400, easing: 'easeOutExpo' });
                 } else {
                     menuRef.current.style.height = 'auto';
                     const targetHeight = menuContentRef.current.scrollHeight;
                     menuRef.current.style.height = '0px';
-
+                    
                     animate(menuRef.current, {
-                        height: [0, targetHeight], opacity: [0, 1], duration: 350, ease: 'outExpo',
-                        onComplete: () => { menuRef.current.style.height = 'auto'; } // <- LA LÍNEA QUE FALTABA
+                        height: [0, targetHeight], opacity: [0, 1], duration: 400, easing: 'easeOutExpo',
+                        complete: () => { menuRef.current.style.height = 'auto'; } // Crucial para la elasticidad
                     });
                 }
             } else {
                 if (isFixed) {
-                    animate(menuRef.current, { width: 0, opacity: 0, duration: 250, ease: 'inExpo' });
+                    animate(menuRef.current, {
+                        width: 0, opacity: 0, duration: 300, easing: 'easeInQuad',
+                        complete: () => menuRef.current.classList.add('pointer-events-none')
+                    });
                 } else {
                     const currentHeight = menuRef.current.offsetHeight;
                     animate(menuRef.current, {
-                        height: [currentHeight, 0], opacity: [1, 0], duration: 250, ease: 'inExpo',
-                        onComplete: () => { menuRef.current.style.height = '0px'; }
+                        height: [currentHeight, 0], opacity: [1, 0], duration: 300, easing: 'easeInQuad',
+                        complete: () => { 
+                            menuRef.current.classList.add('pointer-events-none'); 
+                            menuRef.current.style.height = '0px'; 
+                        }
                     });
                 }
             }
         }
     };
 
+    // --- ANIMACIÓN DEL SUBMENÚ ELÁSTICO ---
     const toggleConfigMenu = () => {
         const nextState = !isConfigExpanded;
         setIsConfigExpanded(nextState);
 
         if (subMenuRef.current) {
             if (nextState) {
+                subMenuRef.current.style.display = 'block';
                 subMenuRef.current.style.height = 'auto';
                 const targetHeight = subMenuRef.current.scrollHeight;
                 subMenuRef.current.style.height = '0px';
-
-                animate(subMenuRef.current, {
-                    height: [0, targetHeight], opacity: [0, 1], duration: 350, ease: 'outExpo',
-                    onComplete: () => { subMenuRef.current.style.height = 'auto'; }
-                });
-                animate('.chevron-config', { rotate: 90, duration: 350, ease: 'outExpo' });
+                
+                animate(subMenuRef.current, { height: [0, targetHeight], opacity: [0, 1], duration: 400, easing: 'easeOutExpo', complete: () => { subMenuRef.current.style.height = 'auto'; } });
+                animate('.chevron-config', { rotate: 90, duration: 400, easing: 'easeOutExpo' });
             } else {
                 const currentHeight = subMenuRef.current.offsetHeight;
-                animate(subMenuRef.current, {
-                    height: [currentHeight, 0], opacity: [1, 0], duration: 250, ease: 'inExpo',
-                    onComplete: () => { subMenuRef.current.style.height = '0px'; }
-                });
-                animate('.chevron-config', { rotate: 0, duration: 250, ease: 'inExpo' });
+                animate(subMenuRef.current, { height: [currentHeight, 0], opacity: [1, 0], duration: 300, easing: 'easeInQuad', complete: () => { subMenuRef.current.style.display = 'none'; } });
+                animate('.chevron-config', { rotate: 0, duration: 300, easing: 'easeInQuad' });
             }
         }
     };
 
+    // Clases dinámicas base
     let navClasses = "fixed z-50 flex ";
     if (isMobileMode) navClasses += "bottom-6 left-1/2 -translate-x-1/2 flex-col-reverse items-center w-max";
     else if (isFixed) navClasses += "top-0 left-0 h-screen flex-row";
@@ -151,8 +148,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     if (isFixed) widgetClasses += "flex-col items-center py-6 w-20 h-full border-r rounded-none";
     else widgetClasses += "items-center p-1.5 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.12)]";
 
-    // Se mantiene pointer-events dinámico en React para bloquear clics durante el cierre
-    let menuClasses = `floating-menu border shadow-2xl overflow-hidden theme-surface theme-border sidebar-glass relative z-10 ${isMenuOpen ? 'pointer-events-auto' : 'pointer-events-none'} `;
+    let menuClasses = "floating-menu border shadow-2xl overflow-hidden pointer-events-none theme-surface theme-border sidebar-glass relative z-10 ";
     if (isFixed) menuClasses += "ml-0 rounded-r-[2.5rem] rounded-l-none border-l-0";
     else if (isMobileMode) menuClasses += "mb-4 rounded-[2rem] w-[90vw] max-w-[320px]";
     else menuClasses += "mt-4 rounded-[2.5rem] w-[300px]";
@@ -182,8 +178,8 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                         <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 theme-surface" style={{ backgroundColor: 'var(--color-primario)' }}></span>
                     </button>
 
-                    <Link
-                        href={route('profile.edit')}
+                    <Link 
+                        href={route('profile.edit')} 
                         className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all border outline-none group ${isFixed ? 'w-12 h-12 mt-4' : 'w-9 h-9 sm:w-10 sm:h-10'} ${isRouteActive('/profile') ? 'border-[var(--color-primario)] shadow-md' : 'theme-element theme-border'}`}
                     >
                         {user?.foto_perfil ? (
@@ -199,17 +195,22 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                 </div>
             </div>
 
-            <div ref={menuRef} className={menuClasses} style={initialMenuStyle.current}>
+            <div 
+                ref={menuRef}
+                className={menuClasses} 
+                style={{ width: isFixed ? 0 : '', height: isFixed ? '100vh' : 0, opacity: 0 }}
+            >
+                {/* Ojo aquí: se cambió el max-h estricto a un flex dinámico para que el scroll lo maneje el interior si es necesario */}
                 <div ref={menuContentRef} className={`p-5 flex flex-col space-y-3 overflow-y-auto custom-scrollbar ${isFixed ? 'w-[300px] h-full pt-10' : 'max-h-[85vh]'}`}>
                     <span className="text-[11px] font-black tracking-[0.3em] px-5 mb-1 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
                         ACCESOS_
                     </span>
 
-                    <Link
-                        href={route('dashboard')}
+                    <Link 
+                        href={route('dashboard')} 
                         className={linkBaseClass + (isRouteActive('/dashboard') ? linkActiveClass : linkInactiveClass)}
-                        onMouseEnter={(e) => { if (!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                        onMouseLeave={(e) => { if (!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'transparent' }}
+                        onMouseEnter={(e) => { if(!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'var(--color-primario)' }} 
+                        onMouseLeave={(e) => { if(!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'transparent' }}
                     >
                         <div className="flex items-center">
                             <LayoutDashboard className="w-4 h-4 mr-4" style={{ color: isRouteActive('/dashboard') ? '#ffffff' : 'var(--color-primario)' }} />
@@ -218,11 +219,11 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     </Link>
 
                     {can('solicitudes.ver_listado') && (
-                        <Link
-                            href={route('solicitudes.index')}
+                        <Link 
+                            href={route('solicitudes.index')} 
                             className={linkBaseClass + (isRouteActive('/solicitudes') ? linkActiveClass : linkInactiveClass)}
-                            onMouseEnter={(e) => { if (!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                            onMouseLeave={(e) => { if (!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'transparent' }}
+                            onMouseEnter={(e) => { if(!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }} 
+                            onMouseLeave={(e) => { if(!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'transparent' }}
                         >
                             <Briefcase className="w-4 h-4 mr-4" />
                             <span className="text-xs font-black uppercase italic tracking-tighter">Solicitudes_</span>
@@ -231,26 +232,31 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
 
                     {showAdminMenu && (
                         <div className="mt-2 pt-3 border-t theme-border flex flex-col">
-                            <button
-                                onClick={toggleConfigMenu}
-                                className={`flex items-center justify-between w-full px-6 py-4 rounded-3xl transition-all outline-none z-10 ${isAdminActive ? 'theme-element border-[var(--color-primario)] text-[var(--color-primario)] shadow-sm' : 'theme-element theme-text-muted hover:theme-text-main border border-transparent'}`}
+                            <button 
+                                onClick={toggleConfigMenu} 
+                                className={`flex items-center justify-between w-full px-6 py-4 rounded-[1.5rem] transition-all outline-none z-10 ${isAdminActive ? 'theme-element border-[var(--color-primario)] text-[var(--color-primario)] shadow-sm' : 'theme-element theme-text-muted hover:theme-text-main border border-transparent'}`}
                             >
                                 <div className="flex items-center">
                                     <Settings className="w-4 h-4 mr-4" />
                                     <span className="text-xs font-black uppercase italic tracking-tighter">Administración_</span>
                                 </div>
-                                <ChevronRight className={`w-3 h-3 transition-transform duration-300 ${isConfigExpanded ? 'rotate-90' : ''}`} />
+                                <ChevronRight className="w-3 h-3 chevron-config" />
                             </button>
 
-                            <div ref={subMenuRef} className="overflow-hidden px-2 mt-2" style={initialSubMenuStyle.current}>
+                            {/* Contenedor del submenú limpiado de clases transition-all que causaban bug con AnimeJS */}
+                            <div 
+                                ref={subMenuRef} 
+                                className="overflow-hidden px-2 mt-2" 
+                                style={{ display: isConfigExpanded ? 'block' : 'none' }}
+                            >
                                 <div className="flex flex-col space-y-2">
                                     {ADMIN_MENU_CONFIG.filter(item => can(item.permission)).map((item) => {
                                         const IconComponent = item.icon;
                                         const isActive = isRouteActive(item.path);
                                         return (
-                                            <Link
+                                            <Link 
                                                 key={item.id}
-                                                href={route(item.routeName)}
+                                                href={route(item.routeName)} 
                                                 className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all outline-none ${isActive ? 'bg-[var(--color-primario)] text-white shadow-md' : 'theme-element theme-text-muted hover:theme-text-main hover:shadow-sm border border-transparent hover:border-[var(--color-primario)]'}`}
                                             >
                                                 <IconComponent className="w-3.5 h-3.5 mr-4" /> {item.label}
@@ -263,14 +269,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     )}
 
                     <div className="mt-auto pt-6 pb-2">
-                        <button
-                            onClick={() => {
-                                // 1. Limpiamos toda la memoria gráfica y configuraciones del navegador
-                                localStorage.clear();
-                                // 2. Ejecutamos el logout en el servidor
-                                post(route('logout'));
-                            }}
-                            className="flex items-center w-full px-6 py-4 rounded-3xl transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group">
+                        <button onClick={() => post(route('logout'))} className="flex items-center w-full px-6 py-4 rounded-[1.5rem] transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group">
                             <LogOut className="w-4 h-4 mr-4 text-red-500 group-hover:text-red-600 transition-colors" />
                             <span className="text-xs font-black uppercase italic tracking-widest text-red-500 group-hover:text-red-600 transition-colors">Cerrar Sesión_</span>
                         </button>

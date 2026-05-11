@@ -9,7 +9,7 @@ export const useModal = () => useContext(ModalContext);
 
 export default function AppLayout({ children }) {
     const { props: { auth }, url } = usePage();
-
+    
     // --- ESTADOS DEL MODAL GLOBAL ---
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState(null);
@@ -62,11 +62,11 @@ export default function AppLayout({ children }) {
         const syncThemeState = () => {
             const savedTheme = localStorage.getItem('theme');
             if (savedTheme) setIsDarkMode(savedTheme === 'dark');
-
+            
             const savedLayout = localStorage.getItem('theme_layout');
             if (savedLayout) setSidebarLayout(savedLayout);
         };
-
+        
         window.addEventListener('theme-changed', syncThemeState);
         return () => window.removeEventListener('theme-changed', syncThemeState);
     }, []);
@@ -75,12 +75,12 @@ export default function AppLayout({ children }) {
     useEffect(() => {
         const root = document.documentElement;
         const tema = auth?.tema_visual || {};
-
+        
         // 1. Color de Énfasis
         const savedColorName = typeof window !== 'undefined' ? localStorage.getItem('theme_color') : null;
         const activeColorName = savedColorName || tema.color_nombre?.toLowerCase() || 'rosa';
         const activeAccent = activeColorName.startsWith('#') ? activeColorName : (accentColors[activeColorName] || accentColors.rosa);
-
+        
         root.style.setProperty('--color-primario', activeAccent);
 
         // 2. Modo Oscuro
@@ -124,11 +124,7 @@ export default function AppLayout({ children }) {
 
         // 5. Efecto Cristal (Glassmorphism)
         const savedGlass = typeof window !== 'undefined' ? localStorage.getItem('theme_glass') : null;
-
-        // CORRECCIÓN: Evaluamos estrictamente los nulos para no forzar el cristal si no es necesario
-        const isGlassActive = savedGlass !== null
-            ? savedGlass === 'true'
-            : (String(tema.efecto_cristal) !== '0' && tema.efecto_cristal !== false);
+        const isGlassActive = savedGlass !== 'false';
 
         if (isGlassActive) {
             root.classList.add('glass-active');
@@ -144,7 +140,7 @@ export default function AppLayout({ children }) {
             y: [15, 0],
             opacity: [0, 1],
         }, {
-            duration: 300,
+            duration: 300, 
             easing: 'easeOutExpo'
         });
     }, [url]);
@@ -158,11 +154,10 @@ export default function AppLayout({ children }) {
 
     return (
         <ModalContext.Provider value={{ openModal, closeModal }}>
-            {/* CORRECCIÓN: Cambiamos min-h-screen por min-h-[100dvh] para que el fondo cubra todo en celulares */}
-            <div
-                className="min-h-dvh text-gray-950 dark:text-gray-100 transition-colors duration-500 w-full"
-                style={{
-                    backgroundColor: 'var(--bg-app)',
+            <div 
+                className="min-h-screen text-gray-950 dark:text-gray-100 transition-colors duration-500"
+                style={{ 
+                    backgroundColor: 'var(--bg-app)', 
                     backgroundImage: 'var(--bg-actual)',
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
@@ -170,14 +165,14 @@ export default function AppLayout({ children }) {
                     backgroundRepeat: 'no-repeat'
                 }}
             >
-                <Sidebar
-                    isDarkMode={isDarkMode}
-                    toggleTheme={toggleTheme}
+                <Sidebar 
+                    isDarkMode={isDarkMode} 
+                    toggleTheme={toggleTheme} 
                     user={auth?.user}
                     permissions={auth?.user?.permissions || []}
                     layout={sidebarLayout}
                 />
-
+                
                 <main className={`transition-all duration-500 bg-transparent max-w-7xl mx-auto min-h-screen px-4 md:px-6 pb-32 md:pb-20 ${sidebarLayout === 'fixed' ? 'md:ml-24 pt-6 md:pt-12' : 'pt-6 md:pt-24'}`}>
                     <div className="page-reveal">
                         {children}
@@ -188,13 +183,13 @@ export default function AppLayout({ children }) {
                     OVERLAY DEL MODAL GLOBAL (SIEMPRE CENTRADO)
                     ========================================= */}
                 {isModalOpen && (
-                    <div
+                    <div 
                         className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in"
-                        onClick={closeModal}
+                        onClick={closeModal} 
                     >
-                        <div
+                        <div 
                             className="w-full max-w-lg bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 modal-pop border border-gray-200 dark:border-[#222222] max-h-[90vh] overflow-y-auto"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()} 
                         >
                             {modalContent}
                         </div>

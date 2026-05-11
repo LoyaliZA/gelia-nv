@@ -29,4 +29,9 @@ class Departamento extends Model
     {
         return $this->hasMany(Area::class);
     }
+
+    public function usuarios()
+    {
+        return $this->belongsToMany(User::class);
+    }
 }

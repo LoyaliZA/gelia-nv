@@ -6,7 +6,10 @@ use Illuminate\Http\Request;
 use App\Models\CatalogoProceso;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoEstadoSolicitud;
+use App\Models\CatalogoTipoCliente; // <-- NUEVO
 use App\Models\Cliente;
+use App\Models\Departamento; // <-- NUEVO
+use App\Models\Area;         // <-- NUEVO
 use Illuminate\Support\Facades\DB;
 
 class CatalogoController extends Controller
@@ -64,5 +67,72 @@ class CatalogoController extends Controller
 
         $lista->delete();
         return back()->with('success', 'Lista eliminada y clientes revinculados exitosamente.');
+    }
+
+    // --- 4. CATÁLOGO DE DEPARTAMENTOS ---
+    public function storeDepartamento(Request $request) {
+        Departamento::create($request->validate([
+            'nombre' => 'required|string|max:255', 
+            'activo' => 'boolean'
+        ]));
+        return back()->with('success', 'Departamento creado correctamente.');
+    }
+
+    public function updateDepartamento(Request $request, $id) {
+        Departamento::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255', 
+            'activo' => 'boolean'
+        ]));
+        return back()->with('success', 'Departamento actualizado.');
+    }
+
+    public function destroyDepartamento($id) {
+        // En BD el ON DELETE CASCADE se encargará de borrar las áreas vinculadas
+        Departamento::findOrFail($id)->delete();
+        return back()->with('success', 'Departamento eliminado exitosamente.');
+    }
+
+    // --- 5. CATÁLOGO DE ÁREAS ---
+    public function storeArea(Request $request) {
+        Area::create($request->validate([
+            'nombre'          => 'required|string|max:255', 
+            'departamento_id' => 'required|exists:departamentos,id'
+        ]));
+        return back()->with('success', 'Área creada correctamente.');
+    }
+
+    public function updateArea(Request $request, $id) {
+        Area::findOrFail($id)->update($request->validate([
+            'nombre'          => 'required|string|max:255', 
+            'departamento_id' => 'required|exists:departamentos,id'
+        ]));
+        return back()->with('success', 'Área actualizada.');
+    }
+
+    public function destroyArea($id) {
+        Area::findOrFail($id)->delete();
+        return back()->with('success', 'Área eliminada exitosamente.');
+    }
+
+    // --- 6. CATÁLOGO DE TIPOS DE CLIENTE ---
+    public function storeTipoCliente(Request $request) {
+        CatalogoTipoCliente::create($request->validate([
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean'
+        ]));
+        return back()->with('success', 'Tipo de cliente registrado.');
+    }
+
+    public function updateTipoCliente(Request $request, $id) {
+        CatalogoTipoCliente::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean'
+        ]));
+        return back()->with('success', 'Tipo de cliente actualizado.');
+    }
+
+    public function destroyTipoCliente($id) {
+        CatalogoTipoCliente::findOrFail($id)->delete();
+        return back()->with('success', 'Tipo de cliente eliminado.');
     }
 }

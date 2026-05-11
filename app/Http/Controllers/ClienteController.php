@@ -12,12 +12,50 @@ use Illuminate\Support\Facades\Gate;
 class ClienteController extends Controller
 {
     /**
+     * Crea un nuevo cliente desde el modal.
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'numero_cliente'           => 'required|string|max:255|unique:clientes,numero_cliente' . (isset($cliente) ? ',' . $cliente->id : ''),
+            'nombre'                   => 'required|string|max:255',
+            'vendedor_id'              => 'nullable|exists:users,id',
+            'es_heredado'              => 'boolean',
+            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id' // <-- AÑADIDO
+        ]);
+
+        Cliente::create($validated);
+
+        return redirect()->back()->with('success', 'Cliente creado exitosamente.');
+    }
+
+    /**
+     * Actualiza un cliente existente desde el modal.
+     */
+    public function update(Request $request, Cliente $cliente)
+    {
+        $validated = $request->validate([
+            'numero_cliente'           => 'required|string|max:255|unique:clientes,numero_cliente,' . $cliente->id,
+            'nombre'                   => 'required|string|max:255',
+            'vendedor_id'              => 'nullable|exists:users,id',
+            'es_heredado'              => 'boolean',
+            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id' // <-- AÑADIDO
+        ]);
+
+        $cliente->update($validated);
+
+        return redirect()->back()->with('success', 'Cliente actualizado exitosamente.');
+    }
+
+    /**
      * Procesa un archivo CSV masivo para actualizar montos.
      */
     public function importacionMasiva(Request $request)
     {
         Gate::authorize('cargar_clientes_masivo');
         
+        // Cuidado aquí: si desde react lo mandas como 'archivo', debes validarlo como 'archivo'.
+        // Si tu form en React usa formCarga.setData('archivo', file), cámbialo aquí a 'archivo'
         $request->validate(['archivo_csv' => 'required|mimes:csv,txt']);
 
         $listas = CatalogoListaDescuento::orderBy('monto_requerido', 'desc')->get(); // Ordenadas de mayor a menor monto

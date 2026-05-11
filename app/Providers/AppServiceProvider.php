@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Gate; // <-- Importación necesaria
 use App\Models\SolicitudTag;
 use App\Observers\SolicitudTagObserver;
 
@@ -21,6 +23,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // 1. Forzar HTTPS en entorno de producción para evitar contenido mixto
+        if (config('app.env') === 'production') {
+            URL::forceScheme('https');
+        }
+
+        // 2. PASE VIP UNIVERSAL: El Super Admin ignora todas las restricciones de Gate::authorize o @can
+        Gate::before(function ($user, $ability) {
+            return $user->hasRole('Super Admin') ? true : null;
+        });
+
+        // 3. Registro de Observadores
         SolicitudTag::observe(SolicitudTagObserver::class);
     }
 }

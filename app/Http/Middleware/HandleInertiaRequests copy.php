@@ -35,18 +35,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
-        
-        // 1. Buscamos la configuración del usuario
-        $configuracion = $user ? ConfiguracionUsuario::where('user_id', $user->id)->first() : null;
-
-        // 2. Nos aseguramos de decodificar el JSON a un array de PHP. 
-        // Si no hay configuración, mandamos un array vacío.
-        $temaVisual = [];
-        if ($configuracion && !empty($configuracion->tema_visual)) {
-            $temaVisual = is_string($configuracion->tema_visual) 
-                ? json_decode($configuracion->tema_visual, true) 
-                : $configuracion->tema_visual;
-        }
+        $configuracion = $user ? \App\Models\ConfiguracionUsuario::where('user_id', $user->id)->first() : null;
 
         return [
             ...parent::share($request),
@@ -55,10 +44,8 @@ class HandleInertiaRequests extends Middleware
                     'roles' => $user->getRoleNames(), 
                     'permissions' => $user->getAllPermissions()->pluck('name'), // Permisos atómicos inyectados
                 ]) : null,
-                
-                // 3. Pasamos ÚNICAMENTE el tema visual limpio. 
-                // ELIMINAMOS por completo la referencia a 'dashboard_prefs'
-                'tema_visual' => $temaVisual,
+                'tema_visual' => $configuracion ? $configuracion->tema_visual : null,
+                'dashboard_prefs' => $configuracion ? $configuracion->dashboard_prefs : ['ocultos' => []],
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

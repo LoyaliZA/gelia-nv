@@ -12,6 +12,8 @@ class CatalogoListaDescuento extends Model
     protected $fillable = [
         'nombre',
         'monto_requerido',
+        'monto_minimo', // <-- AGREGAR
+        'monto_maximo', // <-- AGREGAR
         'activo'
     ];
 

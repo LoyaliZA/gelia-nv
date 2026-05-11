@@ -1,43 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { Head, useForm } from '@inertiajs/react';
-import { animate } from 'animejs/animation'; // Importación modular corregida
+import { createPortal } from 'react-dom';
+import { animate } from 'animejs/animation';
 import { 
     Users, Upload, Search, 
     FileSpreadsheet, TrendingUp, 
-    CheckCircle, Database, Edit3, X, ChevronDown, Sparkles
+    CheckCircle, Database, Edit3, X, ChevronDown, Sparkles,
+    ChevronLeft, ChevronRight, Check, Plus, User, Hash
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
-export default function Clientes({ auth, clientes = [], vendedores = [] }) {
+export default function Clientes({ auth, clientes = [], vendedores = [], tipos_cliente = [] }) {
     // --- ESTADOS LOCALES ---
     const [busqueda, setBusqueda] = useState('');
     const [filtroLista, setFiltroLista] = useState('Todas');
     const [filtroTipo, setFiltroTipo] = useState('Todos');
     const [dragActive, setDragActive] = useState(false);
     
-    // Estados para el Modal de Gestión Manual
-    const [clienteEditando, setClienteEditando] = useState(null);
+    // Estados para la Paginación
+    const [paginaActual, setPaginaActual] = useState(1);
+    const itemsPorPagina = 10;
+    
+    // Estados para el Modal de Gestión
+    const [modoModal, setModoModal] = useState(null); // 'crear' | 'editar' | null
+    const [clienteActual, setClienteActual] = useState(null);
 
     // --- FORMULARIOS INERTIA ---
     const formCarga = useForm({
         archivo: null,
     });
 
-    const formAsignacion = useForm({
+    const formCliente = useForm({
+        numero_cliente: '',
+        nombre: '',
         vendedor_id: '',
-        es_heredado: false
+        es_heredado: false,
+        catalogo_tipo_cliente_id: '', // <-- Añadimos el nuevo campo
     });
 
     // --- ANIMACIONES DE ENTRADA ---
     useEffect(() => {
-        animate('.fade-up', {
-            translateY: [15, 0],
-            opacity: [0, 1],
-            easing: 'easeOutExpo',
-            duration: 600,
-            delay: (el, i) => i * 100
-        });
+        // Retraso ligero para asegurar que el DOM exista antes de que Anime.js busque los targets
+        const timer = setTimeout(() => {
+            const elements = document.querySelectorAll('.fade-up');
+            if (elements.length > 0) {
+                animate('.fade-up', {
+                    translateY: [15, 0],
+                    opacity: [0, 1],
+                    easing: 'easeOutExpo',
+                    duration: 600,
+                    delay: (el, i) => i * 80
+                });
+            }
+        }, 100);
+        return () => clearTimeout(timer);
     }, []);
+
+    // --- EFECTOS DE PAGINACIÓN ---
+    useEffect(() => {
+        setPaginaActual(1);
+    }, [busqueda, filtroLista, filtroTipo]);
 
     // --- MANEJO DE ACCIONES ---
     const handleUpload = (e) => {
@@ -50,80 +72,71 @@ export default function Clientes({ auth, clientes = [], vendedores = [] }) {
         });
     };
 
-    const abrirModalAsignacion = (cliente) => {
-        setClienteEditando(cliente);
-        formAsignacion.setData({
-            vendedor_id: cliente.vendedor_id || '',
-            es_heredado: cliente.es_heredado === 1 || cliente.es_heredado === true
-        });
+    const abrirModalCrear = () => {
+        setModoModal('crear');
+        setClienteActual(null);
+        formCliente.reset();
+        formCliente.clearErrors();
     };
 
-    const guardarAsignacion = (e) => {
-        e.preventDefault();
-        formAsignacion.put(route('admin.clientes.update', clienteEditando.id), {
-            onSuccess: () => setClienteEditando(null)
+    const abrirModalEditar = (cliente) => {
+        setModoModal('editar');
+        setClienteActual(cliente);
+        formCliente.setData({
+            numero_cliente: cliente.numero_cliente || '',
+            nombre: cliente.nombre || '',
+            vendedor_id: cliente.vendedor_id || '',
+            es_heredado: cliente.es_heredado === 1 || cliente.es_heredado === true,
+            catalogo_tipo_cliente_id: cliente.catalogo_tipo_cliente_id || '', // <-- Añadido
         });
+        formCliente.clearErrors();
+    };
+
+    const cerrarModal = () => {
+        setModoModal(null);
+        setClienteActual(null);
+        formCliente.reset();
+    };
+
+    const guardarCliente = (e) => {
+        e.preventDefault();
+        
+        if (modoModal === 'crear') {
+            formCliente.post(route('admin.clientes.store'), {
+                onSuccess: () => cerrarModal()
+            });
+        } else {
+            formCliente.put(route('admin.clientes.update', clienteActual.id), {
+                onSuccess: () => cerrarModal()
+            });
+        }
     };
 
     // --- FUNCIÓN RENDERIZADORA DE LISTAS (UI/UX) ---
     const renderBadgeLista = (nombreLista) => {
-        if (!nombreLista) return <span className="px-2 py-1 bg-zinc-500/10 text-zinc-500 text-[9px] font-black uppercase tracking-widest rounded-md">Sin Lista</span>;
+        if (!nombreLista) return <span className="px-2 py-1 theme-element border theme-border text-zinc-500 text-[9px] font-black uppercase tracking-widest rounded-md">Sin Lista</span>;
         
-        // Limpiamos el texto: quitamos "MAYOREO " y normalizamos
         const nivel = nombreLista.toUpperCase().replace('MAYOREO ', '').trim();
 
         switch (nivel) {
-            case 'BRONCE':
-                return (
-                    <span className="px-2 py-1 bg-[#cd7f32]/10 text-[#cd7f32] border border-[#cd7f32]/30 text-[9px] font-black uppercase tracking-widest rounded-md">
-                        Bronce
-                    </span>
-                );
-            case 'PLATA':
-                return (
-                    <span className="px-2 py-1 bg-slate-400/10 text-slate-500 border border-slate-400/30 text-[9px] font-black uppercase tracking-widest rounded-md">
-                        Plata
-                    </span>
-                );
-            case 'ORO':
-                return (
-                    <span className="px-2 py-1 bg-yellow-500/10 text-yellow-600 border border-yellow-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">
-                        Oro
-                    </span>
-                );
+            case 'BRONCE': return <span className="px-2 py-1 bg-[#cd7f32]/10 text-[#cd7f32] border border-[#cd7f32]/30 text-[9px] font-black uppercase tracking-widest rounded-md">Bronce</span>;
+            case 'PLATA':  return <span className="px-2 py-1 bg-slate-400/10 text-slate-500 border border-slate-400/30 text-[9px] font-black uppercase tracking-widest rounded-md">Plata</span>;
+            case 'ORO':    return <span className="px-2 py-1 bg-yellow-500/10 text-yellow-600 border border-yellow-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">Oro</span>;
             case 'DIAMANTE':
                 return (
                     <span className="relative flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-400/40 text-[9px] font-black uppercase tracking-widest rounded-md overflow-hidden shadow-[0_0_8px_rgba(34,211,238,0.2)]">
                         <Sparkles className="w-3 h-3 text-cyan-600 dark:text-cyan-300" /> 
                         <span className="text-cyan-700 dark:text-cyan-300 drop-shadow-sm">Diamante</span>
-                        
-                        {/* Efecto de cristal (Sweep diagonal) */}
                         <span className="absolute inset-0 w-[150%] -translate-x-full bg-gradient-to-r from-transparent via-cyan-100/60 dark:via-white/20 to-transparent skew-x-12 animate-[shimmer_3s_infinite_ease-in-out]"></span>
                     </span>
                 );
-            case 'PUBLICO GENERAL':
-                return (
-                    <span className="px-2 py-1 bg-zinc-500/10 text-zinc-500 border border-zinc-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">
-                        Público Gral.
-                    </span>
-                );
-            case 'COLABORADORES':
-                return (
-                    <span className="px-2 py-1 bg-purple-500/10 text-purple-600 border border-purple-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">
-                        Colaborador
-                    </span>
-                );
-            default:
-                return (
-                    <span className="px-2 py-1 bg-blue-500/10 text-blue-500 border border-blue-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">
-                        {nivel}
-                    </span>
-                );
+            case 'PUBLICO GENERAL': return <span className="px-2 py-1 theme-element theme-border border text-zinc-500 text-[9px] font-black uppercase tracking-widest rounded-md">Público Gral.</span>;
+            case 'COLABORADORES':   return <span className="px-2 py-1 bg-purple-500/10 text-purple-600 border border-purple-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">Colaborador</span>;
+            default:                return <span className="px-2 py-1 bg-blue-500/10 text-blue-500 border border-blue-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">{nivel}</span>;
         }
     };
 
-    // --- LÓGICA DE FILTRADO ---
-    // Extraer listas únicas para poblar el select dinámicamente
+    // --- LÓGICA DE FILTRADO Y PAGINACIÓN ---
     const listasUnicas = ['Todas', ...new Set(clientes.map(c => c.lista_descuento?.nombre || 'Sin Lista'))];
 
     const clientesFiltrados = clientes.filter(cliente => {
@@ -139,98 +152,166 @@ export default function Clientes({ auth, clientes = [], vendedores = [] }) {
         return matchBusqueda && matchLista && matchTipo;
     });
 
+    const indiceUltimoItem = paginaActual * itemsPorPagina;
+    const indicePrimerItem = indiceUltimoItem - itemsPorPagina;
+    const clientesPaginados = clientesFiltrados.slice(indicePrimerItem, indiceUltimoItem);
+    const totalPaginas = Math.ceil(clientesFiltrados.length / itemsPorPagina);
+
+    const baseCardClass = "fade-up theme-surface border theme-border rounded-[2.5rem] shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)] transition-all duration-300 relative z-10";
+
     return (
         <AppLayout auth={auth}>
             <Head title="Gestión de Clientes | GELIANV" />
 
-            {/* --- MODAL DE GESTIÓN MANUAL --- */}
-            {clienteEditando && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/40 backdrop-blur-sm">
-                    <div className="theme-surface border border-zinc-200 dark:border-zinc-800 rounded-[3rem] p-8 md:p-10 shadow-2xl max-w-md w-full relative z-10 fade-up">
+            {/* =========================================
+                PORTAL DEL MODAL (CREAR / EDITAR)
+                ========================================= */}
+            {modoModal && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl transition-opacity animate-fade-in" onClick={cerrarModal}>
+                    <div className="w-full max-w-lg theme-surface theme-border border shadow-2xl rounded-[2.5rem] p-8 md:p-10 flex flex-col space-y-6 relative modal-pop max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         
-                        <button onClick={() => setClienteEditando(null)} className="absolute top-6 right-6 p-3 theme-element rounded-2xl hover:text-[var(--color-primario)] transition-colors">
-                            <X className="w-5 h-5 theme-text-muted" />
+                        <button onClick={cerrarModal} className="absolute top-5 right-5 p-2 theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors outline-none">
+                            <X className="w-5 h-5" />
                         </button>
                         
-                        <form onSubmit={guardarAsignacion} className="space-y-6">
+                        <form onSubmit={guardarCliente} className="space-y-6 w-full">
                             <div>
-                                <h2 className="text-2xl font-black italic theme-text-main uppercase tracking-tighter mb-1">
-                                    Editar <span style={{ color: 'var(--color-primario)' }}>Cliente</span>
-                                </h2>
-                                <p className="text-xs font-bold theme-text-muted truncate">{clienteEditando.nombre}</p>
+                                <h3 className="text-xl font-black uppercase italic tracking-tighter theme-text-main m-0 drop-shadow-sm">
+                                    {modoModal === 'crear' ? 'Nuevo' : 'Editar'} <span style={{ color: 'var(--color-primario)' }}>Cliente_</span>
+                                </h3>
+                                <p className="text-xs font-bold theme-text-muted mt-1">
+                                    {modoModal === 'crear' ? 'Ingresa los datos del nuevo cliente.' : clienteActual?.nombre}
+                                </p>
                             </div>
-                            
-                            <div className="space-y-3">
-                                <label className="text-[10px] font-black uppercase theme-text-muted ml-2 tracking-widest italic">Vendedora Asignada_</label>
+
+                            <div className="space-y-4">
+                                {/* Número de Cliente */}
+                                <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipo de Cliente_</label>
                                 <select 
-                                    value={formAsignacion.data.vendedor_id} 
-                                    onChange={e => formAsignacion.setData('vendedor_id', e.target.value)}
-                                    className="w-full p-4 theme-element border theme-border rounded-2xl theme-text-main font-bold outline-none transition-all text-sm cursor-pointer focus:border-[var(--color-primario)]"
+                                    value={formCliente.data.catalogo_tipo_cliente_id} 
+                                    onChange={e => formCliente.setData('catalogo_tipo_cliente_id', e.target.value)}
+                                    className="w-full px-5 py-4 theme-surface border theme-border rounded-xl font-bold text-sm outline-none transition-all shadow-sm appearance-none"
+                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
+                                    onBlur={e => e.target.style.borderColor = ''}
                                 >
-                                    <option value="">-- Sin Asignar --</option>
-                                    {vendedores?.map(vendedor => (
-                                        <option key={vendedor.id} value={vendedor.id}>{vendedor.name}</option>
+                                    <option value="">-- Sin asignar (Por definir) --</option>
+                                    {tipos_cliente.map(tipo => (
+                                        <option key={tipo.id} value={tipo.id}>{tipo.nombre}</option>
                                     ))}
                                 </select>
+                                {formCliente.errors.catalogo_tipo_cliente_id && <p className="text-xs text-red-500 mt-1">{formCliente.errors.catalogo_tipo_cliente_id}</p>}
                             </div>
 
-                            <div 
-                                className="p-4 theme-element border theme-border rounded-2xl flex items-center justify-between cursor-pointer group transition-colors hover:border-[var(--color-primario)]" 
-                                style={{ borderColor: formAsignacion.data.es_heredado ? 'var(--color-primario)' : '' }}
-                                onClick={() => formAsignacion.setData('es_heredado', !formAsignacion.data.es_heredado)}
-                            >
-                                <div>
-                                    <p className="text-xs font-black uppercase theme-text-main transition-colors group-hover:text-[var(--color-primario)]" style={{ color: formAsignacion.data.es_heredado ? 'var(--color-primario)' : '' }}>Cliente Heredado</p>
-                                    <p className="text-[10px] font-bold theme-text-muted italic mt-1">Activa reglas de seguridad especiales</p>
+                                {/* Nombre */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre Completo</label>
+                                    <div className="relative">
+                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                        <input 
+                                            type="text" 
+                                            value={formCliente.data.nombre} 
+                                            onChange={e => formCliente.setData('nombre', e.target.value)}
+                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md theme-placeholder"
+                                            placeholder="Nombre del cliente o empresa"
+                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} 
+                                            onBlur={e => e.target.style.borderColor = ''}
+                                        />
+                                    </div>
+                                    {formCliente.errors.nombre && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest m-0 mt-1 ml-1">{formCliente.errors.nombre}</p>}
                                 </div>
-                                <input 
-                                    type="checkbox" 
-                                    checked={formAsignacion.data.es_heredado}
-                                    readOnly
-                                    className="w-5 h-5 rounded border-zinc-300 cursor-pointer pointer-events-none"
-                                    style={{ color: 'var(--color-primario)' }}
-                                />
+
+                                {/* Vendedora Asignada */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Vendedora Asignada</label>
+                                    <div className="relative">
+                                        <select 
+                                            value={formCliente.data.vendedor_id} 
+                                            onChange={e => formCliente.setData('vendedor_id', e.target.value)}
+                                            className="w-full px-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md cursor-pointer appearance-none"
+                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} 
+                                            onBlur={e => e.target.style.borderColor = ''}
+                                        >
+                                            <option value="">-- Sin Asignar --</option>
+                                            {vendedores?.map(vendedor => (
+                                                <option key={vendedor.id} value={vendedor.id}>{vendedor.name}</option>
+                                            ))}
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                                            <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Switch Heredado */}
+                                <div 
+                                    className="p-5 theme-element border theme-border rounded-xl flex items-center justify-between cursor-pointer group transition-all hover:shadow-md mt-2" 
+                                    style={{ borderColor: formCliente.data.es_heredado ? 'var(--color-primario)' : '' }}
+                                    onClick={() => formCliente.setData('es_heredado', !formCliente.data.es_heredado)}
+                                >
+                                    <div>
+                                        <span className="text-sm font-black theme-text-main uppercase tracking-widest block leading-tight transition-colors" style={{ color: formCliente.data.es_heredado ? 'var(--color-primario)' : '' }}>Cliente Heredado</span>
+                                        <span className="text-[10px] font-bold theme-text-muted uppercase tracking-widest">Reglas de seguridad especiales</span>
+                                    </div>
+                                    <button type="button" className="gelia-switch shrink-0 scale-110 origin-right pointer-events-none" data-active={formCliente.data.es_heredado}>
+                                        <div className="gelia-switch-thumb shadow-md" />
+                                    </button>
+                                </div>
                             </div>
 
-                            <div className="pt-4">
-                                <button type="submit" disabled={formAsignacion.processing} className="w-full py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-xl hover:scale-[1.02] disabled:opacity-50" style={{ backgroundColor: 'var(--color-primario)', color: 'white' }}>
-                                    {formAsignacion.processing ? 'Guardando...' : 'Guardar Configuración_'}
-                                </button>
-                            </div>
+                            <button type="submit" disabled={formCliente.processing} className="w-full py-4 mt-6 rounded-2xl text-white font-black uppercase tracking-widest text-[11px] transition-transform hover:scale-105 shadow-md flex justify-center items-center gap-2 outline-none disabled:opacity-60 disabled:scale-100" style={{ backgroundColor: 'var(--color-primario)' }}>
+                                <Check className="w-5 h-5" /> {formCliente.processing ? 'Guardando...' : 'Guardar Cliente_'}
+                            </button>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            <div className="max-w-7xl mx-auto p-6 md:p-12 space-y-12">
-                {/* --- ENCABEZADO --- */}
-                <header className="fade-up space-y-4">
-                    <div className="flex items-center space-x-3">
-                        <span className="h-1.5 w-12 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }}></span>
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>Base de Datos Wizerp</p>
+            <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
+                
+                {/* --- HEADER --- */}
+                <header className={`${baseCardClass} p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`}>
+                    <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-start mb-2">
+                            <div className="w-8 h-1.5 rounded-full mr-3" style={{ backgroundColor: 'var(--color-primario)' }}></div>
+                            <span className="text-[10px] font-black tracking-[0.2em] uppercase theme-text-muted drop-shadow-sm">
+                                BASE DE DATOS WIZERP_
+                            </span>
+                        </div>
+                        <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0 p-0">
+                            SISTEMA DE <span style={{ color: 'var(--color-primario)' }}>CLIENTES</span>
+                        </h1>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-tight transition-colors">
-                        SISTEMA DE <span style={{ color: 'var(--color-primario)' }}>CLIENTES</span>
-                    </h1>
+                    
+                    {/* BOTÓN CREAR CLIENTE */}
+                    <button 
+                        onClick={abrirModalCrear}
+                        className="py-4 px-8 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl outline-none flex justify-center items-center gap-2"
+                        style={{ backgroundColor: 'var(--color-primario)' }}
+                    >
+                        <Plus className="w-5 h-5" /> Nuevo Cliente_
+                    </button>
                 </header>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     
-                    {/* --- PANEL LATERAL: CARGA MASIVA CSV --- */}
-                    <div className="fade-up lg:col-span-1 space-y-6">
-                        <div 
-                            className="theme-surface border-2 rounded-[2.5rem] p-8 shadow-sm transition-all relative overflow-hidden theme-border"
-                            style={{ borderColor: dragActive ? 'var(--color-primario)' : '' }}
-                        >
-                            <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter flex items-center mb-6">
-                                <Upload className="w-5 h-5 mr-3" style={{ color: 'var(--color-primario)' }} />
-                                Carga Masiva
-                            </h2>
+                    {/* --- PANEL LATERAL: CARGA MASIVA --- */}
+                    <div className="lg:col-span-1 space-y-8">
+                        <section className={`${baseCardClass} p-8`}>
+                            <div className="flex items-center gap-3 mb-6">
+                                <Upload className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
+                                <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
+                                    Carga Masiva_
+                                </h2>
+                            </div>
                             
                             <form onSubmit={handleUpload} className="space-y-6">
-                                {/* UX MEJORADA: Toda la caja es un Label clickeable */}
                                 <label 
-                                    className="border-2 border-dashed theme-border rounded-3xl p-10 flex flex-col items-center justify-center text-center space-y-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/10 transition-colors cursor-pointer group w-full block"
+                                    className="border-[3px] border-dashed theme-border rounded-[2rem] p-10 flex flex-col items-center justify-center text-center space-y-4 transition-all cursor-pointer group w-full block theme-element hover:shadow-md"
                                     onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
                                     onDragLeave={() => setDragActive(false)}
                                     onDrop={(e) => {
@@ -240,9 +321,10 @@ export default function Clientes({ auth, clientes = [], vendedores = [] }) {
                                             formCarga.setData('archivo', e.dataTransfer.files[0]);
                                         }
                                     }}
+                                    style={{ borderColor: dragActive ? 'var(--color-primario)' : '' }}
                                 >
-                                    <div className="w-16 h-16 theme-element rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        <FileSpreadsheet className="w-8 h-8 theme-text-muted" style={{ color: formCarga.data.archivo ? 'var(--color-primario)' : '' }} />
+                                    <div className="w-16 h-16 theme-surface border theme-border rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
+                                        <FileSpreadsheet className="w-8 h-8" style={{ color: formCarga.data.archivo ? 'var(--color-primario)' : 'var(--theme-text-muted)' }} />
                                     </div>
                                     <div>
                                         <p className="text-xs font-black theme-text-main uppercase">Suelte el archivo aquí_</p>
@@ -262,31 +344,31 @@ export default function Clientes({ auth, clientes = [], vendedores = [] }) {
                                 </label>
 
                                 {formCarga.errors.archivo && (
-                                    <p className="text-red-500 text-xs font-bold mt-2">{formCarga.errors.archivo}</p>
+                                    <p className="text-red-500 text-[10px] font-bold mt-2 uppercase tracking-widest text-center">{formCarga.errors.archivo}</p>
                                 )}
 
                                 {formCarga.data.archivo && (
-                                    <div className="flex items-center gap-3 p-4 theme-element rounded-2xl border-2 border-emerald-500/20">
-                                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                    <div className="flex items-center gap-3 p-4 theme-surface border border-emerald-500/30 rounded-2xl shadow-sm">
+                                        <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
                                         <span className="text-[10px] font-bold theme-text-main truncate">{formCarga.data.archivo.name}</span>
                                     </div>
                                 )}
 
                                 <button 
                                     disabled={formCarga.processing || !formCarga.data.archivo}
-                                    className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all disabled:opacity-30 hover:scale-[1.02]"
+                                    className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl disabled:opacity-50 disabled:scale-100 outline-none flex justify-center items-center gap-2"
                                     style={{ backgroundColor: 'var(--color-primario)' }}
                                 >
-                                    {formCarga.processing ? 'Sincronizando...' : 'Actualizar Base de Datos'}
+                                    <Database className="w-4 h-4" /> {formCarga.processing ? 'Sincronizando...' : 'Actualizar BD_'}
                                 </button>
                             </form>
 
-                            <div className="mt-8 p-6 theme-element rounded-3xl space-y-4">
+                            <div className="mt-8 pt-6 border-t theme-border space-y-4">
                                 <div className="flex items-center gap-2 text-amber-500">
                                     <Database className="w-4 h-4" />
                                     <p className="text-[9px] font-black uppercase tracking-widest italic">Cabeceras Soportadas_</p>
                                 </div>
-                                <p className="text-[10px] theme-text-muted font-bold leading-relaxed italic">
+                                <p className="text-[10px] theme-text-muted font-bold leading-relaxed">
                                     El sistema detecta automáticamente los campos. Puedes enviar un archivo solo con las columnas necesarias. <br/><br/>
                                     <strong style={{ color: 'var(--color-primario)' }}>numero_cliente</strong> (Requerido)<br/>
                                     <strong style={{ color: 'var(--color-primario)' }}>nombre</strong><br/>
@@ -295,138 +377,184 @@ export default function Clientes({ auth, clientes = [], vendedores = [] }) {
                                     <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)
                                 </p>
                             </div>
-                        </div>
+                        </section>
                     </div>
 
-                    {/* --- PANEL PRINCIPAL: LISTADO DE CLIENTES --- */}
-                    <div className="fade-up lg:col-span-2 space-y-6">
+                    {/* --- PANEL PRINCIPAL: LISTADO --- */}
+                    <div className="lg:col-span-2 space-y-8">
                         
-                        {/* Buscador y Filtros */}
-                        <div className="flex flex-col md:flex-row gap-4 items-center justify-between theme-surface border-2 theme-border p-4 rounded-[2rem] shadow-sm">
-                            <div className="relative w-full md:flex-1">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
-                                <input 
-                                    type="text" 
-                                    placeholder="Buscar por número o nombre..." 
-                                    value={busqueda}
-                                    onChange={e => setBusqueda(e.target.value)}
-                                    className="w-full pl-12 pr-4 py-3 theme-element border theme-border rounded-xl theme-text-main font-bold outline-none focus:border-[var(--color-primario)] transition-all theme-placeholder text-xs"
-                                />
-                            </div>
+                        <section className={`${baseCardClass} p-8 space-y-8`}>
+                            {/* Buscador y Filtros (Estilo Edit.jsx Inputs) */}
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                                <div className="md:col-span-6 relative">
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Buscar por número o nombre..." 
+                                        value={busqueda}
+                                        onChange={e => setBusqueda(e.target.value)}
+                                        className="w-full px-12 py-4 theme-element border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md theme-placeholder"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} 
+                                        onBlur={e => e.target.style.borderColor = ''}
+                                    />
+                                </div>
 
-                            <div className="flex gap-4 w-full md:w-auto">
-                                <div className="relative flex-1 md:w-40">
+                                <div className="md:col-span-3 relative">
                                     <select 
                                         value={filtroLista}
                                         onChange={e => setFiltroLista(e.target.value)}
-                                        className="w-full pl-4 pr-10 py-3 theme-element border theme-border rounded-xl theme-text-main font-black uppercase tracking-widest text-[9px] appearance-none cursor-pointer outline-none focus:border-[var(--color-primario)] transition-all"
+                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} 
+                                        onBlur={e => e.target.style.borderColor = ''}
                                     >
                                         {listasUnicas.map(lista => (
                                             <option key={lista} value={lista}>{lista}</option>
                                         ))}
                                     </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 theme-text-muted pointer-events-none" />
+                                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                    </div>
                                 </div>
-                                <div className="relative flex-1 md:w-40">
+
+                                <div className="md:col-span-3 relative">
                                     <select 
                                         value={filtroTipo}
                                         onChange={e => setFiltroTipo(e.target.value)}
-                                        className="w-full pl-4 pr-10 py-3 theme-element border theme-border rounded-xl theme-text-main font-black uppercase tracking-widest text-[9px] appearance-none cursor-pointer outline-none focus:border-[var(--color-primario)] transition-all"
+                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} 
+                                        onBlur={e => e.target.style.borderColor = ''}
                                     >
-                                        <option value="Todos">TODOS LOS TIPOS</option>
+                                        <option value="Todos">TODOS</option>
                                         <option value="Directos">DIRECTOS</option>
                                         <option value="Heredados">HEREDADOS</option>
                                     </select>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 theme-text-muted pointer-events-none" />
+                                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Contenedor de la lista */}
-                        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                            {clientesFiltrados.length === 0 ? (
-                                <div className="text-center py-12 theme-surface border-2 border-dashed theme-border rounded-[2rem]">
-                                    <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
-                                    <h3 className="text-lg font-black italic uppercase theme-text-main">Sin resultados</h3>
-                                    <p className="text-xs font-bold theme-text-muted mt-2">No se encontraron clientes que coincidan con los filtros.</p>
-                                </div>
-                            ) : (
-                                clientesFiltrados.map((cliente) => (
-                                    <div key={cliente.id} className="theme-surface border-2 theme-border p-6 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-6 transition-all group hover:border-[var(--color-primario)]">
-                                        
-                                        <div className="flex items-center gap-6 w-full md:w-auto">
-                                            {/* Badge Número de Cliente */}
-                                            <div className="w-16 h-16 theme-element border-2 theme-border rounded-2xl flex items-center justify-center font-black italic theme-text-main text-xs transition-colors group-hover:border-[var(--color-primario)]">
-                                                {cliente.numero_cliente}
-                                            </div>
+                            {/* Contenedor de la lista */}
+                            <div className="space-y-4">
+                                {clientesFiltrados.length === 0 ? (
+                                    <div className="text-center py-16 theme-element border-2 border-dashed theme-border rounded-[2rem]">
+                                        <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
+                                        <h3 className="text-lg font-black italic uppercase theme-text-main">Sin resultados</h3>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted mt-2">No se encontraron coincidencias.</p>
+                                    </div>
+                                ) : (
+                                    clientesPaginados.map((cliente) => (
+                                        <div key={cliente.id} className="theme-element border theme-border p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-150 hover:ring-2 hover:ring-[var(--color-primario)]/40 hover:shadow-md group">
                                             
-                                            {/* Información General */}
-                                            <div>
-                                                <h3 className="text-lg font-black italic theme-text-main uppercase tracking-tighter truncate max-w-[200px] md:max-w-[300px]">
-                                                    {cliente.nombre}
-                                                </h3>
-                                                <div className="flex flex-wrap items-center gap-3 mt-1">
-                                                    {renderBadgeLista(cliente.lista_descuento?.nombre)}
-                                                    <span className="flex items-center gap-1 text-[10px] font-bold theme-text-muted">
-                                                        <TrendingUp className="w-3 h-3 text-emerald-500" /> 
-                                                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cliente.monto_venta_actual)}
-                                                    </span>
+                                            <div className="flex items-center gap-4 w-full md:w-auto">
+                                                <div className="w-14 h-14 theme-surface border theme-border rounded-2xl flex items-center justify-center font-black italic theme-text-main text-[10px] transition-transform group-hover:scale-110 shadow-sm shrink-0">
+                                                    {cliente.numero_cliente}
                                                 </div>
+                                                
+                                                <div>
+                                                    <h3 className="text-[15px] font-black theme-text-main leading-tight uppercase truncate max-w-[200px] md:max-w-[280px]">
+                                                        {cliente.nombre}
+                                                    </h3>
+                                                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                                                        {renderBadgeLista(cliente.lista_descuento?.nombre)}
+                                                        <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest theme-text-muted">
+                                                            <TrendingUp className="w-3 h-3 text-emerald-500" /> 
+                                                            {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cliente.monto_venta_actual)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto mt-2 md:mt-0">
+                                                {cliente.es_heredado ? (
+                                                    <div className="text-right border-r theme-border pr-4">
+                                                        <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Protegido_</p>
+                                                        <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase italic">Heredado</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-right border-r theme-border pr-4">
+                                                        <p className="text-[8px] font-black theme-text-muted uppercase tracking-widest">Asignación_</p>
+                                                        <p className="text-[10px] font-black theme-text-main uppercase italic truncate max-w-[100px]">
+                                                            {cliente.vendedor ? cliente.vendedor.name : 'Sin Asignar'}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                <button 
+                                                    onClick={() => abrirModalEditar(cliente)}
+                                                    className="p-3 theme-surface rounded-xl transition-all shadow-sm hover:shadow-md group-hover:scale-110 outline-none"
+                                                    style={{ color: 'var(--color-primario)' }}
+                                                    title="Editar cliente"
+                                                >
+                                                    <Edit3 className="w-4 h-4" />
+                                                </button>
                                             </div>
                                         </div>
+                                    ))
+                                )}
 
-                                        {/* Status y Botón de Gestión */}
-                                        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-                                            {cliente.es_heredado ? (
-                                                <div className="p-3 theme-element rounded-2xl flex flex-col items-end border border-amber-500/20 bg-amber-500/5 min-w-[100px]">
-                                                    <p className="text-[8px] font-black text-amber-600 uppercase tracking-widest">Protegido_</p>
-                                                    <p className="text-[10px] font-black text-amber-500 uppercase italic">Heredado</p>
-                                                </div>
-                                            ) : (
-                                                <div className="p-3 theme-element rounded-2xl flex flex-col items-end min-w-[100px]">
-                                                    <p className="text-[8px] font-black theme-text-muted uppercase tracking-widest">Asignación_</p>
-                                                    <p className="text-[10px] font-black theme-text-main uppercase italic truncate max-w-[100px]">
-                                                        {cliente.vendedor ? cliente.vendedor.name : 'Sin Asignar'}
-                                                    </p>
-                                                </div>
-                                            )}
+                                {/* --- CONTROLES DE PAGINACIÓN --- */}
+                                {totalPaginas > 1 && (
+                                    <div className="flex flex-col md:flex-row items-center justify-between pt-8 mt-4 border-t theme-border gap-4">
+                                        <span className="text-[10px] font-black theme-text-muted uppercase tracking-widest">
+                                            Viendo {indicePrimerItem + 1} al {Math.min(indiceUltimoItem, clientesFiltrados.length)} de {clientesFiltrados.length}
+                                        </span>
+                                        
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
+                                                disabled={paginaActual === 1}
+                                                className="p-3 theme-element border theme-border rounded-xl disabled:opacity-50 transition-all hover:shadow-md outline-none"
+                                                style={{ color: paginaActual === 1 ? 'var(--theme-text-muted)' : 'var(--color-primario)' }}
+                                            >
+                                                <ChevronLeft className="w-4 h-4" />
+                                            </button>
+                                            
+                                            <div className="flex items-center gap-1">
+                                                {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                                                    .filter(num => num === 1 || num === totalPaginas || Math.abs(paginaActual - num) <= 1)
+                                                    .map((num, i, arr) => (
+                                                        <React.Fragment key={num}>
+                                                            {i > 0 && arr[i - 1] !== num - 1 && (
+                                                                <span className="text-xs theme-text-muted px-1 font-bold">...</span>
+                                                            )}
+                                                            <button 
+                                                                onClick={() => setPaginaActual(num)}
+                                                                className={`w-10 h-10 rounded-xl text-xs font-black transition-all outline-none shadow-sm ${
+                                                                    paginaActual === num 
+                                                                    ? 'text-white' 
+                                                                    : 'theme-surface border theme-border theme-text-muted hover:scale-105'
+                                                                }`}
+                                                                style={{ backgroundColor: paginaActual === num ? 'var(--color-primario)' : '' }}
+                                                            >
+                                                                {num}
+                                                            </button>
+                                                        </React.Fragment>
+                                                    ))
+                                                }
+                                            </div>
 
                                             <button 
-                                                onClick={() => abrirModalAsignacion(cliente)}
-                                                className="p-4 theme-element border-2 theme-border rounded-2xl transition-all text-zinc-400 group/btn hover:border-[var(--color-primario)] hover:text-[var(--color-primario)]"
-                                                title="Editar cliente manualmente"
+                                                onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
+                                                disabled={paginaActual === totalPaginas}
+                                                className="p-3 theme-element border theme-border rounded-xl disabled:opacity-50 transition-all hover:shadow-md outline-none"
+                                                style={{ color: paginaActual === totalPaginas ? 'var(--theme-text-muted)' : 'var(--color-primario)' }}
                                             >
-                                                <Edit3 className="w-5 h-5" />
+                                                <ChevronRight className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
-                                ))
-                            )}
-                        </div>
+                                )}
+                            </div>
+                        </section>
                     </div>
                 </div>
             </div>
-
-            {/* --- ESTILOS MAESTROS --- */}
+            
             <style>{`
-                .theme-surface { background-color: #ffffff; border-color: #f4f4f5; }
-                .theme-element { background-color: #fafafa; border-color: #e4e4e7; }
-                .theme-text-main { color: #18181b; }
-                .theme-text-muted { color: #71717a; }
-                .theme-border { border-color: #f4f4f5; }
-                .theme-placeholder::placeholder { color: #a1a1aa; }
-                
-                .dark .theme-surface { background-color: #141414; border-color: #2A2A2A; }
-                .dark .theme-element { background-color: #1A1A1A; border-color: #333333; }
-                .dark .theme-text-main { color: #ffffff; }
-                .dark .theme-text-muted { color: #a1a1aa; }
-                .dark .theme-border { border-color: #2A2A2A; }
-                .dark .theme-placeholder::placeholder { color: #52525b; }
-
-                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background-color: var(--color-primario); border-radius: 10px; }
-
                 @keyframes shimmer {
                     0% { transform: translateX(-200%); }
                     50%, 100% { transform: translateX(200%); }

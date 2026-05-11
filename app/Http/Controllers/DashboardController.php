@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\SolicitudTag;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -16,51 +17,82 @@ class DashboardController extends Controller
     {
         $user = $request->user();
         $estadisticas = [];
+        $ultimasSolicitudes = []; // Inicializamos la variable vacía por defecto
 
-        // 1. Métricas operativas para Vendedoras
-        if ($user->can('crear_solicitud')) {
+        // Estadísticas operativas (Ejemplo: Vendedores/Asesores)
+        if ($user->can('solicitudes.crear') || $user->can('solicitudes.gestionar')) {
             $estadisticas['mis_activas'] = SolicitudTag::where('vendedor_id', $user->id)
-                ->where('catalogo_estado_solicitud_id', '!=', 2) // 2 = Respondida (Finalizada)
+                ->where('catalogo_estado_solicitud_id', '!=', 2) // Asumiendo que 2 es un estado cerrado/finalizado
                 ->count();
-
-            $estadisticas['mis_pagos_pendientes'] = SolicitudTag::where('vendedor_id', $user->id)
-                ->where('pago_confirmado', false)
-                ->count();
+            // ... resto de lógica operativa si la necesitas
         }
 
-        // 2. Métricas de validación para el Auxiliar
-        if ($user->can('verificar_auxiliar')) {
-            // Cuentan las solicitudes en estado 1 (Pendiente) que requieren validación cruzada con Wizerp
-            $estadisticas['auditorias_pendientes'] = SolicitudTag::where('catalogo_estado_solicitud_id', 1)->count(); 
-        }
-
-        // 3. Métricas de ejecución para la Encargada de TAGS
-        if ($user->can('ejecutar_tags')) {
-            // Cuentan las solicitudes en estado 3 (Verificada por auxiliar) listas para procesar
-            $estadisticas['tags_pendientes'] = SolicitudTag::where('catalogo_estado_solicitud_id', 3)->count(); 
-            
-            // Cuentan las solicitudes en estado 4 (Incorrecta/Rebotada)
-            $estadisticas['inconsistencias'] = SolicitudTag::where('catalogo_estado_solicitud_id', 4)->count(); 
-        }
-
-        // 4. Métricas Globales para Gerencia/Administración
-        if ($user->can('ver_auditoria') || $user->can('gestionar_usuarios')) {
+        // Estadísticas administrativas globales
+        if ($user->can('usuarios.gestionar') || $user->can('configuracion.ver_auditoria') || $user->can('clientes.carga_masiva')) {
             $mesActual = now()->month;
             $anioActual = now()->year;
 
             $estadisticas['solicitudes_mes'] = SolicitudTag::whereMonth('created_at', $mesActual)
-                                                           ->whereYear('created_at', $anioActual)
-                                                           ->count();
-                                                           
+                ->whereYear('created_at', $anioActual)
+                ->count();
+
             $estadisticas['cotizado_global'] = SolicitudTag::whereMonth('created_at', $mesActual)
-                                                           ->whereYear('created_at', $anioActual)
-                                                           ->sum('monto_cotizado');
-                                                           
+                ->whereYear('created_at', $anioActual)
+                ->sum('monto_cotizado');
+
             $estadisticas['usuarios_activos'] = User::count();
         }
 
+        // --- NUEVA LÓGICA: LIVE SOLICITUDES ---
+        // Extraemos las 4 más recientes con sus relaciones (cliente y estado) si el usuario tiene permiso
+        if ($user->can('configuracion.ver_auditoria') || $user->can('solicitudes.gestionar')) {
+            $ultimasSolicitudes = SolicitudTag::with(['cliente', 'estado'])
+                ->latest()
+                ->take(4)
+                ->get();
+        }
+
+        // Asegúrate de que la ruta del render coincida con la ubicación real de tu componente en React
+        // Ejemplo: si tu archivo está en resources/js/Pages/Admin/AdminDashboard.jsx, usa 'Admin/AdminDashboard'
         return Inertia::render('Dashboards/Index', [
-            'estadisticas' => $estadisticas
+            'estadisticas' => $estadisticas,
+            'ultimas_solicitudes' => $ultimasSolicitudes // Enviamos la data a Inertia/React
         ]);
+    }
+
+    /**
+     * Actualiza las preferencias visuales del dashboard del usuario (Tarjetas Ocultas).
+     */
+    public function actualizarPreferencias(Request $request)
+    {
+        // 1. Validamos que recibimos el array con la nomenclatura oficial del frontend
+        $request->validate([
+            'dashboard_ocultos' => 'array'
+        ]);
+
+        $user = $request->user();
+
+        // 2. Obtenemos la configuración actual directamente con Query Builder
+        $configActual = DB::table('configuraciones_usuarios')
+            ->where('user_id', $user->id)
+            ->first();
+        
+        // 3. Decodificamos el JSON existente o creamos un array vacío si es la primera vez
+        $temaVisual = $configActual ? json_decode($configActual->tema_visual, true) : [];
+
+        // 4. Modificamos SOLO la parte de las tarjetas ocultas del Dashboard
+        $temaVisual['dashboard_ocultos'] = $request->input('dashboard_ocultos', []);
+
+        // 5. Guardamos o insertamos el JSON actualizado sin tocar colores, layout ni fuentes
+        DB::table('configuraciones_usuarios')->updateOrInsert(
+            ['user_id' => $user->id],
+            [
+                'tema_visual' => json_encode($temaVisual),
+                'updated_at'  => now(),
+            ]
+        );
+
+        // 6. Redirigimos de vuelta. Inertia hará una recarga suave y el frontend leerá el nuevo JSON de 'auth'
+        return back()->with('success', 'Preferencias del panel guardadas.');
     }
 }

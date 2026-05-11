@@ -71,17 +71,23 @@ class RolesSeeder extends Seeder
             'solicitudes.ver_detalle'
         ]);
 
-        // 4. CREACIÓN DE USUARIO PRUEBA
+        // 4. CREACIÓN DE USUARIO SUPER ADMIN
         $superAdmin = User::firstOrCreate(
             ['email' => 'realloyal1a@gmail.com'],
             [
-                'name' => 'Gabriel',
+                'name' => 'Jesus Gabriel',
                 'username' => 'realloyal1a',
-                'apellido_paterno' => 'Admin',
+                'apellido_paterno' => 'de la Cruz',
+                'apellido_materno' => 'Zárate',
                 'password' => Hash::make('12345678'),
                 'telefono' => '0000000000',
+                'fecha_nacimiento' => '1999-01-01', // Fecha placeholder
+                'area_id' => null,
+                'catalogo_sexo_id' => null,
             ]
         );
+        
+        // Asignación del rol maestro
         $superAdmin->assignRole('Super Admin');
     }
 }

@@ -6,12 +6,10 @@ import {
     User, Mail, Smartphone, Camera, 
     Palette, Save, ShieldCheck, Moon, Sun, 
     Image as ImageIcon, Type, Droplet, 
-    PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, XCircle,
-    Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, Eye, EyeOff
+    PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, Plus, X, Trash2, AlertTriangle, Check, CheckCircle2, XCircle
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
-import GeliaLogo from '../../Components/GeliaLogo'; // <-- Importamos el logotipo maestro
 
 // --- COMPONENTE AUXILIAR RESPONSIVO ---
 const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, stackOnMobile = true }) => (
@@ -33,12 +31,12 @@ const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, sta
     </div>
 );
 
-export default function Edit({ auth, tema_visual }) {
-    const fileInputRef    = useRef(null);
-    const bgFileInputRef  = useRef(null);
+export default function Edit({ auth }) {
+    const fileInputRef = useRef(null);
+    const bgFileInputRef = useRef(null);
 
     const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
-    const [isBgModalOpen,     setIsBgModalOpen]     = useState(false);
+    const [isBgModalOpen, setIsBgModalOpen] = useState(false);
 
     const [imagePreview, setImagePreview] = useState(
         auth.user?.foto_perfil ? `/storage/${auth.user.foto_perfil}` : null
@@ -48,26 +46,15 @@ export default function Edit({ auth, tema_visual }) {
 
     const [saveStatus, setSaveStatus] = useState(null); // null | 'success' | 'error'
 
-    // --- Estados para secciones colapsables ---
-    const [showSensitive,     setShowSensitive]     = useState(false);
-    const [showInstitutional, setShowInstitutional] = useState(false);
-    const [showPassword,      setShowPassword]      = useState(false);
-    const [showConfirm,       setShowConfirm]       = useState(false);
-
-    const { data, setData, post, processing, recentlySuccessful, errors, transform } = useForm({
-        name:                  auth.user?.name                 ? auth.user.name.trim()                 : '',
-        email:                 auth.user?.email                ? auth.user.email.trim()                : '',
-        apellido_paterno:      auth.user?.apellido_paterno     ? auth.user.apellido_paterno.trim()     : '',
-        apellido_materno:      auth.user?.apellido_materno     ? auth.user.apellido_materno.trim()     : '',
-        telefono:              auth.user?.telefono             ? auth.user.telefono.trim()             : '',
-        fecha_nacimiento:      auth.user?.fecha_nacimiento     || '',
-        password:              '',
-        password_confirmation: '',
-        foto_perfil:           null,
-        remove_foto:           false,
-        archivo_fondo:         null,
-        remove_fondo:          false,
-        tema_visual:           tema_visual || {},
+    const { data, setData, post, processing, recentlySuccessful, errors } = useForm({
+        name: auth.user?.name ? auth.user.name.trim() : '',
+        email: auth.user?.email ? auth.user.email.trim() : '',
+        apellido_paterno: auth.user?.apellido_paterno ? auth.user.apellido_paterno.trim() : '',
+        telefono: auth.user?.telefono ? auth.user.telefono.trim() : '',
+        foto_perfil: null,
+        remove_foto: false,
+        archivo_fondo: null,
+        remove_fondo: false
     });
 
     useEffect(() => {
@@ -107,34 +94,40 @@ export default function Edit({ auth, tema_visual }) {
     const handleRemoveBg = () => {
         setData(prev => ({ ...prev, archivo_fondo: null, remove_fondo: true }));
         setSelectedBg('none');
+        // Solo preview — no toca localStorage hasta que el usuario guarde
         applyBackgroundCSS('none');
     };
 
-    // --- SUBMIT: Blindado con JSON.stringify ---
     const submitProfile = (e) => {
         if (e) e.preventDefault();
         setSaveStatus(null);
 
         const configJSON = {
-            modo:             isDarkMode ? 'dark' : 'light',
-            color_nombre:     selectedColor,
-            fondo_base:       data.archivo_fondo ? 'subiendo_archivo' : selectedBg,
+            modo: isDarkMode ? 'dark' : 'light',
+            color_nombre: selectedColor,
+            fondo_base: selectedBg,
             fuente_principal: typography,
-            layout_sidebar:   sidebarLayout,
-            efecto_cristal:   glassEffect,
+            layout_sidebar: sidebarLayout,
+            efecto_cristal: glassEffect
         };
 
-        transform((data) => ({
-            ...data,
-            password:              data.password || '',
-            password_confirmation: data.password_confirmation || '',
-            tema_visual:           JSON.stringify(configJSON)
-        }));
+        setData(prev => ({ ...prev, tema_visual: configJSON }));
 
         post(route('profile.update'), {
-            forceFormData:  true,
+            forceFormData: true,
             preserveScroll: true,
+            data: {
+                name: data.name,
+                apellido_paterno: data.apellido_paterno,
+                telefono: data.telefono,
+                foto_perfil: data.foto_perfil,
+                remove_foto: data.remove_foto,
+                archivo_fondo: data.archivo_fondo,
+                remove_fondo: data.remove_fondo,
+                tema_visual: JSON.stringify(configJSON)
+            },
             onSuccess: () => {
+                // ─── Recién aquí se persisten al localStorage — son definitivos ───
                 localStorage.setItem('theme',        isDarkMode ? 'dark' : 'light');
                 localStorage.setItem('theme_color',  selectedColor);
                 localStorage.setItem('bg_base',      selectedBg);
@@ -143,7 +136,7 @@ export default function Edit({ auth, tema_visual }) {
                 localStorage.setItem('theme_layout', sidebarLayout);
 
                 setSaveStatus('success');
-                if (fileInputRef.current)   fileInputRef.current.value   = '';
+                if (fileInputRef.current) fileInputRef.current.value = '';
                 if (bgFileInputRef.current) bgFileInputRef.current.value = '';
                 setIsAvatarModalOpen(false);
                 setIsBgModalOpen(false);
@@ -152,50 +145,46 @@ export default function Edit({ auth, tema_visual }) {
             onError: () => {
                 setSaveStatus('error');
                 setTimeout(() => setSaveStatus(null), 5000);
-            },
+            }
         });
     };
 
-    const accentColors      = { rosa: '#ec4899', azul: '#3b82f6', verde: '#10b981', amarillo: '#f59e0b' };
+    const accentColors = { rosa: '#ec4899', azul: '#3b82f6', verde: '#10b981', amarillo: '#f59e0b' };
     const backgroundOptions = ['blob', 'blobscene', 'circle', 'layered', 'peaks', 'polygon', 'square', 'stacked', 'steps', 'wave'];
-    const solidBackgrounds  = [
-        { name: 'Blanco',      hex: '#ffffff' },
-        { name: 'Negro',       hex: '#000000' },
-        { name: 'Gris Oscuro', hex: '#1e293b' },
+    const solidBackgrounds = [
+        { name: 'Blanco', hex: '#ffffff' }, { name: 'Negro', hex: '#000000' }, { name: 'Gris Oscuro', hex: '#1e293b' }
     ];
     const presets = [
-        { name: 'Gelia Signature', modo: 'dark',  colorHex: '#ec4899', colorNombre: 'rosa',  bg: 'blob',    font: 'montserrat', glass: true,  layout: 'floating_left',  sound: true },
-        { name: 'GELIA Oasis',     modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins',     glass: false, layout: 'floating_right', sound: true },
-        { name: 'CyberTech',       modo: 'dark',  colorHex: '#3b82f6', colorNombre: 'azul',  bg: 'polygon', font: 'mono',        glass: false, layout: 'fixed',          sound: true },
+        { name: 'Gelia Signature', modo: 'dark', colorHex: '#ec4899', colorNombre: 'rosa', bg: 'blob', font: 'montserrat', glass: true, layout: 'floating_left', sound: true },
+        { name: 'GELIA Oasis', modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins', glass: false, layout: 'floating_right', sound: true },
+        { name: 'CyberTech', modo: 'dark', colorHex: '#3b82f6', colorNombre: 'azul', bg: 'polygon', font: 'mono', glass: false, layout: 'fixed', sound: true }
     ];
     const fontFamilies = {
-        inter:      "'Inter', sans-serif",
-        montserrat: "'Montserrat', sans-serif",
-        poppins:    "'Poppins', sans-serif",
-        nunito:     "'Nunito', sans-serif",
-        roboto:     "'Roboto', sans-serif",
-        mono:       "'JetBrains Mono', monospace",
+        inter: "'Inter', sans-serif", montserrat: "'Montserrat', sans-serif", poppins: "'Poppins', sans-serif",
+        nunito: "'Nunito', sans-serif", roboto: "'Roboto', sans-serif", mono: "'JetBrains Mono', monospace"
     };
 
-    const bdColor  = tema_visual?.color_nombre?.toLowerCase() || 'rosa';
-    const bdModo   = tema_visual?.modo === 'dark';
-    const bdBg     = tema_visual?.fondo_base      || 'none';
-    const bdFont   = tema_visual?.fuente_principal || 'inter';
-    const bdGlass  = tema_visual?.efecto_cristal   !== false;
-    const bdLayout = tema_visual?.layout_sidebar   || 'floating_left';
+    // ─── Los valores iniciales vienen SIEMPRE de la BD (auth), no del localStorage ───
+    // Así, al recargar o volver a esta página, se muestra lo que realmente está guardado.
+    const bdColor    = auth?.tema_visual?.color_nombre?.toLowerCase() || 'rosa';
+    const bdModo     = auth?.tema_visual?.modo === 'dark';
+    const bdBg       = auth?.tema_visual?.fondo_base || 'none';
+    const bdFont     = auth?.tema_visual?.fuente_principal || 'inter';
+    const bdGlass    = auth?.tema_visual?.efecto_cristal !== false;
+    const bdLayout   = auth?.tema_visual?.layout_sidebar || 'floating_left';
 
     const [selectedColor, setSelectedColor] = useState(bdColor);
-    const [isDarkMode,    setIsDarkMode]    = useState(bdModo);
-    const [selectedBg,    setSelectedBg]    = useState(bdBg);
-    const [typography,    setTypography]    = useState(bdFont);
-    const [glassEffect,   setGlassEffect]   = useState(bdGlass);
+    const [isDarkMode, setIsDarkMode]       = useState(bdModo);
+    const [selectedBg, setSelectedBg]       = useState(bdBg);
+    const [typography, setTypography]       = useState(bdFont);
+    const [glassEffect, setGlassEffect]     = useState(bdGlass);
     const [sidebarLayout, setSidebarLayout] = useState(bdLayout);
     const [notifications, setNotifications] = useState({ sound: true });
 
     const getBackgroundType = (bg) => {
-        if (!bg || bg === 'none')                                       return 'Sin Fondo';
-        if (bg.startsWith('#'))                                         return 'Color Sólido';
-        if (bg.startsWith('data:image') || bg.startsWith('/storage'))  return 'Imagen Personalizada';
+        if (!bg || bg === 'none') return 'Sin Fondo';
+        if (bg.startsWith('#')) return 'Color Sólido';
+        if (bg.startsWith('data:image') || bg.startsWith('/storage')) return 'Imagen Personalizada';
         return 'Diseño Vectorial';
     };
 
@@ -208,30 +197,36 @@ export default function Edit({ auth, tema_visual }) {
         return () => window.removeEventListener('theme-changed', syncThemeState);
     }, []);
 
+    // ─── Al montar: restaurar visualmente el tema guardado en BD ────────
+    // Esto revierte cualquier preview temporal que haya quedado en el DOM
+    // de una sesión anterior sin guardar.
     useEffect(() => {
-        animate(
-            '.fade-up',
-            { translateY: [15, 0], opacity: [0, 1] },
-            { easing: 'easeOutExpo', duration: 600, delay: (el, i) => i * 80 }
-        );
+        animate('.fade-up', { translateY: [15, 0], opacity: [0, 1] }, { easing: 'easeOutExpo', duration: 600, delay: (el, i) => i * 80 });
 
         const accentHex = accentColors[bdColor] || accentColors.rosa;
         const root = document.documentElement;
 
+        // Modo claro/oscuro
         if (bdModo) { root.classList.remove('light'); root.classList.add('dark'); }
-        else        { root.classList.remove('dark');  root.classList.add('light'); }
+        else         { root.classList.remove('dark');  root.classList.add('light'); }
 
+        // Color primario
         root.style.setProperty('--color-primario', accentHex);
+
+        // Fuente
         root.style.setProperty('--font-principal', fontFamilies[bdFont] || fontFamilies.inter);
 
+        // Glass
         bdGlass ? root.classList.add('glass-active') : root.classList.remove('glass-active');
 
+        // Fondo
         applyBackgroundCSS(bdBg);
     }, []);
 
     const handleColorChange = (colorValue, isHex = false) => {
         const hex = isHex ? colorValue : accentColors[colorValue];
         setSelectedColor(colorValue);
+        // Solo preview — no toca localStorage hasta que el usuario guarde
         document.documentElement.style.setProperty('--color-primario', hex);
     };
 
@@ -239,44 +234,59 @@ export default function Edit({ auth, tema_visual }) {
         const isDark = modo === 'dark';
         setIsDarkMode(isDark);
         const root = document.documentElement;
-        if (isDark) { root.classList.remove('light'); root.classList.add('dark'); }
-        else        { root.classList.remove('dark');  root.classList.add('light'); }
+        if (isDark) {
+            root.classList.remove('light');
+            root.classList.add('dark');
+        } else {
+            root.classList.remove('dark');
+            root.classList.add('light');
+        }
+        // Solo preview — no toca localStorage hasta que el usuario guarde
         window.dispatchEvent(new Event('theme-changed'));
     };
 
     const handleFontChange = (fontValue) => {
         setTypography(fontValue);
+        // Solo preview — no toca localStorage hasta que el usuario guarde
         document.documentElement.style.setProperty('--font-principal', fontFamilies[fontValue] || fontFamilies.inter);
     };
 
     const handleGlassChange = (isActive) => {
         setGlassEffect(isActive);
+        // Solo preview — no toca localStorage hasta que el usuario guarde
         const root = document.documentElement;
         isActive ? root.classList.add('glass-active') : root.classList.remove('glass-active');
     };
 
     const handleLayoutChange = (layout) => {
         setSidebarLayout(layout);
-        localStorage.setItem('theme_layout', layout);
+        // Solo preview — no toca localStorage hasta que el usuario guarde
         window.dispatchEvent(new Event('theme-changed'));
     };
 
+    // ─── FIX: limpiar siempre antes de aplicar el nuevo fondo ────────────
     const applyBackgroundCSS = (bgValue) => {
         const root = document.documentElement;
+
+        // Limpiar SIEMPRE primero para que el fondo anterior no persista
         root.style.removeProperty('--bg-image-pc');
         root.style.removeProperty('--bg-image-movil');
 
         if (!bgValue || bgValue === 'none') {
-            root.style.setProperty('--bg-image-pc',    'none');
+            root.style.setProperty('--bg-image-pc', 'none');
             root.style.setProperty('--bg-image-movil', 'none');
+
         } else if (bgValue.startsWith('#')) {
-            root.style.setProperty('--bg-image-pc',    `linear-gradient(to right, ${bgValue}, ${bgValue})`);
+            root.style.setProperty('--bg-image-pc', `linear-gradient(to right, ${bgValue}, ${bgValue})`);
             root.style.setProperty('--bg-image-movil', `linear-gradient(to right, ${bgValue}, ${bgValue})`);
+
         } else if (bgValue.startsWith('data:image') || bgValue.startsWith('/storage')) {
-            root.style.setProperty('--bg-image-pc',    `url(${bgValue})`);
+            root.style.setProperty('--bg-image-pc', `url(${bgValue})`);
             root.style.setProperty('--bg-image-movil', `url(${bgValue})`);
+
         } else {
-            root.style.setProperty('--bg-image-pc',    `url('/assets/backgrounds/${bgValue}_pc.svg')`);
+            // Preset SVG (blob, wave, polygon, etc.)
+            root.style.setProperty('--bg-image-pc', `url('/assets/backgrounds/${bgValue}_pc.svg')`);
             root.style.setProperty('--bg-image-movil', `url('/assets/backgrounds/${bgValue}_movil.svg')`);
         }
     };
@@ -284,6 +294,7 @@ export default function Edit({ auth, tema_visual }) {
     const handleBgChange = (bgValue) => {
         setSelectedBg(bgValue);
         setData('remove_fondo', false);
+        // Solo preview — no toca localStorage hasta que el usuario guarde
         applyBackgroundCSS(bgValue);
     };
 
@@ -291,15 +302,15 @@ export default function Edit({ auth, tema_visual }) {
         handleModeChange(preset.modo);
         handleColorChange(preset.colorNombre || preset.colorHex, !preset.colorNombre);
         handleBgChange(preset.bg);
-        if (preset.font   !== undefined) handleFontChange(preset.font);
-        if (preset.glass  !== undefined) handleGlassChange(preset.glass);
-        if (preset.layout !== undefined) handleLayoutChange(preset.layout);
-        if (preset.sound  !== undefined) setNotifications({ sound: preset.sound });
+        if (preset.font) handleFontChange(preset.font);
+        if (preset.glass !== undefined) handleGlassChange(preset.glass);
+        if (preset.layout) handleLayoutChange(preset.layout);
+        if (preset.sound !== undefined) setNotifications({ sound: preset.sound });
     };
 
-    const baseCardClass   = "fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300";
-    const glassCardClass  = "bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px] border-[1.5px] border-white/80 dark:border-zinc-700/60 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]";
-    const solidCardClass  = "bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)]";
+    const baseCardClass = "fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300";
+    const glassCardClass = "bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px] border-[1.5px] border-white/80 dark:border-zinc-700/60 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]";
+    const solidCardClass = "bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)]";
     const activeCardClass = `${baseCardClass} ${glassEffect ? glassCardClass : solidCardClass}`;
 
     return (
@@ -307,7 +318,7 @@ export default function Edit({ auth, tema_visual }) {
             <Head title="Mi Perfil | GELIANV" />
             <GeliaLoader isVisible={processing} message="Guardando cambios_" />
 
-            {/* ---- FEEDBACK CENTRADO (MODAL PREMIUM CON LOGO FLUIDO) ---- */}
+            {/* ---- FEEDBACK CENTRADO ---- */}
             {saveStatus && createPortal(
                 <div 
                     className="fixed inset-0 z-[99998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in"
@@ -316,31 +327,31 @@ export default function Edit({ auth, tema_visual }) {
                     <div
                         className={`relative w-full max-w-sm sm:max-w-md flex flex-col items-center gap-6 p-8 sm:p-12 rounded-[2.5rem] shadow-[0_0_60px_rgba(0,0,0,0.4)] border-2 backdrop-blur-xl animate-fade-in
                             ${saveStatus === 'success'
-                                ? 'bg-white dark:bg-[#111] border-[var(--color-primario)]/40'
+                                ? 'bg-white dark:bg-[#111] border-green-400/40'
                                 : 'bg-white dark:bg-[#111] border-red-400/40'
                             }`}
                         onClick={e => e.stopPropagation()}
                     >
                         <div className={`absolute inset-0 rounded-[2.5rem] opacity-10 pointer-events-none
-                            ${saveStatus === 'success' ? 'bg-[var(--color-primario)]' : 'bg-red-400'}`}
+                            ${saveStatus === 'success' ? 'bg-green-400' : 'bg-red-400'}`}
                         />
-                        
+
                         <div className={`relative z-10 w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center shadow-xl
-                            ${saveStatus === 'success' ? 'bg-[var(--color-primario)]/15' : 'bg-red-500/15'}`}>
+                            ${saveStatus === 'success' ? 'bg-green-500/15' : 'bg-red-500/15'}`}>
                             {saveStatus === 'success'
-                                ? <GeliaLogo variant="fluid-fill" className="w-12 h-12 sm:w-14 sm:h-14 drop-shadow-lg" />
-                                : <XCircle className="w-10 h-10 sm:w-12 sm:h-12 text-red-500" />
+                                ? <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12 text-green-500" />
+                                : <XCircle    className="w-10 h-10 sm:w-12 sm:h-12 text-red-500" />
                             }
                         </div>
 
                         <div className="relative z-10 text-center space-y-2">
                             <h3 className={`text-xl sm:text-2xl font-black uppercase italic tracking-tighter m-0
-                                ${saveStatus === 'success' ? 'text-[var(--color-primario)]' : 'text-red-600 dark:text-red-400'}`}>
-                                {saveStatus === 'success' ? '¡Identidad Actualizada!' : 'Algo salió mal'}
+                                ${saveStatus === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {saveStatus === 'success' ? '¡Guardado!' : 'Algo salió mal'}
                             </h3>
                             <p className="text-sm font-bold theme-text-muted leading-snug">
                                 {saveStatus === 'success'
-                                    ? 'Tu perfil y configuración visual han sido aplicados correctamente en el sistema.'
+                                    ? 'Tu perfil y configuración visual han sido actualizados correctamente.'
                                     : 'No se pudieron guardar los cambios. Revisa los campos e intenta de nuevo.'}
                             </p>
                         </div>
@@ -348,10 +359,9 @@ export default function Edit({ auth, tema_visual }) {
                         <button
                             onClick={() => setSaveStatus(null)}
                             className={`relative z-10 w-full py-4 rounded-2xl text-white font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-lg outline-none
-                                ${saveStatus === 'success' ? 'opacity-90 hover:opacity-100' : 'bg-red-500 hover:bg-red-600'}`}
-                            style={saveStatus === 'success' ? { backgroundColor: 'var(--color-primario)' } : {}}
+                                ${saveStatus === 'success' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}
                         >
-                            {saveStatus === 'success' ? 'Continuar_' : 'Entendido_'}
+                            {saveStatus === 'success' ? 'Perfecto_' : 'Entendido_'}
                         </button>
 
                         <button
@@ -366,9 +376,10 @@ export default function Edit({ auth, tema_visual }) {
             )}
 
             <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
-
+                
                 {/* --- HEADER --- */}
                 <header className={`${activeCardClass} p-8 md:p-12 flex flex-col gap-8 md:gap-10`}>
+                    
                     <div className="flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-12">
                         <div className="relative flex flex-col items-center gap-2 shrink-0">
                             <div className="relative group shrink-0 cursor-pointer" onClick={() => setIsAvatarModalOpen(true)}>
@@ -398,6 +409,7 @@ export default function Edit({ auth, tema_visual }) {
                                     HOLA, <span style={{ color: 'var(--color-primario)' }}>{auth.user?.name ? `${auth.user.name} ${auth.user.apellido_paterno || ''}`.trim() : 'USUARIO'}</span>
                                 </h1>
                             </div>
+                            
                             <div className="flex items-center justify-center md:justify-start gap-2 theme-text-muted mt-2">
                                 <ShieldCheck className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
                                 <p className="text-xs font-bold tracking-wide m-0">Miembro desde: {auth.user?.created_at ? new Date(auth.user.created_at).toLocaleDateString() : '2026'}</p>
@@ -423,6 +435,7 @@ export default function Edit({ auth, tema_visual }) {
                             </button>
                         </div>
                     </div>
+
                 </header>
 
                 {/* --- SECCIÓN DATOS --- */}
@@ -431,198 +444,42 @@ export default function Edit({ auth, tema_visual }) {
                         <Settings2 className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
                         <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">Ajustes de Cuenta_</h2>
                     </div>
-
-                    {/* ZONA 1: Datos personales */}
-                    <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest mb-4 ml-1 drop-shadow-sm" style={{ color: 'var(--color-primario)' }}>
-                            Datos Personales
-                        </p>
-                        <div className={`border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre(s)</label>
-                                <div className="relative">
-                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                    <input type="text" value={data.name} onChange={e => setData('name', e.target.value)}
-                                        className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                </div>
-                                {errors.name && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.name}</p>}
+                    
+                    <div className={`border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Nombre(s)</label>
+                            <div className="relative">
+                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                <input type="text" value={data.name} onChange={e => setData('name', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md" onFocus={(e) => e.target.style.borderColor = 'var(--color-primario)'} onBlur={(e) => e.target.style.borderColor = ''} />
                             </div>
+                            {errors.name && <p className="text-xs text-red-500 m-0 mt-1 px-2 drop-shadow-sm">{errors.name}</p>}
+                        </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Apellido Paterno</label>
-                                <div className="relative">
-                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                    <input type="text" value={data.apellido_paterno} onChange={e => setData('apellido_paterno', e.target.value)}
-                                        className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                </div>
-                                {errors.apellido_paterno && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.apellido_paterno}</p>}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Apellido Paterno</label>
+                            <div className="relative">
+                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                <input type="text" value={data.apellido_paterno} onChange={e => setData('apellido_paterno', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md" onFocus={(e) => e.target.style.borderColor = 'var(--color-primario)'} onBlur={(e) => e.target.style.borderColor = ''} />
                             </div>
+                            {errors.apellido_paterno && <p className="text-xs text-red-500 m-0 mt-1 px-2 drop-shadow-sm">{errors.apellido_paterno}</p>}
+                        </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Apellido Materno</label>
-                                <div className="relative">
-                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                    <input type="text" value={data.apellido_materno} onChange={e => setData('apellido_materno', e.target.value)}
-                                        className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                </div>
-                                {errors.apellido_materno && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.apellido_materno}</p>}
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Teléfono</label>
-                                <div className="relative">
-                                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                    <input type="text" value={data.telefono} onChange={e => setData('telefono', e.target.value)}
-                                        className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                </div>
-                                {errors.telefono && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.telefono}</p>}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Email Institucional</label>
+                            <div className="relative">
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                <input type="email" value={data.email} readOnly className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-muted text-sm font-bold cursor-not-allowed opacity-60 shadow-sm" />
                             </div>
                         </div>
-                    </div>
 
-                    {/* ZONA 2: Datos sensibles */}
-                    <div>
-                        <button
-                            type="button"
-                            onClick={() => setShowSensitive(v => !v)}
-                            className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-200 outline-none group
-                                ${showSensitive
-                                    ? 'border-[var(--color-primario)]/40 bg-[var(--color-primario)]/5'
-                                    : 'theme-border theme-surface hover:border-[var(--color-primario)]/30'
-                                }`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
-                                    <Lock className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
-                                </div>
-                                <div className="text-left">
-                                    <span className="text-sm font-black theme-text-main uppercase tracking-widest block leading-tight">Datos Sensibles</span>
-                                    <span className="text-[10px] font-bold theme-text-muted uppercase tracking-widest">Contraseña · Fecha de nacimiento</span>
-                                </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Teléfono</label>
+                            <div className="relative">
+                                <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                <input type="text" value={data.telefono} onChange={e => setData('telefono', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md" onFocus={(e) => e.target.style.borderColor = 'var(--color-primario)'} onBlur={(e) => e.target.style.borderColor = ''} />
                             </div>
-                            <ChevronDown className={`w-5 h-5 theme-text-muted transition-transform duration-300 ${showSensitive ? 'rotate-180' : ''}`} />
-                        </button>
-
-                        {showSensitive && (
-                            <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Fecha de Nacimiento</label>
-                                    <div className="relative">
-                                        <CalendarDays className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input type="date" value={data.fecha_nacimiento} onChange={e => setData('fecha_nacimiento', e.target.value)}
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                    </div>
-                                    {errors.fecha_nacimiento && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.fecha_nacimiento}</p>}
-                                </div>
-
-                                <div className="hidden md:block" />
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nueva Contraseña</label>
-                                    <div className="relative">
-                                        <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input
-                                            type={showPassword ? 'text' : 'password'}
-                                            value={data.password}
-                                            onChange={e => setData('password', e.target.value)}
-                                            placeholder="Dejar vacío para no cambiar"
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                        <button type="button" onClick={() => setShowPassword(v => !v)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 theme-text-muted hover:theme-text-main transition-colors outline-none">
-                                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                        </button>
-                                    </div>
-                                    {errors.password && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.password}</p>}
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Confirmar Contraseña</label>
-                                    <div className="relative">
-                                        <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input
-                                            type={showConfirm ? 'text' : 'password'}
-                                            value={data.password_confirmation}
-                                            onChange={e => setData('password_confirmation', e.target.value)}
-                                            placeholder="Repite la nueva contraseña"
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                        <button type="button" onClick={() => setShowConfirm(v => !v)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 theme-text-muted hover:theme-text-main transition-colors outline-none">
-                                            {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                        </button>
-                                    </div>
-                                    {errors.password_confirmation && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.password_confirmation}</p>}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* ZONA 3: Info institucional */}
-                    <div>
-                        <button
-                            type="button"
-                            onClick={() => setShowInstitutional(v => !v)}
-                            className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-200 outline-none group
-                                ${showInstitutional
-                                    ? 'border-[var(--color-primario)]/40 bg-[var(--color-primario)]/5'
-                                    : 'theme-border theme-surface hover:border-[var(--color-primario)]/30'
-                                }`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
-                                    <Building2 className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
-                                </div>
-                                <div className="text-left">
-                                    <span className="text-sm font-black theme-text-main uppercase tracking-widest block leading-tight">Información Institucional</span>
-                                    <span className="text-[10px] font-bold theme-text-muted uppercase tracking-widest">Solo lectura · Asignada por administración</span>
-                                </div>
-                            </div>
-                            <ChevronDown className={`w-5 h-5 theme-text-muted transition-transform duration-300 ${showInstitutional ? 'rotate-180' : ''}`} />
-                        </button>
-
-                        {showInstitutional && (
-                            <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Correo Institucional</label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input type="email" value={data.email} readOnly
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-muted text-sm font-bold cursor-not-allowed opacity-60 shadow-sm" />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Área</label>
-                                    <div className="relative">
-                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input type="text"
-                                            value={auth.user?.area?.nombre || 'Sin área asignada'}
-                                            readOnly
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-muted text-sm font-bold cursor-not-allowed opacity-60 shadow-sm" />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Departamento</label>
-                                    <div className="relative">
-                                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input type="text"
-                                            value={auth.user?.area?.departamento?.nombre || 'Sin departamento'}
-                                            readOnly
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-muted text-sm font-bold cursor-not-allowed opacity-60 shadow-sm" />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                            {errors.telefono && <p className="text-xs text-red-500 m-0 mt-1 px-2 drop-shadow-sm">{errors.telefono}</p>}
+                        </div>
                     </div>
                 </section>
 
@@ -634,19 +491,27 @@ export default function Edit({ auth, tema_visual }) {
                             Temas Predefinidos_
                         </h2>
                     </div>
+                    
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                         {presets.map((preset, idx) => {
                             const isPresetDark = preset.modo === 'dark';
                             return (
-                                <button
-                                    key={idx} type="button" onClick={() => applyPreset(preset)}
+                                <button 
+                                    key={idx} type="button" onClick={() => applyPreset(preset)} 
                                     className="p-6 rounded-[2rem] flex flex-col items-start gap-4 hover:scale-[1.03] hover:shadow-2xl transition-all text-left shadow-md group relative overflow-hidden border-2"
-                                    style={{ backgroundColor: isPresetDark ? '#111113' : '#f8f9fa', borderColor: preset.colorHex + '55' }}
+                                    style={{
+                                        backgroundColor: isPresetDark ? '#111113' : '#f8f9fa',
+                                        borderColor: preset.colorHex + '55',
+                                    }}
                                 >
                                     <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-20 group-hover:opacity-40 transition-opacity blur-2xl" style={{ backgroundColor: preset.colorHex }} />
+                                    
                                     <div className="w-full flex justify-between items-center relative z-10">
                                         <div className="w-7 h-7 rounded-full shadow-lg group-hover:scale-110 transition-transform ring-2 ring-white/20" style={{ backgroundColor: preset.colorHex }}></div>
-                                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full" style={{ backgroundColor: preset.colorHex + '22', color: preset.colorHex }}>{preset.modo}</span>
+                                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full" style={{ 
+                                            backgroundColor: preset.colorHex + '22', 
+                                            color: preset.colorHex 
+                                        }}>{preset.modo}</span>
                                     </div>
                                     <div className="relative z-10">
                                         <span className="text-sm font-black block mb-1" style={{ color: isPresetDark ? '#ffffff' : '#111113' }}>{preset.name}</span>
@@ -688,7 +553,9 @@ export default function Edit({ auth, tema_visual }) {
                                         style={{ backgroundColor: hex, '--tw-ring-color': hex }} title={name}
                                     />
                                 ))}
+                                
                                 <div className="w-[2px] h-8 bg-zinc-300 dark:bg-zinc-700 mx-2 rounded-full"></div>
+                                
                                 <label className="relative w-10 h-10 rounded-full border-2 border-dashed border-zinc-400 dark:border-zinc-500 flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-md hover:border-[var(--color-primario)] transition-all overflow-hidden bg-transparent" title="Elegir color personalizado">
                                     <Palette className="w-4 h-4 theme-text-main z-10 pointer-events-none" />
                                     <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-20" onChange={(e) => handleColorChange(e.target.value, true)} />
@@ -704,13 +571,13 @@ export default function Edit({ auth, tema_visual }) {
 
                         <SettingsRow icon={Type} title="Fuente del sistema" subtitle="Tipografía principal de la interfaz" border={false} stackOnMobile={true}>
                             <div className="relative w-full sm:w-64">
-                                <select
-                                    value={typography}
-                                    onChange={(e) => handleFontChange(e.target.value)}
-                                    className="w-full pl-5 pr-10 py-3 text-sm font-bold theme-surface border border-zinc-300 dark:border-zinc-700 rounded-xl theme-text-main outline-none cursor-pointer focus:ring-2 transition-all appearance-none shadow-sm hover:shadow-md"
-                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                    onFocus={(e) => e.target.style.borderColor = 'var(--color-primario)'}
-                                    onBlur={(e)  => e.target.style.borderColor = ''}
+                                <select 
+                                    value={typography} 
+                                    onChange={(e) => handleFontChange(e.target.value)} 
+                                    className="w-full pl-5 pr-10 py-3 text-sm font-bold theme-surface border border-zinc-300 dark:border-zinc-700 rounded-xl theme-text-main outline-none cursor-pointer focus:ring-2 transition-all appearance-none shadow-sm hover:shadow-md" 
+                                    style={{ '--tw-ring-color': 'var(--color-primario)' }} 
+                                    onFocus={(e) => e.target.style.borderColor = 'var(--color-primario)'} 
+                                    onBlur={(e) => e.target.style.borderColor = ''}
                                 >
                                     <option value="inter">Inter (Predeterminada)</option>
                                     <option value="montserrat">Montserrat (Corporativa)</option>
@@ -769,7 +636,7 @@ export default function Edit({ auth, tema_visual }) {
                             Fondo de Pantalla_
                         </h2>
                     </div>
-
+                    
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Diseños Vectoriales</p>
@@ -810,8 +677,8 @@ export default function Edit({ auth, tema_visual }) {
 
                         <div className="space-y-4">
                             <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Imagen Personalizada</p>
-                            <button
-                                type="button"
+                            <button 
+                                type="button" 
                                 onClick={() => setIsBgModalOpen(true)}
                                 className={`flex items-center justify-center gap-3 w-full h-14 rounded-2xl border-[3px] border-dashed cursor-pointer hover:border-zinc-500 dark:hover:border-zinc-400 transition-all hover:shadow-md hover:-translate-y-0.5 outline-none ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-white/40 dark:bg-black/20' : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900'}`}
                             >
@@ -846,7 +713,7 @@ export default function Edit({ auth, tema_visual }) {
             </div>
 
             {/* =========================================
-                PORTALS DE MODALES (AVATAR Y FONDO)
+                PORTALS DE MODALES 
                 ========================================= */}
             {isAvatarModalOpen && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl transition-opacity animate-fade-in" onClick={() => setIsAvatarModalOpen(false)}>
@@ -854,7 +721,9 @@ export default function Edit({ auth, tema_visual }) {
                         <button onClick={() => setIsAvatarModalOpen(false)} className="absolute top-5 right-5 p-2 theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors outline-none">
                             <X className="w-5 h-5" />
                         </button>
+                        
                         <h3 className="text-lg font-black uppercase italic tracking-tighter theme-text-main m-0">Foto de Perfil_</h3>
+                        
                         <div className="w-36 h-36 rounded-full overflow-hidden border-4 shadow-lg flex items-center justify-center bg-[var(--color-primario)] shrink-0" style={{ borderColor: 'var(--color-primario)' }}>
                             {imagePreview ? (
                                 <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
@@ -862,7 +731,9 @@ export default function Edit({ auth, tema_visual }) {
                                 <span className="text-5xl font-black text-white">{initialChar}</span>
                             )}
                         </div>
+
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg, image/png, image/jpg, image/webp" onChange={handleProfileFileChange} />
+
                         <div className="flex w-full gap-3">
                             <button type="button" onClick={() => fileInputRef.current.click()} className="flex-1 py-3 px-4 theme-element border theme-border rounded-2xl text-xs font-bold theme-text-main transition-transform hover:scale-105 shadow-sm flex items-center justify-center gap-2 outline-none">
                                 <Upload className="w-4 h-4" /> Subir Foto
@@ -871,11 +742,12 @@ export default function Edit({ auth, tema_visual }) {
                                 <User className="w-4 h-4" /> Sin Foto
                             </button>
                         </div>
+
                         <button type="button" onClick={() => setIsAvatarModalOpen(false)} className="w-full py-4 rounded-full text-white font-black uppercase tracking-widest text-[11px] transition-transform hover:scale-105 shadow-md flex justify-center items-center gap-2 outline-none m-0" style={{ backgroundColor: 'var(--color-primario)' }}>
                             <Check className="w-5 h-5" /> Listo
                         </button>
                     </div>
-                </div>,
+                </div>, 
                 document.body
             )}
 
@@ -886,6 +758,7 @@ export default function Edit({ auth, tema_visual }) {
                             <X className="w-5 h-5" />
                         </button>
                         <h3 className="text-lg font-black uppercase italic tracking-tighter theme-text-main m-0">Fondo Personalizado_</h3>
+                        
                         <div className="w-full aspect-video rounded-3xl overflow-hidden border-4 shadow-lg flex items-center justify-center bg-zinc-900 shrink-0 theme-border relative">
                             {selectedBg && selectedBg !== 'none' && !selectedBg.startsWith('#') ? (
                                 <img src={selectedBg.startsWith('data:image') || selectedBg.startsWith('/storage') ? selectedBg : `/assets/backgrounds/${selectedBg}_movil.svg`} alt="Preview" className="w-full h-full object-cover" />
@@ -894,11 +767,14 @@ export default function Edit({ auth, tema_visual }) {
                             ) : (
                                 <ImageIcon className="w-12 h-12 text-zinc-700" />
                             )}
+                            
                             <span className="bg-black/60 text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest absolute top-4 left-4 backdrop-blur-md">
                                 {getBackgroundType(selectedBg)}
                             </span>
                         </div>
+
                         <input type="file" ref={bgFileInputRef} className="hidden" accept="image/jpeg, image/png, image/jpg, image/webp" onChange={handleBgFileChange} />
+
                         <div className="flex w-full gap-3">
                             <button type="button" onClick={() => bgFileInputRef.current.click()} className="flex-1 py-3 px-4 theme-element border theme-border rounded-2xl text-xs font-bold theme-text-main transition-transform hover:scale-105 shadow-sm flex items-center justify-center gap-2 outline-none">
                                 <Upload className="w-4 h-4" /> Subir Imagen
@@ -907,11 +783,12 @@ export default function Edit({ auth, tema_visual }) {
                                 <Trash2 className="w-4 h-4" /> Sin Fondo
                             </button>
                         </div>
+
                         <button type="button" onClick={() => setIsBgModalOpen(false)} className="w-full py-4 rounded-full text-white font-black uppercase tracking-widest text-[11px] transition-transform hover:scale-105 shadow-md flex justify-center items-center gap-2 outline-none m-0" style={{ backgroundColor: 'var(--color-primario)' }}>
                             <Check className="w-5 h-5" /> Listo
                         </button>
                     </div>
-                </div>,
+                </div>, 
                 document.body
             )}
         </AppLayout>

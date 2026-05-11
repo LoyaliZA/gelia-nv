@@ -3,7 +3,7 @@ import { Head, useForm, router } from '@inertiajs/react';
 import { animate } from 'animejs/animation';
 import { 
     Settings, Plus, Edit2, Trash2, 
-    X, Tags, ListTree, Activity, AlertTriangle
+    X, Tags, ListTree, Activity, AlertTriangle, Save, CheckCircle2
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
@@ -14,7 +14,6 @@ export default function Catalogos({ auth, procesos = [], listas = [], estados = 
     const [itemAEditar, setItemAEditar] = useState(null);
     const [itemAEliminar, setItemAEliminar] = useState(null);
     
-    // Formulario para Crear/Editar
     const { data, setData, post, put, processing, reset, errors } = useForm({
         nombre: '',
         descripcion: '',
@@ -22,7 +21,6 @@ export default function Catalogos({ auth, procesos = [], listas = [], estados = 
         activo: true
     });
 
-    // Formulario para Eliminar/Revincular
     const formEliminar = useForm({
         reubicar_en_id: ''
     });
@@ -33,270 +31,128 @@ export default function Catalogos({ auth, procesos = [], listas = [], estados = 
             opacity: [0, 1],
             easing: 'easeOutExpo',
             duration: 600,
-            delay: (el, i) => i * 100
+            delay: (el, i) => i * 30
         });
     }, [tabActiva]);
 
-    const abrirModal = (item = null) => {
-        setItemAEditar(item);
-        if (item) {
-            setData({
-                nombre: item.nombre || '',
-                descripcion: item.descripcion || '',
-                monto_requerido: item.monto_requerido || '',
-                activo: item.activo
-            });
-        } else {
-            reset();
-        }
-        setModalAbierto(true);
-    };
-
-    const abrirModalEliminar = (item) => {
-        setItemAEliminar(item);
-        formEliminar.reset();
-        setModalEliminarAbierto(true);
-    };
-
-    const guardarCatalogo = (e) => {
-        e.preventDefault();
-        const ruta = itemAEditar 
-            ? route(`admin.catalogos.${tabActiva}.update`, itemAEditar.id) 
-            : route(`admin.catalogos.${tabActiva}.store`);
-
-        const accion = itemAEditar ? put : post;
-
-        accion(ruta, {
-            onSuccess: () => { setModalAbierto(false); reset(); setItemAEditar(null); },
-            preserveScroll: true
-        });
-    };
-
-    const confirmarEliminacion = (e) => {
-        e.preventDefault();
-        formEliminar.delete(route(`admin.catalogos.${tabActiva}.destroy`, itemAEliminar.id), {
-            onSuccess: () => { setModalEliminarAbierto(false); setItemAEliminar(null); },
-            preserveScroll: true
-        });
-    };
-
-    const obtenerDatosActivos = () => {
+    // --- LOGICA DE TABS ---
+    const getItemsActuales = () => {
         if (tabActiva === 'procesos') return procesos;
         if (tabActiva === 'listas') return listas;
-        if (tabActiva === 'estados') return estados;
-        return [];
+        return estados;
     };
 
-    const datosActivos = obtenerDatosActivos();
+    const getTituloTab = () => {
+        if (tabActiva === 'procesos') return 'Procesos de Venta';
+        if (tabActiva === 'listas') return 'Listas de Precios';
+        return 'Estados de Solicitud';
+    };
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Gestión de Catálogos | GELIANV" />
+            <Head title="Configuración de Catálogos" />
 
-            {/* --- MODAL ELIMINAR Y REVINCULAR --- */}
-            {modalEliminarAbierto && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center theme-overlay p-4">
-                    <div className="theme-surface border-2 border-red-500/20 rounded-[2.5rem] p-8 shadow-2xl max-w-md w-full relative">
-                        <form onSubmit={confirmarEliminacion} className="space-y-6">
-                            <div className="flex items-center gap-4 text-red-500 mb-6">
-                                <div className="p-3 bg-red-500/10 rounded-2xl"><AlertTriangle className="w-6 h-6" /></div>
-                                <h2 className="text-xl font-black italic uppercase tracking-tighter">Eliminar Registro</h2>
-                            </div>
-                            
-                            <p className="text-sm font-bold theme-text-main">
-                                Estás a punto de eliminar: <span className="text-red-500">{itemAEliminar?.nombre}</span>
-                            </p>
-
-                            {/* Lógica exclusiva para Listas (Revinculación) */}
-                            {tabActiva === 'listas' && (
-                                <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-3 mt-4">
-                                    <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest">Protocolo de Seguridad_</p>
-                                    <p className="text-xs font-bold text-amber-700/80 dark:text-amber-500">Si este registro tiene clientes asignados, selecciona a qué lista deseas moverlos antes de borrarla.</p>
-                                    <select 
-                                        value={formEliminar.data.reubicar_en_id}
-                                        onChange={e => formEliminar.setData('reubicar_en_id', e.target.value)}
-                                        className="w-full p-3 theme-element border-none rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
-                                        required
-                                    >
-                                        <option value="">-- Seleccionar Lista Destino --</option>
-                                        {listas.filter(l => l.id !== itemAEliminar.id).map(lista => (
-                                            <option key={lista.id} value={lista.id}>{lista.nombre}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            <div className="flex gap-3 pt-4">
-                                <button type="button" onClick={() => setModalEliminarAbierto(false)} className="flex-1 py-4 theme-element rounded-xl font-black uppercase text-[10px] tracking-widest theme-text-muted hover:theme-text-main transition-all">Cancelar</button>
-                                <button type="submit" disabled={formEliminar.processing} className="flex-1 py-4 bg-red-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-red-500 transition-all disabled:opacity-50">Confirmar Borrado</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* --- MODAL CREAR / EDITAR --- */}
-            {modalAbierto && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center theme-overlay p-4">
-                    <div className="theme-surface border-2 theme-border rounded-[2.5rem] p-8 shadow-2xl max-w-md w-full relative">
-                        <button onClick={() => {setModalAbierto(false); reset(); setItemAEditar(null);}} className="absolute top-6 right-6 p-2 theme-text-muted hover:text-[var(--color-primario)] transition-colors">
-                            <X className="w-5 h-5" />
-                        </button>
-                        <form onSubmit={guardarCatalogo} className="space-y-6">
-                            <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter flex items-center">
-                                <Settings className="w-5 h-5 mr-3" style={{ color: 'var(--color-primario)' }} /> {itemAEditar ? 'Editar Registro' : 'Nuevo Registro'}
-                            </h2>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-[10px] font-black uppercase theme-text-muted italic ml-2">Nombre_</label>
-                                    <input 
-                                        type="text" 
-                                        value={data.nombre} 
-                                        onChange={e => setData('nombre', e.target.value)} 
-                                        className="w-full p-4 mt-1 theme-element border theme-border rounded-xl theme-text-main font-bold outline-none focus:border-[var(--color-primario)] transition-colors" 
-                                        required 
-                                    />
-                                </div>
-                                {tabActiva === 'listas' && (
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase theme-text-muted italic ml-2">Monto Requerido ($)_</label>
-                                        <input 
-                                            type="number" 
-                                            step="0.01" 
-                                            value={data.monto_requerido} 
-                                            onChange={e => setData('monto_requerido', e.target.value)} 
-                                            className="w-full p-4 mt-1 theme-element border theme-border rounded-xl theme-text-main font-bold outline-none focus:border-[var(--color-primario)] transition-colors" 
-                                            required 
-                                        />
-                                    </div>
-                                )}
-                                {tabActiva !== 'listas' && (
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase theme-text-muted italic ml-2">Descripción_</label>
-                                        <textarea 
-                                            value={data.descripcion} 
-                                            onChange={e => setData('descripcion', e.target.value)} 
-                                            className="w-full p-4 mt-1 theme-element border theme-border rounded-xl theme-text-main font-bold outline-none focus:border-[var(--color-primario)] transition-colors resize-none h-24"
-                                        ></textarea>
-                                    </div>
-                                )}
-                                <div className="flex items-center gap-3 ml-2 mt-2">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={data.activo} 
-                                        onChange={e => setData('activo', e.target.checked)} 
-                                        className="w-4 h-4 rounded border-zinc-300 cursor-pointer"
-                                        style={{ color: 'var(--color-primario)' }}
-                                    />
-                                    <label className="text-[10px] font-black uppercase theme-text-main cursor-pointer" onClick={() => setData('activo', !data.activo)}>Activo en el sistema</label>
-                                </div>
-                            </div>
-                            <button 
-                                type="submit" 
-                                disabled={processing} 
-                                className="w-full py-4 text-white rounded-xl font-black uppercase text-[10px] tracking-widest transition-all shadow-lg hover:scale-[1.02] disabled:opacity-50"
-                                style={{ backgroundColor: 'var(--color-primario)' }}
-                            >
-                                Guardar Cambios
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* --- VISTA PRINCIPAL --- */}
-            <div className="max-w-7xl mx-auto p-6 md:p-12 space-y-12 min-h-screen">
-                <header className="flex flex-col md:flex-row justify-between md:items-end gap-6 tabla-contenido">
+            <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 min-h-screen">
+                
+                {/* HEADER TIPO CARD */}
+                <header className="theme-surface border-2 theme-border rounded-[2rem] md:rounded-[3rem] p-6 md:p-8 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div className="space-y-4">
                         <div className="flex items-center space-x-3">
                             <span className="h-1.5 w-12 rounded-full transition-colors duration-300" style={{ backgroundColor: 'var(--color-primario)' }}></span>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] transition-colors duration-300" style={{ color: 'var(--color-primario)' }}>Configuración Central</p>
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] transition-colors duration-300" style={{ color: 'var(--color-primario)' }}>
+                                Estructura de Datos
+                            </p>
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-tight transition-colors duration-300">
-                            GESTIÓN DE <span style={{ color: 'var(--color-primario)' }}>CATÁLOGOS</span>
+                        <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0 p-0">
+                            GESTIÓN DE <span className="transition-colors duration-300" style={{ color: 'var(--color-primario)' }}>CATÁLOGOS</span>
                         </h1>
                     </div>
+
                     <button 
-                        onClick={() => abrirModal()} 
-                        className="flex items-center gap-2 px-6 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl hover:scale-[1.02] transition-all"
+                        onClick={() => { setItemAEditar(null); reset(); setModalAbierto(true); }}
+                        className="flex items-center gap-3 px-6 py-4 rounded-2xl font-black uppercase text-xs italic tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg text-white dark:text-black" 
                         style={{ backgroundColor: 'var(--color-primario)' }}
                     >
-                        <Plus className="w-4 h-4" /> Agregar Registro
+                        <Plus className="w-5 h-5" />
+                        Registrar {tabActiva.slice(0, -1)}
                     </button>
                 </header>
 
-                <div className="flex flex-col md:flex-row gap-4 tabla-contenido">
-                    <button 
-                        onClick={() => setTabActiva('procesos')} 
-                        className={`flex items-center gap-2 px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex-1 md:flex-none justify-center ${tabActiva === 'procesos' ? 'text-white shadow-lg' : 'theme-element theme-text-muted hover:theme-text-main border-2 theme-border'}`}
-                        style={{ backgroundColor: tabActiva === 'procesos' ? 'var(--color-primario)' : '' }}
-                    >
-                        <Activity className="w-4 h-4" /> Procesos
-                    </button>
-                    <button 
-                        onClick={() => setTabActiva('listas')} 
-                        className={`flex items-center gap-2 px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex-1 md:flex-none justify-center ${tabActiva === 'listas' ? 'text-white shadow-lg' : 'theme-element theme-text-muted hover:theme-text-main border-2 theme-border'}`}
-                        style={{ backgroundColor: tabActiva === 'listas' ? 'var(--color-primario)' : '' }}
-                    >
-                        <ListTree className="w-4 h-4" /> Listas Descuento
-                    </button>
-                    <button 
-                        onClick={() => setTabActiva('estados')} 
-                        className={`flex items-center gap-2 px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex-1 md:flex-none justify-center ${tabActiva === 'estados' ? 'text-white shadow-lg' : 'theme-element theme-text-muted hover:theme-text-main border-2 theme-border'}`}
-                        style={{ backgroundColor: tabActiva === 'estados' ? 'var(--color-primario)' : '' }}
-                    >
-                        <Tags className="w-4 h-4" /> Estados Solicitud
-                    </button>
+                {/* SELECTOR DE TABS TIPO CARD */}
+                <div className="theme-surface border-2 theme-border p-2 rounded-[2rem] shadow-sm flex flex-wrap gap-2">
+                    {[
+                        { id: 'procesos', label: 'Procesos', icon: ListTree },
+                        { id: 'listas', label: 'Listas de Precios', icon: Tags },
+                        { id: 'estados', label: 'Estados', icon: Activity }
+                    ].map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setTabActiva(tab.id)}
+                            className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all ${tabActiva === tab.id ? 'text-white dark:text-black shadow-lg' : 'theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5'}`}
+                            style={tabActiva === tab.id ? { backgroundColor: 'var(--color-primario)' } : {}}
+                        >
+                            <tab.icon className="w-4 h-4" />
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
 
-                <div className="theme-surface border-2 theme-border rounded-[3rem] overflow-hidden shadow-sm tabla-contenido transition-colors duration-300">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
+                {/* CONTENEDOR DE TABLA */}
+                <div className="theme-surface border-2 theme-border rounded-[2.5rem] shadow-sm overflow-hidden">
+                    <div className="p-6 border-b theme-border flex items-center gap-3">
+                        <div className="p-2 rounded-lg theme-element">
+                            <Settings className="w-4 h-4 theme-text-main" />
+                        </div>
+                        <h2 className="text-xs font-black uppercase tracking-[0.2em] theme-text-main">{getTituloTab()}</h2>
+                    </div>
+
+                    <div className="overflow-x-auto tabla-contenido">
+                        <table className="w-full border-collapse">
                             <thead>
-                                <tr className="border-b-2 theme-border">
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">ID_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Nombre_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Detalles_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted text-center">Estatus_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted text-right">Acciones_</th>
+                                <tr className="theme-element border-b theme-border">
+                                    <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Nombre / Identificador_</th>
+                                    <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Descripción_</th>
+                                    {tabActiva === 'procesos' && <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Monto Req._</th>}
+                                    <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Status_</th>
+                                    <th className="px-6 py-4 text-right text-[9px] font-black theme-text-muted uppercase tracking-widest">Acciones_</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {datosActivos.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="5" className="py-16 text-center">
-                                            <Settings className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
-                                            <h3 className="text-lg font-black italic uppercase theme-text-main">Sin registros</h3>
+                            <tbody className="divide-y theme-border">
+                                {getItemsActuales().map((item) => (
+                                    <tr key={item.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors group">
+                                        <td className="px-6 py-5">
+                                            <p className="text-sm font-black theme-text-main uppercase italic">{item.nombre}</p>
+                                            <p className="text-[9px] font-bold theme-text-muted uppercase tracking-tighter">ID: #{item.id}</p>
                                         </td>
-                                    </tr>
-                                ) : datosActivos.map((item) => (
-                                    <tr key={item.id} className="border-b theme-border hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group/row">
-                                        <td className="p-6 font-bold theme-text-muted">#{item.id}</td>
-                                        <td className="p-6 font-black italic theme-text-main uppercase">{item.nombre}</td>
-                                        <td className="p-6">
-                                            <span className="text-xs font-bold theme-text-muted">
-                                                {tabActiva === 'listas' ? `Requisito: ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(item.monto_requerido)}` : (item.descripcion || 'Sin descripción')}
-                                            </span>
+                                        <td className="px-6 py-5">
+                                            <p className="text-xs font-bold theme-text-muted max-w-xs truncate">{item.descripcion || 'Sin descripción'}</p>
                                         </td>
-                                        <td className="p-6 text-center">
-                                            <span className={`inline-block px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${item.activo ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
+                                        {tabActiva === 'procesos' && (
+                                            <td className="px-6 py-5">
+                                                <span className="text-xs font-black theme-text-main">
+                                                    ${Number(item.monto_requerido).toLocaleString()}
+                                                </span>
+                                            </td>
+                                        )}
+                                        <td className="px-6 py-5">
+                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase ${item.activo ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                                <span className={`w-1 h-1 rounded-full ${item.activo ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
                                                 {item.activo ? 'Activo' : 'Inactivo'}
                                             </span>
                                         </td>
-                                        <td className="p-6 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {/* AQUÍ ESTÁ LA SOLUCIÓN: Agregué theme-text-muted a los botones */}
+                                        <td className="px-6 py-5 text-right">
+                                            <div className="flex justify-end gap-2">
                                                 <button 
-                                                    onClick={() => abrirModal(item)} 
-                                                    className="p-3 theme-element border theme-border rounded-xl transition-all theme-text-muted hover:border-[var(--color-primario)] hover:text-[var(--color-primario)]"
+                                                    onClick={() => { setItemAEditar(item); setData({ nombre: item.nombre, descripcion: item.descripcion || '', monto_requerido: item.monto_requerido || '', activo: item.activo }); setModalAbierto(true); }}
+                                                    className="p-2.5 theme-element border theme-border rounded-xl hover:border-[var(--color-primario)] transition-colors group/btn"
                                                 >
-                                                    <Edit2 className="w-4 h-4" />
+                                                    <Edit2 className="w-4 h-4 theme-text-main group-hover/btn:text-[var(--color-primario)]" />
                                                 </button>
                                                 <button 
-                                                    onClick={() => abrirModalEliminar(item)} 
-                                                    className="p-3 theme-element border theme-border rounded-xl transition-all theme-text-muted hover:border-red-500 hover:text-red-500"
+                                                    onClick={() => { setItemAEliminar(item); setModalEliminarAbierto(true); }}
+                                                    className="p-2.5 theme-element border theme-border rounded-xl hover:bg-red-500 hover:border-red-500 transition-colors group/del"
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
+                                                    <Trash2 className="w-4 h-4 theme-text-main group-hover/del:text-white" />
                                                 </button>
                                             </div>
                                         </td>
@@ -306,23 +162,75 @@ export default function Catalogos({ auth, procesos = [], listas = [], estados = 
                         </table>
                     </div>
                 </div>
-            </div>
 
-            <style>{`
-                .theme-surface { background-color: #ffffff; border-color: #f4f4f5; }
-                .theme-element { background-color: #fafafa; border-color: #e4e4e7; }
-                .theme-text-main { color: #18181b; }
-                .theme-text-muted { color: #71717a; }
-                .theme-border { border-color: #f4f4f5; }
-                .theme-overlay { background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-                
-                .dark .theme-surface { background-color: #141414; border-color: #2A2A2A; }
-                .dark .theme-element { background-color: #1A1A1A; border-color: #333333; }
-                .dark .theme-text-main { color: #ffffff; }
-                .dark .theme-text-muted { color: #a1a1aa; }
-                .dark .theme-border { border-color: #2A2A2A; }
-                .dark .theme-overlay { background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-            `}</style>
+                {/* MODAL DE EDICIÓN / CREACIÓN */}
+                {modalAbierto && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/40">
+                        <div className="absolute inset-0" onClick={() => setModalAbierto(false)}></div>
+                        <div className="relative w-full max-w-lg theme-surface rounded-[2.5rem] border-2 theme-border shadow-2xl overflow-hidden modal-pop">
+                            <div className="p-6 md:p-8 border-b theme-border flex justify-between items-center">
+                                <h2 className="text-xl font-black italic uppercase tracking-tighter theme-text-main flex items-center gap-3 leading-none">
+                                    <Settings className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
+                                    {itemAEditar ? 'Editar Registro' : 'Nuevo Registro'}
+                                </h2>
+                                <button onClick={() => setModalAbierto(false)} className="theme-text-muted hover:theme-text-main p-2">
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <form className="p-8 space-y-6">
+                                <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Nombre del {tabActiva.slice(0,-1)}_</label>
+                                    <input 
+                                        type="text" value={data.nombre} onChange={e => setData('nombre', e.target.value)}
+                                        className="w-full px-6 py-4 rounded-2xl theme-element border theme-border text-xs font-bold theme-text-main outline-none focus:ring-1 focus:ring-transparent transition-all"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Descripción Detallada_</label>
+                                    <textarea 
+                                        rows="3" value={data.descripcion} onChange={e => setData('descripcion', e.target.value)}
+                                        className="w-full px-6 py-4 rounded-2xl theme-element border theme-border text-xs font-bold theme-text-main outline-none transition-all resize-none"
+                                    ></textarea>
+                                </div>
+
+                                {tabActiva === 'procesos' && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Monto Requerido (Venta)_</label>
+                                        <input 
+                                            type="number" value={data.monto_requerido} onChange={e => setData('monto_requerido', e.target.value)}
+                                            className="w-full px-6 py-4 rounded-2xl theme-element border theme-border text-xs font-black theme-text-main outline-none focus:ring-1 focus:ring-transparent"
+                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* SWITCH CORREGIDO PARA USAR EL COLOR DE ACENTO */}
+                                <div className="p-4 theme-element rounded-2xl border theme-border flex items-center justify-between">
+                                    <span className="text-[10px] font-black uppercase tracking-widest theme-text-main">Estado Operativo_</span>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setData('activo', !data.activo)}
+                                        className={`w-12 h-6 rounded-full relative transition-colors ${data.activo ? '' : 'bg-zinc-400 dark:bg-zinc-600'}`}
+                                        style={data.activo ? { backgroundColor: 'var(--color-primario)' } : {}}
+                                    >
+                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${data.activo ? 'left-7' : 'left-1'}`}></div>
+                                    </button>
+                                </div>
+
+                                <button 
+                                    className="w-full py-4 rounded-[1.5rem] text-white dark:text-black text-[11px] font-black uppercase tracking-[0.2em] italic shadow-xl flex items-center justify-center gap-2 transition-transform hover:scale-[1.02]"
+                                    style={{ backgroundColor: 'var(--color-primario)' }}
+                                >
+                                    <Save className="w-5 h-5" /> Guardar Cambios
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+            </div>
         </AppLayout>
     );
 }

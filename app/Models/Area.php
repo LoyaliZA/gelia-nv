@@ -27,8 +27,8 @@ class Area extends Model
     /**
      * Relación: Un área puede tener muchos usuarios asignados.
      */
-    public function usuarios(): HasMany
+    public function usuarios()
     {
-        return $this->hasMany(User::class);
+        return $this->belongsToMany(User::class);
     }
 }

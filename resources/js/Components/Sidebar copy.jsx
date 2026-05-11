@@ -1,24 +1,65 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { animate } from 'animejs/animation';
-import { Link, useForm } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import { 
     Menu, X, Moon, Sun, Bell, Home, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight, 
-    Settings, Database, Users, LogOut, Link as LinkIcon
+    Settings, Database, Users, LogOut, Link as LinkIcon,
+    FolderTree, Calculator
 } from 'lucide-react';
 
-export default function Sidebar({ isDarkMode, toggleTheme, user, permissions }) {
+/* --- CONFIGURACIÓN DINÁMICA DEL MENÚ DE ADMINISTRACIÓN --- */
+// Para agregar un módulo en el futuro, solo añade una línea a este arreglo.
+const ADMIN_MENU_CONFIG = [
+    { id: 'enlaces', label: 'Generar Enlaces', path: '/admin/enlaces', routeName: 'admin.enlaces', icon: LinkIcon, permission: 'usuarios.gestionar' },
+    { id: 'clientes', label: 'Base de Clientes', path: '/admin/clientes', routeName: 'admin.clientes', icon: Database, permission: 'clientes.ver' },
+    { id: 'catalogos', label: 'Catálogos Globales', path: '/admin/catalogos', routeName: 'admin.catalogos', icon: FolderTree, permission: 'catalogos.gestionar' },
+    { id: 'comisiones', label: 'Comisiones', path: '/admin/comisiones', routeName: 'admin.comisiones', icon: Calculator, permission: 'comisiones.gestionar' },
+    { id: 'usuarios', label: 'Usuarios', path: '/admin/usuarios', routeName: 'admin.usuarios', icon: Users, permission: 'usuarios.gestionar' },
+];
+
+export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left' }) {
+    const { url } = usePage();
+    const isAdminActive = url.startsWith('/admin');
+
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [isConfigExpanded, setIsConfigExpanded] = useState(false);
+    const [isConfigExpanded, setIsConfigExpanded] = useState(isAdminActive);
     
+    const [isMobile, setIsMobile] = useState(false);
     const root = useRef(null);
     const widgetRef = useRef(null);
     const menuRef = useRef(null);
-    const menuContentRef = useRef(null); // Ref para calcular la altura total del contenido
+    const menuContentRef = useRef(null);
     const { post } = useForm(); 
 
-    const initial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
+    // --- RASTREO AUTOMÁTICO DE RUTA ---
+    useEffect(() => {
+        if (isAdminActive) setIsConfigExpanded(true);
+    }, [url, isAdminActive]);
 
+    const isRouteActive = (path) => {
+        if (path === '/dashboard' && url === '/dashboard') return true;
+        if (path !== '/dashboard' && url.startsWith(path)) return true;
+        return false;
+    };
+
+    const linkBaseClass = "flex items-center w-full px-6 py-4 rounded-[1.5rem] transition-all outline-none ";
+    const linkActiveClass = "bg-[var(--color-primario)] text-white shadow-lg border border-transparent";
+    const linkInactiveClass = "theme-element theme-text-muted hover:theme-text-main hover:shadow-md border border-transparent hover:border-[var(--color-primario)]";
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const effectiveLayout = isMobile ? 'mobile_bottom' : layout;
+    const isFixed = effectiveLayout === 'fixed';
+    const isRight = effectiveLayout === 'floating_right';
+    const isMobileMode = effectiveLayout === 'mobile_bottom';
+
+    const initial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
     const avatarContent = (
         <div className="flex items-center justify-center w-full h-full bg-transparent">
             <span className="font-black text-lg leading-none select-none" style={{ color: 'var(--color-primario)' }}>
@@ -27,21 +68,24 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions }) 
         </div>
     );
 
+    // --- LÓGICA DE PERMISOS DINÁMICA ---
     const can = (permission) => permissions?.includes(permission);
+    
+    // El menú Padre ("Administración") solo se muestra si el usuario tiene acceso a AL MENOS UN submenú
+    const showAdminMenu = ADMIN_MENU_CONFIG.some(item => can(item.permission));
 
-    // ANIMACIÓN DE REVELADO INICIAL
     useEffect(() => {
-        animate(root.current, {
-            y: [20, 0],
-            opacity: [0, 1],
-        }, {
-            duration: 1000,
-            easing: 'easeOutExpo',
-            delay: 100
-        });
+        if (root.current) {
+            animate(root.current, {
+                y: [10, 0],
+                opacity: [0, 1],
+                duration: 200,
+                ease: 'outQuart'
+            });
+        }
     }, []);
 
-    // LÓGICA PRINCIPAL DEL MENÚ (Apertura y Cierre Base)
+    // --- ANIMACIÓN PRINCIPAL ---
     const handleMenuToggle = () => {
         const nextState = !isMenuOpen;
         setIsMenuOpen(nextState);
@@ -49,155 +93,153 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions }) 
         if (menuRef.current && menuContentRef.current) {
             if (nextState) {
                 menuRef.current.classList.remove('pointer-events-none');
-                
-                // Forzamos altura 'auto' en el submenú si estaba abierto para calcular bien
                 const subMenu = document.querySelector('.sub-menu-config');
-                if (isConfigExpanded && subMenu) subMenu.style.height = 'auto';
+                if (isConfigExpanded && subMenu) {
+                    subMenu.style.height = 'auto';
+                    subMenu.style.opacity = 1;
+                }
 
-                const targetHeight = menuContentRef.current.scrollHeight;
-                
-                animate(menuRef.current, {
-                    height: [0, targetHeight],
-                    opacity: [0, 1]
-                }, { 
-                    duration: 600, 
-                    easing: 'easeOutExpo',
-                    // Importante: al terminar, lo dejamos en auto para que pueda crecer si abren submenús
-                    complete: () => { menuRef.current.style.height = 'auto'; }
-                });
+                if (isFixed) {
+                    menuContentRef.current.style.width = '300px';
+                    animate(menuRef.current, { width: [0, 300], opacity: [0, 1], duration: 180, ease: 'outQuart' });
+                } else {
+                    menuRef.current.style.height = 'auto';
+                    const targetHeight = menuContentRef.current.scrollHeight;
+                    menuRef.current.style.height = '0px';
+                    
+                    animate(menuRef.current, {
+                        height: [0, targetHeight], opacity: [0, 1], duration: 180, ease: 'outQuart',
+                        complete: () => { menuRef.current.style.height = 'auto'; }
+                    });
+                }
             } else {
-                // Al cerrar, fijamos la altura actual antes de animar a 0
-                menuRef.current.style.height = `${menuRef.current.offsetHeight}px`;
-                
-                animate(menuRef.current, {
-                    height: 0,
-                    opacity: 0
-                }, { 
-                    duration: 300, 
-                    easing: 'easeInQuad',
-                    complete: () => menuRef.current.classList.add('pointer-events-none')
-                });
+                if (isFixed) {
+                    animate(menuRef.current, {
+                        width: 0, opacity: 0, duration: 150, ease: 'inQuart',
+                        complete: () => menuRef.current.classList.add('pointer-events-none')
+                    });
+                } else {
+                    const currentHeight = menuRef.current.offsetHeight;
+                    animate(menuRef.current, {
+                        height: [currentHeight, 0], opacity: [1, 0], duration: 150, ease: 'inQuart',
+                        complete: () => { 
+                            menuRef.current.classList.add('pointer-events-none'); 
+                            menuRef.current.style.height = '0px'; 
+                        }
+                    });
+                }
             }
         }
     };
 
-    // LÓGICA DEL SUBMENÚ ADMINISTRACIÓN (Recalcula la altura del padre)
+    // --- ANIMACIÓN DEL SUBMENÚ ---
     useEffect(() => {
         const subMenu = document.querySelector('.sub-menu-config');
-        if (subMenu && menuRef.current && isMenuOpen) {
-            
-            // 1. Animamos el submenú
-            animate(subMenu, {
-                height: isConfigExpanded ? [0, subMenu.scrollHeight] : 0,
-                opacity: isConfigExpanded ? [0, 1] : 0
-            }, { duration: 400, easing: 'easeOutExpo' });
-            
-            animate('.chevron-config', {
-                rotate: isConfigExpanded ? 90 : 0
-            }, { duration: 300 });
-
-            // 2. EL TRUCO: Animamos el contenedor padre para que acompañe al submenú
-            // Guardamos la altura actual
-            const currentMenuHeight = menuRef.current.offsetHeight;
-            
-            // Calculamos la nueva altura forzando el submenú temporalmente
-            subMenu.style.height = isConfigExpanded ? 'auto' : '0px';
-            const newMenuHeight = menuContentRef.current.scrollHeight;
-            
-            // Restauramos el estado del submenú para que la animación fluya
-            subMenu.style.height = isConfigExpanded ? '0px' : 'auto';
-
-            animate(menuRef.current, {
-                height: [currentMenuHeight, newMenuHeight]
-            }, { 
-                duration: 400, 
-                easing: 'easeOutExpo',
-                complete: () => { menuRef.current.style.height = 'auto'; } // Siempre auto al final
-            });
+        if (subMenu && isMenuOpen) {
+            if (isConfigExpanded) {
+                subMenu.style.height = 'auto';
+                const targetHeight = subMenu.scrollHeight;
+                subMenu.style.height = '0px';
+                
+                animate(subMenu, { height: [0, targetHeight], opacity: [0, 1], duration: 180, ease: 'outQuart', complete: () => { subMenu.style.height = 'auto'; } });
+                animate('.chevron-config', { rotate: 90, duration: 180, ease: 'outQuart' });
+            } else {
+                const currentHeight = subMenu.offsetHeight;
+                animate(subMenu, { height: [currentHeight, 0], opacity: [1, 0], duration: 150, ease: 'inQuart', complete: () => { subMenu.style.height = '0px'; } });
+                animate('.chevron-config', { rotate: 0, duration: 150, ease: 'inQuart' });
+            }
         }
-    }, [isConfigExpanded]);
+    }, [isConfigExpanded, isMenuOpen]);
+
+    let navClasses = "fixed z-50 flex ";
+    if (isMobileMode) navClasses += "bottom-6 left-1/2 -translate-x-1/2 flex-col-reverse items-center w-max";
+    else if (isFixed) navClasses += "top-0 left-0 h-screen flex-row";
+    else navClasses += `top-6 flex-col ${isRight ? 'right-6 items-end' : 'left-6 items-start'}`;
+
+    let widgetClasses = "theme-surface theme-border sidebar-glass flex relative z-20 ";
+    if (isFixed) widgetClasses += "flex-col items-center py-6 w-20 h-full border-r rounded-none";
+    else widgetClasses += "items-center p-1.5 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.12)]";
+
+    let menuClasses = "floating-menu border shadow-2xl overflow-hidden pointer-events-none theme-surface theme-border sidebar-glass relative z-10 ";
+    if (isFixed) menuClasses += "ml-0 rounded-r-[2.5rem] rounded-l-none border-l-0";
+    else if (isMobileMode) menuClasses += "mb-4 rounded-[2rem] w-[90vw] max-w-[320px]";
+    else menuClasses += "mt-4 rounded-[2.5rem] w-[300px]";
 
     return (
-        <nav ref={root} className="fixed top-6 left-6 z-50 flex flex-col items-start" style={{ opacity: 0 }}>
-            {/* WIDGET SUPERIOR */}
-            <div 
-                ref={widgetRef}
-                className="flex items-center p-1.5 rounded-full border shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.5)]"
-                style={{ 
-                    backgroundColor: isDarkMode ? '#111111' : '#FFFFFF',
-                    borderColor: isDarkMode ? '#222222' : '#E5E7EB'
-                }}
-            >
-                <button onClick={handleMenuToggle} className={`p-2.5 ml-1 mr-1 rounded-full transition-colors ${isDarkMode ? 'text-white hover:bg-white/5' : 'text-black hover:bg-black/5'}`}>
+        <nav ref={root} className={navClasses} style={{ opacity: 0 }}>
+            <div ref={widgetRef} className={widgetClasses}>
+                <button onClick={handleMenuToggle} className={`rounded-full transition-colors theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none ${isFixed ? 'p-3 mb-8' : 'p-2.5 mx-1'}`}>
                     {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                 </button>
 
-                <div className={`flex items-center px-4 border-l space-x-5 ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
-                    <Link href={route('dashboard')} className={`transition-all hover:scale-110 ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-black'}`}>
-                        <Home className="w-4 h-4" />
+                <div className={`flex theme-border ${isFixed ? 'flex-col items-center space-y-8 pt-8 border-t w-full' : 'items-center px-3 sm:px-4 border-l space-x-3 sm:space-x-5'}`}>
+                    <Link href={route('dashboard')} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none hidden sm:block">
+                        <Home className="w-5 h-5" />
                     </Link>
 
-                    <button onClick={() => window.history.back()} className={`transition-all hover:scale-110 ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-black'}`}>
-                        <ArrowLeft className="w-4 h-4" />
+                    <button onClick={() => window.history.back()} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
+                        <ArrowLeft className="w-5 h-5" />
                     </button>
 
-                    <button onClick={toggleTheme} className="transition-transform active:scale-90 hover:scale-110" style={{ color: 'var(--color-primario)' }}>
-                        {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                    <button onClick={toggleTheme} className="transition-transform active:scale-90 hover:scale-110 outline-none" style={{ color: 'var(--color-primario)' }}>
+                        {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                     </button>
 
-                    <button className={`relative transition-all hover:scale-110 ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-black'}`}>
-                        <Bell className="w-4 h-4" />
-                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full border" style={{ backgroundColor: 'var(--color-primario)', borderColor: isDarkMode ? '#111' : '#fff' }}></span>
+                    <button className="relative transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
+                        <Bell className="w-5 h-5" />
+                        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 theme-surface" style={{ backgroundColor: 'var(--color-primario)' }}></span>
                     </button>
 
                     <Link 
                         href={route('profile.edit')} 
-                        className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all border ${isDarkMode ? 'bg-white/5 border-white/10 hover:border-[var(--color-primario)]' : 'bg-black/5 border-black/5 hover:border-black'}`}
+                        className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all border outline-none group ${isFixed ? 'w-12 h-12 mt-4' : 'w-9 h-9 sm:w-10 sm:h-10'} ${isRouteActive('/profile') ? 'border-[var(--color-primario)] shadow-md' : 'theme-element theme-border'}`}
                     >
                         {user?.foto_perfil ? (
-                            <img src={`/storage/${user.foto_perfil}`} alt="Perfil" className="w-full h-full object-cover rounded-full" />
+                            <img src={`/storage/${user.foto_perfil}`} alt="Perfil" className="w-full h-full object-cover rounded-full transition-transform group-hover:scale-110" />
                         ) : avatarContent}
                     </Link>
                 </div>
             </div>
 
-            {/* MENÚ FLOTANTE */}
             <div 
                 ref={menuRef}
-                className="floating-menu mt-4 border rounded-[2.5rem] shadow-2xl overflow-hidden pointer-events-none" 
-                style={{ 
-                    width: '300px', 
-                    height: 0, 
-                    opacity: 0,
-                    backgroundColor: isDarkMode ? '#111111' : '#FFFFFF',
-                    borderColor: isDarkMode ? '#222222' : '#E5E7EB'
-                }}
+                className={menuClasses} 
+                style={{ width: isFixed ? 0 : '', height: isFixed ? '100vh' : 0, opacity: 0 }}
             >
-                {/* Nuevo contenedor interno para calcular scrollHeight correctamente */}
-                <div ref={menuContentRef} className="p-5 flex flex-col space-y-2">
-                    <span className="text-[11px] font-black tracking-[0.3em] px-5 mb-3 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
+                <div ref={menuContentRef} className={`p-5 flex flex-col space-y-3 overflow-y-auto custom-scrollbar ${isFixed ? 'w-[300px] h-full pt-10' : 'max-h-[75vh] sm:max-h-[85vh]'}`}>
+                    <span className="text-[11px] font-black tracking-[0.3em] px-5 mb-1 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
                         ACCESOS_
                     </span>
 
-                    <Link href={route('dashboard')} className={`flex items-center justify-between w-full px-6 py-4 rounded-[1.5rem] transition-all border ${isDarkMode ? 'bg-white/5 border-transparent text-white hover:border-[var(--color-primario)]' : 'bg-black/5 border-transparent text-black hover:border-black'}`}>
+                    <Link 
+                        href={route('dashboard')} 
+                        className={linkBaseClass + (isRouteActive('/dashboard') ? linkActiveClass : linkInactiveClass)}
+                        onMouseEnter={(e) => { if(!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'var(--color-primario)' }} 
+                        onMouseLeave={(e) => { if(!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'transparent' }}
+                    >
                         <div className="flex items-center">
-                            <LayoutDashboard className="w-4 h-4 mr-4" style={{ color: 'var(--color-primario)' }} />
-                            <span className="text-xs font-black uppercase italic tracking-tighter">Panel Principal_</span>
+                            <LayoutDashboard className="w-4 h-4 mr-4" style={{ color: isRouteActive('/dashboard') ? '#ffffff' : 'var(--color-primario)' }} />
+                            <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Panel Principal_</span>
                         </div>
                     </Link>
 
-                    {can('crear_solicitud') && (
-                        <Link href={route('solicitudes.index')} className={`flex items-center w-full px-6 py-4 rounded-[1.5rem] transition-all border border-transparent ${isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/5' : 'text-gray-600 hover:text-black hover:bg-black/5'}`}>
+                    {can('solicitudes.ver_listado') && (
+                        <Link 
+                            href={route('solicitudes.index')} 
+                            className={linkBaseClass + (isRouteActive('/solicitudes') ? linkActiveClass : linkInactiveClass)}
+                            onMouseEnter={(e) => { if(!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }} 
+                            onMouseLeave={(e) => { if(!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'transparent' }}
+                        >
                             <Briefcase className="w-4 h-4 mr-4" />
                             <span className="text-xs font-black uppercase italic tracking-tighter">Solicitudes_</span>
                         </Link>
                     )}
 
-                    {can('gestionar_usuarios') && (
-                        <div className={`mt-3 pt-3 border-t ${isDarkMode ? 'border-white/10' : 'border-black/10'}`}>
+                    {showAdminMenu && (
+                        <div className="mt-2 pt-3 border-t theme-border flex flex-col">
                             <button 
-                                onClick={() => setIsConfigExpanded(!isConfigExpanded)}
-                                className={`flex items-center justify-between w-full px-6 py-4 rounded-[1.5rem] transition-all ${isDarkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'}`}
+                                onClick={() => setIsConfigExpanded(!isConfigExpanded)} 
+                                className={`flex items-center justify-between w-full px-6 py-4 rounded-[1.5rem] transition-all outline-none z-10 ${isAdminActive ? 'theme-element border-[var(--color-primario)] text-[var(--color-primario)] shadow-sm' : 'theme-element theme-text-muted hover:theme-text-main border border-transparent'}`}
                             >
                                 <div className="flex items-center">
                                     <Settings className="w-4 h-4 mr-4" />
@@ -206,24 +248,31 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions }) 
                                 <ChevronRight className="w-3 h-3 chevron-config transition-transform" />
                             </button>
 
-                            <div className="sub-menu-config overflow-hidden h-0 opacity-0 px-4 space-y-1">
-                                <Link href={route('admin.enlaces')} className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${isDarkMode ? 'text-gray-500 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-black/5'}`}>
-                                    <LinkIcon className="w-3.5 h-3.5 mr-4" /> Generar Enlaces
-                                </Link>
-                                <Link href={route('admin.clientes')} className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${isDarkMode ? 'text-gray-500 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-black/5'}`}>
-                                    <Database className="w-3.5 h-3.5 mr-4" /> Base de Clientes
-                                </Link>
-                                <Link href={route('admin.usuarios')} className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${isDarkMode ? 'text-gray-500 hover:text-white hover:bg-white/5' : 'text-gray-500 hover:text-black hover:bg-black/5'}`}>
-                                    <Users className="w-3.5 h-3.5 mr-4" /> Usuarios
-                                </Link>
+                            <div className="sub-menu-config overflow-hidden h-0 opacity-0 px-2 space-y-2 mt-2">
+                                {/* RENDERIZADO DINÁMICO DEL SUBMENÚ */}
+                                {ADMIN_MENU_CONFIG.filter(item => can(item.permission)).map((item) => {
+                                    const IconComponent = item.icon;
+                                    const isActive = isRouteActive(item.path);
+                                    return (
+                                        <Link 
+                                            key={item.id}
+                                            href={route(item.routeName)} 
+                                            className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all outline-none ${isActive ? 'bg-[var(--color-primario)] text-white shadow-md' : 'theme-element theme-text-muted hover:theme-text-main hover:shadow-sm border border-transparent hover:border-[var(--color-primario)]'}`}
+                                        >
+                                            <IconComponent className="w-3.5 h-3.5 mr-4" /> {item.label}
+                                        </Link>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
 
-                    <button onClick={() => post(route('logout'))} className={`mt-6 flex items-center w-full px-6 py-4 rounded-[1.5rem] transition-all text-red-500 font-black ${isDarkMode ? 'hover:bg-red-500/10' : 'hover:bg-red-500/5'}`}>
-                        <LogOut className="w-4 h-4 mr-4" />
-                        <span className="text-xs font-black uppercase italic tracking-widest">Cerrar Sesión_</span>
-                    </button>
+                    <div className="mt-auto pt-6 pb-2">
+                        <button onClick={() => post(route('logout'))} className="flex items-center w-full px-6 py-4 rounded-[1.5rem] transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group">
+                            <LogOut className="w-4 h-4 mr-4 text-red-500 group-hover:text-red-600 transition-colors" />
+                            <span className="text-xs font-black uppercase italic tracking-widest text-red-500 group-hover:text-red-600 transition-colors">Cerrar Sesión_</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </nav>

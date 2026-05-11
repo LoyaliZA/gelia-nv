@@ -6,12 +6,11 @@ import {
     User, Mail, Smartphone, Camera, 
     Palette, Save, ShieldCheck, Moon, Sun, 
     Image as ImageIcon, Type, Droplet, 
-    PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, XCircle,
+    PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, CheckCircle2, XCircle,
     Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, Eye, EyeOff
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
-import GeliaLogo from '../../Components/GeliaLogo'; // <-- Importamos el logotipo maestro
 
 // --- COMPONENTE AUXILIAR RESPONSIVO ---
 const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, stackOnMobile = true }) => (
@@ -33,6 +32,7 @@ const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, sta
     </div>
 );
 
+// ─── El controlador ahora pasa `tema_visual` como prop separado ───────────────
 export default function Edit({ auth, tema_visual }) {
     const fileInputRef    = useRef(null);
     const bgFileInputRef  = useRef(null);
@@ -48,7 +48,7 @@ export default function Edit({ auth, tema_visual }) {
 
     const [saveStatus, setSaveStatus] = useState(null); // null | 'success' | 'error'
 
-    // --- Estados para secciones colapsables ---
+    // ─── Estados para secciones colapsables ──────────────────────────────
     const [showSensitive,     setShowSensitive]     = useState(false);
     const [showInstitutional, setShowInstitutional] = useState(false);
     const [showPassword,      setShowPassword]      = useState(false);
@@ -60,14 +60,14 @@ export default function Edit({ auth, tema_visual }) {
         apellido_paterno:      auth.user?.apellido_paterno     ? auth.user.apellido_paterno.trim()     : '',
         apellido_materno:      auth.user?.apellido_materno     ? auth.user.apellido_materno.trim()     : '',
         telefono:              auth.user?.telefono             ? auth.user.telefono.trim()             : '',
-        fecha_nacimiento:      auth.user?.fecha_nacimiento     || '',
+        fecha_nacimiento:      auth.user?.fecha_nacimiento     || '',   // ✅ viene formateada Y-m-d desde el controlador
         password:              '',
         password_confirmation: '',
         foto_perfil:           null,
         remove_foto:           false,
         archivo_fondo:         null,
         remove_fondo:          false,
-        tema_visual:           tema_visual || {},
+        tema_visual: tema_visual || {},
     });
 
     useEffect(() => {
@@ -110,11 +110,12 @@ export default function Edit({ auth, tema_visual }) {
         applyBackgroundCSS('none');
     };
 
-    // --- SUBMIT: Blindado con JSON.stringify ---
+// ─── SUBMIT ───────────────────────────────────────────────────────────
     const submitProfile = (e) => {
         if (e) e.preventDefault();
         setSaveStatus(null);
 
+        // 1. Armamos el JSON con los estados visuales actuales de React
         const configJSON = {
             modo:             isDarkMode ? 'dark' : 'light',
             color_nombre:     selectedColor,
@@ -124,17 +125,20 @@ export default function Edit({ auth, tema_visual }) {
             efecto_cristal:   glassEffect,
         };
 
+        // 2. Transformamos la data del formulario justo antes de enviarla
         transform((data) => ({
             ...data,
             password:              data.password || '',
             password_confirmation: data.password_confirmation || '',
-            tema_visual:           JSON.stringify(configJSON)
+            tema_visual:           configJSON // <-- Aquí inyectamos el JSON
         }));
 
+        // 3. Enviamos la petición sin meter un objeto "data" manualmente
         post(route('profile.update'), {
             forceFormData:  true,
             preserveScroll: true,
             onSuccess: () => {
+                // Persistencia en localStorage para que AppLayout lo recoja
                 localStorage.setItem('theme',        isDarkMode ? 'dark' : 'light');
                 localStorage.setItem('theme_color',  selectedColor);
                 localStorage.setItem('bg_base',      selectedBg);
@@ -177,6 +181,7 @@ export default function Edit({ auth, tema_visual }) {
         mono:       "'JetBrains Mono', monospace",
     };
 
+    // ─── Valores iniciales desde el prop `tema_visual` (viene de BD) ─────
     const bdColor  = tema_visual?.color_nombre?.toLowerCase() || 'rosa';
     const bdModo   = tema_visual?.modo === 'dark';
     const bdBg     = tema_visual?.fondo_base      || 'none';
@@ -208,6 +213,7 @@ export default function Edit({ auth, tema_visual }) {
         return () => window.removeEventListener('theme-changed', syncThemeState);
     }, []);
 
+    // ─── Al montar: restaurar el tema guardado en BD ──────────────────────
     useEffect(() => {
         animate(
             '.fade-up',
@@ -255,8 +261,13 @@ export default function Edit({ auth, tema_visual }) {
         isActive ? root.classList.add('glass-active') : root.classList.remove('glass-active');
     };
 
+    // ─── FIX: el layout se escribe en localStorage en preview para que
+    //     AppLayout lo recoja via el evento 'theme-changed' ────────────────
     const handleLayoutChange = (layout) => {
         setSidebarLayout(layout);
+        // Escribimos temporalmente en localStorage para que AppLayout
+        // actualice el sidebar en tiempo real (preview).
+        // Al guardar, se sobreescribirá con el valor definitivo.
         localStorage.setItem('theme_layout', layout);
         window.dispatchEvent(new Event('theme-changed'));
     };
@@ -293,7 +304,7 @@ export default function Edit({ auth, tema_visual }) {
         handleBgChange(preset.bg);
         if (preset.font   !== undefined) handleFontChange(preset.font);
         if (preset.glass  !== undefined) handleGlassChange(preset.glass);
-        if (preset.layout !== undefined) handleLayoutChange(preset.layout);
+        if (preset.layout !== undefined) handleLayoutChange(preset.layout); // ✅ ahora mueve el sidebar
         if (preset.sound  !== undefined) setNotifications({ sound: preset.sound });
     };
 
@@ -307,7 +318,7 @@ export default function Edit({ auth, tema_visual }) {
             <Head title="Mi Perfil | GELIANV" />
             <GeliaLoader isVisible={processing} message="Guardando cambios_" />
 
-            {/* ---- FEEDBACK CENTRADO (MODAL PREMIUM CON LOGO FLUIDO) ---- */}
+            {/* ---- FEEDBACK CENTRADO ---- */}
             {saveStatus && createPortal(
                 <div 
                     className="fixed inset-0 z-[99998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in"
@@ -316,44 +327,39 @@ export default function Edit({ auth, tema_visual }) {
                     <div
                         className={`relative w-full max-w-sm sm:max-w-md flex flex-col items-center gap-6 p-8 sm:p-12 rounded-[2.5rem] shadow-[0_0_60px_rgba(0,0,0,0.4)] border-2 backdrop-blur-xl animate-fade-in
                             ${saveStatus === 'success'
-                                ? 'bg-white dark:bg-[#111] border-[var(--color-primario)]/40'
+                                ? 'bg-white dark:bg-[#111] border-green-400/40'
                                 : 'bg-white dark:bg-[#111] border-red-400/40'
                             }`}
                         onClick={e => e.stopPropagation()}
                     >
                         <div className={`absolute inset-0 rounded-[2.5rem] opacity-10 pointer-events-none
-                            ${saveStatus === 'success' ? 'bg-[var(--color-primario)]' : 'bg-red-400'}`}
+                            ${saveStatus === 'success' ? 'bg-green-400' : 'bg-red-400'}`}
                         />
-                        
                         <div className={`relative z-10 w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center shadow-xl
-                            ${saveStatus === 'success' ? 'bg-[var(--color-primario)]/15' : 'bg-red-500/15'}`}>
+                            ${saveStatus === 'success' ? 'bg-green-500/15' : 'bg-red-500/15'}`}>
                             {saveStatus === 'success'
-                                ? <GeliaLogo variant="fluid-fill" className="w-12 h-12 sm:w-14 sm:h-14 drop-shadow-lg" />
-                                : <XCircle className="w-10 h-10 sm:w-12 sm:h-12 text-red-500" />
+                                ? <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12 text-green-500" />
+                                : <XCircle      className="w-10 h-10 sm:w-12 sm:h-12 text-red-500" />
                             }
                         </div>
-
                         <div className="relative z-10 text-center space-y-2">
                             <h3 className={`text-xl sm:text-2xl font-black uppercase italic tracking-tighter m-0
-                                ${saveStatus === 'success' ? 'text-[var(--color-primario)]' : 'text-red-600 dark:text-red-400'}`}>
-                                {saveStatus === 'success' ? '¡Identidad Actualizada!' : 'Algo salió mal'}
+                                ${saveStatus === 'success' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {saveStatus === 'success' ? '¡Guardado!' : 'Algo salió mal'}
                             </h3>
                             <p className="text-sm font-bold theme-text-muted leading-snug">
                                 {saveStatus === 'success'
-                                    ? 'Tu perfil y configuración visual han sido aplicados correctamente en el sistema.'
+                                    ? 'Tu perfil y configuración visual han sido actualizados correctamente.'
                                     : 'No se pudieron guardar los cambios. Revisa los campos e intenta de nuevo.'}
                             </p>
                         </div>
-
                         <button
                             onClick={() => setSaveStatus(null)}
                             className={`relative z-10 w-full py-4 rounded-2xl text-white font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-lg outline-none
-                                ${saveStatus === 'success' ? 'opacity-90 hover:opacity-100' : 'bg-red-500 hover:bg-red-600'}`}
-                            style={saveStatus === 'success' ? { backgroundColor: 'var(--color-primario)' } : {}}
+                                ${saveStatus === 'success' ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}
                         >
-                            {saveStatus === 'success' ? 'Continuar_' : 'Entendido_'}
+                            {saveStatus === 'success' ? 'Perfecto_' : 'Entendido_'}
                         </button>
-
                         <button
                             onClick={() => setSaveStatus(null)}
                             className="absolute top-4 right-4 z-10 p-2 theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors outline-none"
@@ -432,13 +438,14 @@ export default function Edit({ auth, tema_visual }) {
                         <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">Ajustes de Cuenta_</h2>
                     </div>
 
-                    {/* ZONA 1: Datos personales */}
+                    {/* ── ZONA 1: Datos personales ── */}
                     <div>
                         <p className="text-[10px] font-black uppercase tracking-widest mb-4 ml-1 drop-shadow-sm" style={{ color: 'var(--color-primario)' }}>
                             Datos Personales
                         </p>
                         <div className={`border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
 
+                            {/* Nombre */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre(s)</label>
                                 <div className="relative">
@@ -450,6 +457,7 @@ export default function Edit({ auth, tema_visual }) {
                                 {errors.name && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.name}</p>}
                             </div>
 
+                            {/* Apellido Paterno */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Apellido Paterno</label>
                                 <div className="relative">
@@ -461,6 +469,7 @@ export default function Edit({ auth, tema_visual }) {
                                 {errors.apellido_paterno && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.apellido_paterno}</p>}
                             </div>
 
+                            {/* Apellido Materno */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Apellido Materno</label>
                                 <div className="relative">
@@ -472,6 +481,7 @@ export default function Edit({ auth, tema_visual }) {
                                 {errors.apellido_materno && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.apellido_materno}</p>}
                             </div>
 
+                            {/* Teléfono */}
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Teléfono</label>
                                 <div className="relative">
@@ -485,7 +495,7 @@ export default function Edit({ auth, tema_visual }) {
                         </div>
                     </div>
 
-                    {/* ZONA 2: Datos sensibles */}
+                    {/* ── ZONA 2: Datos sensibles ── */}
                     <div>
                         <button
                             type="button"
@@ -511,6 +521,7 @@ export default function Edit({ auth, tema_visual }) {
                         {showSensitive && (
                             <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
 
+                                {/* Fecha de nacimiento */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Fecha de Nacimiento</label>
                                     <div className="relative">
@@ -522,8 +533,10 @@ export default function Edit({ auth, tema_visual }) {
                                     {errors.fecha_nacimiento && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.fecha_nacimiento}</p>}
                                 </div>
 
+                                {/* Spacer desktop */}
                                 <div className="hidden md:block" />
 
+                                {/* Nueva contraseña */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nueva Contraseña</label>
                                     <div className="relative">
@@ -543,6 +556,7 @@ export default function Edit({ auth, tema_visual }) {
                                     {errors.password && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.password}</p>}
                                 </div>
 
+                                {/* Confirmar contraseña */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Confirmar Contraseña</label>
                                     <div className="relative">
@@ -565,7 +579,7 @@ export default function Edit({ auth, tema_visual }) {
                         )}
                     </div>
 
-                    {/* ZONA 3: Info institucional */}
+                    {/* ── ZONA 3: Info institucional ── */}
                     <div>
                         <button
                             type="button"
@@ -591,6 +605,7 @@ export default function Edit({ auth, tema_visual }) {
                         {showInstitutional && (
                             <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
 
+                                {/* Email */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Correo Institucional</label>
                                     <div className="relative">
@@ -600,6 +615,7 @@ export default function Edit({ auth, tema_visual }) {
                                     </div>
                                 </div>
 
+                                {/* Área — ✅ ahora viene de auth.user.area cargada por el controlador */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Área</label>
                                     <div className="relative">
@@ -611,6 +627,7 @@ export default function Edit({ auth, tema_visual }) {
                                     </div>
                                 </div>
 
+                                {/* Departamento — ✅ now via area.departamento eager loaded */}
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Departamento</label>
                                     <div className="relative">
@@ -846,7 +863,7 @@ export default function Edit({ auth, tema_visual }) {
             </div>
 
             {/* =========================================
-                PORTALS DE MODALES (AVATAR Y FONDO)
+                PORTALS DE MODALES
                 ========================================= */}
             {isAvatarModalOpen && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl transition-opacity animate-fade-in" onClick={() => setIsAvatarModalOpen(false)}>
