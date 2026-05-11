@@ -9,8 +9,8 @@ import {
     PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, CheckCircle2, XCircle,
     Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, Eye, EyeOff
 } from 'lucide-react';
-import AppLayout from '../../Layouts/AppLayout';
-import GeliaLoader from '../../Components/GeliaLoader';
+import AppLayout from '../js/Layouts/AppLayout';
+import GeliaLoader from '../js/Components/GeliaLoader';
 
 // --- COMPONENTE AUXILIAR RESPONSIVO ---
 const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, stackOnMobile = true }) => (

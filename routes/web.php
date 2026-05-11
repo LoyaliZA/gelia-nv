@@ -24,12 +24,12 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store'])->name('login.store');
 
-    // Registro Seguro (Vía enlace firmado)
-    Route::get('/registro/{rol}', [RegistroController::class, 'mostrarFormulario'])
+    // Registro Seguro (Vía enlace firmado) - CORRECCIÓN APLICADA AQUÍ
+    Route::get('/registro/colaborador', [RegistroController::class, 'mostrarFormulario'])
         ->name('registro.formulario')
         ->middleware('signed');
 
-    Route::post('/registro/{rol}', [RegistroController::class, 'almacenar'])
+    Route::post('/registro/colaborador', [RegistroController::class, 'almacenar'])
         ->name('registro.store')
         ->middleware('signed');
 });
@@ -70,8 +70,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('solicitudes.confirmar_pago');
 
     // Control de estados (Verificación mediante Gate en el Controlador)
-    Route::put('/solicitudes/{solicitud}/estado', [SolicitudController::class, 'actualizarEstado'])
-        ->name('solicitudes.actualizar_estado');
+    Route::put('/solicitudes/{solicitud}', [SolicitudController::class, 'update'])->name('solicitudes.update');
+    Route::put('/solicitudes/{solicitud}/rechazar-pago', [SolicitudController::class, 'rechazarPago'])->name('solicitudes.rechazar_pago');
 
 
     // ══════════════════════════════════════════════════════════════════════

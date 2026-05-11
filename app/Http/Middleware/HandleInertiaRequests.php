@@ -51,13 +51,14 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => [
+                // Inyectamos roles, permisos y NOTIFICACIONES dentro de user
                 'user' => $user ? array_merge($user->toArray(), [
                     'roles' => $user->getRoleNames(), 
-                    'permissions' => $user->getAllPermissions()->pluck('name'), // Permisos atómicos inyectados
+                    'permissions' => $user->getAllPermissions()->pluck('name'),
+                    'notifications' => $user->notifications, // <-- AQUÍ ESTÁ LA MAGIA
                 ]) : null,
                 
-                // 3. Pasamos ÚNICAMENTE el tema visual limpio. 
-                // ELIMINAMOS por completo la referencia a 'dashboard_prefs'
+                // Mantenemos tu tema visual independiente y seguro
                 'tema_visual' => $temaVisual,
             ],
             'flash' => [

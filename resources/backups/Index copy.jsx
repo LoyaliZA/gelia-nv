@@ -8,7 +8,7 @@ import {
     Database, History, LineChart, FileText,
     CheckCircle2, AlertTriangle, Clock
 } from 'lucide-react';
-import AppLayout from '../../Layouts/AppLayout';
+import AppLayout from '../js/Layouts/AppLayout';
 
 export default function AdminDashboard({ auth, estadisticas = {} }) {
     

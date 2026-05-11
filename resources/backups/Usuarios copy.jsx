@@ -6,7 +6,7 @@ import {
     ShieldCheck, X, Briefcase, Key, Check, MapPin, 
     Mail, User, ShieldAlert, ChevronRight, Lock, Smartphone, Save
 } from 'lucide-react';
-import AppLayout from '../../Layouts/AppLayout';
+import AppLayout from '../js/Layouts/AppLayout';
 
 export default function Usuarios({ auth, usuarios = [], departamentos = [], roles = [], todosLosPermisos = [] }) {
     // --- SECCIÓN: ESTADOS LOCALES ---

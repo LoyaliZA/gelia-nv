@@ -8,6 +8,8 @@ import {
     FolderTree, Calculator
 } from 'lucide-react';
 
+import NotificationBell from './NotificationBell';
+
 /* --- DICCIONARIO FRONTEND --- */
 const ADMIN_MENU_CONFIG = [
     { id: 'enlaces', label: 'Generar Enlaces', path: '/admin/enlaces', routeName: 'admin.enlaces', icon: LinkIcon, permission: 'usuarios.gestionar' },
@@ -177,10 +179,9 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                         {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                     </button>
 
-                    <button className="relative transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
-                        <Bell className="w-5 h-5" />
-                        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 theme-surface" style={{ backgroundColor: 'var(--color-primario)' }}></span>
-                    </button>
+                    {/* --- REEMPLAZA LA CAMPANA ANTIGUA CON ESTO --- */}
+                    <NotificationBell notifications={user?.notifications || []} />
+                    {/* --------------------------------------------- */}
 
                     <Link
                         href={route('profile.edit')}

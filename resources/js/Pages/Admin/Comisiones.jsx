@@ -1,30 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Head, useForm } from '@inertiajs/react';
-import { animate } from 'animejs/animation'; // Importación modular corregida
+import { animate } from 'animejs/animation';
 import { 
     DollarSign, Edit3, Save, 
-    CheckCircle, Info, TrendingUp,
-    Briefcase, Sparkles, X, ShieldCheck
+    Info, Briefcase, Sparkles, 
+    ShieldCheck, TrendingUp, X
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
 export default function Comisiones({ auth, tabulador = [] }) {
     const [editando, setEditando] = useState(null);
 
-    const { data, setData, put, processing, reset, errors } = useForm({
+    const { data, setData, put, processing, reset } = useForm({
         monto_vendedora: '',
         monto_original: '', 
         activo: true
     });
 
     useEffect(() => {
-        animate('.fade-up', {
+        animate('.page-reveal-comisiones', {
             translateY: [15, 0],
             opacity: [0, 1],
-        }, {
             easing: 'easeOutExpo',
             duration: 600,
-            delay: (el, i) => i * 100
+            delay: (el, i) => i * 80
         });
     }, []);
 
@@ -36,7 +35,6 @@ export default function Comisiones({ auth, tabulador = [] }) {
             activo: item.activo
         });
         
-        // Animación sutil al seleccionar
         animate('.panel-edicion', {
             scale: [0.98, 1],
             duration: 400,
@@ -56,45 +54,52 @@ export default function Comisiones({ auth, tabulador = [] }) {
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Configuración de Comisiones | GELIANV" />
+            <Head title="Tabulador de Comisiones | GELIANV" />
 
-            <div className="max-w-7xl mx-auto p-6 md:p-12 space-y-12 min-h-screen">
-                {/* --- ENCABEZADO --- */}
-                <header className="fade-up space-y-4">
-                    <div className="flex items-center space-x-3">
-                        <span className="h-1.5 w-12 rounded-full transition-colors duration-300" style={{ backgroundColor: 'var(--color-primario)' }}></span>
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>Configuración Global</p>
+            <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+                
+                {/* --- HEADER GELIA --- */}
+                <div className="page-reveal-comisiones flex flex-col md:flex-row justify-between items-start md:items-center gap-6 theme-surface border-2 theme-border p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] shadow-sm">
+                    <div>
+                        <div className="flex items-center space-x-3 mb-2">
+                            <span className="h-1.5 w-12 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }}></span>
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>Configuración Financiera</p>
+                        </div>
+                        <h1 className="text-3xl md:text-4xl font-black theme-text-main flex items-center gap-3 italic uppercase tracking-tighter m-0">
+                            <TrendingUp className="w-8 h-8 md:w-10 md:h-10 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
+                            TABULADOR DE <span style={{ color: 'var(--color-primario)' }}>COMISIONES</span>
+                        </h1>
+                        <p className="theme-text-muted text-[10px] font-bold uppercase tracking-widest mt-2 opacity-80 max-w-2xl">
+                            Ajuste de parámetros económicos por cada proceso y movimiento operativo dentro de la matriz.
+                        </p>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-tight transition-colors">
-                        TABULADOR DE <span style={{ color: 'var(--color-primario)' }}>COMISIONES</span>
-                    </h1>
-                </header>
+                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     
-                    {/* --- PANEL DE EDICIÓN --- */}
-                    <div className="fade-up lg:col-span-1 space-y-6">
+                    {/* --- PANEL LATERAL DE EDICIÓN --- */}
+                    <div className="page-reveal-comisiones lg:col-span-1 space-y-6">
                         <div 
-                            className="panel-edicion theme-surface border-2 rounded-[2.5rem] p-8 shadow-sm transition-all relative overflow-hidden"
-                            style={{ borderColor: editando ? 'var(--color-primario)' : 'var(--theme-border-color)' }}
+                            className="panel-edicion theme-surface border-2 theme-border rounded-[2.5rem] p-8 shadow-sm transition-all relative overflow-hidden"
+                            style={{ borderColor: editando ? 'var(--color-primario)' : '' }}
                         >
-                            <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter flex items-center mb-6">
-                                <Edit3 className="w-5 h-5 mr-3" style={{ color: 'var(--color-primario)' }} />
-                                {editando ? 'Modificar Valores' : 'Seleccione un Item'}
+                            <h2 className="text-xl font-black italic uppercase tracking-tighter theme-text-main flex items-center gap-2 border-b theme-border pb-4 mb-8">
+                                <Edit3 className="w-5 h-5" style={{ color: 'var(--color-primario)' }} /> 
+                                {editando ? 'Modificar Matriz' : 'Selección Activa_'}
                             </h2>
 
                             {editando ? (
-                                <form onSubmit={guardarCambios} className="space-y-6 animate-fade-in">
-                                    <div className="space-y-4">
+                                <form onSubmit={guardarCambios} className="space-y-8 animate-fade-in">
+                                    <div className="space-y-6">
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase theme-text-muted ml-2 tracking-widest italic">Comisión Vendedora ($)_</label>
+                                            <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-1">Comisión Vendedora ($)</label>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
                                                 <input 
-                                                    type="number" step="0.01"
+                                                    type="number" step="0.01" required
                                                     value={data.monto_vendedora}
                                                     onChange={e => setData('monto_vendedora', e.target.value)}
-                                                    className="w-full pl-12 p-4 theme-element border-2 theme-border rounded-2xl theme-text-main font-bold outline-none transition-all"
+                                                    className="w-full pl-12 p-4 theme-element border theme-border rounded-xl theme-text-main text-sm font-bold outline-none transition-all focus:ring-2 focus:ring-[var(--color-primario)]"
                                                     onFocus={(e) => e.target.style.borderColor = 'var(--color-primario)'}
                                                     onBlur={(e) => e.target.style.borderColor = ''}
                                                 />
@@ -102,136 +107,131 @@ export default function Comisiones({ auth, tabulador = [] }) {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase theme-text-muted ml-2 tracking-widest italic flex items-center gap-1">
-                                                <ShieldCheck className="w-3 h-3 text-amber-500" /> Comisión Original (Heredados) ($)_
+                                            <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-1 flex items-center gap-1.5">
+                                                <ShieldCheck className="w-3 h-3 text-amber-500" /> Comisión Heredada ($)
                                             </label>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500" />
                                                 <input 
-                                                    type="number" step="0.01"
+                                                    type="number" step="0.01" required
                                                     value={data.monto_original}
                                                     onChange={e => setData('monto_original', e.target.value)}
-                                                    className="w-full pl-12 p-4 theme-element border-2 theme-border rounded-2xl theme-text-main font-bold outline-none transition-all focus:border-amber-500"
+                                                    className="w-full pl-12 p-4 theme-element border theme-border rounded-xl theme-text-main text-sm font-bold outline-none transition-all focus:ring-2 focus:ring-amber-500"
                                                 />
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="flex gap-3">
+                                    <div className="flex flex-col gap-3">
                                         <button 
-                                            type="button" 
-                                            onClick={() => setEditando(null)}
-                                            className="flex-1 py-4 theme-element border-2 theme-border rounded-2xl font-black uppercase text-[10px] tracking-widest theme-text-muted hover:theme-text-main transition-all"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button 
-                                            type="submit" 
-                                            disabled={processing}
-                                            className="flex-[2] py-4 text-white dark:text-black rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl transition-all disabled:opacity-50"
+                                            type="submit" disabled={processing}
+                                            className="w-full py-4 text-white dark:text-black rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-xl transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
                                             style={{ backgroundColor: 'var(--color-primario)' }}
                                         >
-                                            <Save className="inline w-3.5 h-3.5 mr-2" /> Guardar_
+                                            <Save className="inline w-4 h-4 mr-2" /> {processing ? 'Transmitiendo...' : 'Actualizar Valores'}
+                                        </button>
+                                        <button 
+                                            type="button" onClick={() => { setEditando(null); reset(); }}
+                                            className="w-full py-4 theme-element border theme-border rounded-2xl font-black uppercase text-[10px] tracking-widest theme-text-muted hover:theme-text-main transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <X className="w-3.5 h-3.5" /> Cancelar Transacción
                                         </button>
                                     </div>
                                 </form>
                             ) : (
-                                <div className="text-center py-12 space-y-4 opacity-40">
-                                    <Briefcase className="w-12 h-12 mx-auto theme-text-muted" />
-                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted leading-relaxed">
-                                        Haga clic en el icono de edición de la lista para modificar los montos operativos.
+                                <div className="text-center py-16 space-y-4 opacity-30 italic">
+                                    <Briefcase className="w-16 h-16 mx-auto theme-text-muted" />
+                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted px-6 leading-relaxed">
+                                        Active el protocolo de edición sobre un proceso de la tabla para reajustar los montos.
                                     </p>
                                 </div>
                             )}
                         </div>
 
                         {/* INFO BOX */}
-                        <div className="p-6 theme-element rounded-3xl space-y-4 border-2 theme-border transition-colors duration-300">
-                            <div className="flex items-center gap-2" style={{ color: 'var(--color-primario)' }}>
-                                <Info className="w-4 h-4" />
-                                <p className="text-[9px] font-black uppercase tracking-widest italic">Nota del Sistema_</p>
+                        <div className="p-6 theme-element border theme-border rounded-[2rem] shadow-sm flex flex-col gap-3 relative overflow-hidden">
+                             <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+                                <Info className="w-24 h-24 absolute -right-4 -bottom-4" />
                             </div>
-                            <p className="text-[10px] theme-text-muted font-bold leading-relaxed italic uppercase">
-                                Las comisiones se aplican al momento de <strong className="theme-text-main">Aprobar</strong> la solicitud por parte de la encargada de TAGS.
+                            <div className="flex items-center gap-2 pb-2 border-b theme-border" style={{ color: 'var(--color-primario)' }}>
+                                <Info className="w-4 h-4" />
+                                <h4 className="text-[10px] font-black uppercase tracking-widest">Información Crítica</h4>
+                            </div>
+                            <p className="text-[11px] theme-text-muted font-bold leading-relaxed italic uppercase tracking-tighter">
+                                Los cambios aplicados se verán reflejados <span className="theme-text-main font-black">únicamente en solicitudes futuras</span>. La aprobación de TAGS congela el monto al momento de la firma.
                             </p>
                         </div>
                     </div>
 
-                    {/* --- LISTADO DE PROCESOS --- */}
-                    <div className="fade-up lg:col-span-2">
-                        <div className="theme-surface border-2 theme-border rounded-[3rem] overflow-hidden shadow-sm transition-colors duration-300">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="border-b-2 theme-border">
-                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Proceso / Movimiento_</th>
-                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted text-center">Vendedora Actual_</th>
-                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted text-center">Org. (Heredado)_</th>
-                                        <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted text-center">Acción_</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {tabulador.map((item) => (
-                                        <tr key={item.id} className={`border-b theme-border transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/30 ${editando === item.id ? 'bg-zinc-50 dark:bg-zinc-800/50' : ''}`}>
-                                            <td className="p-6">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 theme-element rounded-xl flex items-center justify-center border theme-border" style={{ borderColor: editando === item.id ? 'var(--color-primario)' : '' }}>
-                                                        <Sparkles className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-black italic theme-text-main uppercase tracking-tighter">{item.proceso?.nombre || 'Sin nombre'}</p>
-                                                        <p className="text-[9px] font-bold theme-text-muted uppercase tracking-widest mt-1">ID Ref: {item.id}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-6 text-center">
-                                                <span className="text-sm font-black theme-text-main italic" style={{ color: editando === item.id ? 'var(--color-primario)' : '' }}>
-                                                    {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(item.monto_vendedora || item.monto_comision)}
-                                                </span>
-                                            </td>
-                                            <td className="p-6 text-center">
-                                                <span className={`text-sm font-black italic ${item.monto_original > 0 ? 'text-amber-500' : 'theme-text-muted opacity-30'}`}>
-                                                    {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(item.monto_original || 0)}
-                                                </span>
-                                            </td>
-                                            <td className="p-6 text-center">
-                                                <button 
-                                                    onClick={() => iniciarEdicion(item)}
-                                                    className="p-3 theme-element border-2 theme-border rounded-xl hover:text-white transition-all"
-                                                    style={{ 
-                                                        borderColor: editando === item.id ? 'var(--color-primario)' : '',
-                                                        backgroundColor: editando === item.id ? 'var(--color-primario)' : ''
-                                                    }}
-                                                >
-                                                    <Edit3 className="w-4 h-4" style={{ color: editando === item.id ? (auth.tema_visual?.modo === 'dark' ? '#000' : '#fff') : '' }} />
-                                                </button>
-                                            </td>
+                    {/* --- TABLA DE PROCESOS --- */}
+                    <div className="page-reveal-comisiones lg:col-span-2">
+                        <div className="theme-surface border-2 theme-border rounded-[3rem] overflow-hidden shadow-sm">
+                            <div className="overflow-x-auto custom-scrollbar">
+                                <table className="w-full text-left border-collapse min-w-[600px]">
+                                    <thead>
+                                        <tr className="border-b-2 theme-border">
+                                            <th className="p-8 text-[10px] font-black uppercase tracking-widest theme-text-muted">Concepto Operativo_</th>
+                                            <th className="p-8 text-[10px] font-black uppercase tracking-widest theme-text-muted text-center">Vendedora_</th>
+                                            <th className="p-8 text-[10px] font-black uppercase tracking-widest theme-text-muted text-center">Heredados_</th>
+                                            <th className="p-8 text-[10px] font-black uppercase tracking-widest theme-text-muted text-center">Acción_</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {tabulador.map((item) => (
+                                            <tr 
+                                                key={item.id} 
+                                                className={`border-b theme-border transition-all duration-300 hover:bg-black/5 dark:hover:bg-white/5 ${editando === item.id ? 'bg-zinc-50 dark:bg-zinc-900' : ''}`}
+                                            >
+                                                <td className="p-8">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-12 h-12 theme-element rounded-[1rem] flex items-center justify-center border transition-all duration-500 shadow-sm ${editando === item.id ? 'border-[var(--color-primario)]' : 'theme-border'}`}>
+                                                            <Sparkles className="w-5 h-5" style={{ color: editando === item.id ? 'var(--color-primario)' : 'var(--theme-text-muted)' }} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-black italic theme-text-main uppercase tracking-tighter leading-none">{item.proceso?.nombre || 'PROCESO SIN IDENTIFICAR'}</p>
+                                                            <p className="text-[9px] font-black theme-text-muted uppercase tracking-widest mt-2 bg-black/5 dark:bg-white/5 w-fit px-2 py-0.5 rounded-md border theme-border">REFERENCIA: {item.id}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-8 text-center">
+                                                    <span className="text-sm font-black theme-text-main italic block" style={{ color: editando === item.id ? 'var(--color-primario)' : '' }}>
+                                                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(item.monto_vendedora || item.monto_comision)}
+                                                    </span>
+                                                </td>
+                                                <td className="p-8 text-center">
+                                                    <span className={`text-sm font-black italic block ${item.monto_original > 0 ? 'text-amber-500' : 'theme-text-muted opacity-30'}`}>
+                                                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(item.monto_original || 0)}
+                                                    </span>
+                                                </td>
+                                                <td className="p-8 text-center">
+                                                    <button 
+                                                        onClick={() => iniciarEdicion(item)}
+                                                        className="p-4 theme-element border-2 theme-border rounded-2xl hover:text-white transition-all shadow-sm active:scale-90"
+                                                        style={{ 
+                                                            borderColor: editando === item.id ? 'var(--color-primario)' : '',
+                                                            backgroundColor: editando === item.id ? 'var(--color-primario)' : ''
+                                                        }}
+                                                    >
+                                                        <Edit3 className="w-5 h-5" style={{ color: editando === item.id ? (auth.tema_visual?.modo === 'dark' ? '#000' : '#fff') : 'var(--theme-text-main)' }} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <style>{`
-                :root { --theme-border-color: #f4f4f5; }
-                .dark { --theme-border-color: #2A2A2A; }
-
-                .theme-surface { background-color: #ffffff; border-color: var(--theme-border-color); }
-                .theme-element { background-color: #fafafa; border-color: #e4e4e7; }
-                .theme-text-main { color: #18181b; }
-                .theme-text-muted { color: #71717a; }
-                .theme-border { border-color: var(--theme-border-color); }
+                .animate-fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
                 
-                .dark .theme-surface { background-color: #121212; border-color: var(--theme-border-color); }
-                .dark .theme-element { background-color: #1A1A1A; border-color: #333333; }
-                .dark .theme-text-main { color: #ffffff; }
-                .dark .theme-text-muted { color: #a1a1aa; }
-                .dark .theme-border { border-color: var(--theme-border-color); }
-
-                .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-                @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+                .custom-scrollbar::-webkit-scrollbar { height: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+                .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); }
             `}</style>
         </AppLayout>
     );

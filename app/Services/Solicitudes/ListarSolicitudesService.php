@@ -19,16 +19,23 @@ class ListarSolicitudesService
      */
     public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
     {
-        $query = SolicitudTag::with(['cliente', 'vendedor', 'proceso', 'estado'])
+        // CAMBIAMOS estado_nuevo por estadoNuevo
+        $query = SolicitudTag::with(['cliente', 'vendedor', 'proceso', 'estado', 'auditorias.usuario', 'auditorias.estadoNuevo'])
             ->orderBy('created_at', 'desc'); 
 
-        if ($usuario && $usuario->hasRole('Vendedor')) {
-            $query->where('vendedor_id', $usuario->id);
+        // AISLAMIENTO DE DATOS BASADO EN PERMISOS Y ROLES ACTIVOS
+        if ($usuario) {
+            $esAdminOGerente = $usuario->hasAnyRole(['Super Admin', 'Administrador', 'Gerente']);
+            $esVerificador = $usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar', 'solicitudes.editar']);
+
+            // Si es un "Colaborador" normal (sin permisos de revisión), solo ve lo suyo
+            if (!$esAdminOGerente && !$esVerificador) {
+                $query->where('vendedor_id', $usuario->id);
+            }
         }
 
         $this->aplicarFiltros($query, $filtros);
 
-        // Si es para la web, paginamos. Si es para exportar a Excel, traemos todo.
         return $paginar ? $query->paginate(15) : $query->get();
     }
 

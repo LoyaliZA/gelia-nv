@@ -5,7 +5,7 @@ import {
     Settings, Plus, Edit2, Trash2, 
     X, Tags, ListTree, Activity, AlertTriangle, Save, CheckCircle2
 } from 'lucide-react';
-import AppLayout from '../../Layouts/AppLayout';
+import AppLayout from '../js/Layouts/AppLayout';
 
 export default function Catalogos({ auth, procesos = [], listas = [], estados = [] }) {
     const [tabActiva, setTabActiva] = useState('procesos');

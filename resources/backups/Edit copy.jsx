@@ -8,8 +8,8 @@ import {
     Image as ImageIcon, Type, Droplet, 
     PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, Plus, X, Trash2, AlertTriangle, Check, CheckCircle2, XCircle
 } from 'lucide-react';
-import AppLayout from '../../Layouts/AppLayout';
-import GeliaLoader from '../../Components/GeliaLoader';
+import AppLayout from '../js/Layouts/AppLayout';
+import GeliaLoader from '../js/Components/GeliaLoader';
 
 // --- COMPONENTE AUXILIAR RESPONSIVO ---
 const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, stackOnMobile = true }) => (

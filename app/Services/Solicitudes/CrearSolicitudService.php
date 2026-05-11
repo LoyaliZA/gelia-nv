@@ -5,7 +5,10 @@ namespace App\Services\Solicitudes;
 use App\Models\Cliente;
 use App\Models\SolicitudTag;
 use App\Models\CatalogoEstadoSolicitud;
+use App\Models\User; // <-- Importar User
+use App\Notifications\AlertaSolicitud; // <-- Importar tu Notificación
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification; // <-- Importar el facade
 
 class CrearSolicitudService
 {
@@ -18,26 +21,30 @@ class CrearSolicitudService
      */
     public function ejecutar(array $datos, int $vendedorId): SolicitudTag
     {
-        // DB::transaction asegura que si hay un error en alguna línea, 
-        // no se guarde información a medias en la base de datos.
         return DB::transaction(function () use ($datos, $vendedorId) {
-            
-            // 1. Resolver el Cliente (Existente o Nuevo Prospecto)
             $clienteId = $this->resolverClienteId($datos, $vendedorId);
-
-            // 2. Obtener el estado inicial por defecto ("Pendiente")
             $estadoPendiente = CatalogoEstadoSolicitud::where('nombre', 'Pendiente')->firstOrFail();
 
-            // 3. Crear la Solicitud
             $solicitud = SolicitudTag::create([
                 'cliente_id' => $clienteId,
                 'vendedor_id' => $vendedorId,
                 'catalogo_proceso_id' => $datos['catalogo_proceso_id'],
                 'catalogo_estado_solicitud_id' => $estadoPendiente->id,
                 'monto_cotizado' => $datos['monto_cotizado'],
-                'pago_confirmado' => false, // Regla de negocio: inicia sin confirmar
+                'pago_confirmado' => false,
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? null,
             ]);
+
+            // --- ESTO ES LO QUE FALTA: NOTIFICAR AL ENCARGADO ---
+            // Buscamos a los usuarios que tengan permiso de verificar (Encargadas/Admin)
+            $encargados = User::permission('solicitudes.verificar')->get();
+            
+            // Mandamos la notificación (Database + Correo)
+            Notification::send($encargados, new AlertaSolicitud(
+                $solicitud, 
+                'nueva', 
+                "Nueva solicitud recibida de: " . (auth()->user()->name ?? 'Vendedora')
+            ));
 
             return $solicitud;
         });

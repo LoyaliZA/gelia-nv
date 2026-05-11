@@ -14,6 +14,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\DB;
+use \App\Models\CatalogoProceso;
+use \App\Models\CatalogoListaDescuento;
+use \App\Models\CatalogoTipoCliente;
 use Inertia\Inertia;
 use Inertia\Response;
 use Rap2hpoutre\FastExcel\FastExcel;
@@ -26,12 +29,15 @@ class SolicitudController extends Controller
         // ->with(['auditorias.usuario', 'auditorias.estado_nuevo'])
         $solicitudes = $listarService->ejecutar(Auth::user(), $request->all());
         
-        $procesos = \App\Models\CatalogoProceso::where('activo', true)->get();
+        $procesos = CatalogoProceso::where('activo', true)->get();
 
         return Inertia::render('Solicitudes/Index', [
             'solicitudes' => $solicitudes,
             'filtros' => $request->all(),
             'procesos' => $procesos,
+            // ESTAS DOS LÍNEAS SON LAS QUE FALTABAN PARA LLENAR LOS SELECTS:
+            'listas'        => CatalogoListaDescuento::where('activo', true)->get(),
+            'tipos_cliente' => CatalogoTipoCliente::where('activo', true)->orderBy('nombre')->get(),
         ]);
     }
 
@@ -45,17 +51,17 @@ class SolicitudController extends Controller
 
     public function confirmarPago(Request $request, SolicitudTag $solicitud)
     {
-        Gate::authorize('solicitudes.editar');
+        // CAMBIO AQUÍ: Ahora pide el permiso específico de contabilidad
+        Gate::authorize('solicitudes.confirmar_pago');
 
         DB::transaction(function () use ($solicitud) {
             $solicitud->update(['pago_confirmado' => true]);
 
-            // REGISTRO EN BITÁCORA: Confirmar pago es un evento auditable
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $solicitud->catalogo_estado_solicitud_id,
-                'estado_nuevo_id' => $solicitud->catalogo_estado_solicitud_id, // El estado no cambia, pero el evento sí
+                'estado_nuevo_id' => $solicitud->catalogo_estado_solicitud_id,
                 'motivo_reporte' => 'PAGO CONFIRMADO POR ADMINISTRACIÓN'
             ]);
         });
@@ -63,13 +69,55 @@ class SolicitudController extends Controller
         return back()->with('success', 'Pago confirmado. El área administrativa ha sido notificada.');
     }
 
+    // --- NUEVA FUNCIÓN PARA REPARAR SOLICITUDES INCORRECTAS ---
+    public function update(Request $request, SolicitudTag $solicitud)
+    {
+        // Solo puede editar si es su solicitud y está en estado Incorrecta (4)
+        if ($solicitud->vendedor_id !== Auth::id() || $solicitud->catalogo_estado_solicitud_id != 4) {
+            abort(403, 'No tienes permiso para editar esta solicitud o no está en estado Incorrecto.');
+        }
+
+        $request->validate([
+            'monto_cotizado' => 'required|numeric|min:0',
+            'catalogo_proceso_id' => 'required|exists:catalogo_procesos,id',
+            'evidencia' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:5120',
+        ]);
+
+        DB::transaction(function () use ($solicitud, $request) {
+            $rutaEvidencia = $solicitud->evidencia_path;
+            if ($request->hasFile('evidencia')) {
+                $rutaEvidencia = $request->file('evidencia')->store('evidencias/solicitudes', 'public');
+            }
+
+            // Regresamos el estado a Pendiente (1) para que se vuelva a revisar
+            $solicitud->update([
+                'monto_cotizado' => $request->monto_cotizado,
+                'catalogo_proceso_id' => $request->catalogo_proceso_id,
+                'evidencia_path' => $rutaEvidencia,
+                'catalogo_estado_solicitud_id' => 1, 
+            ]);
+
+            AuditoriaSolicitud::create([
+                'solicitud_id' => $solicitud->id,
+                'usuario_id' => Auth::id(),
+                'estado_anterior_id' => 4, // Incorrecta
+                'estado_nuevo_id' => 1, // Pendiente
+                'motivo_reporte' => 'El colaborador corrigió la solicitud y subió nueva evidencia.'
+            ]);
+        });
+
+        return back()->with('success', 'Solicitud corregida y enviada a revisión.');
+    }
+
+    // --- FUNCIÓN ACTUALIZADA CON EVIDENCIA DE RESPUESTA ---
     public function actualizarEstado(Request $request, SolicitudTag $solicitud)
     {
         Gate::any(['solicitudes.verificar', 'solicitudes.reportar']);
 
         $request->validate([
             'catalogo_estado_solicitud_id' => 'required|exists:catalogo_estados_solicitud,id',
-            'motivo' => 'nullable|string'
+            'motivo' => 'nullable|string',
+            'evidencia_respuesta' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:5120',
         ]);
 
         $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
@@ -77,8 +125,14 @@ class SolicitudController extends Controller
 
         DB::transaction(function () use ($solicitud, $estadoAnteriorId, $estadoNuevoId, $request) {
             
+            $rutaEvidencia = $solicitud->evidencia_respuesta_path;
+            if ($request->hasFile('evidencia_respuesta')) {
+                $rutaEvidencia = $request->file('evidencia_respuesta')->store('evidencias/respuestas', 'public');
+            }
+
             $solicitud->update([
                 'catalogo_estado_solicitud_id' => $estadoNuevoId,
+                'evidencia_respuesta_path' => $rutaEvidencia,
             ]);
 
             AuditoriaSolicitud::create([
@@ -88,17 +142,9 @@ class SolicitudController extends Controller
                 'estado_nuevo_id' => $estadoNuevoId,
                 'motivo_reporte' => $request->motivo ?: 'CAMBIO DE ESTADO OPERATIVO'
             ]);
-
-            if ($estadoNuevoId == 3) {
-                $tabulador = TabuladorComision::where('catalogo_proceso_id', $solicitud->catalogo_proceso_id)->first();
-                if ($tabulador) {
-                    $montoComision = $tabulador->monto_vendedora;
-                    // Lógica de inserción de comisión aquí...
-                }
-            }
         });
 
-        return back()->with('success', 'El estado de la solicitud ha sido actualizado correctamente.');
+        return back()->with('success', 'El estado ha sido actualizado correctamente.');
     }
 
     public function exportar(Request $request, ListarSolicitudesService $listarService)
@@ -120,5 +166,49 @@ class SolicitudController extends Controller
                 'Observaciones' => $solicitud->observaciones_vendedor ?? 'Ninguna',
             ];
         });
+    }
+
+    public function rechazarPago(Request $request, SolicitudTag $solicitud)
+    {
+        Gate::authorize('solicitudes.confirmar_pago');
+
+        DB::transaction(function () use ($solicitud) {
+            // 1. Mandamos la solicitud a estado Incorrecta (ID 4)
+            $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
+            $solicitud->update([
+                'catalogo_estado_solicitud_id' => 4, 
+                'pago_confirmado' => false
+            ]);
+
+            // 2. REVERSIÓN AUTOMÁTICA DEL CLIENTE
+            // Si la vendedora le había asignado un tipo (ej. REACTIVADO), lo regresamos a null o a su estado original
+            if ($solicitud->catalogo_tipo_cliente_id && $solicitud->cliente_id) {
+                $cliente = \App\Models\Cliente::find($solicitud->cliente_id);
+                if ($cliente) {
+                    // Aquí reviertes la lista o el tipo. Como medida de seguridad, lo desvinculamos de la sugerencia nueva.
+                    $cliente->update(['catalogo_tipo_cliente_id' => null]);
+                }
+            }
+
+            // 3. REGISTRO EN LA BITÁCORA
+            \App\Models\AuditoriaSolicitud::create([
+                'solicitud_id' => $solicitud->id,
+                'usuario_id' => \Illuminate\Support\Facades\Auth::id(),
+                'estado_anterior_id' => $estadoAnteriorId,
+                'estado_nuevo_id' => 4, // Incorrecta
+                'motivo_reporte' => 'PAGO RECHAZADO: Se aplicó la reversión automática de las propiedades del cliente.'
+            ]);
+
+            // 4. NOTIFICAR A LA VENDEDORA (Vía correo y web)
+            if ($solicitud->vendedor) {
+                $solicitud->vendedor->notify(new \App\Notifications\AlertaSolicitud(
+                    $solicitud, 
+                    'pago_rechazado', 
+                    'Tu solicitud ha sido rebotada por falta de pago. Se revirtieron los cambios del cliente.'
+                ));
+            }
+        });
+
+        return back()->with('success', 'Pago rechazado. La vendedora ha sido notificada y el cliente fue revertido.');
     }
 }

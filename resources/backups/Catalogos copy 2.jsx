@@ -7,8 +7,8 @@ import {
     X, Tags, ListTree, Activity, AlertTriangle, Save, CheckCircle2, XCircle,
     Building2, MapPin // <-- Nuevos Iconos
 } from 'lucide-react';
-import AppLayout from '../../Layouts/AppLayout';
-import GeliaLoader from '../../Components/GeliaLoader';
+import AppLayout from '../js/Layouts/AppLayout';
+import GeliaLoader from '../js/Components/GeliaLoader';
 
 export default function Catalogos({ auth, procesos = [], listas = [], estados = [], departamentos = [], areas = [] }) {
     const [tabActiva, setTabActiva]               = useState('procesos');

@@ -1,18 +1,49 @@
 import React, { useEffect, useState, createContext, useContext } from 'react';
-import { usePage } from '@inertiajs/react';
+import { usePage, router } from '@inertiajs/react';
 import Sidebar from '../Components/Sidebar';
 import { animate } from 'animejs/animation';
+// 1. AÑADIMOS LAS IMPORTACIONES DE LOS ICONOS AQUÍ
+import { Bell, X } from 'lucide-react';
 
-// 1. CREAMOS EL CONTEXTO GLOBAL PARA LOS MODALES
 const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
 
 export default function AppLayout({ children }) {
     const { props: { auth }, url } = usePage();
 
-    // --- ESTADOS DEL MODAL GLOBAL ---
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState(null);
+
+    // 2. EL ESTADO DE LOS TOASTS DEBE IR AQUÍ AFUERA (En el primer nivel)
+    const [toasts, setToasts] = useState([]);
+
+    const addToast = (notif) => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, ...notif }]);
+
+        // --- LÓGICA DE SONIDO ---
+        try {
+            const audio = new Audio('/assets/sounds/notification.mp3'); // Asegúrate de tener un mp3 en esa ruta
+            audio.play();
+        } catch (e) { console.warn("El navegador bloqueó el audio inicial"); }
+
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 5000);
+    };
+
+    // 3. AGREGAMOS EL ESCUCHADOR DE REVERB (TIEMPO REAL)
+    useEffect(() => {
+        if (auth?.user && typeof window !== 'undefined' && window.Echo) {
+            window.Echo.private(`App.Models.User.${auth.user.id}`)
+                .notification((notification) => {
+                    // Muestra el Toast en la esquina
+                    addToast({ mensaje: notification.mensaje });
+                    // Recarga las notificaciones silenciosamente para actualizar el contador de la campanita
+                    router.reload({ only: ['auth'], preserveScroll: true, preserveState: true });
+                });
+        }
+    }, [auth?.user]);
 
     const accentColors = {
         rosa: '#ec4899',
@@ -29,13 +60,11 @@ export default function AppLayout({ children }) {
         return auth?.tema_visual?.modo === 'dark';
     });
 
-    // --- ESTADO DEL LAYOUT DEL SIDEBAR ---
     const [sidebarLayout, setSidebarLayout] = useState(() => {
         if (typeof window !== 'undefined') return localStorage.getItem('theme_layout') || auth?.tema_visual?.layout_sidebar || 'floating_left';
         return 'floating_left';
     });
 
-    // --- FUNCIONES DEL MODAL ---
     const openModal = (content) => {
         setModalContent(content);
         setIsModalOpen(true);
@@ -43,21 +72,15 @@ export default function AppLayout({ children }) {
 
     const closeModal = () => {
         setIsModalOpen(false);
-        setTimeout(() => setModalContent(null), 300); // Limpia el contenido después de la animación de cierre
+        setTimeout(() => setModalContent(null), 300);
     };
 
-    // --- BLOQUEO DE SCROLL (Para evitar que el modal se corte) ---
     useEffect(() => {
-        if (isModalOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
-        }
-        // Limpieza por si el componente se desmonta con el modal abierto
+        if (isModalOpen) document.body.style.overflow = 'hidden';
+        else document.body.style.overflow = 'unset';
         return () => { document.body.style.overflow = 'unset'; };
     }, [isModalOpen]);
 
-    // --- ESCUCHADOR DE EVENTOS GLOBALES ---
     useEffect(() => {
         const syncThemeState = () => {
             const savedTheme = localStorage.getItem('theme');
@@ -66,24 +89,19 @@ export default function AppLayout({ children }) {
             const savedLayout = localStorage.getItem('theme_layout');
             if (savedLayout) setSidebarLayout(savedLayout);
         };
-
         window.addEventListener('theme-changed', syncThemeState);
         return () => window.removeEventListener('theme-changed', syncThemeState);
     }, []);
 
-    // --- MOTOR CENTRAL DE PERSONALIZACIÓN (UI CORE) ---
     useEffect(() => {
         const root = document.documentElement;
         const tema = auth?.tema_visual || {};
 
-        // 1. Color de Énfasis
         const savedColorName = typeof window !== 'undefined' ? localStorage.getItem('theme_color') : null;
         const activeColorName = savedColorName || tema.color_nombre?.toLowerCase() || 'rosa';
         const activeAccent = activeColorName.startsWith('#') ? activeColorName : (accentColors[activeColorName] || accentColors.rosa);
-
         root.style.setProperty('--color-primario', activeAccent);
 
-        // 2. Modo Oscuro
         if (isDarkMode) {
             root.classList.add('dark');
             localStorage.setItem('theme', 'dark');
@@ -92,9 +110,7 @@ export default function AppLayout({ children }) {
             localStorage.setItem('theme', 'light');
         }
 
-        // 3. Fondos Multiformato
         const nombreFondo = tema.fondo_base || (typeof window !== 'undefined' ? localStorage.getItem('bg_base') : null) || 'none';
-
         if (nombreFondo === 'none') {
             root.style.setProperty('--bg-image-pc', 'none');
             root.style.setProperty('--bg-image-movil', 'none');
@@ -109,7 +125,6 @@ export default function AppLayout({ children }) {
             root.style.setProperty('--bg-image-movil', `url('/assets/backgrounds/${nombreFondo}_movil.svg')`);
         }
 
-        // 4. Tipografía Escalable
         const savedFont = typeof window !== 'undefined' ? localStorage.getItem('theme_font') : null;
         const activeFont = savedFont || tema.fuente_principal || 'inter';
         const fontMap = {
@@ -122,31 +137,18 @@ export default function AppLayout({ children }) {
         };
         root.style.setProperty('--font-principal', fontMap[activeFont] || fontMap.inter);
 
-        // 5. Efecto Cristal (Glassmorphism)
         const savedGlass = typeof window !== 'undefined' ? localStorage.getItem('theme_glass') : null;
-
-        // CORRECCIÓN: Evaluamos estrictamente los nulos para no forzar el cristal si no es necesario
         const isGlassActive = savedGlass !== null
             ? savedGlass === 'true'
             : (String(tema.efecto_cristal) !== '0' && tema.efecto_cristal !== false);
 
-        if (isGlassActive) {
-            root.classList.add('glass-active');
-        } else {
-            root.classList.remove('glass-active');
-        }
+        if (isGlassActive) root.classList.add('glass-active');
+        else root.classList.remove('glass-active');
 
     }, [isDarkMode, auth?.tema_visual]);
 
-    // --- ANIMACIÓN DE TRANSICIÓN DE PÁGINA (Rápida: 300ms) ---
     useEffect(() => {
-        animate('.page-reveal', {
-            y: [15, 0],
-            opacity: [0, 1],
-        }, {
-            duration: 300,
-            easing: 'easeOutExpo'
-        });
+        animate('.page-reveal', { y: [15, 0], opacity: [0, 1] }, { duration: 300, easing: 'easeOutExpo' });
     }, [url]);
 
     const toggleTheme = () => {
@@ -158,9 +160,8 @@ export default function AppLayout({ children }) {
 
     return (
         <ModalContext.Provider value={{ openModal, closeModal }}>
-            {/* CORRECCIÓN: Cambiamos min-h-screen por min-h-[100dvh] para que el fondo cubra todo en celulares */}
             <div
-                className="min-h-dvh text-gray-950 dark:text-gray-100 transition-colors duration-500 w-full"
+                className="min-h-dvh text-gray-950 dark:text-gray-100 transition-colors duration-500 w-full overflow-x-hidden"
                 style={{
                     backgroundColor: 'var(--bg-app)',
                     backgroundImage: 'var(--bg-actual)',
@@ -184,43 +185,40 @@ export default function AppLayout({ children }) {
                     </div>
                 </main>
 
-                {/* =========================================
-                    OVERLAY DEL MODAL GLOBAL (SIEMPRE CENTRADO)
-                    ========================================= */}
+                {/* MODAL GLOBAL */}
                 {isModalOpen && (
-                    <div
-                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in"
-                        onClick={closeModal}
-                    >
-                        <div
-                            className="w-full max-w-lg bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 modal-pop border border-gray-200 dark:border-[#222222] max-h-[90vh] overflow-y-auto"
-                            onClick={(e) => e.stopPropagation()}
-                        >
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in" onClick={closeModal}>
+                        <div className="w-full max-w-lg bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 modal-pop border border-gray-200 dark:border-[#222222] max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                             {modalContent}
                         </div>
                     </div>
                 )}
 
-                {/* =========================================
-                    SISTEMA DE DISEÑO GLOBAL GELIANV
-                    ========================================= */}
+                {/* TOASTS FLOTANTES */}
+                <div className="fixed top-6 right-6 z-[10000] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
+                    {toasts.map((toast) => (
+                        <div key={toast.id} className="pointer-events-auto theme-surface border theme-border shadow-2xl rounded-2xl p-4 flex items-start gap-4 animate-slide-in-right overflow-hidden relative group">
+                            <div className="absolute bottom-0 left-0 h-1 bg-[var(--color-primario)] animate-progress-shrink" />
+                            <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
+                                <Bell className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)] mb-0.5">Nueva Alerta_</p>
+                                <p className="text-xs font-bold theme-text-main leading-snug">{toast.mensaje}</p>
+                            </div>
+                            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="theme-text-muted hover:theme-text-main transition-colors outline-none">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+
                 <style>{`
-                    :root { 
-                        --bg-app: #FFFFFF;
-                        --bg-actual: var(--bg-image-movil, none); 
-                    }
-                    .dark { 
-                        --bg-app: #0a0a0a;
-                    }
-                    @media (min-width: 768px) {
-                        :root { --bg-actual: var(--bg-image-pc, none); }
-                    }
+                    :root { --bg-app: #FFFFFF; --bg-actual: var(--bg-image-movil, none); }
+                    .dark { --bg-app: #0a0a0a; }
+                    @media (min-width: 768px) { :root { --bg-actual: var(--bg-image-pc, none); } }
+                    html, body, input, select, textarea, button { font-family: var(--font-principal) !important; }
 
-                    html, body, input, select, textarea, button { 
-                        font-family: var(--font-principal) !important;
-                    }
-
-                    /* --- COLORES Y SUPERFICIES (BASE SÓLIDA PARA LEGIBILIDAD) --- */
                     .theme-surface { background-color: #ffffff; border-color: #f4f4f5; transition: background-color 0.3s, border-color 0.3s, backdrop-filter 0.3s; }
                     .theme-element { background-color: rgba(250, 250, 250, 1) !important; border-color: #e4e4e7 !important; transition: background-color 0.3s, border-color 0.3s, backdrop-filter 0.3s; }
                     .theme-text-main { color: #18181b; }
@@ -235,88 +233,38 @@ export default function AppLayout({ children }) {
                     .dark .theme-border { border-color: #27272a; }
                     .dark .theme-placeholder::placeholder { color: #52525b; }
 
-                    /* --- EFECTO CRISTAL (GLASSMORPHISM) --- */
-                    html.glass-active .theme-surface,
-                    html.glass-active .theme-element,
-                    html.glass-active .sidebar-glass {
-                        backdrop-filter: blur(16px);
-                        -webkit-backdrop-filter: blur(16px);
-                    }
+                    html.glass-active .theme-surface, html.glass-active .theme-element, html.glass-active .sidebar-glass { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+                    html.glass-active .theme-surface { background-color: rgba(255, 255, 255, 0.75); border-color: rgba(255, 255, 255, 0.8); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); }
+                    html.glass-active .theme-element { background-color: rgba(250, 250, 250, 0.85) !important; border-color: rgba(255, 255, 255, 0.6) !important; }
+                    html.dark.glass-active .theme-surface { background-color: rgba(18, 18, 18, 0.7); border-color: rgba(255, 255, 255, 0.08); box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.5); }
+                    html.dark.glass-active .theme-element { background-color: rgba(30, 30, 30, 0.85) !important; border-color: rgba(255, 255, 255, 0.05) !important; }
 
-                    html.glass-active .theme-surface {
-                        background-color: rgba(255, 255, 255, 0.75);
-                        border-color: rgba(255, 255, 255, 0.8);
-                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-                    }
-                    html.glass-active .theme-element {
-                        background-color: rgba(250, 250, 250, 0.85) !important; 
-                        border-color: rgba(255, 255, 255, 0.6) !important;
-                    }
-
-                    html.dark.glass-active .theme-surface {
-                        background-color: rgba(18, 18, 18, 0.7);
-                        border-color: rgba(255, 255, 255, 0.08);
-                        box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.5);
-                    }
-                    html.dark.glass-active .theme-element {
-                        background-color: rgba(30, 30, 30, 0.85) !important; 
-                        border-color: rgba(255, 255, 255, 0.05) !important;
-                    }
-
-                    /* --- COMPONENTES UI --- */
-                    .gelia-switch {
-                        width: 3rem; height: 1.5rem; border-radius: 9999px; padding: 0.25rem;
-                        background-color: #d4d4d8; transition: background-color 0.3s ease;
-                        cursor: pointer; display: flex; align-items: center; border: none; outline: none;
-                    }
+                    .gelia-switch { width: 3rem; height: 1.5rem; border-radius: 9999px; padding: 0.25rem; background-color: #d4d4d8; transition: background-color 0.3s ease; cursor: pointer; display: flex; align-items: center; border: none; outline: none; }
                     .dark .gelia-switch { background-color: #3f3f46; }
                     .gelia-switch[data-active="true"] { background-color: var(--color-primario); }
-                    
-                    .gelia-switch-thumb {
-                        width: 1rem; height: 1rem; border-radius: 9999px; background-color: white;
-                        box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    }
+                    .gelia-switch-thumb { width: 1rem; height: 1rem; border-radius: 9999px; background-color: white; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
                     .gelia-switch[data-active="true"] .gelia-switch-thumb { transform: translateX(1.5rem); }
 
-                    .gelia-segment {
-                        display: flex; background-color: #f4f4f5; padding: 0.25rem; border-radius: 0.75rem; border: 1px solid #e4e4e7;
-                    }
+                    .gelia-segment { display: flex; background-color: #f4f4f5; padding: 0.25rem; border-radius: 0.75rem; border: 1px solid #e4e4e7; }
                     .dark .gelia-segment { background-color: #18181b; border-color: #27272a; }
-                    
-                    .gelia-segment-btn {
-                        flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-                        padding: 0.5rem 1rem; font-size: 0.75rem; font-weight: 700; border-radius: 0.5rem;
-                        transition: all 0.3s ease; color: #71717a; background: transparent; border: none; outline: none; cursor: pointer;
-                    }
-                    .gelia-segment-btn[data-active="true"] {
-                        background-color: #ffffff; color: var(--color-primario); box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-                    }
+                    .gelia-segment-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.5rem 1rem; font-size: 0.75rem; font-weight: 700; border-radius: 0.5rem; transition: all 0.3s ease; color: #71717a; background: transparent; border: none; outline: none; cursor: pointer; }
+                    .gelia-segment-btn[data-active="true"] { background-color: #ffffff; color: var(--color-primario); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
                     .dark .gelia-segment-btn[data-active="true"] { background-color: #27272a; }
 
-                    /* --- INDICADORES DE ESTADO --- */
-                    .gelia-leyenda { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; color: var(--theme-text-muted); }
-                    .gelia-leyenda-azul { color: #3b82f6; font-weight: 900; margin: 0 4px; }
-                    .gelia-leyenda-naranja { color: #f97316; font-weight: 900; margin: 0 4px; }
-
-                    .gelia-estado-heredado { border-color: rgba(59, 130, 246, 0.3) !important; background-color: rgba(59, 130, 246, 0.1) !important; color: #2563eb !important; cursor: not-allowed; }
-                    .gelia-estado-directo { border-color: #f97316 !important; background-color: rgba(249, 115, 22, 0.1) !important; color: #ea580c !important; }
-
-                    /* --- SCROLLBARS Y ANIMACIONES MODALES --- */
                     ::-webkit-scrollbar { width: 8px; }
                     ::-webkit-scrollbar-track { background: transparent; }
                     ::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.4); border-radius: 20px; }
                     ::-webkit-scrollbar-thumb:hover { background-color: var(--color-primario); }
                     
-                    @keyframes scaleUp {
-                        0% { opacity: 0; transform: scale(0.95); }
-                        100% { opacity: 1; transform: scale(1); }
-                    }
-                    @keyframes fadeIn { 
-                        from { opacity: 0; } 
-                        to { opacity: 1; } 
-                    }
+                    @keyframes scaleUp { 0% { opacity: 0; transform: scale(0.95); } 100% { opacity: 1; transform: scale(1); } }
+                    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+                    @keyframes progressShrink { from { width: 100%; } to { width: 0%; } }
+                    
                     .modal-pop { animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
                     .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+                    .animate-slide-in-right { animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                    .animate-progress-shrink { animation: progressShrink 5s linear forwards; }
                 `}</style>
             </div>
         </ModalContext.Provider>

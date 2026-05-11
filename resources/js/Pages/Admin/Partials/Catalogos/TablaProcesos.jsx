@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useForm } from '@inertiajs/react';
+import { useForm, router } from '@inertiajs/react'; // <-- Asegúrate de importar router
 import { ListTree, Edit2, Trash2, Plus, X, Save, AlertTriangle } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
 
@@ -9,7 +9,8 @@ export default function TablaProcesos({ datos = [] }) {
     const [modalEliminar, setModalEliminar] = useState(false);
     const [itemActual, setItemActual] = useState(null);
 
-    const { data, setData, post, put, processing, reset, errors } = useForm({
+    // 1. Estado limpio, sin _method
+    const { data, setData, post, put, processing, reset, errors, clearErrors } = useForm({
         nombre: '',
         descripcion: '',
         monto_requerido: '',
@@ -19,31 +20,40 @@ export default function TablaProcesos({ datos = [] }) {
     const abrirNuevo = () => {
         setItemActual(null);
         reset();
+        clearErrors();
         setModalAbierto(true);
     };
 
     const abrirEditar = (item) => {
         setItemActual(item);
+        clearErrors();
         setData({ 
             nombre: item.nombre, 
             descripcion: item.descripcion || '',
             monto_requerido: item.monto_requerido || '',
-            activo: item.activo 
+            activo: item.activo
         });
         setModalAbierto(true);
     };
 
+    // 2. Usamos put() nativo si estamos editando, post() si estamos creando
     const handleSubmit = (e) => {
         e.preventDefault();
-        const accion = itemActual ? put : post;
-        const ruta = itemActual ? route('admin.catalogos.procesos.update', itemActual.id) : route('admin.catalogos.procesos.store');
         
-        accion(ruta, { onSuccess: () => { setModalAbierto(false); reset(); } });
+        if (itemActual) {
+            put(route('admin.catalogos.procesos.update', itemActual.id), { 
+                onSuccess: () => { setModalAbierto(false); reset(); } 
+            });
+        } else {
+            post(route('admin.catalogos.procesos.store'), { 
+                onSuccess: () => { setModalAbierto(false); reset(); } 
+            });
+        }
     };
 
+    // 3. Usamos router.delete() nativo para eliminar
     const confirmDelete = () => {
-        post(route('admin.catalogos.procesos.destroy', itemActual.id), {
-            _method: 'delete',
+        router.delete(route('admin.catalogos.procesos.destroy', itemActual.id), {
             onSuccess: () => { setModalEliminar(false); setItemActual(null); }
         });
     };

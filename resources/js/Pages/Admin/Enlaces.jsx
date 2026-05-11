@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
-import { animate } from 'animejs/animation'; // Importación modular corregida
+import { animate } from 'animejs/animation';
 import { 
     Link as LinkIcon, 
     Copy, 
@@ -9,24 +9,55 @@ import {
     Sparkles, 
     ShieldCheck, 
     Clock, 
-    ChevronDown 
+    ChevronDown,
+    Briefcase,
+    AlertTriangle,
+    Key,
+    Check
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
 export default function Enlaces({ auth }) {
-    const [rolSeleccionado, setRolSeleccionado] = useState('Vendedor');
+    const [rolSeleccionado, setRolSeleccionado] = useState('Grupo: Vendedor');
     const [enlaceGenerado, setEnlaceGenerado] = useState('');
     const [copiado, setCopiado] = useState(false);
     const [cargando, setCargando] = useState(false);
     
-    const rolesDisponibles = ['Vendedor', 'Contador', 'Auxiliar', 'Encargado de TAGS'];
+    // Diccionario de roles y sus permisos (Mapeado de la BD)
+    const rolesInfo = {
+        'Colaborador': [
+            'Ver el listado general de solicitudes'
+        ],
+        'Grupo: Vendedor': [
+            'Crear nuevas solicitudes (cotizaciones)', 
+            'Ver el directorio de clientes', 
+            'Registrar nuevos clientes en el sistema'
+        ],
+        'Grupo: Verificador': [
+            'Ver detalles de las solicitudes', 
+            'Verificar y aprobar procesos operativos'
+        ],
+        'Gerente': [
+            'Ver listado y detalle de solicitudes', 
+            'Reportar inconsistencias o errores', 
+            'Acceso de lectura a la bitácora de auditoría'
+        ],
+        'Administrador': [
+            'Gestión completa de usuarios (CRUD)', 
+            'Gestión de clientes y carga masiva', 
+            'Todas las funciones operativas y de auditoría'
+        ]
+    };
+
+    const rolesDisponibles = Object.keys(rolesInfo);
 
     useEffect(() => {
-        animate('.tab-content', {
+        animate('.page-reveal-enlaces', {
             translateY: [15, 0],
             opacity: [0, 1],
             easing: 'easeOutExpo',
-            duration: 600
+            duration: 600,
+            delay: (el, i) => i * 80
         });
     }, []);
 
@@ -36,170 +67,230 @@ export default function Enlaces({ auth }) {
         setCopiado(false);
 
         try {
-            const response = await axios.post(route('registro.generar_enlace'), { role_name: rolSeleccionado });
+            const response = await axios.post(route('admin.enlaces.generar'), { role_name: rolSeleccionado });
             setEnlaceGenerado(response.data.enlace);
             
             setTimeout(() => {
                 animate('.result-box', {
-                    scale: [0.95, 1],
+                    translateY: [10, 0],
                     opacity: [0, 1],
                     duration: 400,
-                    easing: 'easeOutBack'
+                    easing: 'easeOutExpo'
                 });
             }, 50);
         } catch (error) {
             console.error("Error generando el enlace:", error);
-            alert("Hubo un error al generar el enlace.");
+            alert("Hubo un error al generar el enlace. Verifica la consola.");
         } finally {
             setCargando(false);
         }
     };
 
-    const copiarAlPortapapeles = () => {
-        navigator.clipboard.writeText(enlaceGenerado);
-        setCopiado(true);
-        setTimeout(() => setCopiado(false), 3000);
+    // FUNCIÓN DE COPIADO ULTRA-ROBUSTA (Funciona en HTTP y HTTPS)
+    const copiarAlPortapapeles = async () => {
+        if (!enlaceGenerado) return;
+
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                // Modo seguro (HTTPS o localhost)
+                await navigator.clipboard.writeText(enlaceGenerado);
+            } else {
+                // Modo inseguro (HTTP por IP como 100.75.11.59)
+                const textArea = document.createElement("textarea");
+                textArea.value = enlaceGenerado;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                textArea.style.top = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand('copy');
+                textArea.remove();
+            }
+
+            setCopiado(true);
+            setTimeout(() => setCopiado(false), 3000);
+            
+        } catch (error) {
+            console.error("Error al copiar al portapapeles:", error);
+            alert("Tu navegador bloqueó el copiado automático. Por favor, selecciona el texto y cópialo manualmente.");
+        }
     };
 
     return (
         <AppLayout auth={auth}>
             <Head title="Generación de Accesos | GELIANV" />
             
-            <div className="max-w-4xl mx-auto p-6 md:p-12 space-y-12 min-h-screen">
-                {/* HEADER */}
-                <header className="space-y-4 tab-content">
-                    <div className="flex items-center space-x-3">
-                        <span className="h-1.5 w-12 rounded-full transition-colors duration-300" style={{ backgroundColor: 'var(--color-primario)' }}></span>
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em] transition-colors duration-300" style={{ color: 'var(--color-primario)' }}>Protocolo de Seguridad</p>
+            <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
+                
+                {/* --- HEADER --- */}
+                <div className="page-reveal-enlaces flex flex-col md:flex-row justify-between items-start md:items-center gap-6 theme-surface border-2 theme-border p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-sm">
+                    <div>
+                        <div className="flex items-center space-x-3 mb-2">
+                            <span className="h-1.5 w-12 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }}></span>
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>Protocolo de Seguridad</p>
+                        </div>
+                        <h1 className="text-3xl md:text-4xl font-black theme-text-main flex items-center gap-3 italic uppercase tracking-tighter m-0">
+                            <ShieldCheck className="w-8 h-8 md:w-10 md:h-10 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
+                            GENERACIÓN DE <span style={{ color: 'var(--color-primario)' }}>ACCESOS</span>
+                        </h1>
+                        <p className="theme-text-muted text-[10px] font-bold uppercase tracking-widest mt-2 opacity-80 max-w-2xl">
+                            Crea enlaces criptográficos seguros para la identidad y el registro de nuevos colaboradores operativos.
+                        </p>
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-tight">
-                        GENERACIÓN DE <span style={{ color: 'var(--color-primario)' }}>ACCESOS</span>
-                    </h1>
-                    <p className="theme-text-muted font-bold italic text-base max-w-2xl">
-                        Crea enlaces criptográficos seguros para el registro de nuevos colaboradores.
-                    </p>
-                </header>
+                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 items-start tab-content">
-                    {/* PANEL PRINCIPAL */}
-                    <div className="lg:col-span-3 theme-surface border-2 theme-border rounded-[3rem] p-10 shadow-sm relative overflow-hidden group/card hover:border-[var(--color-primario)] transition-all duration-300">
-                        <div className="absolute top-0 right-0 p-8 opacity-5">
-                            <ShieldCheck className="w-32 h-32" style={{ color: 'var(--color-primario)' }} />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                    
+                    {/* --- PANEL PRINCIPAL --- */}
+                    <div className="page-reveal-enlaces lg:col-span-2 theme-surface border-2 theme-border rounded-[2.5rem] p-6 md:p-10 shadow-sm relative overflow-hidden transition-all duration-300">
+                        <div className="absolute -top-10 -right-10 opacity-[0.03] pointer-events-none dark:opacity-[0.02]">
+                            <Key className="w-64 h-64" style={{ color: 'var(--color-primario)' }} />
                         </div>
 
                         <div className="relative z-10 space-y-8">
-                            <h2 className="text-2xl font-black italic theme-text-main uppercase tracking-tighter flex items-center">
-                                <LinkIcon className="w-6 h-6 mr-3" style={{ color: 'var(--color-primario)' }} />
-                                Enlace de Registro
+                            <h2 className="text-xl font-black italic uppercase tracking-tighter theme-text-main flex items-center gap-2 border-b theme-border pb-4">
+                                <LinkIcon className="w-5 h-5" style={{ color: 'var(--color-primario)' }} /> 
+                                Configuración de Enlace
                             </h2>
 
-                            <div className="space-y-6">
-                                <div className="space-y-3">
-                                    <label className="text-xs font-black uppercase theme-text-muted ml-2 tracking-widest italic">Seleccionar Rol de Usuario_</label>
-                                    
-                                    <div className="relative group/select">
+                            <div className="space-y-6 max-w-xl">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-1">Seleccionar Nivel de Acceso_</label>
+                                    <div className="relative group/select mt-2">
+                                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
                                         <select 
                                             value={rolSeleccionado} 
                                             onChange={(e) => setRolSeleccionado(e.target.value)}
-                                            className="w-full p-4 theme-element border-2 theme-border rounded-2xl theme-text-main font-bold outline-none appearance-none cursor-pointer transition-all pr-12"
+                                            className="w-full pl-12 pr-12 py-4 theme-element border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none cursor-pointer transition-all focus:ring-2 focus:ring-[var(--color-primario)] shadow-sm hover:shadow-md"
                                             style={{ '--tw-ring-color': 'var(--color-primario)' }}
                                             onFocus={(e) => e.target.style.borderColor = 'var(--color-primario)'}
                                             onBlur={(e) => e.target.style.borderColor = ''}
                                         >
                                             {rolesDisponibles.map(rol => (
-                                                <option key={rol} value={rol} className="theme-option">
-                                                    {rol.toUpperCase()}
+                                                <option key={rol} value={rol} className="theme-option font-bold uppercase">
+                                                    {rol}
                                                 </option>
                                             ))}
                                         </select>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400 group-hover/select:text-[var(--color-primario)] transition-colors">
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none theme-text-muted group-hover/select:text-[var(--color-primario)] transition-colors">
                                             <ChevronDown className="w-5 h-5" />
                                         </div>
                                     </div>
                                 </div>
 
+                                {/* INFO DE PERMISOS */}
+                                <div className="p-5 rounded-2xl bg-black/5 dark:bg-white/5 border border-zinc-200 dark:border-zinc-800">
+                                    <h4 className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-3 flex items-center gap-1.5">
+                                        <ShieldCheck className="w-3.5 h-3.5" style={{ color: 'var(--color-primario)' }} /> 
+                                        Privilegios Asignados Automáticamente:
+                                    </h4>
+                                    <ul className="space-y-2">
+                                        {rolesInfo[rolSeleccionado]?.map((permiso, idx) => (
+                                            <li key={idx} className="text-[11px] font-bold theme-text-main flex items-start gap-2.5 leading-tight">
+                                                <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                                                <span className="opacity-90">{permiso}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+
                                 <button 
                                     onClick={generarEnlace} 
                                     disabled={cargando}
-                                    className="w-full py-5 text-white rounded-3xl font-black uppercase tracking-widest text-[10px] transition-all shadow-xl hover:scale-[1.02] disabled:opacity-50 flex items-center justify-center gap-3"
-                                    style={{ 
-                                        backgroundColor: 'var(--color-primario)',
-                                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' 
-                                    }}
+                                    className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all shadow-xl hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 outline-none"
+                                    style={{ backgroundColor: 'var(--color-primario)' }}
                                 >
                                     {cargando ? <Clock className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                                    {cargando ? 'Generando Token...' : 'Crear Enlace Seguro'}
+                                    {cargando ? 'Cifrando Token...' : 'Generar Enlace Seguro'}
                                 </button>
                             </div>
 
+                            {/* --- CAJA DE RESULTADO --- */}
                             {enlaceGenerado && (
-                                <div className="result-box mt-10 p-6 theme-element border-2 theme-border rounded-3xl space-y-4 opacity-0 transition-all">
-                                    <label className="block text-[10px] font-black uppercase tracking-widest italic" style={{ color: 'var(--color-primario)' }}>Token Criptográfico Generado_</label>
-                                    <div className="flex items-center gap-3">
+                                <div className="result-box mt-8 p-6 theme-element border-2 border-dashed theme-border rounded-[2rem] space-y-4 transition-all bg-black/5 dark:bg-white/5">
+                                    <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest italic" style={{ color: 'var(--color-primario)' }}>
+                                        <Key className="w-3 h-3" /> Token Criptográfico Generado_
+                                    </label>
+                                    
+                                    <div className="flex flex-col sm:flex-row items-center gap-3">
                                         <input 
                                             type="text" 
                                             readOnly 
                                             value={enlaceGenerado} 
-                                            className="flex-1 p-3 bg-transparent border-none outline-none theme-text-main font-bold text-xs truncate" 
+                                            className="w-full sm:flex-1 p-4 bg-white dark:bg-[#121212] border theme-border rounded-xl theme-text-main font-bold text-xs truncate shadow-inner outline-none focus:ring-1 focus:ring-[var(--color-primario)]" 
+                                            onClick={(e) => e.target.select()}
                                         />
                                         <button 
                                             onClick={copiarAlPortapapeles} 
-                                            className="p-4 theme-surface border theme-border rounded-2xl transition-all group/copy hover:border-[var(--color-primario)]"
-                                            title="Copiar enlace"
+                                            className="w-full sm:w-auto px-6 py-4 theme-surface border theme-border rounded-xl transition-all group/copy hover:border-[var(--color-primario)] flex items-center justify-center gap-2 outline-none shadow-sm"
+                                            title="Copiar enlace al portapapeles"
                                         >
-                                            {copiado ? <CheckCircle className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5 theme-text-muted group-hover/copy:text-[var(--color-primario)]" />}
+                                            {copiado ? (
+                                                <>
+                                                    <CheckCircle className="w-5 h-5 text-emerald-500" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 sm:hidden">Copiado</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Copy className="w-5 h-5 theme-text-muted group-hover/copy:text-[var(--color-primario)] transition-colors" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted group-hover/copy:text-[var(--color-primario)] transition-colors sm:hidden">Copiar</span>
+                                                </>
+                                            )}
                                         </button>
                                     </div>
-                                    <p className="text-[9px] font-black uppercase text-emerald-500 italic flex items-center gap-1">
-                                        <ShieldCheck className="w-3 h-3" /> Enlace válido por 48 horas bajo firma digital.
+                                    <p className="text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400 italic flex items-center gap-1.5 mt-2 bg-emerald-500/10 w-fit px-3 py-1.5 rounded-lg border border-emerald-500/20">
+                                        <ShieldCheck className="w-3 h-3" /> Válido por 48 horas bajo firma digital.
                                     </p>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* SIDEBAR INFORMATIVO */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <div className="p-8 theme-element border-2 theme-border rounded-[2.5rem] shadow-sm transition-colors duration-300">
-                            <div className="flex items-center gap-2 mb-4">
-                                <ShieldCheck className="w-4 h-4 theme-text-main" />
-                                <h4 className="text-[10px] font-black uppercase tracking-widest theme-text-main">Seguridad Firmada</h4>
+                    {/* --- SIDEBAR INFORMATIVO --- */}
+                    <div className="page-reveal-enlaces lg:col-span-1 space-y-4">
+                        <div className="p-6 theme-surface border-[1.5px] theme-border rounded-[2rem] shadow-sm flex flex-col gap-3">
+                            <div className="flex items-center gap-2 pb-3 border-b theme-border">
+                                <ShieldCheck className="w-5 h-5 theme-text-main" />
+                                <h4 className="text-[10px] font-black uppercase tracking-widest theme-text-main">Firma Digital</h4>
                             </div>
-                            <p className="text-xs theme-text-muted leading-relaxed font-bold italic uppercase tracking-tighter">
-                                Estos enlaces utilizan URLs firmadas. Si el enlace es alterado incluso en un solo carácter, Laravel invalidará el acceso automáticamente.
+                            <p className="text-[11px] theme-text-main leading-relaxed font-bold italic tracking-wide">
+                                Estos enlaces utilizan <span className="text-emerald-500 dark:text-emerald-400 font-black">URLs firmadas</span>. Si el enlace es alterado en el navegador, el sistema invalidará el acceso por seguridad.
                             </p>
                         </div>
 
-                        <div className="p-8 border-2 border-amber-500/10 rounded-[2.5rem] bg-amber-500/5">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Clock className="w-4 h-4 text-amber-500" />
-                                <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-500">Expiración</h4>
+                        <div className="p-6 theme-surface border-[1.5px] border-amber-500/40 rounded-[2rem] shadow-sm flex flex-col gap-3 relative overflow-hidden">
+                            <div className="absolute inset-0 bg-amber-500/5 pointer-events-none"></div>
+                            
+                            <div className="relative z-10 flex items-center gap-2 pb-3 border-b border-amber-500/20">
+                                <Clock className="w-5 h-5 text-amber-500" />
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500">Expiración</h4>
                             </div>
-                            <p className="text-xs text-amber-600/80 leading-relaxed font-bold italic uppercase tracking-tighter">
-                                Al expirar el tiempo, deberás generar un nuevo token. No se pueden reutilizar enlaces caducados.
+                            <p className="relative z-10 text-[11px] theme-text-main leading-relaxed font-bold italic tracking-wide">
+                                Al expirar las 48 horas, deberás generar un nuevo token. <span className="font-black text-amber-600 dark:text-amber-500">No se pueden reutilizar</span> enlaces caducados.
+                            </p>
+                        </div>
+
+                        <div className="p-6 theme-surface border-[1.5px] border-blue-500/40 rounded-[2rem] shadow-sm flex flex-col gap-3 relative overflow-hidden">
+                            <div className="absolute inset-0 bg-blue-500/5 pointer-events-none"></div>
+                            
+                            <div className="relative z-10 flex items-center gap-2 pb-3 border-b border-blue-500/20">
+                                <AlertTriangle className="w-5 h-5 text-blue-500" />
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-500">Uso Único</h4>
+                            </div>
+                            <p className="relative z-10 text-[11px] theme-text-main leading-relaxed font-bold italic tracking-wide">
+                                Comparte este enlace exclusivamente con el colaborador. Cada enlace <span className="font-black text-blue-600 dark:text-blue-500">hereda el rol</span> seleccionado.
                             </p>
                         </div>
                     </div>
                 </div>
+
+                <style>{`
+                    .theme-option { background-color: white; color: #18181b; font-weight: 700; }
+                    .dark .theme-option { background-color: #1A1A1A; color: white; }
+                    select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+                `}</style>
             </div>
-
-            <style>{`
-                .theme-surface { background-color: #ffffff; border-color: #f4f4f5; }
-                .theme-element { background-color: #fafafa; border-color: #e4e4e7; }
-                .theme-text-main { color: #18181b; }
-                .theme-text-muted { color: #71717a; }
-                .theme-border { border-color: #f4f4f5; }
-                .theme-option { background-color: white; color: #18181b; }
-
-                .dark .theme-surface { background-color: #121212; border-color: #222222; }
-                .dark .theme-element { background-color: #1A1A1A; border-color: #2A2A2A; }
-                .dark .theme-text-main { color: #ffffff; }
-                .dark .theme-text-muted { color: #a1a1aa; }
-                .dark .theme-border { border-color: #222222; }
-                .dark .theme-option { background-color: #1A1A1A; color: white; }
-
-                select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
-            `}</style>
         </AppLayout>
     );
 }

@@ -14,9 +14,8 @@ class StoreSolicitudRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        // Por el momento lo dejamos en true. 
-        // Más adelante lo protegeremos con Spatie: return $this->user()->hasRole('Vendedor');
-        return true; 
+        // Solo los usuarios con el permiso explícito pueden transmitir solicitudes
+        return $this->user() && $this->user()->can('solicitudes.crear'); 
     }
 
     /**
@@ -28,8 +27,10 @@ class StoreSolicitudRequest extends FormRequest
             'numero_cliente' => ['nullable', 'string', 'max:255'],
             'nombre_cliente' => ['nullable', 'string', 'max:255'],
             'catalogo_proceso_id' => ['required', 'exists:catalogo_procesos,id'],
+            'catalogo_tipo_cliente_id' => ['nullable', 'exists:catalogo_tipo_clientes,id'], // <-- NUEVO
             'monto_cotizado' => ['required', 'numeric', 'min:0'],
             'observaciones_vendedor' => ['nullable', 'string'],
+            'evidencia' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'], // <-- NUEVO (Máx 5MB)
         ];
     }
 
