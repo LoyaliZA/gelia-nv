@@ -13,12 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // 1. ESTO ES LO QUE FALTABA: Enviar los datos a React
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
         ]);
 
-        // 2. Alias de Spatie (estos ya los tenías bien)
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
@@ -26,5 +24,24 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        
+        // CORRECCIÓN: Usamos render() para interceptar el error crudo antes de la vista HTML
+        $exceptions->render(function (\Throwable $e, \Illuminate\Http\Request $request) {
+            
+            if ($request->header('X-Inertia')) {
+                // Determinamos si es un error HTTP válido (como 403 o 404)
+                $status = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface 
+                            ? $e->getStatusCode() 
+                            : 500;
+
+                if (in_array($status, [403, 404, 500, 503])) {
+                    return \Inertia\Inertia::render('Error', ['status' => $status])
+                        ->toResponse($request)
+                        ->setStatusCode($status);
+                }
+            }
+            
+            return null; // Deja que Laravel siga su curso si no es Inertia
+        });
+
     })->create();

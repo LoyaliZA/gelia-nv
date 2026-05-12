@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import { Head, useForm, router } from '@inertiajs/react';
 import { animate } from 'animejs/animation';
 import axios from 'axios';
-import { 
-    Clock, Sparkles, Send, ShieldCheck, Info, Plus, MoreVertical, Edit2, 
-    CheckCircle2, XCircle, FileText, X, AlertOctagon, Search, History, 
+import {
+    Clock, Sparkles, Send, ShieldCheck, Info, Plus, MoreVertical, Edit2,
+    CheckCircle2, XCircle, FileText, X, AlertOctagon, Search, History,
     CheckSquare, CreditCard, Upload, FileSignature, AlertTriangle, User,
     TrendingUp, UserCheck, Copy, Check
 } from 'lucide-react';
@@ -24,11 +24,11 @@ const ESTILOS_GLOBALES = `
 `;
 
 export default function Index({ solicitudes = { total: 0, data: [] }, procesos = [], listas = [], tipos_cliente = [], auth, filtros = {} }) {
-    
+
     const [modalAbierto, setModalAbierto] = useState(false);
-    const [modoEdicion, setModoEdicion] = useState(false); 
+    const [modoEdicion, setModoEdicion] = useState(false);
     const [solicitudAEditar, setSolicitudAEditar] = useState(null);
-    
+
     const [modalRespuestaAbierto, setModalRespuestaAbierto] = useState(false);
     const [modalBitacoraAbierto, setModalBitacoraAbierto] = useState(false);
     const [menuAbierto, setMenuAbierto] = useState(null);
@@ -104,7 +104,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                     canvas.toBlob((blob) => {
                         const newFile = new File([blob], `captura_${Date.now()}.webp`, { type: 'image/webp' });
                         resolve({ file: newFile, preview: canvas.toDataURL('image/webp', 0.8) });
-                    }, 'image/webp', 0.8); 
+                    }, 'image/webp', 0.8);
                 };
             };
         });
@@ -147,7 +147,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
     // --- CORRECCIÓN: Botón de copiar robusto ---
     const copiarAlPortapapeles = (e, texto, id) => {
         e.stopPropagation(); // Evita que se disparen clics de otros elementos
-        
+
         if (navigator.clipboard && window.isSecureContext) {
             // Navegadores modernos con HTTPS o Localhost
             navigator.clipboard.writeText(texto);
@@ -168,7 +168,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
             }
             textArea.remove();
         }
-        
+
         setCopiadoId(id);
         setTimeout(() => setCopiadoId(null), 2000);
     };
@@ -176,7 +176,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
     const fetchClientes = async (term = '') => {
         if (!term) return;
         setBuscandoCliente(true); setMostrarDropdown(true);
-        try { const response = await axios.get(`/api/clientes?q=${term}`); setListaClientes(response.data); } 
+        try { const response = await axios.get(`/api/clientes?q=${term}`); setListaClientes(response.data); }
         catch (error) { setListaClientes([]); } finally { setBuscandoCliente(false); }
     };
 
@@ -213,13 +213,21 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
     const guardarSolicitud = (e) => {
         e.preventDefault();
         const procesoSeleccionado = procesos.find(p => p.id == data.catalogo_proceso_id);
+
         if (infoCliente?.es_heredado && (procesoSeleccionado?.nombre === 'ASIGNAR CLIENTE REACTIVADO' || procesoSeleccionado?.nombre === 'ASIGNAR CLIENTE REACTIVADO Y CAMBIO DE LISTA')) {
-            setAlertaHeredado(true); return;
+            setAlertaHeredado(true);
+            return;
         }
-        
+
         const config = { onSuccess: () => { setModalAbierto(false); reset(); setPreviewEvidencia(null); setInfoCliente(null); } };
+
         if (modoEdicion) {
-            post(route('solicitudes.update', solicitudAEditar.id), { ...config, data: { ...data, _method: 'put' }});
+            // SOLUCIÓN: Usamos router.post para construir el payload exacto
+            // Inyectamos _method: 'put' junto con todo el estado 'data'
+            router.post(route('solicitudes.update', solicitudAEditar.id), {
+                _method: 'put',
+                ...data
+            }, config);
         } else {
             post(route('solicitudes.store'), config);
         }
@@ -228,9 +236,9 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
     const iniciarRespuesta = (solicitud, estadoId) => { formRespuesta.setData({ solicitud_id: solicitud.id, catalogo_estado_solicitud_id: estadoId, motivo: '', evidencia_respuesta: null, _method: 'put' }); setPreviewEvidenciaRespuesta(null); setMenuAbierto(null); setModalRespuestaAbierto(true); };
     const enviarRespuesta = (e) => { e.preventDefault(); formRespuesta.post(route('solicitudes.actualizar_estado', formRespuesta.data.solicitud_id), { onSuccess: () => { setModalRespuestaAbierto(false); formRespuesta.reset(); } }); };
     const confirmarPagoManual = (id) => { setMenuAbierto(null); router.put(route('solicitudes.confirmar_pago', id)); };
-    
+
     const solicitudesFiltradas = (solicitudes.data || []).filter(solicitud => { const cumpleTab = tabActiva === 'TODAS' || (tabActiva === 'PENDIENTES' && solicitud.estado?.nombre === 'Pendiente') || (tabActiva === 'RESPONDIDAS' && solicitud.estado?.nombre === 'Respondida') || (tabActiva === 'INCORRECTAS' && solicitud.estado?.nombre === 'Incorrecta'); const idString = solicitud.id ? solicitud.id.toString() : ''; const nombreCliente = solicitud.cliente?.nombre || ''; const numeroCliente = solicitud.cliente?.numero_cliente || ''; const cumpleBusqueda = busqueda === '' || idString.includes(busqueda) || nombreCliente.toLowerCase().includes(busqueda.toLowerCase()) || numeroCliente.includes(busqueda); return cumpleTab && cumpleBusqueda; });
-    const obtenerEstiloEstado = (nombreEstado) => { switch(nombreEstado?.toLowerCase()) { case 'respondida': return { clase: 'status-aprobado', icon: CheckCircle2, label: 'Aprobado (TAGS)' }; case 'incorrecta': return { clase: 'status-incidencia', icon: AlertOctagon, label: 'Reporte (Error)' }; case 'verificada': return { clase: 'status-verificado', icon: CheckSquare, label: 'Verificada (Auxiliar)' }; default: return { clase: 'status-revision', icon: Clock, label: 'Pendiente' }; } };
+    const obtenerEstiloEstado = (nombreEstado) => { switch (nombreEstado?.toLowerCase()) { case 'respondida': return { clase: 'status-aprobado', icon: CheckCircle2, label: 'Aprobado (TAGS)' }; case 'incorrecta': return { clase: 'status-incidencia', icon: AlertOctagon, label: 'Reporte (Error)' }; case 'verificada': return { clase: 'status-verificado', icon: CheckSquare, label: 'Verificada (Auxiliar)' }; default: return { clase: 'status-revision', icon: Clock, label: 'Pendiente' }; } };
     const activeCardClass = "page-reveal-solicitudes theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300 border theme-border shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)] bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px]";
 
     return (
@@ -285,7 +293,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                                         <tr key={solicitud.id} className="border-b theme-border transition-colors hover:bg-black/5 dark:hover:bg-white/5">
                                             <td className="py-6 pl-6">
                                                 <div className="font-black text-sm theme-text-main drop-shadow-sm" style={{ color: 'var(--color-primario)' }}>FOL-{solicitud.id}</div>
-                                                <div className="text-[10px] font-bold theme-text-muted mt-1 uppercase truncate max-w-[150px]"><User className="w-3 h-3 inline mr-1 opacity-70"/> {solicitud.vendedor?.name}</div>
+                                                <div className="text-[10px] font-bold theme-text-muted mt-1 uppercase truncate max-w-[150px]"><User className="w-3 h-3 inline mr-1 opacity-70" /> {solicitud.vendedor?.name}</div>
                                             </td>
                                             <td className="py-6 min-w-[250px] pr-4">
                                                 <div className="flex items-center gap-2 mb-1">
@@ -318,12 +326,12 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                                             </td>
                                             <td className="py-6 pr-6 text-center relative">
                                                 <button onClick={() => setMenuAbierto(menuAbierto === solicitud.id ? null : solicitud.id)} className="p-3 theme-element border theme-border hover:border-[var(--color-primario)] rounded-2xl transition-all shadow-sm outline-none"><MoreVertical className="w-5 h-5 theme-text-main" /></button>
-                                                
+
                                                 {menuAbierto === solicitud.id && (
                                                     <>
                                                         <div className="fixed inset-0 z-40" onClick={() => setMenuAbierto(null)}></div>
                                                         <div className="absolute right-16 top-4 theme-surface border theme-border shadow-2xl rounded-2xl p-2 z-50 w-56 flex flex-col gap-1 text-left animate-fade-in backdrop-blur-xl">
-                                                            
+
                                                             {solicitud.vendedor_id === auth.user.id && solicitud.estado?.nombre === 'Incorrecta' && (
                                                                 <button onClick={() => abrirEditar(solicitud)} className="flex items-center gap-3 px-4 py-3 hover:bg-orange-50 dark:hover:bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none transition-colors border-b theme-border mb-1 pb-3">
                                                                     <Edit2 className="w-4 h-4" /> Reparar Solicitud
@@ -331,8 +339,14 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                                                             )}
 
                                                             {/* CAMBIO AQUÍ: Ahora revisa si tiene el permiso de confirmar pago */}
-                                                            {can('solicitudes.confirmar_pago') && !solicitud.pago_confirmado && (<button onClick={() => confirmarPagoManual(solicitud.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none transition-colors"><CreditCard className="w-4 h-4" /> Confirmar Pago</button>)}
-                                                            
+                                                            {/* Lógica segura: El dueño o un Admin pueden confirmar, pero NUNCA si la solicitud es 'Incorrecta' */}
+                                                            {(can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id) &&
+                                                                !solicitud.pago_confirmado &&
+                                                                solicitud.estado?.nombre !== 'Incorrecta' && (
+                                                                    <button onClick={() => confirmarPagoManual(solicitud.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none transition-colors border-b theme-border mb-1 pb-3">
+                                                                        <CreditCard className="w-4 h-4" /> Confirmar Pago
+                                                                    </button>
+                                                                )}
                                                             {can('solicitudes.verificar') && (<button onClick={() => iniciarRespuesta(solicitud, 3)} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none transition-colors"><CheckSquare className="w-4 h-4" /> Verificado</button>)}
                                                             {can('solicitudes.reportar') && (
                                                                 <>
@@ -370,7 +384,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cliente (Buscador)_</label>
                                     <div className="relative">
                                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input type="text" value={data.numero_cliente} onChange={e => manejarBusquedaCliente(e.target.value)} onFocus={() => { if(data.numero_cliente) setMostrarDropdown(true); }} placeholder="Ingresa nombre o folio..." className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md" disabled={modoEdicion} />
+                                        <input type="text" value={data.numero_cliente} onChange={e => manejarBusquedaCliente(e.target.value)} onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }} placeholder="Ingresa nombre o folio..." className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md" disabled={modoEdicion} />
                                     </div>
                                     {infoCliente && (
                                         <div className="mt-4 p-4 theme-element border theme-border rounded-2xl shadow-sm animate-fade-in">
@@ -392,7 +406,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                                 <div className="space-y-2"><label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipo de Cliente (Asignación)_</label><div className="relative"><UserCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" /><select value={data.catalogo_tipo_cliente_id} onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none focus:ring-2 transition-all shadow-sm cursor-pointer"><option value="">-- Mantener tipo actual --</option>{tipos_cliente.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}</select></div></div>
                             </div>
                             <div className="space-y-8 flex flex-col justify-between">
-                                <div className="space-y-2 h-full flex flex-col"><label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Evidencia / Ticket (Ctrl + V soportado)_</label><label className="flex-1 flex flex-col items-center justify-center min-h-[250px] border-2 border-dashed theme-border rounded-2xl cursor-pointer theme-element transition-all group overflow-hidden relative"><Upload className="w-12 h-12 mb-4 theme-text-muted z-10" />{previewEvidencia && <img src={previewEvidencia} className="absolute inset-0 w-full h-full object-cover opacity-80" />}<input type="file" className="hidden" accept="image/*,.pdf" onChange={(e)=>handleFileUpload(e, false)} /></label></div>
+                                <div className="space-y-2 h-full flex flex-col"><label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Evidencia / Ticket (Ctrl + V soportado)_</label><label className="flex-1 flex flex-col items-center justify-center min-h-[250px] border-2 border-dashed theme-border rounded-2xl cursor-pointer theme-element transition-all group overflow-hidden relative"><Upload className="w-12 h-12 mb-4 theme-text-muted z-10" />{previewEvidencia && <img src={previewEvidencia} className="absolute inset-0 w-full h-full object-cover opacity-80" />}<input type="file" className="hidden" accept="image/*,.pdf" onChange={(e) => handleFileUpload(e, false)} /></label></div>
                                 <button type="submit" disabled={processing} className="w-full py-5 text-white rounded-2xl font-black uppercase tracking-widest text-[12px] shadow-xl hover:scale-105 transition-all disabled:opacity-50 outline-none flex justify-center items-center gap-3" style={{ backgroundColor: 'var(--color-primario)' }}><Send className="w-5 h-5" /> {processing ? 'Procesando...' : (modoEdicion ? 'Reenviar Corrección' : 'Transmitir Solicitud')}</button>
                             </div>
                         </form>
@@ -406,7 +420,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                     <div onPaste={handlePasteRespuesta} className="w-full max-w-3xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-10 flex flex-col relative modal-pop" onClick={e => e.stopPropagation()}>
                         <button onClick={() => setModalRespuestaAbierto(false)} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main theme-element border theme-border rounded-2xl outline-none hover:scale-110"><X className="w-5 h-5" /></button>
                         <div className="flex items-center gap-3 mb-8"><Edit2 className="w-8 h-8" style={{ color: 'var(--color-primario)' }} /><h2 className="text-2xl font-black italic theme-text-main uppercase tracking-tighter m-0">Actualizar Estado_</h2></div>
-                        
+
                         <form onSubmit={enviarRespuesta} className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-8">
                                 <div className="p-5 rounded-2xl border flex items-start gap-4" style={{ backgroundColor: formRespuesta.data.catalogo_estado_solicitud_id === 4 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', borderColor: formRespuesta.data.catalogo_estado_solicitud_id === 4 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(52, 211, 153, 0.3)' }}>
@@ -421,7 +435,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                                     <Upload className="w-10 h-10 mb-3 theme-text-muted z-10" />
                                     {previewEvidenciaRespuesta && <img src={previewEvidenciaRespuesta} className="absolute inset-0 w-full h-full object-cover opacity-80" />}
                                     <p className="text-[10px] font-bold theme-text-main uppercase z-10 bg-white/50 dark:bg-black/50 px-3 py-1.5 rounded-lg border theme-border backdrop-blur-sm">Adjuntar Captura</p>
-                                    <input type="file" className="hidden" accept="image/*" onChange={(e)=>handleFileUpload(e, true)} />
+                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, true)} />
                                 </label>
                                 <button type="submit" disabled={formRespuesta.processing} className="w-full py-5 text-white rounded-2xl font-black uppercase tracking-widest text-[12px] hover:scale-105 transition-all mt-4" style={{ backgroundColor: formRespuesta.data.catalogo_estado_solicitud_id === 4 ? '#ef4444' : 'var(--color-primario)' }}>{formRespuesta.processing ? 'Registrando...' : 'Confirmar Acción'}</button>
                             </div>
@@ -435,7 +449,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-md animate-fade-in" onClick={() => setModalBitacoraAbierto(false)}>
                     <div className="w-full max-w-6xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-10 md:p-12 flex flex-col relative modal-pop max-h-[90vh]" onClick={e => e.stopPropagation()}>
                         <button onClick={() => setModalBitacoraAbierto(false)} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main theme-element border theme-border rounded-2xl outline-none hover:scale-110 z-10"><X className="w-5 h-5" /></button>
-                        
+
                         <div className="flex items-center gap-4 mb-8 shrink-0 border-b theme-border pb-6">
                             <History className="w-10 h-10 text-purple-500 drop-shadow-sm" />
                             <div>
@@ -495,7 +509,7 @@ export default function Index({ solicitudes = { total: 0, data: [] }, procesos =
                     </div>
                 </div>, document.body
             )}
-            
+
         </AppLayout>
     );
 }

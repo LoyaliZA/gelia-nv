@@ -28,7 +28,7 @@ class SolicitudController extends Controller
         // Asegúrate de que el Service esté configurado para incluir: 
         // ->with(['auditorias.usuario', 'auditorias.estado_nuevo'])
         $solicitudes = $listarService->ejecutar(Auth::user(), $request->all());
-        
+
         $procesos = CatalogoProceso::where('activo', true)->get();
 
         return Inertia::render('Solicitudes/Index', [
@@ -51,8 +51,15 @@ class SolicitudController extends Controller
 
     public function confirmarPago(Request $request, SolicitudTag $solicitud)
     {
-        // CAMBIO AQUÍ: Ahora pide el permiso específico de contabilidad
-        Gate::authorize('solicitudes.confirmar_pago');
+        // 1. PARCHE DE SEGURIDAD: Bloquear confirmación si hay incidencia (Estado 4 = Incorrecta)
+        if ($solicitud->catalogo_estado_solicitud_id == 4) {
+            abort(403, 'Acción Bloqueada: No puedes confirmar el pago de una solicitud con incidencias. Repárala primero.');
+        }
+
+        // 2. AUTORIZACIÓN: Permitir a la colaboradora dueña de la solicitud o a un administrador
+        if ($solicitud->vendedor_id !== Auth::id() && !Auth::user()->can('solicitudes.confirmar_pago')) {
+            abort(403, 'No tienes autorización para confirmar este pago.');
+        }
 
         DB::transaction(function () use ($solicitud) {
             $solicitud->update(['pago_confirmado' => true]);
@@ -62,17 +69,26 @@ class SolicitudController extends Controller
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $solicitud->catalogo_estado_solicitud_id,
                 'estado_nuevo_id' => $solicitud->catalogo_estado_solicitud_id,
-                'motivo_reporte' => 'PAGO CONFIRMADO POR ADMINISTRACIÓN'
+                'motivo_reporte' => 'PAGO CONFIRMADO POR EL COLABORADOR'
             ]);
+
+            // 3. NOTIFICACIÓN INVERTIDA: Del Colaborador hacia Administración (Gerentes/Admins)
+            $encargados = \App\Models\User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
+            
+            if ($encargados->isNotEmpty()) {
+                \Illuminate\Support\Facades\Notification::send($encargados, new \App\Notifications\AlertaSolicitud(
+                    $solicitud, 
+                    'pago_confirmado', 
+                    'El colaborador ' . Auth::user()->name . ' ha notificado la confirmación de pago para la solicitud FOL-' . $solicitud->id . '.'
+                ));
+            }
         });
 
-        return back()->with('success', 'Pago confirmado. El área administrativa ha sido notificada.');
+        return back()->with('success', 'Pago confirmado y notificado a la administración.');
     }
 
-    // --- NUEVA FUNCIÓN PARA REPARAR SOLICITUDES INCORRECTAS ---
     public function update(Request $request, SolicitudTag $solicitud)
     {
-        // Solo puede editar si es su solicitud y está en estado Incorrecta (4)
         if ($solicitud->vendedor_id !== Auth::id() || $solicitud->catalogo_estado_solicitud_id != 4) {
             abort(403, 'No tienes permiso para editar esta solicitud o no está en estado Incorrecto.');
         }
@@ -89,7 +105,6 @@ class SolicitudController extends Controller
                 $rutaEvidencia = $request->file('evidencia')->store('evidencias/solicitudes', 'public');
             }
 
-            // Regresamos el estado a Pendiente (1) para que se vuelva a revisar
             $solicitud->update([
                 'monto_cotizado' => $request->monto_cotizado,
                 'catalogo_proceso_id' => $request->catalogo_proceso_id,
@@ -100,16 +115,26 @@ class SolicitudController extends Controller
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
-                'estado_anterior_id' => 4, // Incorrecta
-                'estado_nuevo_id' => 1, // Pendiente
+                'estado_anterior_id' => 4,
+                'estado_nuevo_id' => 1,
                 'motivo_reporte' => 'El colaborador corrigió la solicitud y subió nueva evidencia.'
             ]);
+
+            // --- NUEVO: NOTIFICAR A LOS GERENTES/ADMINISTRADORES ---
+            // Obtenemos a los usuarios que tienen permiso de verificar solicitudes
+            $gerentes = \App\Models\User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
+            
+            \Illuminate\Support\Facades\Notification::send($gerentes, new \App\Notifications\AlertaSolicitud(
+                $solicitud,
+                'reparada',
+                'El colaborador ' . Auth::user()->name . ' ha reparado la solicitud FOL-' . $solicitud->id . '.'
+            ));
         });
 
         return back()->with('success', 'Solicitud corregida y enviada a revisión.');
     }
 
-    // --- FUNCIÓN ACTUALIZADA CON EVIDENCIA DE RESPUESTA ---
+    // --- FUNCIÓN ACTUALIZADA CON EVIDENCIA DE RESPUESTA Y NOTIFICACIÓN ---
     public function actualizarEstado(Request $request, SolicitudTag $solicitud)
     {
         Gate::any(['solicitudes.verificar', 'solicitudes.reportar']);
@@ -124,7 +149,7 @@ class SolicitudController extends Controller
         $estadoNuevoId = $request->catalogo_estado_solicitud_id;
 
         DB::transaction(function () use ($solicitud, $estadoAnteriorId, $estadoNuevoId, $request) {
-            
+
             $rutaEvidencia = $solicitud->evidencia_respuesta_path;
             if ($request->hasFile('evidencia_respuesta')) {
                 $rutaEvidencia = $request->file('evidencia_respuesta')->store('evidencias/respuestas', 'public');
@@ -142,6 +167,20 @@ class SolicitudController extends Controller
                 'estado_nuevo_id' => $estadoNuevoId,
                 'motivo_reporte' => $request->motivo ?: 'CAMBIO DE ESTADO OPERATIVO'
             ]);
+
+            // --- NUEVO: NOTIFICAR A LA VENDEDORA DE LA ACTUALIZACIÓN ---
+            if ($solicitud->vendedor) {
+                $tipoAlerta = $estadoNuevoId == 4 ? 'rechazada' : 'actualizacion';
+                $mensaje = $estadoNuevoId == 4
+                    ? 'Se ha reportado un error en tu solicitud. Revisa las observaciones.'
+                    : 'El área administrativa ha emitido una resolución para tu solicitud.';
+
+                $solicitud->vendedor->notify(new \App\Notifications\AlertaSolicitud(
+                    $solicitud,
+                    $tipoAlerta,
+                    $mensaje
+                ));
+            }
         });
 
         return back()->with('success', 'El estado ha sido actualizado correctamente.');
@@ -176,7 +215,7 @@ class SolicitudController extends Controller
             // 1. Mandamos la solicitud a estado Incorrecta (ID 4)
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
             $solicitud->update([
-                'catalogo_estado_solicitud_id' => 4, 
+                'catalogo_estado_solicitud_id' => 4,
                 'pago_confirmado' => false
             ]);
 
@@ -202,8 +241,8 @@ class SolicitudController extends Controller
             // 4. NOTIFICAR A LA VENDEDORA (Vía correo y web)
             if ($solicitud->vendedor) {
                 $solicitud->vendedor->notify(new \App\Notifications\AlertaSolicitud(
-                    $solicitud, 
-                    'pago_rechazado', 
+                    $solicitud,
+                    'pago_rechazado',
                     'Tu solicitud ha sido rebotada por falta de pago. Se revirtieron los cambios del cliente.'
                 ));
             }

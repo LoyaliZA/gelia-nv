@@ -54,9 +54,9 @@ class AdminController extends Controller
             $usuarios = User::with(['areas', 'departamentos', 'gerentes', 'roles', 'permissions'])->get();
             $departamentos = Departamento::with('areas')->where('activo', true)->get();
             $posiblesGerentes = User::role(['Super Admin', 'Administrador', 'Gerente'])
-                                    ->select('id', 'name', 'apellido_paterno')
-                                    ->get();
-                                    
+                ->select('id', 'name', 'apellido_paterno')
+                ->get();
+
             $roles = Role::all();
             $todosLosPermisos = Permission::all();
         } else {
@@ -69,13 +69,13 @@ class AdminController extends Controller
                 $query->whereIn('areas.id', $misAreasIds);
             }])->where('activo', true)->get();
 
-            $posiblesGerentes = collect([$user]); 
-            
+            $posiblesGerentes = collect([$user]);
+
             // PREVENCIÓN DE ESCALADA DE PRIVILEGIOS
             // Un gerente no puede crear otros Administradores ni Super Admins
             $roles = Role::whereNotIn('name', ['Super Admin', 'Administrador'])->get();
             // Un gerente solo puede asignar los permisos que él mismo tiene en su sesión
-            $todosLosPermisos = $user->getAllPermissions(); 
+            $todosLosPermisos = $user->getAllPermissions();
         }
 
         return Inertia::render('Admin/Usuarios', [
@@ -122,7 +122,7 @@ class AdminController extends Controller
         if (isset($data['departamentos'])) $usuario->departamentos()->sync($data['departamentos']);
         if (isset($data['areas'])) $usuario->areas()->sync($data['areas']);
         if (isset($data['gerentes'])) $usuario->gerentes()->sync($data['gerentes']);
-        
+
         $usuario->syncRoles($data['roles_asignados'] ?? []);
         $usuario->syncPermissions($data['permisos_individuales'] ?? []);
 
@@ -157,7 +157,7 @@ class AdminController extends Controller
             'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
             'catalogo_sexo_id' => $data['catalogo_sexo_id'] ?? null,
         ]);
-        
+
         if ($request->filled('password')) {
             $user->update(['password' => Hash::make($request->password)]);
         }
@@ -181,7 +181,7 @@ class AdminController extends Controller
 
         // 2. Obtenemos las vendedoras (Asumiendo que usas Spatie Roles)
         // Si no usas roles, puedes usar User::all() o el filtro que prefieras
-        $vendedores = User::all(); 
+        $vendedores = User::all();
 
         // 3. Obtenemos el nuevo catálogo de tipos (Nuevo, Reactivado, etc.)
         // Usamos el bloque try-catch por si la tabla aún tiene detalles de migración
@@ -217,7 +217,8 @@ class AdminController extends Controller
         return response()->json($cliente->historialMontos()->get());
     }
 
-    public function comisiones(): Response {
+    public function comisiones(): Response
+    {
         $tabulador = TabuladorComision::with('proceso')->get();
         return Inertia::render('Admin/Comisiones', ['tabulador' => $tabulador]);
     }
@@ -238,7 +239,8 @@ class AdminController extends Controller
     public function marcarNotificacionLeida($id)
     {
         $notificacion = auth()->user()->notifications()->findOrFail($id);
-        $notificacion->markAsRead();
-        return back();
+        $notificacion->markAsRead(); // Esto llena el campo 'read_at' en la BD
+
+        return back(); // Refresca los datos compartidos de Inertia
     }
 }

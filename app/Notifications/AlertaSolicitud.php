@@ -4,16 +4,19 @@ namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast; // <-- Agregado
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Messages\BroadcastMessage; // <-- Agregado
 use Illuminate\Notifications\Notification;
 use App\Models\SolicitudTag;
 
-class AlertaSolicitud extends Notification implements ShouldQueue
+// Agregamos ShouldBroadcast a la firma de la clase
+class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadcast
 {
     use Queueable;
 
     public $solicitud;
-    public $tipoAlerta; // 'nueva', 'aprobada', 'rechazada', 'pago_rechazado'
+    public $tipoAlerta; 
     public $mensaje;
 
     public function __construct(SolicitudTag $solicitud, $tipoAlerta, $mensaje)
@@ -23,13 +26,12 @@ class AlertaSolicitud extends Notification implements ShouldQueue
         $this->mensaje = $mensaje;
     }
 
-    // Le decimos a Laravel que mande esto por Base de Datos (Campanita) y por Correo
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        // Agregamos 'broadcast' para que Laravel sepa que debe enviarlo por Reverb
+        return ['database', 'mail', 'broadcast'];
     }
 
-    // --- DISEÑO DEL CORREO ELECTRÓNICO ---
     public function toMail(object $notifiable): MailMessage
     {
         $url = url('/solicitudes?folio=' . $this->solicitud->id);
@@ -44,13 +46,12 @@ class AlertaSolicitud extends Notification implements ShouldQueue
                     ->action('Ver Solicitud en el ERP', $url);
 
         if ($this->tipoAlerta === 'pago_rechazado' || $this->tipoAlerta === 'rechazada') {
-            $mail->error(); // Pone el botón rojo en el correo
+            $mail->error(); 
         }
 
         return $mail;
     }
 
-    // --- DISEÑO DE LA ALERTA WEB (Campanita) ---
     public function toDatabase(object $notifiable): array
     {
         return [
@@ -60,5 +61,17 @@ class AlertaSolicitud extends Notification implements ShouldQueue
             'cliente'      => $this->solicitud->cliente->nombre ?? 'N/A',
             'fecha'        => now()->toDateTimeString(),
         ];
+    }
+
+    // --- NUEVO: DISEÑO DE LA ALERTA EN TIEMPO REAL (Reverb) ---
+    public function toBroadcast(object $notifiable): BroadcastMessage
+    {
+        return new BroadcastMessage([
+            'solicitud_id' => $this->solicitud->id,
+            'tipo'         => $this->tipoAlerta,
+            'mensaje'      => $this->mensaje,
+            'cliente'      => $this->solicitud->cliente->nombre ?? 'N/A',
+            'fecha'        => now()->toDateTimeString(),
+        ]);
     }
 }

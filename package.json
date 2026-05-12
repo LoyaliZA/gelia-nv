@@ -21,6 +21,7 @@
         "@vitejs/plugin-react": "^6.0.1",
         "animejs": "^4.4.1",
         "axios": "^1.16.0",
+        "lottie-react": "^2.4.1",
         "lucide-react": "^1.14.0",
         "react": "^19.2.5",
         "react-dom": "^19.2.5"

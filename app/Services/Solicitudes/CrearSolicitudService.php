@@ -16,18 +16,20 @@ class CrearSolicitudService
      * Ejecuta la lógica para almacenar una nueva solicitud.
      *
      * @param array $datos Validados por el FormRequest
-     * @param int $vendedorId ID del usuario autenticado
+     * @param int $vendedorId ID del usuario autenticado (Colaborador)
      * @return SolicitudTag
      */
     public function ejecutar(array $datos, int $vendedorId): SolicitudTag
     {
         return DB::transaction(function () use ($datos, $vendedorId) {
+            
+            // SECCIÓN: Inicialización y Creación de la Solicitud
             $clienteId = $this->resolverClienteId($datos, $vendedorId);
             $estadoPendiente = CatalogoEstadoSolicitud::where('nombre', 'Pendiente')->firstOrFail();
 
             $solicitud = SolicitudTag::create([
                 'cliente_id' => $clienteId,
-                'vendedor_id' => $vendedorId,
+                'vendedor_id' => $vendedorId, // Conservamos el nombre de la columna por integridad de la BD
                 'catalogo_proceso_id' => $datos['catalogo_proceso_id'],
                 'catalogo_estado_solicitud_id' => $estadoPendiente->id,
                 'monto_cotizado' => $datos['monto_cotizado'],
@@ -35,16 +37,23 @@ class CrearSolicitudService
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? null,
             ]);
 
-            // --- ESTO ES LO QUE FALTA: NOTIFICAR AL ENCARGADO ---
-            // Buscamos a los usuarios que tengan permiso de verificar (Encargadas/Admin)
-            $encargados = User::permission('solicitudes.verificar')->get();
-            
-            // Mandamos la notificación (Database + Correo)
-            Notification::send($encargados, new AlertaSolicitud(
-                $solicitud, 
-                'nueva', 
-                "Nueva solicitud recibida de: " . (auth()->user()->name ?? 'Vendedora')
-            ));
+            // SECCIÓN: Identificación del Colaborador
+            // Buscamos al usuario mediante el ID inyectado para aislar el servicio de la sesión HTTP
+            $colaborador = User::find($vendedorId);
+            $nombreColaborador = $colaborador ? $colaborador->name : 'Sistema';
+
+            // SECCIÓN: Despliegue de Notificaciones
+            // Solicitamos al sistema los roles superiores (Gerentes y Administradores)
+            $encargados = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
+
+            // Validación de seguridad: Solo enviamos a la cola si existen encargados registrados
+            if ($encargados->isNotEmpty()) {
+                Notification::send($encargados, new AlertaSolicitud(
+                    $solicitud, 
+                    'nueva', 
+                    "Nueva solicitud recibida de: {$nombreColaborador}"
+                ));
+            }
 
             return $solicitud;
         });

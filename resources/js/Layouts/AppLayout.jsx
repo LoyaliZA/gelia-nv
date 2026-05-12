@@ -5,6 +5,8 @@ import { animate } from 'animejs/animation';
 // 1. AÑADIMOS LAS IMPORTACIONES DE LOS ICONOS AQUÍ
 import { Bell, X } from 'lucide-react';
 
+import NotificationService from '../Services/NotificationBrowserService';
+
 const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
 
@@ -21,29 +23,48 @@ export default function AppLayout({ children }) {
         const id = Date.now();
         setToasts(prev => [...prev, { id, ...notif }]);
 
-        // --- LÓGICA DE SONIDO ---
-        try {
-            const audio = new Audio('/assets/sounds/notification.mp3'); // Asegúrate de tener un mp3 en esa ruta
-            audio.play();
-        } catch (e) { console.warn("El navegador bloqueó el audio inicial"); }
+        // ELIMINAMOS LA LÓGICA DE AUDIO DE AQUÍ. Ahora es responsabilidad del listener global.
 
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 5000);
     };
 
-    // 3. AGREGAMOS EL ESCUCHADOR DE REVERB (TIEMPO REAL)
+    // 2. INICIALIZAR PERMISOS AL CARGAR LA APP
+    useEffect(() => {
+        NotificationService.requestDesktopPermissions();
+    }, []);
+
+    // 3. REFACTORIZACIÓN DEL ESCUCHADOR DE REVERB
     useEffect(() => {
         if (auth?.user && typeof window !== 'undefined' && window.Echo) {
-            window.Echo.private(`App.Models.User.${auth.user.id}`)
+            const channelName = `App.Models.User.${auth.user.id}`;
+            
+            // Limpiar suscripciones previas para evitar llamadas duplicadas en re-renders
+            window.Echo.leave(channelName);
+
+            window.Echo.private(channelName)
                 .notification((notification) => {
-                    // Muestra el Toast en la esquina
+                    // 1. UI: Toast interno
                     addToast({ mensaje: notification.mensaje });
-                    // Recarga las notificaciones silenciosamente para actualizar el contador de la campanita
+                    
+                    // 2. Hardware/OS: Sonido y Notificación de Escritorio
+                    NotificationService.triggerFullAlert('GELIA ERP', notification.mensaje);
+
+                    // 3. Data: Actualizar el prop 'notificaciones' del usuario
                     router.reload({ only: ['auth'], preserveScroll: true, preserveState: true });
                 });
         }
+
+        // Limpieza de memoria al desmontar el componente
+        return () => {
+            if (auth?.user && typeof window !== 'undefined' && window.Echo) {
+                window.Echo.leave(`App.Models.User.${auth.user.id}`);
+            }
+        };
     }, [auth?.user]);
+
+    
 
     const accentColors = {
         rosa: '#ec4899',

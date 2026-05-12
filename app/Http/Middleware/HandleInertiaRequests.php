@@ -36,11 +36,8 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
         
-        // 1. Buscamos la configuración del usuario
-        $configuracion = $user ? ConfiguracionUsuario::where('user_id', $user->id)->first() : null;
+        $configuracion = $user ? \App\Models\ConfiguracionUsuario::where('user_id', $user->id)->first() : null;
 
-        // 2. Nos aseguramos de decodificar el JSON a un array de PHP. 
-        // Si no hay configuración, mandamos un array vacío.
         $temaVisual = [];
         if ($configuracion && !empty($configuracion->tema_visual)) {
             $temaVisual = is_string($configuracion->tema_visual) 
@@ -51,15 +48,14 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => [
-                // Inyectamos roles, permisos y NOTIFICACIONES dentro de user
                 'user' => $user ? array_merge($user->toArray(), [
                     'roles' => $user->getRoleNames(), 
-                    'permissions' => $user->getAllPermissions()->pluck('name'),
-                    'notifications' => $user->notifications, // <-- AQUÍ ESTÁ LA MAGIA
+                    'permissions' => $user->getAllPermissions()->pluck('name'), 
                 ]) : null,
-                
-                // Mantenemos tu tema visual independiente y seguro
                 'tema_visual' => $temaVisual,
+                
+                // --- NUEVO: Pasamos las notificaciones no leídas para la campanita ---
+                'notificaciones' => $user ? $user->unreadNotifications()->take(10)->get() : [],
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
