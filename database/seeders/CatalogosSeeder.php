@@ -5,12 +5,19 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoProceso;
+use Illuminate\Support\Facades\DB;
 
 class CatalogosSeeder extends Seeder
 {
     public function run(): void
     {
-        // Población de Estados de Solicitud
+        // Población de Sexos (Necesario para el perfil de usuario)
+        $sexos = ['Hombre', 'Mujer', 'Otro'];
+        foreach ($sexos as $sexo) {
+            DB::table('catalogo_sexos')->updateOrInsert(['nombre' => $sexo]);
+        }
+
+        // Población de Estados de Solicitud (Basado en requerimientos actuales)
         $estados = [
             ['nombre' => 'Pendiente', 'descripcion' => 'Solicitud recién creada por el vendedor'],
             ['nombre' => 'Respondida', 'descripcion' => 'La encargada de TAGS ha procesado la solicitud'],
@@ -19,10 +26,10 @@ class CatalogosSeeder extends Seeder
         ];
 
         foreach ($estados as $estado) {
-            CatalogoEstadoSolicitud::firstOrCreate(['nombre' => $estado['nombre']], $estado);
+            CatalogoEstadoSolicitud::updateOrCreate(['nombre' => $estado['nombre']], $estado);
         }
 
-        // Población de Procesos
+        // Población de Procesos (Consolidado)
         $procesos = [
             ['nombre' => 'CAMBIO DE LISTA'],
             ['nombre' => 'ASIGNAR CLIENTE NUEVO'],
@@ -32,7 +39,7 @@ class CatalogosSeeder extends Seeder
         ];
 
         foreach ($procesos as $proceso) {
-            CatalogoProceso::firstOrCreate(['nombre' => $proceso['nombre']], $proceso);
+            CatalogoProceso::updateOrCreate(['nombre' => $proceso['nombre']], $proceso);
         }
     }
 }

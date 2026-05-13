@@ -10,18 +10,18 @@ class OrganizacionSeeder extends Seeder
 {
     public function run(): void
     {
-        // Creamos los Departamentos base
-        $deptos = [
-            'TI' => ['Soporte', 'Desarrollo', 'Infraestructura'],
-            'Cedis' => ['Logística', 'Almacén', 'Embarques'],
-            'Bellaroma' => ['Ventas', 'Atención a Clientes', 'Marketing'],
-            'Aromas' => ['Producción', 'Calidad']
+        $estructura = [
+            'TI' => ['Soporte', 'Desarrollo', 'Infraestructura', 'Auxiliar'],
+            'Cedis' => ['Logística', 'Almacén', 'Embarques', 'Auxiliar'],
+            'Bellaroma' => ['Ventas', 'Atención a Clientes', 'Marketing', 'Auxiliar'],
+            'Aromas' => ['Producción', 'Calidad', 'Auxiliar']
         ];
 
-        foreach ($deptos as $deptoNombre => $areas) {
-            $depto = Departamento::create(['nombre' => $deptoNombre, 'activo' => true]);
+        foreach ($estructura as $deptoNombre => $areas) {
+            $depto = Departamento::updateOrCreate(['nombre' => $deptoNombre], ['activo' => true]);
+            
             foreach ($areas as $areaNombre) {
-                Area::create([
+                Area::updateOrCreate([
                     'nombre' => $areaNombre,
                     'departamento_id' => $depto->id
                 ]);
