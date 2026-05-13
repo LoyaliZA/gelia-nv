@@ -117,11 +117,15 @@ class SolicitudController extends Controller
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => 4,
                 'estado_nuevo_id' => 1,
-                'motivo_reporte' => 'El colaborador corrigió la solicitud y subió nueva evidencia.'
+                'motivo_reporte' => 'El colaborador corrigió la solicitud y subió nueva evidencia.',
+                // SNAPSHOT: Guardamos la foto y datos de esta corrección exacta
+                'datos_snapshot' => [
+                    'monto_cotizado' => $request->monto_cotizado,
+                    'proceso_id' => $request->catalogo_proceso_id,
+                    'evidencia_path' => $rutaEvidencia,
+                ]
             ]);
 
-            // --- NUEVO: NOTIFICAR A LOS GERENTES/ADMINISTRADORES ---
-            // Obtenemos a los usuarios que tienen permiso de verificar solicitudes
             $gerentes = \App\Models\User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
             
             \Illuminate\Support\Facades\Notification::send($gerentes, new \App\Notifications\AlertaSolicitud(
@@ -165,10 +169,13 @@ class SolicitudController extends Controller
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $estadoAnteriorId,
                 'estado_nuevo_id' => $estadoNuevoId,
-                'motivo_reporte' => $request->motivo ?: 'CAMBIO DE ESTADO OPERATIVO'
+                'motivo_reporte' => $request->motivo ?: 'CAMBIO DE ESTADO OPERATIVO',
+                // SNAPSHOT: Guardamos la foto exacta que subió la encargada en este ciclo
+                'datos_snapshot' => [
+                    'evidencia_respuesta_path' => $rutaEvidencia
+                ]
             ]);
 
-            // --- NUEVO: NOTIFICAR A LA VENDEDORA DE LA ACTUALIZACIÓN ---
             if ($solicitud->vendedor) {
                 $tipoAlerta = $estadoNuevoId == 4 ? 'rechazada' : 'actualizacion';
                 $mensaje = $estadoNuevoId == 4

@@ -14,7 +14,13 @@ class AuditoriaSolicitud extends Model
         'usuario_id',
         'estado_anterior_id',
         'estado_nuevo_id',
-        'motivo_reporte'
+        'motivo_reporte',
+        'datos_snapshot' // <-- Nueva columna permitida
+    ];
+
+    // Casteo automático para manejar el JSON como Array
+    protected $casts = [
+        'datos_snapshot' => 'array',
     ];
 
     public function solicitud(): BelongsTo

@@ -10,10 +10,10 @@ class SolicitudTagObserver
 {
     /**
      * Escucha las actualizaciones del modelo para registrar auditorías.
-     */
+     
     public function updated(SolicitudTag $solicitudTag): void
     {
-        // Solo registramos si cambió el estado o el vendedor
+          Solo registramos si cambió el estado o el vendedor
         if ($solicitudTag->wasChanged('catalogo_estado_solicitud_id') || $solicitudTag->wasChanged('vendedor_id')) {
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitudTag->id,
@@ -23,5 +23,5 @@ class SolicitudTagObserver
                 'motivo_reporte' => 'Cambio registrado automáticamente por el sistema.'
             ]);
         }
-    }
+    }*/
 }

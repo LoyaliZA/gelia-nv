@@ -73,9 +73,9 @@ class ImportarClientesWizerpService
 
     private function cargarMapaVendedoras(): void
     {
-        // Traemos solo a los usuarios con rol de Vendedor
+        // CORRECCIÓN DE ROLES: Apuntamos al rol operativo vigente
         $vendedoras = User::whereHas('roles', function($q) {
-            $q->where('name', 'Vendedor');
+            $q->where('name', 'colaborador');
         })->get(['id', 'name', 'username']);
 
         // Mapeamos en mayúsculas para evitar errores de tipeo
@@ -119,23 +119,31 @@ class ImportarClientesWizerpService
 
     private function crearNuevoCliente(array $data, $listas): void
     {
-        if (!isset($data['nombre']) || empty(trim($data['nombre']))) return; 
+        // Validación de datos requeridos
+        // Se ajusta la llave a 'nombre' para coincidir con el CSV
+        if (!isset($data['nombre']) || empty(trim($data['nombre']))) {
+            return; 
+        }
 
         $clienteNuevo = [
             'numero_cliente' => trim($data['numero_cliente']),
             'nombre' => trim($data['nombre']),
             'monto_venta_actual' => 0.00,
-            'es_heredado' => false
+            'es_heredado' => isset($data['es_heredado']) ? filter_var($data['es_heredado'], FILTER_VALIDATE_BOOLEAN) : false
         ];
 
-        // Traducimos el TAG de Wizerp (ej. "FANY") a un ID de usuario de Gelia
-        if (isset($data['vendedor_id'])) {
+        // Procesamiento opcional del Vendedor
+        // Solo se intenta traducir si la columna existe y tiene datos
+        if (!empty($data['vendedor_id'])) {
             $clienteNuevo['vendedor_id'] = $this->traducirVendedora($data['vendedor_id']);
         }
 
+        // Asignación de Lista de Descuento
         $listaId = null;
         if (array_key_exists('codigo_lista', $data)) {
             $codigo = strtoupper(trim($data['codigo_lista']));
+            
+            // Si viene vacío o con espacios, forzamos PG
             if ($codigo === '') {
                 $codigo = 'PG';
             }
@@ -146,13 +154,23 @@ class ImportarClientesWizerpService
             }
         }
 
-        if (isset($data['monto_venta_actual']) && is_numeric($data['monto_venta_actual'])) {
-            $clienteNuevo['monto_venta_actual'] = (float) $data['monto_venta_actual'];
-            if (!$listaId) {
-                $listaId = $this->determinarListaPorMonto($clienteNuevo['monto_venta_actual'], $listas);
+        // Limpieza y validación del Monto de Venta
+        if (isset($data['monto_venta_actual'])) {
+            $montoLimpio = trim(str_replace(['$', ','], '', $data['monto_venta_actual']));
+            
+            if ($montoLimpio === '-') {
+                $montoLimpio = '0';
+            }
+
+            if (is_numeric($montoLimpio)) {
+                $clienteNuevo['monto_venta_actual'] = (float) $montoLimpio;
+                if (!$listaId) {
+                    $listaId = $this->determinarListaPorMonto($clienteNuevo['monto_venta_actual'], $listas);
+                }
             }
         }
 
+        // Valor por defecto en caso de no determinar la lista
         $clienteNuevo['lista_actual_id'] = $listaId ?? $listas->where('nombre', 'PUBLICO GENERAL')->first()->id;
 
         Cliente::create($clienteNuevo);
@@ -162,20 +180,24 @@ class ImportarClientesWizerpService
     {
         $updateData = [];
         
+        // Actualización de Nombre
         if (isset($data['nombre']) && !empty(trim($data['nombre']))) {
             $updateData['nombre'] = trim($data['nombre']);
         }
 
-        // Traducimos el TAG de Wizerp (ej. "FANY") a un ID de usuario de Gelia
-        if (isset($data['vendedor_id'])) {
+        // Actualización opcional de Vendedor
+        if (!empty($data['vendedor_id'])) {
             $vendedorIdTraducido = $this->traducirVendedora($data['vendedor_id']);
             if ($vendedorIdTraducido) {
                 $updateData['vendedor_id'] = $vendedorIdTraducido;
             }
         }
 
+        // Actualización de Lista de Descuento
         if (array_key_exists('codigo_lista', $data)) {
             $codigo = strtoupper(trim($data['codigo_lista']));
+            
+            // Tolerancia a campos vacíos
             if ($codigo === '') {
                 $codigo = 'PG';
             }
@@ -188,24 +210,34 @@ class ImportarClientesWizerpService
             }
         }
         
-        if (isset($data['monto_venta_actual']) && is_numeric($data['monto_venta_actual'])) {
-            $montoNuevo = (float) $data['monto_venta_actual'];
+        // Actualización y registro de Monto de Venta
+        if (isset($data['monto_venta_actual'])) {
+            $montoLimpio = trim(str_replace(['$', ','], '', $data['monto_venta_actual']));
             
-            if ($cliente->monto_venta_actual != $montoNuevo) {
-                $diferencia = $montoNuevo - $cliente->monto_venta_actual;
+            if ($montoLimpio === '-') {
+                $montoLimpio = '0';
+            }
+            
+            if (is_numeric($montoLimpio)) {
+                $montoNuevo = (float) $montoLimpio;
                 
-                if (!isset($updateData['lista_actual_id'])) {
-                    $updateData['lista_actual_id'] = $this->determinarListaPorMonto($montoNuevo, $listas);
+                if ($cliente->monto_venta_actual != $montoNuevo) {
+                    $diferencia = $montoNuevo - $cliente->monto_venta_actual;
+                    
+                    if (!isset($updateData['lista_actual_id'])) {
+                        $updateData['lista_actual_id'] = $this->determinarListaPorMonto($montoNuevo, $listas);
+                    }
+
+                    // Se mantiene el historial de cambios monetarios
+                    HistorialMontoCliente::create([
+                        'cliente_id' => $cliente->id,
+                        'monto_anterior' => $cliente->monto_venta_actual,
+                        'monto_nuevo' => $montoNuevo,
+                        'diferencia_aplicada' => $diferencia
+                    ]);
+
+                    $updateData['monto_venta_actual'] = $montoNuevo;
                 }
-
-                HistorialMontoCliente::create([
-                    'cliente_id' => $cliente->id,
-                    'monto_anterior' => $cliente->monto_venta_actual,
-                    'monto_nuevo' => $montoNuevo,
-                    'diferencia_aplicada' => $diferencia
-                ]);
-
-                $updateData['monto_venta_actual'] = $montoNuevo;
             }
         }
         

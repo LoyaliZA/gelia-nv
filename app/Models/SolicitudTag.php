@@ -24,6 +24,7 @@ class SolicitudTag extends Model
         'observaciones_vendedor',
         'evidencia_path',
         'catalogo_tipo_cliente_id',
+        'catalogo_lista_descuento_id', // <-- NUEVO CAMPO AÑADIDO
     ];
 
     protected $casts = [
@@ -37,6 +38,7 @@ class SolicitudTag extends Model
     public function proceso(): BelongsTo { return $this->belongsTo(CatalogoProceso::class, 'catalogo_proceso_id'); }
     public function estado(): BelongsTo { return $this->belongsTo(CatalogoEstadoSolicitud::class, 'catalogo_estado_solicitud_id'); }
     public function tipoCliente(): BelongsTo { return $this->belongsTo(CatalogoTipoCliente::class, 'catalogo_tipo_cliente_id'); }
+    public function listaDescuento(): BelongsTo { return $this->belongsTo(CatalogoListaDescuento::class, 'catalogo_lista_descuento_id'); }
     /**
      * Relación: Una solicitud tiene un historial de auditorías
      */

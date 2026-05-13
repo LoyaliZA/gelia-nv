@@ -19,16 +19,14 @@ class ListarSolicitudesService
      */
     public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
     {
-        // CAMBIAMOS estado_nuevo por estadoNuevo
-        $query = SolicitudTag::with(['cliente', 'vendedor', 'proceso', 'estado', 'auditorias.usuario', 'auditorias.estadoNuevo'])
+        // AÑADIDO: 'listaDescuento' y 'tipoCliente' para poder renderizarlos en la tabla
+        $query = SolicitudTag::with(['cliente', 'vendedor', 'proceso', 'estado', 'auditorias.usuario', 'auditorias.estadoNuevo', 'listaDescuento', 'tipoCliente'])
             ->orderBy('created_at', 'desc'); 
 
-        // AISLAMIENTO DE DATOS BASADO EN PERMISOS Y ROLES ACTIVOS
         if ($usuario) {
             $esAdminOGerente = $usuario->hasAnyRole(['Super Admin', 'Administrador', 'Gerente']);
             $esVerificador = $usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar', 'solicitudes.editar']);
 
-            // Si es un "Colaborador" normal (sin permisos de revisión), solo ve lo suyo
             if (!$esAdminOGerente && !$esVerificador) {
                 $query->where('vendedor_id', $usuario->id);
             }
@@ -44,48 +42,26 @@ class ListarSolicitudesService
      */
     private function aplicarFiltros(Builder $query, array $filtros): void
     {
-        // Filtro por Estado
-        if (!empty($filtros['estado_id'])) {
-            $query->where('catalogo_estado_solicitud_id', $filtros['estado_id']);
-        }
+        if (!empty($filtros['estado_id'])) $query->where('catalogo_estado_solicitud_id', $filtros['estado_id']);
+        if (!empty($filtros['proceso_id'])) $query->where('catalogo_proceso_id', $filtros['proceso_id']);
+        if (!empty($filtros['vendedor_id'])) $query->where('vendedor_id', $filtros['vendedor_id']);
 
-        // Filtro por Tipo de Proceso
-        if (!empty($filtros['proceso_id'])) {
-            $query->where('catalogo_proceso_id', $filtros['proceso_id']);
-        }
-
-        // Filtro por Vendedora (Útil para Encargada/Auxiliar)
-        if (!empty($filtros['vendedor_id'])) {
-            $query->where('vendedor_id', $filtros['vendedor_id']);
-        }
-
-        // Filtro por Fecha Exacta o Rango
         if (!empty($filtros['fecha_inicio']) && !empty($filtros['fecha_fin'])) {
             $query->whereBetween('created_at', [$filtros['fecha_inicio'] . ' 00:00:00', $filtros['fecha_fin'] . ' 23:59:59']);
         } elseif (!empty($filtros['fecha_inicio'])) {
             $query->whereDate('created_at', $filtros['fecha_inicio']);
         }
 
-        // Filtro por Mes
         if (!empty($filtros['mes'])) {
             $query->whereMonth('created_at', $filtros['mes']);
-            if (!empty($filtros['anio'])) {
-                $query->whereYear('created_at', $filtros['anio']);
-            }
+            if (!empty($filtros['anio'])) $query->whereYear('created_at', $filtros['anio']);
         }
 
-        // Filtro en Relaciones (Cliente)
         if (!empty($filtros['cliente_numero']) || !empty($filtros['cliente_nombre']) || isset($filtros['es_heredado'])) {
             $query->whereHas('cliente', function ($q) use ($filtros) {
-                if (!empty($filtros['cliente_numero'])) {
-                    $q->where('numero_cliente', 'like', '%' . $filtros['cliente_numero'] . '%');
-                }
-                if (!empty($filtros['cliente_nombre'])) {
-                    $q->where('nombre', 'like', '%' . $filtros['cliente_nombre'] . '%');
-                }
-                if (isset($filtros['es_heredado']) && $filtros['es_heredado'] !== '') {
-                    $q->where('es_heredado', clone $filtros['es_heredado']);
-                }
+                if (!empty($filtros['cliente_numero'])) $q->where('numero_cliente', 'like', '%' . $filtros['cliente_numero'] . '%');
+                if (!empty($filtros['cliente_nombre'])) $q->where('nombre', 'like', '%' . $filtros['cliente_nombre'] . '%');
+                if (isset($filtros['es_heredado']) && $filtros['es_heredado'] !== '') $q->where('es_heredado', clone $filtros['es_heredado']);
             });
         }
     }
