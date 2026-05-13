@@ -19,9 +19,17 @@ class ListarSolicitudesService
      */
     public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
     {
-        // AÑADIDO: 'listaDescuento' y 'tipoCliente' para poder renderizarlos en la tabla
-        $query = SolicitudTag::with(['cliente', 'vendedor', 'proceso', 'estado', 'auditorias.usuario', 'auditorias.estadoNuevo', 'listaDescuento', 'tipoCliente'])
-            ->orderBy('created_at', 'desc'); 
+        // Eager Loading configurado correctamente para renderizar en la tabla
+        $query = SolicitudTag::with([
+            'cliente', 
+            'vendedor', 
+            'proceso', 
+            'estado', 
+            'auditorias.usuario', 
+            'auditorias.estadoNuevo', 
+            'listaDescuento', 
+            'tipoCliente'
+        ])->orderBy('created_at', 'desc'); 
 
         if ($usuario) {
             $esAdminOGerente = $usuario->hasAnyRole(['Super Admin', 'Administrador', 'Gerente']);
@@ -59,9 +67,16 @@ class ListarSolicitudesService
 
         if (!empty($filtros['cliente_numero']) || !empty($filtros['cliente_nombre']) || isset($filtros['es_heredado'])) {
             $query->whereHas('cliente', function ($q) use ($filtros) {
-                if (!empty($filtros['cliente_numero'])) $q->where('numero_cliente', 'like', '%' . $filtros['cliente_numero'] . '%');
-                if (!empty($filtros['cliente_nombre'])) $q->where('nombre', 'like', '%' . $filtros['cliente_nombre'] . '%');
-                if (isset($filtros['es_heredado']) && $filtros['es_heredado'] !== '') $q->where('es_heredado', clone $filtros['es_heredado']);
+                if (!empty($filtros['cliente_numero'])) {
+                    $q->where('numero_cliente', 'like', '%' . $filtros['cliente_numero'] . '%');
+                }
+                if (!empty($filtros['cliente_nombre'])) {
+                    $q->where('nombre', 'like', '%' . $filtros['cliente_nombre'] . '%');
+                }
+                // Solución del error: Se elimina 'clone' y se asigna el valor directamente
+                if (isset($filtros['es_heredado']) && $filtros['es_heredado'] !== '') {
+                    $q->where('es_heredado', filter_var($filtros['es_heredado'], FILTER_VALIDATE_BOOLEAN));
+                }
             });
         }
     }

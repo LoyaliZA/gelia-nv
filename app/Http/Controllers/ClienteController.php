@@ -17,12 +17,14 @@ class ClienteController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'numero_cliente'           => 'required|string|max:255|unique:clientes,numero_cliente' . (isset($cliente) ? ',' . $cliente->id : ''),
+            'numero_cliente'           => 'required|string|max:255|unique:clientes,numero_cliente',
             'nombre'                   => 'required|string|max:255',
             'vendedor_id'              => 'nullable|exists:users,id',
-            'es_heredado'              => 'boolean',
-            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id' // <-- AÑADIDO
+            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id'
         ]);
+
+        // Forzamos la captura del booleano para que no dependa de si el input llegó o no
+        $validated['es_heredado'] = $request->boolean('es_heredado');
 
         Cliente::create($validated);
 
@@ -38,9 +40,12 @@ class ClienteController extends Controller
             'numero_cliente'           => 'required|string|max:255|unique:clientes,numero_cliente,' . $cliente->id,
             'nombre'                   => 'required|string|max:255',
             'vendedor_id'              => 'nullable|exists:users,id',
-            'es_heredado'              => 'boolean',
-            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id' // <-- AÑADIDO
+            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id'
         ]);
+
+        // Al usar boolean(), si el checkbox no se marcó, devolverá false automáticamente
+        // Esto permite "desactivar" la herencia si ya estaba activa.
+        $validated['es_heredado'] = $request->boolean('es_heredado');
 
         $cliente->update($validated);
 

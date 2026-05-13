@@ -154,7 +154,7 @@ export default function AdminDashboard({ auth, estadisticas = {}, ultimas_solici
                         <div className="flex items-center space-x-3">
                             <span className="h-1.5 w-12 rounded-full transition-colors duration-300" style={{ backgroundColor: 'var(--color-primario)' }}></span>
                             <p className="text-[10px] font-black uppercase tracking-[0.3em] transition-colors duration-300" style={{ color: 'var(--color-primario)' }}>
-                                Protocolo de Mando Global
+                                Gelia NV
                             </p>
                         </div>
                         <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0 p-0">

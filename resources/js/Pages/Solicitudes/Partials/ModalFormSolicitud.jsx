@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useForm, router } from '@inertiajs/react';
+import { useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Upload, Send, AlertTriangle, Users } from 'lucide-react';
 
@@ -17,7 +17,8 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     
     const temporizadorBusqueda = useRef(null);
 
-    const { data, setData, post, processing, reset } = useForm({
+    // Integramos 'transform' para manejar el PUT con archivos correctamente en Inertia
+    const { data, setData, post, processing, reset, transform } = useForm({
         numero_cliente: solicitudAEditar?.cliente?.numero_cliente || '',
         nombre_cliente: solicitudAEditar?.cliente?.nombre || '',
         monto_cotizado: solicitudAEditar?.monto_cotizado || '',
@@ -28,7 +29,6 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     });
 
     // LÓGICA REACTIVA: Tipos de Cliente Permitidos
-    // Si el cliente es heredado, ocultamos las opciones normales
     const opcionesTipoCliente = infoCliente?.es_heredado 
         ? tiposCliente.filter(t => t.nombre.toUpperCase().includes('HEREDADO')) 
         : tiposCliente.filter(t => !t.nombre.toUpperCase().includes('HEREDADO'));
@@ -39,7 +39,6 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
             const cotizacion = parseFloat(data.monto_cotizado);
             const totalProyectado = montoHistorico + cotizacion;
 
-            // 1. Obtener la jerarquía de la lista actual del cliente
             const listaActualObj = listas.find(l => l.nombre === infoCliente.lista_actual);
             const montoMinimoListaActual = listaActualObj ? parseFloat(listaActualObj.monto_requerido || listaActualObj.monto_minimo || 0) : 0;
 
@@ -47,15 +46,13 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                 .filter(l => !l.nombre.toUpperCase().includes('COLABORADOR'))
                 .sort((a, b) => parseFloat(b.monto_requerido || b.monto_minimo || 0) - parseFloat(a.monto_requerido || a.monto_minimo || 0));
 
-            // 2. Encontrar a qué lista califica según la proyección actual
             const sugerencia = listasValidas.find(l => totalProyectado >= parseFloat(l.monto_requerido || l.monto_minimo || 0));
 
-            // 3. REGLA DE NEGOCIO: Solo sugerir si representa un ascenso (monto mayor a su nivel actual)
+            // Solo sugerir si representa un ascenso
             if (sugerencia && parseFloat(sugerencia.monto_requerido || sugerencia.monto_minimo || 0) > montoMinimoListaActual) {
                 setData('catalogo_lista_descuento_id', sugerencia.id);
                 setAlertaLista({ mensaje: `Califica para ascenso a: ${sugerencia.nombre}` });
             } else {
-                // Si la sugerencia es menor o igual, se mantiene en su nivel actual automáticamente
                 setData('catalogo_lista_descuento_id', '');
                 setAlertaLista(null);
             }
@@ -65,7 +62,6 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         }
     }, [data.monto_cotizado, infoCliente, listas]);
 
-    // ... (Mantén las funciones de imagen y búsqueda intactas)
     const compressToWebp = (file) => {
         return new Promise((resolve) => {
             const reader = new FileReader(); reader.readAsDataURL(file);
@@ -121,31 +117,37 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setInfoCliente(cliente); 
         setMostrarDropdown(false); 
         setAlertaHeredado(false);
-        // Al cambiar de cliente, vaciamos el tipo para forzar la selección basada en su estatus (Heredado o Normal)
         setData('catalogo_tipo_cliente_id', '');
-        // También reiniciamos la lista solicitada para que recalcule
         setData('catalogo_lista_descuento_id', '');
     };
 
     const guardarSolicitud = (e) => {
         e.preventDefault();
         const procesoSeleccionado = procesos.find(p => p.id == data.catalogo_proceso_id);
+        
         if (infoCliente?.es_heredado && (procesoSeleccionado?.nombre === 'ASIGNAR CLIENTE REACTIVADO' || procesoSeleccionado?.nombre === 'ASIGNAR CLIENTE REACTIVADO Y CAMBIO DE LISTA')) {
             setAlertaHeredado(true); return;
         }
 
-        const config = { onSuccess: () => { reset(); onClose(); }, forceFormData: true };
+        const config = { 
+            onSuccess: () => { reset(); onClose(); }, 
+            forceFormData: true 
+        };
 
         if (modoEdicion) {
-            router.post(route('solicitudes.update', solicitudAEditar.id), { _method: 'put', ...data }, config);
+            // Transformación inteligente para inyectar el método PUT y mantener el estado 'processing' de Inertia
+            transform((data) => ({ ...data, _method: 'put' }));
+            post(route('solicitudes.update', solicitudAEditar.id), config);
         } else {
+            // Reseteamos el transform por seguridad en modo creación
+            transform((data) => data);
             post(route('solicitudes.store'), config);
         }
     };
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-md animate-fade-in" onClick={onClose}>
-            <div onPaste={handlePaste} className="w-full max-w-4xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-10 md:p-12 flex flex-col relative modal-pop max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div onPaste={handlePaste} className="w-full max-w-4xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-10 md:p-12 flex flex-col relative modal-pop max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
                 <button onClick={onClose} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main theme-element border theme-border rounded-2xl transition-all outline-none hover:scale-110 z-50"><X className="w-5 h-5" /></button>
 
                 <div className="flex items-center gap-3 mb-8">
@@ -200,7 +202,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             </div>
                         </div>
 
-                        {/* Proceso y Tipo Cliente en 2 columnas */}
+                        {/* Proceso y Tipo Cliente */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Proceso_</label>
@@ -265,12 +267,12 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                         <div className="space-y-2 h-full flex flex-col">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Evidencia / Ticket (Ctrl + V)_</label>
                             <label className="flex-1 flex flex-col items-center justify-center min-h-[250px] border-2 border-dashed theme-border rounded-2xl cursor-pointer theme-element transition-all group overflow-hidden relative">
-                                <Upload className="w-12 h-12 mb-4 theme-text-muted z-10" />
+                                <Upload className="w-12 h-12 mb-4 theme-text-muted z-10 group-hover:scale-110 transition-transform" />
                                 {previewEvidencia && <img src={previewEvidencia} className="absolute inset-0 w-full h-full object-cover opacity-80" />}
                                 <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileUpload} />
                             </label>
                         </div>
-                        <button type="submit" disabled={processing} className="w-full py-5 text-white rounded-2xl font-black uppercase tracking-widest text-[12px] shadow-xl hover:scale-105 transition-all disabled:opacity-50 outline-none flex justify-center items-center gap-3" style={{ backgroundColor: 'var(--color-primario)' }}>
+                        <button type="submit" disabled={processing} className="w-full py-5 text-white rounded-2xl font-black uppercase tracking-widest text-[12px] shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 outline-none flex justify-center items-center gap-3" style={{ backgroundColor: 'var(--color-primario)' }}>
                             <Send className="w-5 h-5" /> {processing ? 'Procesando...' : (modoEdicion ? 'Reenviar Corrección' : 'Transmitir Solicitud')}
                         </button>
                     </div>

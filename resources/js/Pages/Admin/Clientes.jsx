@@ -1,67 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { Head, useForm } from '@inertiajs/react';
-import { createPortal } from 'react-dom';
-import { animate } from 'animejs/animation';
 import { 
     Users, Upload, Search, 
     FileSpreadsheet, TrendingUp, 
-    CheckCircle, Database, Edit3, X, ChevronDown, Sparkles,
-    ChevronLeft, ChevronRight, Check, Plus, User, Hash
+    CheckCircle, Database, Edit3, ChevronDown, Sparkles,
+    ChevronLeft, ChevronRight, Plus
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
+// --- IMPORTACIÓN DEL PARCIAL ---
+import ModalFormCliente from './Partials/ModalFormCliente';
+
+// --- ESTILOS COMPARTIDOS ---
+const ESTILOS_ADICIONALES = `
+    @keyframes slideUpFade {
+        0% { opacity: 0; transform: translateY(20px); }
+        100% { opacity: 1; transform: translateY(0); }
+    }
+    .animate-page-reveal {
+        opacity: 0;
+        animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes shimmer {
+        0% { transform: translateX(-200%); }
+        50%, 100% { transform: translateX(200%); }
+    }
+`;
+
 export default function Clientes({ auth, clientes = [], vendedores = [], tipos_cliente = [] }) {
-    // --- ESTADOS LOCALES ---
+    
+    // --- SECCIÓN: ESTADOS GLOBALES ---
     const [busqueda, setBusqueda] = useState('');
     const [filtroLista, setFiltroLista] = useState('Todas');
     const [filtroTipo, setFiltroTipo] = useState('Todos');
     const [dragActive, setDragActive] = useState(false);
     
-    // Estados para la Paginación
     const [paginaActual, setPaginaActual] = useState(1);
     const itemsPorPagina = 10;
     
-    // Estados para el Modal de Gestión
-    const [modoModal, setModoModal] = useState(null); // 'crear' | 'editar' | null
-    const [clienteActual, setClienteActual] = useState(null);
+    // Control del Modal unificado
+    const [modalConfig, setModalConfig] = useState({ abierto: false, modo: null, cliente: null });
 
-    // --- FORMULARIOS INERTIA ---
     const formCarga = useForm({
         archivo: null,
     });
 
-    const formCliente = useForm({
-        numero_cliente: '',
-        nombre: '',
-        vendedor_id: '',
-        es_heredado: false,
-        catalogo_tipo_cliente_id: '', // <-- Añadimos el nuevo campo
-    });
-
-    // --- ANIMACIONES DE ENTRADA ---
-    useEffect(() => {
-        // Retraso ligero para asegurar que el DOM exista antes de que Anime.js busque los targets
-        const timer = setTimeout(() => {
-            const elements = document.querySelectorAll('.fade-up');
-            if (elements.length > 0) {
-                animate('.fade-up', {
-                    translateY: [15, 0],
-                    opacity: [0, 1],
-                    easing: 'easeOutExpo',
-                    duration: 600,
-                    delay: (el, i) => i * 80
-                });
-            }
-        }, 100);
-        return () => clearTimeout(timer);
-    }, []);
-
-    // --- EFECTOS DE PAGINACIÓN ---
     useEffect(() => {
         setPaginaActual(1);
     }, [busqueda, filtroLista, filtroTipo]);
 
-    // --- MANEJO DE ACCIONES ---
+    // --- SECCIÓN: MANEJO DE ACCIONES ---
     const handleUpload = (e) => {
         e.preventDefault();
         formCarga.post(route('admin.clientes.importar'), {
@@ -72,47 +60,15 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
         });
     };
 
-    const abrirModalCrear = () => {
-        setModoModal('crear');
-        setClienteActual(null);
-        formCliente.reset();
-        formCliente.clearErrors();
-    };
-
-    const abrirModalEditar = (cliente) => {
-        setModoModal('editar');
-        setClienteActual(cliente);
-        formCliente.setData({
-            numero_cliente: cliente.numero_cliente || '',
-            nombre: cliente.nombre || '',
-            vendedor_id: cliente.vendedor_id || '',
-            es_heredado: cliente.es_heredado === 1 || cliente.es_heredado === true,
-            catalogo_tipo_cliente_id: cliente.catalogo_tipo_cliente_id || '', // <-- Añadido
-        });
-        formCliente.clearErrors();
+    const abrirModal = (modo, cliente = null) => {
+        setModalConfig({ abierto: true, modo, cliente });
     };
 
     const cerrarModal = () => {
-        setModoModal(null);
-        setClienteActual(null);
-        formCliente.reset();
+        setModalConfig({ abierto: false, modo: null, cliente: null });
     };
 
-    const guardarCliente = (e) => {
-        e.preventDefault();
-        
-        if (modoModal === 'crear') {
-            formCliente.post(route('admin.clientes.store'), {
-                onSuccess: () => cerrarModal()
-            });
-        } else {
-            formCliente.put(route('admin.clientes.update', clienteActual.id), {
-                onSuccess: () => cerrarModal()
-            });
-        }
-    };
-
-    // --- FUNCIÓN RENDERIZADORA DE LISTAS (UI/UX) ---
+    // --- SECCIÓN: RENDERIZADORES DE UI ---
     const renderBadgeLista = (nombreLista) => {
         if (!nombreLista) return <span className="px-2 py-1 theme-element border theme-border text-zinc-500 text-[9px] font-black uppercase tracking-widest rounded-md">Sin Lista</span>;
         
@@ -136,7 +92,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
         }
     };
 
-    // --- LÓGICA DE FILTRADO Y PAGINACIÓN ---
+    // --- SECCIÓN: FILTRADO Y PAGINACIÓN ---
     const listasUnicas = ['Todas', ...new Set(clientes.map(c => c.lista_descuento?.nombre || 'Sin Lista'))];
 
     const clientesFiltrados = clientes.filter(cliente => {
@@ -157,124 +113,28 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
     const clientesPaginados = clientesFiltrados.slice(indicePrimerItem, indiceUltimoItem);
     const totalPaginas = Math.ceil(clientesFiltrados.length / itemsPorPagina);
 
-    const baseCardClass = "fade-up theme-surface border theme-border rounded-[2.5rem] shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)] transition-all duration-300 relative z-10";
+    const baseCardClass = "animate-page-reveal theme-surface border theme-border rounded-[2.5rem] shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)] transition-all duration-300 relative z-10";
 
     return (
         <AppLayout auth={auth}>
             <Head title="Gestión de Clientes | GELIANV" />
+            <style>{ESTILOS_ADICIONALES}</style>
 
-            {/* =========================================
-                PORTAL DEL MODAL (CREAR / EDITAR)
-                ========================================= */}
-            {modoModal && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl transition-opacity animate-fade-in" onClick={cerrarModal}>
-                    <div className="w-full max-w-lg theme-surface theme-border border shadow-2xl rounded-[2.5rem] p-8 md:p-10 flex flex-col space-y-6 relative modal-pop max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        
-                        <button onClick={cerrarModal} className="absolute top-5 right-5 p-2 theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors outline-none">
-                            <X className="w-5 h-5" />
-                        </button>
-                        
-                        <form onSubmit={guardarCliente} className="space-y-6 w-full">
-                            <div>
-                                <h3 className="text-xl font-black uppercase italic tracking-tighter theme-text-main m-0 drop-shadow-sm">
-                                    {modoModal === 'crear' ? 'Nuevo' : 'Editar'} <span style={{ color: 'var(--color-primario)' }}>Cliente_</span>
-                                </h3>
-                                <p className="text-xs font-bold theme-text-muted mt-1">
-                                    {modoModal === 'crear' ? 'Ingresa los datos del nuevo cliente.' : clienteActual?.nombre}
-                                </p>
-                            </div>
-
-                            <div className="space-y-4">
-                                {/* Número de Cliente */}
-                                <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipo de Cliente_</label>
-                                <select 
-                                    value={formCliente.data.catalogo_tipo_cliente_id} 
-                                    onChange={e => formCliente.setData('catalogo_tipo_cliente_id', e.target.value)}
-                                    className="w-full px-5 py-4 theme-surface border theme-border rounded-xl font-bold text-sm outline-none transition-all shadow-sm appearance-none"
-                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                    onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
-                                    onBlur={e => e.target.style.borderColor = ''}
-                                >
-                                    <option value="">-- Sin asignar (Por definir) --</option>
-                                    {tipos_cliente.map(tipo => (
-                                        <option key={tipo.id} value={tipo.id}>{tipo.nombre}</option>
-                                    ))}
-                                </select>
-                                {formCliente.errors.catalogo_tipo_cliente_id && <p className="text-xs text-red-500 mt-1">{formCliente.errors.catalogo_tipo_cliente_id}</p>}
-                            </div>
-
-                                {/* Nombre */}
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre Completo</label>
-                                    <div className="relative">
-                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input 
-                                            type="text" 
-                                            value={formCliente.data.nombre} 
-                                            onChange={e => formCliente.setData('nombre', e.target.value)}
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md theme-placeholder"
-                                            placeholder="Nombre del cliente o empresa"
-                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} 
-                                            onBlur={e => e.target.style.borderColor = ''}
-                                        />
-                                    </div>
-                                    {formCliente.errors.nombre && <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest m-0 mt-1 ml-1">{formCliente.errors.nombre}</p>}
-                                </div>
-
-                                {/* Vendedora Asignada */}
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Vendedora Asignada</label>
-                                    <div className="relative">
-                                        <select 
-                                            value={formCliente.data.vendedor_id} 
-                                            onChange={e => formCliente.setData('vendedor_id', e.target.value)}
-                                            className="w-full px-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md cursor-pointer appearance-none"
-                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} 
-                                            onBlur={e => e.target.style.borderColor = ''}
-                                        >
-                                            <option value="">-- Sin Asignar --</option>
-                                            {vendedores?.map(vendedor => (
-                                                <option key={vendedor.id} value={vendedor.id}>{vendedor.name}</option>
-                                            ))}
-                                        </select>
-                                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                                            <ChevronDown className="w-4 h-4 theme-text-muted" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Switch Heredado */}
-                                <div 
-                                    className="p-5 theme-element border theme-border rounded-xl flex items-center justify-between cursor-pointer group transition-all hover:shadow-md mt-2" 
-                                    style={{ borderColor: formCliente.data.es_heredado ? 'var(--color-primario)' : '' }}
-                                    onClick={() => formCliente.setData('es_heredado', !formCliente.data.es_heredado)}
-                                >
-                                    <div>
-                                        <span className="text-sm font-black theme-text-main uppercase tracking-widest block leading-tight transition-colors" style={{ color: formCliente.data.es_heredado ? 'var(--color-primario)' : '' }}>Cliente Heredado</span>
-                                        <span className="text-[10px] font-bold theme-text-muted uppercase tracking-widest">Reglas de seguridad especiales</span>
-                                    </div>
-                                    <button type="button" className="gelia-switch shrink-0 scale-110 origin-right pointer-events-none" data-active={formCliente.data.es_heredado}>
-                                        <div className="gelia-switch-thumb shadow-md" />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <button type="submit" disabled={formCliente.processing} className="w-full py-4 mt-6 rounded-2xl text-white font-black uppercase tracking-widest text-[11px] transition-transform hover:scale-105 shadow-md flex justify-center items-center gap-2 outline-none disabled:opacity-60 disabled:scale-100" style={{ backgroundColor: 'var(--color-primario)' }}>
-                                <Check className="w-5 h-5" /> {formCliente.processing ? 'Guardando...' : 'Guardar Cliente_'}
-                            </button>
-                        </form>
-                    </div>
-                </div>,
-                document.body
+            {/* Renderizado condicional del modal extraído */}
+            {modalConfig.abierto && (
+                <ModalFormCliente 
+                    onClose={cerrarModal} 
+                    modoModal={modalConfig.modo} 
+                    clienteActual={modalConfig.cliente} 
+                    tiposCliente={tipos_cliente} 
+                    vendedores={vendedores} 
+                />
             )}
 
             <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
                 
                 {/* --- HEADER --- */}
-                <header className={`${baseCardClass} p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`}>
+                <header className={`${baseCardClass} p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`} style={{ animationDelay: '0ms' }}>
                     <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-start mb-2">
                             <div className="w-8 h-1.5 rounded-full mr-3" style={{ backgroundColor: 'var(--color-primario)' }}></div>
@@ -287,9 +147,8 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                         </h1>
                     </div>
                     
-                    {/* BOTÓN CREAR CLIENTE */}
                     <button 
-                        onClick={abrirModalCrear}
+                        onClick={() => abrirModal('crear')}
                         className="py-4 px-8 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl outline-none flex justify-center items-center gap-2"
                         style={{ backgroundColor: 'var(--color-primario)' }}
                     >
@@ -301,7 +160,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                     
                     {/* --- PANEL LATERAL: CARGA MASIVA --- */}
                     <div className="lg:col-span-1 space-y-8">
-                        <section className={`${baseCardClass} p-8`}>
+                        <section className={`${baseCardClass} p-8`} style={{ animationDelay: '100ms' }}>
                             <div className="flex items-center gap-3 mb-6">
                                 <Upload className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
                                 <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
@@ -374,7 +233,8 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                     <strong style={{ color: 'var(--color-primario)' }}>nombre</strong><br/>
                                     <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7)<br/>
                                     <strong style={{ color: 'var(--color-primario)' }}>monto_venta_actual</strong><br/>
-                                    <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)
+                                    <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)<br/>
+                                    <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)
                                 </p>
                             </div>
                         </section>
@@ -382,9 +242,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
 
                     {/* --- PANEL PRINCIPAL: LISTADO --- */}
                     <div className="lg:col-span-2 space-y-8">
-                        
-                        <section className={`${baseCardClass} p-8 space-y-8`}>
-                            {/* Buscador y Filtros (Estilo Edit.jsx Inputs) */}
+                        <section className={`${baseCardClass} p-8 space-y-8`} style={{ animationDelay: '200ms' }}>
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                                 <div className="md:col-span-6 relative">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
@@ -437,7 +295,6 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                 </div>
                             </div>
 
-                            {/* Contenedor de la lista */}
                             <div className="space-y-4">
                                 {clientesFiltrados.length === 0 ? (
                                     <div className="text-center py-16 theme-element border-2 border-dashed theme-border rounded-[2rem]">
@@ -484,7 +341,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                                 )}
 
                                                 <button 
-                                                    onClick={() => abrirModalEditar(cliente)}
+                                                    onClick={() => abrirModal('editar', cliente)}
                                                     className="p-3 theme-surface rounded-xl transition-all shadow-sm hover:shadow-md group-hover:scale-110 outline-none"
                                                     style={{ color: 'var(--color-primario)' }}
                                                     title="Editar cliente"
@@ -496,7 +353,6 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                     ))
                                 )}
 
-                                {/* --- CONTROLES DE PAGINACIÓN --- */}
                                 {totalPaginas > 1 && (
                                     <div className="flex flex-col md:flex-row items-center justify-between pt-8 mt-4 border-t theme-border gap-4">
                                         <span className="text-[10px] font-black theme-text-muted uppercase tracking-widest">
@@ -553,13 +409,6 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                     </div>
                 </div>
             </div>
-            
-            <style>{`
-                @keyframes shimmer {
-                    0% { transform: translateX(-200%); }
-                    50%, 100% { transform: translateX(200%); }
-                }
-            `}</style>
         </AppLayout>
     );
 }

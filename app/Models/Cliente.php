@@ -19,7 +19,7 @@ class Cliente extends Model
         'vendedor_original_id', // Agregado a la asignación masiva
         'monto_venta_actual',
         'es_heredado',
-        'catalogo_tipo_clientes_id', // Agregado a la asignación masiva
+        'catalogo_tipo_cliente_id', // <-- CORREGIDO: Se quitó la "s" para coincidir con la DB
     ];
 
     protected $casts = [
@@ -55,6 +55,7 @@ class Cliente extends Model
 
     public function tipo(): BelongsTo
     {
-        return $this->belongsTo(CatalogoTipoCliente::class, 'catalogo_tipo_clientes_id');
+        // <-- CORREGIDO: Se quitó la "s" en la llave foránea
+        return $this->belongsTo(CatalogoTipoCliente::class, 'catalogo_tipo_cliente_id');
     }
 }

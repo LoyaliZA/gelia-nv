@@ -1,8 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, History, ShieldCheck, CheckCircle2, FileImage, Camera } from 'lucide-react';
+import { X, History, ShieldCheck, CheckCircle2, FileImage, Camera, Users, TrendingUp } from 'lucide-react';
 
-export default function ModalBitacoraSolicitud({ onClose, solicitud }) {
+export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = [], tiposCliente = [] }) {
     if (!solicitud) return null;
 
     // FILTRO DE RUIDO: Eliminamos los registros automáticos duplicados
@@ -10,12 +10,16 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud }) {
         (r) => !r.motivo_reporte?.toUpperCase().includes('AUTOMÁTICAMENTE')
     ) || [];
 
+    // Normalización de variables actuales
+    const objListaActual = solicitud.lista_descuento || solicitud.listaDescuento;
+    const objTipoActual = solicitud.tipo_cliente || solicitud.tipoCliente;
+
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-md animate-fade-in" onClick={onClose}>
             <div className="w-full max-w-6xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-10 md:p-12 flex flex-col relative modal-pop max-h-[90vh]" onClick={e => e.stopPropagation()}>
                 
                 {/* BOTÓN CERRAR */}
-                <button onClick={onClose} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main theme-element border theme-border rounded-2xl outline-none hover:scale-110 z-10">
+                <button onClick={onClose} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main theme-element border theme-border rounded-2xl outline-none hover:scale-110 transition-transform z-10">
                     <X className="w-5 h-5" />
                 </button>
 
@@ -36,7 +40,20 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud }) {
                         <div className="space-y-6">
                             <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Cliente</p><p className="text-base font-black theme-text-main">{solicitud?.cliente?.nombre}</p></div>
                             <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Proceso Solicitado</p><p className="text-base font-black theme-text-main">{solicitud?.proceso?.nombre}</p></div>
-                            <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Cotización Final</p><p className="text-base font-black theme-text-main">${solicitud?.monto_cotizado}</p></div>
+                            
+                            {/* NUEVOS CAMPOS: Tipo y Lista Actual */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 rounded-xl bg-black/5 dark:bg-white/5 border theme-border">
+                                    <p className="text-[10px] font-black uppercase theme-text-muted tracking-widest mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Clasificación</p>
+                                    <p className="text-sm font-bold theme-text-main">{objTipoActual?.nombre || 'Normal'}</p>
+                                </div>
+                                <div className="p-4 rounded-xl bg-black/5 dark:bg-white/5 border theme-border">
+                                    <p className="text-[10px] font-black uppercase theme-text-muted tracking-widest mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Lista Solicitada</p>
+                                    <p className="text-sm font-bold theme-text-main">{objListaActual?.nombre || 'Mantener actual'}</p>
+                                </div>
+                            </div>
+
+                            <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Cotización Final</p><p className="text-base font-black theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud?.monto_cotizado || 0)}</p></div>
                             <div>
                                 <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Evidencia Vigente (Vendedora)</p>
                                 {solicitud?.evidencia_path ? (
@@ -58,12 +75,15 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud }) {
                             )}
 
                             {auditoriasLimpias.map((registro, idx) => {
-                                // Determinamos si este registro fue una acción de Encargada/Verificador
                                 const estadoNombre = registro.estado_nuevo?.nombre;
                                 const esRespuesta = estadoNombre === 'Respondida' || estadoNombre === 'Verificada' || estadoNombre === 'Incorrecta';
                                 
                                 // Parseamos el snapshot si viene como string desde la base de datos
                                 const snapshot = typeof registro.datos_snapshot === 'string' ? JSON.parse(registro.datos_snapshot) : registro.datos_snapshot;
+
+                                // Extracción de nombres basados en los catálogos para el historial
+                                const nombreListaHistorial = snapshot?.lista_descuento_id ? listas.find(l => l.id == snapshot.lista_descuento_id)?.nombre : null;
+                                const nombreTipoHistorial = snapshot?.tipo_cliente_id ? tiposCliente.find(t => t.id == snapshot.tipo_cliente_id)?.nombre : null;
 
                                 return (
                                     <div key={idx} className="relative flex flex-col ml-10">
@@ -89,9 +109,18 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud }) {
                                             {/* BLOQUE DE VERSIÓN (SNAPSHOT DE LA VENDEDORA) */}
                                             {snapshot && !esRespuesta && (
                                                 <div className="mb-4 p-4 bg-black/5 dark:bg-white/5 rounded-2xl border theme-border flex flex-col gap-3">
+                                                    
+                                                    {/* Mostrar cambios de Lista o Tipo si existen en este snapshot */}
+                                                    {(nombreListaHistorial || nombreTipoHistorial) && (
+                                                        <div className="flex flex-wrap gap-2 mb-2">
+                                                            {nombreListaHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Aspiraba a: {nombreListaHistorial}</span>}
+                                                            {nombreTipoHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">Clasificación: {nombreTipoHistorial}</span>}
+                                                        </div>
+                                                    )}
+
                                                     <div className="flex justify-between items-center">
                                                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Cotización Proyectada</p>
-                                                        <span className="text-xs font-black theme-text-main">${snapshot.monto_cotizado}</span>
+                                                        <span className="text-xs font-black theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(snapshot.monto_cotizado || 0)}</span>
                                                     </div>
                                                     {snapshot.evidencia_path && (
                                                         <a href={`/storage/${snapshot.evidencia_path}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-blue-500 hover:text-blue-600 transition-colors w-fit">
@@ -110,7 +139,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud }) {
                                                 </div>
                                             )}
 
-                                            {/* EVIDENCIA OFICIAL DE LA ENCARGADA (Leída desde el Snapshot) */}
+                                            {/* EVIDENCIA OFICIAL DE LA ENCARGADA */}
                                             {esRespuesta && snapshot?.evidencia_respuesta_path && (
                                                 <div className="mt-6 pt-4 border-t border-emerald-500/20">
                                                     <h4 className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">

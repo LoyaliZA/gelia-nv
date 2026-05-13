@@ -1,11 +1,11 @@
 import React, { useEffect, useState, createContext, useContext } from 'react';
 import { usePage, router } from '@inertiajs/react';
 import Sidebar from '../Components/Sidebar';
-import { animate } from 'animejs/animation';
-// 1. AÑADIMOS LAS IMPORTACIONES DE LOS ICONOS AQUÍ
+// ELIMINADO: import { animate } from 'animejs/animation';
 import { Bell, X } from 'lucide-react';
 
 import NotificationService from '../Services/NotificationBrowserService';
+import GeliaLoader from '../Components/GeliaLoader'; // <-- 1. IMPORTAMOS EL LOADER
 
 const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
@@ -16,55 +16,78 @@ export default function AppLayout({ children }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState(null);
 
-    // 2. EL ESTADO DE LOS TOASTS DEBE IR AQUÍ AFUERA (En el primer nivel)
+    // ESTADO PARA TOASTS
     const [toasts, setToasts] = useState([]);
+
+    // --- 2. ESTADOS GLOBALES PARA EL LOADER ---
+    const [isGlobalLoading, setIsGlobalLoading] = useState(false);
+    const [globalProgress, setGlobalProgress] = useState(null);
 
     const addToast = (notif) => {
         const id = Date.now();
         setToasts(prev => [...prev, { id, ...notif }]);
-
-        // ELIMINAMOS LA LÓGICA DE AUDIO DE AQUÍ. Ahora es responsabilidad del listener global.
-
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 5000);
     };
 
-    // 2. INICIALIZAR PERMISOS AL CARGAR LA APP
+    // INICIALIZAR PERMISOS AL CARGAR LA APP
     useEffect(() => {
         NotificationService.requestDesktopPermissions();
     }, []);
 
-    // 3. REFACTORIZACIÓN DEL ESCUCHADOR DE REVERB
+    // --- ESCUCHADORES DE EVENTOS GLOBALES DE INERTIA ---
+    useEffect(() => {
+        const removeStart = router.on('start', (event) => {
+            // REGLA: Si la petición indica showProgress: false, ignoramos el loader
+            if (event.detail.visit.showProgress === false) return;
+            
+            setIsGlobalLoading(true);
+            setGlobalProgress(null);
+        });
+
+        const removeProgress = router.on('progress', (event) => {
+            if (event.detail.visit.showProgress === false) return;
+            
+            if (event.detail.progress && event.detail.progress.percentage) {
+                setGlobalProgress(event.detail.progress.percentage);
+            }
+        });
+
+        const removeFinish = router.on('finish', () => {
+            // Siempre apagamos por seguridad al terminar cualquier ciclo
+            setIsGlobalLoading(false);
+            setGlobalProgress(null);
+        });
+
+        return () => {
+            removeStart();
+            removeProgress();
+            removeFinish();
+        };
+    }, []);
+
+    // REFACTORIZACIÓN DEL ESCUCHADOR DE REVERB
     useEffect(() => {
         if (auth?.user && typeof window !== 'undefined' && window.Echo) {
             const channelName = `App.Models.User.${auth.user.id}`;
             
-            // Limpiar suscripciones previas para evitar llamadas duplicadas en re-renders
             window.Echo.leave(channelName);
 
             window.Echo.private(channelName)
                 .notification((notification) => {
-                    // 1. UI: Toast interno
                     addToast({ mensaje: notification.mensaje });
-                    
-                    // 2. Hardware/OS: Sonido y Notificación de Escritorio
                     NotificationService.triggerFullAlert('GELIA ERP', notification.mensaje);
-
-                    // 3. Data: Actualizar el prop 'notificaciones' del usuario
                     router.reload({ only: ['auth'], preserveScroll: true, preserveState: true });
                 });
         }
 
-        // Limpieza de memoria al desmontar el componente
         return () => {
             if (auth?.user && typeof window !== 'undefined' && window.Echo) {
                 window.Echo.leave(`App.Models.User.${auth.user.id}`);
             }
         };
     }, [auth?.user]);
-
-    
 
     const accentColors = {
         rosa: '#ec4899',
@@ -168,10 +191,6 @@ export default function AppLayout({ children }) {
 
     }, [isDarkMode, auth?.tema_visual]);
 
-    useEffect(() => {
-        animate('.page-reveal', { y: [15, 0], opacity: [0, 1] }, { duration: 300, easing: 'easeOutExpo' });
-    }, [url]);
-
     const toggleTheme = () => {
         const newMode = !isDarkMode;
         setIsDarkMode(newMode);
@@ -192,6 +211,13 @@ export default function AppLayout({ children }) {
                     backgroundRepeat: 'no-repeat'
                 }}
             >
+                {/* --- 4. INSTANCIA ÚNICA DEL LOADER --- */}
+                <GeliaLoader 
+                    isVisible={isGlobalLoading} 
+                    progress={globalProgress} 
+                    message="Procesando_" 
+                />
+
                 <Sidebar
                     isDarkMode={isDarkMode}
                     toggleTheme={toggleTheme}
@@ -201,7 +227,8 @@ export default function AppLayout({ children }) {
                 />
 
                 <main className={`transition-all duration-500 bg-transparent max-w-7xl mx-auto min-h-screen px-4 md:px-6 pb-32 md:pb-20 ${sidebarLayout === 'fixed' ? 'md:ml-24 pt-6 md:pt-12' : 'pt-6 md:pt-24'}`}>
-                    <div className="page-reveal">
+                    {/* Al usar key={url}, React desmonta y monta este div en cada cambio de ruta, disparando la animación CSS nativa */}
+                    <div key={url} className="animate-page-reveal">
                         {children}
                     </div>
                 </main>
@@ -281,6 +308,15 @@ export default function AppLayout({ children }) {
                     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
                     @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
                     @keyframes progressShrink { from { width: 100%; } to { width: 0%; } }
+                    
+                    /* --- ANIMACIÓN NATIVA DE TRANSICIÓN DE PÁGINA --- */
+                    @keyframes pageReveal {
+                        from { opacity: 0; transform: translateY(15px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+                    .animate-page-reveal { 
+                        animation: pageReveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+                    }
                     
                     .modal-pop { animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
                     .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }

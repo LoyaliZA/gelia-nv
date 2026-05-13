@@ -7,6 +7,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Solicitudes\SolicitudController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CatalogoController;
+use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ProfileController;
 
 // ══════════════════════════════════════════════════════════════════════
@@ -97,6 +98,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/clientes', [AdminController::class, 'clientes'])->name('clientes');
             Route::post('/clientes/importar', [AdminController::class, 'importarClientes'])->name('clientes.importar');
             Route::get('/clientes/{cliente}/historial', [AdminController::class, 'historialCliente'])->name('clientes.historial');
+            Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');
+            Route::put('/clientes/{cliente}', [ClienteController::class, 'update'])->name('clientes.update');
         });
 
         // --- 3. Catálogos Globales (Acceso Estricto Administrativo) ---
