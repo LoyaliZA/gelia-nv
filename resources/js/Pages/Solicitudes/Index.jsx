@@ -4,7 +4,7 @@ import { Head, router } from '@inertiajs/react';
 import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
     Search, History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
-    ChevronLeft, ChevronRight
+    ChevronLeft, ChevronRight, Trash2
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -13,6 +13,8 @@ import GeliaLoader from '../../Components/GeliaLoader';
 import ModalFormSolicitud from './Partials/ModalFormSolicitud';
 import ModalRespuestaSolicitud from './Partials/ModalRespuestaSolicitud';
 import ModalBitacoraSolicitud from './Partials/ModalBitacoraSolicitud';
+
+
 
 const ESTILOS_ADICIONALES = `
     .status-aprobado { background-color: #ecfdf5; color: #059669; border-color: #a7f3d0; }
@@ -81,9 +83,11 @@ const ESTILOS_ADICIONALES = `
 // =============================================
 // MENÚ ACCIONES — Portal (nunca se corta)
 // =============================================
-const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, confirmarPagoManual, can, auth }) => {
+const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, confirmarPagoManual, eliminarSolicitud, can, auth }) => {
     if (!menuAbierto || !menuSolicitud) return null;
     const solicitud = menuSolicitud;
+
+    
 
     return createPortal(
         <>
@@ -106,6 +110,11 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </>
                 )}
                 {can('configuracion.ver_auditoria') && (<button onClick={() => { setMenuAbierto(null); setModalBitacora({ abierto: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-purple-50 dark:hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3"><History className="w-4 h-4" /> Ver Bitácora</button>)}
+                {can('solicitudes.eliminar') && (
+                    <button onClick={() => eliminarSolicitud(solicitud.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-red-900/10 text-red-600 dark:text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3">
+                        <Trash2 className="w-4 h-4" /> Eliminar Registro
+                    </button>
+                )}
             </div>
         </>,
         document.body
@@ -187,6 +196,25 @@ export default function Index({ solicitudes = { total: 0, data: [], current_page
         const roles = auth?.user?.roles || [];
         const isAdmin = roles.includes('Admin') || roles.includes('Super admin (admin)');
         return auth?.user?.permissions?.includes(permiso) || isAdmin;
+    };
+
+    const eliminarSolicitud = (id) => {
+        const motivo = window.prompt("ATENCIÓN: Se eliminará este registro y se creará un respaldo en la auditoría.\n\nIngresa el motivo de la eliminación (Mínimo 10 caracteres):");
+
+        if (motivo === null) return; // El usuario canceló
+        
+        if (motivo.trim().length < 10) {
+            alert("Operación cancelada: El motivo debe tener al menos 10 caracteres.");
+            return;
+        }
+
+        setMenuAbierto(null);
+        setProcesandoAccion(true);
+        
+        router.delete(route('solicitudes.destroy', id), {
+            data: { motivo: motivo.trim() },
+            onFinish: () => setProcesandoAccion(false)
+        });
     };
 
     useEffect(() => {
@@ -281,6 +309,7 @@ export default function Index({ solicitudes = { total: 0, data: [], current_page
                 setModalRespuesta={setModalRespuesta}
                 setModalBitacora={setModalBitacora}
                 confirmarPagoManual={confirmarPagoManual}
+                eliminarSolicitud={eliminarSolicitud}
                 can={can}
                 auth={auth}
             />

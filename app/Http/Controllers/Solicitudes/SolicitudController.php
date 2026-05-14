@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Solicitudes\StoreSolicitudRequest;
 use App\Services\Solicitudes\CrearSolicitudService;
 use App\Services\Solicitudes\ListarSolicitudesService;
+use App\Services\Solicitudes\EliminarSolicitudService;
 use Illuminate\Http\RedirectResponse;
 use App\Models\SolicitudTag;
 use App\Models\AuditoriaSolicitud;
@@ -301,5 +302,21 @@ class SolicitudController extends Controller
             ->reject(function ($usuario) {
                 return $usuario->id === Auth::id(); // <-- Esta línea bloquea el auto-envío
             });
+    }
+
+    public function destroy(SolicitudTag $solicitud, Request $request, EliminarSolicitudService $eliminarService): RedirectResponse
+    {
+        // Validación estricta de permisos
+        if (!Auth::user()->can('solicitudes.eliminar')) {
+            abort(403, 'No tienes los permisos administrativos necesarios para eliminar registros.');
+        }
+
+        $request->validate([
+            'motivo' => 'required|string|min:10|max:255'
+        ]);
+
+        $eliminarService->ejecutar($solicitud, $request->motivo);
+
+        return redirect()->route('solicitudes.index')->with('success', 'La solicitud ha sido eliminada y el evento ha sido auditado.');
     }
 }
