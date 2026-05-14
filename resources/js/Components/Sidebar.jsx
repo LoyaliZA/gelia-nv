@@ -144,17 +144,19 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         }
     };
 
-    let navClasses = "fixed z-50 flex ";
-    if (isMobileMode) navClasses += "bottom-6 left-1/2 -translate-x-1/2 flex-col-reverse items-center w-max";
+    // 1. Contenedor Base: Ocupa todo el ancho pero NO bloquea los clics
+    let navClasses = "fixed z-50 flex pointer-events-none ";
+    if (isMobileMode) navClasses += "bottom-6 left-0 right-0 w-full flex-col-reverse items-center";
     else if (isFixed) navClasses += "top-0 left-0 h-screen flex-row";
     else navClasses += `top-6 flex-col ${isRight ? 'right-6 items-end' : 'left-6 items-start'}`;
 
-    let widgetClasses = "theme-surface theme-border sidebar-glass flex relative z-20 ";
+    // 2. Botón (Widget): Reactiva los clics exclusivamente en esta área
+    let widgetClasses = "theme-surface theme-border sidebar-glass flex relative z-20 pointer-events-auto ";
     if (isFixed) widgetClasses += "flex-col items-center py-6 w-20 h-full border-r rounded-none";
     else widgetClasses += "items-center p-1.5 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.12)]";
 
-    // Se mantiene pointer-events dinámico en React para bloquear clics durante el cierre
-    let menuClasses = `floating-menu border shadow-2xl overflow-hidden theme-surface theme-border sidebar-glass relative z-10 ${isMenuOpen ? 'pointer-events-auto' : 'pointer-events-none'} `;
+    // 3. Menú: Previene que Flexbox lo aplaste (flex-shrink-0)
+    let menuClasses = `floating-menu border shadow-2xl overflow-hidden theme-surface theme-border sidebar-glass relative z-10 flex-shrink-0 ${isMenuOpen ? 'pointer-events-auto' : 'pointer-events-none'} `;
     if (isFixed) menuClasses += "ml-0 rounded-r-[2.5rem] rounded-l-none border-l-0";
     else if (isMobileMode) menuClasses += "mb-4 rounded-[2rem] w-[90vw] max-w-[320px]";
     else menuClasses += "mt-4 rounded-[2.5rem] w-[300px]";
@@ -167,10 +169,11 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                 </button>
 
                 <div className={`flex theme-border ${isFixed ? 'flex-col items-center space-y-8 pt-8 border-t w-full' : 'items-center px-3 sm:px-4 border-l space-x-3 sm:space-x-5'}`}>
-                    <Link href={route('dashboard')} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none hidden sm:block">
+                    <Link href={route('dashboard')} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
                         <Home className="w-5 h-5" />
                     </Link>
 
+                    {/* Botón de Atrás (Flecha) */}
                     <button onClick={() => window.history.back()} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
