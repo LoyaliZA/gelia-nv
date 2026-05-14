@@ -29,7 +29,13 @@ echo "Limpiando y regenerando caché de optimización..."
 docker exec -it gelianv_app php artisan optimize:clear
 docker exec -it gelianv_app php artisan optimize
 
-# 7. Refrescar permisos de almacenamiento (Seguridad)
+# ==============================================================================
+# 7. Reinicio de Trabajadores de Cola y WebSockets
+# ==============================================================================
+echo "Purgando RAM y reiniciando procesos en segundo plano..."
+docker exec -it gelianv_app php artisan queue:restart
+
+# 8. Refrescar permisos de almacenamiento (Seguridad)
 echo "Ajustando permisos de archivos..."
 docker exec -it gelianv_app chown -R 1337:1337 /var/www/html/storage /var/www/html/bootstrap/cache
 docker exec -it gelianv_app chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
