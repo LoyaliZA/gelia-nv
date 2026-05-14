@@ -76,6 +76,7 @@ class ImportarClientesWizerpService
             ['nombre' => 'MAYOREO PLATA', 'monto_requerido' => 5000.00],
             ['nombre' => 'MAYOREO BRONCE', 'monto_requerido' => 0.01], 
             ['nombre' => 'PUBLICO GENERAL', 'monto_requerido' => 0.00],
+            ['nombre' => 'PLATAFORMAS', 'monto_requerido' => 999999.00],
             ['nombre' => 'COLABORADORES', 'monto_requerido' => 999999.00], 
         ];
 

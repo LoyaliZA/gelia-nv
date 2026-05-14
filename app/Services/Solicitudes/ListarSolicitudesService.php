@@ -19,10 +19,11 @@ class ListarSolicitudesService
      */
     public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
     {
-        // Eager Loading configurado correctamente para renderizar en la tabla
+        // Eager Loading configurado correctamente
         $query = SolicitudTag::with([
             'cliente', 
             'vendedor', 
+            'departamento', // <-- AÑADIDO PARA LA VISTA
             'proceso', 
             'estado', 
             'auditorias.usuario', 
@@ -31,12 +32,31 @@ class ListarSolicitudesService
             'tipoCliente'
         ])->orderBy('created_at', 'desc'); 
 
+        /*
+        |--------------------------------------------------------------------------
+        | Lógica de visibilidad y aislamiento de datos (Multi-Tenancy)
+        |--------------------------------------------------------------------------
+        */
         if ($usuario) {
             $esAdminOGerente = $usuario->hasAnyRole(['Super Admin', 'Administrador', 'Gerente']);
             $esVerificador = $usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar', 'solicitudes.editar']);
 
-            if (!$esAdminOGerente && !$esVerificador) {
-                $query->where('vendedor_id', $usuario->id);
+            if (!$esAdminOGerente) {
+                if ($esVerificador) {
+                    // Extrae los IDs de los departamentos asignados al auxiliar o administradora
+                    $departamentosUsuario = $usuario->departamentos->pluck('id')->toArray();
+                    
+                    // Restringe la lectura únicamente a los departamentos del usuario
+                    if (!empty($departamentosUsuario)) {
+                        $query->whereIn('departamento_id', $departamentosUsuario);
+                    } else {
+                        // Prevención de fuga de datos si el auxiliar no tiene departamento asignado
+                        $query->where('id', 0); 
+                    }
+                } else {
+                    // Aislamiento total: El colaborador estándar solo ve lo propio
+                    $query->where('vendedor_id', $usuario->id);
+                }
             }
         }
 

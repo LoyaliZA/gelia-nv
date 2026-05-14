@@ -53,16 +53,38 @@ class NotificationBrowserService {
         }
     }
 
+    speakText(text) {
+        if (!('speechSynthesis' in window)) return;
+        
+        // Cancela audios previos para no encolar retrasos si llegan muchas alertas juntas
+        window.speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'es-MX'; // Español de México
+        utterance.rate = 1.0;     // Velocidad
+        utterance.pitch = 1.0;    // Tono
+        
+        window.speechSynthesis.speak(utterance);
+    }
+
     /**
-     * Orquesta el audio y la alerta visual del sistema.
+     * Orquesta el audio, la síntesis de voz y la alerta visual del sistema.
      */
-    triggerFullAlert(title, message) {
+    triggerFullAlert(title, message, voiceMessage = null) {
         this.playAudio();
+        
+        if (voiceMessage) {
+            // Retraso de 1 segundo para permitir que suene la campana primero
+            setTimeout(() => this.speakText(voiceMessage), 1000);
+        }
+
         this.showDesktopNotification(title, {
             body: message,
-            // icon: '/assets/logo.png', // Descomenta y ajusta si tienes un logo para la alerta
+            // icon: '/assets/logo.png',
         });
     }
+
+    
 }
 
 export default new NotificationBrowserService();

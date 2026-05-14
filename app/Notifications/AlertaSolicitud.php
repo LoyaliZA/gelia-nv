@@ -72,6 +72,43 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
             'mensaje'      => $this->mensaje,
             'cliente'      => $this->solicitud->cliente->nombre ?? 'N/A',
             'fecha'        => now()->toDateTimeString(),
+            'mensaje_voz'  => $this->construirMensajeVoz($notifiable) // Inyección del TTS
         ]);
+    }
+
+    private function construirMensajeVoz(object $notifiable): string
+    {
+        $nombreDestinatario = explode(' ', trim($notifiable->name))[0];
+        $nombreVendedor = explode(' ', trim($this->solicitud->vendedor->name ?? 'un colaborador'))[0];
+        $esVendedorOriginal = ($this->solicitud->vendedor_id === $notifiable->id);
+        
+        // El guion cambia según la naturaleza de la alerta
+        switch ($this->tipoAlerta) {
+            case 'nueva':
+                return "Atención {$nombreDestinatario}, {$nombreVendedor} ha realizado una nueva solicitud.";
+
+            case 'rechazada':
+            case 'pago_rechazado':
+                if ($esVendedorOriginal) {
+                    return "{$nombreDestinatario}, se ha encontrado un error en tu solicitud. Por favor, realiza las correcciones.";
+                }
+                // Guion para la Auxiliar/Encargada
+                return "{$nombreDestinatario}, {$nombreVendedor} ha recibido una observación en su solicitud.";
+
+            case 'reparada':
+                return "Atención {$nombreDestinatario}, {$nombreVendedor} ha corregido su solicitud y está lista para revisión.";
+
+            case 'pago_confirmado':
+                return "{$nombreDestinatario}, {$nombreVendedor} ha confirmado el pago del cliente en el folio {$this->solicitud->id}.";
+
+            case 'actualizacion':
+                if ($esVendedorOriginal) {
+                    return "{$nombreDestinatario}, el área administrativa respondió tu solicitud.";
+                }
+                return "{$nombreDestinatario}, {$nombreVendedor} tiene una nueva actualización en su folio.";
+
+            default:
+                return "{$nombreDestinatario}, tienes una notificación operativa de {$nombreVendedor}.";
+        }
     }
 }

@@ -10,6 +10,7 @@ class ProcesarFilaClienteAction
     protected $mapaWizerp = [
         'PG' => 'PUBLICO GENERAL',
         '7'  => 'COLABORADORES',
+        '5'  => 'PLATAFORMAS',
         '4'  => 'MAYOREO DIAMANTE',
         '3'  => 'MAYOREO PLATA',
         '2'  => 'MAYOREO BRONCE',
@@ -147,6 +148,7 @@ class ProcesarFilaClienteAction
     {
         foreach ($listas as $lista) {
             if ($lista->nombre === 'COLABORADORES') continue;
+            if ($lista->nombre === 'PLATAFORMAS') continue;
             if ($monto >= $lista->monto_requerido) return $lista->id;
         }
         return $listas->where('nombre', 'PUBLICO GENERAL')->first()->id; 

@@ -6,8 +6,8 @@ use App\Models\Cliente;
 use App\Models\SolicitudTag;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\AuditoriaSolicitud;
-use App\Models\User; 
-use App\Notifications\AlertaSolicitud; 
+use App\Models\User;
+use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Http\UploadedFile; // Importación necesaria para manejar el archivo
@@ -17,32 +17,35 @@ class CrearSolicitudService
     public function ejecutar(array $datos, int $vendedorId): SolicitudTag
     {
         return DB::transaction(function () use ($datos, $vendedorId) {
-            
+
             $clienteId = $this->resolverClienteId($datos, $vendedorId);
             $estadoPendiente = CatalogoEstadoSolicitud::where('nombre', 'Pendiente')->firstOrFail();
 
-            // 1. Procesamiento de la Evidencia (NUEVO)
-            // Guardamos el archivo antes de crear la solicitud para tener el path listo.
+            // 1. Obtención del Departamento de Origen
+            $vendedor = User::with('departamentos')->find($vendedorId);
+            $departamentoOrigenId = $vendedor && $vendedor->departamentos->isNotEmpty()
+                ? $vendedor->departamentos->first()->id
+                : null;
+
+            // 2. Procesamiento de la Evidencia
             $evidenciaPath = null;
             if (isset($datos['evidencia']) && $datos['evidencia'] instanceof UploadedFile && $datos['evidencia']->isValid()) {
-                // store() lo guarda en storage/app/public/evidencias_solicitudes y devuelve el path relativo
                 $evidenciaPath = $datos['evidencia']->store('evidencias_solicitudes', 'public');
             }
 
-            // 2. Creación de la Solicitud (Versión 1)
+            // 3. Creación de la Solicitud
             $solicitud = SolicitudTag::create([
                 'cliente_id' => $clienteId,
-                'vendedor_id' => $vendedorId, 
+                'vendedor_id' => $vendedorId,
+                'departamento_id' => $departamentoOrigenId, // <-- INYECCIÓN DE DEPENDENCIA DEPARTAMENTAL
                 'catalogo_proceso_id' => $datos['catalogo_proceso_id'],
                 'catalogo_estado_solicitud_id' => $estadoPendiente->id,
                 'monto_cotizado' => $datos['monto_cotizado'],
-                'pago_confirmado' => false,
+                'pago_confirmado' => filter_var($datos['pago_confirmado'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? null,
+                'evidencia_path' => $evidenciaPath,
                 'catalogo_tipo_cliente_id' => $datos['catalogo_tipo_cliente_id'] ?? null,
                 'catalogo_lista_descuento_id' => $datos['catalogo_lista_descuento_id'] ?? null,
-                
-                // Aquí asignamos el path generado arriba
-                'evidencia_path' => $evidenciaPath, 
             ]);
 
             // 3. Registro del Snapshot Inicial (Auditoría V1)
@@ -63,12 +66,17 @@ class CrearSolicitudService
             // 4. Despliegue de Notificaciones
             $colaborador = User::find($vendedorId);
             $nombreColaborador = $colaborador ? $colaborador->name : 'Sistema';
-            $encargados = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
+
+            $encargados = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])
+                ->whereHas('departamentos', function ($query) use ($departamentoOrigenId) {
+                    $query->where('departamentos.id', $departamentoOrigenId);
+                })
+                ->get();
 
             if ($encargados->isNotEmpty()) {
                 Notification::send($encargados, new AlertaSolicitud(
-                    $solicitud, 
-                    'nueva', 
+                    $solicitud,
+                    'nueva',
                     "Nueva solicitud recibida de: {$nombreColaborador}"
                 ));
             }
@@ -79,7 +87,7 @@ class CrearSolicitudService
 
     private function resolverClienteId(array $datos, int $vendedorId): ?int
     {
-        if (empty($datos['numero_cliente'])) return null; 
+        if (empty($datos['numero_cliente'])) return null;
 
         $cliente = Cliente::where('numero_cliente', $datos['numero_cliente'])->first();
 

@@ -17,6 +17,7 @@ class SolicitudTag extends Model
     protected $fillable = [
         'cliente_id',
         'vendedor_id',
+        'departamento_id', // <-- NUEVO CAMPO AÑADIDO
         'catalogo_proceso_id',
         'catalogo_estado_solicitud_id',
         'monto_cotizado',
@@ -35,6 +36,7 @@ class SolicitudTag extends Model
     // Relaciones (BelongsTo) hacia los catálogos y entidades
     public function cliente(): BelongsTo { return $this->belongsTo(Cliente::class); }
     public function vendedor(): BelongsTo { return $this->belongsTo(User::class, 'vendedor_id'); }
+    public function departamento(): BelongsTo { return $this->belongsTo(Departamento::class); }
     public function proceso(): BelongsTo { return $this->belongsTo(CatalogoProceso::class, 'catalogo_proceso_id'); }
     public function estado(): BelongsTo { return $this->belongsTo(CatalogoEstadoSolicitud::class, 'catalogo_estado_solicitud_id'); }
     public function tipoCliente(): BelongsTo { return $this->belongsTo(CatalogoTipoCliente::class, 'catalogo_tipo_cliente_id'); }

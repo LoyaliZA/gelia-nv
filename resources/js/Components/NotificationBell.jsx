@@ -42,7 +42,8 @@ export default function NotificationBell({ notifications: propNotifications = []
                 // 1. Alerta sónica y de escritorio
                 NotificationBrowserService.triggerFullAlert(
                     "Gelia ERP",
-                    notification.mensaje || "Nueva notificación operativa."
+                    notification.mensaje || "Nueva notificación operativa.",
+                    notification.mensaje_voz // <-- Este es el parámetro faltante
                 );
 
                 // 2. Inyectar la notificación al inicio de la lista local
@@ -56,6 +57,7 @@ export default function NotificationBell({ notifications: propNotifications = []
                     },
                     ...prev
                 ]);
+                
             });
 
             return () => {

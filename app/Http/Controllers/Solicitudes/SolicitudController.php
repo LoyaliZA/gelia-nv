@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -28,9 +29,7 @@ class SolicitudController extends Controller
 {
     public function index(Request $request, ListarSolicitudesService $listarService): Response
     {
-        // El service se encarga de la lógica de filtrado y carga de relaciones (Eager Loading)
         $solicitudes = $listarService->ejecutar(Auth::user(), $request->all());
-
         $procesos = CatalogoProceso::where('activo', true)->get();
 
         return Inertia::render('Solicitudes/Index', [
@@ -52,12 +51,10 @@ class SolicitudController extends Controller
 
     public function confirmarPago(Request $request, SolicitudTag $solicitud)
     {
-        // 1. PARCHE DE SEGURIDAD: Bloquear confirmación si hay incidencia (Estado 4 = Incorrecta)
         if ($solicitud->catalogo_estado_solicitud_id == 4) {
             abort(403, 'Acción Bloqueada: No puedes confirmar el pago de una solicitud con incidencias. Repárala primero.');
         }
 
-        // 2. AUTORIZACIÓN: Permitir a la colaboradora dueña de la solicitud o a un administrador
         if ($solicitud->vendedor_id !== Auth::id() && !Auth::user()->can('solicitudes.confirmar_pago')) {
             abort(403, 'No tienes autorización para confirmar este pago.');
         }
@@ -73,11 +70,11 @@ class SolicitudController extends Controller
                 'motivo_reporte' => 'PAGO CONFIRMADO POR EL COLABORADOR'
             ]);
 
-            // 3. NOTIFICACIÓN: Del Colaborador hacia Administración (Gerentes/Admins)
-            $encargados = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
+            // Notificación aislada por departamento (Sin incluir al vendedor)
+            $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, false);
             
-            if ($encargados->isNotEmpty()) {
-                Notification::send($encargados, new AlertaSolicitud(
+            if ($destinatarios->isNotEmpty()) {
+                Notification::send($destinatarios, new AlertaSolicitud(
                     $solicitud, 
                     'pago_confirmado', 
                     'El colaborador ' . Auth::user()->name . ' ha notificado la confirmación de pago para la solicitud FOL-' . $solicitud->id . '.'
@@ -90,7 +87,6 @@ class SolicitudController extends Controller
 
     public function update(Request $request, SolicitudTag $solicitud)
     {
-        // Seguridad: Solo el dueño puede reparar y solo si está marcada como incorrecta
         if ($solicitud->vendedor_id !== Auth::id() || $solicitud->catalogo_estado_solicitud_id != 4) {
             abort(403, 'No tienes permiso para editar esta solicitud o no está en estado Incorrecto.');
         }
@@ -107,7 +103,11 @@ class SolicitudController extends Controller
             $rutaEvidencia = $solicitud->evidencia_path;
             
             if ($request->hasFile('evidencia')) {
-                // Sincronizamos con el path del CrearSolicitudService
+                // Eliminamos el archivo físico anterior para evitar fuga de memoria en el servidor
+                if ($rutaEvidencia && Storage::disk('public')->exists($rutaEvidencia)) {
+                    Storage::disk('public')->delete($rutaEvidencia);
+                }
+
                 $rutaEvidencia = $request->file('evidencia')->store('evidencias_solicitudes', 'public');
             }
 
@@ -117,7 +117,7 @@ class SolicitudController extends Controller
                 'catalogo_tipo_cliente_id' => $request->catalogo_tipo_cliente_id,
                 'catalogo_lista_descuento_id' => $request->catalogo_lista_descuento_id,
                 'evidencia_path' => $rutaEvidencia,
-                'catalogo_estado_solicitud_id' => 1, // Regresa a Pendiente
+                'catalogo_estado_solicitud_id' => 1, 
             ]);
 
             AuditoriaSolicitud::create([
@@ -135,13 +135,16 @@ class SolicitudController extends Controller
                 ]
             ]);
 
-            $gerentes = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
+            // Notificación aislada por departamento (Sin incluir al vendedor)
+            $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, false);
             
-            Notification::send($gerentes, new AlertaSolicitud(
-                $solicitud,
-                'reparada',
-                'El colaborador ' . Auth::user()->name . ' ha reparado la solicitud FOL-' . $solicitud->id . '.'
-            ));
+            if ($destinatarios->isNotEmpty()) {
+                Notification::send($destinatarios, new AlertaSolicitud(
+                    $solicitud,
+                    'reparada',
+                    'El colaborador ' . Auth::user()->name . ' ha reparado la solicitud FOL-' . $solicitud->id . '.'
+                ));
+            }
         });
 
         return back()->with('success', 'Solicitud corregida y enviada a revisión.');
@@ -164,6 +167,10 @@ class SolicitudController extends Controller
 
             $rutaEvidencia = $solicitud->evidencia_respuesta_path;
             if ($request->hasFile('evidencia_respuesta')) {
+                // Eliminamos el archivo físico anterior para evitar fuga de memoria en el servidor
+                if ($rutaEvidencia && Storage::disk('public')->exists($rutaEvidencia)) {
+                    Storage::disk('public')->delete($rutaEvidencia);
+                }
                 $rutaEvidencia = $request->file('evidencia_respuesta')->store('evidencias_respuestas', 'public');
             }
 
@@ -183,13 +190,16 @@ class SolicitudController extends Controller
                 ]
             ]);
 
-            if ($solicitud->vendedor) {
+            // Notificación múltiple: Vendedor + Auxiliares del departamento
+            $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, true);
+            
+            if ($destinatarios->isNotEmpty()) {
                 $tipoAlerta = $estadoNuevoId == 4 ? 'rechazada' : 'actualizacion';
                 $mensaje = $estadoNuevoId == 4
                     ? 'Se ha reportado un error en tu solicitud. Revisa las observaciones.'
                     : 'El área administrativa ha emitido una resolución para tu solicitud.';
 
-                $solicitud->vendedor->notify(new AlertaSolicitud(
+                Notification::send($destinatarios, new AlertaSolicitud(
                     $solicitud,
                     $tipoAlerta,
                     $mensaje
@@ -202,7 +212,6 @@ class SolicitudController extends Controller
 
     public function exportar(Request $request, ListarSolicitudesService $listarService)
     {
-        // Pedimos al service que no pagine para exportar todo
         $solicitudes = $listarService->ejecutar(Auth::user(), $request->all(), false);
         $nombreArchivo = 'reporte_solicitudes_' . date('Y-m-d_H-i-s') . '.xlsx';
 
@@ -236,7 +245,6 @@ class SolicitudController extends Controller
                 'pago_confirmado' => false
             ]);
 
-            // REVERSIÓN AUTOMÁTICA DEL CLIENTE (Si aplica)
             if ($solicitud->cliente_id) {
                 $cliente = Cliente::find($solicitud->cliente_id);
                 if ($cliente) {
@@ -252,8 +260,11 @@ class SolicitudController extends Controller
                 'motivo_reporte' => 'PAGO RECHAZADO: Se aplicó la reversión automática de las propiedades del cliente.'
             ]);
 
-            if ($solicitud->vendedor) {
-                $solicitud->vendedor->notify(new AlertaSolicitud(
+            // Notificación múltiple: Vendedor + Auxiliares del departamento
+            $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, true);
+
+            if ($destinatarios->isNotEmpty()) {
+                Notification::send($destinatarios, new AlertaSolicitud(
                     $solicitud,
                     'pago_rechazado',
                     'Tu solicitud ha sido rebotada por falta de pago. Se revirtieron los cambios del cliente.'
@@ -261,6 +272,34 @@ class SolicitudController extends Controller
             }
         });
 
-        return back()->with('success', 'Pago rechazado. La vendedora ha sido notificada.');
+        return back()->with('success', 'Pago rechazado. La vendedora y auxiliares han sido notificados.');
+    }
+
+    /**
+     * CENTRALIZACIÓN DE NOTIFICACIONES:
+     * Retorna una colección unificada que asegura la segmentación departamental ABAC.
+     */
+    private function obtenerDestinatariosDepartamentales(SolicitudTag $solicitud, bool $incluirVendedor = false)
+    {
+        $destinatarios = collect();
+
+        // 1. Agregar al vendedor original si aplica
+        if ($incluirVendedor && $solicitud->vendedor) {
+            $destinatarios->push($solicitud->vendedor);
+        }
+
+        // 2. Localizar verificadores estrictamente matriculados en el departamento de la solicitud
+        $verificadores = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])
+            ->whereHas('departamentos', function ($query) use ($solicitud) {
+                $query->where('departamentos.id', $solicitud->departamento_id);
+            })
+            ->get();
+
+        // 3. Fusionar, evitar duplicados y EXCLUIR al usuario que está ejecutando la acción
+        return $destinatarios->merge($verificadores)
+            ->unique('id')
+            ->reject(function ($usuario) {
+                return $usuario->id === Auth::id(); // <-- Esta línea bloquea el auto-envío
+            });
     }
 }
