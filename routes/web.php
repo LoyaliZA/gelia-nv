@@ -56,6 +56,15 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     // MÓDULO OPERATIVO: SOLICITUDES
     // ══════════════════════════════════════════════════════════════════════
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: MIS CLIENTES
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:mis_clientes.gestionar'])->group(function () {
+        Route::get('/mis-clientes', [ClienteController::class, 'misClientes'])->name('mis_clientes.index');
+        Route::post('/mis-clientes/rapido', [ClienteController::class, 'registroRapido'])->name('mis_clientes.rapido');
+    });
+
     Route::middleware(['can:solicitudes.ver_listado'])->group(function () {
         Route::get('/solicitudes', [SolicitudController::class, 'index'])->name('solicitudes.index');
         Route::get('/solicitudes/exportar', [SolicitudController::class, 'exportar'])->name('solicitudes.exportar');

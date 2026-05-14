@@ -110,6 +110,22 @@ export default function AdminDashboard({ auth, estadisticas = {}, ultimas_solici
         });
     }
 
+    // Acceso al Directorio de Clientes (Módulo Operativo)
+    if (can('mis_clientes.gestionar')) {
+        todosLosAccesos.push({ 
+            id: 'card_clientes', 
+            titulo: 'Mis Clientes', 
+            desc: 'Cartera y altas rápidas.', 
+            icon: Users, 
+            href: route('mis_clientes.index'), 
+            color: 'text-purple-500', 
+            bgColor: 'bg-purple-500/10', 
+            hoverBg: 'hover:bg-purple-50', 
+            borderColor: 'border-purple-500/20' 
+        });
+    }
+    
+
     const accesosVisibles = todosLosAccesos.filter(acceso => !dashboardOcultosBD.includes(acceso.id));
 
     const toggleVisibilidad = (id) => {

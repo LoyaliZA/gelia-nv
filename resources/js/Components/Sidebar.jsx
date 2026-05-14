@@ -235,6 +235,21 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                         </Link>
                     )}
 
+                    {/* NUEVO ENLACE: MIS CLIENTES */}
+                    {can('mis_clientes.gestionar') && (
+                        <Link
+                            href={route('mis_clientes.index')}
+                            className={linkBaseClass + (isRouteActive('/mis-clientes') ? linkActiveClass : linkInactiveClass)}
+                            onMouseEnter={(e) => { if (!isRouteActive('/mis-clientes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                            onMouseLeave={(e) => { if (!isRouteActive('/mis-clientes')) e.currentTarget.style.borderColor = 'transparent' }}
+                        >
+                            <div className="flex items-center">
+                                <Users className="w-4 h-4 mr-4" style={{ color: isRouteActive('/mis-clientes') ? '#ffffff' : 'var(--color-primario)' }} />
+                                <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mis Clientes_</span>
+                            </div>
+                        </Link>
+                    )}
+
                     {showAdminMenu && (
                         <div className="mt-2 pt-3 border-t theme-border flex flex-col">
                             <button
