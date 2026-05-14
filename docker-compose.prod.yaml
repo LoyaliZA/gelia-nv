@@ -13,7 +13,6 @@ services:
       - storage_data:/var/www/html/storage
     networks:
       - gelianv_net
-      
 
   # Servidor Web: Nginx para tráfico HTTP
   web:
@@ -23,6 +22,7 @@ services:
     volumes:
       - .:/var/www/html
       - ./default.conf:/etc/nginx/conf.d/default.conf
+      - storage_data:/var/www/html/storage
     depends_on:
       - app
     networks:
@@ -47,9 +47,12 @@ services:
     image: gelianv-prod:latest
     container_name: gelianv_reverb
     restart: unless-stopped
-    # Sobrescribimos el comando para iniciar Reverb
+    working_dir: /var/www/html
     command: php artisan reverb:start --host="0.0.0.0" --port=8080
     env_file: .env
+    volumes:
+      - .:/var/www/html
+      - storage_data:/var/www/html/storage
     depends_on:
       - app
       - redis
@@ -61,8 +64,12 @@ services:
     image: gelianv-prod:latest
     container_name: gelianv_queue
     restart: unless-stopped
+    working_dir: /var/www/html
     command: php artisan queue:work --tries=3 --timeout=90
     env_file: .env
+    volumes:
+      - .:/var/www/html
+      - storage_data:/var/www/html/storage
     depends_on:
       - app
       - redis
@@ -74,8 +81,12 @@ services:
     image: gelianv-prod:latest
     container_name: gelianv_scheduler
     restart: unless-stopped
+    working_dir: /var/www/html
     command: php artisan schedule:work
     env_file: .env
+    volumes:
+      - .:/var/www/html
+      - storage_data:/var/www/html/storage
     depends_on:
       - app
     networks:
@@ -106,3 +117,4 @@ networks:
 
 volumes:
   storage_data:
+  db_data:

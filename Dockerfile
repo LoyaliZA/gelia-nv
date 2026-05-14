@@ -24,10 +24,10 @@ RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
     echo "Acquire::BrokenProxy    true;" >> /etc/apt/apt.conf.d/99custom
 
 # ==============================================================================
-# 3. Instalación de Dependencias del Sistema y PHP 8.2 (FPM y CLI)
+# 3. Instalación de Dependencias del Sistema y PHP 8.4 (FPM y CLI)
 # ==============================================================================
 # Nota: Se eliminaron xdebug, pcov, swoole y playwright por seguridad en producción.
-# Se reemplazó el servidor integrado por php8.2-fpm.
+# Se reemplazó el servidor integrado por php8.4-fpm.
 RUN apt-get update && apt-get upgrade -y \
     && mkdir -p /etc/apt/keyrings \
     && apt-get install -y gnupg gosu curl ca-certificates zip unzip git sqlite3 libcap2-bin libpng-dev python3 dnsutils librsvg2-bin fswatch ffmpeg nano  \
@@ -36,33 +36,34 @@ RUN apt-get update && apt-get upgrade -y \
     && apt-get update \
     && apt-get install -y \
         libgd3 \
-        php8.2-fpm \
-        php8.2-cli \
-        php8.2-pgsql \
-        php8.2-sqlite3 \
-        php8.2-gd \
-        php8.2-curl \
-        php8.2-mongodb \
-        php8.2-imap \
-        php8.2-mysql \
-        php8.2-mbstring \
-        php8.2-xml \
-        php8.2-zip \
-        php8.2-bcmath \
-        php8.2-soap \
-        php8.2-intl \
-        php8.2-readline \
-        php8.2-ldap \
-        php8.2-msgpack \
-        php8.2-igbinary \
-        php8.2-redis \
-        php8.2-memcached \
-        php8.2-imagick \
+        php8.4-fpm \
+        php8.4-cli \
+        php8.4-dev \
+        php8.4-pgsql \
+        php8.4-sqlite3 \
+        php8.4-gd \
+        php8.4-curl \
+        php8.4-mongodb \
+        php8.4-imap \
+        php8.4-mysql \
+        php8.4-mbstring \
+        php8.4-xml \
+        php8.4-zip \
+        php8.4-bcmath \
+        php8.4-soap \
+        php8.4-intl \
+        php8.4-readline \
+        php8.4-ldap \
+        php8.4-msgpack \
+        php8.4-igbinary \
+        php8.4-redis \
+        php8.4-memcached \
+        php8.4-imagick \
     && apt-get install -y php-pear zlib1g-dev \
     && pecl channel-update pecl.php.net \
     && pecl install xlswriter \
-    && echo "extension=xlswriter.so" > /etc/php/8.2/cli/conf.d/20-xlswriter.ini \
-    && echo "extension=xlswriter.so" > /etc/php/8.2/fpm/conf.d/20-xlswriter.ini
+    && echo "extension=xlswriter.so" > /etc/php/8.4/cli/conf.d/20-xlswriter.ini \
+    && echo "extension=xlswriter.so" > /etc/php/8.4/fpm/conf.d/20-xlswriter.ini
 
 # ==============================================================================
 # 4. Instalación de Composer, Node.js y Clientes de BD
@@ -81,7 +82,7 @@ RUN curl -sLS https://getcomposer.org/installer | php -- --install-dir=/usr/bin/
 # ==============================================================================
 # 5. Configuración de Seguridad y Permisos
 # ==============================================================================
-RUN setcap "cap_net_bind_service=+ep" /usr/bin/php8.2
+RUN setcap "cap_net_bind_service=+ep" /usr/bin/php8.4
 
 # Eliminamos usuario ubuntu por defecto y creamos el usuario de la aplicación
 RUN userdel -r ubuntu || true
@@ -91,16 +92,15 @@ RUN useradd -ms /bin/bash --no-user-group -g $WWWGROUP -u 1337 gelia
 # ==============================================================================
 # 6. Configuración de PHP-FPM y Archivos de Arranque
 # ==============================================================================
-# Configuramos FPM para que se ejecute en primer plano y escuche en el puerto 9000
 RUN mkdir -p /run/php \
-    && sed -i 's/listen = \/run\/php\/php8.2-fpm.sock/listen = 9000/g' /etc/php/8.2/fpm/pool.d/www.conf \
-    && sed -i 's/clear_env = no/clear_env = yes/g' /etc/php/8.2/fpm/pool.d/www.conf
+    && sed -i 's/listen = \/run\/php\/php8.4-fpm.sock/listen = 9000/g' /etc/php/8.4/fpm/pool.d/www.conf \
+    && sed -i 's/clear_env = no/clear_env = yes/g' /etc/php/8.4/fpm/pool.d/www.conf \
+    && sed -i 's/user = www-data/user = gelia/g' /etc/php/8.4/fpm/pool.d/www.conf \
+    && sed -i 's/group = www-data/group = gelia/g' /etc/php/8.4/fpm/pool.d/www.conf
 
-COPY php.ini /etc/php/8.2/fpm/conf.d/99-gelia.ini
-COPY php.ini /etc/php/8.2/cli/conf.d/99-gelia.ini
+COPY php.ini /etc/php/8.4/fpm/conf.d/99-gelia.ini
+COPY php.ini /etc/php/8.4/cli/conf.d/99-gelia.ini
 
-# Ya no copiamos start-container ni supervisor, el orquestador dictará el comando
 EXPOSE 9000
 
-# Comando por defecto (será sobreescrito por docker-compose para workers/reverb)
-CMD ["php-fpm8.2", "-F"]
+CMD ["php-fpm8.4", "-F"]

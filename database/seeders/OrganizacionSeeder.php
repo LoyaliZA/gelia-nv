@@ -14,7 +14,7 @@ class OrganizacionSeeder extends Seeder
             'TI' => ['Soporte', 'Desarrollo', 'Infraestructura', 'Auxiliar'],
             'Cedis' => ['Logística', 'Almacén', 'Embarques', 'Auxiliar'],
             'Bellaroma' => ['Ventas', 'Atención a Clientes', 'Marketing', 'Auxiliar'],
-            'Aromas' => ['Producción', 'Calidad', 'Auxiliar']
+            'Aromas' => ['Administración', 'Contabilidad', 'Facturación', 'Recursos Humanos', 'Call Center', 'Punto de Venta', 'Auxiliar']
         ];
 
         foreach ($estructura as $deptoNombre => $areas) {
