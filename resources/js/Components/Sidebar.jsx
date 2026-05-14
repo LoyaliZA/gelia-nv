@@ -35,7 +35,12 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const { post } = useForm();
 
     // --- ESTILOS INICIALES BLINDADOS (Previene conflictos React vs AnimeJS en el F5) ---
-    const initialMenuStyle = useRef({ opacity: 0, height: layout === 'fixed' ? '100vh' : '0px', width: layout === 'fixed' ? '0px' : '' });
+    const isActuallyFixed = (window.innerWidth < 768) ? false : (layout === 'fixed');
+    const initialMenuStyle = useRef({
+        opacity: 0,
+        height: isActuallyFixed ? '100vh' : '0px',
+        width: isActuallyFixed ? '0px' : ''
+    });
     const initialSubMenuStyle = useRef({ opacity: isAdminActive ? 1 : 0, height: isAdminActive ? 'auto' : '0px' });
 
     useEffect(() => {
@@ -86,22 +91,19 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
 
         if (menuRef.current && menuContentRef.current) {
             if (nextState) {
-                // Preparamos el submenú visualmente si le toca estar abierto
-                if (isConfigExpanded && subMenuRef.current) {
-                    subMenuRef.current.style.height = 'auto';
-                    subMenuRef.current.style.opacity = 1;
-                }
-
                 if (isFixed) {
                     animate(menuRef.current, { width: [0, 300], opacity: [0, 1], duration: 350, ease: 'outExpo' });
                 } else {
+                    // CORRECCIÓN: Forzamos que el ancho no sea 0 en móvil
+                    menuRef.current.style.width = isMobile ? '90vw' : '300px';
+
                     menuRef.current.style.height = 'auto';
                     const targetHeight = menuContentRef.current.scrollHeight;
                     menuRef.current.style.height = '0px';
 
                     animate(menuRef.current, {
                         height: [0, targetHeight], opacity: [0, 1], duration: 350, ease: 'outExpo',
-                        onComplete: () => { menuRef.current.style.height = 'auto'; } // <- LA LÍNEA QUE FALTABA
+                        onComplete: () => { menuRef.current.style.height = 'auto'; }
                     });
                 }
             } else {
