@@ -75,14 +75,14 @@ class SolicitudController extends Controller
             if ($solicitud->catalogo_lista_descuento_id && $solicitud->cliente_id) {
                 $cliente = Cliente::find($solicitud->cliente_id);
                 $listaSolicitada = CatalogoListaDescuento::find($solicitud->catalogo_lista_descuento_id);
-                
+
                 if ($cliente && $listaSolicitada) {
                     // Para la proyección, restamos el monto original (que ya estaba sumado) y sumamos el nuevo pago real
                     $montoHistoricoBase = $cliente->monto_venta_actual - $montoOriginal;
                     $totalProyectado = $montoHistoricoBase + $montoFinal;
 
                     if ($totalProyectado < $listaSolicitada->monto_requerido) {
-                        
+
                         $listaCalificada = CatalogoListaDescuento::where('activo', true)
                             ->where('nombre', 'not like', '%COLABORADOR%')
                             ->where('monto_requerido', '<=', $totalProyectado)
@@ -91,8 +91,8 @@ class SolicitudController extends Controller
 
                         $nombreListaCalificada = $listaCalificada ? $listaCalificada->nombre : 'Público General';
                         $mensajeAuditoria = "ALERTA DE PAGO: Pago final de $" . number_format($montoFinal, 2) . " es insuficiente para la lista {$listaSolicitada->nombre}. El cliente califica para: {$nombreListaCalificada}.";
-                        
-                        $estadoNuevoId = 4; 
+
+                        $estadoNuevoId = 4;
                         $esAlertaFaltaPago = true;
                     }
                 }
@@ -101,10 +101,10 @@ class SolicitudController extends Controller
             if ($esAlertaFaltaPago) {
                 // ROLLBACK: El pago no cubre la cuota, revertimos todo el monto y quitamos la lista para revisión.
                 $this->revertirBeneficiosCliente($solicitud);
-                
+
                 $solicitud->update([
                     'pago_confirmado' => false,
-                    'monto_cotizado' => $montoFinal, 
+                    'monto_cotizado' => $montoFinal,
                     'catalogo_estado_solicitud_id' => $estadoNuevoId
                 ]);
             } else {
@@ -118,7 +118,7 @@ class SolicitudController extends Controller
 
                 $solicitud->update([
                     'pago_confirmado' => true,
-                    'monto_cotizado' => $montoFinal, 
+                    'monto_cotizado' => $montoFinal,
                     'catalogo_estado_solicitud_id' => $estadoNuevoId
                 ]);
             }
@@ -135,8 +135,8 @@ class SolicitudController extends Controller
             if ($destinatarios->isNotEmpty()) {
                 $tituloAlerta = $esAlertaFaltaPago ? 'alerta_pago_insuficiente' : 'pago_confirmado';
                 Notification::send($destinatarios, new AlertaSolicitud(
-                    $solicitud, 
-                    $tituloAlerta, 
+                    $solicitud,
+                    $tituloAlerta,
                     'El colaborador ' . Auth::user()->name . ($esAlertaFaltaPago ? ' intentó confirmar un pago insuficiente. Requiere ajuste de lista.' : ' ha confirmado el pago exitosamente.')
                 ));
             }
@@ -150,14 +150,16 @@ class SolicitudController extends Controller
         Gate::authorize('solicitudes.confirmar_cambio_lista');
 
         DB::transaction(function () use ($solicitud) {
-            $estadoNuevoId = 3; 
+            $estadoNuevoId = 3;
 
             $cliente = Cliente::find($solicitud->cliente_id);
             if ($cliente) {
                 $totalProyectado = ($cliente->monto_venta_actual ?? 0) + $solicitud->monto_cotizado;
-                
+
+                // Recalcular lista real a la que califica el cliente excluyendo casos especiales
                 $listaCalificada = CatalogoListaDescuento::where('activo', true)
                     ->where('nombre', 'not like', '%COLABORADOR%')
+                    ->where('nombre', 'not like', '%PLATAFORMAS%') // Exclusión de seguridad
                     ->where('monto_requerido', '<=', $totalProyectado)
                     ->orderBy('monto_requerido', 'desc')
                     ->first();
@@ -406,7 +408,7 @@ class SolicitudController extends Controller
         return $destinatarios->merge($verificadores)
             ->unique('id')
             ->reject(function ($usuario) {
-                return $usuario->id === Auth::id(); 
+                return $usuario->id === Auth::id();
             });
     }
 
