@@ -6,40 +6,39 @@ import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Upload, Sen
 
 // --- SECCIÓN: UTILIDADES Y FUNCIONES PURAS ---
 
+// =============================================
+// HELPER MODULAR: EVALUACIÓN FINANCIERA DE LISTAS
+// =============================================
 const evaluarProyeccionLista = (cliente, cotizacion, catalogoListas, listaActualObj) => {
-    // Extracción segura de montos previniendo valores no numéricos
     const montoHistorico = parseFloat(cliente?.monto_venta_actual?.toString().replace(/[^0-9.-]+/g, "") || 0);
     const montoCotizado = parseFloat(cotizacion || 0);
     const totalProyectado = montoHistorico + montoCotizado;
 
-    // Filtrar listas corporativas y ordenar de mayor a menor exigencia
+    // Se excluyen explícitamente las listas de uso interno y técnico
     const listasValidas = [...catalogoListas]
-        .filter(l => !l.nombre.toUpperCase().includes('COLABORADOR'))
+        .filter(l => !l.nombre.toUpperCase().includes('COLABORADOR') && !l.nombre.toUpperCase().includes('PLATAFORMAS'))
         .sort((a, b) => parseFloat(b.monto_requerido) - parseFloat(a.monto_requerido));
 
-    // Determinar calificación matemática
     const listaCalificada = listasValidas.find(l => totalProyectado >= parseFloat(l.monto_requerido)) || null;
 
-    // Calcular monto restante para el siguiente nivel jerárquico
     const listaSiguiente = listasValidas.slice().reverse().find(l => parseFloat(l.monto_requerido) > totalProyectado);
     const faltanteSiguiente = listaSiguiente ? parseFloat(listaSiguiente.monto_requerido) - totalProyectado : 0;
-    
-    // Evaluar si representa un ascenso real respecto a su nivel actual
+
     const requisitoListaActual = listaActualObj ? parseFloat(listaActualObj.monto_requerido || 0) : 0;
     const esAscenso = listaCalificada && parseFloat(listaCalificada.monto_requerido) > requisitoListaActual;
 
-    return { 
-        montoHistorico, 
-        totalProyectado, 
-        listaCalificada, 
-        listaSiguiente, 
+    return {
+        montoHistorico,
+        totalProyectado,
+        listaCalificada,
+        listaSiguiente,
         faltanteSiguiente,
         esAscenso
     };
 };
 
 export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCliente = [], modoEdicion, solicitudAEditar }) {
-    
+
     // --- SECCIÓN: ESTADOS Y REFERENCIAS ---
     const infoClienteInicial = solicitudAEditar?.cliente || null;
     const [infoCliente, setInfoCliente] = useState(infoClienteInicial);
@@ -50,7 +49,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     const [alertaHeredado, setAlertaHeredado] = useState(false);
     const [analisisFinanciero, setAnalisisFinanciero] = useState(null);
     const [previewEvidencia, setPreviewEvidencia] = useState(solicitudAEditar?.evidencia_path ? `/storage/${solicitudAEditar.evidencia_path}` : null);
-    
+
     const temporizadorBusqueda = useRef(null);
 
     const { data, setData, post, processing, reset, transform } = useForm({
@@ -63,15 +62,15 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         evidencia: null,
     });
 
-    const opcionesTipoCliente = infoCliente?.es_heredado 
-        ? tiposCliente.filter(t => t.nombre.toUpperCase().includes('HEREDADO')) 
+    const opcionesTipoCliente = infoCliente?.es_heredado
+        ? tiposCliente.filter(t => t.nombre.toUpperCase().includes('HEREDADO'))
         : tiposCliente.filter(t => !t.nombre.toUpperCase().includes('HEREDADO'));
 
     const obtenerListaActual = () => {
         if (!infoCliente) return null;
-        return listas.find(l => 
-            l.id == infoCliente.lista_actual_id || 
-            l.nombre === infoCliente.lista_actual || 
+        return listas.find(l =>
+            l.id == infoCliente.lista_actual_id ||
+            l.nombre === infoCliente.lista_actual ||
             l.nombre === infoCliente.lista_descuento?.nombre
         );
     };
@@ -81,13 +80,13 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         if (infoCliente && data.monto_cotizado && !isNaN(data.monto_cotizado)) {
             const listaActualObj = obtenerListaActual();
             const analisis = evaluarProyeccionLista(infoCliente, data.monto_cotizado, listas, listaActualObj);
-            
+
             setAnalisisFinanciero(analisis);
 
             if (analisis.esAscenso) {
                 setData('catalogo_lista_descuento_id', analisis.listaCalificada.id);
-                setAlertaLista({ 
-                    mensaje: `¡Total proyectado alcanza nivel ${analisis.listaCalificada.nombre}!` 
+                setAlertaLista({
+                    mensaje: `¡Total proyectado alcanza nivel ${analisis.listaCalificada.nombre}!`
                 });
             } else {
                 setData('catalogo_lista_descuento_id', '');
@@ -152,10 +151,10 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     };
 
     const seleccionarCliente = (cliente) => {
-        setData('numero_cliente', cliente.numero_cliente); 
+        setData('numero_cliente', cliente.numero_cliente);
         setData('nombre_cliente', cliente.nombre);
-        setInfoCliente(cliente); 
-        setMostrarDropdown(false); 
+        setInfoCliente(cliente);
+        setMostrarDropdown(false);
         setAlertaHeredado(false);
         setData('catalogo_tipo_cliente_id', '');
         setData('catalogo_lista_descuento_id', '');
@@ -164,14 +163,14 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     const guardarSolicitud = (e) => {
         e.preventDefault();
         const procesoSeleccionado = procesos.find(p => p.id == data.catalogo_proceso_id);
-        
+
         if (infoCliente?.es_heredado && (procesoSeleccionado?.nombre === 'ASIGNAR CLIENTE REACTIVADO' || procesoSeleccionado?.nombre === 'ASIGNAR CLIENTE REACTIVADO Y CAMBIO DE LISTA')) {
             setAlertaHeredado(true); return;
         }
 
-        const config = { 
-            onSuccess: () => { reset(); onClose(); }, 
-            forceFormData: true 
+        const config = {
+            onSuccess: () => { reset(); onClose(); },
+            forceFormData: true
         };
 
         if (modoEdicion) {
@@ -203,7 +202,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                 <form onSubmit={guardarSolicitud} className="grid grid-cols-1 lg:grid-cols-2 gap-10 relative z-10">
                     <div className="space-y-8">
-                        
+
                         <div className="space-y-2 relative">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cliente (Buscador)_</label>
                             <div className="relative">
@@ -254,7 +253,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     </select>
                                 </div>
                             </div>
-                            
+
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Clasificación_</label>
                                 <div className="relative">
@@ -296,14 +295,14 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
                                 <select value={data.catalogo_lista_descuento_id || ''} onChange={e => setData('catalogo_lista_descuento_id', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none focus:ring-2 transition-all shadow-sm cursor-pointer">
                                     <option value="">-- Mantener nivel actual --</option>
-                                    {listas.filter(l => !l.nombre.toUpperCase().includes('COLABORADOR')).map(lista => {
+                                    {listas.filter(l => !l.nombre.toUpperCase().includes('COLABORADOR') && !l.nombre.toUpperCase().includes('PLATAFORMAS')).map(lista => {
                                         const baseClienteObj = obtenerListaActual();
-                                        let estaDeshabilitada = false; 
+                                        let estaDeshabilitada = false;
                                         let textoEstado = '';
 
-                                        if (lista.id == baseClienteObj?.id) { 
-                                            estaDeshabilitada = true; 
-                                            textoEstado = '(Nivel actual)'; 
+                                        if (lista.id == baseClienteObj?.id) {
+                                            estaDeshabilitada = true;
+                                            textoEstado = '(Nivel actual)';
                                         } else if (analisisFinanciero) {
                                             const reqLista = parseFloat(lista.monto_requerido);
                                             if (reqLista > analisisFinanciero.totalProyectado) {
