@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e  # Detener el script si cualquier comando falla
 
 # ==============================================================================
 # Script de Actualización Automática - GeliaNV
@@ -9,35 +10,44 @@ echo "Descargando actualizaciones desde el repositorio..."
 git pull origin main
 
 # 2. Sincronizar permisos y excepciones de Git (Preventivo)
-docker exec -it gelianv_app git config --global --add safe.directory /var/www/html
+docker exec -i gelianv_app git config --global --add safe.directory /var/www/html
 
-# 3. Actualizar dependencias de PHP (Laravel)
+# 3. Limpiar caché ANTES de todo (evita servir rutas viejas durante el deploy)
+echo "Limpiando caché anterior..."
+docker exec -i gelianv_app php artisan optimize:clear
+
+# 4. Actualizar dependencias de PHP (Laravel)
 echo "Actualizando dependencias de Composer..."
-docker exec -it gelianv_app composer install --no-dev --optimize-autoloader
+docker exec -i gelianv_app composer install --no-dev --optimize-autoloader --no-interaction
 
-# 4. Ejecutar migraciones de base de datos
+# 5. Ejecutar migraciones de base de datos
 echo "Sincronizando estructura de base de datos..."
-docker exec -it gelianv_app php artisan migrate --force
+docker exec -i gelianv_app php artisan migrate --force
 
-# 5. Reconstruir assets del frontend (Vite)
+# 6. Reconstruir assets del frontend (Vite)
 echo "Compilando nueva versión del frontend..."
-docker exec -it gelianv_app npm install
-docker exec -it gelianv_app npm run build
-
-# 6. Optimización del sistema
-echo "Limpiando y regenerando caché de optimización..."
-docker exec -it gelianv_app php artisan optimize:clear
-docker exec -it gelianv_app php artisan optimize
+docker exec -i gelianv_app npm install
+docker exec -i gelianv_app npm run build
 
 # ==============================================================================
-# 7. Reinicio de Trabajadores de Cola y WebSockets
+# 7. Regenerar caché con código ya actualizado
 # ==============================================================================
-echo "Purgando RAM y reiniciando procesos en segundo plano..."
-docker exec -it gelianv_app php artisan queue:restart
+echo "Regenerando caché de rutas y optimización..."
+docker exec -i gelianv_app php artisan route:cache   # <-- Ziggy leerá esto
+docker exec -i gelianv_app php artisan optimize
 
-# 8. Refrescar permisos de almacenamiento (Seguridad)
+# 8. Reinicio de Trabajadores de Cola
+echo "Reiniciando workers de cola..."
+docker exec -i gelianv_app php artisan queue:restart
+sleep 3  # Dar tiempo a que los workers se relancen
+
+# 9. Recargar PHP-FPM para limpiar OPcache (fix de rutas en memoria)
+echo "Recargando PHP-FPM..."
+docker exec -i gelianv_app sh -c "kill -USR2 \$(pgrep php-fpm | head -1) 2>/dev/null || true"
+
+# 10. Refrescar permisos de almacenamiento (Seguridad)
 echo "Ajustando permisos de archivos..."
-docker exec -it gelianv_app chown -R 1337:1337 /var/www/html/storage /var/www/html/bootstrap/cache
-docker exec -it gelianv_app chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+docker exec -i gelianv_app chown -R 1337:1337 /var/www/html/storage /var/www/html/bootstrap/cache
+docker exec -i gelianv_app chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 echo "--- Proceso de Actualización Finalizado ---"
