@@ -52,8 +52,9 @@ class SolicitudController extends Controller
 
     public function confirmarPago(Request $request, SolicitudTag $solicitud)
     {
-        if ($solicitud->catalogo_estado_solicitud_id == 4) {
-            abort(403, 'Acción Bloqueada: No puedes confirmar el pago de una solicitud con incidencias. Repárala primero.');
+        // 1. Seguro Arquitectónico: Bloquear si la encargada no ha aprobado (Estado 2)
+        if ($solicitud->catalogo_estado_solicitud_id != 2) {
+            abort(403, 'Acción Bloqueada: El pago solo puede confirmarse después de que la encargada haya emitido una resolución aprobatoria.');
         }
 
         if ($solicitud->vendedor_id !== Auth::id() && !Auth::user()->can('solicitudes.confirmar_pago')) {
@@ -65,24 +66,23 @@ class SolicitudController extends Controller
         ]);
 
         DB::transaction(function () use ($solicitud, $request) {
+            $montoOriginal = $solicitud->monto_cotizado;
             $montoFinal = $request->monto_final_pagado;
-            $estadoNuevoId = $solicitud->catalogo_estado_solicitud_id;
+            $estadoNuevoId = 2; // Mantenemos el estado aprobado por defecto
             $mensajeAuditoria = 'PAGO CONFIRMADO POR EL COLABORADOR';
             $esAlertaFaltaPago = false;
 
-            // Lógica dinámica de equivalencias de lista
             if ($solicitud->catalogo_lista_descuento_id && $solicitud->cliente_id) {
                 $cliente = Cliente::find($solicitud->cliente_id);
                 $listaSolicitada = CatalogoListaDescuento::find($solicitud->catalogo_lista_descuento_id);
                 
                 if ($cliente && $listaSolicitada) {
-                    $montoHistorico = $cliente->monto_venta_actual ?? 0;
-                    $totalProyectado = $montoHistorico + $montoFinal;
+                    // Para la proyección, restamos el monto original (que ya estaba sumado) y sumamos el nuevo pago real
+                    $montoHistoricoBase = $cliente->monto_venta_actual - $montoOriginal;
+                    $totalProyectado = $montoHistoricoBase + $montoFinal;
 
-                    // Verificamos si el pago final quedó por debajo de la meta de la lista solicitada
                     if ($totalProyectado < $listaSolicitada->monto_requerido) {
                         
-                        // Recalcular lista real a la que califica el cliente
                         $listaCalificada = CatalogoListaDescuento::where('activo', true)
                             ->where('nombre', 'not like', '%COLABORADOR%')
                             ->where('monto_requerido', '<=', $totalProyectado)
@@ -90,26 +90,43 @@ class SolicitudController extends Controller
                             ->first();
 
                         $nombreListaCalificada = $listaCalificada ? $listaCalificada->nombre : 'Público General';
-
                         $mensajeAuditoria = "ALERTA DE PAGO: Pago final de $" . number_format($montoFinal, 2) . " es insuficiente para la lista {$listaSolicitada->nombre}. El cliente califica para: {$nombreListaCalificada}.";
                         
-                        // Detenemos el proceso en estado Incorrecta (4) para revisión
                         $estadoNuevoId = 4; 
                         $esAlertaFaltaPago = true;
                     }
                 }
             }
 
-            $solicitud->update([
-                'pago_confirmado' => true,
-                'monto_cotizado' => $montoFinal, 
-                'catalogo_estado_solicitud_id' => $estadoNuevoId
-            ]);
+            if ($esAlertaFaltaPago) {
+                // ROLLBACK: El pago no cubre la cuota, revertimos todo el monto y quitamos la lista para revisión.
+                $this->revertirBeneficiosCliente($solicitud);
+                
+                $solicitud->update([
+                    'pago_confirmado' => false,
+                    'monto_cotizado' => $montoFinal, 
+                    'catalogo_estado_solicitud_id' => $estadoNuevoId
+                ]);
+            } else {
+                // ÉXITO: Ajustamos el Delta si la vendedora cobró una cantidad diferente a la cotizada
+                $diferencia = $montoFinal - $montoOriginal;
+                if ($diferencia != 0 && $solicitud->cliente_id) {
+                    $clienteObj = Cliente::find($solicitud->cliente_id);
+                    $clienteObj->monto_venta_actual = max(0, $clienteObj->monto_venta_actual + $diferencia);
+                    $clienteObj->save();
+                }
+
+                $solicitud->update([
+                    'pago_confirmado' => true,
+                    'monto_cotizado' => $montoFinal, 
+                    'catalogo_estado_solicitud_id' => $estadoNuevoId
+                ]);
+            }
 
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
-                'estado_anterior_id' => $solicitud->catalogo_estado_solicitud_id,
+                'estado_anterior_id' => 2,
                 'estado_nuevo_id' => $estadoNuevoId,
                 'motivo_reporte' => $mensajeAuditoria
             ]);
@@ -120,15 +137,14 @@ class SolicitudController extends Controller
                 Notification::send($destinatarios, new AlertaSolicitud(
                     $solicitud, 
                     $tituloAlerta, 
-                    'El colaborador ' . Auth::user()->name . ' ha confirmado el pago. ' . ($esAlertaFaltaPago ? 'Se requiere ajuste de lista.' : '')
+                    'El colaborador ' . Auth::user()->name . ($esAlertaFaltaPago ? ' intentó confirmar un pago insuficiente. Requiere ajuste de lista.' : ' ha confirmado el pago exitosamente.')
                 ));
             }
         });
 
-        return back()->with('success', 'Pago procesado.');
+        return back()->with('success', 'Operación procesada.');
     }
 
-    // NUEVO MÉTODO PARA ADMINISTRACIÓN
     public function confirmarCambioLista(Request $request, SolicitudTag $solicitud)
     {
         Gate::authorize('solicitudes.confirmar_cambio_lista');
@@ -136,7 +152,6 @@ class SolicitudController extends Controller
         DB::transaction(function () use ($solicitud) {
             $estadoNuevoId = 3; 
 
-            // 1. Recalcular la lista real validada por el pago final
             $cliente = Cliente::find($solicitud->cliente_id);
             if ($cliente) {
                 $totalProyectado = ($cliente->monto_venta_actual ?? 0) + $solicitud->monto_cotizado;
@@ -147,19 +162,16 @@ class SolicitudController extends Controller
                     ->orderBy('monto_requerido', 'desc')
                     ->first();
 
-                // Forzamos el ajuste en la solicitud antes de aprobar
                 if ($listaCalificada) {
                     $solicitud->catalogo_lista_descuento_id = $listaCalificada->id;
                 }
             }
 
-            // 2. Avanzar el estado
             $solicitud->update([
                 'catalogo_estado_solicitud_id' => $estadoNuevoId,
                 'catalogo_lista_descuento_id' => $solicitud->catalogo_lista_descuento_id
             ]);
 
-            // 3. Aplicar beneficios persistentes al cliente en la BD
             $this->aplicarBeneficiosCliente($solicitud);
 
             AuditoriaSolicitud::create([
@@ -192,11 +204,9 @@ class SolicitudController extends Controller
             $rutaEvidencia = $solicitud->evidencia_path;
 
             if ($request->hasFile('evidencia')) {
-                // Eliminamos el archivo físico anterior para evitar fuga de memoria en el servidor
                 if ($rutaEvidencia && Storage::disk('public')->exists($rutaEvidencia)) {
                     Storage::disk('public')->delete($rutaEvidencia);
                 }
-
                 $rutaEvidencia = $request->file('evidencia')->store('evidencias_solicitudes', 'public');
             }
 
@@ -224,7 +234,6 @@ class SolicitudController extends Controller
                 ]
             ]);
 
-            // Notificación aislada por departamento (Sin incluir al vendedor)
             $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, false);
 
             if ($destinatarios->isNotEmpty()) {
@@ -256,7 +265,6 @@ class SolicitudController extends Controller
 
             $rutaEvidencia = $solicitud->evidencia_respuesta_path;
             if ($request->hasFile('evidencia_respuesta')) {
-                // Eliminamos el archivo físico anterior para evitar fuga de memoria en el servidor
                 if ($rutaEvidencia && Storage::disk('public')->exists($rutaEvidencia)) {
                     Storage::disk('public')->delete($rutaEvidencia);
                 }
@@ -268,9 +276,19 @@ class SolicitudController extends Controller
                 'evidencia_respuesta_path' => $rutaEvidencia,
             ]);
 
-            if ($estadoNuevoId == 3 && $estadoAnteriorId != 3) {
+            // ==========================================
+            // MOTOR FINANCIERO CORREGIDO (Estados 2 y 3)
+            // ==========================================
+            $estadosAprobatorios = [2, 3]; // 2 = Aprobada/Respondida, 3 = Verificada
+
+            if (in_array($estadoNuevoId, $estadosAprobatorios) && !in_array($estadoAnteriorId, $estadosAprobatorios)) {
+                // Suman beneficios solo la primera vez que se aprueba/verifica
                 $this->aplicarBeneficiosCliente($solicitud);
+            } elseif ($estadoNuevoId == 4 && in_array($estadoAnteriorId, $estadosAprobatorios)) {
+                // Rollback: Si un admin regresa una solicitud ya aprobada a "Incorrecta", restamos el dinero.
+                $this->revertirBeneficiosCliente($solicitud);
             }
+            // ==========================================
 
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
@@ -283,7 +301,6 @@ class SolicitudController extends Controller
                 ]
             ]);
 
-            // Notificación múltiple: Vendedor + Auxiliares del departamento
             $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, true);
 
             if ($destinatarios->isNotEmpty()) {
@@ -338,6 +355,11 @@ class SolicitudController extends Controller
                 'pago_confirmado' => false
             ]);
 
+            // Evitar descuadres si ya estaba aprobada
+            if (in_array($estadoAnteriorId, [2, 3])) {
+                $this->revertirBeneficiosCliente($solicitud);
+            }
+
             if ($solicitud->cliente_id) {
                 $cliente = Cliente::find($solicitud->cliente_id);
                 if ($cliente) {
@@ -353,7 +375,6 @@ class SolicitudController extends Controller
                 'motivo_reporte' => 'PAGO RECHAZADO: Se aplicó la reversión automática de las propiedades del cliente.'
             ]);
 
-            // Notificación múltiple: Vendedor + Auxiliares del departamento
             $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, true);
 
             if ($destinatarios->isNotEmpty()) {
@@ -368,37 +389,29 @@ class SolicitudController extends Controller
         return back()->with('success', 'Pago rechazado. La vendedora y auxiliares han sido notificados.');
     }
 
-    /**
-     * CENTRALIZACIÓN DE NOTIFICACIONES:
-     * Retorna una colección unificada que asegura la segmentación departamental ABAC.
-     */
     private function obtenerDestinatariosDepartamentales(SolicitudTag $solicitud, bool $incluirVendedor = false)
     {
         $destinatarios = collect();
 
-        // 1. Agregar al vendedor original si aplica
         if ($incluirVendedor && $solicitud->vendedor) {
             $destinatarios->push($solicitud->vendedor);
         }
 
-        // 2. Localizar verificadores estrictamente matriculados en el departamento de la solicitud
         $verificadores = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])
             ->whereHas('departamentos', function ($query) use ($solicitud) {
                 $query->where('departamentos.id', $solicitud->departamento_id);
             })
             ->get();
 
-        // 3. Fusionar, evitar duplicados y EXCLUIR al usuario que está ejecutando la acción
         return $destinatarios->merge($verificadores)
             ->unique('id')
             ->reject(function ($usuario) {
-                return $usuario->id === Auth::id(); // <-- Esta línea bloquea el auto-envío
+                return $usuario->id === Auth::id(); 
             });
     }
 
     public function destroy(SolicitudTag $solicitud, Request $request, EliminarSolicitudService $eliminarService): RedirectResponse
     {
-        // Validación estricta de permisos
         if (!Auth::user()->can('solicitudes.eliminar')) {
             abort(403, 'No tienes los permisos administrativos necesarios para eliminar registros.');
         }
@@ -411,9 +424,7 @@ class SolicitudController extends Controller
 
         return redirect()->route('solicitudes.index')->with('success', 'La solicitud ha sido eliminada y el evento ha sido auditado.');
     }
-    /**
-     * Aplica los montos y beneficios estructurados al registro físico del Cliente.
-     */
+
     private function aplicarBeneficiosCliente(SolicitudTag $solicitud): void
     {
         if (!$solicitud->cliente_id) return;
@@ -421,25 +432,33 @@ class SolicitudController extends Controller
         $cliente = Cliente::find($solicitud->cliente_id);
         if (!$cliente) return;
 
-        // 1. Acumulación del capital comprobado
         $cliente->monto_venta_actual = ($cliente->monto_venta_actual ?? 0) + ($solicitud->monto_cotizado ?? 0);
 
-        // 2. Ascenso de Lista (Mapeo corregido a la BD)
         if ($solicitud->catalogo_lista_descuento_id) {
-            // En la tabla clientes, la columna es 'lista_actual_id'
             $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
-            
-            // ELIMINAMOS la asignación del texto $cliente->lista_actual = ... 
-            // ya que esa columna física no existe en tu tabla.
         }
 
-        // 3. Asignación de Clasificación 
-        // (Esta sí se llama igual en ambas tablas)
         if ($solicitud->catalogo_tipo_cliente_id) {
             $cliente->catalogo_tipo_cliente_id = $solicitud->catalogo_tipo_cliente_id;
         }
 
         $cliente->save();
     }
-    
+
+    private function revertirBeneficiosCliente(SolicitudTag $solicitud): void
+    {
+        if (!$solicitud->cliente_id) return;
+
+        $cliente = Cliente::find($solicitud->cliente_id);
+        if (!$cliente) return;
+
+        // Restamos el monto, evitando que quede en negativo con max()
+        $nuevoMonto = ($cliente->monto_venta_actual ?? 0) - ($solicitud->monto_cotizado ?? 0);
+        $cliente->monto_venta_actual = max(0, $nuevoMonto);
+
+        // Nota: Para un rollback de listas habría que hacer una lógica histórica más compleja, 
+        // pero con restaurar el monto de venta es suficiente para corregir descuadres monetarios.
+
+        $cliente->save();
+    }
 }

@@ -204,29 +204,59 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
             <div className="fixed inset-0 z-[999]" onClick={() => setMenuAbierto(null)}></div>
             <div className="fixed z-[1000] theme-surface border theme-border shadow-2xl rounded-2xl p-2 w-56 flex flex-col gap-1 backdrop-blur-xl animate-fade-in" style={{ top: menuPos.top, left: menuPos.left }}>
 
-                {/* Nuevo Botón: Confirmar Cambio de Lista */}
+                {/* Confirmar Cambio de Lista (Solo si hay alerta) */}
                 {esAlertaPago && can('solicitudes.confirmar_cambio_lista') && (
                     <button onClick={() => { setMenuAbierto(null); confirmarCambioLista(solicitud.id); }} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
                         <TrendingUp className="w-4 h-4" /> Confirmar Ajuste
                     </button>
                 )}
 
-                {solicitud.vendedor_id === auth.user.id && solicitud.estado?.nombre === 'Incorrecta' && !esAlertaPago && (<button onClick={() => { setMenuAbierto(null); setModalForm({ abierto: true, modoEdicion: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-orange-50 dark:hover:bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3"><Edit2 className="w-4 h-4" /> Reparar Solicitud</button>)}
+                {/* Reparar Solicitud (Solo vendedor, solo si está incorrecta) */}
+                {solicitud.vendedor_id === auth.user.id && solicitud.estado?.nombre === 'Incorrecta' && !esAlertaPago && (
+                    <button onClick={() => { setMenuAbierto(null); setModalForm({ abierto: true, modoEdicion: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-orange-50 dark:hover:bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                        <Edit2 className="w-4 h-4" /> Reparar Solicitud
+                    </button>
+                )}
 
-                {(can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id) && !solicitud.pago_confirmado && solicitud.estado?.nombre !== 'Incorrecta' && (<button onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3"><CreditCard className="w-4 h-4" /> Confirmar Pago</button>)}
+                {/* Confirmar Pago - CORREGIDO: Ahora exige estrictamente que el estado sea 'Respondida' (Estado 2) */}
+                {(can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id) && !solicitud.pago_confirmado && solicitud.estado?.nombre === 'Respondida' && !esAlertaPago && (
+                    <button onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                        <CreditCard className="w-4 h-4" /> Confirmar Pago
+                    </button>
+                )}
 
-                {can('solicitudes.verificar') && !esAlertaPago && (<button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 3 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"><CheckSquare className="w-4 h-4" /> Verificado</button>)}
+                {/* Verificado (Paso final de la auxiliar) */}
+                {can('solicitudes.verificar') && !esAlertaPago && (
+                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 3 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
+                        <CheckSquare className="w-4 h-4" /> Verificado
+                    </button>
+                )}
 
+                {/* Aprobar / Reportar (Encargada) */}
                 {can('solicitudes.reportar') && !esAlertaPago && (
                     <>
-                        <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 2 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors" style={{ color: 'var(--color-primario)' }}><CheckCircle2 className="w-4 h-4" /> Aprobar Proceso</button>
-                        <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 4 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"><AlertOctagon className="w-4 h-4" /> Reportar Error</button>
+                        <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 2 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors" style={{ color: 'var(--color-primario)' }}>
+                            <CheckCircle2 className="w-4 h-4" /> Aprobar Proceso
+                        </button>
+                        <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 4 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
+                            <AlertOctagon className="w-4 h-4" /> Reportar Error
+                        </button>
                     </>
                 )}
 
-                {can('configuracion.ver_auditoria') && (<button onClick={() => { setMenuAbierto(null); setModalBitacora({ abierto: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-purple-50 dark:hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3"><History className="w-4 h-4" /> Ver Bitácora</button>)}
+                {/* Bitácora */}
+                {can('configuracion.ver_auditoria') && (
+                    <button onClick={() => { setMenuAbierto(null); setModalBitacora({ abierto: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-purple-50 dark:hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3">
+                        <History className="w-4 h-4" /> Ver Bitácora
+                    </button>
+                )}
 
-                {can('solicitudes.eliminar') && (<button onClick={() => eliminarSolicitud(solicitud.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-red-900/10 text-red-600 dark:text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3"><Trash2 className="w-4 h-4" /> Eliminar Registro</button>)}
+                {/* Eliminar */}
+                {can('solicitudes.eliminar') && (
+                    <button onClick={() => eliminarSolicitud(solicitud.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-red-900/10 text-red-600 dark:text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3">
+                        <Trash2 className="w-4 h-4" /> Eliminar Registro
+                    </button>
+                )}
             </div>
         </>, document.body
     );
