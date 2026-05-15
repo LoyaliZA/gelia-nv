@@ -9,18 +9,17 @@ use Illuminate\Http\JsonResponse;
 
 class ClienteApiController extends Controller
 {
-    // --- NUEVO ENDPOINT: Búsqueda y Listado en Tiempo Real ---
+    // --- SECCIÓN: BÚSQUEDA Y LISTADO EN TIEMPO REAL ---
     public function index(Request $request): JsonResponse
     {
         $termino = $request->query('q', '');
 
         $clientes = Cliente::with('listaDescuento')
             ->when($termino, function($query, $termino) {
-                // Filtramos por número o por nombre
                 $query->where('numero_cliente', 'like', "%{$termino}%")
                       ->orWhere('nombre', 'like', "%{$termino}%");
             })
-            ->limit(50) // Límite para no saturar la memoria del navegador
+            ->limit(50)
             ->get()
             ->map(function($cliente) {
                 return [
@@ -28,14 +27,16 @@ class ClienteApiController extends Controller
                     'numero_cliente' => $cliente->numero_cliente,
                     'nombre' => $cliente->nombre,
                     'es_heredado' => (bool) $cliente->es_heredado,
-                    'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista'
+                    'lista_actual_id' => $cliente->lista_actual_id, // Añadido para comparación exacta
+                    'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
+                    'monto_venta_actual' => (float) $cliente->monto_venta_actual // Añadido para el motor de decisión
                 ];
             });
 
         return response()->json($clientes);
     }
 
-    // --- ENDPOINT ANTERIOR: Búsqueda Exacta ---
+    // --- SECCIÓN: BÚSQUEDA EXACTA ---
     public function show($numero): JsonResponse
     {
         $cliente = Cliente::with('listaDescuento')
@@ -51,7 +52,9 @@ class ClienteApiController extends Controller
             'id' => $cliente->id,
             'nombre' => $cliente->nombre,
             'es_heredado' => (bool) $cliente->es_heredado,
-            'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista'
+            'lista_actual_id' => $cliente->lista_actual_id, // Añadido
+            'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
+            'monto_venta_actual' => (float) $cliente->monto_venta_actual // Añadido
         ]);
     }
 }

@@ -60,13 +60,13 @@ class ClienteController extends Controller
     public function importacionMasiva(Request $request)
     {
         Gate::authorize('cargar_clientes_masivo');
-        
+
         // Cuidado aquí: si desde react lo mandas como 'archivo', debes validarlo como 'archivo'.
         // Si tu form en React usa formCarga.setData('archivo', file), cámbialo aquí a 'archivo'
         $request->validate(['archivo_csv' => 'required|mimes:csv,txt']);
 
         $listas = CatalogoListaDescuento::orderBy('monto_requerido', 'desc')->get(); // Ordenadas de mayor a menor monto
-        
+
         $path = $request->file('archivo_csv')->getRealPath();
         $file = fopen($path, 'r');
         $header = fgetcsv($file); // Saltar cabeceras
@@ -111,7 +111,6 @@ class ClienteController extends Controller
             fclose($file);
 
             return back()->with('success', 'Carga masiva procesada y listas recalculadas correctamente.');
-
         } catch (\Exception $e) {
             DB::rollBack();
             fclose($file);
@@ -153,8 +152,8 @@ class ClienteController extends Controller
 
         if ($validator->fails()) {
             return redirect()->route('mis_clientes.index')
-                             ->withErrors($validator)
-                             ->withInput();
+                ->withErrors($validator)
+                ->withInput();
         }
 
         $numeroCliente = trim($request->numero_cliente);
@@ -174,7 +173,7 @@ class ClienteController extends Controller
                     'nombre'                   => $nombre,
                     'vendedor_id'              => $usuarioId,
                     'vendedor_original_id'     => $usuarioId,
-                    'catalogo_tipo_cliente_id' => null, 
+                    'catalogo_tipo_cliente_id' => null,
                     'lista_actual_id'          => $listaBaseId, // <-- Parche aplicado
                     'es_heredado'              => false,
                     'monto_venta_actual'       => 0.00
@@ -182,7 +181,6 @@ class ClienteController extends Controller
             });
 
             return redirect()->route('mis_clientes.index')->with('success', 'Cliente registrado exitosamente.');
-
         } catch (\Exception $e) {
             return redirect()->route('mis_clientes.index')->withErrors([
                 'numero_cliente' => 'Fallo en BD: ' . $e->getMessage()

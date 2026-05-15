@@ -4,8 +4,43 @@ import { useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Upload, Send, AlertTriangle, Users } from 'lucide-react';
 
+// --- SECCIÓN: UTILIDADES Y FUNCIONES PURAS ---
+
+const evaluarProyeccionLista = (cliente, cotizacion, catalogoListas, listaActualObj) => {
+    // Extracción segura de montos previniendo valores no numéricos
+    const montoHistorico = parseFloat(cliente?.monto_venta_actual?.toString().replace(/[^0-9.-]+/g, "") || 0);
+    const montoCotizado = parseFloat(cotizacion || 0);
+    const totalProyectado = montoHistorico + montoCotizado;
+
+    // Filtrar listas corporativas y ordenar de mayor a menor exigencia
+    const listasValidas = [...catalogoListas]
+        .filter(l => !l.nombre.toUpperCase().includes('COLABORADOR'))
+        .sort((a, b) => parseFloat(b.monto_requerido) - parseFloat(a.monto_requerido));
+
+    // Determinar calificación matemática
+    const listaCalificada = listasValidas.find(l => totalProyectado >= parseFloat(l.monto_requerido)) || null;
+
+    // Calcular monto restante para el siguiente nivel jerárquico
+    const listaSiguiente = listasValidas.slice().reverse().find(l => parseFloat(l.monto_requerido) > totalProyectado);
+    const faltanteSiguiente = listaSiguiente ? parseFloat(listaSiguiente.monto_requerido) - totalProyectado : 0;
+    
+    // Evaluar si representa un ascenso real respecto a su nivel actual
+    const requisitoListaActual = listaActualObj ? parseFloat(listaActualObj.monto_requerido || 0) : 0;
+    const esAscenso = listaCalificada && parseFloat(listaCalificada.monto_requerido) > requisitoListaActual;
+
+    return { 
+        montoHistorico, 
+        totalProyectado, 
+        listaCalificada, 
+        listaSiguiente, 
+        faltanteSiguiente,
+        esAscenso
+    };
+};
+
 export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCliente = [], modoEdicion, solicitudAEditar }) {
     
+    // --- SECCIÓN: ESTADOS Y REFERENCIAS ---
     const infoClienteInicial = solicitudAEditar?.cliente || null;
     const [infoCliente, setInfoCliente] = useState(infoClienteInicial);
     const [listaClientes, setListaClientes] = useState([]);
@@ -13,11 +48,11 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     const [buscandoCliente, setBuscandoCliente] = useState(false);
     const [alertaLista, setAlertaLista] = useState(null);
     const [alertaHeredado, setAlertaHeredado] = useState(false);
+    const [analisisFinanciero, setAnalisisFinanciero] = useState(null);
     const [previewEvidencia, setPreviewEvidencia] = useState(solicitudAEditar?.evidencia_path ? `/storage/${solicitudAEditar.evidencia_path}` : null);
     
     const temporizadorBusqueda = useRef(null);
 
-    // Integramos 'transform' para manejar el PUT con archivos correctamente en Inertia
     const { data, setData, post, processing, reset, transform } = useForm({
         numero_cliente: solicitudAEditar?.cliente?.numero_cliente || '',
         nombre_cliente: solicitudAEditar?.cliente?.nombre || '',
@@ -28,40 +63,44 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         evidencia: null,
     });
 
-    // LÓGICA REACTIVA: Tipos de Cliente Permitidos
     const opcionesTipoCliente = infoCliente?.es_heredado 
         ? tiposCliente.filter(t => t.nombre.toUpperCase().includes('HEREDADO')) 
         : tiposCliente.filter(t => !t.nombre.toUpperCase().includes('HEREDADO'));
 
+    const obtenerListaActual = () => {
+        if (!infoCliente) return null;
+        return listas.find(l => 
+            l.id == infoCliente.lista_actual_id || 
+            l.nombre === infoCliente.lista_actual || 
+            l.nombre === infoCliente.lista_descuento?.nombre
+        );
+    };
+
+    // --- SECCIÓN: MOTOR DE REGLAS DE NEGOCIO ---
     useEffect(() => {
         if (infoCliente && data.monto_cotizado && !isNaN(data.monto_cotizado)) {
-            const montoHistorico = parseFloat(infoCliente.monto_venta_actual || 0);
-            const cotizacion = parseFloat(data.monto_cotizado);
-            const totalProyectado = montoHistorico + cotizacion;
+            const listaActualObj = obtenerListaActual();
+            const analisis = evaluarProyeccionLista(infoCliente, data.monto_cotizado, listas, listaActualObj);
+            
+            setAnalisisFinanciero(analisis);
 
-            const listaActualObj = listas.find(l => l.nombre === infoCliente.lista_actual);
-            const montoMinimoListaActual = listaActualObj ? parseFloat(listaActualObj.monto_requerido || listaActualObj.monto_minimo || 0) : 0;
-
-            const listasValidas = listas
-                .filter(l => !l.nombre.toUpperCase().includes('COLABORADOR'))
-                .sort((a, b) => parseFloat(b.monto_requerido || b.monto_minimo || 0) - parseFloat(a.monto_requerido || a.monto_minimo || 0));
-
-            const sugerencia = listasValidas.find(l => totalProyectado >= parseFloat(l.monto_requerido || l.monto_minimo || 0));
-
-            // Solo sugerir si representa un ascenso
-            if (sugerencia && parseFloat(sugerencia.monto_requerido || sugerencia.monto_minimo || 0) > montoMinimoListaActual) {
-                setData('catalogo_lista_descuento_id', sugerencia.id);
-                setAlertaLista({ mensaje: `Califica para ascenso a: ${sugerencia.nombre}` });
+            if (analisis.esAscenso) {
+                setData('catalogo_lista_descuento_id', analisis.listaCalificada.id);
+                setAlertaLista({ 
+                    mensaje: `¡Total proyectado alcanza nivel ${analisis.listaCalificada.nombre}!` 
+                });
             } else {
                 setData('catalogo_lista_descuento_id', '');
                 setAlertaLista(null);
             }
         } else {
+            setAnalisisFinanciero(null);
             setAlertaLista(null);
             setData('catalogo_lista_descuento_id', '');
         }
     }, [data.monto_cotizado, infoCliente, listas]);
 
+    // --- SECCIÓN: MANEJO DE ARCHIVOS Y MULTIMEDIA ---
     const compressToWebp = (file) => {
         return new Promise((resolve) => {
             const reader = new FileReader(); reader.readAsDataURL(file);
@@ -98,6 +137,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         }
     };
 
+    // --- SECCIÓN: CONSULTA Y SELECCIÓN DE CLIENTES ---
     const fetchClientes = async (term = '') => {
         if (!term) return; setBuscandoCliente(true); setMostrarDropdown(true);
         try { const response = await axios.get(`/api/clientes?q=${term}`); setListaClientes(response.data); }
@@ -105,7 +145,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     };
 
     const manejarBusquedaCliente = (valor) => {
-        setData('numero_cliente', valor); setInfoCliente(null); setAlertaHeredado(false); setAlertaLista(null);
+        setData('numero_cliente', valor); setInfoCliente(null); setAlertaHeredado(false); setAlertaLista(null); setAnalisisFinanciero(null);
         if (temporizadorBusqueda.current) clearTimeout(temporizadorBusqueda.current);
         if (valor.trim() === '') { setMostrarDropdown(false); setListaClientes([]); return; }
         temporizadorBusqueda.current = setTimeout(() => { fetchClientes(valor); }, 400);
@@ -135,16 +175,15 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         };
 
         if (modoEdicion) {
-            // Transformación inteligente para inyectar el método PUT y mantener el estado 'processing' de Inertia
             transform((data) => ({ ...data, _method: 'put' }));
             post(route('solicitudes.update', solicitudAEditar.id), config);
         } else {
-            // Reseteamos el transform por seguridad en modo creación
             transform((data) => data);
             post(route('solicitudes.store'), config);
         }
     };
 
+    // --- SECCIÓN: RENDERIZADO DEL COMPONENTE ---
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-md animate-fade-in" onClick={onClose}>
             <div onPaste={handlePaste} className="w-full max-w-4xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-10 md:p-12 flex flex-col relative modal-pop max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
@@ -165,7 +204,6 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                 <form onSubmit={guardarSolicitud} className="grid grid-cols-1 lg:grid-cols-2 gap-10 relative z-10">
                     <div className="space-y-8">
                         
-                        {/* Buscador de Cliente */}
                         <div className="space-y-2 relative">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cliente (Buscador)_</label>
                             <div className="relative">
@@ -183,7 +221,11 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                             <span className="text-[9px] font-black bg-purple-500 text-white px-2 py-1 rounded-md uppercase tracking-widest shadow-sm">HEREDADO</span>
                                         )}
                                     </div>
-                                    <div className="flex gap-2 mt-3"><span className="text-[10px] font-bold bg-[var(--color-primario)] text-white px-3 py-1 rounded-lg uppercase shadow-sm">Lista Actual: {infoCliente.lista_actual || 'Público'}</span></div>
+                                    <div className="flex gap-2 mt-3">
+                                        <span className="text-[10px] font-bold bg-[var(--color-primario)] text-white px-3 py-1 rounded-lg uppercase shadow-sm">
+                                            Lista Actual: {obtenerListaActual()?.nombre || 'Público General'}
+                                        </span>
+                                    </div>
                                 </div>
                             )}
                             {mostrarDropdown && !modoEdicion && (
@@ -193,7 +235,6 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             )}
                         </div>
 
-                        {/* Cotización */}
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cotización Autorizada_</label>
                             <div className="relative">
@@ -202,7 +243,6 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             </div>
                         </div>
 
-                        {/* Proceso y Tipo Cliente */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Proceso_</label>
@@ -227,32 +267,49 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             </div>
                         </div>
 
-                        {/* Cambio de Lista */}
                         <div className="space-y-2">
                             <div className="flex justify-between items-end mb-1 px-1">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Lista Solicitada_</label>
                                 {alertaLista && <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 animate-pulse">{alertaLista.mensaje}</span>}
                             </div>
+
+                            {/* Desglose visual para facilitar el proceso de venta */}
+                            {analisisFinanciero && (
+                                <div className="flex flex-col gap-1 mb-3 p-3 bg-black/5 dark:bg-white/5 rounded-xl border border-dashed theme-border animate-fade-in">
+                                    <div className="flex justify-between text-xs font-bold theme-text-muted">
+                                        <span>Historial de Compra:</span>
+                                        <span>${analisisFinanciero.montoHistorico.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs font-black theme-text-main border-t theme-border pt-1">
+                                        <span>Total Proyectado:</span>
+                                        <span className="text-[var(--color-primario)]">${analisisFinanciero.totalProyectado.toFixed(2)}</span>
+                                    </div>
+                                    {analisisFinanciero.listaSiguiente && (
+                                        <p className="text-[9px] font-bold text-amber-500 mt-1 italic text-right">
+                                            Faltan ${analisisFinanciero.faltanteSiguiente.toFixed(2)} para nivel {analisisFinanciero.listaSiguiente.nombre}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="relative">
                                 <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
                                 <select value={data.catalogo_lista_descuento_id || ''} onChange={e => setData('catalogo_lista_descuento_id', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none focus:ring-2 transition-all shadow-sm cursor-pointer">
                                     <option value="">-- Mantener nivel actual --</option>
                                     {listas.filter(l => !l.nombre.toUpperCase().includes('COLABORADOR')).map(lista => {
-                                        const montoHistorico = parseFloat(infoCliente?.monto_venta_actual || 0);
-                                        const cotizacion = parseFloat(data.monto_cotizado || 0);
-                                        const totalProyectado = montoHistorico + cotizacion;
+                                        const baseClienteObj = obtenerListaActual();
+                                        let estaDeshabilitada = false; 
+                                        let textoEstado = '';
 
-                                        const listasOrdenadas = [...listas].filter(l => !l.nombre.toUpperCase().includes('COLABORADOR')).sort((a, b) => parseFloat(b.monto_requerido || b.monto_minimo || 0) - parseFloat(a.monto_requerido || a.monto_minimo || 0));
-                                        const listaCalificada = listasOrdenadas.find(l => totalProyectado >= parseFloat(l.monto_requerido || l.monto_minimo || 0));
-
-                                        let estaDeshabilitada = false; let textoEstado = '';
-
-                                        if (lista.nombre === infoCliente?.lista_actual) { estaDeshabilitada = true; textoEstado = '(Nivel actual)'; } 
-                                        else if (listaCalificada && lista.id !== listaCalificada.id) {
-                                            estaDeshabilitada = true;
-                                            if (parseFloat(lista.monto_requerido || lista.monto_minimo || 0) > parseFloat(listaCalificada.monto_requerido || listaCalificada.monto_minimo || 0)) {
+                                        if (lista.id == baseClienteObj?.id) { 
+                                            estaDeshabilitada = true; 
+                                            textoEstado = '(Nivel actual)'; 
+                                        } else if (analisisFinanciero) {
+                                            const reqLista = parseFloat(lista.monto_requerido);
+                                            if (reqLista > analisisFinanciero.totalProyectado) {
+                                                estaDeshabilitada = true;
                                                 textoEstado = '(Monto insuficiente)';
-                                            } else { textoEstado = '(Excede el límite)'; }
+                                            }
                                         }
 
                                         return <option key={lista.id} value={lista.id} disabled={estaDeshabilitada}>{lista.nombre} {estaDeshabilitada ? textoEstado : ''}</option>;
@@ -262,7 +319,6 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                         </div>
                     </div>
 
-                    {/* Evidencia y Submit */}
                     <div className="space-y-8 flex flex-col justify-between">
                         <div className="space-y-2 h-full flex flex-col">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Evidencia / Ticket (Ctrl + V)_</label>

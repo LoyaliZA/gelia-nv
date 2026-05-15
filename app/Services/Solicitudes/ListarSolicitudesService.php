@@ -21,7 +21,7 @@ class ListarSolicitudesService
     {
         // Eager Loading configurado correctamente
         $query = SolicitudTag::with([
-            'cliente', 
+            'cliente.listaDescuento', 
             'vendedor', 
             'departamento', // <-- AÑADIDO PARA LA VISTA
             'proceso', 
