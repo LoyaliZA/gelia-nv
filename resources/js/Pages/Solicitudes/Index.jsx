@@ -4,7 +4,7 @@ import { Head, router, useForm } from '@inertiajs/react';
 import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
     Search, History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
-    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle
+    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Calendar, Filter
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -12,6 +12,37 @@ import GeliaLoader from '../../Components/GeliaLoader';
 import ModalFormSolicitud from './Partials/ModalFormSolicitud';
 import ModalRespuestaSolicitud from './Partials/ModalRespuestaSolicitud';
 import ModalBitacoraSolicitud from './Partials/ModalBitacoraSolicitud';
+
+// Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
+const formatearTiempoRelativo = (fechaString) => {
+    if (!fechaString) return '';
+    const fecha = new Date(fechaString);
+    const ahora = new Date();
+    const diffMs = ahora - fecha;
+    const diffMinutos = Math.floor(diffMs / 60000);
+    const diffHoras = Math.floor(diffMinutos / 60);
+    const diffDias = Math.floor(diffHoras / 24);
+
+    const esHoy = fecha.getDate() === ahora.getDate() &&
+        fecha.getMonth() === ahora.getMonth() &&
+        fecha.getFullYear() === ahora.getFullYear();
+
+    const ayer = new Date();
+    ayer.setDate(ayer.getDate() - 1);
+    const esAyer = fecha.getDate() === ayer.getDate() &&
+        fecha.getMonth() === ayer.getMonth() &&
+        fecha.getFullYear() === ayer.getFullYear();
+
+    const horaFormateada = fecha.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    if (diffMinutos < 1) return 'Hace menos de un minuto';
+    if (diffMinutos < 60) return `Hace ${diffMinutos} minutos`;
+    if (diffHoras < 24 && esHoy) return `Hoy a las ${horaFormateada}`;
+    if (esAyer) return `Ayer a las ${horaFormateada}`;
+    if (diffDias < 7) return `Hace ${diffDias} días`;
+
+    return `${fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })} a las ${horaFormateada}`;
+};
 
 const ESTILOS_ADICIONALES = `
     .status-aprobado { background-color: #ecfdf5; color: #059669; border-color: #a7f3d0; }
@@ -287,7 +318,15 @@ const Paginacion = ({ solicitudes, onIrAPagina }) => {
     );
 };
 
-export default function Index({ solicitudes = { total: 0, data: [], current_page: 1, last_page: 1, per_page: 10, from: 1, to: 10 }, procesos = [], listas = [], tipos_cliente = [], auth }) {
+export default function Index({
+    solicitudes = { total: 0, data: [], current_page: 1, last_page: 1, per_page: 10, from: 1, to: 10 },
+    procesos = [],
+    listas = [],
+    tipos_cliente = [],
+    vendedores = [],
+    filtros = {},
+    auth
+}) {
 
     const [modalForm, setModalForm] = useState({ abierto: false, modoEdicion: false, solicitud: null });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, solicitud: null, estadoId: null });
@@ -300,6 +339,10 @@ export default function Index({ solicitudes = { total: 0, data: [], current_page
     const [busqueda, setBusqueda] = useState('');
     const [copiadoId, setCopiadoId] = useState(null);
     const [procesandoAccion, setProcesandoAccion] = useState(false);
+    const [filtroVendedor, setFiltroVendedor] = useState(filtros.vendedor_id || '');
+    const [tipoFecha, setTipoFecha] = useState(filtros.tipo_fecha || 'TODAS');
+    const [fechaInicio, setFechaInicio] = useState(filtros.fecha_inicio || '');
+    const [fechaFin, setFechaFin] = useState(filtros.fecha_fin || '');
 
     const can = (permiso) => { const roles = auth?.user?.roles || []; const isAdmin = roles.includes('Admin') || roles.includes('Super admin (admin)'); return auth?.user?.permissions?.includes(permiso) || isAdmin; };
 
@@ -309,6 +352,48 @@ export default function Index({ solicitudes = { total: 0, data: [], current_page
         if (motivo.trim().length < 10) { alert("Operación cancelada: El motivo debe tener al menos 10 caracteres."); return; }
         setMenuAbierto(null); setProcesandoAccion(true);
         router.delete(route('solicitudes.destroy', id), { data: { motivo: motivo.trim() }, onFinish: () => setProcesandoAccion(false) });
+    };
+
+    // FUNCIÓN PARA CALCULAR FECHAS Y ENVIAR AL BACKEND
+    const aplicarFiltrosBackend = (vendedorId, tipo, fInicio, fFin) => {
+        let inicioCalculado = fInicio;
+        let finCalculado = fFin;
+
+        if (tipo !== 'PERSONALIZADO' && tipo !== 'TODAS') {
+            const hoy = new Date();
+            const formatDate = (d) => d.toISOString().split('T')[0];
+
+            if (tipo === 'HOY') {
+                inicioCalculado = finCalculado = formatDate(hoy);
+            } else if (tipo === 'AYER') {
+                const ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1);
+                inicioCalculado = finCalculado = formatDate(ayer);
+            } else if (tipo === 'SEMANA') {
+                const primerDia = new Date(hoy); primerDia.setDate(primerDia.getDate() - primerDia.getDay() + 1);
+                inicioCalculado = formatDate(primerDia);
+                finCalculado = formatDate(hoy);
+            } else if (tipo === 'MES') {
+                const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                inicioCalculado = formatDate(primerDiaMes);
+                finCalculado = formatDate(hoy);
+            }
+        } else if (tipo === 'TODAS') {
+            inicioCalculado = '';
+            finCalculado = '';
+        }
+
+        setProcesandoAccion(true);
+        router.get(route('solicitudes.index'), {
+            vendedor_id: vendedorId,
+            tipo_fecha: tipo,
+            fecha_inicio: inicioCalculado,
+            fecha_fin: finCalculado,
+            // mantenemos la pestaña activa si es necesario
+        }, {
+            preserveState: true,
+            preserveScroll: true,
+            onFinish: () => setProcesandoAccion(false)
+        });
     };
 
     useEffect(() => {
@@ -417,6 +502,7 @@ export default function Index({ solicitudes = { total: 0, data: [], current_page
                     )}
                 </header>
 
+                {/* BARRA DE BÚSQUEDA Y TABS ORIGINALES */}
                 <div className="animate-page-reveal flex flex-col lg:flex-row gap-4 items-center justify-between" style={{ animationDelay: '100ms' }}>
                     <div className="gelia-segment w-full lg:w-auto p-1 h-14 shadow-sm overflow-x-auto flex">
                         {['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'INCORRECTAS'].map(tab => (<button key={tab} type="button" onClick={() => setTabActiva(tab)} className="gelia-segment-btn px-4 md:px-6 min-w-max flex-1 text-center" data-active={tabActiva === tab}>{tab}</button>))}
@@ -425,6 +511,68 @@ export default function Index({ solicitudes = { total: 0, data: [], current_page
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted" />
                         <input type="text" placeholder="Buscar folio o cliente..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm" />
                     </div>
+                </div>
+
+                {/* NUEVA BARRA DE FILTROS AVANZADOS (BACKEND) */}
+                <div className="animate-page-reveal theme-surface rounded-2xl border theme-border p-4 flex flex-col md:flex-row gap-4 shadow-sm" style={{ animationDelay: '150ms' }}>
+
+                    {/* Filtro de Usuario */}
+                    <div className="flex-1 flex flex-col gap-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-1"><Filter className="w-3 h-3" /> Asesor / Vendedor</label>
+                        <select
+                            value={filtroVendedor}
+                            onChange={(e) => {
+                                setFiltroVendedor(e.target.value);
+                                aplicarFiltrosBackend(e.target.value, tipoFecha, fechaInicio, fechaFin);
+                            }}
+                            className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all cursor-pointer"
+                        >
+                            <option value="">Todos los asesores</option>
+                            {vendedores.map(v => (
+                                <option key={v.id} value={v.id}>{v.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Filtro de Fechas Predefinidas */}
+                    <div className="flex-1 flex flex-col gap-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-1"><Calendar className="w-3 h-3" /> Rango de Tiempo</label>
+                        <select
+                            value={tipoFecha}
+                            onChange={(e) => {
+                                setTipoFecha(e.target.value);
+                                aplicarFiltrosBackend(filtroVendedor, e.target.value, fechaInicio, fechaFin);
+                            }}
+                            className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all cursor-pointer"
+                        >
+                            <option value="TODAS">Histórico Completo</option>
+                            <option value="HOY">Solo Hoy</option>
+                            <option value="AYER">Ayer</option>
+                            <option value="SEMANA">Esta Semana</option>
+                            <option value="MES">Este Mes</option>
+                            <option value="PERSONALIZADO">Rango Personalizado...</option>
+                        </select>
+                    </div>
+
+                    {/* Rango Personalizado (Solo visible si selecciona PERSONALIZADO) */}
+                    {tipoFecha === 'PERSONALIZADO' && (
+                        <div className="flex-[2] flex flex-col sm:flex-row gap-2 items-end">
+                            <div className="flex-1 w-full flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Desde</label>
+                                <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all" />
+                            </div>
+                            <div className="flex-1 w-full flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Hasta</label>
+                                <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all" />
+                            </div>
+                            <button
+                                onClick={() => aplicarFiltrosBackend(filtroVendedor, tipoFecha, fechaInicio, fechaFin)}
+                                className="w-full sm:w-auto px-6 py-2.5 bg-slate-800 dark:bg-slate-200 text-white dark:text-black rounded-xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-md"
+                            >
+                                Buscar
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="block lg:hidden space-y-4 animate-page-reveal" style={{ animationDelay: '200ms' }}>
@@ -436,9 +584,29 @@ export default function Index({ solicitudes = { total: 0, data: [], current_page
                                     <div className="flex items-start justify-between border-b theme-border pb-3">
                                         <div>
                                             <div className="font-black text-base" style={{ color: 'var(--color-primario)' }}>FOL-{solicitud.id}</div>
-                                            <div className="text-[11px] font-bold theme-text-muted mt-0.5 uppercase flex items-center gap-1"><User className="w-3 h-3" /> {solicitud.vendedor?.name}</div>
+                                            <div className="text-[11px] font-bold theme-text-muted mt-0.5 uppercase flex items-center gap-1">
+                                                <User className="w-3 h-3" /> {solicitud.vendedor?.name}
+                                            </div>
+
+                                            {/* Despliegue de indicadores de tiempo relativo */}
+                                            <div className="mt-2 space-y-1">
+                                                <div className="text-[9px] font-bold theme-text-muted flex items-center gap-1" title={solicitud.created_at}>
+                                                    <Clock className="w-3 h-3" /> Emitida: {formatearTiempoRelativo(solicitud.created_at)}
+                                                </div>
+
+                                                {/* Se muestra solo si el registro ha sufrido modificaciones posteriores */}
+                                                {solicitud.updated_at && solicitud.updated_at !== solicitud.created_at && (
+                                                    <div className="text-[9px] font-bold text-blue-500/80 flex items-center gap-1" title={solicitud.updated_at}>
+                                                        <History className="w-3 h-3" /> Actualizada: {formatearTiempoRelativo(solicitud.updated_at)}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${estatus.clase}`}><StatusIcon className="w-3.5 h-3.5" /><span className="text-[9px] font-black uppercase tracking-wider italic">{estatus.label}</span></div>
+
+                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${estatus.clase}`}>
+                                            <StatusIcon className="w-3.5 h-3.5" />
+                                            <span className="text-[9px] font-black uppercase tracking-wider italic">{estatus.label}</span>
+                                        </div>
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2 mb-1.5">
@@ -486,7 +654,22 @@ export default function Index({ solicitudes = { total: 0, data: [], current_page
                                         <tr key={solicitud.id} className="border-b theme-border transition-colors hover:bg-black/5 dark:hover:bg-white/5 group">
                                             <td className="p-6 align-top">
                                                 <div className="font-black text-sm theme-text-main" style={{ color: 'var(--color-primario)' }}>FOL-{solicitud.id}</div>
-                                                <div className="text-[10px] font-bold theme-text-muted mt-1 uppercase"><User className="w-3 h-3 inline mr-1" /> {solicitud.vendedor?.name}</div>
+                                                <div className="text-[10px] font-bold theme-text-muted mt-1 uppercase">
+                                                    <User className="w-3 h-3 inline mr-1" /> {solicitud.vendedor?.name}
+                                                </div>
+
+                                                {/* NUEVO: Despliegue de indicadores de tiempo relativo para Escritorio */}
+                                                <div className="mt-2 space-y-1">
+                                                    <div className="text-[9px] font-bold theme-text-muted flex items-center gap-1" title={solicitud.created_at}>
+                                                        <Clock className="w-3 h-3" /> Emitida: {formatearTiempoRelativo(solicitud.created_at)}
+                                                    </div>
+
+                                                    {solicitud.updated_at && solicitud.updated_at !== solicitud.created_at && (
+                                                        <div className="text-[9px] font-bold text-blue-500/80 flex items-center gap-1" title={solicitud.updated_at}>
+                                                            <History className="w-3 h-3" /> Actualizada: {formatearTiempoRelativo(solicitud.updated_at)}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="p-6 align-top">
                                                 <div className="flex items-center gap-2 mb-1">

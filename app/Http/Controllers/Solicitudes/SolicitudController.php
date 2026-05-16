@@ -33,12 +33,18 @@ class SolicitudController extends Controller
         $solicitudes = $listarService->ejecutar(Auth::user(), $request->all());
         $procesos = CatalogoProceso::where('activo', true)->get();
 
+        // Obtenemos los usuarios que pueden ser vendedores/colaboradores para el filtro
+        $vendedores = User::whereHas('roles', function($q) {
+            $q->whereIn('name', ['colaborador', 'Administrador', 'Super Admin']); // Ajusta según tus roles reales
+        })->orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('Solicitudes/Index', [
             'solicitudes' => $solicitudes,
-            'filtros' => $request->all(),
+            'filtros' => $request->all(), // Pasamos los filtros actuales para mantener el estado en React
             'procesos' => $procesos,
             'listas' => CatalogoListaDescuento::where('activo', true)->get(),
             'tipos_cliente' => CatalogoTipoCliente::where('activo', true)->orderBy('nombre')->get(),
+            'vendedores' => $vendedores, // Nueva variable enviada al frontend
         ]);
     }
 
