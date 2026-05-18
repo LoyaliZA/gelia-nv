@@ -5,7 +5,7 @@ import {
     Menu, X, Moon, Sun, Bell, Home, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator
+    FolderTree, Calculator, History
 } from 'lucide-react';
 
 import NotificationBell from './NotificationBell';
@@ -17,6 +17,7 @@ const ADMIN_MENU_CONFIG = [
     { id: 'catalogos', label: 'Catálogos Globales', path: '/admin/catalogos', routeName: 'admin.catalogos', icon: FolderTree, permission: 'catalogos.gestionar' },
     { id: 'comisiones', label: 'Comisiones', path: '/admin/comisiones', routeName: 'admin.comisiones', icon: Calculator, permission: 'comisiones.gestionar' },
     { id: 'usuarios', label: 'Usuarios', path: '/admin/usuarios', routeName: 'admin.usuarios', icon: Users, permission: 'usuarios.gestionar' },
+    { id: 'auditorias', label: 'Auditorías de Sistema', path: '/admin/auditorias-sistema', routeName: 'admin.auditorias_sistema.index', icon: History, permission: 'sistema.auditorias.ver' },
 ];
 
 export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left' }) {

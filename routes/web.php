@@ -9,6 +9,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CatalogoController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Admin\AuditoriaListaDescuentoController;
 
 // ══════════════════════════════════════════════════════════════════════
 // 1. REDIRECCIÓN INICIAL
@@ -154,6 +155,13 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['can:comisiones.gestionar'])->group(function () {
             Route::get('/comisiones', [AdminController::class, 'comisiones'])->name('comisiones');
             Route::put('/comisiones/{id}', [AdminController::class, 'actualizarComision'])->name('comisiones.update');
+        });
+
+        // --- 5. Auditorías del Sistema ---
+        Route::middleware(['can:sistema.auditorias.ver'])->group(function () {
+            // Corrección: Cambiar el llamado de 'auditorias' a 'index'
+            Route::get('/auditorias-sistema', [AuditoriaListaDescuentoController::class, 'index'])
+                ->name('auditorias_sistema.index');
         });
     });
 

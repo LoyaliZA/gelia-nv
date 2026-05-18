@@ -4,9 +4,12 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Support\Facades\Gate; // <-- Importación necesaria
+use Illuminate\Support\Facades\Gate;
 use App\Models\SolicitudTag;
 use App\Observers\SolicitudTagObserver;
+// Importaciones requeridas para el módulo de auditoría de catálogos
+use App\Models\CatalogoListaDescuento;
+use App\Observers\CatalogoListaDescuentoObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -35,5 +38,8 @@ class AppServiceProvider extends ServiceProvider
 
         // 3. Registro de Observadores
         SolicitudTag::observe(SolicitudTagObserver::class);
+        
+        // CONEXIÓN DEL NUEVO OBSERVADOR PARA CATÁLOGOS
+        CatalogoListaDescuento::observe(CatalogoListaDescuentoObserver::class);
     }
 }
