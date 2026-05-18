@@ -83,8 +83,9 @@ class SolicitudController extends Controller
                 $listaSolicitada = CatalogoListaDescuento::find($solicitud->catalogo_lista_descuento_id);
 
                 if ($cliente && $listaSolicitada) {
-                    // Para la proyección, restamos el monto original (que ya estaba sumado) y sumamos el nuevo pago real
-                    $montoHistoricoBase = $cliente->monto_venta_actual - $montoOriginal;
+                    // CÁLCULO DE PROYECCIÓN INDEPENDIENTE
+                    // Se neutralizan balances negativos con max() para evitar que el pago real se absorba por un déficit histórico.
+                    $montoHistoricoBase = max(0, $cliente->monto_venta_actual - $montoOriginal);
                     $totalProyectado = $montoHistoricoBase + $montoFinal;
 
                     if ($totalProyectado < $listaSolicitada->monto_requerido) {

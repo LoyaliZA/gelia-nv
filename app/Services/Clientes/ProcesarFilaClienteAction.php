@@ -25,17 +25,18 @@ class ProcesarFilaClienteAction
         'PUBLICO GENERAL' => 'PUBLICO GENERAL',
     ];
 
-    public function ejecutar(array $data, $listas, array $mapaVendedoras): void
+    public function ejecutar(array $data, $listas, array $mapaVendedoras): ?array
     {
         $numeroCliente = trim($data['numero_cliente'] ?? '');
-        if (empty($numeroCliente)) return;
+        if (empty($numeroCliente)) return null;
 
         $cliente = Cliente::where('numero_cliente', $numeroCliente)->first();
         
         if ($cliente) {
-            $this->actualizarClienteExistente($cliente, $data, $listas, $mapaVendedoras);
+            return $this->actualizarClienteExistente($cliente, $data, $listas, $mapaVendedoras);
         } else {
             $this->crearNuevoCliente($data, $listas, $mapaVendedoras);
+            return null; 
         }
     }
 
@@ -94,9 +95,11 @@ class ProcesarFilaClienteAction
         Cliente::create($clienteNuevo);
     }
 
-    private function actualizarClienteExistente(Cliente $cliente, array $data, $listas, array $mapaVendedoras): void
+    private function actualizarClienteExistente(Cliente $cliente, array $data, $listas, array $mapaVendedoras): ?array
     {
         $updateData = [];
+        $listaOriginalId = $cliente->lista_actual_id; // Captura de estado previo
+        $cambioReporte = null;
         
         if (!empty(trim($data['nombre'] ?? ''))) {
             $updateData['nombre'] = trim($data['nombre']);
@@ -114,7 +117,6 @@ class ProcesarFilaClienteAction
             }
         }
 
-        // Si la plantilla incluye una lista forzada (ej. código o literal), tiene prioridad
         $listaId = $this->resolverLista($data, $listas);
         if ($listaId && $cliente->lista_actual_id !== $listaId) {
             $updateData['lista_actual_id'] = $listaId;
@@ -129,11 +131,9 @@ class ProcesarFilaClienteAction
                 $nuevaListaIdPorMonto = $this->determinarListaPorMonto($montoExtraido, $listas);
 
                 if ($cliente->lista_actual_id !== $nuevaListaIdPorMonto) {
-                    // Prevencion de degradacion de lista automatica
                     $listaActual = $listas->firstWhere('id', $cliente->lista_actual_id);
                     $nuevaLista = $listas->firstWhere('id', $nuevaListaIdPorMonto);
 
-                    // Valida que el cambio sea estrictamente un ascenso de jerarquia
                     if ($listaActual && $nuevaLista && ($nuevaLista->monto_requerido > $listaActual->monto_requerido)) {
                         $updateData['lista_actual_id'] = $nuevaListaIdPorMonto;
                     }
@@ -151,8 +151,26 @@ class ProcesarFilaClienteAction
         }
         
         if (!empty($updateData)) {
+            // Auditar si ocurrió un ascenso de categoría para el reporte
+            if (isset($updateData['lista_actual_id']) && $updateData['lista_actual_id'] !== $listaOriginalId) {
+                $listaAnterior = $listas->firstWhere('id', $listaOriginalId);
+                $listaNueva = $listas->firstWhere('id', $updateData['lista_actual_id']);
+
+                if ($listaAnterior && $listaNueva && ($listaNueva->monto_requerido > $listaAnterior->monto_requerido)) {
+                    $cambioReporte = [
+                        'numero_cliente' => $cliente->numero_cliente,
+                        'nombre'         => $cliente->nombre,
+                        'lista_anterior' => $listaAnterior->nombre,
+                        'lista_nueva'    => $listaNueva->nombre,
+                        'monto_nuevo'    => $updateData['monto_venta_actual'] ?? $cliente->monto_venta_actual
+                    ];
+                }
+            }
+
             $cliente->update($updateData);
         }
+
+        return $cambioReporte;
     }
 
     // --- UTILERÍAS ---

@@ -18,13 +18,12 @@ class ImportarClientesWizerpService
         $this->procesador = $procesador;
     }
 
-    public function ejecutar(UploadedFile $archivo): void
+    public function ejecutar(UploadedFile $archivo): array
     {
         $path = $archivo->getRealPath();
         $file = fopen($path, 'r');
         
         $headers = fgetcsv($file); 
-        // CORRECCIÓN: Solo limpiamos el BOM invisible de Excel, sin romper acentos
         $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', $headers[0]); 
         
         $headers = array_map(function($header) {
@@ -35,8 +34,9 @@ class ImportarClientesWizerpService
         $mapaVendedoras = $this->cargarMapaVendedoras();
         $listas = CatalogoListaDescuento::orderBy('monto_requerido', 'desc')->get();
 
-        // Envolvemos todo en una transacción limpia de Laravel
-        DB::transaction(function () use ($file, $headers, $listas, $mapaVendedoras) {
+        $reporteAscensos = [];
+
+        DB::transaction(function () use ($file, $headers, $listas, $mapaVendedoras, &$reporteAscensos) {
             while ($row = fgetcsv($file)) {
                 if (empty(array_filter($row)) || count($headers) !== count($row)) continue;
                 
@@ -44,12 +44,17 @@ class ImportarClientesWizerpService
 
                 if (!isset($data['numero_cliente']) || empty(trim($data['numero_cliente']))) continue;
 
-                // Delegamos la lógica de negocio a la Acción
-                $this->procesador->ejecutar($data, $listas, $mapaVendedoras);
+                $cambio = $this->procesador->ejecutar($data, $listas, $mapaVendedoras);
+                
+                if ($cambio) {
+                    $reporteAscensos[] = $cambio;
+                }
             }
         });
 
         fclose($file);
+        
+        return $reporteAscensos;
     }
 
     private function cargarMapaVendedoras(): array
