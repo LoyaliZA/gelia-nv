@@ -76,9 +76,9 @@ class ImportarClientesWizerpService
     private function sincronizarListasWizerp(): void
     {
         $listasOficiales = [
-            ['nombre' => 'MAYOREO DIAMANTE', 'monto_requerido' => 80000.00],
-            ['nombre' => 'MAYOREO ORO', 'monto_requerido' => 30000.00],
-            ['nombre' => 'MAYOREO PLATA', 'monto_requerido' => 5000.00],
+            ['nombre' => 'MAYOREO DIAMANTE', 'monto_requerido' => 85108.00],
+            ['nombre' => 'MAYOREO ORO', 'monto_requerido' => 31250.00],
+            ['nombre' => 'MAYOREO PLATA', 'monto_requerido' => 5104.00],
             ['nombre' => 'MAYOREO BRONCE', 'monto_requerido' => 0.01], 
             ['nombre' => 'PUBLICO GENERAL', 'monto_requerido' => 0.00],
             ['nombre' => 'PLATAFORMAS', 'monto_requerido' => 999999.00],
@@ -86,7 +86,8 @@ class ImportarClientesWizerpService
         ];
 
         foreach ($listasOficiales as $lista) {
-            CatalogoListaDescuento::updateOrCreate(
+            // Se cambia updateOrCreate por firstOrCreate para proteger los montos personalizados
+            CatalogoListaDescuento::firstOrCreate(
                 ['nombre' => $lista['nombre']],
                 ['monto_requerido' => $lista['monto_requerido'], 'activo' => 1]
             );
