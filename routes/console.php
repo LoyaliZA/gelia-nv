@@ -8,5 +8,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('pagos:rechazar-vencidos')->hourly();
+// Configuración para ejecución diaria fija a las 09:00 AM
+Schedule::command('pagos:rechazar-vencidos')->dailyAt('09:00');
+
 

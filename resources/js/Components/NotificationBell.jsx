@@ -8,21 +8,23 @@ import NotificationBrowserService from '@/Services/NotificationBrowserService';
 /**
  * COMPONENTE: NotificationBell
  * DESCRIPCIÓN: Gestiona la bandeja de notificaciones en tiempo real, 
- * persistencia en BD y navegación directa a solicitudes.
+ * persistencia en BD y navegación directa a solicitudes o módulos generales.
  */
 export default function NotificationBell({ notifications: propNotifications = [] }) {
     // SECCIÓN: Estado y Contexto
-    const { auth } = usePage().props;
+    // Extraemos las notificaciones compartidas de Inertia como respaldo global
+    const { auth, notifications: sharedNotifications } = usePage().props;
     const [isOpen, setIsOpen] = useState(false);
-    const [notifications, setNotifications] = useState(propNotifications);
+    
+    // Inicialización segura combinando propiedades directas y globales
+    const obtenerNotificacionesIniciales = () => {
+        return propNotifications.length > 0 ? propNotifications : (sharedNotifications || []);
+    };
+    
+    const [notifications, setNotifications] = useState(obtenerNotificacionesIniciales);
     
     // Contamos solo las que no tienen fecha de lectura en la BD
     const unreadCount = notifications.filter(n => !n.read_at).length;
-
-    // SECCIÓN: Sincronización de Datos
-    useEffect(() => {
-        setNotifications(propNotifications);
-    }, [propNotifications]);
 
     // SECCIÓN: Bloqueo de Scroll (UX)
     useEffect(() => {
@@ -31,33 +33,59 @@ export default function NotificationBell({ notifications: propNotifications = []
         return () => { document.body.style.overflow = 'unset'; };
     }, [isOpen]);
 
+    // SECCIÓN: Sincronización de Datos Defensiva (Merge por ID)
+    useEffect(() => {
+        const fuenteBase = propNotifications.length > 0 ? propNotifications : (sharedNotifications || []);
+        
+        setNotifications(prev => {
+            const registroMap = new Map();
+            
+            // 1. Cargamos las notificaciones persistidas desde el servidor
+            fuenteBase.forEach(n => {
+                if (n && n.id) registroMap.set(n.id, n);
+            });
+            
+            // 2. Conservamos las notificaciones volátiles recibidas por WebSocket
+            prev.forEach(n => {
+                if (n && n.id && !registroMap.has(n.id)) {
+                    registroMap.set(n.id, n);
+                }
+            });
+            
+            // Retornamos el arreglo ordenado para mantener las más recientes arriba
+            return Array.from(registroMap.values()).sort((a, b) => b.id - a.id);
+        });
+    }, [propNotifications, sharedNotifications]);
+
     // SECCIÓN: Escucha de WebSockets (Real-Time)
     useEffect(() => {
         if (auth && auth.user && typeof window !== 'undefined' && window.Echo) {
             
-            // Suscripción al canal privado del usuario en Reverb
             const channel = window.Echo.private(`App.Models.User.${auth.user.id}`);
             
             channel.notification((notification) => {
-                // 1. Alerta sónica y de escritorio
+                // Alerta sónica y de escritorio con inyección de TTS
                 NotificationBrowserService.triggerFullAlert(
                     "Gelia ERP",
                     notification.mensaje || "Nueva notificación operativa.",
-                    notification.mensaje_voz // <-- Este es el parámetro faltante
+                    notification.mensaje_voz
                 );
 
-                // 2. Inyectar la notificación al inicio de la lista local
-                setNotifications(prev => [
-                    {
-                        id: notification.id,
-                        data: notification,
-                        read_at: null,
-                        created_at: 'Ahora mismo',
-                        type: notification.tipo
-                    },
-                    ...prev
-                ]);
-                
+                setNotifications(prev => {
+                    // Evita duplicar registros en caso de alta concurrencia
+                    if (prev.some(n => n.id === notification.id)) return prev;
+                    
+                    return [
+                        {
+                            id: notification.id,
+                            data: notification,
+                            read_at: null,
+                            created_at: 'Ahora mismo',
+                            type: notification.tipo || notification.type
+                        },
+                        ...prev
+                    ];
+                });
             });
 
             return () => {
@@ -68,32 +96,31 @@ export default function NotificationBell({ notifications: propNotifications = []
 
     // SECCIÓN: Lógica de Interacción (Click y Navegación)
     const handleNotificationClick = (n) => {
-        const destino = `/solicitudes?folio=${n.data?.solicitud_id || ''}`;
+        // Fallback de ruta para notificaciones globales sin folio (ej. Resumen de pagos)
+        const destino = n.data?.solicitud_id 
+            ? `/solicitudes?folio=${n.data.solicitud_id}` 
+            : `/solicitudes`;
 
-        // Si ya está leída, solo navegamos directamente
+        // Si ya está leída, navegamos directamente
         if (n.read_at) {
-            if (n.data?.solicitud_id) {
-                router.visit(destino);
-                setIsOpen(false);
-            }
+            router.visit(destino);
+            setIsOpen(false);
             return;
         }
 
-        // Si es nueva, la marcamos en la base de datos y luego navegamos
+        // Si es nueva, la marcamos como leída en backend y navegamos
         router.post(route('notifications.read', n.id), {}, {
             preserveScroll: true,
             onSuccess: () => {
-                if (n.data?.solicitud_id) {
-                    router.visit(destino);
-                    setIsOpen(false);
-                }
+                router.visit(destino);
+                setIsOpen(false);
             }
         });
     };
 
     const handleOpenDrawer = () => {
         setIsOpen(true);
-        // Desbloqueamos el permiso de audio/notificaciones en la primera interacción
+        // Desbloqueamos permisos de medios en la primera interacción del usuario
         NotificationBrowserService.requestDesktopPermissions();
     };
 
@@ -148,10 +175,11 @@ export default function NotificationBell({ notifications: propNotifications = []
                             {notifications.length > 0 ? (
                                 notifications.map((n, i) => {
                                     const tipo = n.type || n.data?.tipo;
-                                    const isError = tipo === 'pago_rechazado' || tipo === 'rechazada';
+                                    // Detectamos alertas globales (como los reportes agrupados)
+                                    const esResumen = n.data?.total_vencidos !== undefined; 
+                                    const isError = tipo === 'pago_rechazado' || tipo === 'rechazada' || esResumen;
                                     const iconColor = isError ? 'text-red-500' : 'text-[var(--color-primario)]';
                                     
-                                    // Efecto visual: Las leídas son más tenues y sin borde de resalte
                                     const bgClase = n.read_at 
                                         ? 'theme-surface opacity-60 border-transparent shadow-none' 
                                         : 'theme-element border-[var(--color-primario)] shadow-lg';
@@ -169,7 +197,7 @@ export default function NotificationBell({ notifications: propNotifications = []
                                                 <div className="space-y-1.5 w-full">
                                                     <div className="flex justify-between items-start gap-2">
                                                         <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: isError ? '#ef4444' : 'var(--color-primario)' }}>
-                                                            {n.data?.cliente || 'Sistema Global'}
+                                                            {n.data?.cliente || (esResumen ? 'Reporte Automático' : 'Sistema Global')}
                                                         </p>
                                                         <span className="text-[9px] font-bold theme-text-muted uppercase shrink-0">
                                                             {n.created_at} 
