@@ -461,13 +461,30 @@ class SolicitudController extends Controller
         $cliente = Cliente::find($solicitud->cliente_id);
         if (!$cliente) return;
 
-        // Restamos el monto, evitando que quede en negativo con max()
+        // 1. Restamos el monto, evitando que quede en negativo con max()
         $nuevoMonto = ($cliente->monto_venta_actual ?? 0) - ($solicitud->monto_cotizado ?? 0);
         $cliente->monto_venta_actual = max(0, $nuevoMonto);
 
-        // Nota: Para un rollback de listas habría que hacer una lógica histórica más compleja, 
-        // pero con restaurar el monto de venta es suficiente para corregir descuadres monetarios.
+        // 2. Ejecutamos el recalculo dinámico de la lista
+        $this->recalcularListaCliente($cliente);
 
         $cliente->save();
+    }
+
+    /**
+     * Recalcula la lista de descuento del cliente basada estrictamente en su monto actual.
+     * Excluye listas protegidas del cálculo general.
+     */
+    private function recalcularListaCliente(Cliente $cliente): void
+    {
+        $listaCalificada = CatalogoListaDescuento::where('activo', true)
+            ->where('nombre', 'not like', '%COLABORADOR%')
+            ->where('nombre', 'not like', '%PLATAFORMAS%')
+            ->where('monto_requerido', '<=', $cliente->monto_venta_actual)
+            ->orderBy('monto_requerido', 'desc')
+            ->first();
+
+        // Si no califica para ninguna por el monto (ej. monto 0), se asigna null o se maneja a Público General.
+        $cliente->lista_actual_id = $listaCalificada ? $listaCalificada->id : null;
     }
 }
