@@ -80,9 +80,9 @@ class ClienteController extends Controller
     {
         $usuarioId = Auth::id();
 
-        // Extraemos los clientes creados por la vendedora o asignados a ella,
-        // ordenados por los más recientes para facilitar la visualización inmediata tras el alta.
-        $clientes = Cliente::where('vendedor_original_id', $usuarioId)
+        // Corrección en los nombres de las relaciones según Cliente.php
+        $clientes = Cliente::with(['listaDescuento', 'tipo']) 
+            ->where('vendedor_original_id', $usuarioId)
             ->orWhere('vendedor_id', $usuarioId)
             ->orderBy('created_at', 'desc')
             ->paginate(15);

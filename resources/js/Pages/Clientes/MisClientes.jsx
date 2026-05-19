@@ -92,24 +92,27 @@ export default function MisClientes({ auth, clientes }) {
                 <div className="animate-page-reveal theme-surface rounded-[2.5rem] border theme-border shadow-2xl overflow-hidden bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl" style={{ animationDelay: '100ms' }}>
                     <div className="overflow-x-auto pb-4 custom-scrollbar">
                         <table className="w-full text-left border-collapse min-w-[800px]">
+                            {/* Cabeceras actualizadas */}
                             <thead>
                                 <tr className="border-b theme-border">
                                     <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">No. Cliente_</th>
                                     <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Nombre Completo_</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Tipo / Lista Actual_</th>
+                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Nivel / Lista_</th>
+                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Monto Actual_</th>
                                     <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Fecha de Alta_</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {(!clientes.data || clientes.data.length === 0) ? (
                                     <tr>
-                                        <td colSpan="4" className="p-12 text-center text-[11px] font-black uppercase tracking-widest theme-text-muted italic">
+                                        <td colSpan="5" className="p-12 text-center text-[11px] font-black uppercase tracking-widest theme-text-muted italic">
                                             Aún no tienes clientes registrados en tu cartera_
                                         </td>
                                     </tr>
                                 ) : (
                                     clientes.data.map((cliente) => (
                                         <tr key={cliente.id} className="border-b theme-border transition-colors hover:bg-black/5 dark:hover:bg-white/5 group">
+                                            
                                             <td className="p-6">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[10px] font-black px-2 py-0.5 rounded bg-black/5 dark:bg-white/5 border theme-border theme-text-main">
@@ -118,20 +121,40 @@ export default function MisClientes({ auth, clientes }) {
                                                     {cliente.es_heredado && <span className="text-[9px] font-black uppercase bg-purple-500/10 text-purple-500 border border-purple-500/20 px-2 py-0.5 rounded flex items-center gap-1"><ShieldAlert className="w-3 h-3" /> Heredado</span>}
                                                 </div>
                                             </td>
+                                            
                                             <td className="p-6 font-bold text-sm theme-text-main uppercase italic">
                                                 {cliente.nombre}
                                             </td>
+                                            
+                                            {/* Modificación: Renderizado dinámico de la lista de descuento */}
                                             <td className="p-6">
                                                 <div className="inline-block px-3 py-1 rounded-lg theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-main mb-1">
-                                                    {cliente.tipo_cliente ? cliente.tipo_cliente.nombre : 'Público General'}
+                                                    {cliente.lista_descuento ? cliente.lista_descuento.nombre : 'Público General'}
                                                 </div>
+                                                {cliente.tipo && (
+                                                    <div className="text-[8px] font-bold text-gray-400 uppercase mt-1">
+                                                        {cliente.tipo.nombre}
+                                                    </div>
+                                                )}
                                             </td>
+
+                                            {/* Modificación: Formateo nativo de divisa para el monto de venta */}
+                                            <td className="p-6">
+                                                <span className="text-sm font-black theme-text-main">
+                                                    {new Intl.NumberFormat('es-MX', { 
+                                                        style: 'currency', 
+                                                        currency: 'MXN' 
+                                                    }).format(cliente.monto_venta_actual || 0)}
+                                                </span>
+                                            </td>
+
                                             <td className="p-6">
                                                 <div className="text-[10px] font-bold theme-text-muted uppercase flex items-center gap-1.5">
                                                     <Calendar className="w-3.5 h-3.5" />
                                                     {new Date(cliente.created_at).toLocaleDateString('es-MX')}
                                                 </div>
                                             </td>
+                                            
                                         </tr>
                                     ))
                                 )}

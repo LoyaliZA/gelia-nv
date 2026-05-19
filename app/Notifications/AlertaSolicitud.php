@@ -82,17 +82,19 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
         $nombreVendedor = explode(' ', trim($this->solicitud->vendedor->name ?? 'un colaborador'))[0];
         $esVendedorOriginal = ($this->solicitud->vendedor_id === $notifiable->id);
         
-        // El guion cambia según la naturaleza de la alerta
         switch ($this->tipoAlerta) {
             case 'nueva':
                 return "Atención {$nombreDestinatario}, {$nombreVendedor} ha realizado una nueva solicitud.";
+
+            // --- INYECCIÓN DEL CASO DE ASCENSO ---
+            case 'alerta_ascenso_lista':
+                return "Atención {$nombreDestinatario}, el pago procesado por {$nombreVendedor} ha permitido ascender al cliente de categoría.";
 
             case 'rechazada':
             case 'pago_rechazado':
                 if ($esVendedorOriginal) {
                     return "{$nombreDestinatario}, se ha encontrado un error en tu solicitud. Por favor, realiza las correcciones.";
                 }
-                // Guion para la Auxiliar/Encargada
                 return "{$nombreDestinatario}, {$nombreVendedor} ha recibido una observación en su solicitud.";
 
             case 'reparada':

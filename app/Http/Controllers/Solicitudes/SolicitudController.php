@@ -34,7 +34,7 @@ class SolicitudController extends Controller
         $procesos = CatalogoProceso::where('activo', true)->get();
 
         // Obtenemos los usuarios que pueden ser vendedores/colaboradores para el filtro
-        $vendedores = User::whereHas('roles', function($q) {
+        $vendedores = User::whereHas('roles', function ($q) {
             $q->whereIn('name', ['colaborador', 'Administrador', 'Super Admin']); // Ajusta según tus roles reales
         })->orderBy('name')->get(['id', 'name']);
 
@@ -58,7 +58,6 @@ class SolicitudController extends Controller
 
     public function confirmarPago(Request $request, SolicitudTag $solicitud)
     {
-        // 1. Seguro Arquitectónico: Bloquear si la encargada no ha aprobado (Estado 2)
         if ($solicitud->catalogo_estado_solicitud_id != 2) {
             abort(403, 'Acción Bloqueada: El pago solo puede confirmarse después de que la encargada haya emitido una resolución aprobatoria.');
         }
@@ -74,39 +73,53 @@ class SolicitudController extends Controller
         DB::transaction(function () use ($solicitud, $request) {
             $montoOriginal = $solicitud->monto_cotizado;
             $montoFinal = $request->monto_final_pagado;
-            $estadoNuevoId = 2; // Mantenemos el estado aprobado por defecto
+            $estadoNuevoId = 2; 
             $mensajeAuditoria = 'PAGO CONFIRMADO POR EL COLABORADOR';
             $esAlertaFaltaPago = false;
+            $esAlertaAscenso = false;
 
-            if ($solicitud->catalogo_lista_descuento_id && $solicitud->cliente_id) {
-                $cliente = Cliente::find($solicitud->cliente_id);
-                $listaSolicitada = CatalogoListaDescuento::find($solicitud->catalogo_lista_descuento_id);
-
-                if ($cliente && $listaSolicitada) {
-                    // CÁLCULO DE PROYECCIÓN INDEPENDIENTE
-                    // Se neutralizan balances negativos con max() para evitar que el pago real se absorba por un déficit histórico.
+            // 1. Extraemos al cliente con su lista actual cargada para hacer la comparación real
+            if ($solicitud->cliente_id) {
+                $cliente = Cliente::with('listaDescuento')->find($solicitud->cliente_id);
+                
+                if ($cliente) {
                     $montoHistoricoBase = max(0, $cliente->monto_venta_actual - $montoOriginal);
                     $totalProyectado = $montoHistoricoBase + $montoFinal;
 
-                    if ($totalProyectado < $listaSolicitada->monto_requerido) {
+                    $listaCalificada = CatalogoListaDescuento::where('activo', true)
+                        ->where('nombre', 'not like', '%COLABORADOR%')
+                        ->where('nombre', 'not like', '%PLATAFORMAS%')
+                        ->where('monto_requerido', '<=', $totalProyectado)
+                        ->orderBy('monto_requerido', 'desc')
+                        ->first();
 
-                        $listaCalificada = CatalogoListaDescuento::where('activo', true)
-                            ->where('nombre', 'not like', '%COLABORADOR%')
-                            ->where('monto_requerido', '<=', $totalProyectado)
-                            ->orderBy('monto_requerido', 'desc')
-                            ->first();
+                    if ($listaCalificada) {
+                        // 2. Evaluación de Downgrade (Falta de Pago)
+                        if ($solicitud->catalogo_lista_descuento_id) {
+                            $listaSolicitada = CatalogoListaDescuento::find($solicitud->catalogo_lista_descuento_id);
+                            if ($listaSolicitada && $totalProyectado < $listaSolicitada->monto_requerido) {
+                                $mensajeAuditoria = "ALERTA DE PAGO: Pago final de $" . number_format($montoFinal, 2) . " es insuficiente para la lista {$listaSolicitada->nombre}. El cliente califica para: {$listaCalificada->nombre}.";
+                                $estadoNuevoId = 4;
+                                $esAlertaFaltaPago = true;
+                            }
+                        }
 
-                        $nombreListaCalificada = $listaCalificada ? $listaCalificada->nombre : 'Público General';
-                        $mensajeAuditoria = "ALERTA DE PAGO: Pago final de $" . number_format($montoFinal, 2) . " es insuficiente para la lista {$listaSolicitada->nombre}. El cliente califica para: {$nombreListaCalificada}.";
-
-                        $estadoNuevoId = 4;
-                        $esAlertaFaltaPago = true;
+                        // 3. Evaluación de Upgrade (Ascenso)
+                        if (!$esAlertaFaltaPago) {
+                            $montoRequeridoActual = $cliente->listaDescuento ? $cliente->listaDescuento->monto_requerido : 0;
+                            
+                            if ($listaCalificada->monto_requerido > $montoRequeridoActual) {
+                                $esAlertaAscenso = true;
+                                $mensajeAuditoria = "ALERTA DE ASCENSO: El pago final de $" . number_format($montoFinal, 2) . " permite al cliente ascender de categoría a la lista: {$listaCalificada->nombre}.";
+                                $solicitud->catalogo_lista_descuento_id = $listaCalificada->id;
+                            }
+                        }
                     }
                 }
             }
 
+            // 4. Persistencia y Control Monetario
             if ($esAlertaFaltaPago) {
-                // ROLLBACK: El pago no cubre la cuota, revertimos todo el monto y quitamos la lista para revisión.
                 $this->revertirBeneficiosCliente($solicitud);
 
                 $solicitud->update([
@@ -115,21 +128,30 @@ class SolicitudController extends Controller
                     'catalogo_estado_solicitud_id' => $estadoNuevoId
                 ]);
             } else {
-                // ÉXITO: Ajustamos el Delta si la vendedora cobró una cantidad diferente a la cotizada
                 $diferencia = $montoFinal - $montoOriginal;
-                if ($diferencia != 0 && $solicitud->cliente_id) {
+                if ($solicitud->cliente_id) {
                     $clienteObj = Cliente::find($solicitud->cliente_id);
-                    $clienteObj->monto_venta_actual = max(0, $clienteObj->monto_venta_actual + $diferencia);
-                    $clienteObj->save();
+                    if ($clienteObj) {
+                        $clienteObj->monto_venta_actual = max(0, $clienteObj->monto_venta_actual + $diferencia);
+                        
+                        // Inyectamos la nueva lista independientemente de si la diferencia de montos es cero
+                        if ($esAlertaAscenso && isset($listaCalificada)) {
+                            $clienteObj->lista_actual_id = $listaCalificada->id;
+                        }
+
+                        $clienteObj->save();
+                    }
                 }
 
                 $solicitud->update([
                     'pago_confirmado' => true,
                     'monto_cotizado' => $montoFinal,
-                    'catalogo_estado_solicitud_id' => $estadoNuevoId
+                    'catalogo_estado_solicitud_id' => $estadoNuevoId,
+                    'catalogo_lista_descuento_id' => $solicitud->catalogo_lista_descuento_id
                 ]);
             }
 
+            // 5. Auditoría
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
@@ -138,13 +160,25 @@ class SolicitudController extends Controller
                 'motivo_reporte' => $mensajeAuditoria
             ]);
 
+            // 6. Notificaciones en Tiempo Real
             $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, false);
             if ($destinatarios->isNotEmpty()) {
-                $tituloAlerta = $esAlertaFaltaPago ? 'alerta_pago_insuficiente' : 'pago_confirmado';
+                
+                $tituloAlerta = 'pago_confirmado';
+                $mensajeNotificacion = 'El colaborador ' . Auth::user()->name . ' ha confirmado el pago exitosamente.';
+
+                if ($esAlertaFaltaPago) {
+                    $tituloAlerta = 'alerta_pago_insuficiente';
+                    $mensajeNotificacion = 'El colaborador ' . Auth::user()->name . ' intentó confirmar un pago insuficiente. Requiere ajuste de lista.';
+                } elseif ($esAlertaAscenso) {
+                    $tituloAlerta = 'alerta_ascenso_lista';
+                    $mensajeNotificacion = 'El colaborador ' . Auth::user()->name . ' confirmó un pago que permite ascender al cliente de categoría.';
+                }
+
                 Notification::send($destinatarios, new AlertaSolicitud(
                     $solicitud,
                     $tituloAlerta,
-                    'El colaborador ' . Auth::user()->name . ($esAlertaFaltaPago ? ' intentó confirmar un pago insuficiente. Requiere ajuste de lista.' : ' ha confirmado el pago exitosamente.')
+                    $mensajeNotificacion
                 ));
             }
         });
