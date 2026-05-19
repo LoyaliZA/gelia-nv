@@ -11,7 +11,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use App\Notifications\AlertaSolicitud;
-use app\Notifications\ResumenPagosVencidos; // Importación de la nueva alerta agrupada
+use App\Notifications\ResumenPagosVencidos; // Importación de la nueva alerta agrupada
 
 class RechazarPagosVencidos extends Command
 {

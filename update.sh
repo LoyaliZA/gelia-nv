@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e  # Detener el script si cualquier comando falla
+set -e
 
 # ==============================================================================
 # Script de Actualización Automática - GeliaNV
@@ -33,19 +33,29 @@ docker exec -i gelianv_app npm run build
 # 7. Regenerar caché con código ya actualizado
 # ==============================================================================
 echo "Regenerando caché de rutas y optimización..."
-docker exec -i gelianv_app php artisan route:cache   # <-- Ziggy leerá esto
+docker exec -i gelianv_app php artisan route:cache
 docker exec -i gelianv_app php artisan optimize
 
-# 8. Reinicio de Trabajadores de Cola
-echo "Reiniciando workers de cola..."
-docker exec -i gelianv_app php artisan queue:restart
-sleep 3  # Dar tiempo a que los workers se relancen
+# ==============================================================================
+# 8. Refrescar procesos en memoria con código nuevo
+# ==============================================================================
 
-# 9. Recargar PHP-FPM para limpiar OPcache (fix de rutas en memoria)
-echo "Recargando PHP-FPM..."
+# --- App (PHP-FPM): graceful reload, no corta requests activos ---
+echo "Recargando PHP-FPM (OPcache)..."
 docker exec -i gelianv_app sh -c "kill -USR2 \$(pgrep php-fpm | head -1) 2>/dev/null || true"
 
-# 10. Refrescar permisos de almacenamiento (Seguridad)
+# --- Queue Worker: señal limpia, Docker lo relanza solo por restart: unless-stopped ---
+echo "Señalizando queue worker para reinicio limpio..."
+docker exec -i gelianv_app php artisan queue:restart
+sleep 8  # Tiempo para que el worker termine su job actual y Docker lo relance
+
+# --- Scheduler y Reverb: no se tocan ---
+# El scheduler lee el código de disco en cada tick, ya tiene el código nuevo
+# Reverb NO se reinicia para mantener WebSockets activos
+
+# ==============================================================================
+# 9. Refrescar permisos de almacenamiento
+# ==============================================================================
 echo "Ajustando permisos de archivos..."
 docker exec -i gelianv_app chown -R 1337:1337 /var/www/html/storage /var/www/html/bootstrap/cache
 docker exec -i gelianv_app chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
