@@ -9,6 +9,9 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CatalogoController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Api\CotizacionEntregaController;
+use App\Http\Controllers\Api\ClienteApiController;
+use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\Admin\AuditoriaListaDescuentoController;
 
 // ══════════════════════════════════════════════════════════════════════
@@ -89,6 +92,13 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/solicitudes/{solicitud}/confirmar-lista', [SolicitudController::class, 'confirmarCambioLista'])->name('solicitudes.confirmar_lista');
     Route::delete('/solicitudes/{solicitud}', [SolicitudController::class, 'destroy'])->name('solicitudes.destroy');
 
+    // --- Nuevo Módulo: Interfaz de Entregas ---
+    Route::middleware(['can:entregas.cotizar'])->group(function () {
+        Route::get('/entregas/cotizador', [EntregasController::class, 'index'])->name('entregas.index');
+        Route::put('/entregas/configuracion', [EntregasController::class, 'actualizarConfiguracion'])->name('entregas.configuracion.update')->middleware('can:entregas.configurar_zonas');
+        Route::post('/entregas/zonas', [EntregasController::class, 'storeZona'])->name('entregas.zonas.store')->middleware('can:entregas.configurar_zonas');
+    });
+
 
     // ══════════════════════════════════════════════════════════════════════
     // MÓDULO DE ADMINISTRACIÓN (GELIANV CORE)
@@ -148,6 +158,16 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/tipo-clientes', [CatalogoController::class, 'storeTipoCliente'])->name('tipo_clientes.store');
                 Route::put('/tipo-clientes/{id}', [CatalogoController::class, 'updateTipoCliente'])->name('tipo_clientes.update');
                 Route::delete('/tipo-clientes/{id}', [CatalogoController::class, 'destroyTipoCliente'])->name('tipo_clientes.destroy');
+
+                // Zonas Logísticas (Entregas)
+                // Protegidas con el permiso específico del módulo de entregas
+                Route::put('/zonas-entrega/{id}', [CatalogoController::class, 'updateZonaEntrega'])
+                    ->name('zonas_entrega.update')
+                    ->middleware('can:entregas.configurar_zonas');
+
+                Route::delete('/zonas-entrega/{id}', [CatalogoController::class, 'destroyZonaEntrega'])
+                    ->name('zonas_entrega.destroy')
+                    ->middleware('can:entregas.configurar_zonas');
             });
         });
 
@@ -169,7 +189,8 @@ Route::middleware(['auth'])->group(function () {
     // API INTERNA DEL SISTEMA
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('api')->name('api.')->group(function () {
-        Route::get('/clientes', [\App\Http\Controllers\Api\ClienteApiController::class, 'index'])->name('clientes.index');
-        Route::get('/clientes/{numero}', [\App\Http\Controllers\Api\ClienteApiController::class, 'show'])->name('clientes.show');
+        Route::get('/clientes', [ClienteApiController::class, 'index'])->name('clientes.index');
+        Route::get('/clientes/{numero}', [ClienteApiController::class, 'show'])->name('clientes.show');
+        Route::middleware(['auth'])->post('/entregas/cotizar', [CotizacionEntregaController::class, 'calcularCosto'])->name('entregas.cotizar');
     });
 });

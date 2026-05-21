@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head } from '@inertiajs/react';
-import { Building2, MapPin, ListTree, Tags, Activity, UserCheck } from 'lucide-react';
+import { Building2, MapPin, ListTree, Tags, Activity, UserCheck, Map } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
 // Importamos los nuevos sub-componentes (Crea esta carpeta en el siguiente paso)
@@ -10,8 +10,9 @@ import TablaProcesos from './Partials/Catalogos/TablaProcesos';
 import TablaListas from './Partials/Catalogos/TablaListas';
 import TablaEstados from './Partials/Catalogos/TablaEstados';
 import TablaTipoClientes from './Partials/Catalogos/TablaTipoClientes';
+import TablaZonasEntrega from './Partials/Catalogos/TablaZonasEntrega';
 
-export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente }) {
+export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega }) {
     const [tabActiva, setTabActiva] = useState('departamentos');
     const [glassEffect] = useState(() => localStorage.getItem('theme_glass') !== 'false');
 
@@ -23,7 +24,8 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
         { id: 'areas',         label: 'Áreas',         icon: MapPin },
         { id: 'procesos',      label: 'Procesos',      icon: ListTree },
         { id: 'listas',        label: 'Listas',        icon: Tags },
-        { id: 'estados',       label: 'Estados',       icon: Activity }
+        { id: 'estados',       label: 'Estados',       icon: Activity },
+        { id: 'zonas_entrega', label: 'Zonas Logísticas', icon: Map }
     ];
 
     return (
@@ -68,6 +70,7 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
                     {tabActiva === 'listas' && <TablaListas datos={listas} />}
                     {tabActiva === 'estados' && <TablaEstados datos={estados} />}
                     {tabActiva === 'tipos_cliente' && <TablaTipoClientes datos={tipos_cliente} />}
+                    {tabActiva === 'zonas_entrega' && <TablaZonasEntrega datos={zonas_entrega} auth={auth} />}
                 </section>
 
             </div>

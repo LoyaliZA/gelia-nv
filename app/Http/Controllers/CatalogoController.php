@@ -10,6 +10,8 @@ use App\Models\CatalogoTipoCliente; // <-- NUEVO
 use App\Models\Cliente;
 use App\Models\Departamento; // <-- NUEVO
 use App\Models\Area;         // <-- NUEVO
+use App\Models\CatalogoZonaEntrega; // <-- NUEVO
+use App\Models\CatalogoHorarioEntrega;
 use Illuminate\Support\Facades\DB;
 
 class CatalogoController extends Controller
@@ -134,5 +136,31 @@ class CatalogoController extends Controller
     public function destroyTipoCliente($id) {
         CatalogoTipoCliente::findOrFail($id)->delete();
         return back()->with('success', 'Tipo de cliente eliminado.');
+    }
+
+    // Asegúrate de agregar esta importación en la parte superior del archivo:
+    // use App\Models\CatalogoZonaEntrega;
+
+    // --- 7. CATÁLOGO DE ZONAS DE ENTREGA (Logística) ---
+    public function updateZonaEntrega(Request $request, $id) {
+        $request->validate([
+            'nombre' => 'required|string|max:255',
+            'costo_base' => 'required|numeric|min:0',
+            'activo' => 'boolean'
+        ]);
+
+        CatalogoZonaEntrega::findOrFail($id)->update([
+            'nombre' => $request->nombre,
+            'costo_base' => $request->costo_base,
+            'activo' => $request->activo ?? false
+        ]);
+
+        return back()->with('success', 'Costos de la zona logística actualizados.');
+    }
+
+    public function destroyZonaEntrega($id) {
+        // En lugar de borrar el polígono y romper el mapa, aplicamos un borrado lógico o lo desactivamos
+        CatalogoZonaEntrega::findOrFail($id)->update(['activo' => false]);
+        return back()->with('success', 'Zona de entrega desactivada del mapa.');
     }
 }
