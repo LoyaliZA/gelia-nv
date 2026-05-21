@@ -160,14 +160,13 @@ Route::middleware(['auth'])->group(function () {
                 Route::delete('/tipo-clientes/{id}', [CatalogoController::class, 'destroyTipoCliente'])->name('tipo_clientes.destroy');
 
                 // Zonas Logísticas (Entregas)
-                // Protegidas con el permiso específico del módulo de entregas
-                Route::put('/zonas-entrega/{id}', [CatalogoController::class, 'updateZonaEntrega'])
-                    ->name('zonas_entrega.update')
-                    ->middleware('can:entregas.configurar_zonas');
+                Route::put('/zonas-entrega/{id}', [CatalogoController::class, 'updateZonaEntrega'])->name('zonas_entrega.update')->middleware('can:entregas.configurar_zonas');
+                Route::delete('/zonas-entrega/{id}', [CatalogoController::class, 'destroyZonaEntrega'])->name('zonas_entrega.destroy')->middleware('can:entregas.configurar_zonas');
 
-                Route::delete('/zonas-entrega/{id}', [CatalogoController::class, 'destroyZonaEntrega'])
-                    ->name('zonas_entrega.destroy')
-                    ->middleware('can:entregas.configurar_zonas');
+                // Horarios de Entrega
+                Route::post('/horarios-entrega', [CatalogoController::class, 'storeHorarioEntrega'])->name('horarios_entrega.store')->middleware('can:entregas.configurar_zonas');
+                Route::put('/horarios-entrega/{id}', [CatalogoController::class, 'updateHorarioEntrega'])->name('horarios_entrega.update')->middleware('can:entregas.configurar_zonas');
+                Route::delete('/horarios-entrega/{id}', [CatalogoController::class, 'destroyHorarioEntrega'])->name('horarios_entrega.destroy')->middleware('can:entregas.configurar_zonas');
             });
         });
 

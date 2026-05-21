@@ -17,6 +17,7 @@ export default function TablaZonasEntrega({ datos = [], auth }) {
 
     const { data, setData, put, processing, errors, reset } = useForm({
         nombre: '',
+        color_hex: '#000000',
         costo_base: '',
         activo: true
     });
@@ -28,6 +29,7 @@ export default function TablaZonasEntrega({ datos = [], auth }) {
         setZonaSeleccionada(zona);
         setData({
             nombre: zona.nombre,
+            color_hex: zona.color_hex,
             costo_base: zona.costo_base,
             activo: zona.activo
         });
@@ -168,6 +170,25 @@ export default function TablaZonasEntrega({ datos = [], auth }) {
                                 />
                                 {errors.nombre && <p className="text-xs text-red-500 mt-1 font-bold">{errors.nombre}</p>}
                             </div>
+                            {/* Selector de Color Cartográfico */}
+                            <div>
+                                <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2">
+                                    Color en Mapa
+                                </label>
+                                <div className="flex items-center gap-4 theme-element border theme-border rounded-xl p-2">
+                                    <input
+                                        type="color"
+                                        value={data.color_hex}
+                                        onChange={e => setData('color_hex', e.target.value)}
+                                        className="w-10 h-10 rounded cursor-pointer border-0 bg-transparent p-0"
+                                    />
+                                    <span className="text-sm font-bold theme-text-main uppercase">
+                                        {data.color_hex}
+                                    </span>
+                                </div>
+                                {errors.color_hex && <p className="text-xs text-red-500 mt-1 font-bold">{errors.color_hex}</p>}
+                            </div>
+
 
                             <div>
                                 <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2">

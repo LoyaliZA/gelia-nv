@@ -138,29 +138,57 @@ class CatalogoController extends Controller
         return back()->with('success', 'Tipo de cliente eliminado.');
     }
 
-    // Asegúrate de agregar esta importación en la parte superior del archivo:
-    // use App\Models\CatalogoZonaEntrega;
-
-    // --- 7. CATÁLOGO DE ZONAS DE ENTREGA (Logística) ---
+    // ----------------------------------------------------------------------
+    // 7. CATÁLOGO DE ZONAS DE ENTREGA (Actualizado con Color)
+    // ----------------------------------------------------------------------
     public function updateZonaEntrega(Request $request, $id) {
         $request->validate([
             'nombre' => 'required|string|max:255',
+            'color_hex' => 'required|string|size:7',
             'costo_base' => 'required|numeric|min:0',
             'activo' => 'boolean'
         ]);
 
         CatalogoZonaEntrega::findOrFail($id)->update([
             'nombre' => $request->nombre,
+            'color_hex' => $request->color_hex,
             'costo_base' => $request->costo_base,
             'activo' => $request->activo ?? false
         ]);
 
-        return back()->with('success', 'Costos de la zona logística actualizados.');
+        return back()->with('success', 'Costos y color de la zona logística actualizados.');
     }
 
     public function destroyZonaEntrega($id) {
-        // En lugar de borrar el polígono y romper el mapa, aplicamos un borrado lógico o lo desactivamos
         CatalogoZonaEntrega::findOrFail($id)->update(['activo' => false]);
         return back()->with('success', 'Zona de entrega desactivada del mapa.');
+    }
+
+    // ----------------------------------------------------------------------
+    // 8. CATÁLOGO DE HORARIOS DE ENTREGA
+    // ----------------------------------------------------------------------
+    public function storeHorarioEntrega(Request $request) {
+        CatalogoHorarioEntrega::create($request->validate([
+            'zona_id' => 'required|exists:catalogo_zonas_entrega,id',
+            'hora_inicio' => 'required|date_format:H:i',
+            'hora_fin' => 'required|date_format:H:i|after:hora_inicio',
+            'activo' => 'boolean'
+        ]));
+        return back()->with('success', 'Horario de entrega registrado.');
+    }
+
+    public function updateHorarioEntrega(Request $request, $id) {
+        CatalogoHorarioEntrega::findOrFail($id)->update($request->validate([
+            'zona_id' => 'required|exists:catalogo_zonas_entrega,id',
+            'hora_inicio' => 'required|date_format:H:i|date_format:H:i:s', // Soporta ambos formatos al editar
+            'hora_fin' => 'required|date_format:H:i|date_format:H:i:s',
+            'activo' => 'boolean'
+        ]));
+        return back()->with('success', 'Horario de entrega actualizado.');
+    }
+
+    public function destroyHorarioEntrega($id) {
+        CatalogoHorarioEntrega::findOrFail($id)->delete();
+        return back()->with('success', 'Horario de entrega eliminado.');
     }
 }
