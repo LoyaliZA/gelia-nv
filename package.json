@@ -18,6 +18,7 @@
     },
     "dependencies": {
         "@inertiajs/react": "^3.0.3",
+        "@react-google-maps/api": "^2.20.8",
         "@vitejs/plugin-react": "^6.0.1",
         "animejs": "^4.4.1",
         "axios": "^1.16.0",

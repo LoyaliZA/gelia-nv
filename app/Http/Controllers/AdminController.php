@@ -22,6 +22,8 @@ use App\Models\User;
 use App\Models\Departamento;
 use App\Models\Area;
 use App\Models\CatalogoSexo;
+use App\Models\CatalogoZonaEntrega;
+use App\Models\CatalogoHorarioEntrega;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
 
 class AdminController extends Controller
@@ -41,6 +43,8 @@ class AdminController extends Controller
             'departamentos' => Departamento::orderBy('nombre')->get(),
             'areas'         => Area::with('departamento')->orderBy('nombre')->get(),
             'tipos_cliente' => CatalogoTipoCliente::orderBy('nombre')->get(), // <-- Añadido
+            'zonas_entrega' => CatalogoZonaEntrega::orderBy('nombre')->get(), // <-- Añadido
+            'horarios_entrega' => CatalogoHorarioEntrega::with('zona')->get(),
         ]);
     }
 

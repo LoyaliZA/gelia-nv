@@ -5,8 +5,10 @@ import {
     Menu, X, Moon, Sun, Bell, Home, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History
+    FolderTree, Calculator, History, Map
 } from 'lucide-react';
+
+import GeliaLogo from './GeliaLogo';
 
 import NotificationBell from './NotificationBell';
 
@@ -172,23 +174,26 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                 </button>
 
                 <div className={`flex theme-border ${isFixed ? 'flex-col items-center space-y-8 pt-8 border-t w-full' : 'items-center px-3 sm:px-4 border-l space-x-3 sm:space-x-5'}`}>
-                    <Link href={route('dashboard')} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
-                        <Home className="w-5 h-5" />
-                    </Link>
+                    
+                    {/* 1. Botón de Tema (Ahora en la posición del Home) */}
+                    <button onClick={toggleTheme} className="transition-transform active:scale-90 hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
+                        {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                    </button>
 
-                    {/* Botón de Atrás (Flecha) */}
+                    {/* 2. Botón de Atrás (Se mantiene en su posición) */}
                     <button onClick={() => window.history.back()} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
 
-                    <button onClick={toggleTheme} className="transition-transform active:scale-90 hover:scale-110 outline-none" style={{ color: 'var(--color-primario)' }}>
-                        {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                    </button>
+                    {/* 3. Botón Home con Diamante (Ahora en el centro) */}
+                    <Link href={route('dashboard')} className="transition-transform hover:scale-110 active:scale-90 outline-none flex items-center justify-center">
+                        <GeliaLogo variant="sparkle" className="w-7 h-7 drop-shadow-sm" />
+                    </Link>
 
-                    {/* --- REEMPLAZA LA CAMPANA ANTIGUA CON ESTO --- */}
+                    {/* 4. Campana de Notificaciones (Se mantiene) */}
                     <NotificationBell notifications={user?.notifications || []} />
-                    {/* --------------------------------------------- */}
 
+                    {/* 5. Avatar de Perfil (Se mantiene) */}
                     <Link
                         href={route('profile.edit')}
                         className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all border outline-none group ${isFixed ? 'w-12 h-12 mt-4' : 'w-9 h-9 sm:w-10 sm:h-10'} ${isRouteActive('/profile') ? 'border-[var(--color-primario)] shadow-md' : 'theme-element theme-border'}`}
@@ -247,6 +252,21 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                             <div className="flex items-center">
                                 <Users className="w-4 h-4 mr-4" style={{ color: isRouteActive('/mis-clientes') ? '#ffffff' : 'var(--color-primario)' }} />
                                 <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mis Clientes_</span>
+                            </div>
+                        </Link>
+                    )}
+
+                    {/* NUEVO ENLACE: ÁREA LOGÍSTICA / ENTREGAS */}
+                    {can('entregas.cotizar') && (
+                        <Link
+                            href={route('entregas.index')}
+                            className={linkBaseClass + (isRouteActive('/entregas') ? linkActiveClass : linkInactiveClass)}
+                            onMouseEnter={(e) => { if (!isRouteActive('/entregas')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                            onMouseLeave={(e) => { if (!isRouteActive('/entregas')) e.currentTarget.style.borderColor = 'transparent' }}
+                        >
+                            <div className="flex items-center">
+                                <Map className="w-4 h-4 mr-4" style={{ color: isRouteActive('/entregas') ? '#ffffff' : 'var(--color-primario)' }} />
+                                <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Cotizar Entregas</span>
                             </div>
                         </Link>
                     )}
