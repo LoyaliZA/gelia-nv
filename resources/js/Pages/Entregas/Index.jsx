@@ -79,7 +79,7 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
     // ----------------------------------------------------------------------
     return (
         <AppLayout auth={auth}>
-            <Head title="Área Logística" />
+            <Head title="Cotización de Entregas" />
             <style>{ESTILOS_ADICIONALES}</style>
 
             {/* 2. Contenedor Principal: 
@@ -97,7 +97,7 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                             <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>Panel Logístico</p>
                         </div>
                         <h1 className="text-3xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main m-0">
-                            ÁREA DE <span style={{ color: 'var(--color-primario)' }}>ENTREGAS</span>
+                            COTIZACIÓN DE <span style={{ color: 'var(--color-primario)' }}>ENTREGAS</span>
                         </h1>
                     </div>
                     {/* En el encabezado, modifica el botón así: */}
@@ -216,6 +216,27 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                                         <p className="text-sm font-bold theme-text-main mt-0.5">{resultado.distancia_km} km</p>
                                     </div>
 
+                                    {/* SECCIÓN DE HORARIOS DISPONIBLES */}
+                                    {resultado.horarios && resultado.horarios.length > 0 && (
+                                        <div className="pt-4 border-t theme-border mt-2">
+                                            <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-2 mb-3">
+                                                <Clock className="w-3.5 h-3.5" /> Ventanas de Entrega
+                                            </span>
+                                            <div className="flex flex-col gap-2">
+                                                {resultado.horarios.map((horario, index) => (
+                                                    <div key={index} className="flex items-center justify-between theme-element border theme-border rounded-xl px-4 py-2">
+                                                        <span className="text-xs font-bold theme-text-main">
+                                                            {horario.hora_inicio.substring(0, 5)} hrs — {horario.hora_fin.substring(0, 5)} hrs
+                                                        </span>
+                                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* ------------------------------------ */}
+
+                                    {/* El costo final original se mantiene igual debajo de este bloque */}
                                     <div className="pt-4 border-t theme-border mt-2">
                                         <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Costo Final</span>
                                         <div className="text-4xl font-black italic tracking-tighter mt-1" style={{ color: 'var(--color-primario)' }}>

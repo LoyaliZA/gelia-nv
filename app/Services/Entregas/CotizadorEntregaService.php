@@ -43,13 +43,22 @@ class CotizadorEntregaService
             $coordenadasPoligono = $zona->coordenadas_poligono['coordinates'][0] ?? [];
 
             if ($this->puntoEnPoligono($lonCliente, $latCliente, $coordenadasPoligono)) {
+
+                // ----------------------------------------------------------------------
+                // EXTRACCIÓN DE HORARIOS
+                // ----------------------------------------------------------------------
+                $horariosDisponibles = $zona->horarios()
+                    ->where('activo', true)
+                    ->orderBy('hora_inicio')
+                    ->get(['hora_inicio', 'hora_fin']);
                 return [
                     'es_valido' => true,
                     'zona_id' => $zona->id,
                     'nombre_zona' => $zona->nombre,
                     'costo_envio' => $zona->costo_base,
                     'distancia_km' => round($distanciaKm, 2),
-                    'tipo_tarifa' => 'zona_base'
+                    'tipo_tarifa' => 'zona_base',
+                    'horarios' => $horariosDisponibles
                 ];
             }
         }
