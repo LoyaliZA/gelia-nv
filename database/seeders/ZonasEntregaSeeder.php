@@ -14,7 +14,7 @@ class ZonasEntregaSeeder extends Seeder
     public function run(): void
     {
         // 1. Definición de ruta absoluta al archivo
-        $rutaArchivo = storage_path('app/villahermosa.json');
+        $rutaArchivo = database_path('data/villahermosa.json');
         
         if (!File::exists($rutaArchivo)) {
             $this->command->error('No se encontró el archivo exactamente en: ' . $rutaArchivo);
