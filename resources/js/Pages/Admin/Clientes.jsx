@@ -4,12 +4,13 @@ import {
     Users, Upload, Search,
     FileSpreadsheet, TrendingUp,
     CheckCircle, Database, Edit3, ChevronDown, Sparkles,
-    ChevronLeft, ChevronRight, Plus
+    ChevronLeft, ChevronRight, Plus, Shield
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
 // --- IMPORTACIÓN DEL PARCIAL ---
 import ModalFormCliente from './Partials/ModalFormCliente';
+import ModalConfiguracionEspecial from './Partials/ModalConfiguracionEspecial';
 
 // --- ESTILOS COMPARTIDOS ---
 const ESTILOS_ADICIONALES = `
@@ -84,6 +85,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
 
     // Control del Modal unificado
     const [modalConfig, setModalConfig] = useState({ abierto: false, modo: null, cliente: null });
+    const [panelProteccionAbierto, setPanelProteccionAbierto] = useState(false);
 
     const formCarga = useForm({
         archivo: null,
@@ -186,6 +188,13 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                 />
             )}
 
+            {/* --- PANEL DE PROTECCION --- */}
+            {panelProteccionAbierto && (
+                <ModalConfiguracionEspecial 
+                    onClose={() => setPanelProteccionAbierto(false)} 
+                />
+            )}
+
             {/* Renderizado del Modal de Reporte de Importación */}
             {reporteModal && (
                 <ModalReporteImportacion 
@@ -210,13 +219,24 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                         </h1>
                     </div>
 
-                    <button
-                        onClick={() => abrirModal('crear')}
-                        className="py-4 px-8 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl outline-none flex justify-center items-center gap-2"
-                        style={{ backgroundColor: 'var(--color-primario)' }}
-                    >
-                        <Plus className="w-5 h-5" /> Nuevo Cliente_
-                    </button>
+                    {/* --- BOTONES DE ACCION --- */}
+                    <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                        <button
+                            onClick={() => setPanelProteccionAbierto(true)}
+                            className="py-4 px-6 theme-element border theme-border theme-text-main rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:shadow-md outline-none flex justify-center items-center gap-2 group"
+                        >
+                            <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" style={{ color: 'var(--color-primario)' }} /> 
+                            Protección_
+                        </button>
+
+                        <button
+                            onClick={() => abrirModal('crear')}
+                            className="py-4 px-8 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl outline-none flex justify-center items-center gap-2"
+                            style={{ backgroundColor: 'var(--color-primario)' }}
+                        >
+                            <Plus className="w-5 h-5" /> Nuevo Cliente_
+                        </button>
+                    </div>
                 </header>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">

@@ -7,6 +7,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use App\Models\ConfiguracionEntrega;
 use App\Models\CatalogoZonaEntrega;
+use App\Models\CatalogoZonaRestringida;
 use Illuminate\Support\Facades\Crypt;
 
 class EntregasController extends Controller
@@ -53,10 +54,21 @@ class EntregasController extends Controller
             ];
         });
 
+        // Zonas prohibidas (Formateadas igual que las zonas normales para React)
+        $zonasRestringidas = CatalogoZonaRestringida::where('activo', true)->get()->map(function ($zr) {
+            $coordenadasGeoJson = $zr->coordenadas_poligono['coordinates'][0] ?? [];
+            return [
+                'id' => $zr->id,
+                'nombre' => $zr->nombre,
+                'rutas_formateadas' => array_map(fn($punto) => ['lat' => (float) $punto[1], 'lng' => (float) $punto[0]], $coordenadasGeoJson)
+            ];
+        });
+
         return Inertia::render('Entregas/Index', [
             'configuracion' => $configuracion,
             'googleApiKey' => $apiKey,
-            'zonas' => $zonasFormateadas 
+            'zonas' => $zonasFormateadas,
+            'zonas_restringidas' => $zonasRestringidas // <-- Prop nueva
         ]);
     }
 
@@ -103,7 +115,7 @@ class EntregasController extends Controller
             'costo_base' => 'required|numeric|min:0',
         ]);
 
-        \App\Models\CatalogoZonaEntrega::create([
+        CatalogoZonaEntrega::create([
             'nombre' => $request->nombre,
             // Estructuramos el arreglo en formato GeoJSON estándar para nuestra BD
             'coordenadas_poligono' => [

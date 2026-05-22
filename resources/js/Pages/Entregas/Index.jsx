@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
+import { useJsApiLoader } from '@react-google-maps/api'; 
 import {
     MapPin, Navigation, Search, CheckCircle2,
     AlertTriangle, Settings2, Clock, CheckSquare
@@ -9,8 +10,11 @@ import AppLayout from '@/Layouts/AppLayout';
 import MapaGoogle from '@/Components/Entregas/MapaGoogle';
 import ModalConfiguracionLogistica from './Partials/ModalConfiguracionLogistica';
 
-// 1. Agregamos la animación que tienes en tu módulo principal
-// para no depender de librerías externas y mantener el estándar.
+// ----------------------------------------------------------------------
+// CONSTANTES GLOBALES Y ESTILOS DEL WEB COMPONENT
+// ----------------------------------------------------------------------
+const LIBRERIAS_GOOGLE = ['places'];
+
 const ESTILOS_ADICIONALES = `
     @keyframes slideUpFade { 
         0% { opacity: 0; transform: translateY(20px); } 
@@ -20,39 +24,213 @@ const ESTILOS_ADICIONALES = `
         opacity: 0; 
         animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
     }
+    
+    /* ---------------------------------------------------------------------- */
+    /* FIX: Estilización del Web Component de Google (PlaceAutocompleteElement) */
+    /* ---------------------------------------------------------------------- */
+    gmp-place-autocomplete {
+        display: block; /* Fuerza comportamiento de bloque en el Web Component */
+        width: 100%;
+    }
+    gmp-place-autocomplete::part(input) {
+        display: block;
+        width: 100%;
+        box-sizing: border-box; /* Previene desbordamiento del padding */
+        padding: 1rem 1rem 1rem 3.5rem; /* Ajuste para el icono de búsqueda */
+        background-color: transparent;
+        border: 1px solid var(--border-color, #e5e7eb);
+        border-radius: 0.75rem; 
+        color: inherit;
+        font-family: inherit; /* Hereda la tipografía de la aplicación */
+        font-size: 0.875rem; 
+        font-weight: 700; 
+        outline: none;
+        transition: all 0.3s ease;
+        margin: 0;
+    }
+    gmp-place-autocomplete::part(input):focus {
+        border-color: var(--color-primario);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primario) 20%, transparent);
+    }
+    .dark gmp-place-autocomplete::part(input) {
+        border-color: #3f3f46; 
+    }
 `;
 
-export default function Index({ auth, configuracion, googleApiKey, zonas }) {
+// ----------------------------------------------------------------------
+// COMPONENTE PRINCIPAL
+// ----------------------------------------------------------------------
+export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_restringidas }) {
+    
     // ----------------------------------------------------------------------
-    // ESTADO DEL COMPONENTE Y SEGURIDAD
+    // ESTADO DEL COMPONENTE
     // ----------------------------------------------------------------------
-    const can = (permiso) => auth?.user?.permissions?.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
-    const canConfigurar = can('entregas.configurar_zonas');
-
     const [coordenadas, setCoordenadas] = useState({ latitud: '', longitud: '' });
     const [direccion, setDireccion] = useState('');
     const [cargando, setCargando] = useState(false);
     const [resultado, setResultado] = useState(null);
     const [modalConfigAbierto, setModalConfigAbierto] = useState(false);
     const [errorMotor, setErrorMotor] = useState(null);
-
-    const actualizarCoordenadasDesdeMapa = (lat, lng) => {
-        setCoordenadas({ latitud: lat.toFixed(8), longitud: lng.toFixed(8) });
-        // Limpiamos la búsqueda manual al interactuar con el mapa
-        setDireccion('');
-    };
+    
+    const autocompleteContainerRef = useRef(null);
 
     // ----------------------------------------------------------------------
-    // MANEJADORES DE EVENTOS
+    // INICIALIZACIÓN Y PERMISOS
+    // ----------------------------------------------------------------------
+    const { isLoaded, loadError } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: googleApiKey || '',
+        libraries: LIBRERIAS_GOOGLE
+    });
+
+    const can = (permiso) => auth?.user?.permissions?.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
+    const canConfigurar = can('entregas.configurar_zonas');
+
+    // ----------------------------------------------------------------------
+    // FUNCIONES DE PARSEO Y FORMATEO
+    // ----------------------------------------------------------------------
+    const analizarCoordenadasPgadas = (texto) => {
+        if (!texto) return null;
+        const cadena = texto.trim();
+
+        try {
+            // 1. Formato Decimal Directo
+            const regexDecimal = /^(-?\d{1,3}\.\d+)[\s,]+(-?\d{1,3}\.\d+)$/;
+            const matchDecimal = cadena.match(regexDecimal);
+            if (matchDecimal) {
+                return { lat: parseFloat(matchDecimal[1]), lng: parseFloat(matchDecimal[2]) };
+            }
+
+            // 2. Formato WhatsApp / GPS
+            const regexDMS = /(\d+)[°\s]+(\d+)['\s]+([\d.]+)["\s]+([NS])[\s,]*(\d+)[°\s]+(\d+)['\s]+([\d.]+)["\s]+([EW])/i;
+            const matchDMS = cadena.match(regexDMS);
+            if (matchDMS) {
+                let latitud = parseFloat(matchDMS[1]) + (parseFloat(matchDMS[2]) / 60) + (parseFloat(matchDMS[3]) / 3600);
+                if (matchDMS[4].toUpperCase() === 'S') latitud = latitud * -1;
+
+                let longitud = parseFloat(matchDMS[5]) + (parseFloat(matchDMS[6]) / 60) + (parseFloat(matchDMS[7]) / 3600);
+                if (matchDMS[8].toUpperCase() === 'W') longitud = longitud * -1;
+
+                return { lat: latitud, lng: longitud };
+            }
+        } catch (error) {
+            console.error("Error analizando coordenadas:", error);
+        }
+
+        return null; 
+    };
+
+    const actualizarCoordenadasDesdeMapa = (lat, lng, limpiarInput = false) => {
+        if (typeof lat !== 'number' || typeof lng !== 'number') return;
+        
+        setCoordenadas({ latitud: lat.toFixed(8), longitud: lng.toFixed(8) });
+        
+        // Solo limpiamos el buscador si el usuario interactuó directamente con el mapa
+        if (limpiarInput) {
+            setDireccion('');
+            if (autocompleteContainerRef.current && autocompleteContainerRef.current.firstChild) {
+                autocompleteContainerRef.current.firstChild.value = '';
+            }
+        }
+    };
+    // ----------------------------------------------------------------------
+    // EFECTOS (LIFECYCLE)
+    // ----------------------------------------------------------------------
+    useEffect(() => {
+        if (!isLoaded || !autocompleteContainerRef.current) return;
+
+        try {
+            autocompleteContainerRef.current.innerHTML = '';
+
+            // 1. Instanciamos el componente
+            const autocompleteElement = new window.google.maps.places.PlaceAutocompleteElement({
+                componentRestrictions: { country: 'mx' }
+            });
+
+            // 2. FIX DE ACCESIBILIDAD Y VALIDACIÓN
+            // Asignamos propiedades antes de que se renderice en el DOM
+            autocompleteElement.setAttribute('placeholder', 'Buscar zona o dirección...');
+            autocompleteElement.setAttribute('aria-label', 'Campo de búsqueda de ubicaciones de entrega');
+            
+            // Opcional: Limpiar el aria-labelledby si Google lo inyecta vacío por defecto
+            autocompleteElement.removeAttribute('aria-labelledby');
+
+            autocompleteElement.addEventListener('gmp-placeselect', async (e) => {
+                const place = e.place;
+                if (!place) return;
+
+                try {
+                    await place.fetchFields({ fields: ['location', 'displayName', 'formattedAddress'] });
+                    
+                    if (place.location) {
+                        const lat = place.location.lat();
+                        const lng = place.location.lng();
+                        actualizarCoordenadasDesdeMapa(lat, lng);
+                        setDireccion(place.formattedAddress || place.displayName);
+                    }
+                } catch (fetchError) {
+                    setErrorMotor('Error al obtener los detalles de la ubicación seleccionada.');
+                    console.error("Error fetchFields:", fetchError);
+                }
+            });
+
+            autocompleteElement.addEventListener('gmp-placeselect', async (e) => {
+                const place = e.place;
+                if (!place) return;
+
+                try {
+                    await place.fetchFields({ fields: ['location', 'displayName', 'formattedAddress'] });
+                    
+                    if (place.location) {
+                        const lat = place.location.lat();
+                        const lng = place.location.lng();
+                        // FIX: Pasamos false para NO limpiar el buscador
+                        actualizarCoordenadasDesdeMapa(lat, lng, false);
+                        setDireccion(place.formattedAddress || place.displayName);
+                    }
+                } catch (fetchError) {
+                    setErrorMotor('Error al obtener los detalles de la ubicación seleccionada.');
+                    console.error("Error fetchFields:", fetchError);
+                }
+            });
+
+            autocompleteElement.addEventListener('input', (e) => {
+                const valor = e.target.value;
+                setDireccion(valor);
+                const coordenadasDetectadas = analizarCoordenadasPgadas(valor);
+                if (coordenadasDetectadas) {
+                    // FIX: Pasamos false para NO limpiar lo que acaba de pegar
+                    actualizarCoordenadasDesdeMapa(coordenadasDetectadas.lat, coordenadasDetectadas.lng, false);
+                }
+            });
+
+            // 3. Montamos en el DOM
+            autocompleteContainerRef.current.appendChild(autocompleteElement);
+
+        } catch (initError) {
+            setErrorMotor('Error al inicializar el motor de búsqueda inteligente.');
+            console.error("Error inicializando PlaceAutocompleteElement:", initError);
+        }
+
+        return () => {
+            if (autocompleteContainerRef.current) {
+                autocompleteContainerRef.current.innerHTML = '';
+            }
+        };
+
+    }, [isLoaded]);
+
+    // ----------------------------------------------------------------------
+    // FUNCIONES DE NEGOCIO (COTIZACIÓN)
     // ----------------------------------------------------------------------
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setCoordenadas({ ...coordenadas, [name]: value });
+        setCoordenadas(prev => ({ ...prev, [name]: value }));
     };
 
     const solicitarCotizacion = async () => {
         if (!coordenadas.latitud || !coordenadas.longitud) {
-            setErrorMotor('Ingresa las coordenadas en la barra superior.');
+            setErrorMotor('Por favor, ingresa las coordenadas válidas en la barra superior antes de cotizar.');
             return;
         }
 
@@ -62,12 +240,15 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
 
         try {
             const response = await axios.post('/api/entregas/cotizar', coordenadas);
-            setResultado(response.data);
+            if (response.data) {
+                setResultado(response.data);
+            }
         } catch (error) {
-            if (error.response && error.response.data) {
+            console.error("Error en cotización:", error);
+            if (error.response?.data?.mensaje) {
                 setErrorMotor(error.response.data.mensaje);
             } else {
-                setErrorMotor('Error de conexión con el motor matemático.');
+                setErrorMotor('Error de conexión con el motor matemático. Verifica la red o contacta a soporte.');
             }
         } finally {
             setCargando(false);
@@ -75,21 +256,18 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
     };
 
     // ----------------------------------------------------------------------
-    // RENDERIZADO DE INTERFAZ
+    // RENDERIZADO DEL DOM
     // ----------------------------------------------------------------------
     return (
         <AppLayout auth={auth}>
             <Head title="Cotización de Entregas" />
             <style>{ESTILOS_ADICIONALES}</style>
 
-            {/* 2. Contenedor Principal: 
-                Igualamos el margen y padding máximo que usaste en Solicitudes 
-            */}
             <div className="max-w-[1440px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
 
-                {/* 3. ENCABEZADO DEL MÓDULO AL ESTILO GELIANV
-                    Le damos el fondo theme-surface, los bordes gruesos y la tipografía grande e itálica.
-                */}
+                {/* ---------------------------------------------------------------------- */}
+                {/* CABECERA */}
+                {/* ---------------------------------------------------------------------- */}
                 <header className="animate-page-reveal theme-surface rounded-3xl md:rounded-[2.5rem] p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 border theme-border shadow-xl">
                     <div className="w-full md:w-auto text-center md:text-left">
                         <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">
@@ -100,7 +278,6 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                             COTIZACIÓN DE <span style={{ color: 'var(--color-primario)' }}>ENTREGAS</span>
                         </h1>
                     </div>
-                    {/* En el encabezado, modifica el botón así: */}
                     {canConfigurar && (
                         <button
                             onClick={() => setModalConfigAbierto(true)}
@@ -112,24 +289,27 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                     )}
                 </header>
 
-                {/* 4. BARRA DE HERRAMIENTAS (Buscador y Coordenadas)
-                    Aquí aplicamos los inputs redondeados de gran tamaño (px-12 py-4) para igualar tu buscador.
-                */}
-                <div className="animate-page-reveal flex flex-col lg:flex-row gap-4 items-center justify-between" style={{ animationDelay: '100ms' }}>
+                {/* ---------------------------------------------------------------------- */}
+                {/* BARRA DE HERRAMIENTAS Y BÚSQUEDA */}
+                {/* ---------------------------------------------------------------------- */}
+                <div className="relative z-[50] animate-page-reveal flex flex-col lg:flex-row gap-4 items-center justify-between" style={{ animationDelay: '100ms' }}>
 
-                    {/* Buscador Visual */}
-                    <div className="relative w-full flex-1">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted" />
-                        <input
-                            type="text"
-                            value={direccion}
-                            onChange={(e) => setDireccion(e.target.value)}
-                            placeholder="Buscar dirección en el mapa..."
-                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm placeholder:text-gray-400"
-                        />
+                    {/* FIX Z-INDEX: Agregamos z-[60] al buscador para que sus sugerencias estén sobre el mapa */}
+                    <div className="relative z-[60] w-full flex-1 theme-surface rounded-xl shadow-sm border theme-border">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                        
+                        {isLoaded ? (
+                            <div ref={autocompleteContainerRef} className="w-full relative z-0"></div>
+                        ) : (
+                            <input
+                                type="text"
+                                disabled
+                                placeholder="Cargando motor de búsqueda inteligente..."
+                                className="w-full pl-14 pr-4 py-4 bg-transparent border-none rounded-xl text-gray-400 text-sm font-bold shadow-sm outline-none"
+                            />
+                        )}
                     </div>
 
-                    {/* Controles de Coordenadas y Cotización */}
                     <div className="flex flex-col md:flex-row items-center gap-4 w-full lg:w-auto">
                         <div className="flex items-center gap-2 theme-surface border theme-border rounded-xl px-4 py-4 text-sm shadow-sm w-full md:w-auto font-bold">
                             <Navigation className="w-5 h-5 theme-text-muted" />
@@ -164,18 +344,15 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                     </div>
                 </div>
 
-                {/* 5. CUERPO DEL MÓDULO (Resultados y Mapa)
-                    Lo encerramos en una caja grande rounded-[2.5rem] idéntica a tu tabla de Solicitudes.
-                */}
+                {/* ---------------------------------------------------------------------- */}
+                {/* ÁREA DE RESULTADOS Y MAPA */}
+                {/* ---------------------------------------------------------------------- */}
                 <div className="animate-page-reveal theme-surface rounded-[2.5rem] border theme-border shadow-2xl overflow-hidden bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl flex flex-col-reverse lg:flex-row min-h-[500px]" style={{ animationDelay: '200ms' }}>
-
-                    {/* Panel Lateral: Resultados */}
                     <div className="w-full lg:w-[380px] border-r theme-border p-8 flex flex-col bg-slate-50/50 dark:bg-black/10">
                         <h3 className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-6 flex items-center gap-2">
                             <CheckSquare className="w-4 h-4" /> Resumen Logístico
                         </h3>
 
-                        {/* Estado Vacío */}
                         {!resultado && !errorMotor && (
                             <div className="flex flex-col items-center justify-center text-center h-full opacity-50 space-y-4 py-10 lg:py-0">
                                 <MapPin className="w-12 h-12 theme-text-muted" />
@@ -183,7 +360,6 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                             </div>
                         )}
 
-                        {/* Manejo de Errores */}
                         {errorMotor && (
                             <div className="p-4 rounded-2xl border bg-red-50 dark:bg-red-500/5 border-red-200 dark:border-red-500/20 shadow-sm flex items-start gap-3">
                                 <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
@@ -191,7 +367,6 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                             </div>
                         )}
 
-                        {/* Tarjeta de Cotización Exitosa */}
                         {resultado && (
                             <div className="space-y-6 animate-page-reveal">
                                 <div className="theme-surface border theme-border p-6 rounded-3xl shadow-lg relative flex flex-col gap-4">
@@ -216,7 +391,6 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                                         <p className="text-sm font-bold theme-text-main mt-0.5">{resultado.distancia_km} km</p>
                                     </div>
 
-                                    {/* SECCIÓN DE HORARIOS DISPONIBLES */}
                                     {resultado.horarios && resultado.horarios.length > 0 && (
                                         <div className="pt-4 border-t theme-border mt-2">
                                             <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-2 mb-3">
@@ -234,9 +408,7 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                                             </div>
                                         </div>
                                     )}
-                                    {/* ------------------------------------ */}
 
-                                    {/* El costo final original se mantiene igual debajo de este bloque */}
                                     <div className="pt-4 border-t theme-border mt-2">
                                         <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Costo Final</span>
                                         <div className="text-4xl font-black italic tracking-tighter mt-1" style={{ color: 'var(--color-primario)' }}>
@@ -248,7 +420,6 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                         )}
                     </div>
 
-                    {/* Área del Mapa */}
                     <div className="flex-1 relative bg-[#e5e5e5] dark:bg-[#0f0f0f] flex items-center justify-center min-h-[400px] lg:min-h-full rounded-r-[2.5rem]">
                         {!googleApiKey ? (
                             <div className="flex flex-col items-center gap-3 opacity-60 p-6 text-center">
@@ -262,18 +433,24 @@ export default function Index({ auth, configuracion, googleApiKey, zonas }) {
                             </div>
                         ) : (
                             <MapaGoogle 
-                                key={googleApiKey} // <-- ESTA LÍNEA DESTRUYE Y RECONSTRUYE EL MAPA AL CAMBIAR LA LLAVE
+                                key={googleApiKey}
                                 apiKey={googleApiKey}
                                 coordenadas={coordenadas}
                                 configuracion={configuracion}
                                 zonas={zonas || []}
+                                zonas_restringidas={zonas_restringidas || []}
                                 onCoordenadasChange={actualizarCoordenadasDesdeMapa}
+                                isLoaded={isLoaded}
+                                loadError={loadError}
                             />
                         )}
                     </div>
                 </div>
             </div>
 
+            {/* ---------------------------------------------------------------------- */}
+            {/* MODALES */}
+            {/* ---------------------------------------------------------------------- */}
             {modalConfigAbierto && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-page-reveal">
                     <div className="w-full max-w-2xl theme-surface border theme-border rounded-[2rem] shadow-2xl p-6 md:p-8 max-h-[90vh] overflow-y-auto relative">

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { GoogleMap, useJsApiLoader, MarkerF, Polygon } from '@react-google-maps/api';
+import { GoogleMap, MarkerF, Polygon } from '@react-google-maps/api';
 import { AlertTriangle } from 'lucide-react';
 
 // ----------------------------------------------------------------------
@@ -140,11 +140,11 @@ const ESTILO_CONTENEDOR = {
     borderRadius: 'inherit'
 };
 
-export default function MapaGoogle({ apiKey, coordenadas, onCoordenadasChange, configuracion, zonas = [] }) {
+export default function MapaGoogle({ apiKey, coordenadas, onCoordenadasChange, configuracion, zonas = [], zonas_restringidas = [], isLoaded, loadError }) {
     // ----------------------------------------------------------------------
     // ESTADO E INICIALIZACIÓN
     // ----------------------------------------------------------------------
-    const { isLoaded, loadError } = useJsApiLoader({ id: 'google-map-script', googleMapsApiKey: apiKey || '' });
+    
     const [map, setMap] = useState(null);
     const [isDarkMode, setIsDarkMode] = useState(false);
     
@@ -234,6 +234,22 @@ export default function MapaGoogle({ apiKey, coordenadas, onCoordenadasChange, c
                         fillOpacity: 0.35,
                         strokeColor: zona.color_hex || '#000000',
                         strokeOpacity: 0.8,
+                        strokeWeight: 2,
+                        clickable: false
+                    }}
+                />
+            ))}
+
+            {/* Capa de Zonas Restringidas (Alertas visuales en el mapa) */}
+            {zonas_restringidas && zonas_restringidas.map((zr, index) => (
+                <Polygon 
+                    key={`restringida-${index}`}
+                    paths={zr.rutas_formateadas}
+                    options={{
+                        fillColor: '#b91c1c', // Rojo alerta
+                        fillOpacity: 0.15, // Más tenue para no tapar los nombres de las calles
+                        strokeColor: '#ef4444', 
+                        strokeOpacity: 0.9,
                         strokeWeight: 2,
                         clickable: false
                     }}

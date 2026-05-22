@@ -4,6 +4,7 @@ namespace App\Services\Entregas;
 
 use App\Models\ConfiguracionEntrega;
 use App\Models\CatalogoZonaEntrega;
+use App\Models\CatalogoZonaRestringida;
 use Exception;
 
 class CotizadorEntregaService
@@ -23,7 +24,23 @@ class CotizadorEntregaService
             throw new Exception("La configuración del sistema de entregas no ha sido inicializada.");
         }
 
-        // 1. Validar la distancia máxima permitida (Seguro del Jefe)
+        // ----------------------------------------------------------------------
+        // FILTRO 1: ZONAS RESTRINGIDAS (Geofencing Negativo)
+        // ----------------------------------------------------------------------
+        $zonasRestringidas = CatalogoZonaRestringida::where('activo', true)->get();
+
+        foreach ($zonasRestringidas as $zr) {
+            $poligonoRestringido = $zr->coordenadas_poligono['coordinates'][0] ?? [];
+
+            if ($this->puntoEnPoligono($lonCliente, $latCliente, $poligonoRestringido)) {
+                // Si cae aquí, detenemos el proceso inmediatamente
+                throw new Exception("Lo sentimos, no hay cobertura en esta zona por políticas de acceso y rutas federales.");
+            }
+        }
+
+        // ----------------------------------------------------------------------
+        // FILTRO 2: SEGURO DEL JEFE (Distancia máxima lineal)
+        // ----------------------------------------------------------------------
         $distanciaKm = $this->calcularDistanciaHaversine(
             $config->latitud_origen,
             $config->longitud_origen,
@@ -35,22 +52,21 @@ class CotizadorEntregaService
             throw new Exception("El domicilio se encuentra fuera de nuestra área máxima de cobertura ({$config->radio_tolerancia_km} km).");
         }
 
-        // 2. Verificar si el cliente pertenece a una zona predefinida (Polígonos)
+        // ----------------------------------------------------------------------
+        // FILTRO 3: ZONAS COMERCIALES (Polígonos de reparto)
+        // ----------------------------------------------------------------------
         $zonas = CatalogoZonaEntrega::where('activo', true)->get();
 
         foreach ($zonas as $zona) {
-            // Se asume estructura estándar de GeoJSON: {"type": "Polygon", "coordinates": [[[lon, lat], [lon, lat], ...]]}
             $coordenadasPoligono = $zona->coordenadas_poligono['coordinates'][0] ?? [];
 
             if ($this->puntoEnPoligono($lonCliente, $latCliente, $coordenadasPoligono)) {
-
-                // ----------------------------------------------------------------------
-                // EXTRACCIÓN DE HORARIOS
-                // ----------------------------------------------------------------------
+                
                 $horariosDisponibles = $zona->horarios()
                     ->where('activo', true)
                     ->orderBy('hora_inicio')
                     ->get(['hora_inicio', 'hora_fin']);
+
                 return [
                     'es_valido' => true,
                     'zona_id' => $zona->id,
@@ -63,7 +79,9 @@ class CotizadorEntregaService
             }
         }
 
-        // 3. Cálculo Híbrido: Está dentro de los 12km de tolerancia, pero no en un polígono (Zona Extra)
+        // ----------------------------------------------------------------------
+        // FILTRO 4: CÁLCULO HÍBRIDO (Periferia permitida)
+        // ----------------------------------------------------------------------
         $costoFinal = $this->calcularCostoPeriferia($config, $distanciaKm);
 
         return [

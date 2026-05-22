@@ -19,12 +19,14 @@ class Cliente extends Model
         'vendedor_original_id', // Agregado a la asignación masiva
         'monto_venta_actual',
         'es_heredado',
-        'catalogo_tipo_cliente_id', // <-- CORREGIDO: Se quitó la "s" para coincidir con la DB
+        'catalogo_tipo_cliente_id',
+        'lista_bloqueada', // <-- NUEVO CAMPO PARA CONTROLAR BLOQUEO DE LISTA
     ];
 
     protected $casts = [
         'monto_venta_actual' => 'decimal:2',
         'es_heredado' => 'boolean',
+        'lista_bloqueada' => 'boolean',
     ];
 
     /**

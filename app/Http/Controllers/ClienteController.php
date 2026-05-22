@@ -145,4 +145,61 @@ class ClienteController extends Controller
             ])->withInput();
         }
     }
+    /**
+     * Obtiene los clientes con listas protegidas o administrativas.
+     */
+    public function obtenerEspeciales()
+    {
+        $clientesEspeciales = Cliente::with(['listaDescuento'])
+            ->where('lista_bloqueada', true)
+            ->orWhereHas('listaDescuento', function($q) {
+                $q->whereIn('nombre', ['COLABORADORES', 'PLATAFORMAS']);
+            })
+            ->get(['id', 'numero_cliente', 'nombre', 'lista_actual_id', 'lista_bloqueada']);
+
+        return response()->json($clientesEspeciales);
+    }
+
+    /**
+     * Activa o desactiva la protección de lista para un cliente específico.
+     */
+    public function toggleBloqueoLista(Request $request)
+    {
+        $validated = $request->validate([
+            'cliente_id' => 'required|exists:clientes,id',
+            'bloquear'   => 'required|boolean'
+        ]);
+
+        $cliente = Cliente::findOrFail($validated['cliente_id']);
+        $cliente->update([
+            'lista_bloqueada' => $validated['bloquear']
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'mensaje' => 'Estado de protección actualizado correctamente.'
+        ]);
+    }
+
+    /**
+     * Activa o desactiva la protección de lista para múltiples clientes a la vez.
+     */
+    public function toggleBloqueoMasivo(Request $request)
+    {
+        $validated = $request->validate([
+            'cliente_ids'   => 'required|array',
+            'cliente_ids.*' => 'exists:clientes,id',
+            'bloquear'      => 'required|boolean'
+        ]);
+
+        Cliente::whereIn('id', $validated['cliente_ids'])->update([
+            'lista_bloqueada' => $validated['bloquear']
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'mensaje' => 'Estado de protección actualizado masivamente.'
+        ]);
+    }
+    
 }

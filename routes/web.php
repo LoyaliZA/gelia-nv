@@ -119,6 +119,13 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['can:clientes.ver'])->group(function () {
             Route::get('/clientes', [AdminController::class, 'clientes'])->name('clientes');
             Route::post('/clientes/importar', [AdminController::class, 'importarClientes'])->name('clientes.importar');
+            
+            // --- NUEVAS RUTAS PARA EL BLINDAJE DE LISTAS ---
+            Route::get('/clientes/especiales/protegidos', [ClienteController::class, 'obtenerEspeciales'])->name('clientes.especiales');
+            Route::post('/clientes/toggle-bloqueo', [ClienteController::class, 'toggleBloqueoLista'])->name('clientes.toggle_bloqueo');
+            Route::post('/clientes/toggle-bloqueo-masivo', [ClienteController::class, 'toggleBloqueoMasivo'])->name('clientes.toggle_bloqueo_masivo');
+            // -----------------------------------------------
+
             Route::get('/clientes/{cliente}/historial', [AdminController::class, 'historialCliente'])->name('clientes.historial');
             Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');
             Route::put('/clientes/{cliente}', [ClienteController::class, 'update'])->name('clientes.update');
