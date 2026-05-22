@@ -180,25 +180,29 @@ class AdminController extends Controller
     public function clientes(): Response
     {
         // 1. Cargamos clientes con sus relaciones para la tabla
-        // 'tipo' es la relación que definimos en el modelo Cliente.php
         $clientes = Cliente::with(['vendedor', 'listaDescuento', 'tipo'])->get();
 
-        // 2. Obtenemos las vendedoras (Asumiendo que usas Spatie Roles)
-        // Si no usas roles, puedes usar User::all() o el filtro que prefieras
+        // 2. Obtenemos las vendedoras
         $vendedores = User::all();
 
-        // 3. Obtenemos el nuevo catálogo de tipos (Nuevo, Reactivado, etc.)
-        // Usamos el bloque try-catch por si la tabla aún tiene detalles de migración
+        // 3. Obtenemos el catálogo de tipos de cliente
         try {
             $tipos_cliente = CatalogoTipoCliente::where('activo', true)->orderBy('nombre')->get();
         } catch (\Exception $e) {
-            $tipos_cliente = []; // Evita que la app truene si hay error de base de datos
+            $tipos_cliente = []; 
         }
 
+        // 4. Obtenemos el catálogo de listas de descuento activas (LO NUEVO)
+        $listas = CatalogoListaDescuento::where('activo', true)
+            ->orderBy('monto_requerido', 'desc')
+            ->get();
+
+        // 5. Enviamos todo a la vista de React
         return Inertia::render('Admin/Clientes', [
             'clientes'      => $clientes,
             'vendedores'    => $vendedores,
             'tipos_cliente' => $tipos_cliente,
+            'listas'        => $listas, // <-- INYECTADO PARA EL MODAL 360
         ]);
     }
 

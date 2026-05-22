@@ -72,7 +72,7 @@ const ModalReporteImportacion = ({ reporte, onClose }) => {
     );
 };
 
-export default function Clientes({ auth, clientes = [], vendedores = [], tipos_cliente = [] }) {
+export default function Clientes({ auth, clientes = [], vendedores = [], tipos_cliente = [], listas = [] }) {
 
     // --- SECCIÓN: ESTADOS GLOBALES ---
     const [busqueda, setBusqueda] = useState('');
@@ -185,6 +185,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                     clienteActual={modalConfig.cliente}
                     tiposCliente={tipos_cliente}
                     vendedores={vendedores}
+                    listas={listas}
                 />
             )}
 
