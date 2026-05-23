@@ -5,7 +5,7 @@ import {
     Menu, X, Moon, Sun, Bell, Home, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History, Map
+    FolderTree, Calculator, History, Map, FileText
 } from 'lucide-react';
 
 import GeliaLogo from './GeliaLogo';
@@ -80,6 +80,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     };
 
     const showAdminMenu = ADMIN_MENU_CONFIG.some(item => can(item.permission));
+    const showOperacionesMenu = can('listados.ver');
 
     useEffect(() => {
         if (root.current) {
@@ -269,6 +270,42 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                 <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Cotizar Entregas</span>
                             </div>
                         </Link>
+                    )}
+
+                    {/* --- NUEVA SECCIÓN: FUNCIONES OPERATIVAS --- */}
+                    {/* 1. Evaluamos el Interruptor Maestro. Si tiene AL MENOS UN permiso, entra. */}
+                    {showOperacionesMenu && (
+                        <div className="flex flex-col">
+                            
+                            {/* Etiqueta del Grupo */}
+                            <div className="pt-3 pb-1">
+                                <span className="text-[11px] font-black tracking-[0.3em] px-5 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
+                                    FUNCIONES OPERATIVAS_
+                                </span>
+                            </div>
+
+                            {/* 2. Evaluamos el Interruptor Individual de Listados */}
+                            {can('listados.ver') && (
+                                <Link
+                                    href={route('listados.index')}
+                                    className={linkBaseClass + (isRouteActive('/listados') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/listados')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/listados')) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <div className="flex items-center">
+                                        <FileText className="w-4 h-4 mr-4" style={{ color: isRouteActive('/listados') ? '#ffffff' : 'var(--color-primario)' }} />
+                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Listados_</span>
+                                    </div>
+                                </Link>
+                            )}
+
+                            {/* 💡 AQUÍ ABAJO IRÁN TUS FUTUROS DESARROLLOS */}
+                            {/* {can('tu_nueva_funcion.ver') && (
+                                <Link href="..."> ... </Link>
+                            )} 
+                            */}
+
+                        </div>
                     )}
 
                     {showAdminMenu && (

@@ -294,7 +294,7 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const a = document.createElement('a');
             a.href = url;
-            let fileName = `${tipo.toUpperCase()}-${new Date().toISOString().split('T')[0]}.xlsx`;
+            let fileName = `${String(tipo).toUpperCase()}-${new Date().toISOString().split('T')[0]}.xlsx`;
             const cd = response.headers['content-disposition'];
             if (cd) { const m = /filename="?([^"]+)"?/.exec(cd); if (m && m[1]) fileName = m[1]; }
             a.download = fileName;

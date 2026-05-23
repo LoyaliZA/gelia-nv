@@ -68,7 +68,13 @@ class DashboardController extends Controller
     {
         // 1. Validamos que recibimos el array con la nomenclatura oficial del frontend
         $request->validate([
-            'dashboard_ocultos' => 'array'
+            'dashboard_ocultos' => 'sometimes|array',
+            'dashboard_layout' => 'nullable|array',
+            'dashboard_layout.*.i' => 'required_with:dashboard_layout|string|max:64',
+            'dashboard_layout.*.x' => 'required_with:dashboard_layout|integer|min:0|max:11',
+            'dashboard_layout.*.y' => 'required_with:dashboard_layout|integer|min:0|max:200',
+            'dashboard_layout.*.w' => 'required_with:dashboard_layout|integer|min:1|max:12',
+            'dashboard_layout.*.h' => 'required_with:dashboard_layout|integer|min:1|max:100',
         ]);
 
         $user = $request->user();
@@ -81,8 +87,13 @@ class DashboardController extends Controller
         // 3. Decodificamos el JSON existente o creamos un array vacío si es la primera vez
         $temaVisual = $configActual ? json_decode($configActual->tema_visual, true) : [];
 
-        // 4. Modificamos SOLO la parte de las tarjetas ocultas del Dashboard
-        $temaVisual['dashboard_ocultos'] = $request->input('dashboard_ocultos', []);
+        // 4. Tarjetas ocultas y disposición del panel (grid)
+        if ($request->has('dashboard_ocultos')) {
+            $temaVisual['dashboard_ocultos'] = $request->input('dashboard_ocultos', []);
+        }
+        if ($request->has('dashboard_layout') && is_array($request->input('dashboard_layout'))) {
+            $temaVisual['dashboard_layout'] = $request->input('dashboard_layout');
+        }
 
         // 5. Guardamos o insertamos el JSON actualizado sin tocar colores, layout ni fuentes
         DB::table('configuraciones_usuarios')->updateOrInsert(
