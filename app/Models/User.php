@@ -73,4 +73,16 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(User::class, 'gerente_colaborador', 'gerente_id', 'colaborador_id');
     }
+    // Listas creadas por el usuario
+    public function customLists()
+    {
+        return $this->hasMany(CustomList::class);
+    }
+
+    // Listas que le han compartido
+    public function sharedCustomLists()
+    {
+        return $this->belongsToMany(CustomList::class, 'custom_list_user', 'user_id', 'custom_list_id');
+    }
+    
 }

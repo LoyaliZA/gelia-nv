@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\CotizacionEntregaController;
 use App\Http\Controllers\Api\ClienteApiController;
 use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\Admin\AuditoriaListaDescuentoController;
+use App\Http\Controllers\AromasListasController;
 
 // ══════════════════════════════════════════════════════════════════════
 // 1. REDIRECCIÓN INICIAL
@@ -97,6 +98,22 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/entregas/cotizador', [EntregasController::class, 'index'])->name('entregas.index');
         Route::put('/entregas/configuracion', [EntregasController::class, 'actualizarConfiguracion'])->name('entregas.configuracion.update')->middleware('can:entregas.configurar_zonas');
         Route::post('/entregas/zonas', [EntregasController::class, 'storeZona'])->name('entregas.zonas.store')->middleware('can:entregas.configurar_zonas');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FUNCIONES OPERATIVAS: CRUCE DE INVENTARIOS (LISTADOS)
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:listados.ver'])->prefix('funciones/listados')->name('listados.')->group(function () {
+        Route::get('/', [AromasListasController::class, 'index'])->name('index');
+        Route::post('/generar', [AromasListasController::class, 'generar'])->name('generar');
+        Route::get('/descargar-temporal', [AromasListasController::class, 'descargarTemporal'])->name('descargar_temporal');
+        
+        Route::post('/guardar', [AromasListasController::class, 'guardarLista'])->name('guardar')->middleware('can:listados.crear');
+        Route::post('/{id}/actualizar', [AromasListasController::class, 'actualizarLista'])->name('actualizar')->middleware('can:listados.editar');
+        Route::delete('/{id}', [AromasListasController::class, 'eliminarLista'])->name('eliminar')->middleware('can:listados.eliminar');
+        
+        Route::get('/configuracion', [AromasListasController::class, 'obtenerConfiguracion'])->name('config.obtener')->middleware('can:listados.configurar_porcentajes');
+        Route::post('/configuracion', [AromasListasController::class, 'guardarConfiguracion'])->name('config.guardar')->middleware('can:listados.configurar_porcentajes');
     });
 
 

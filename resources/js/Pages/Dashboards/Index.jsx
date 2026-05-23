@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, useForm } from '@inertiajs/react';
-import { LayoutDashboard, Activity, Settings2, X, Check } from 'lucide-react';
+import { LayoutDashboard, Activity, Settings2, X, Check, Layers } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
 // Separación de responsabilidades: Imports de submódulos atómicos
@@ -13,6 +13,7 @@ import ModuleSolicitudes from './Modules/ModuleSolicitudes';
 import ModuleMisClientes from './Modules/ModuleMisClientes';
 import ModuleEntregas from './Modules/ModuleEntregas';
 import WidgetSolicitudes from './Widgets/WidgetSolicitudes';
+import FunctionListados from './Functions/FunctionListados';
 
 // Estilos de transiciones nativas de Gelia NV para erradicar librerías de animación de terceros
 const ESTILOS_ANIMACION_NATIVA = `
@@ -38,6 +39,15 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [] }) {
     const { data, setData, put, processing } = useForm({
         dashboard_ocultos: dashboardOcultosBD
     });
+
+    // Matriz de Funciones Operativas
+    const catalogoFunciones = [
+        { id: 'func_listados', titulo: 'Cruce de Inventarios', permiso: 'listados.ver', componente: FunctionListados }
+    ];
+
+    // Lógica de visibilidad (añádela justo debajo de las tarjetasVisibles)
+    const funcionesHabilitadas = catalogoFunciones.filter(func => can(func.permiso));
+    const funcionesVisibles = funcionesHabilitadas.filter(func => !dashboardOcultosBD.includes(func.id));
 
     useEffect(() => {
         if (showConfig) document.body.style.overflow = 'hidden';
@@ -88,7 +98,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [] }) {
             <style>{ESTILOS_ANIMACION_NATIVA}</style>
 
             <div className="w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-12 space-y-8 md:space-y-10 min-h-screen relative">
-                
+
                 {/* Encabezado Principal */}
                 <header className="theme-surface border-2 theme-border rounded-[2rem] md:rounded-[3rem] p-6 md:p-8 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10 animate-page-reveal">
                     <div className="space-y-4">
@@ -114,7 +124,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [] }) {
 
                 {/* Contenedor de Módulos y Widgets */}
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 md:gap-10 relative z-10 items-start">
-                    
+
                     {/* Caja de Módulos Operativos */}
                     <div className={`space-y-6 theme-surface border-2 theme-border p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-sm animate-page-reveal ${can('configuracion.ver_auditoria') || can('solicitudes.ver_listado') ? 'xl:col-span-2' : 'xl:col-span-3'}`} style={{ animationDelay: '100ms' }}>
                         <div className="flex items-center justify-between border-b theme-border pb-4">
@@ -122,14 +132,14 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [] }) {
                                 <LayoutDashboard className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
                                 <h2 className="text-sm font-black uppercase tracking-widest theme-text-main">Módulos de Sistema_</h2>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setShowConfig(true)}
                                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl theme-element border theme-border hover:border-[var(--color-primario)] transition-colors theme-text-muted hover:theme-text-main text-[9px] font-black uppercase tracking-widest shadow-sm outline-none"
                             >
                                 <Settings2 className="w-3 h-3" /> Configurar
                             </button>
                         </div>
-                        
+
                         {tarjetasVisibles.length > 0 ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {tarjetasVisibles.map((tarjeta) => {
@@ -146,6 +156,26 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [] }) {
                         )}
                     </div>
 
+                    {/* Renderizado Condicional del Contenedor de Funciones Operativas */}
+                    {funcionesVisibles.length > 0 && (
+                        <div className="xl:col-span-3 space-y-6 theme-surface border-2 theme-border p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-sm animate-page-reveal" style={{ animationDelay: '200ms' }}>
+                            <div className="flex items-center justify-between border-b theme-border pb-4">
+                                <div className="flex items-center gap-3">
+                                    <Layers className="w-5 h-5 text-indigo-500" />
+                                    <h2 className="text-sm font-black uppercase tracking-widest theme-text-main">Funciones Operativas_</h2>
+                                </div>
+                            </div>
+
+                            {/* Añadí sm:grid-cols-2 lg:grid-cols-3 para que el botón tenga el tamaño correcto */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {funcionesVisibles.map((func) => {
+                                    const ComponenteFuncion = func.componente;
+                                    return <ComponenteFuncion key={func.id} />;
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Renderizado Condicional del Widget de Solicitudes */}
                     {(can('configuracion.ver_auditoria') || can('solicitudes.ver_listado')) && (
                         <WidgetSolicitudes ultimas_solicitudes={ultimas_solicitudes} />
@@ -161,19 +191,19 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [] }) {
                         <button type="button" onClick={cerrarModal} className="absolute top-5 right-5 p-2 theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors outline-none">
                             <X className="w-5 h-5" />
                         </button>
-                        
+
                         <h3 className="text-lg font-black uppercase italic tracking-tighter theme-text-main m-0 flex items-center gap-3">
-                            <Settings2 className="w-6 h-6" style={{ color: 'var(--color-primario)' }}/>
+                            <Settings2 className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
                             Personalizar Panel_
                         </h3>
 
                         <div className="space-y-3 max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
                             <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-4 ml-1">Tarjetas operativas disponibles:</p>
-                            
+
                             {tarjetasHabilitadas.map(tarjeta => {
                                 const isVisible = !data.dashboard_ocultos.includes(tarjeta.id);
                                 return (
-                                    <button 
+                                    <button
                                         key={tarjeta.id} type="button" onClick={() => toggleVisibilidad(tarjeta.id)}
                                         className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-[11px] font-black uppercase tracking-widest outline-none ${isVisible ? 'border-[var(--color-primario)] bg-[var(--color-primario)]/5 theme-text-main' : 'theme-border theme-element theme-text-muted hover:border-[var(--color-primario)]/30'}`}
                                     >
@@ -184,9 +214,9 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [] }) {
                             })}
                         </div>
 
-                        <button 
+                        <button
                             type="button" onClick={guardarPreferencias} disabled={processing}
-                            className="w-full py-4 rounded-full text-white font-black uppercase tracking-widest text-[11px] shadow-md flex justify-center items-center gap-2 outline-none m-0" 
+                            className="w-full py-4 rounded-full text-white font-black uppercase tracking-widest text-[11px] shadow-md flex justify-center items-center gap-2 outline-none m-0"
                             style={{ backgroundColor: 'var(--color-primario)' }}
                         >
                             <Check className="w-5 h-5" /> {processing ? 'Procesando...' : 'Aplicar Preferencias'}

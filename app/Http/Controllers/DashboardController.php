@@ -58,6 +58,7 @@ class DashboardController extends Controller
             'estadisticas' => $estadisticas,
             'ultimas_solicitudes' => $ultimasSolicitudes // Enviamos la data a Inertia/React
         ]);
+
     }
 
     /**
@@ -76,7 +77,7 @@ class DashboardController extends Controller
         $configActual = DB::table('configuraciones_usuarios')
             ->where('user_id', $user->id)
             ->first();
-        
+
         // 3. Decodificamos el JSON existente o creamos un array vacío si es la primera vez
         $temaVisual = $configActual ? json_decode($configActual->tema_visual, true) : [];
 
