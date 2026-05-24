@@ -84,7 +84,8 @@ class EntregasController extends Controller
             'tarifa_envio_extra' => 'required|numeric|min:0',
             'cobro_extra_por_km' => 'required|boolean',
             'usar_api_distancia' => 'required|boolean',
-            'api_key_google' => 'nullable|string'
+            'api_key_google' => 'nullable|string',
+            'google_map_id' => 'nullable|string|max:128',
         ]);
 
         $configuracion = ConfiguracionEntrega::first();

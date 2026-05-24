@@ -151,7 +151,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     };
 
     // 1. Contenedor Base: Ocupa todo el ancho pero NO bloquea los clics
-    let navClasses = "fixed z-50 flex pointer-events-none ";
+    let navClasses = "fixed z-[200] flex pointer-events-none ";
     if (isMobileMode) navClasses += "bottom-6 left-0 right-0 w-full flex-col-reverse items-center";
     else if (isFixed) navClasses += "top-0 left-0 h-screen flex-row";
     else navClasses += `top-6 flex-col ${isRight ? 'right-6 items-end' : 'left-6 items-start'}`;
@@ -197,7 +197,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     {/* 5. Avatar de Perfil (Se mantiene) */}
                     <Link
                         href={route('profile.edit')}
-                        className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all border outline-none group ${isFixed ? 'w-12 h-12 mt-4' : 'w-9 h-9 sm:w-10 sm:h-10'} ${isRouteActive('/profile') ? 'border-[var(--color-primario)] shadow-md' : 'theme-element theme-border'}`}
+                        className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all border outline-none group ${isFixed ? 'w-12 h-12 mt-4' : 'w-9 h-9 sm:w-10 sm:h-10'} ${isRouteActive('/perfil') ? 'border-[var(--color-primario)] shadow-md' : 'theme-element theme-border'}`}
                     >
                         {user?.foto_perfil ? (
                             <img src={`/storage/${user.foto_perfil}`} alt="Perfil" className="w-full h-full object-cover rounded-full transition-transform group-hover:scale-110" />

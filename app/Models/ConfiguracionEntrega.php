@@ -22,6 +22,7 @@ class ConfiguracionEntrega extends Model
         'cobro_extra_por_km',
         'usar_api_distancia',
         'api_key_google',
+        'google_map_id',
     ];
 
     /**

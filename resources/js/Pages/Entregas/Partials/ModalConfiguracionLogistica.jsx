@@ -18,6 +18,7 @@ export default function ModalConfiguracionLogistica({ configuracion, onClose }) 
         cobro_extra_por_km: !!configuracion?.cobro_extra_por_km,
         usar_api_distancia: !!configuracion?.usar_api_distancia,
         api_key_google: '', // Se mantiene vacío por seguridad; solo se envía si el usuario desea cambiarla
+        google_map_id: configuracion?.google_map_id || '',
     });
 
     /*
@@ -72,6 +73,27 @@ export default function ModalConfiguracionLogistica({ configuracion, onClose }) 
                         />
                     </div>
                     {errors.api_key_google && <p className="text-xs text-red-500 mt-1 font-bold">{errors.api_key_google}</p>}
+                </div>
+
+                <div className="md:col-span-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2">
+                        Map ID — Marcadores avanzados (Google Cloud)
+                    </label>
+                    <div className="flex items-center theme-element border theme-border rounded-xl px-4 py-1 focus-within:ring-2 focus-within:ring-[var(--color-primario)] transition-all">
+                        <Map className="w-4 h-4 theme-text-muted shrink-0" />
+                        <input
+                            type="text"
+                            value={data.google_map_id}
+                            onChange={(e) => setData('google_map_id', e.target.value)}
+                            className="w-full bg-transparent border-none p-3 text-sm font-bold theme-text-main outline-none focus:ring-0 placeholder:text-gray-400 placeholder:font-normal"
+                            placeholder="ej. a1b2c3d4e5f6g7h8 (Map ID vectorial)"
+                        />
+                    </div>
+                    <p className="text-[10px] theme-text-muted mt-1.5 font-medium leading-relaxed">
+                        Opcional. Si lo dejas vacío, el mapa usa el estilo monocromático integrado de la app.
+                        Si lo configuras, el estilo se define en Google Cloud (Map Management → Map ID) y se activa el marcador avanzado.
+                    </p>
+                    {errors.google_map_id && <p className="text-xs text-red-500 mt-1 font-bold">{errors.google_map_id}</p>}
                 </div>
 
                 {/* Coordenadas Punto Central */}

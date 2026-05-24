@@ -6,6 +6,12 @@ import { Bell, X } from 'lucide-react';
 
 import NotificationService from '../Services/NotificationBrowserService';
 import GeliaLoader from '../Components/GeliaLoader'; // <-- 1. IMPORTAMOS EL LOADER
+import {
+    clampFontScale,
+    FONT_SCALE_DEFAULT,
+    FONT_SCALE_STORAGE_KEY,
+    applyFontScaleToRoot,
+} from '../utils/fontScale';
 
 const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
@@ -130,12 +136,30 @@ export default function AppLayout({ children }) {
             const savedTheme = localStorage.getItem('theme');
             if (savedTheme) setIsDarkMode(savedTheme === 'dark');
 
-            const savedLayout = localStorage.getItem('theme_layout');
-            if (savedLayout) setSidebarLayout(savedLayout);
+            const savedLayout = localStorage.getItem('theme_layout')
+                || auth?.tema_visual?.layout_sidebar
+                || 'floating_left';
+            setSidebarLayout(savedLayout);
         };
+
+        const onLayoutPreview = (event) => {
+            if (event.detail?.layout) setSidebarLayout(event.detail.layout);
+        };
+
         window.addEventListener('theme-changed', syncThemeState);
-        return () => window.removeEventListener('theme-changed', syncThemeState);
-    }, []);
+        window.addEventListener('theme-layout-preview', onLayoutPreview);
+        return () => {
+            window.removeEventListener('theme-changed', syncThemeState);
+            window.removeEventListener('theme-layout-preview', onLayoutPreview);
+        };
+    }, [auth?.tema_visual?.layout_sidebar]);
+
+    useEffect(() => {
+        const layout = localStorage.getItem('theme_layout')
+            || auth?.tema_visual?.layout_sidebar
+            || 'floating_left';
+        setSidebarLayout(layout);
+    }, [url, auth?.tema_visual?.layout_sidebar]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -180,6 +204,14 @@ export default function AppLayout({ children }) {
             mono: "'JetBrains Mono', monospace"
         };
         root.style.setProperty('--font-principal', fontMap[activeFont] || fontMap.inter);
+
+        const savedScale = typeof window !== 'undefined' ? localStorage.getItem(FONT_SCALE_STORAGE_KEY) : null;
+        const activeScale = clampFontScale(
+            savedScale !== null && savedScale !== ''
+                ? savedScale
+                : (tema.escala_fuente ?? FONT_SCALE_DEFAULT)
+        );
+        applyFontScaleToRoot(activeScale);
 
         const savedGlass = typeof window !== 'undefined' ? localStorage.getItem('theme_glass') : null;
         const isGlassActive = savedGlass !== null
@@ -226,24 +258,25 @@ export default function AppLayout({ children }) {
                     layout={sidebarLayout}
                 />
 
-                <main className={`transition-all duration-500 bg-transparent max-w-7xl mx-auto min-h-screen px-4 md:px-6 pb-32 md:pb-20 ${sidebarLayout === 'fixed' ? 'md:ml-24 pt-6 md:pt-12' : 'pt-6 md:pt-24'}`}>
-                    {/* Al usar key={url}, React desmonta y monta este div en cada cambio de ruta, disparando la animación CSS nativa */}
-                    <div key={url} className="animate-page-reveal">
-                        {children}
-                    </div>
-                </main>
-
-                {/* MODAL GLOBAL */}
-                {isModalOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in" onClick={closeModal}>
-                        <div className="w-full max-w-lg bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 modal-pop border border-gray-200 dark:border-[#222222] max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                            {modalContent}
+                {/* Zoom solo en contenido: el sidebar fixed queda fuera y funciona igual en /perfil */}
+                <div className="gelia-ui-scale min-h-dvh w-full">
+                    <main className={`transition-all duration-500 bg-transparent max-w-7xl mx-auto min-h-screen px-4 md:px-6 pb-32 md:pb-20 ${sidebarLayout === 'fixed' ? 'md:ml-24 pt-6 md:pt-12' : 'pt-6 md:pt-24'}`}>
+                        <div key={url} className="animate-page-reveal">
+                            {children}
                         </div>
-                    </div>
-                )}
+                    </main>
 
-                {/* TOASTS FLOTANTES */}
-                <div className="fixed top-6 right-6 z-[10000] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
+                    {/* MODAL GLOBAL */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in" onClick={closeModal}>
+                            <div className="w-full max-w-lg bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 modal-pop border border-gray-200 dark:border-[#222222] max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                                {modalContent}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TOASTS FLOTANTES */}
+                    <div className="fixed top-6 right-6 z-[10000] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
                     {toasts.map((toast) => (
                         <div key={toast.id} className="pointer-events-auto theme-surface border theme-border shadow-2xl rounded-2xl p-4 flex items-start gap-4 animate-slide-in-right overflow-hidden relative group">
                             <div className="absolute bottom-0 left-0 h-1 bg-[var(--color-primario)] animate-progress-shrink" />
@@ -259,12 +292,21 @@ export default function AppLayout({ children }) {
                             </button>
                         </div>
                     ))}
+                    </div>
                 </div>
 
                 <style>{`
                     :root { --bg-app: #FFFFFF; --bg-actual: var(--bg-image-movil, none); }
                     .dark { --bg-app: #0a0a0a; }
                     @media (min-width: 768px) { :root { --bg-actual: var(--bg-image-pc, none); } }
+                    .gelia-ui-scale {
+                        zoom: var(--font-scale, 1);
+                    }
+                    @supports not (zoom: 1) {
+                        .gelia-ui-scale {
+                            font-size: calc(16px * var(--font-scale, 1));
+                        }
+                    }
                     html, body, input, select, textarea, button { font-family: var(--font-principal) !important; }
 
                     .theme-surface { background-color: #ffffff; border-color: #f4f4f5; transition: background-color 0.3s, border-color 0.3s, backdrop-filter 0.3s; }

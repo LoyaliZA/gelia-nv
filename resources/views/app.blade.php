@@ -6,6 +6,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@400;700;900&family=Nunito:wght@400;700;900&family=Poppins:wght@400;700;900&family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
     <title>GELIA</title>
 
+    <script>
+        (function () {
+            var KEY = 'theme_font_scale', MIN = 0.875, MAX = 1.5, STEP = 0.0625, DEF = 1;
+            var raw = localStorage.getItem(KEY);
+            var n = raw !== null && raw !== '' ? parseFloat(raw) : DEF;
+            if (!Number.isFinite(n)) n = DEF;
+            n = Math.round(n / STEP) * STEP;
+            n = Math.max(MIN, Math.min(MAX, Number(n.toFixed(4))));
+            document.documentElement.style.setProperty('--font-scale', String(n));
+        })();
+    </script>
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" id="dynamic-favicon">
 

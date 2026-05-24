@@ -1,134 +1,31 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { GoogleMap, MarkerF, Polygon } from '@react-google-maps/api';
 import { AlertTriangle } from 'lucide-react';
 
-// ----------------------------------------------------------------------
-// CONSTANTES DE DISEÑO (ESTILO CLARO MONOCROMÁTICO)
-// ----------------------------------------------------------------------
 const ESTILO_CLARO = [
-    {
-        elementType: "geometry",
-        stylers: [{ color: "#f5f5f5" }]
-    },
-    // Íconos visibles, sin color (escala de grises) y ligeramente aclarados
-    {
-        elementType: "labels.icon",
-        stylers: [
-            { visibility: "on" },
-            { saturation: -100 },
-            { lightness: 15 }
-        ]
-    },
-    {
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#616161" }]
-    },
-    {
-        elementType: "labels.text.stroke",
-        stylers: [{ color: "#f5f5f5" }]
-    },
-    {
-        featureType: "poi",
-        elementType: "geometry",
-        stylers: [{ color: "#eeeeee" }]
-    },
-    {
-        featureType: "poi",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#757575" }]
-    },
-    {
-        featureType: "road",
-        elementType: "geometry",
-        stylers: [{ color: "#ffffff" }]
-    },
-    {
-        featureType: "road.highway",
-        elementType: "geometry",
-        stylers: [{ color: "#dadada" }]
-    },
-    {
-        featureType: "water",
-        elementType: "geometry",
-        stylers: [{ color: "#c9c9c9" }]
-    }
+    { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+    { elementType: 'labels.icon', stylers: [{ visibility: 'on' }, { saturation: -100 }, { lightness: 15 }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
+    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9c9c9' }] },
 ];
 
-// ----------------------------------------------------------------------
-// CONSTANTES DE DISEÑO (MODO OSCURO - GOOGLE CLOUD STYLE)
-// ----------------------------------------------------------------------
 const ESTILO_OSCURO = [
-    {
-        elementType: "geometry",
-        stylers: [{ color: "#212121" }]
-    },
-    // Íconos visibles, sin color (escala de grises) y oscurecidos para no brillar de más
-    {
-        elementType: "labels.icon",
-        stylers: [
-            { visibility: "on" }, 
-            { saturation: -100 },
-            { lightness: -40 }
-        ]
-    },
-    {
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#9e9e9e" }]
-    },
-    {
-        elementType: "labels.text.stroke",
-        stylers: [{ color: "#212121" }]
-    },
-    {
-        featureType: "poi",
-        elementType: "geometry",
-        stylers: [{ color: "#181818" }]
-    },
-    {
-        featureType: "poi",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#bdbdbd" }]
-    },
-    {
-        featureType: "road",
-        elementType: "geometry.fill",
-        stylers: [{ color: "#2c2c2c" }]
-    },
-    {
-        featureType: "road",
-        elementType: "geometry.stroke",
-        stylers: [{ color: "#5c5c5c" }, { weight: 1.5 }]
-    },
-    {
-        featureType: "road",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#8a8a8a" }]
-    },
-    {
-        featureType: "road.arterial",
-        elementType: "geometry",
-        stylers: [{ color: "#373737" }]
-    },
-    {
-        featureType: "road.highway",
-        elementType: "geometry",
-        stylers: [{ color: "#3c3c3c" }]
-    },
-    {
-        featureType: "road.highway",
-        elementType: "geometry.stroke",
-        stylers: [{ color: "#4d4d4d" }, { weight: 2 }]
-    },
-    {
-        featureType: "water",
-        elementType: "geometry",
-        stylers: [{ color: "#000000" }]
-    },
-    {
-        featureType: "water",
-        elementType: "labels.text.fill",
-        stylers: [{ color: "#3d3d3d" }]
-    }
+    { elementType: 'geometry', stylers: [{ color: '#212121' }] },
+    { elementType: 'labels.icon', stylers: [{ visibility: 'on' }, { saturation: -100 }, { lightness: -40 }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#181818' }] },
+    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
+    { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#2c2c2c' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#5c5c5c' }, { weight: 1.5 }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3c3c3c' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
+    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3d3d3d' }] },
 ];
 
 const ESTILO_CONTENEDOR = {
@@ -137,58 +34,186 @@ const ESTILO_CONTENEDOR = {
     position: 'absolute',
     top: 0,
     left: 0,
-    borderRadius: 'inherit'
+    borderRadius: 'inherit',
 };
 
-export default function MapaGoogle({ apiKey, coordenadas, onCoordenadasChange, configuracion, zonas = [], zonas_restringidas = [], isLoaded, loadError }) {
-    // ----------------------------------------------------------------------
-    // ESTADO E INICIALIZACIÓN
-    // ----------------------------------------------------------------------
-    
+function resolverMapId(configuracion) {
+    const desdeConfig = configuracion?.google_map_id?.trim();
+    if (desdeConfig) return desdeConfig;
+
+    const desdeEnv = import.meta.env.VITE_GOOGLE_MAP_ID?.trim();
+    if (desdeEnv) return desdeEnv;
+
+    return null;
+}
+
+function obtenerPosicionMarcador(coordenadas, center) {
+    if (coordenadas?.latitud && coordenadas?.longitud) {
+        const lat = parseFloat(coordenadas.latitud);
+        const lng = parseFloat(coordenadas.longitud);
+        if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+            return { lat, lng };
+        }
+    }
+    return center;
+}
+
+export default function MapaGoogle({
+    apiKey,
+    coordenadas,
+    onCoordenadasChange,
+    configuracion,
+    zonas = [],
+    zonas_restringidas = [],
+    isLoaded,
+    loadError,
+    viewportBusqueda = null,
+}) {
     const [map, setMap] = useState(null);
     const [isDarkMode, setIsDarkMode] = useState(false);
-    
+    const markerAvanzadoRef = useRef(null);
+
+    const mapId = resolverMapId(configuracion);
+    const usaMapIdCloud = Boolean(mapId);
+
     const [center, setCenter] = useState({
         lat: parseFloat(configuracion?.latitud_origen || 17.99300568),
-        lng: parseFloat(configuracion?.longitud_origen || -92.94544775)
+        lng: parseFloat(configuracion?.longitud_origen || -92.94544775),
     });
 
-    // ----------------------------------------------------------------------
-    // EFECTOS (TEMA Y COORDENADAS)
-    // ----------------------------------------------------------------------
-    useEffect(() => {
-        if (coordenadas?.latitud && coordenadas?.longitud) {
-            setCenter({
-                lat: parseFloat(coordenadas.latitud),
-                lng: parseFloat(coordenadas.longitud)
-            });
+    const posicionMarcador = useMemo(
+        () => obtenerPosicionMarcador(coordenadas, center),
+        [coordenadas, center]
+    );
+
+    const mapOptions = useMemo(() => {
+        const base = {
+            disableDefaultUI: true,
+            zoomControl: true,
+        };
+
+        if (usaMapIdCloud) {
+            return { ...base, mapId };
         }
-    }, [coordenadas]);
+
+        return {
+            ...base,
+            styles: isDarkMode ? ESTILO_OSCURO : ESTILO_CLARO,
+        };
+    }, [usaMapIdCloud, mapId, isDarkMode]);
 
     useEffect(() => {
-        // Observador para detectar cambios en el tema de Tailwind
+        if (!coordenadas?.latitud || !coordenadas?.longitud) return;
+
+        const posicion = {
+            lat: parseFloat(coordenadas.latitud),
+            lng: parseFloat(coordenadas.longitud),
+        };
+
+        if (Number.isNaN(posicion.lat) || Number.isNaN(posicion.lng)) return;
+
+        setCenter(posicion);
+
+        if (map) {
+            if (viewportBusqueda) {
+                map.fitBounds(viewportBusqueda);
+            } else {
+                map.panTo(posicion);
+                const zoomActual = map.getZoom();
+                if (!zoomActual || zoomActual < 14) {
+                    map.setZoom(15);
+                }
+            }
+        }
+    }, [coordenadas, map, viewportBusqueda]);
+
+    useEffect(() => {
         const checkTheme = () => setIsDarkMode(document.documentElement.classList.contains('dark'));
         checkTheme();
-        
         const observer = new MutationObserver(checkTheme);
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-        
         return () => observer.disconnect();
     }, []);
 
-    // ----------------------------------------------------------------------
-    // MANEJADORES DE EVENTOS
-    // ----------------------------------------------------------------------
-    const onLoad = useCallback(function callback(map) { setMap(map); }, []);
-    const onUnmount = useCallback(function callback() { setMap(null); }, []);
+    useEffect(() => {
+        if (!map || usaMapIdCloud) return;
+        map.setOptions({ styles: isDarkMode ? ESTILO_OSCURO : ESTILO_CLARO });
+    }, [map, isDarkMode, usaMapIdCloud]);
 
-    const handleInteraction = (e) => {
-        onCoordenadasChange(e.latLng.lat(), e.latLng.lng());
-    };
+    const onLoad = useCallback((mapInstance) => {
+        setMap(mapInstance);
+    }, []);
 
-    // ----------------------------------------------------------------------
-    // RENDERIZADO CONDICIONAL
-    // ----------------------------------------------------------------------
+    const onUnmount = useCallback(() => {
+        if (markerAvanzadoRef.current) {
+            markerAvanzadoRef.current.map = null;
+            markerAvanzadoRef.current = null;
+        }
+        setMap(null);
+    }, []);
+
+    const handleInteraction = useCallback(
+        (lat, lng) => {
+            if (typeof lat === 'number' && typeof lng === 'number') {
+                onCoordenadasChange(lat, lng);
+            }
+        },
+        [onCoordenadasChange]
+    );
+
+    const handleMapClick = useCallback(
+        (e) => handleInteraction(e.latLng.lat(), e.latLng.lng()),
+        [handleInteraction]
+    );
+
+    const handleMarkerDragEnd = useCallback(
+        (e) => handleInteraction(e.latLng.lat(), e.latLng.lng()),
+        [handleInteraction]
+    );
+
+    useEffect(() => {
+        if (!usaMapIdCloud || !map || !isLoaded || !window.google?.maps?.importLibrary) return;
+
+        const posicion = posicionMarcador;
+        let activo = true;
+
+        const sincronizarMarcadorAvanzado = async () => {
+            try {
+                const { AdvancedMarkerElement } = await window.google.maps.importLibrary('marker');
+
+                if (!activo) return;
+
+                if (!markerAvanzadoRef.current) {
+                    markerAvanzadoRef.current = new AdvancedMarkerElement({
+                        map,
+                        position: posicion,
+                        gmpDraggable: true,
+                        title: 'Punto de entrega',
+                    });
+
+                    markerAvanzadoRef.current.addListener('dragend', () => {
+                        const pos = markerAvanzadoRef.current?.position;
+                        if (!pos) return;
+                        const lat = typeof pos.lat === 'function' ? pos.lat() : pos.lat;
+                        const lng = typeof pos.lng === 'function' ? pos.lng() : pos.lng;
+                        handleInteraction(lat, lng);
+                    });
+                } else {
+                    markerAvanzadoRef.current.position = posicion;
+                    markerAvanzadoRef.current.map = map;
+                }
+            } catch (error) {
+                console.error('AdvancedMarkerElement:', error);
+            }
+        };
+
+        sincronizarMarcadorAvanzado();
+
+        return () => {
+            activo = false;
+        };
+    }, [usaMapIdCloud, map, isLoaded, posicionMarcador, handleInteraction]);
+
     if (loadError || !apiKey) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-red-500 gap-3 p-6 text-center">
@@ -201,33 +226,43 @@ export default function MapaGoogle({ apiKey, coordenadas, onCoordenadasChange, c
         );
     }
 
-    if (!isLoaded) return <div className="flex flex-col items-center justify-center h-full gap-4 opacity-50"><div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--color-primario)' }}></div></div>;
+    if (!isLoaded) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full gap-4 opacity-50">
+                <div
+                    className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin"
+                    style={{ borderColor: 'var(--color-primario)' }}
+                />
+            </div>
+        );
+    }
+
+    const tienePin = Boolean(coordenadas?.latitud && coordenadas?.longitud);
 
     return (
         <GoogleMap
+            key={usaMapIdCloud ? `map-cloud-${mapId}` : `map-styled-${isDarkMode ? 'dark' : 'light'}`}
             mapContainerStyle={ESTILO_CONTENEDOR}
             center={center}
             zoom={13}
             onLoad={onLoad}
             onUnmount={onUnmount}
-            onClick={handleInteraction}
-            options={{
-                disableDefaultUI: true,
-                zoomControl: true,
-                styles: isDarkMode ? ESTILO_OSCURO : ESTILO_CLARO // Inyección del estilo dinámico
-            }}
+            onClick={handleMapClick}
+            options={mapOptions}
         >
-            <MarkerF 
-                position={(coordenadas?.latitud && coordenadas?.longitud) ? { lat: parseFloat(coordenadas.latitud), lng: parseFloat(coordenadas.longitud) } : center}
-                draggable={true}
-                onDragEnd={handleInteraction}
-                animation={(coordenadas?.latitud && coordenadas?.longitud) ? window.google.maps.Animation.DROP : null}
-                opacity={(coordenadas?.latitud && coordenadas?.longitud) ? 1 : 0.6}
-            />
+            {!usaMapIdCloud && (
+                <MarkerF
+                    position={posicionMarcador}
+                    draggable
+                    onDragEnd={handleMarkerDragEnd}
+                    animation={tienePin && window.google?.maps?.Animation ? window.google.maps.Animation.DROP : undefined}
+                    opacity={tienePin ? 1 : 0.6}
+                />
+            )}
 
-            {zonas.map((zona, index) => (
-                <Polygon 
-                    key={index}
+            {zonas.map((zona) => (
+                <Polygon
+                    key={zona.id ?? zona.nombre}
                     paths={zona.rutas_formateadas}
                     options={{
                         fillColor: zona.color_hex || '#000000',
@@ -235,26 +270,31 @@ export default function MapaGoogle({ apiKey, coordenadas, onCoordenadasChange, c
                         strokeColor: zona.color_hex || '#000000',
                         strokeOpacity: 0.8,
                         strokeWeight: 2,
-                        clickable: false
+                        clickable: false,
                     }}
                 />
             ))}
 
-            {/* Capa de Zonas Restringidas (Alertas visuales en el mapa) */}
-            {zonas_restringidas && zonas_restringidas.map((zr, index) => (
-                <Polygon 
-                    key={`restringida-${index}`}
+            {zonas_restringidas?.map((zr) => (
+                <Polygon
+                    key={`restringida-${zr.id ?? zr.nombre}`}
                     paths={zr.rutas_formateadas}
                     options={{
-                        fillColor: '#b91c1c', // Rojo alerta
-                        fillOpacity: 0.15, // Más tenue para no tapar los nombres de las calles
-                        strokeColor: '#ef4444', 
+                        fillColor: '#b91c1c',
+                        fillOpacity: 0.15,
+                        strokeColor: '#ef4444',
                         strokeOpacity: 0.9,
                         strokeWeight: 2,
-                        clickable: false
+                        clickable: false,
                     }}
                 />
             ))}
+
+            {!tienePin && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded-xl theme-surface border theme-border text-[10px] font-bold theme-text-muted shadow-lg pointer-events-none">
+                    Busca una dirección o haz clic en el mapa para colocar el pin
+                </div>
+            )}
         </GoogleMap>
     );
 }

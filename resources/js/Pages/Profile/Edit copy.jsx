@@ -1,28 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { animate } from 'animejs/animation';
 import { 
     User, Mail, Smartphone, Camera, 
     Palette, Save, ShieldCheck, Moon, Sun, 
     Image as ImageIcon, Type, Droplet, 
     PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, XCircle,
-    Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, Eye, EyeOff,
-    Minus, Plus
+    Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, Eye, EyeOff
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
 import GeliaLogo from '../../Components/GeliaLogo'; // <-- Importamos el logotipo maestro
-import {
-    clampFontScale,
-    formatFontScaleLabel,
-    applyFontScaleToRoot,
-    FONT_SCALE_DEFAULT,
-    FONT_SCALE_MIN,
-    FONT_SCALE_MAX,
-    FONT_SCALE_STEP,
-    FONT_SCALE_STORAGE_KEY,
-} from '../../utils/fontScale';
 
 // --- COMPONENTE AUXILIAR RESPONSIVO ---
 const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, stackOnMobile = true }) => (
@@ -44,10 +33,7 @@ const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, sta
     </div>
 );
 
-export default function Edit({ tema_visual, perfilUsuario = {} }) {
-    const { auth } = usePage().props;
-    const usuario = { ...auth?.user, ...perfilUsuario };
-
+export default function Edit({ auth, tema_visual }) {
     const fileInputRef    = useRef(null);
     const bgFileInputRef  = useRef(null);
 
@@ -55,10 +41,10 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [isBgModalOpen,     setIsBgModalOpen]     = useState(false);
 
     const [imagePreview, setImagePreview] = useState(
-        usuario?.foto_perfil ? `/storage/${usuario.foto_perfil}` : null
+        auth.user?.foto_perfil ? `/storage/${auth.user.foto_perfil}` : null
     );
 
-    const initialChar = usuario?.name ? usuario.name.charAt(0).toUpperCase() : 'U';
+    const initialChar = auth.user?.name ? auth.user.name.charAt(0).toUpperCase() : 'U';
 
     const [saveStatus, setSaveStatus] = useState(null); // null | 'success' | 'error'
 
@@ -69,12 +55,12 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [showConfirm,       setShowConfirm]       = useState(false);
 
     const { data, setData, post, processing, recentlySuccessful, errors, transform } = useForm({
-        name:                  usuario?.name                 ? usuario.name.trim()                 : '',
-        email:                 usuario?.email                ? usuario.email.trim()                : '',
-        apellido_paterno:      usuario?.apellido_paterno     ? usuario.apellido_paterno.trim()     : '',
-        apellido_materno:      usuario?.apellido_materno     ? usuario.apellido_materno.trim()     : '',
-        telefono:              usuario?.telefono             ? usuario.telefono.trim()             : '',
-        fecha_nacimiento:      usuario?.fecha_nacimiento     || '',
+        name:                  auth.user?.name                 ? auth.user.name.trim()                 : '',
+        email:                 auth.user?.email                ? auth.user.email.trim()                : '',
+        apellido_paterno:      auth.user?.apellido_paterno     ? auth.user.apellido_paterno.trim()     : '',
+        apellido_materno:      auth.user?.apellido_materno     ? auth.user.apellido_materno.trim()     : '',
+        telefono:              auth.user?.telefono             ? auth.user.telefono.trim()             : '',
+        fecha_nacimiento:      auth.user?.fecha_nacimiento     || '',
         password:              '',
         password_confirmation: '',
         foto_perfil:           null,
@@ -134,7 +120,6 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             color_nombre:     selectedColor,
             fondo_base:       data.archivo_fondo ? 'subiendo_archivo' : selectedBg,
             fuente_principal: typography,
-            escala_fuente:    fontScale,
             layout_sidebar:   sidebarLayout,
             efecto_cristal:   glassEffect,
         };
@@ -154,10 +139,8 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                 localStorage.setItem('theme_color',  selectedColor);
                 localStorage.setItem('bg_base',      selectedBg);
                 localStorage.setItem('theme_font',   typography);
-                localStorage.setItem(FONT_SCALE_STORAGE_KEY, String(fontScale));
                 localStorage.setItem('theme_glass',  glassEffect);
                 localStorage.setItem('theme_layout', sidebarLayout);
-                window.dispatchEvent(new Event('theme-changed'));
 
                 setSaveStatus('success');
                 if (fileInputRef.current)   fileInputRef.current.value   = '';
@@ -181,9 +164,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         { name: 'Gris Oscuro', hex: '#1e293b' },
     ];
     const presets = [
-        { name: 'Gelia Signature', modo: 'dark',  colorHex: '#ec4899', colorNombre: 'rosa',  bg: 'blob',    font: 'montserrat', escala: 1, glass: true,  layout: 'floating_left',  sound: true },
-        { name: 'GELIA Oasis',     modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins',     escala: 1, glass: false, layout: 'floating_right', sound: true },
-        { name: 'CyberTech',       modo: 'dark',  colorHex: '#3b82f6', colorNombre: 'azul',  bg: 'polygon', font: 'mono',        escala: 1, glass: false, layout: 'fixed',          sound: true },
+        { name: 'Gelia Signature', modo: 'dark',  colorHex: '#ec4899', colorNombre: 'rosa',  bg: 'blob',    font: 'montserrat', glass: true,  layout: 'floating_left',  sound: true },
+        { name: 'GELIA Oasis',     modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins',     glass: false, layout: 'floating_right', sound: true },
+        { name: 'CyberTech',       modo: 'dark',  colorHex: '#3b82f6', colorNombre: 'azul',  bg: 'polygon', font: 'mono',        glass: false, layout: 'fixed',          sound: true },
     ];
     const fontFamilies = {
         inter:      "'Inter', sans-serif",
@@ -198,7 +181,6 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const bdModo   = tema_visual?.modo === 'dark';
     const bdBg     = tema_visual?.fondo_base      || 'none';
     const bdFont   = tema_visual?.fuente_principal || 'inter';
-    const bdScale  = clampFontScale(tema_visual?.escala_fuente ?? FONT_SCALE_DEFAULT);
     const bdGlass  = tema_visual?.efecto_cristal   !== false;
     const bdLayout = tema_visual?.layout_sidebar   || 'floating_left';
 
@@ -206,7 +188,6 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [isDarkMode,    setIsDarkMode]    = useState(bdModo);
     const [selectedBg,    setSelectedBg]    = useState(bdBg);
     const [typography,    setTypography]    = useState(bdFont);
-    const [fontScale,     setFontScale]     = useState(bdScale);
     const [glassEffect,   setGlassEffect]   = useState(bdGlass);
     const [sidebarLayout, setSidebarLayout] = useState(bdLayout);
     const [notifications, setNotifications] = useState({ sound: true });
@@ -246,16 +227,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         bdGlass ? root.classList.add('glass-active') : root.classList.remove('glass-active');
 
         applyBackgroundCSS(bdBg);
-        applyFontScaleToRoot(bdScale);
     }, []);
-
-    const handleFontScaleStep = (direction) => {
-        setFontScale((prev) => {
-            const next = clampFontScale(prev + direction * FONT_SCALE_STEP);
-            applyFontScaleToRoot(next);
-            return next;
-        });
-    };
 
     const handleColorChange = (colorValue, isHex = false) => {
         const hex = isHex ? colorValue : accentColors[colorValue];
@@ -285,7 +257,8 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
 
     const handleLayoutChange = (layout) => {
         setSidebarLayout(layout);
-        window.dispatchEvent(new CustomEvent('theme-layout-preview', { detail: { layout } }));
+        localStorage.setItem('theme_layout', layout);
+        window.dispatchEvent(new Event('theme-changed'));
     };
 
     const applyBackgroundCSS = (bgValue) => {
@@ -319,11 +292,6 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         handleColorChange(preset.colorNombre || preset.colorHex, !preset.colorNombre);
         handleBgChange(preset.bg);
         if (preset.font   !== undefined) handleFontChange(preset.font);
-        if (preset.escala !== undefined) {
-            const scale = clampFontScale(preset.escala);
-            setFontScale(scale);
-            applyFontScaleToRoot(scale);
-        }
         if (preset.glass  !== undefined) handleGlassChange(preset.glass);
         if (preset.layout !== undefined) handleLayoutChange(preset.layout);
         if (preset.sound  !== undefined) setNotifications({ sound: preset.sound });
@@ -335,7 +303,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const activeCardClass = `${baseCardClass} ${glassEffect ? glassCardClass : solidCardClass}`;
 
     return (
-        <AppLayout>
+        <AppLayout auth={auth}>
             <Head title="Mi Perfil | GELIANV" />
             <GeliaLoader isVisible={processing} message="Guardando cambios_" />
 
@@ -427,12 +395,12 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                     </span>
                                 </div>
                                 <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0 p-0">
-                                    HOLA, <span style={{ color: 'var(--color-primario)' }}>{usuario?.name ? `${usuario.name} ${usuario.apellido_paterno || ''}`.trim() : 'USUARIO'}</span>
+                                    HOLA, <span style={{ color: 'var(--color-primario)' }}>{auth.user?.name ? `${auth.user.name} ${auth.user.apellido_paterno || ''}`.trim() : 'USUARIO'}</span>
                                 </h1>
                             </div>
                             <div className="flex items-center justify-center md:justify-start gap-2 theme-text-muted mt-2">
                                 <ShieldCheck className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
-                                <p className="text-xs font-bold tracking-wide m-0">Miembro desde: {usuario?.created_at ? new Date(usuario.created_at).toLocaleDateString() : '2026'}</p>
+                                <p className="text-xs font-bold tracking-wide m-0">Miembro desde: {auth.user?.created_at ? new Date(auth.user.created_at).toLocaleDateString() : '2026'}</p>
                             </div>
                         </div>
                     </div>
@@ -637,7 +605,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                     <div className="relative">
                                         <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
                                         <input type="text"
-                                            value={usuario?.area?.nombre || 'Sin área asignada'}
+                                            value={auth.user?.area?.nombre || 'Sin área asignada'}
                                             readOnly
                                             className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-muted text-sm font-bold cursor-not-allowed opacity-60 shadow-sm" />
                                     </div>
@@ -648,7 +616,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                     <div className="relative">
                                         <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
                                         <input type="text"
-                                            value={usuario?.area?.departamento?.nombre || 'Sin departamento'}
+                                            value={auth.user?.area?.departamento?.nombre || 'Sin departamento'}
                                             readOnly
                                             className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-muted text-sm font-bold cursor-not-allowed opacity-60 shadow-sm" />
                                     </div>
@@ -734,7 +702,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             </button>
                         </SettingsRow>
 
-                        <SettingsRow icon={Type} title="Fuente del sistema" subtitle="Tipografía principal de la interfaz" stackOnMobile={true}>
+                        <SettingsRow icon={Type} title="Fuente del sistema" subtitle="Tipografía principal de la interfaz" border={false} stackOnMobile={true}>
                             <div className="relative w-full sm:w-64">
                                 <select
                                     value={typography}
@@ -756,34 +724,6 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                                     </svg>
                                 </div>
-                            </div>
-                        </SettingsRow>
-
-                        <SettingsRow icon={Type} title="Tamaño de letra" subtitle={`${formatFontScaleLabel(FONT_SCALE_MIN)} – ${formatFontScaleLabel(FONT_SCALE_MAX)} · vista previa temporal`} border={false} stackOnMobile={true}>
-                            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => handleFontScaleStep(-1)}
-                                    disabled={fontScale <= FONT_SCALE_MIN}
-                                    className="w-11 h-11 rounded-xl theme-element border theme-border flex items-center justify-center transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 outline-none shadow-sm"
-                                    title="Reducir tamaño"
-                                    aria-label="Reducir tamaño de letra"
-                                >
-                                    <Minus className="w-5 h-5 theme-text-main" />
-                                </button>
-                                <span className="min-w-[4.5rem] text-center text-sm font-black theme-text-main tabular-nums px-2">
-                                    {formatFontScaleLabel(fontScale)}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => handleFontScaleStep(1)}
-                                    disabled={fontScale >= FONT_SCALE_MAX}
-                                    className="w-11 h-11 rounded-xl theme-element border theme-border flex items-center justify-center transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 outline-none shadow-sm"
-                                    title="Aumentar tamaño"
-                                    aria-label="Aumentar tamaño de letra"
-                                >
-                                    <Plus className="w-5 h-5 theme-text-main" />
-                                </button>
                             </div>
                         </SettingsRow>
                     </div>

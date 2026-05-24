@@ -31,20 +31,22 @@ class ProfileController extends Controller
         // Tomamos la primera área asignada
         $primeraArea = $user->areas->first();
 
-        // No sobrescribir auth compartido (permisos, roles, tema_visual): rompe el sidebar en /perfil.
         return Inertia::render('Profile/Edit', [
-            'tema_visual' => $temaVisual,
-            'perfilUsuario' => [
-                'fecha_nacimiento' => $user->fecha_nacimiento
-                    ? Carbon::parse($user->fecha_nacimiento)->format('Y-m-d')
-                    : null,
-                'area' => $primeraArea ? [
-                    'nombre'       => $primeraArea->nombre,
-                    'departamento' => $primeraArea->departamento ? [
-                        'nombre' => $primeraArea->departamento->nombre,
+            'auth' => [
+                'user' => array_merge($user->toArray(), [
+                    // Formateo de fecha para el input date de React
+                    'fecha_nacimiento' => $user->fecha_nacimiento 
+                        ? Carbon::parse($user->fecha_nacimiento)->format('Y-m-d') 
+                        : null,
+                    'area' => $primeraArea ? [
+                        'nombre'       => $primeraArea->nombre,
+                        'departamento' => $primeraArea->departamento ? [
+                            'nombre' => $primeraArea->departamento->nombre,
+                        ] : null,
                     ] : null,
-                ] : null,
+                ]),
             ],
+            'tema_visual' => $temaVisual,
         ]);
     }
 
@@ -72,7 +74,6 @@ class ProfileController extends Controller
             'tema_visual.color_nombre'     => 'nullable|string|max:50',
             'tema_visual.fondo_base'       => 'nullable|string|max:500',
             'tema_visual.fuente_principal' => 'nullable|string|max:50',
-            'tema_visual.escala_fuente'    => 'nullable|numeric|min:0.875|max:1.5',
             'tema_visual.layout_sidebar'   => 'nullable|string|max:50',
             'tema_visual.efecto_cristal'   => 'nullable|boolean',
         ]);
@@ -83,12 +84,6 @@ class ProfileController extends Controller
         $configVisual = $request->filled('tema_visual') 
             ? json_decode($request->input('tema_visual'), true) 
             : [];
-
-        if (isset($configVisual['escala_fuente'])) {
-            $escala = (float) $configVisual['escala_fuente'];
-            $escala = round($escala / 0.0625) * 0.0625;
-            $configVisual['escala_fuente'] = max(0.875, min(1.5, $escala));
-        }
 
         // 3. GESTIÓN DE CONTRASEÑA
         if (!empty($datos['password'])) {
