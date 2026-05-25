@@ -25,6 +25,20 @@ const ordenarPorFecha = (lista) =>
         return fechaB - fechaA;
     });
 
+export function NotificationCountBadge({ count, className = '-top-1.5 -right-1.5' }) {
+    if (!count || count <= 0) return null;
+
+    return (
+        <span
+            className={`absolute z-30 flex items-center justify-center min-w-[1.125rem] h-[1.125rem] px-1 text-[9px] font-black leading-none text-white rounded-full shadow-md border-2 theme-surface pointer-events-none ${className}`}
+            style={{ backgroundColor: 'var(--color-primario)' }}
+            aria-hidden="true"
+        >
+            {count > 9 ? '9+' : count}
+        </span>
+    );
+}
+
 export default function NotificationBell({ notifications: propNotifications = [] }) {
     const { auth } = usePage().props;
     const [isOpen, setIsOpen] = useState(false);
@@ -123,18 +137,14 @@ export default function NotificationBell({ notifications: propNotifications = []
         <>
             <button
                 onClick={handleOpenDrawer}
-                className="relative p-3 theme-element border theme-border rounded-2xl hover:border-[var(--color-primario)] transition-all group outline-none"
+                className="relative overflow-visible p-3 theme-element border theme-border rounded-2xl hover:border-[var(--color-primario)] transition-all group outline-none shrink-0"
             >
                 {unreadCount > 0 ? (
                     <BellRing className="w-5 h-5 animate-pulse" style={{ color: 'var(--color-primario)' }} />
                 ) : (
                     <Bell className="w-5 h-5 theme-text-muted group-hover:text-[var(--color-primario)] transition-colors" />
                 )}
-                {unreadCount > 0 && (
-                    <span className="absolute -top-2 -right-2 w-5 h-5 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow-md border-2 theme-surface" style={{ backgroundColor: 'var(--color-primario)' }}>
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                )}
+                <NotificationCountBadge count={unreadCount} />
             </button>
 
             {isOpen && createPortal(

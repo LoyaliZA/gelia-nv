@@ -9,7 +9,7 @@ import {
 
 import GeliaLogo from './GeliaLogo';
 
-import NotificationBell from './NotificationBell';
+import NotificationBell, { NotificationCountBadge } from './NotificationBell';
 
 const SIDEBAR_MODE_STORAGE_KEY = 'theme_sidebar_mode';
 const SIDEBAR_MODES = { collapsed: 'collapsed', expanded: 'expanded' };
@@ -31,7 +31,7 @@ const prefixGroupClass = (visible, orientation) => {
 };
 
 const suffixGroupClass = (visible) =>
-    `overflow-hidden shrink-0 sidebar-widget-reveal ${visible ? 'max-w-[3.75rem] opacity-100 mx-2 sm:mx-3 pointer-events-auto' : 'max-w-0 opacity-0 mx-0 pointer-events-none'}`;
+    `shrink-0 sidebar-widget-reveal ${visible ? 'max-w-[3.75rem] opacity-100 mx-2 sm:mx-3 pointer-events-auto overflow-visible py-0.5 pr-1' : 'max-w-0 opacity-0 mx-0 pointer-events-none overflow-hidden'}`;
 const ADMIN_MENU_CONFIG = [
     { id: 'enlaces', label: 'Generar Enlaces', path: '/admin/enlaces', routeName: 'admin.enlaces', icon: LinkIcon, permission: 'usuarios.gestionar' },
     { id: 'clientes', label: 'Base de Clientes', path: '/admin/clientes', routeName: 'admin.clientes', icon: Database, permission: 'clientes.ver' },
@@ -230,7 +230,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     }
 
     // 2. Botón (Widget): compacto en vista contraída (solo logo + avatar)
-    let widgetClasses = "theme-surface theme-border sidebar-glass relative z-20 sidebar-widget-shell ";
+    let widgetClasses = "theme-surface theme-border sidebar-glass relative z-20 sidebar-widget-shell overflow-visible ";
     if (isFixedVertical) {
         const edgeBorder = fixedPos === FIXED_POSITIONS.right ? 'border-l' : 'border-r';
         widgetClasses += showCollapsedWidget
@@ -297,14 +297,6 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     onMouseLeave={handleHoverLeave}
                 >
                     <div className={widgetClasses} style={widgetShellStyle}>
-                        {showCollapsedWidget && unreadCount > 0 && (
-                            <span
-                                className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full border border-white/20 theme-surface animate-pulse z-30"
-                                style={{ backgroundColor: 'var(--color-primario)' }}
-                                aria-label={`${unreadCount} notificaciones nuevas`}
-                            />
-                        )}
-
                         <div className={`flex items-center ${innerFlexClass} ${innerGapClass} ${isFixedHorizontal ? 'w-full justify-start' : ''}`}>
                             <div
                                 className={prefixGroupClass(showSecondaryControls, widgetOrientation)}
@@ -337,9 +329,16 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
 
                             <Link
                                 href={route('dashboard')}
-                                className={`hover:scale-110 active:scale-90 outline-none flex items-center justify-center shrink-0 sidebar-logo-link ${!showCollapsedWidget && widgetOrientation === 'horizontal' ? 'mx-1 sm:mx-2' : ''}`}
+                                className={`relative overflow-visible hover:scale-110 active:scale-90 outline-none flex items-center justify-center shrink-0 sidebar-logo-link ${!showCollapsedWidget && widgetOrientation === 'horizontal' ? 'mx-1 sm:mx-2' : ''}`}
+                                aria-label={showCollapsedWidget && unreadCount > 0 ? `Panel principal, ${unreadCount} notificaciones nuevas` : 'Panel principal'}
                             >
                                 <GeliaLogo variant="sparkle" className={`sidebar-logo-mark ${logoSizeClass}`} />
+                                {showCollapsedWidget && (
+                                    <NotificationCountBadge
+                                        count={unreadCount}
+                                        className="-top-0.5 -right-0.5 animate-pulse"
+                                    />
+                                )}
                             </Link>
 
                             <div
