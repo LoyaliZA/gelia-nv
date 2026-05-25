@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Solicitudes;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Solicitudes\StoreSolicitudRequest;
 use App\Services\Solicitudes\CrearSolicitudService;
+use App\Services\Solicitudes\CrearConsultaSolicitudService;
 use App\Services\Solicitudes\ListarSolicitudesService;
 use App\Services\Solicitudes\EliminarSolicitudService;
+use App\Services\Solicitudes\ResponderConsultaSolicitudService;
 use Illuminate\Http\RedirectResponse;
 use App\Models\SolicitudTag;
+use App\Models\ConsultaSolicitud;
 use App\Models\AuditoriaSolicitud;
 use App\Models\Cliente;
 use App\Models\User;
@@ -119,27 +122,34 @@ class SolicitudController extends Controller
             }
 
             // 4. Persistencia y Control Monetario
+            $snapshotDiff = [];
             if ($esAlertaFaltaPago) {
-                $this->revertirBeneficiosCliente($solicitud);
+                $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
 
                 $solicitud->update([
                     'pago_confirmado' => false,
                     'monto_cotizado' => $montoFinal,
-                    'catalogo_estado_solicitud_id' => $estadoNuevoId
+                    'catalogo_estado_solicitud_id' => $estadoNuevoId,
+                    'motivo_incorrecta' => 'pago_insuficiente',
                 ]);
             } else {
                 $diferencia = $montoFinal - $montoOriginal;
                 if ($solicitud->cliente_id) {
-                    $clienteObj = Cliente::find($solicitud->cliente_id);
+                    $clienteObj = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
                     if ($clienteObj) {
+                        $antes = $this->capturarSnapshotCliente($clienteObj);
                         $clienteObj->monto_venta_actual = max(0, $clienteObj->monto_venta_actual + $diferencia);
-                        
-                        // Inyectamos la nueva lista independientemente de si la diferencia de montos es cero
+
                         if ($esAlertaAscenso && isset($listaCalificada)) {
                             $clienteObj->lista_actual_id = $listaCalificada->id;
                         }
 
                         $clienteObj->save();
+                        $clienteObj->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+                        $snapshotDiff = [
+                            'antes' => $antes,
+                            'despues' => $this->capturarSnapshotCliente($clienteObj),
+                        ];
                     }
                 }
 
@@ -157,7 +167,8 @@ class SolicitudController extends Controller
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => 2,
                 'estado_nuevo_id' => $estadoNuevoId,
-                'motivo_reporte' => $mensajeAuditoria
+                'motivo_reporte' => $mensajeAuditoria,
+                'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
             ]);
 
             // 6. Notificaciones en Tiempo Real
@@ -191,16 +202,16 @@ class SolicitudController extends Controller
         Gate::authorize('solicitudes.confirmar_cambio_lista');
 
         DB::transaction(function () use ($solicitud) {
+            $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
             $estadoNuevoId = 3;
 
             $cliente = Cliente::find($solicitud->cliente_id);
             if ($cliente) {
                 $totalProyectado = ($cliente->monto_venta_actual ?? 0) + $solicitud->monto_cotizado;
 
-                // Recalcular lista real a la que califica el cliente excluyendo casos especiales
                 $listaCalificada = CatalogoListaDescuento::where('activo', true)
                     ->where('nombre', 'not like', '%COLABORADOR%')
-                    ->where('nombre', 'not like', '%PLATAFORMAS%') // Exclusión de seguridad
+                    ->where('nombre', 'not like', '%PLATAFORMAS%')
                     ->where('monto_requerido', '<=', $totalProyectado)
                     ->orderBy('monto_requerido', 'desc')
                     ->first();
@@ -212,17 +223,18 @@ class SolicitudController extends Controller
 
             $solicitud->update([
                 'catalogo_estado_solicitud_id' => $estadoNuevoId,
-                'catalogo_lista_descuento_id' => $solicitud->catalogo_lista_descuento_id
+                'catalogo_lista_descuento_id' => $solicitud->catalogo_lista_descuento_id,
             ]);
 
-            $this->aplicarBeneficiosCliente($solicitud);
+            $snapshotDiff = $this->aplicarBeneficiosCliente($solicitud);
 
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
-                'estado_anterior_id' => $solicitud->catalogo_estado_solicitud_id,
+                'estado_anterior_id' => $estadoAnteriorId,
                 'estado_nuevo_id' => $estadoNuevoId,
-                'motivo_reporte' => 'CAMBIO DE LISTA CONFIRMADO Y APLICADO POR ADMINISTRACIÓN'
+                'motivo_reporte' => 'CAMBIO DE LISTA CONFIRMADO Y APLICADO POR ADMINISTRACIÓN',
+                'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
             ]);
         });
 
@@ -233,6 +245,10 @@ class SolicitudController extends Controller
     {
         if ($solicitud->vendedor_id !== Auth::id() || $solicitud->catalogo_estado_solicitud_id != 4) {
             abort(403, 'No tienes permiso para editar esta solicitud o no está en estado Incorrecto.');
+        }
+
+        if ($solicitud->motivo_incorrecta === 'vencimiento_pago') {
+            abort(403, 'No se puede reparar una solicitud vencida por falta de pago. Debe iniciar una nueva solicitud.');
         }
 
         $request->validate([
@@ -260,7 +276,14 @@ class SolicitudController extends Controller
                 'catalogo_lista_descuento_id' => $request->catalogo_lista_descuento_id,
                 'evidencia_path' => $rutaEvidencia,
                 'catalogo_estado_solicitud_id' => 1,
+                'motivo_incorrecta' => null,
             ]);
+
+            $clienteSnapshot = null;
+            if ($solicitud->cliente_id) {
+                $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
+                $clienteSnapshot = ['antes' => $this->capturarSnapshotCliente($cliente)];
+            }
 
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
@@ -268,13 +291,13 @@ class SolicitudController extends Controller
                 'estado_anterior_id' => 4,
                 'estado_nuevo_id' => 1,
                 'motivo_reporte' => 'El colaborador corrigió la solicitud y subió nueva evidencia.',
-                'datos_snapshot' => [
+                'datos_snapshot' => array_merge([
                     'monto_cotizado' => $request->monto_cotizado,
                     'proceso_id' => $request->catalogo_proceso_id,
                     'tipo_cliente_id' => $request->catalogo_tipo_cliente_id,
                     'lista_descuento_id' => $request->catalogo_lista_descuento_id,
                     'evidencia_path' => $rutaEvidencia,
-                ]
+                ], $clienteSnapshot ?? []),
             ]);
 
             $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, false);
@@ -314,24 +337,21 @@ class SolicitudController extends Controller
                 $rutaEvidencia = $request->file('evidencia_respuesta')->store('evidencias_respuestas', 'public');
             }
 
+            $snapshotDiff = [];
+
             $solicitud->update([
                 'catalogo_estado_solicitud_id' => $estadoNuevoId,
                 'evidencia_respuesta_path' => $rutaEvidencia,
+                'motivo_incorrecta' => $estadoNuevoId == 4 ? 'error_reportado' : null,
             ]);
 
-            // ==========================================
-            // MOTOR FINANCIERO CORREGIDO (Estados 2 y 3)
-            // ==========================================
-            $estadosAprobatorios = [2, 3]; // 2 = Aprobada/Respondida, 3 = Verificada
+            $estadosAprobatorios = [2, 3];
 
             if (in_array($estadoNuevoId, $estadosAprobatorios) && !in_array($estadoAnteriorId, $estadosAprobatorios)) {
-                // Suman beneficios solo la primera vez que se aprueba/verifica
-                $this->aplicarBeneficiosCliente($solicitud);
+                $snapshotDiff = $this->aplicarBeneficiosCliente($solicitud);
             } elseif ($estadoNuevoId == 4 && in_array($estadoAnteriorId, $estadosAprobatorios)) {
-                // Rollback: Si un admin regresa una solicitud ya aprobada a "Incorrecta", restamos el dinero.
-                $this->revertirBeneficiosCliente($solicitud);
+                $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
             }
-            // ==========================================
 
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
@@ -339,9 +359,10 @@ class SolicitudController extends Controller
                 'estado_anterior_id' => $estadoAnteriorId,
                 'estado_nuevo_id' => $estadoNuevoId,
                 'motivo_reporte' => $request->motivo ?: 'CAMBIO DE ESTADO OPERATIVO',
-                'datos_snapshot' => [
-                    'evidencia_respuesta_path' => $rutaEvidencia
-                ]
+                'datos_snapshot' => array_merge(
+                    ['evidencia_respuesta_path' => $rutaEvidencia],
+                    !empty($snapshotDiff) ? $snapshotDiff : []
+                ),
             ]);
 
             $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, true);
@@ -392,16 +413,17 @@ class SolicitudController extends Controller
 
         DB::transaction(function () use ($solicitud) {
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
+            $snapshotDiff = [];
+
+            if (in_array($estadoAnteriorId, [2, 3])) {
+                $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
+            }
 
             $solicitud->update([
-                'catalogo_estado_solicitud_id' => 4, // Incorrecta
-                'pago_confirmado' => false
+                'catalogo_estado_solicitud_id' => 4,
+                'pago_confirmado' => false,
+                'motivo_incorrecta' => 'vencimiento_pago',
             ]);
-
-            // Evitar descuadres si ya estaba aprobada
-            if (in_array($estadoAnteriorId, [2, 3])) {
-                $this->revertirBeneficiosCliente($solicitud);
-            }
 
             if ($solicitud->cliente_id) {
                 $cliente = Cliente::find($solicitud->cliente_id);
@@ -415,7 +437,8 @@ class SolicitudController extends Controller
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $estadoAnteriorId,
                 'estado_nuevo_id' => 4,
-                'motivo_reporte' => 'PAGO RECHAZADO: Se aplicó la reversión automática de las propiedades del cliente.'
+                'motivo_reporte' => 'PAGO RECHAZADO: Se aplicó la reversión automática de las propiedades del cliente.',
+                'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
             ]);
 
             $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, true);
@@ -468,12 +491,129 @@ class SolicitudController extends Controller
         return redirect()->route('solicitudes.index')->with('success', 'La solicitud ha sido eliminada y el evento ha sido auditado.');
     }
 
-    private function aplicarBeneficiosCliente(SolicitudTag $solicitud): void
+    public function storeConsulta(Request $request, SolicitudTag $solicitud, CrearConsultaSolicitudService $service): RedirectResponse
     {
-        if (!$solicitud->cliente_id) return;
+        Gate::authorize('solicitudes.consultar');
 
-        $cliente = Cliente::find($solicitud->cliente_id);
-        if (!$cliente) return;
+        $request->validate([
+            'consulta_tag' => 'nullable|boolean',
+            'consulta_lista' => 'nullable|boolean',
+            'comentario_vendedor' => 'nullable|string|max:1000',
+        ]);
+
+        $service->ejecutar($solicitud, $request->all());
+
+        return back()->with('success', 'Consulta enviada al encargado.');
+    }
+
+    public function responderConsulta(Request $request, SolicitudTag $solicitud, ConsultaSolicitud $consulta, ResponderConsultaSolicitudService $service): RedirectResponse
+    {
+        Gate::authorize('solicitudes.reportar');
+
+        $request->validate([
+            'respuesta_positiva' => 'required',
+            'comentario_encargada' => 'nullable|string|max:1000',
+            'evidencia_respuesta' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:5120',
+        ]);
+
+        $service->ejecutar($solicitud, $consulta, $request->all());
+
+        return back()->with('success', 'Consulta respondida correctamente.');
+    }
+
+    public function marcarConsultaLeida(SolicitudTag $solicitud, ConsultaSolicitud $consulta): RedirectResponse
+    {
+        if ($consulta->solicitud_id !== $solicitud->id) {
+            abort(404);
+        }
+
+        if ($solicitud->vendedor_id !== Auth::id()) {
+            abort(403, 'Solo la vendedora dueña puede marcar la consulta como leída.');
+        }
+
+        if ($consulta->estado !== 'respondida') {
+            abort(422, 'La consulta aún no tiene respuesta.');
+        }
+
+        $consulta->update(['leido_vendedor_at' => now()]);
+
+        return back()->with('success', 'Respuesta marcada como leída.');
+    }
+
+    public function confirmarRollback(Request $request, SolicitudTag $solicitud): RedirectResponse
+    {
+        Gate::authorize('solicitudes.reportar');
+
+        if ($solicitud->motivo_incorrecta !== 'vencimiento_pago') {
+            abort(403, 'Esta solicitud no requiere confirmación de reversión.');
+        }
+
+        if ($solicitud->rollback_confirmado_at) {
+            abort(422, 'La reversión ya fue confirmada.');
+        }
+
+        DB::transaction(function () use ($solicitud, $request) {
+            $snapshotDiff = [];
+
+            if ($solicitud->cliente_id) {
+                $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
+                $snapshotDiff['despues'] = $this->capturarSnapshotCliente($cliente);
+            }
+
+            $solicitud->update(['rollback_confirmado_at' => now()]);
+
+            AuditoriaSolicitud::create([
+                'solicitud_id' => $solicitud->id,
+                'usuario_id' => Auth::id(),
+                'estado_anterior_id' => $solicitud->catalogo_estado_solicitud_id,
+                'estado_nuevo_id' => $solicitud->catalogo_estado_solicitud_id,
+                'motivo_reporte' => $request->input('motivo', 'REVERSIÓN CONFIRMADA POR ENCARGADA: Folio cerrado por vencimiento de pago.'),
+                'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
+            ]);
+
+            if ($solicitud->vendedor) {
+                $solicitud->vendedor->notify(new AlertaSolicitud(
+                    $solicitud,
+                    'rollback_confirmado',
+                    'La encargada confirmó la reversión del folio FOL-' . $solicitud->id . '. Debes iniciar una nueva solicitud.'
+                ));
+            }
+        });
+
+        return back()->with('success', 'Reversión confirmada. La vendedora ha sido notificada.');
+    }
+
+    private function capturarSnapshotCliente(?Cliente $cliente): array
+    {
+        if (!$cliente) {
+            return [];
+        }
+
+        $cliente->loadMissing(['listaDescuento', 'vendedor', 'tipo']);
+
+        return [
+            'monto_venta' => $cliente->monto_venta_actual,
+            'lista_id' => $cliente->lista_actual_id,
+            'lista_nombre' => $cliente->listaDescuento?->nombre,
+            'tag_vendedor_id' => $cliente->vendedor_id,
+            'tag_vendedor_nombre' => $cliente->vendedor?->name,
+            'tipo_cliente_id' => $cliente->catalogo_tipo_cliente_id,
+            'tipo_cliente_nombre' => $cliente->tipo?->nombre,
+        ];
+    }
+
+    private function aplicarBeneficiosCliente(SolicitudTag $solicitud): array
+    {
+        if (!$solicitud->cliente_id) {
+            return [];
+        }
+
+        $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
+        if (!$cliente) {
+            return [];
+        }
+
+        $antes = $this->capturarSnapshotCliente($cliente);
 
         $cliente->monto_venta_actual = ($cliente->monto_venta_actual ?? 0) + ($solicitud->monto_cotizado ?? 0);
 
@@ -486,23 +626,37 @@ class SolicitudController extends Controller
         }
 
         $cliente->save();
+        $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+
+        return [
+            'antes' => $antes,
+            'despues' => $this->capturarSnapshotCliente($cliente),
+        ];
     }
 
-    private function revertirBeneficiosCliente(SolicitudTag $solicitud): void
+    private function revertirBeneficiosCliente(SolicitudTag $solicitud): array
     {
-        if (!$solicitud->cliente_id) return;
+        if (!$solicitud->cliente_id) {
+            return [];
+        }
 
-        $cliente = Cliente::find($solicitud->cliente_id);
-        if (!$cliente) return;
+        $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
+        if (!$cliente) {
+            return [];
+        }
 
-        // 1. Restamos el monto, evitando que quede en negativo con max()
+        $antes = $this->capturarSnapshotCliente($cliente);
+
         $nuevoMonto = ($cliente->monto_venta_actual ?? 0) - ($solicitud->monto_cotizado ?? 0);
         $cliente->monto_venta_actual = max(0, $nuevoMonto);
-
-        // 2. Ejecutamos el recalculo dinámico de la lista
         $this->recalcularListaCliente($cliente);
-
         $cliente->save();
+        $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+
+        return [
+            'antes' => $antes,
+            'despues' => $this->capturarSnapshotCliente($cliente),
+        ];
     }
 
     /**

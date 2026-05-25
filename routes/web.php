@@ -56,6 +56,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/perfil', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::post('/perfil', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/notificaciones/{id}/leer', [AdminController::class, 'marcarNotificacionLeida'])->name('notifications.read');
+    Route::post('/notificaciones/limpiar', [AdminController::class, 'limpiarNotificaciones'])->name('notifications.clear');
 
 
     // ══════════════════════════════════════════════════════════════════════
@@ -91,6 +92,10 @@ Route::middleware(['auth'])->group(function () {
     // AGREGA ESTA LÍNEA: Ruta específica para la revisión administrativa
     Route::put('/solicitudes/{solicitud}/estado', [SolicitudController::class, 'actualizarEstado'])->name('solicitudes.actualizar_estado');
     Route::put('/solicitudes/{solicitud}/confirmar-lista', [SolicitudController::class, 'confirmarCambioLista'])->name('solicitudes.confirmar_lista');
+    Route::put('/solicitudes/{solicitud}/confirmar-rollback', [SolicitudController::class, 'confirmarRollback'])->name('solicitudes.confirmar_rollback');
+    Route::post('/solicitudes/{solicitud}/consultas', [SolicitudController::class, 'storeConsulta'])->middleware('can:solicitudes.consultar')->name('solicitudes.consultas.store');
+    Route::put('/solicitudes/{solicitud}/consultas/{consulta}', [SolicitudController::class, 'responderConsulta'])->name('solicitudes.consultas.responder');
+    Route::put('/solicitudes/{solicitud}/consultas/{consulta}/leer', [SolicitudController::class, 'marcarConsultaLeida'])->name('solicitudes.consultas.leer');
     Route::delete('/solicitudes/{solicitud}', [SolicitudController::class, 'destroy'])->name('solicitudes.destroy');
 
     // --- Nuevo Módulo: Interfaz de Entregas ---

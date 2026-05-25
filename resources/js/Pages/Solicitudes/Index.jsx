@@ -4,7 +4,7 @@ import { Head, router, useForm } from '@inertiajs/react';
 import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
     Search, History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
-    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Calendar, Filter
+    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Calendar, Filter, Eye
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -12,6 +12,8 @@ import GeliaLoader from '../../Components/GeliaLoader';
 import ModalFormSolicitud from './Partials/ModalFormSolicitud';
 import ModalRespuestaSolicitud from './Partials/ModalRespuestaSolicitud';
 import ModalBitacoraSolicitud from './Partials/ModalBitacoraSolicitud';
+import ModalConsultaSolicitud from './Partials/ModalConsultaSolicitud';
+import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
 const formatearTiempoRelativo = (fechaString) => {
@@ -121,6 +123,53 @@ const VisorImagenHover = ({ path }) => {
 };
 
 // =============================================
+// COMPONENTE: RESPUESTA DE CONSULTA (VENDEDORA)
+// =============================================
+const RespuestaConsultaEncargada = ({ solicitud, auth, onMarcarLeido, procesando }) => {
+    const consulta = (solicitud.consultas || [])
+        .filter(c => c.estado === 'respondida' && !c.leido_vendedor_at)
+        .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+
+    if (!consulta || solicitud.vendedor_id !== auth?.user?.id) return null;
+
+    const temas = [consulta.consulta_tag && 'TAG', consulta.consulta_lista && 'Lista'].filter(Boolean);
+    const esPositiva = consulta.respuesta_positiva;
+
+    return (
+        <div className={`mt-3 p-4 rounded-2xl border flex flex-col gap-3 shadow-sm ${esPositiva ? 'bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20' : 'bg-red-50 dark:bg-red-500/5 border-red-200 dark:border-red-500/20'}`}>
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2 flex-1">
+                    <MessageSquare className={`w-4 h-4 shrink-0 mt-0.5 ${esPositiva ? 'text-emerald-500' : 'text-red-500'}`} />
+                    <div className="flex-1">
+                        <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${esPositiva ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                            Respuesta de encargada · {temas.join(' + ')}
+                        </p>
+                        <p className="text-[10px] font-bold theme-text-muted mb-1">
+                            {consulta.encargada?.name || 'Encargada'} · {esPositiva ? 'Confirmada' : 'Rechazada'}
+                        </p>
+                        {consulta.comentario_encargada && (
+                            <p className="text-xs font-bold theme-text-main italic leading-tight">{consulta.comentario_encargada}</p>
+                        )}
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    disabled={procesando}
+                    onClick={() => onMarcarLeido(solicitud.id, consulta.id)}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest text-white transition-transform hover:scale-105 disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--color-primario)' }}
+                >
+                    <Eye className="w-3.5 h-3.5" /> Leído
+                </button>
+            </div>
+            {consulta.evidencia_respuesta_path && (
+                <VisorImagenHover path={consulta.evidencia_respuesta_path} />
+            )}
+        </div>
+    );
+};
+
+// =============================================
 // COMPONENTE: COMENTARIOS Y FEEDBACK
 // =============================================
 const FeedbackYComentarios = ({ solicitud }) => {
@@ -221,14 +270,21 @@ const ModalConfirmarPago = ({ onClose, solicitud, onConfirmar }) => {
 // =============================================
 // MENÚ ACCIONES — Portal
 // =============================================
-const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, abrirModalPago, confirmarCambioLista, eliminarSolicitud, can, auth }) => {
+const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, setModalConsulta, setModalRespuestaConsulta, abrirModalPago, confirmarCambioLista, confirmarRollback, eliminarSolicitud, can, auth }) => {
     if (!menuAbierto || !menuSolicitud) return null;
     const solicitud = menuSolicitud;
 
-    // Detectamos si es una alerta de pago para mostrar la opción de confirmar ajuste
     const auditoriasOrdenadas = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id);
     const ultimaAuditoria = auditoriasOrdenadas.find(a => !a.motivo_reporte?.toUpperCase().includes('AUTOMÁTICAMENTE'));
     const esAlertaPago = ultimaAuditoria?.motivo_reporte?.toUpperCase().includes('ALERTA DE PAGO');
+    const esVencimiento = solicitud.motivo_incorrecta === 'vencimiento_pago';
+    const consultaPendiente = (solicitud.consultas || []).find(c => c.estado === 'pendiente');
+    const puedeConsultar = can('solicitudes.consultar')
+        && solicitud.vendedor_id === auth.user.id
+        && solicitud.estado?.nombre === 'Respondida'
+        && !solicitud.pago_confirmado
+        && !consultaPendiente
+        && !esAlertaPago;
 
     return createPortal(
         <>
@@ -242,10 +298,34 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Reparar Solicitud (Solo vendedor, solo si está incorrecta) */}
-                {solicitud.vendedor_id === auth.user.id && solicitud.estado?.nombre === 'Incorrecta' && !esAlertaPago && (
+                {/* Reparar Solicitud (Solo vendedor, solo si está incorrecta y NO es vencimiento) */}
+                {solicitud.vendedor_id === auth.user.id && solicitud.estado?.nombre === 'Incorrecta' && !esAlertaPago && !esVencimiento && (
                     <button onClick={() => { setMenuAbierto(null); setModalForm({ abierto: true, modoEdicion: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-orange-50 dark:hover:bg-orange-500/10 text-orange-600 dark:text-orange-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
                         <Edit2 className="w-4 h-4" /> Reparar Solicitud
+                    </button>
+                )}
+
+                {esVencimiento && solicitud.vendedor_id === auth.user.id && (
+                    <div className="px-4 py-3 text-[9px] font-bold theme-text-muted uppercase tracking-widest border-b theme-border mb-1 pb-3 italic">
+                        Pago vencido: debe iniciar una nueva solicitud
+                    </div>
+                )}
+
+                {can('solicitudes.reportar') && esVencimiento && !solicitud.rollback_confirmado_at && (
+                    <button onClick={() => { setMenuAbierto(null); confirmarRollback(solicitud.id); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                        <ShieldAlert className="w-4 h-4" /> Confirmar Reversión
+                    </button>
+                )}
+
+                {puedeConsultar && (
+                    <button onClick={() => { setMenuAbierto(null); setModalConsulta({ abierto: true, solicitud }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                        <MessageSquare className="w-4 h-4" /> Consultar TAG/Lista
+                    </button>
+                )}
+
+                {can('solicitudes.reportar') && consultaPendiente && (
+                    <button onClick={() => { setMenuAbierto(null); setModalRespuestaConsulta({ abierto: true, solicitud, consulta: consultaPendiente }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                        <MessageSquare className="w-4 h-4" /> Responder Consulta
                     </button>
                 )}
 
@@ -263,8 +343,8 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Aprobar / Reportar (Encargada) */}
-                {can('solicitudes.reportar') && !esAlertaPago && (
+                {/* Aprobar / Reportar (Encargada) — solo en Pendiente */}
+                {can('solicitudes.reportar') && !esAlertaPago && solicitud.estado?.nombre === 'Pendiente' && (
                     <>
                         <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 2 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors" style={{ color: 'var(--color-primario)' }}>
                             <CheckCircle2 className="w-4 h-4" /> Aprobar Proceso
@@ -331,6 +411,8 @@ export default function Index({
     const [modalForm, setModalForm] = useState({ abierto: false, modoEdicion: false, solicitud: null });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, solicitud: null, estadoId: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, solicitud: null });
+    const [modalConsulta, setModalConsulta] = useState({ abierto: false, solicitud: null });
+    const [modalRespuestaConsulta, setModalRespuestaConsulta] = useState({ abierto: false, solicitud: null, consulta: null });
     const [modalPago, setModalPago] = useState({ abierto: false, solicitud: null });
     const [menuAbierto, setMenuAbierto] = useState(null);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
@@ -340,6 +422,7 @@ export default function Index({
     const [copiadoId, setCopiadoId] = useState(null);
     const [procesandoAccion, setProcesandoAccion] = useState(false);
     const [filtroVendedor, setFiltroVendedor] = useState(filtros.vendedor_id || '');
+    const [filtroMotivo, setFiltroMotivo] = useState(filtros.motivo_incorrecta || '');
     const [tipoFecha, setTipoFecha] = useState(filtros.tipo_fecha || 'TODAS');
     const [fechaInicio, setFechaInicio] = useState(filtros.fecha_inicio || '');
     const [fechaFin, setFechaFin] = useState(filtros.fecha_fin || '');
@@ -355,7 +438,7 @@ export default function Index({
     };
 
     // FUNCIÓN PARA CALCULAR FECHAS Y ENVIAR AL BACKEND
-    const aplicarFiltrosBackend = (vendedorId, tipo, fInicio, fFin) => {
+    const aplicarFiltrosBackend = (vendedorId, tipo, fInicio, fFin, motivo = filtroMotivo) => {
         let inicioCalculado = fInicio;
         let finCalculado = fFin;
 
@@ -384,15 +467,23 @@ export default function Index({
 
         setProcesandoAccion(true);
         router.get(route('solicitudes.index'), {
-            vendedor_id: vendedorId,
+            vendedor_id: vendedorId || undefined,
             tipo_fecha: tipo,
-            fecha_inicio: inicioCalculado,
-            fecha_fin: finCalculado,
-            // mantenemos la pestaña activa si es necesario
+            fecha_inicio: inicioCalculado || undefined,
+            fecha_fin: finCalculado || undefined,
+            motivo_incorrecta: motivo || undefined,
         }, {
             preserveState: true,
             preserveScroll: true,
             onFinish: () => setProcesandoAccion(false)
+        });
+    };
+
+    const marcarConsultaLeida = (solicitudId, consultaId) => {
+        setProcesandoAccion(true);
+        router.put(route('solicitudes.consultas.leer', [solicitudId, consultaId]), {}, {
+            preserveScroll: true,
+            onFinish: () => setProcesandoAccion(false),
         });
     };
 
@@ -433,6 +524,15 @@ export default function Index({
         if (window.confirm('¿Confirmar el ajuste de lista para este cliente?')) {
             setProcesandoAccion(true);
             router.put(route('solicitudes.confirmar_lista', id), {}, {
+                onFinish: () => setProcesandoAccion(false)
+            });
+        }
+    };
+
+    const confirmarRollback = (id) => {
+        if (window.confirm('¿Confirmar la reversión de cambios por vencimiento de pago? La vendedora deberá iniciar una nueva solicitud.')) {
+            setProcesandoAccion(true);
+            router.put(route('solicitudes.confirmar_rollback', id), {}, {
                 onFinish: () => setProcesandoAccion(false)
             });
         }
@@ -480,8 +580,11 @@ export default function Index({
                 setModalForm={setModalForm}
                 setModalRespuesta={setModalRespuesta}
                 setModalBitacora={setModalBitacora}
+                setModalConsulta={setModalConsulta}
+                setModalRespuestaConsulta={setModalRespuestaConsulta}
                 abrirModalPago={(s) => setModalPago({ abierto: true, solicitud: s })}
                 confirmarCambioLista={confirmarCambioLista}
+                confirmarRollback={confirmarRollback}
                 eliminarSolicitud={eliminarSolicitud}
                 can={can}
                 auth={auth}
@@ -531,6 +634,24 @@ export default function Index({
                             {vendedores.map(v => (
                                 <option key={v.id} value={v.id}>{v.name}</option>
                             ))}
+                        </select>
+                    </div>
+
+                    {/* Filtro por motivo de incidencia */}
+                    <div className="flex-1 flex flex-col gap-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-1"><AlertOctagon className="w-3 h-3" /> Motivo incidencia</label>
+                        <select
+                            value={filtroMotivo}
+                            onChange={(e) => {
+                                setFiltroMotivo(e.target.value);
+                                aplicarFiltrosBackend(filtroVendedor, tipoFecha, fechaInicio, fechaFin, e.target.value);
+                            }}
+                            className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all cursor-pointer"
+                        >
+                            <option value="">Todos los motivos</option>
+                            <option value="vencimiento_pago">Pago vencido</option>
+                            <option value="error_reportado">Reportadas (error)</option>
+                            <option value="pago_insuficiente">Rechazadas (pago insuficiente)</option>
                         </select>
                     </div>
 
@@ -620,6 +741,12 @@ export default function Index({
                                         <span className="text-[10px] font-black uppercase tracking-widest theme-text-main block">{nombreProceso}</span>
                                         <EtiquetasOperacion solicitud={solicitud} listas={listas} />
                                     </div>
+                                    <RespuestaConsultaEncargada
+                                        solicitud={solicitud}
+                                        auth={auth}
+                                        onMarcarLeido={marcarConsultaLeida}
+                                        procesando={procesandoAccion}
+                                    />
                                     <FeedbackYComentarios solicitud={solicitud} />
                                     <div className="flex items-center justify-between pt-2 border-t theme-border">
                                         <div>
@@ -682,6 +809,27 @@ export default function Index({
                                             <td className="p-6 align-top">
                                                 <div className="inline-block px-3 py-1 rounded-lg theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-main mb-2">{nombreProceso}</div>
                                                 <EtiquetasOperacion solicitud={solicitud} listas={listas} />
+                                                {(solicitud.consultas || []).some(c => c.estado === 'pendiente') && (
+                                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 mt-1">
+                                                        <MessageSquare className="w-3 h-3" /> Consulta pendiente
+                                                    </span>
+                                                )}
+                                                {solicitud.motivo_incorrecta && (
+                                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-red-500/10 text-red-500 border border-red-500/20 mt-1">
+                                                        <AlertOctagon className="w-3 h-3" /> {
+                                                            solicitud.motivo_incorrecta === 'vencimiento_pago' ? 'Pago vencido'
+                                                            : solicitud.motivo_incorrecta === 'error_reportado' ? 'Error reportado'
+                                                            : solicitud.motivo_incorrecta === 'pago_insuficiente' ? 'Pago insuficiente'
+                                                            : solicitud.motivo_incorrecta
+                                                        }
+                                                    </span>
+                                                )}
+                                                <RespuestaConsultaEncargada
+                                                    solicitud={solicitud}
+                                                    auth={auth}
+                                                    onMarcarLeido={marcarConsultaLeida}
+                                                    procesando={procesandoAccion}
+                                                />
                                                 <FeedbackYComentarios solicitud={solicitud} />
                                             </td>
                                             <td className="p-6 align-top">
@@ -708,6 +856,8 @@ export default function Index({
             {modalForm.abierto && <ModalFormSolicitud onClose={() => setModalForm({ ...modalForm, abierto: false })} procesos={procesos} listas={listas} tiposCliente={tipos_cliente} modoEdicion={modalForm.modoEdicion} solicitudAEditar={modalForm.solicitud} />}
             {modalRespuesta.abierto && <ModalRespuestaSolicitud onClose={() => setModalRespuesta({ ...modalRespuesta, abierto: false })} solicitud={modalRespuesta.solicitud} estadoId={modalRespuesta.estadoId} />}
             {modalBitacora.abierto && <ModalBitacoraSolicitud onClose={() => setModalBitacora({ ...modalBitacora, abierto: false })} solicitud={modalBitacora.solicitud} listas={listas} tiposCliente={tipos_cliente} />}
+            {modalConsulta.abierto && <ModalConsultaSolicitud onClose={() => setModalConsulta({ ...modalConsulta, abierto: false })} solicitud={modalConsulta.solicitud} />}
+            {modalRespuestaConsulta.abierto && <ModalRespuestaConsulta onClose={() => setModalRespuestaConsulta({ ...modalRespuestaConsulta, abierto: false })} solicitud={modalRespuestaConsulta.solicitud} consulta={modalRespuestaConsulta.consulta} />}
         </AppLayout>
     );
 }

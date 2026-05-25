@@ -23,7 +23,7 @@ const ADMIN_MENU_CONFIG = [
 ];
 
 export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left' }) {
-    const { url } = usePage();
+    const { url, props: { auth } } = usePage();
     const isAdminActive = url.startsWith('/admin');
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -192,7 +192,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     </Link>
 
                     {/* 4. Campana de Notificaciones (Se mantiene) */}
-                    <NotificationBell notifications={user?.notifications || []} />
+                    <NotificationBell notifications={auth?.notificaciones || []} />
 
                     {/* 5. Avatar de Perfil (Se mantiene) */}
                     <Link

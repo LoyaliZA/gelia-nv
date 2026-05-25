@@ -1,134 +1,127 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, BellRing, Clock, CheckCircle2, AlertCircle, X, MailOpen } from 'lucide-react';
+import { Bell, BellRing, CheckCircle2, AlertCircle, X, MailOpen } from 'lucide-react';
 import { usePage, router } from '@inertiajs/react';
-// Servicio para audio y notificaciones nativas de escritorio
 import NotificationBrowserService from '@/Services/NotificationBrowserService';
 
-/**
- * COMPONENTE: NotificationBell
- * DESCRIPCIÓN: Gestiona la bandeja de notificaciones en tiempo real, 
- * persistencia en BD y navegación directa a solicitudes o módulos generales.
- */
+const ETIQUETAS_TIPO = {
+    nueva: 'Nueva solicitud',
+    reparada: 'Solicitud reparada',
+    rechazada: 'Error reportado',
+    pago_rechazado: 'Pago vencido',
+    pago_confirmado: 'Pago confirmado',
+    actualizacion: 'Actualización',
+    alerta_pago_insuficiente: 'Pago insuficiente',
+    alerta_ascenso_lista: 'Ascenso de lista',
+    consulta_nueva: 'Consulta TAG/Lista',
+    consulta_respondida: 'Consulta respondida',
+    rollback_confirmado: 'Reversión confirmada',
+};
+
+const ordenarPorFecha = (lista) =>
+    [...lista].sort((a, b) => {
+        const fechaA = new Date(a.created_at || 0).getTime();
+        const fechaB = new Date(b.created_at || 0).getTime();
+        return fechaB - fechaA;
+    });
+
 export default function NotificationBell({ notifications: propNotifications = [] }) {
-    // SECCIÓN: Estado y Contexto
-    // Extraemos las notificaciones compartidas de Inertia como respaldo global
-    const { auth, notifications: sharedNotifications } = usePage().props;
+    const { auth } = usePage().props;
     const [isOpen, setIsOpen] = useState(false);
-    
-    // Inicialización segura combinando propiedades directas y globales
-    const obtenerNotificacionesIniciales = () => {
-        return propNotifications.length > 0 ? propNotifications : (sharedNotifications || []);
-    };
-    
-    const [notifications, setNotifications] = useState(obtenerNotificacionesIniciales);
-    
-    // Contamos solo las que no tienen fecha de lectura en la BD
+
+    const fuenteServidor = auth?.notificaciones?.length > 0
+        ? auth.notificaciones
+        : propNotifications;
+
+    const [notifications, setNotifications] = useState(() => ordenarPorFecha(fuenteServidor || []));
+
     const unreadCount = notifications.filter(n => !n.read_at).length;
 
-    // SECCIÓN: Bloqueo de Scroll (UX)
     useEffect(() => {
         if (isOpen) document.body.style.overflow = 'hidden';
         else document.body.style.overflow = 'unset';
         return () => { document.body.style.overflow = 'unset'; };
     }, [isOpen]);
 
-    // SECCIÓN: Sincronización de Datos Defensiva (Merge por ID)
     useEffect(() => {
-        const fuenteBase = propNotifications.length > 0 ? propNotifications : (sharedNotifications || []);
-        
+        const base = auth?.notificaciones?.length > 0 ? auth.notificaciones : propNotifications;
+
         setNotifications(prev => {
             const registroMap = new Map();
-            
-            // 1. Cargamos las notificaciones persistidas desde el servidor
-            fuenteBase.forEach(n => {
-                if (n && n.id) registroMap.set(n.id, n);
-            });
-            
-            // 2. Conservamos las notificaciones volátiles recibidas por WebSocket
-            prev.forEach(n => {
-                if (n && n.id && !registroMap.has(n.id)) {
-                    registroMap.set(n.id, n);
-                }
-            });
-            
-            // Retornamos el arreglo ordenado para mantener las más recientes arriba
-            return Array.from(registroMap.values()).sort((a, b) => b.id - a.id);
+            (base || []).forEach(n => { if (n?.id) registroMap.set(n.id, n); });
+            prev.forEach(n => { if (n?.id && !registroMap.has(n.id)) registroMap.set(n.id, n); });
+            return ordenarPorFecha(Array.from(registroMap.values()));
         });
-    }, [propNotifications, sharedNotifications]);
+    }, [auth?.notificaciones, propNotifications]);
 
-    // SECCIÓN: Escucha de WebSockets (Real-Time)
     useEffect(() => {
-        if (auth && auth.user && typeof window !== 'undefined' && window.Echo) {
-            
+        if (auth?.user && typeof window !== 'undefined' && window.Echo) {
             const channel = window.Echo.private(`App.Models.User.${auth.user.id}`);
-            
+
             channel.notification((notification) => {
-                // Alerta sónica y de escritorio con inyección de TTS
                 NotificationBrowserService.triggerFullAlert(
-                    "Gelia ERP",
-                    notification.mensaje || "Nueva notificación operativa.",
+                    'Gelia ERP',
+                    notification.mensaje || 'Nueva notificación operativa.',
                     notification.mensaje_voz
                 );
 
                 setNotifications(prev => {
-                    // Evita duplicar registros en caso de alta concurrencia
                     if (prev.some(n => n.id === notification.id)) return prev;
-                    
-                    return [
+                    return ordenarPorFecha([
                         {
                             id: notification.id,
                             data: notification,
                             read_at: null,
-                            created_at: 'Ahora mismo',
-                            type: notification.tipo || notification.type
+                            created_at: new Date().toISOString(),
+                            type: notification.tipo || notification.type,
                         },
-                        ...prev
-                    ];
+                        ...prev,
+                    ]);
                 });
             });
 
-            return () => {
-                window.Echo.leave(`App.Models.User.${auth.user.id}`);
-            };
+            return () => window.Echo.leave(`App.Models.User.${auth.user.id}`);
         }
     }, [auth]);
 
-    // SECCIÓN: Lógica de Interacción (Click y Navegación)
     const handleNotificationClick = (n) => {
-        // Fallback de ruta para notificaciones globales sin folio (ej. Resumen de pagos)
-        const destino = n.data?.solicitud_id 
-            ? `/solicitudes?folio=${n.data.solicitud_id}` 
-            : `/solicitudes`;
+        const destino = n.data?.solicitud_id
+            ? `/solicitudes?folio=${n.data.solicitud_id}`
+            : '/solicitudes';
 
-        // Si ya está leída, navegamos directamente
-        if (n.read_at) {
-            router.visit(destino);
-            setIsOpen(false);
-            return;
-        }
+        router.visit(destino);
+        setIsOpen(false);
+    };
 
-        // Si es nueva, la marcamos como leída en backend y navegamos
-        router.post(route('notifications.read', n.id), {}, {
+    const handleLimpiarBandeja = () => {
+        router.post(route('notifications.clear'), {}, {
             preserveScroll: true,
             onSuccess: () => {
-                router.visit(destino);
+                setNotifications([]);
                 setIsOpen(false);
-            }
+            },
         });
     };
 
     const handleOpenDrawer = () => {
         setIsOpen(true);
-        // Desbloqueamos permisos de medios en la primera interacción del usuario
         NotificationBrowserService.requestDesktopPermissions();
     };
 
-    // SECCIÓN: Renderizado
+    const formatearFecha = (fecha) => {
+        if (!fecha || fecha === 'Ahora mismo') return 'Recién';
+        try {
+            return new Date(fecha).toLocaleString('es-MX', {
+                day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
+            });
+        } catch {
+            return fecha;
+        }
+    };
+
     return (
         <>
-            {/* --- ACTIVADOR (CAMPANA) --- */}
-            <button 
+            <button
                 onClick={handleOpenDrawer}
                 className="relative p-3 theme-element border theme-border rounded-2xl hover:border-[var(--color-primario)] transition-all group outline-none"
             >
@@ -137,7 +130,6 @@ export default function NotificationBell({ notifications: propNotifications = []
                 ) : (
                     <Bell className="w-5 h-5 theme-text-muted group-hover:text-[var(--color-primario)] transition-colors" />
                 )}
-                
                 {unreadCount > 0 && (
                     <span className="absolute -top-2 -right-2 w-5 h-5 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow-md border-2 theme-surface" style={{ backgroundColor: 'var(--color-primario)' }}>
                         {unreadCount > 9 ? '9+' : unreadCount}
@@ -145,16 +137,10 @@ export default function NotificationBell({ notifications: propNotifications = []
                 )}
             </button>
 
-            {/* --- BANDEJA LATERAL (PORTAL) --- */}
             {isOpen && createPortal(
                 <div className="fixed inset-0 z-[9999] flex justify-end">
-                    {/* Overlay de fondo */}
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsOpen(false)}></div>
-                    
-                    {/* Contenedor del Panel */}
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsOpen(false)} />
                     <div className="relative w-full max-w-md theme-surface border-l theme-border shadow-2xl h-full flex flex-col animate-slide-in-right">
-                        
-                        {/* Cabecera de Bandeja */}
                         <div className="p-6 md:p-8 border-b theme-border flex justify-between items-center bg-black/5 dark:bg-white/5 shrink-0">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
@@ -170,59 +156,95 @@ export default function NotificationBell({ notifications: propNotifications = []
                             </button>
                         </div>
 
-                        {/* Listado de Notificaciones */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-                            {notifications.length > 0 ? (
-                                notifications.map((n, i) => {
-                                    const tipo = n.type || n.data?.tipo;
-                                    // Detectamos alertas globales (como los reportes agrupados)
-                                    const esResumen = n.data?.total_vencidos !== undefined; 
-                                    const isError = tipo === 'pago_rechazado' || tipo === 'rechazada' || esResumen;
-                                    const iconColor = isError ? 'text-red-500' : 'text-[var(--color-primario)]';
-                                    
-                                    const bgClase = n.read_at 
-                                        ? 'theme-surface opacity-60 border-transparent shadow-none' 
-                                        : 'theme-element border-[var(--color-primario)] shadow-lg';
+                            {notifications.length > 0 ? notifications.map((n, i) => {
+                                const tipo = n.type || n.data?.tipo;
+                                const esResumen = n.data?.total_vencidos !== undefined;
+                                const isError = tipo === 'pago_rechazado' || tipo === 'rechazada' || tipo === 'alerta_pago_insuficiente' || esResumen;
+                                const iconColor = isError ? 'text-red-500' : 'text-[var(--color-primario)]';
+                                const bgClase = n.read_at
+                                    ? 'theme-surface opacity-60 border-transparent shadow-none'
+                                    : 'theme-element border-[var(--color-primario)] shadow-lg';
+                                const etiqueta = ETIQUETAS_TIPO[tipo] || (esResumen ? 'Reporte automático' : 'Sistema');
 
-                                    return (
-                                        <div 
-                                            key={n.id || i} 
-                                            onClick={() => handleNotificationClick(n)}
-                                            className={`p-5 rounded-2xl transition-all cursor-pointer group border ${bgClase} hover:scale-[1.02] active:scale-95`}
-                                        >
-                                            <div className="flex gap-4">
-                                                <div className="mt-1 shrink-0">
-                                                    {isError ? <AlertCircle className={`w-5 h-5 ${iconColor}`} /> : <CheckCircle2 className={`w-5 h-5 ${iconColor}`} />}
-                                                </div>
-                                                <div className="space-y-1.5 w-full">
-                                                    <div className="flex justify-between items-start gap-2">
-                                                        <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: isError ? '#ef4444' : 'var(--color-primario)' }}>
+                                return (
+                                    <div
+                                        key={n.id || i}
+                                        onClick={() => handleNotificationClick(n)}
+                                        className={`p-5 rounded-2xl transition-all cursor-pointer group border ${bgClase} hover:scale-[1.02] active:scale-95`}
+                                    >
+                                        <div className="flex gap-4">
+                                            <div className="mt-1 shrink-0">
+                                                {isError ? <AlertCircle className={`w-5 h-5 ${iconColor}`} /> : <CheckCircle2 className={`w-5 h-5 ${iconColor}`} />}
+                                            </div>
+                                            <div className="space-y-1.5 w-full">
+                                                <div className="flex justify-between items-start gap-2">
+                                                    <div>
+                                                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-black/5 dark:bg-white/10 theme-text-muted">
+                                                            {etiqueta}
+                                                        </span>
+                                                        <p className="text-[11px] font-black uppercase tracking-widest mt-1" style={{ color: isError ? '#ef4444' : 'var(--color-primario)' }}>
                                                             {n.data?.cliente || (esResumen ? 'Reporte Automático' : 'Sistema Global')}
                                                         </p>
-                                                        <span className="text-[9px] font-bold theme-text-muted uppercase shrink-0">
-                                                            {n.created_at} 
-                                                        </span>
                                                     </div>
-                                                    <p className="text-xs font-bold theme-text-main leading-snug">
-                                                        {n.data?.mensaje || 'Nueva actividad en el sistema'}
-                                                    </p>
+                                                    <span className="text-[9px] font-bold theme-text-muted uppercase shrink-0">
+                                                        {formatearFecha(n.created_at)}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs font-bold theme-text-main leading-snug">
+                                                    {n.data?.mensaje || 'Nueva actividad en el sistema'}
+                                                </p>
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {n.data?.solicitud_id && (
+                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20">
+                                                            FOL-{n.data.solicitud_id}
+                                                        </span>
+                                                    )}
+                                                    {n.data?.cliente_numero && (
+                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-slate-500/10 text-slate-500 border border-slate-500/20">
+                                                            #{n.data.cliente_numero}
+                                                        </span>
+                                                    )}
+                                                    {n.data?.proceso && (
+                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                                                            {n.data.proceso}
+                                                        </span>
+                                                    )}
+                                                    {n.data?.monto != null && (
+                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                                            ${Number(n.data.monto).toLocaleString('es-MX')}
+                                                        </span>
+                                                    )}
+                                                    {n.data?.consulta_temas?.length > 0 && (
+                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                            {n.data.consulta_temas.join(' + ')}
+                                                        </span>
+                                                    )}
+                                                    {n.data?.respuesta_positiva != null && (
+                                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${n.data.respuesta_positiva ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
+                                                            {n.data.respuesta_positiva ? 'Respuesta positiva' : 'Respuesta negativa'}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
-                                    )
-                                })
-                            ) : (
+                                    </div>
+                                );
+                            }) : (
                                 <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-50">
                                     <Bell className="w-12 h-12 theme-text-muted" />
-                                    <p className="text-[11px] font-black uppercase theme-text-muted italic tracking-widest text-center">Bandeja limpia_<br/>Sin novedades operativas</p>
+                                    <p className="text-[11px] font-black uppercase theme-text-muted italic tracking-widest text-center">Bandeja limpia_<br />Sin novedades operativas</p>
                                 </div>
                             )}
                         </div>
 
-                        {/* Acciones Globales */}
                         {notifications.length > 0 && (
                             <div className="p-4 border-t theme-border shrink-0 bg-black/5 dark:bg-white/5">
-                                <button className="w-full py-4 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl text-white transition-transform hover:scale-105 outline-none flex items-center justify-center gap-2 shadow-md" style={{ backgroundColor: 'var(--color-primario)' }}>
+                                <button
+                                    onClick={handleLimpiarBandeja}
+                                    className="w-full py-4 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl text-white transition-transform hover:scale-105 outline-none flex items-center justify-center gap-2 shadow-md"
+                                    style={{ backgroundColor: 'var(--color-primario)' }}
+                                >
                                     <MailOpen className="w-4 h-4" /> Limpiar Bandeja
                                 </button>
                             </div>
@@ -231,16 +253,10 @@ export default function NotificationBell({ notifications: propNotifications = []
                 </div>,
                 document.body
             )}
-            
-            {/* SECCIÓN: Animaciones Locales */}
+
             <style>{`
-                @keyframes slide-in-right {
-                    0% { transform: translateX(100%); }
-                    100% { transform: translateX(0); }
-                }
-                .animate-slide-in-right {
-                    animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-                }
+                @keyframes slide-in-right { 0% { transform: translateX(100%); } 100% { transform: translateX(0); } }
+                .animate-slide-in-right { animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
                 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
                 .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--color-primario); border-radius: 10px; }
             `}</style>

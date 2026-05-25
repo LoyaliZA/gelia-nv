@@ -54,8 +54,9 @@ class HandleInertiaRequests extends Middleware
                 ]) : null,
                 'tema_visual' => $temaVisual,
                 
-                // --- NUEVO: Pasamos las notificaciones no leídas para la campanita ---
-                'notificaciones' => $user ? $user->unreadNotifications()->take(10)->get() : [],
+                'notificaciones' => $user
+                    ? $user->notifications()->orderByDesc('created_at')->take(50)->get()
+                    : [],
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

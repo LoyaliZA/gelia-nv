@@ -247,8 +247,15 @@ class AdminController extends Controller
     public function marcarNotificacionLeida($id)
     {
         $notificacion = auth()->user()->notifications()->findOrFail($id);
-        $notificacion->markAsRead(); // Esto llena el campo 'read_at' en la BD
+        $notificacion->markAsRead();
 
-        return back(); // Refresca los datos compartidos de Inertia
+        return back();
+    }
+
+    public function limpiarNotificaciones()
+    {
+        auth()->user()->notifications()->delete();
+
+        return back();
     }
 }

@@ -19,7 +19,9 @@ class ListarSolicitudesService
             'auditorias.usuario', 
             'auditorias.estadoNuevo', 
             'listaDescuento', 
-            'tipoCliente'
+            'tipoCliente',
+            'consultas.encargada',
+            'consultas.vendedor',
         ])->orderBy('created_at', 'desc'); 
 
         if ($usuario) {
@@ -97,6 +99,10 @@ class ListarSolicitudesService
                     $q->where('es_heredado', filter_var($filtros['es_heredado'], FILTER_VALIDATE_BOOLEAN));
                 }
             });
+        }
+
+        if (!empty($filtros['motivo_incorrecta'])) {
+            $query->where('motivo_incorrecta', $filtros['motivo_incorrecta']);
         }
     }
 }

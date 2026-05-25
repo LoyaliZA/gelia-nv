@@ -58,8 +58,9 @@ class CrearSolicitudService
                 'datos_snapshot' => [
                     'monto_cotizado' => $solicitud->monto_cotizado,
                     'proceso_id' => $solicitud->catalogo_proceso_id,
-                    'evidencia_path' => $solicitud->evidencia_path, // El snapshot captura la ruta correcta
-                    'lista_descuento_id' => $solicitud->catalogo_lista_descuento_id
+                    'evidencia_path' => $solicitud->evidencia_path,
+                    'lista_descuento_id' => $solicitud->catalogo_lista_descuento_id,
+                    'antes' => $this->snapshotClienteAlCrear($clienteId),
                 ]
             ]);
 
@@ -92,5 +93,27 @@ class CrearSolicitudService
         $cliente = Cliente::where('numero_cliente', $datos['numero_cliente'])->first();
 
         return $cliente ? $cliente->id : null;
+    }
+
+    private function snapshotClienteAlCrear(?int $clienteId): array
+    {
+        if (!$clienteId) {
+            return [];
+        }
+
+        $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($clienteId);
+        if (!$cliente) {
+            return [];
+        }
+
+        return [
+            'monto_venta' => $cliente->monto_venta_actual,
+            'lista_id' => $cliente->lista_actual_id,
+            'lista_nombre' => $cliente->listaDescuento?->nombre,
+            'tag_vendedor_id' => $cliente->vendedor_id,
+            'tag_vendedor_nombre' => $cliente->vendedor?->name,
+            'tipo_cliente_id' => $cliente->catalogo_tipo_cliente_id,
+            'tipo_cliente_nombre' => $cliente->tipo?->nombre,
+        ];
     }
 }

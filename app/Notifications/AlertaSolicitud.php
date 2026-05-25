@@ -4,49 +4,51 @@ namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast; // <-- Agregado
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Messages\BroadcastMessage; // <-- Agregado
+use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
 use App\Models\SolicitudTag;
 
-// Agregamos ShouldBroadcast a la firma de la clase
 class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadcast
 {
     use Queueable;
 
     public $solicitud;
-    public $tipoAlerta; 
+    public $tipoAlerta;
     public $mensaje;
+    public $extras;
 
-    public function __construct(SolicitudTag $solicitud, $tipoAlerta, $mensaje)
+    public function __construct(SolicitudTag $solicitud, $tipoAlerta, $mensaje, array $extras = [])
     {
-        $this->solicitud = $solicitud;
+        $this->solicitud = $solicitud->loadMissing(['cliente', 'proceso', 'estado', 'vendedor', 'listaDescuento']);
         $this->tipoAlerta = $tipoAlerta;
         $this->mensaje = $mensaje;
+        $this->extras = $extras;
     }
 
     public function via(object $notifiable): array
     {
-        // Agregamos 'broadcast' para que Laravel sepa que debe enviarlo por Reverb
         return ['database', 'mail', 'broadcast'];
     }
 
     public function toMail(object $notifiable): MailMessage
     {
         $url = url('/solicitudes?folio=' . $this->solicitud->id);
-        
-        $mail = (new MailMessage)
-                    ->subject('Alerta de Solicitud GELIA: FOL-' . $this->solicitud->id)
-                    ->greeting('Hola, ' . $notifiable->name . '!')
-                    ->line('Se ha registrado una actualización en el sistema:')
-                    ->line('**Aviso:** ' . $this->mensaje)
-                    ->line('**Cliente:** ' . ($this->solicitud->cliente->nombre ?? 'N/A'))
-                    ->line('**Proceso:** ' . $this->solicitud->proceso->nombre)
-                    ->action('Ver Solicitud en el ERP', $url);
+        $payload = $this->construirPayload();
 
-        if ($this->tipoAlerta === 'pago_rechazado' || $this->tipoAlerta === 'rechazada') {
-            $mail->error(); 
+        $mail = (new MailMessage)
+            ->subject('Alerta de Solicitud GELIA: FOL-' . $this->solicitud->id)
+            ->greeting('Hola, ' . $notifiable->name . '!')
+            ->line('Se ha registrado una actualización en el sistema:')
+            ->line('**Aviso:** ' . $this->mensaje)
+            ->line('**Cliente:** ' . ($payload['cliente'] ?? 'N/A'))
+            ->line('**Proceso:** ' . ($payload['proceso'] ?? 'N/A'))
+            ->line('**Estado:** ' . ($payload['estado'] ?? 'N/A'))
+            ->action('Ver Solicitud en el ERP', $url);
+
+        if (in_array($this->tipoAlerta, ['pago_rechazado', 'rechazada', 'alerta_pago_insuficiente'], true)) {
+            $mail->error();
         }
 
         return $mail;
@@ -54,26 +56,34 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
 
     public function toDatabase(object $notifiable): array
     {
-        return [
-            'solicitud_id' => $this->solicitud->id,
-            'tipo'         => $this->tipoAlerta,
-            'mensaje'      => $this->mensaje,
-            'cliente'      => $this->solicitud->cliente->nombre ?? 'N/A',
-            'fecha'        => now()->toDateTimeString(),
-        ];
+        return $this->construirPayload();
     }
 
-    // --- NUEVO: DISEÑO DE LA ALERTA EN TIEMPO REAL (Reverb) ---
     public function toBroadcast(object $notifiable): BroadcastMessage
     {
-        return new BroadcastMessage([
+        return new BroadcastMessage(array_merge(
+            $this->construirPayload(),
+            ['mensaje_voz' => $this->construirMensajeVoz($notifiable)]
+        ));
+    }
+
+    private function construirPayload(): array
+    {
+        $cliente = $this->solicitud->cliente;
+
+        return array_merge([
             'solicitud_id' => $this->solicitud->id,
-            'tipo'         => $this->tipoAlerta,
-            'mensaje'      => $this->mensaje,
-            'cliente'      => $this->solicitud->cliente->nombre ?? 'N/A',
-            'fecha'        => now()->toDateTimeString(),
-            'mensaje_voz'  => $this->construirMensajeVoz($notifiable) // Inyección del TTS
-        ]);
+            'tipo' => $this->tipoAlerta,
+            'mensaje' => $this->mensaje,
+            'cliente' => $cliente->nombre ?? 'N/A',
+            'cliente_numero' => $cliente->numero_cliente ?? null,
+            'proceso' => $this->solicitud->proceso->nombre ?? null,
+            'estado' => $this->solicitud->estado->nombre ?? null,
+            'vendedora' => $this->solicitud->vendedor->name ?? null,
+            'monto' => $this->solicitud->monto_cotizado,
+            'lista_solicitada' => $this->solicitud->listaDescuento->nombre ?? null,
+            'fecha' => now()->toDateTimeString(),
+        ], $this->extras);
     }
 
     private function construirMensajeVoz(object $notifiable): string
@@ -81,34 +91,34 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
         $nombreDestinatario = explode(' ', trim($notifiable->name))[0];
         $nombreVendedor = explode(' ', trim($this->solicitud->vendedor->name ?? 'un colaborador'))[0];
         $esVendedorOriginal = ($this->solicitud->vendedor_id === $notifiable->id);
-        
+
         switch ($this->tipoAlerta) {
             case 'nueva':
                 return "Atención {$nombreDestinatario}, {$nombreVendedor} ha realizado una nueva solicitud.";
-
-            // --- INYECCIÓN DEL CASO DE ASCENSO ---
             case 'alerta_ascenso_lista':
                 return "Atención {$nombreDestinatario}, el pago procesado por {$nombreVendedor} ha permitido ascender al cliente de categoría.";
-
             case 'rechazada':
             case 'pago_rechazado':
                 if ($esVendedorOriginal) {
-                    return "{$nombreDestinatario}, se ha encontrado un error en tu solicitud. Por favor, realiza las correcciones.";
+                    return "{$nombreDestinatario}, se ha encontrado un error en tu solicitud. Por favor, inicia una nueva solicitud si el pago venció.";
                 }
                 return "{$nombreDestinatario}, {$nombreVendedor} ha recibido una observación en su solicitud.";
-
             case 'reparada':
                 return "Atención {$nombreDestinatario}, {$nombreVendedor} ha corregido su solicitud y está lista para revisión.";
-
             case 'pago_confirmado':
                 return "{$nombreDestinatario}, {$nombreVendedor} ha confirmado el pago del cliente en el folio {$this->solicitud->id}.";
-
+            case 'consulta_nueva':
+                return "Atención {$nombreDestinatario}, {$nombreVendedor} solicita verificación de TAG o lista antes de confirmar el pago.";
+            case 'consulta_respondida':
+                $resultado = ($this->extras['respuesta_positiva'] ?? false) ? 'confirmada' : 'rechazada';
+                return "{$nombreDestinatario}, tu consulta de TAG o lista fue {$resultado}.";
+            case 'rollback_confirmado':
+                return "{$nombreDestinatario}, la encargada confirmó la reversión del folio vencido. Debes iniciar una nueva solicitud.";
             case 'actualizacion':
                 if ($esVendedorOriginal) {
                     return "{$nombreDestinatario}, el área administrativa respondió tu solicitud.";
                 }
                 return "{$nombreDestinatario}, {$nombreVendedor} tiene una nueva actualización en su folio.";
-
             default:
                 return "{$nombreDestinatario}, tienes una notificación operativa de {$nombreVendedor}.";
         }

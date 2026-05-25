@@ -26,11 +26,14 @@ class SolicitudTag extends Model
         'evidencia_path',
         'catalogo_tipo_cliente_id',
         'catalogo_lista_descuento_id', // <-- NUEVO CAMPO AÑADIDO
+        'motivo_incorrecta',
+        'rollback_confirmado_at',
     ];
 
     protected $casts = [
         'monto_cotizado' => 'decimal:2',
         'pago_confirmado' => 'boolean',
+        'rollback_confirmado_at' => 'datetime',
     ];
 
     // Relaciones (BelongsTo) hacia los catálogos y entidades
@@ -47,5 +50,10 @@ class SolicitudTag extends Model
     public function auditorias(): HasMany
     {
         return $this->hasMany(AuditoriaSolicitud::class, 'solicitud_id');
+    }
+
+    public function consultas(): HasMany
+    {
+        return $this->hasMany(ConsultaSolicitud::class, 'solicitud_id');
     }
 }
