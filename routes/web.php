@@ -105,6 +105,17 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/entregas/zonas', [EntregasController::class, 'storeZona'])->name('entregas.zonas.store')->middleware('can:entregas.configurar_zonas');
     });
 
+    Route::middleware(['can:entregas.configurar_zonas'])->prefix('admin/mapa-logistico')->name('admin.mapa_logistico.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MapaLogisticoController::class, 'index'])->name('index');
+        Route::get('/exportar/{tipo}', [\App\Http\Controllers\MapaLogisticoController::class, 'exportar'])->name('exportar');
+        Route::post('/importar/{tipo}', [\App\Http\Controllers\MapaLogisticoController::class, 'importar'])->name('importar');
+        Route::post('/{tipo}', [\App\Http\Controllers\MapaLogisticoController::class, 'store'])->name('store');
+        Route::put('/{tipo}/{id}/poligono', [\App\Http\Controllers\MapaLogisticoController::class, 'actualizarPoligono'])->name('poligono.update');
+        Route::put('/periferia/{id}', [\App\Http\Controllers\MapaLogisticoController::class, 'actualizarPeriferia'])->name('periferia.update');
+        Route::put('/{tipo}/{id}/activo', [\App\Http\Controllers\MapaLogisticoController::class, 'toggleActivo'])->name('toggle');
+        Route::delete('/{tipo}/{id}', [\App\Http\Controllers\MapaLogisticoController::class, 'eliminar'])->name('eliminar');
+    });
+
     // ══════════════════════════════════════════════════════════════════════
     // FUNCIONES OPERATIVAS: CRUCE DE INVENTARIOS (LISTADOS)
     // ══════════════════════════════════════════════════════════════════════

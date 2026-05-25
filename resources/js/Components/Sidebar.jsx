@@ -5,7 +5,7 @@ import {
     Menu, X, Moon, Sun, Bell, Home, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History, Map, FileText
+    FolderTree, Calculator, History, Map, FileText, Layers
 } from 'lucide-react';
 
 import GeliaLogo from './GeliaLogo';
@@ -268,6 +268,20 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                             <div className="flex items-center">
                                 <Map className="w-4 h-4 mr-4" style={{ color: isRouteActive('/entregas') ? '#ffffff' : 'var(--color-primario)' }} />
                                 <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Cotizar Entregas</span>
+                            </div>
+                        </Link>
+                    )}
+
+                    {can('entregas.configurar_zonas') && (
+                        <Link
+                            href={route('admin.mapa_logistico.index')}
+                            className={linkBaseClass + (isRouteActive('/admin/mapa-logistico') ? linkActiveClass : linkInactiveClass)}
+                            onMouseEnter={(e) => { if (!isRouteActive('/admin/mapa-logistico')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                            onMouseLeave={(e) => { if (!isRouteActive('/admin/mapa-logistico')) e.currentTarget.style.borderColor = 'transparent' }}
+                        >
+                            <div className="flex items-center">
+                                <Layers className="w-4 h-4 mr-4" style={{ color: isRouteActive('/admin/mapa-logistico') ? '#ffffff' : 'var(--color-primario)' }} />
+                                <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mapa Logístico</span>
                             </div>
                         </Link>
                     )}

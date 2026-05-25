@@ -4,6 +4,7 @@ namespace App\Services\Entregas;
 
 use App\Models\CatalogoZonaEntrega;
 use App\Models\CatalogoZonaEntregaOverride;
+use App\Models\CatalogoZonaPeriferia;
 use App\Models\CatalogoZonaRestringida;
 use App\Models\ConfiguracionEntrega;
 use Exception;
@@ -36,6 +37,7 @@ class CotizadorEntregaService
             $lonCliente
         );
 
+        // Límite absoluto de cobertura: el radio prevalece sobre polígonos de periferia.
         if ($distanciaKm > (float) $config->radio_tolerancia_km) {
             throw new Exception("El domicilio se encuentra fuera de nuestra área máxima de cobertura ({$config->radio_tolerancia_km} km).");
         }
@@ -100,7 +102,8 @@ class CotizadorEntregaService
     }
 
     /**
-     * Asigna horario de periferia según sector geográfico desde el km 0 (mapa operativo).
+     * Asigna horario de periferia cuando el punto ya pasó el check de radio_tolerancia_km
+     * y está fuera de los polígonos comerciales. Los polígonos de periferia solo definen horarios.
      */
     private function resolverZonaPeriferia(
         float $lat,
@@ -109,6 +112,22 @@ class CotizadorEntregaService
         float $lonOrigen,
         Collection $zonas
     ): ?CatalogoZonaEntrega {
+        $periferias = CatalogoZonaPeriferia::where('activo', true)
+            ->with('zonaReferencia')
+            ->get();
+
+        foreach ($periferias as $periferia) {
+            $poligono = $periferia->coordenadas_poligono['coordinates'][0] ?? [];
+
+            if ($this->puntoEnPoligono($lon, $lat, $poligono)) {
+                $zonaReferencia = $periferia->zonaReferencia;
+
+                if ($zonaReferencia && $zonaReferencia->activo) {
+                    return $zonaReferencia;
+                }
+            }
+        }
+
         $rumbo = $this->calcularRumboGrados($latOrigen, $lonOrigen, $lat, $lon);
         $nombreZona = $this->nombreZonaPorSectorPeriferia($rumbo);
 

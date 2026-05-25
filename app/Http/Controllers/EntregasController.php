@@ -7,6 +7,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use App\Models\ConfiguracionEntrega;
 use App\Models\CatalogoZonaEntrega;
+use App\Models\CatalogoZonaPeriferia;
 use App\Models\CatalogoZonaRestringida;
 use Illuminate\Support\Facades\Crypt;
 
@@ -34,41 +35,29 @@ class EntregasController extends Controller
         $zonas = CatalogoZonaEntrega::where('activo', true)->get();
 
         // 2. Formateamos las coordenadas para el Frontend (Google Maps)
-        $zonasFormateadas = $zonas->map(function ($zona) {
-            // Extraemos el arreglo de coordenadas [ [lon, lat], [lon, lat] ]
-            $coordenadasGeoJson = $zona->coordenadas_poligono['coordinates'][0] ?? [];
-            
-            // Transformamos al formato { lat: y, lng: x }
-            $rutasMaps = array_map(function ($punto) {
-                return [
-                    'lat' => (float) $punto[1],
-                    'lng' => (float) $punto[0],
-                ];
-            }, $coordenadasGeoJson);
+        $zonasFormateadas = $zonas->map(fn ($zona) => $this->formatearPoligonoParaMapa($zona, incluirColor: true));
 
-            return [
-                'id' => $zona->id,
-                'nombre' => $zona->nombre,
-                'color_hex' => $zona->color_hex,
-                'rutas_formateadas' => $rutasMaps, // Esta es la propiedad que lee MapaGoogle.jsx
-            ];
-        });
+        $zonasRestringidas = CatalogoZonaRestringida::where('activo', true)
+            ->get()
+            ->map(fn ($zr) => $this->formatearPoligonoParaMapa($zr));
 
-        // Zonas prohibidas (Formateadas igual que las zonas normales para React)
-        $zonasRestringidas = CatalogoZonaRestringida::where('activo', true)->get()->map(function ($zr) {
-            $coordenadasGeoJson = $zr->coordenadas_poligono['coordinates'][0] ?? [];
-            return [
-                'id' => $zr->id,
-                'nombre' => $zr->nombre,
-                'rutas_formateadas' => array_map(fn($punto) => ['lat' => (float) $punto[1], 'lng' => (float) $punto[0]], $coordenadasGeoJson)
-            ];
-        });
+        $zonasPeriferia = CatalogoZonaPeriferia::where('activo', true)
+            ->with('zonaReferencia')
+            ->get()
+            ->map(function ($periferia) {
+                $formateada = $this->formatearPoligonoParaMapa($periferia);
+                $formateada['zona_referencia'] = $periferia->zonaReferencia?->nombre;
+                $formateada['color_hex'] = $periferia->zonaReferencia?->color_hex ?? '#F59E0B';
+
+                return $formateada;
+            });
 
         return Inertia::render('Entregas/Index', [
             'configuracion' => $configuracion,
             'googleApiKey' => $apiKey,
             'zonas' => $zonasFormateadas,
-            'zonas_restringidas' => $zonasRestringidas // <-- Prop nueva
+            'zonas_restringidas' => $zonasRestringidas,
+            'zonas_periferia' => $zonasPeriferia,
         ]);
     }
 
@@ -86,6 +75,10 @@ class EntregasController extends Controller
             'usar_api_distancia' => 'required|boolean',
             'api_key_google' => 'nullable|string',
             'google_map_id' => 'nullable|string|max:128',
+            'mostrar_zonas_principales' => 'required|boolean',
+            'mostrar_zonas_restringidas' => 'required|boolean',
+            'mostrar_zonas_periferia' => 'required|boolean',
+            'mostrar_radio_tolerancia' => 'required|boolean',
         ]);
 
         $configuracion = ConfiguracionEntrega::first();
@@ -129,5 +122,25 @@ class EntregasController extends Controller
         ]);
 
         return redirect()->back();
+    }
+
+    private function formatearPoligonoParaMapa(object $registro, bool $incluirColor = false): array
+    {
+        $coordenadasGeoJson = $registro->coordenadas_poligono['coordinates'][0] ?? [];
+
+        $formateado = [
+            'id' => $registro->id,
+            'nombre' => $registro->nombre,
+            'rutas_formateadas' => array_map(
+                fn ($punto) => ['lat' => (float) $punto[1], 'lng' => (float) $punto[0]],
+                $coordenadasGeoJson
+            ),
+        ];
+
+        if ($incluirColor) {
+            $formateado['color_hex'] = $registro->color_hex;
+        }
+
+        return $formateado;
     }
 }

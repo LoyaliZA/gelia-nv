@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
-import { useJsApiLoader } from '@react-google-maps/api';
+import { useGoogleMapsLoader } from '@/hooks/useGoogleMapsLoader';
 import {
     MapPin, Navigation, CheckCircle2,
     AlertTriangle, Settings2, Clock, CheckSquare
@@ -10,8 +10,6 @@ import AppLayout from '@/Layouts/AppLayout';
 import MapaGoogle from '@/Components/Entregas/MapaGoogle';
 import BuscadorPlacesGoogle from '@/Components/Entregas/BuscadorPlacesGoogle';
 import ModalConfiguracionLogistica from './Partials/ModalConfiguracionLogistica';
-
-const LIBRERIAS_GOOGLE = ['places', 'marker'];
 
 const ESTILOS_ADICIONALES = `
     @keyframes slideUpFade { 
@@ -24,7 +22,7 @@ const ESTILOS_ADICIONALES = `
     }
 `;
 
-export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_restringidas }) {
+export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_restringidas, zonas_periferia }) {
     const [coordenadas, setCoordenadas] = useState({ latitud: '', longitud: '' });
     const [direccion, setDireccion] = useState('');
     const [viewportBusqueda, setViewportBusqueda] = useState(null);
@@ -33,11 +31,7 @@ export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_
     const [modalConfigAbierto, setModalConfigAbierto] = useState(false);
     const [errorMotor, setErrorMotor] = useState(null);
 
-    const { isLoaded, loadError } = useJsApiLoader({
-        id: 'google-map-script',
-        googleMapsApiKey: googleApiKey || '',
-        libraries: LIBRERIAS_GOOGLE,
-    });
+    const { isLoaded, loadError } = useGoogleMapsLoader(googleApiKey);
 
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
     const canConfigurar = can('entregas.configurar_zonas');
@@ -328,6 +322,7 @@ export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_
                                 configuracion={configuracion}
                                 zonas={zonas || []}
                                 zonas_restringidas={zonas_restringidas || []}
+                                zonas_periferia={zonas_periferia || []}
                                 onCoordenadasChange={actualizarCoordenadasDesdeMapa}
                                 isLoaded={isLoaded}
                                 loadError={loadError}
@@ -339,14 +334,10 @@ export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_
             </div>
 
             {modalConfigAbierto && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-page-reveal">
-                    <div className="w-full max-w-2xl theme-surface border theme-border rounded-[2rem] shadow-2xl p-6 md:p-8 max-h-[90vh] overflow-y-auto relative">
-                        <ModalConfiguracionLogistica
-                            configuracion={configuracion}
-                            onClose={() => setModalConfigAbierto(false)}
-                        />
-                    </div>
-                </div>
+                <ModalConfiguracionLogistica
+                    configuracion={configuracion}
+                    onClose={() => setModalConfigAbierto(false)}
+                />
             )}
         </AppLayout>
     );

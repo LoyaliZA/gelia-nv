@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { GoogleMap, MarkerF, Polygon } from '@react-google-maps/api';
+import { GoogleMap, MarkerF, Polygon, Circle } from '@react-google-maps/api';
 import { AlertTriangle } from 'lucide-react';
 
 const ESTILO_CLARO = [
@@ -65,9 +65,11 @@ export default function MapaGoogle({
     configuracion,
     zonas = [],
     zonas_restringidas = [],
+    zonas_periferia = [],
     isLoaded,
     loadError,
     viewportBusqueda = null,
+    soloLectura = false,
 }) {
     const [map, setMap] = useState(null);
     const [isDarkMode, setIsDarkMode] = useState(false);
@@ -80,6 +82,24 @@ export default function MapaGoogle({
         lat: parseFloat(configuracion?.latitud_origen || 17.99300568),
         lng: parseFloat(configuracion?.longitud_origen || -92.94544775),
     });
+
+    const mostrarPrincipales = configuracion?.mostrar_zonas_principales ?? true;
+    const mostrarRestringidas = configuracion?.mostrar_zonas_restringidas ?? true;
+    const mostrarPeriferia = configuracion?.mostrar_zonas_periferia ?? false;
+    const mostrarRadio = configuracion?.mostrar_radio_tolerancia ?? true;
+
+    const centroKm0 = useMemo(
+        () => ({
+            lat: parseFloat(configuracion?.latitud_origen || 17.99300568),
+            lng: parseFloat(configuracion?.longitud_origen || -92.94544775),
+        }),
+        [configuracion?.latitud_origen, configuracion?.longitud_origen]
+    );
+
+    const radioMetros = useMemo(
+        () => parseFloat(configuracion?.radio_tolerancia_km || 12) * 1000,
+        [configuracion?.radio_tolerancia_km]
+    );
 
     const posicionMarcador = useMemo(
         () => obtenerPosicionMarcador(coordenadas, center),
@@ -260,7 +280,22 @@ export default function MapaGoogle({
                 />
             )}
 
-            {zonas.map((zona) => (
+            {mostrarRadio && (
+                <Circle
+                    center={centroKm0}
+                    radius={radioMetros}
+                    options={{
+                        fillColor: '#3B82F6',
+                        fillOpacity: 0.06,
+                        strokeColor: '#3B82F6',
+                        strokeOpacity: 0.75,
+                        strokeWeight: 2,
+                        clickable: false,
+                    }}
+                />
+            )}
+
+            {mostrarPrincipales && zonas.map((zona) => (
                 <Polygon
                     key={zona.id ?? zona.nombre}
                     paths={zona.rutas_formateadas}
@@ -275,7 +310,22 @@ export default function MapaGoogle({
                 />
             ))}
 
-            {zonas_restringidas?.map((zr) => (
+            {mostrarPeriferia && zonas_periferia?.map((zp) => (
+                <Polygon
+                    key={`periferia-${zp.id ?? zp.nombre}`}
+                    paths={zp.rutas_formateadas}
+                    options={{
+                        fillColor: zp.color_hex || '#F59E0B',
+                        fillOpacity: 0.1,
+                        strokeColor: zp.color_hex || '#F59E0B',
+                        strokeOpacity: 0.7,
+                        strokeWeight: 2,
+                        clickable: false,
+                    }}
+                />
+            ))}
+
+            {mostrarRestringidas && zonas_restringidas?.map((zr) => (
                 <Polygon
                     key={`restringida-${zr.id ?? zr.nombre}`}
                     paths={zr.rutas_formateadas}
@@ -290,7 +340,7 @@ export default function MapaGoogle({
                 />
             ))}
 
-            {!tienePin && (
+            {!soloLectura && !tienePin && (
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-4 py-2 rounded-xl theme-surface border theme-border text-[10px] font-bold theme-text-muted shadow-lg pointer-events-none">
                     Busca una dirección o haz clic en el mapa para colocar el pin
                 </div>
