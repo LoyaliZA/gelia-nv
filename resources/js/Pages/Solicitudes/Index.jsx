@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { Head, router, useForm } from '@inertiajs/react';
 import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
-    Search, History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
-    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Calendar, Filter, Eye
+    History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
+    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -14,6 +14,7 @@ import ModalRespuestaSolicitud from './Partials/ModalRespuestaSolicitud';
 import ModalBitacoraSolicitud from './Partials/ModalBitacoraSolicitud';
 import ModalConsultaSolicitud from './Partials/ModalConsultaSolicitud';
 import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
+import FiltrosSolicitudes from './Partials/FiltrosSolicitudes';
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
 const formatearTiempoRelativo = (fechaString) => {
@@ -274,6 +275,11 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
     if (!menuAbierto || !menuSolicitud) return null;
     const solicitud = menuSolicitud;
 
+    const roles = auth?.user?.roles || [];
+    const esGerente = roles.some(r => String(r).toLowerCase().includes('gerente'));
+    const puedeReportarError = (can('solicitudes.reportar') || can('solicitudes.verificar') || esGerente)
+        && solicitud.estado?.nombre !== 'Incorrecta';
+
     const auditoriasOrdenadas = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id);
     const ultimaAuditoria = auditoriasOrdenadas.find(a => !a.motivo_reporte?.toUpperCase().includes('AUTOMÁTICAMENTE'));
     const esAlertaPago = ultimaAuditoria?.motivo_reporte?.toUpperCase().includes('ALERTA DE PAGO');
@@ -343,16 +349,18 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Aprobar / Reportar (Encargada) — solo en Pendiente */}
+                {/* Aprobar (Encargada) — solo Pendiente */}
                 {can('solicitudes.reportar') && !esAlertaPago && solicitud.estado?.nombre === 'Pendiente' && (
-                    <>
-                        <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 2 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors" style={{ color: 'var(--color-primario)' }}>
-                            <CheckCircle2 className="w-4 h-4" /> Aprobar Proceso
-                        </button>
-                        <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 4 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
-                            <AlertOctagon className="w-4 h-4" /> Reportar Error
-                        </button>
-                    </>
+                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 2 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3" style={{ color: 'var(--color-primario)' }}>
+                        <CheckCircle2 className="w-4 h-4" /> Aprobar Proceso
+                    </button>
+                )}
+
+                {/* Reportar error — encargadas, auxiliares y gerentes en cualquier etapa activa */}
+                {puedeReportarError && !esAlertaPago && (
+                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 4 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                        <AlertOctagon className="w-4 h-4" /> Reportar Error
+                    </button>
                 )}
 
                 {/* Bitácora */}
@@ -417,8 +425,8 @@ export default function Index({
     const [menuAbierto, setMenuAbierto] = useState(null);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
     const [menuSolicitud, setMenuSolicitud] = useState(null);
-    const [tabActiva, setTabActiva] = useState('TODAS');
-    const [busqueda, setBusqueda] = useState('');
+    const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
+    const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [copiadoId, setCopiadoId] = useState(null);
     const [procesandoAccion, setProcesandoAccion] = useState(false);
     const [filtroVendedor, setFiltroVendedor] = useState(filtros.vendedor_id || '');
@@ -427,18 +435,9 @@ export default function Index({
     const [fechaInicio, setFechaInicio] = useState(filtros.fecha_inicio || '');
     const [fechaFin, setFechaFin] = useState(filtros.fecha_fin || '');
 
-    const can = (permiso) => { const roles = auth?.user?.roles || []; const isAdmin = roles.includes('Admin') || roles.includes('Super admin (admin)'); return auth?.user?.permissions?.includes(permiso) || isAdmin; };
+    const filtrosAdicionalesActivos = [filtroVendedor, filtroMotivo].filter(Boolean).length;
 
-    const eliminarSolicitud = (id) => {
-        const motivo = window.prompt("ATENCIÓN: Se eliminará este registro y se creará un respaldo en la auditoría.\n\nIngresa el motivo de la eliminación (Mínimo 10 caracteres):");
-        if (motivo === null) return;
-        if (motivo.trim().length < 10) { alert("Operación cancelada: El motivo debe tener al menos 10 caracteres."); return; }
-        setMenuAbierto(null); setProcesandoAccion(true);
-        router.delete(route('solicitudes.destroy', id), { data: { motivo: motivo.trim() }, onFinish: () => setProcesandoAccion(false) });
-    };
-
-    // FUNCIÓN PARA CALCULAR FECHAS Y ENVIAR AL BACKEND
-    const aplicarFiltrosBackend = (vendedorId, tipo, fInicio, fFin, motivo = filtroMotivo) => {
+    const calcularRangoFechas = (tipo, fInicio, fFin) => {
         let inicioCalculado = fInicio;
         let finCalculado = fFin;
 
@@ -449,10 +448,12 @@ export default function Index({
             if (tipo === 'HOY') {
                 inicioCalculado = finCalculado = formatDate(hoy);
             } else if (tipo === 'AYER') {
-                const ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1);
+                const ayer = new Date(hoy);
+                ayer.setDate(ayer.getDate() - 1);
                 inicioCalculado = finCalculado = formatDate(ayer);
             } else if (tipo === 'SEMANA') {
-                const primerDia = new Date(hoy); primerDia.setDate(primerDia.getDate() - primerDia.getDay() + 1);
+                const primerDia = new Date(hoy);
+                primerDia.setDate(primerDia.getDate() - primerDia.getDay() + 1);
                 inicioCalculado = formatDate(primerDia);
                 finCalculado = formatDate(hoy);
             } else if (tipo === 'MES') {
@@ -465,18 +466,61 @@ export default function Index({
             finCalculado = '';
         }
 
+        return { inicioCalculado, finCalculado };
+    };
+
+    const aplicarFiltros = (overrides = {}) => {
+        const tab = overrides.tab ?? tabActiva;
+        const vendedorId = overrides.vendedor_id ?? filtroVendedor;
+        const motivo = overrides.motivo_incorrecta ?? filtroMotivo;
+        const tipo = overrides.tipo_fecha ?? tipoFecha;
+        const q = overrides.q !== undefined ? overrides.q : busqueda;
+        const fInicio = overrides.fecha_inicio ?? fechaInicio;
+        const fFin = overrides.fecha_fin ?? fechaFin;
+
+        if (overrides.tab !== undefined) setTabActiva(tab);
+        if (overrides.vendedor_id !== undefined) setFiltroVendedor(vendedorId);
+        if (overrides.motivo_incorrecta !== undefined) {
+            setFiltroMotivo(motivo);
+            if (motivo) setTabActiva('INCORRECTAS');
+        }
+        if (overrides.tipo_fecha !== undefined) setTipoFecha(tipo);
+        if (overrides.q !== undefined) setBusqueda(q);
+        if (overrides.fecha_inicio !== undefined) setFechaInicio(fInicio);
+        if (overrides.fecha_fin !== undefined) setFechaFin(fFin);
+
+        const { inicioCalculado, finCalculado } = calcularRangoFechas(tipo, fInicio, fFin);
+        const tabFinal = motivo ? 'INCORRECTAS' : tab;
+
         setProcesandoAccion(true);
         router.get(route('solicitudes.index'), {
+            tab: tabFinal !== 'TODAS' ? tabFinal : undefined,
             vendedor_id: vendedorId || undefined,
-            tipo_fecha: tipo,
+            tipo_fecha: tipo !== 'TODAS' ? tipo : undefined,
             fecha_inicio: inicioCalculado || undefined,
             fecha_fin: finCalculado || undefined,
             motivo_incorrecta: motivo || undefined,
+            q: q?.trim() || undefined,
         }, {
             preserveState: true,
             preserveScroll: true,
-            onFinish: () => setProcesandoAccion(false)
+            onFinish: () => setProcesandoAccion(false),
         });
+    };
+
+    const limpiarFiltrosAdicionales = () => {
+        const nuevaTab = filtroMotivo ? 'TODAS' : tabActiva;
+        aplicarFiltros({ vendedor_id: '', motivo_incorrecta: '', tab: nuevaTab });
+    };
+
+    const can = (permiso) => { const roles = auth?.user?.roles || []; const isAdmin = roles.includes('Admin') || roles.includes('Super admin (admin)'); return auth?.user?.permissions?.includes(permiso) || isAdmin; };
+
+    const eliminarSolicitud = (id) => {
+        const motivo = window.prompt("ATENCIÓN: Se eliminará este registro y se creará un respaldo en la auditoría.\n\nIngresa el motivo de la eliminación (Mínimo 10 caracteres):");
+        if (motivo === null) return;
+        if (motivo.trim().length < 10) { alert("Operación cancelada: El motivo debe tener al menos 10 caracteres."); return; }
+        setMenuAbierto(null); setProcesandoAccion(true);
+        router.delete(route('solicitudes.destroy', id), { data: { motivo: motivo.trim() }, onFinish: () => setProcesandoAccion(false) });
     };
 
     const marcarConsultaLeida = (solicitudId, consultaId) => {
@@ -545,11 +589,7 @@ export default function Index({
         setMenuPos({ top, left }); setMenuSolicitud(solicitud); setMenuAbierto(menuAbierto === solicitud.id ? null : solicitud.id);
     };
 
-    const solicitudesFiltradas = (solicitudes.data || []).filter(solicitud => {
-        const cumpleTab = tabActiva === 'TODAS' || (tabActiva === 'PENDIENTES' && solicitud.estado?.nombre === 'Pendiente') || (tabActiva === 'RESPONDIDAS' && solicitud.estado?.nombre === 'Respondida') || (tabActiva === 'INCORRECTAS' && solicitud.estado?.nombre === 'Incorrecta');
-        const search = busqueda.toLowerCase();
-        return cumpleTab && ((solicitud.id?.toString() || '').includes(search) || (solicitud.cliente?.nombre?.toLowerCase() || '').includes(search) || (solicitud.cliente?.numero_cliente?.toLowerCase() || '').includes(search));
-    });
+    const solicitudesFiltradas = solicitudes.data || [];
 
     const obtenerEstiloEstado = (nombreEstado) => {
         switch (nombreEstado?.toLowerCase()) {
@@ -563,7 +603,17 @@ export default function Index({
     const irAPagina = (pagina) => {
         const totalPaginas = solicitudes.last_page || 1;
         if (pagina < 1 || pagina > totalPaginas) return;
-        router.get(route('solicitudes.index'), { page: pagina }, { preserveState: true, preserveScroll: false });
+        setProcesandoAccion(true);
+        router.get(route('solicitudes.index'), {
+            page: pagina,
+            tab: tabActiva !== 'TODAS' ? tabActiva : undefined,
+            vendedor_id: filtroVendedor || undefined,
+            tipo_fecha: tipoFecha !== 'TODAS' ? tipoFecha : undefined,
+            fecha_inicio: fechaInicio || undefined,
+            fecha_fin: fechaFin || undefined,
+            motivo_incorrecta: filtroMotivo || undefined,
+            q: busqueda?.trim() || undefined,
+        }, { preserveState: true, preserveScroll: false, onFinish: () => setProcesandoAccion(false) });
     };
 
     return (
@@ -605,96 +655,21 @@ export default function Index({
                     )}
                 </header>
 
-                {/* BARRA DE BÚSQUEDA Y TABS ORIGINALES */}
-                <div className="animate-page-reveal flex flex-col lg:flex-row gap-4 items-center justify-between" style={{ animationDelay: '100ms' }}>
-                    <div className="gelia-segment w-full lg:w-auto p-1 h-14 shadow-sm overflow-x-auto flex">
-                        {['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'INCORRECTAS'].map(tab => (<button key={tab} type="button" onClick={() => setTabActiva(tab)} className="gelia-segment-btn px-4 md:px-6 min-w-max flex-1 text-center" data-active={tabActiva === tab}>{tab}</button>))}
-                    </div>
-                    <div className="relative w-full lg:w-96">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted" />
-                        <input type="text" placeholder="Buscar folio o cliente..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm" />
-                    </div>
-                </div>
-
-                {/* NUEVA BARRA DE FILTROS AVANZADOS (BACKEND) */}
-                <div className="animate-page-reveal theme-surface rounded-2xl border theme-border p-4 flex flex-col md:flex-row gap-4 shadow-sm" style={{ animationDelay: '150ms' }}>
-
-                    {/* Filtro de Usuario */}
-                    <div className="flex-1 flex flex-col gap-1.5">
-                        <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-1"><Filter className="w-3 h-3" /> Asesor / Vendedor</label>
-                        <select
-                            value={filtroVendedor}
-                            onChange={(e) => {
-                                setFiltroVendedor(e.target.value);
-                                aplicarFiltrosBackend(e.target.value, tipoFecha, fechaInicio, fechaFin);
-                            }}
-                            className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all cursor-pointer"
-                        >
-                            <option value="">Todos los asesores</option>
-                            {vendedores.map(v => (
-                                <option key={v.id} value={v.id}>{v.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Filtro por motivo de incidencia */}
-                    <div className="flex-1 flex flex-col gap-1.5">
-                        <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-1"><AlertOctagon className="w-3 h-3" /> Motivo incidencia</label>
-                        <select
-                            value={filtroMotivo}
-                            onChange={(e) => {
-                                setFiltroMotivo(e.target.value);
-                                aplicarFiltrosBackend(filtroVendedor, tipoFecha, fechaInicio, fechaFin, e.target.value);
-                            }}
-                            className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all cursor-pointer"
-                        >
-                            <option value="">Todos los motivos</option>
-                            <option value="vencimiento_pago">Pago vencido</option>
-                            <option value="error_reportado">Reportadas (error)</option>
-                            <option value="pago_insuficiente">Rechazadas (pago insuficiente)</option>
-                        </select>
-                    </div>
-
-                    {/* Filtro de Fechas Predefinidas */}
-                    <div className="flex-1 flex flex-col gap-1.5">
-                        <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-1"><Calendar className="w-3 h-3" /> Rango de Tiempo</label>
-                        <select
-                            value={tipoFecha}
-                            onChange={(e) => {
-                                setTipoFecha(e.target.value);
-                                aplicarFiltrosBackend(filtroVendedor, e.target.value, fechaInicio, fechaFin);
-                            }}
-                            className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all cursor-pointer"
-                        >
-                            <option value="TODAS">Histórico Completo</option>
-                            <option value="HOY">Solo Hoy</option>
-                            <option value="AYER">Ayer</option>
-                            <option value="SEMANA">Esta Semana</option>
-                            <option value="MES">Este Mes</option>
-                            <option value="PERSONALIZADO">Rango Personalizado...</option>
-                        </select>
-                    </div>
-
-                    {/* Rango Personalizado (Solo visible si selecciona PERSONALIZADO) */}
-                    {tipoFecha === 'PERSONALIZADO' && (
-                        <div className="flex-[2] flex flex-col sm:flex-row gap-2 items-end">
-                            <div className="flex-1 w-full flex flex-col gap-1.5">
-                                <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Desde</label>
-                                <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all" />
-                            </div>
-                            <div className="flex-1 w-full flex flex-col gap-1.5">
-                                <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Hasta</label>
-                                <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)} className="w-full px-4 py-2.5 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all" />
-                            </div>
-                            <button
-                                onClick={() => aplicarFiltrosBackend(filtroVendedor, tipoFecha, fechaInicio, fechaFin)}
-                                className="w-full sm:w-auto px-6 py-2.5 bg-slate-800 dark:bg-slate-200 text-white dark:text-black rounded-xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-md"
-                            >
-                                Buscar
-                            </button>
-                        </div>
-                    )}
-                </div>
+                <FiltrosSolicitudes
+                    tabActiva={tabActiva}
+                    busqueda={busqueda}
+                    tipoFecha={tipoFecha}
+                    fechaInicio={fechaInicio}
+                    fechaFin={fechaFin}
+                    filtroVendedor={filtroVendedor}
+                    filtroMotivo={filtroMotivo}
+                    vendedores={vendedores}
+                    filtrosActivos={filtrosAdicionalesActivos}
+                    onCambiarTab={(tab) => aplicarFiltros({ tab })}
+                    onCambiarBusqueda={setBusqueda}
+                    onAplicarFiltros={aplicarFiltros}
+                    onLimpiarAdicionales={limpiarFiltrosAdicionales}
+                />
 
                 <div className="block lg:hidden space-y-4 animate-page-reveal" style={{ animationDelay: '200ms' }}>
                     {solicitudesFiltradas.length === 0 ? (<div className="theme-surface rounded-3xl p-8 text-center border theme-border theme-text-muted font-bold text-sm">No se encontraron solicitudes_</div>) : (

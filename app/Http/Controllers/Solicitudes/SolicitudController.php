@@ -316,7 +316,13 @@ class SolicitudController extends Controller
 
     public function actualizarEstado(Request $request, SolicitudTag $solicitud)
     {
-        Gate::any(['solicitudes.verificar', 'solicitudes.reportar']);
+        $usuario = Auth::user();
+        $puedeGestionarEstado = $usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar'])
+            || $usuario->hasRole('Gerente');
+
+        if (!$puedeGestionarEstado) {
+            abort(403, 'No tienes permiso para actualizar el estado de esta solicitud.');
+        }
 
         $request->validate([
             'catalogo_estado_solicitud_id' => 'required|exists:catalogo_estados_solicitud,id',
@@ -326,6 +332,19 @@ class SolicitudController extends Controller
 
         $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
         $estadoNuevoId = $request->catalogo_estado_solicitud_id;
+
+        if ($estadoNuevoId == 2) {
+            if (!$usuario->can('solicitudes.reportar')) {
+                abort(403, 'Solo las encargadas pueden aprobar procesos.');
+            }
+            if ($estadoAnteriorId != 1) {
+                abort(422, 'Solo se puede aprobar una solicitud en estado Pendiente.');
+            }
+        }
+
+        if ($estadoNuevoId == 4 && $estadoAnteriorId == 4) {
+            abort(422, 'Esta solicitud ya está marcada como incorrecta.');
+        }
 
         DB::transaction(function () use ($solicitud, $estadoAnteriorId, $estadoNuevoId, $request) {
 
