@@ -29,6 +29,18 @@ const calcularMontoFinalTentativo = (montoCotizado, porcentaje) => {
     return Math.round(montoCotizado * (1 - porcentaje / 100) * 100) / 100;
 };
 
+const fmtMonto = (valor) =>
+    `$${Number(valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const FilaMontoEscalonamiento = ({ etiqueta, valor, destacado = false, valorClassName = '' }) => (
+    <div className={`flex justify-between items-baseline gap-4 ${destacado ? 'py-2.5 px-3 rounded-xl bg-black/5 dark:bg-white/5' : 'py-1'}`}>
+        <span className={`${destacado ? 'text-sm font-bold' : 'text-sm font-medium'} theme-text-muted leading-snug`}>{etiqueta}</span>
+        <span className={`text-sm font-bold tabular-nums shrink-0 ${destacado ? 'text-base font-black text-[var(--color-primario)]' : 'theme-text-main'} ${valorClassName}`}>
+            {fmtMonto(valor)}
+        </span>
+    </div>
+);
+
 const calcularMontoBrutoNecesario = (faltanteNeto, porcentaje) => {
     if (faltanteNeto <= 0) return 0;
     const mult = 1 - porcentaje / 100;
@@ -352,128 +364,10 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 </div>
                             </div>
                         </div>
-
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-end mb-1 px-1">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Lista Solicitada_</label>
-                                {alertaLista && <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 animate-pulse">{alertaLista.mensaje}</span>}
-                            </div>
-
-                            {analisisFinanciero && (
-                                <div className="flex flex-col gap-2 mb-3 p-3 bg-black/5 dark:bg-white/5 rounded-xl border border-dashed theme-border animate-fade-in">
-                                    <div className="flex justify-between text-xs font-bold theme-text-muted">
-                                        <span>Historial de Compra:</span>
-                                        <span>${analisisFinanciero.montoHistorico.toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-xs font-black theme-text-main">
-                                        <span>Monto bruto (cotización):</span>
-                                        <span className="text-[var(--color-primario)]">${analisisFinanciero.montoCotizado.toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-xs font-bold theme-text-muted">
-                                        <span>Total Proyectado (bruto):</span>
-                                        <span className={analisisFinanciero.listaAnticipada && analisisFinanciero.totalProyectadoBruto >= parseFloat(analisisFinanciero.listaAnticipada.monto_requerido) ? 'text-emerald-500 font-black' : ''}>
-                                            ${analisisFinanciero.totalProyectadoBruto.toFixed(2)}
-                                        </span>
-                                    </div>
-                                    {analisisFinanciero.listaAnticipada && analisisFinanciero.montoCotizado > 0 && (
-                                        <>
-                                            <div className="flex justify-between text-xs font-bold theme-text-muted border-t theme-border pt-1">
-                                                <span>Monto tentativo final ({analisisFinanciero.listaAnticipada.nombre} · {analisisFinanciero.porcentajeDescuento.toFixed(2)}% desc.):</span>
-                                                <span>${analisisFinanciero.montoFinalTentativo.toFixed(2)}</span>
-                                            </div>
-                                            <div className="flex justify-between text-xs font-black theme-text-main border-t theme-border pt-1">
-                                                <span>Total Pago Final Esperado:</span>
-                                                <span className={analisisFinanciero.mantieneListaAnticipada ? 'text-emerald-500' : 'text-amber-500'}>
-                                                    ${analisisFinanciero.totalProyectadoNeto.toFixed(2)}
-                                                </span>
-                                            </div>
-                                        </>
-                                    )}
-                                    {analisisFinanciero.brutoCalificaNetoNo && analisisFinanciero.listaAnticipada && (
-                                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 mt-1">
-                                            <p className="text-[9px] font-bold text-amber-600 dark:text-amber-400 leading-snug m-0">
-                                                Faltan ${analisisFinanciero.faltanteNetoMantener.toFixed(2)} netos para mantener Lista {analisisFinanciero.listaAnticipada.nombre}
-                                                {analisisFinanciero.montoBrutoParaMantener > 0 && (
-                                                    <> (~${analisisFinanciero.montoBrutoParaMantener.toFixed(2)} bruto adicional)</>
-                                                )}
-                                                . Informa al cliente antes de continuar.
-                                            </p>
-                                        </div>
-                                    )}
-                                    {analisisFinanciero.mantieneListaAnticipada && analisisFinanciero.listaAnticipada && !analisisFinanciero.listaAnticipada.nombre.toUpperCase().includes('PUBLICO') && (
-                                        <p className="text-[9px] font-bold text-emerald-500 mt-1 text-right m-0">
-                                            El pago final mantiene la lista {analisisFinanciero.listaAnticipada.nombre}.
-                                        </p>
-                                    )}
-                                    {analisisFinanciero.listaSiguienteNeto && analisisFinanciero.faltanteNetoSiguiente > 0 && (
-                                        <p className="text-[9px] font-bold text-amber-500 mt-1 italic text-right m-0">
-                                            Faltan ${analisisFinanciero.faltanteNetoSiguiente.toFixed(2)} netos (~${analisisFinanciero.montoBrutoParaSiguiente.toFixed(2)} bruto al {analisisFinanciero.porcentajeSiguiente.toFixed(2)}% de {analisisFinanciero.listaSiguienteNeto.nombre}) para alcanzar {analisisFinanciero.listaSiguienteNeto.nombre}
-                                        </p>
-                                    )}
-                                    {analisisFinanciero.desgloseListas?.length > 0 && (
-                                        <div className="mt-2 pt-2 border-t theme-border space-y-1">
-                                            {analisisFinanciero.desgloseListas.map(item => (
-                                                <div key={item.id} className="flex justify-between items-center text-[9px] font-bold">
-                                                    <span className={`flex items-center gap-1 ${item.cubre ? 'text-emerald-500' : 'theme-text-muted'}`}>
-                                                        {item.cubre ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
-                                                        {item.nombre}
-                                                    </span>
-                                                    <span className={item.cubre ? 'text-emerald-500' : 'theme-text-muted'}>
-                                                        ${item.monto_requerido.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            <div className="relative">
-                                <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                <select value={data.catalogo_lista_descuento_id || ''} onChange={e => setData('catalogo_lista_descuento_id', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none focus:ring-2 transition-all shadow-sm cursor-pointer">
-                                    <option value="">-- Mantener nivel actual --</option>
-                                    {listas.filter(l => !l.nombre.toUpperCase().includes('COLABORADOR') && !l.nombre.toUpperCase().includes('PLATAFORMAS')).map(lista => {
-                                        const baseClienteObj = obtenerListaActual();
-                                        let estaDeshabilitada = false;
-                                        let textoEstado = '';
-
-                                        if (lista.id == baseClienteObj?.id) {
-                                            estaDeshabilitada = true;
-                                            textoEstado = '(Nivel actual)';
-                                        } else if (analisisFinanciero) {
-                                            const reqLista = parseFloat(lista.monto_requerido);
-                                            if (reqLista > analisisFinanciero.totalProyectadoBruto) {
-                                                estaDeshabilitada = true;
-                                                textoEstado = '(Monto insuficiente)';
-                                            }
-                                        }
-
-                                        return <option key={lista.id} value={lista.id} disabled={estaDeshabilitada}>{lista.nombre} {estaDeshabilitada ? textoEstado : ''}</option>;
-                                    })}
-                                </select>
-                            </div>
-
-                            {requiereConfirmacionEscalonamiento && (
-                                <label className="flex items-start gap-3 p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 cursor-pointer mt-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={!!data.confirmo_informacion_escalonamiento}
-                                        onChange={e => setData('confirmo_informacion_escalonamiento', e.target.checked)}
-                                        className="mt-0.5 shrink-0"
-                                    />
-                                    <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 leading-snug">
-                                        Confirmo que informé al cliente el monto bruto necesario para mantener/subir de lista considerando el descuento aplicado.
-                                    </span>
-                                </label>
-                            )}
-                            {errors.confirmo_informacion_escalonamiento && (
-                                <p className="text-xs text-red-500 mt-1">{errors.confirmo_informacion_escalonamiento}</p>
-                            )}
-                        </div>
                     </div>
 
-                    <div className="space-y-8 flex flex-col justify-between">
-                        <div className="space-y-2 flex flex-col">
+                    <div className="space-y-8 flex flex-col">
+                        <div className="space-y-2 flex flex-col flex-1">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Comentario de la Vendedora_</label>
                             <div className="relative flex-1">
                                 <MessageSquare className="absolute left-4 top-4 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
@@ -482,13 +376,222 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     onChange={e => setData('observaciones_vendedor', e.target.value)}
                                     placeholder="Observaciones, contexto de la venta, acuerdos con el cliente..."
                                     rows={8}
-                                    className="w-full min-h-[250px] px-12 py-4 theme-surface border theme-border rounded-2xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm resize-none"
+                                    className="w-full min-h-[220px] lg:min-h-[280px] px-12 py-4 theme-surface border theme-border rounded-2xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm resize-none"
                                 />
                             </div>
                             {errors.observaciones_vendedor && (
                                 <p className="text-xs text-red-500">{errors.observaciones_vendedor}</p>
                             )}
                         </div>
+                    </div>
+
+                    <div className="lg:col-span-2 space-y-3">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2 mb-1 px-1">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Lista Solicitada_</label>
+                            {alertaLista && (
+                                <span className="text-xs font-black uppercase px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                    {alertaLista.mensaje}
+                                </span>
+                            )}
+                        </div>
+
+                        {analisisFinanciero && (
+                            <div className="mb-2 rounded-2xl border-2 theme-border overflow-hidden animate-fade-in shadow-sm">
+                                {analisisFinanciero.listaAnticipada && analisisFinanciero.montoCotizado > 0 && (
+                                    <div className="px-4 py-3 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center gap-2.5">
+                                        <TrendingUp className="w-5 h-5 text-emerald-500 shrink-0" />
+                                        <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 m-0 leading-snug">
+                                            Nivel anticipado: {analisisFinanciero.listaAnticipada.nombre}
+                                            <span className="font-bold opacity-80"> · {analisisFinanciero.porcentajeDescuento.toFixed(2)}% descuento</span>
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="p-4 md:p-5 bg-black/[0.02] dark:bg-white/[0.03]">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-8">
+                                        {/* Columna izquierda: montos */}
+                                        <div className="space-y-4">
+                                            <div>
+                                                <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted mb-3 m-0">Resumen de montos</p>
+                                                <div className="space-y-1">
+                                                    <FilaMontoEscalonamiento
+                                                        etiqueta="Historial de compra"
+                                                        valor={analisisFinanciero.montoHistorico}
+                                                    />
+                                                    <FilaMontoEscalonamiento
+                                                        etiqueta="Monto bruto (cotización)"
+                                                        valor={analisisFinanciero.montoCotizado}
+                                                        destacado
+                                                    />
+                                                    <FilaMontoEscalonamiento
+                                                        etiqueta="Total proyectado (bruto)"
+                                                        valor={analisisFinanciero.totalProyectadoBruto}
+                                                        valorClassName={
+                                                            analisisFinanciero.listaAnticipada
+                                                            && analisisFinanciero.totalProyectadoBruto >= parseFloat(analisisFinanciero.listaAnticipada.monto_requerido)
+                                                                ? 'text-emerald-600 dark:text-emerald-400 font-black text-base'
+                                                                : ''
+                                                        }
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {analisisFinanciero.listaAnticipada && analisisFinanciero.montoCotizado > 0 && (
+                                                <div className="pt-4 border-t-2 border-dashed theme-border space-y-3">
+                                                    <FilaMontoEscalonamiento
+                                                        etiqueta={`Monto tentativo final (${analisisFinanciero.porcentajeDescuento.toFixed(2)}% desc.)`}
+                                                        valor={analisisFinanciero.montoFinalTentativo}
+                                                        valorClassName="text-base font-black theme-text-main"
+                                                    />
+                                                    <div className={`flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 py-3.5 px-4 rounded-xl border-2 ${
+                                                        analisisFinanciero.mantieneListaAnticipada
+                                                            ? 'border-emerald-500/40 bg-emerald-500/10'
+                                                            : 'border-amber-500/40 bg-amber-500/10'
+                                                    }`}>
+                                                        <span className="text-sm font-black theme-text-main uppercase tracking-wide leading-snug">
+                                                            Total pago final esperado
+                                                        </span>
+                                                        <span className={`text-2xl font-black tabular-nums ${
+                                                            analisisFinanciero.mantieneListaAnticipada
+                                                                ? 'text-emerald-600 dark:text-emerald-400'
+                                                                : 'text-amber-600 dark:text-amber-400'
+                                                        }`}>
+                                                            {fmtMonto(analisisFinanciero.totalProyectadoNeto)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Columna derecha: alertas + niveles */}
+                                        <div className="space-y-4 md:border-l md:theme-border md:pl-5 lg:pl-8">
+                                            {(analisisFinanciero.brutoCalificaNetoNo && analisisFinanciero.listaAnticipada)
+                                                || (analisisFinanciero.mantieneListaAnticipada
+                                                    && analisisFinanciero.listaAnticipada
+                                                    && !analisisFinanciero.listaAnticipada.nombre.toUpperCase().includes('PUBLICO'))
+                                                || (analisisFinanciero.listaSiguienteNeto
+                                                    && analisisFinanciero.faltanteNetoSiguiente > 0
+                                                    && !analisisFinanciero.brutoCalificaNetoNo
+                                                    && analisisFinanciero.listaSiguienteNeto.id !== analisisFinanciero.listaAnticipada?.id) ? (
+                                                <div className="space-y-3">
+                                                    <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted m-0">Estado del escalonamiento</p>
+
+                                                    {analisisFinanciero.brutoCalificaNetoNo && analisisFinanciero.listaAnticipada && (
+                                                        <div className="p-4 rounded-xl bg-amber-500/10 border-2 border-amber-500/30 flex gap-3 items-start">
+                                                            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                                                            <p className="text-sm font-bold text-amber-800 dark:text-amber-300 leading-relaxed m-0">
+                                                                Faltan <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteNetoMantener)}</span> netos para mantener{' '}
+                                                                <span className="font-black">{analisisFinanciero.listaAnticipada.nombre}</span>
+                                                                {analisisFinanciero.montoBrutoParaMantener > 0 && (
+                                                                    <> (~<span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.montoBrutoParaMantener)}</span> bruto adicional)</>
+                                                                )}
+                                                                . Informa al cliente antes de continuar.
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {analisisFinanciero.mantieneListaAnticipada
+                                                        && analisisFinanciero.listaAnticipada
+                                                        && !analisisFinanciero.listaAnticipada.nombre.toUpperCase().includes('PUBLICO') && (
+                                                        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex gap-2.5 items-center">
+                                                            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                                                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 m-0">
+                                                                El pago final mantiene la lista {analisisFinanciero.listaAnticipada.nombre}.
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {analisisFinanciero.listaSiguienteNeto
+                                                        && analisisFinanciero.faltanteNetoSiguiente > 0
+                                                        && !analisisFinanciero.brutoCalificaNetoNo
+                                                        && analisisFinanciero.listaSiguienteNeto.id !== analisisFinanciero.listaAnticipada?.id && (
+                                                        <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 leading-relaxed m-0 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                                                            Faltan <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteNetoSiguiente)}</span> netos (~
+                                                            <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.montoBrutoParaSiguiente)}</span> bruto al{' '}
+                                                            {analisisFinanciero.porcentajeSiguiente.toFixed(2)}% de{' '}
+                                                            <span className="font-black">{analisisFinanciero.listaSiguienteNeto.nombre}</span>) para alcanzar el siguiente nivel.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ) : null}
+
+                                            {analisisFinanciero.desgloseListas?.length > 0 && (
+                                                <div className={`${(analisisFinanciero.brutoCalificaNetoNo || analisisFinanciero.mantieneListaAnticipada) ? 'pt-4 border-t-2 md:border-t-0 md:pt-0 theme-border' : ''}`}>
+                                                    <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted mb-3 m-0">Niveles de lista</p>
+                                                    <div className="space-y-2">
+                                                        {analisisFinanciero.desgloseListas.map(item => (
+                                                            <div
+                                                                key={item.id}
+                                                                className={`flex justify-between items-center gap-3 py-2.5 px-3 rounded-xl border ${
+                                                                    item.cubre
+                                                                        ? 'bg-emerald-500/10 border-emerald-500/25'
+                                                                        : 'bg-black/5 dark:bg-white/5 border-transparent'
+                                                                }`}
+                                                            >
+                                                                <span className={`flex items-center gap-2 text-sm font-bold leading-snug ${item.cubre ? 'text-emerald-700 dark:text-emerald-400' : 'theme-text-muted'}`}>
+                                                                    {item.cubre
+                                                                        ? <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                                                        : <Circle className="w-4 h-4 shrink-0 opacity-60" />}
+                                                                    {item.nombre}
+                                                                </span>
+                                                                <span className={`text-sm font-black tabular-nums shrink-0 ${item.cubre ? 'text-emerald-700 dark:text-emerald-400' : 'theme-text-muted'}`}>
+                                                                    {fmtMonto(item.monto_requerido)}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="relative">
+                            <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                            <select value={data.catalogo_lista_descuento_id || ''} onChange={e => setData('catalogo_lista_descuento_id', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none focus:ring-2 transition-all shadow-sm cursor-pointer">
+                                <option value="">-- Mantener nivel actual --</option>
+                                {listas.filter(l => !l.nombre.toUpperCase().includes('COLABORADOR') && !l.nombre.toUpperCase().includes('PLATAFORMAS')).map(lista => {
+                                    const baseClienteObj = obtenerListaActual();
+                                    let estaDeshabilitada = false;
+                                    let textoEstado = '';
+
+                                    if (lista.id == baseClienteObj?.id) {
+                                        estaDeshabilitada = true;
+                                        textoEstado = '(Nivel actual)';
+                                    } else if (analisisFinanciero) {
+                                        const reqLista = parseFloat(lista.monto_requerido);
+                                        if (reqLista > analisisFinanciero.totalProyectadoBruto) {
+                                            estaDeshabilitada = true;
+                                            textoEstado = '(Monto insuficiente)';
+                                        }
+                                    }
+
+                                    return <option key={lista.id} value={lista.id} disabled={estaDeshabilitada}>{lista.nombre} {estaDeshabilitada ? textoEstado : ''}</option>;
+                                })}
+                            </select>
+                        </div>
+
+                        {requiereConfirmacionEscalonamiento && (
+                            <label className="flex items-start gap-3 p-4 rounded-xl border-2 border-amber-500/40 bg-amber-500/10 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={!!data.confirmo_informacion_escalonamiento}
+                                    onChange={e => setData('confirmo_informacion_escalonamiento', e.target.checked)}
+                                    className="mt-1 shrink-0 w-4 h-4"
+                                />
+                                <span className="text-sm font-bold text-amber-800 dark:text-amber-300 leading-relaxed">
+                                    Confirmo que informé al cliente el monto bruto necesario para mantener/subir de lista considerando el descuento aplicado.
+                                </span>
+                            </label>
+                        )}
+                        {errors.confirmo_informacion_escalonamiento && (
+                            <p className="text-xs text-red-500 mt-1">{errors.confirmo_informacion_escalonamiento}</p>
+                        )}
+                    </div>
+
+                    <div className="lg:col-span-2">
                         <button type="submit" disabled={processing || (requiereConfirmacionEscalonamiento && !data.confirmo_informacion_escalonamiento)} className="w-full py-5 text-white rounded-2xl font-black uppercase tracking-widest text-[12px] shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 outline-none flex justify-center items-center gap-3" style={{ backgroundColor: 'var(--color-primario)' }}>
                             <Send className="w-5 h-5" /> {processing ? 'Procesando...' : (modoEdicion ? 'Reenviar Corrección' : 'Transmitir Solicitud')}
                         </button>
