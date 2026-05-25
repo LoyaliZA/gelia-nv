@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { animate } from 'animejs/animation';
 import { 
     User, Mail, Smartphone, Camera, 
@@ -23,6 +23,99 @@ import {
     FONT_SCALE_STEP,
     FONT_SCALE_STORAGE_KEY,
 } from '../../utils/fontScale';
+import {
+    compressImageToWebp,
+    validateImageSource,
+    MAX_SOURCE_IMAGE_BYTES,
+} from '../../utils/compressImage';
+
+const MAX_PROFILE_PHOTO_BYTES = 2048 * 1024;
+const MAX_BG_PHOTO_BYTES = 5120 * 1024;
+
+const accentColors = { rosa: '#ec4899', azul: '#3b82f6', verde: '#10b981', amarillo: '#f59e0b' };
+const fontFamilies = {
+    inter:      "'Inter', sans-serif",
+    montserrat: "'Montserrat', sans-serif",
+    poppins:    "'Poppins', sans-serif",
+    nunito:     "'Nunito', sans-serif",
+    roboto:     "'Roboto', sans-serif",
+    mono:       "'JetBrains Mono', monospace",
+};
+
+function readStoredTheme(temaVisual = {}) {
+    if (typeof window === 'undefined') {
+        return {
+            color: temaVisual?.color_nombre?.toLowerCase() || 'rosa',
+            dark: temaVisual?.modo === 'dark',
+            bg: temaVisual?.fondo_base || 'none',
+            font: temaVisual?.fuente_principal || 'inter',
+            scale: clampFontScale(temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT),
+            glass: temaVisual?.efecto_cristal !== false,
+            layout: temaVisual?.layout_sidebar || 'floating_left',
+        };
+    }
+    const savedGlass = localStorage.getItem('theme_glass');
+    return {
+        color: localStorage.getItem('theme_color') || temaVisual?.color_nombre?.toLowerCase() || 'rosa',
+        dark: localStorage.getItem('theme')
+            ? localStorage.getItem('theme') === 'dark'
+            : temaVisual?.modo === 'dark',
+        bg: localStorage.getItem('bg_base') || temaVisual?.fondo_base || 'none',
+        font: localStorage.getItem('theme_font') || temaVisual?.fuente_principal || 'inter',
+        scale: clampFontScale(
+            localStorage.getItem(FONT_SCALE_STORAGE_KEY) ?? temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT
+        ),
+        glass: savedGlass !== null ? savedGlass === 'true' : temaVisual?.efecto_cristal !== false,
+        layout: localStorage.getItem('theme_layout') || temaVisual?.layout_sidebar || 'floating_left',
+    };
+}
+
+function captureThemeSnapshot() {
+    if (typeof window === 'undefined') return null;
+    return {
+        theme: localStorage.getItem('theme'),
+        theme_color: localStorage.getItem('theme_color'),
+        bg_base: localStorage.getItem('bg_base'),
+        theme_font: localStorage.getItem('theme_font'),
+        [FONT_SCALE_STORAGE_KEY]: localStorage.getItem(FONT_SCALE_STORAGE_KEY),
+        theme_glass: localStorage.getItem('theme_glass'),
+        theme_layout: localStorage.getItem('theme_layout'),
+    };
+}
+
+function restoreThemeSnapshot(snapshot) {
+    if (!snapshot || typeof window === 'undefined') return;
+    Object.entries(snapshot).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) localStorage.setItem(key, value);
+        else localStorage.removeItem(key);
+    });
+    window.dispatchEvent(new Event('theme-changed'));
+}
+
+function applyBackgroundCSS(bgValue) {
+    const root = document.documentElement;
+    root.style.removeProperty('--bg-image-pc');
+    root.style.removeProperty('--bg-image-movil');
+
+    if (!bgValue || bgValue === 'none') {
+        root.style.setProperty('--bg-image-pc', 'none');
+        root.style.setProperty('--bg-image-movil', 'none');
+    } else if (bgValue.startsWith('#')) {
+        root.style.setProperty('--bg-image-pc', `linear-gradient(to right, ${bgValue}, ${bgValue})`);
+        root.style.setProperty('--bg-image-movil', `linear-gradient(to right, ${bgValue}, ${bgValue})`);
+    } else if (bgValue.startsWith('data:image') || bgValue.startsWith('/storage')) {
+        root.style.setProperty('--bg-image-pc', `url(${bgValue})`);
+        root.style.setProperty('--bg-image-movil', `url(${bgValue})`);
+    } else {
+        root.style.setProperty('--bg-image-pc', `url('/assets/backgrounds/${bgValue}_pc.svg')`);
+        root.style.setProperty('--bg-image-movil', `url('/assets/backgrounds/${bgValue}_movil.svg')`);
+    }
+}
+
+function resolveAccentHex(colorName) {
+    if (!colorName) return accentColors.rosa;
+    return colorName.startsWith('#') ? colorName : (accentColors[colorName] || accentColors.rosa);
+}
 
 // --- COMPONENTE AUXILIAR RESPONSIVO ---
 const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, stackOnMobile = true }) => (
@@ -50,6 +143,10 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
 
     const fileInputRef    = useRef(null);
     const bgFileInputRef  = useRef(null);
+    const themeSnapshotRef = useRef(null);
+    const themeSavedRef    = useRef(false);
+
+    const initialTheme = readStoredTheme(tema_visual);
 
     const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
     const [isBgModalOpen,     setIsBgModalOpen]     = useState(false);
@@ -57,10 +154,13 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [imagePreview, setImagePreview] = useState(
         usuario?.foto_perfil ? `/storage/${usuario.foto_perfil}` : null
     );
+    const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
 
     const initialChar = usuario?.name ? usuario.name.charAt(0).toUpperCase() : 'U';
 
     const [saveStatus, setSaveStatus] = useState(null); // null | 'success' | 'error'
+    const [fileAlert, setFileAlert] = useState(null);   // null | { title, message }
+    const [isCompressing, setIsCompressing] = useState(false);
 
     // --- Estados para secciones colapsables ---
     const [showSensitive,     setShowSensitive]     = useState(false);
@@ -84,37 +184,133 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         tema_visual:           tema_visual || {},
     });
 
+    const backgroundOptions = ['blob', 'blobscene', 'circle', 'layered', 'peaks', 'polygon', 'square', 'stacked', 'steps', 'wave'];
+    const solidBackgrounds  = [
+        { name: 'Blanco',      hex: '#ffffff' },
+        { name: 'Negro',       hex: '#000000' },
+        { name: 'Gris Oscuro', hex: '#1e293b' },
+    ];
+    const presets = [
+        { name: 'Gelia Signature', modo: 'dark',  colorHex: '#ec4899', colorNombre: 'rosa',  bg: 'blob',    font: 'montserrat', escala: 1, glass: true,  layout: 'floating_left',  sound: true },
+        { name: 'GELIA Oasis',     modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins',     escala: 1, glass: false, layout: 'floating_right', sound: true },
+        { name: 'CyberTech',       modo: 'dark',  colorHex: '#3b82f6', colorNombre: 'azul',  bg: 'polygon', font: 'mono',        escala: 1, glass: false, layout: 'fixed',          sound: true },
+    ];
+
+    const [selectedColor, setSelectedColor] = useState(initialTheme.color);
+    const [isDarkMode,    setIsDarkMode]    = useState(initialTheme.dark);
+    const [selectedBg,    setSelectedBg]    = useState(initialTheme.bg);
+    const [typography,    setTypography]    = useState(initialTheme.font);
+    const [fontScale,     setFontScale]     = useState(initialTheme.scale);
+    const [glassEffect,   setGlassEffect]   = useState(initialTheme.glass);
+    const [sidebarLayout, setSidebarLayout] = useState(initialTheme.layout);
+    const [notifications, setNotifications] = useState({ sound: true });
+
     useEffect(() => {
         if (isAvatarModalOpen || isBgModalOpen) document.body.style.overflow = 'hidden';
         else document.body.style.overflow = '';
         return () => { document.body.style.overflow = ''; };
     }, [isAvatarModalOpen, isBgModalOpen]);
 
-    const handleProfileFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setData(prev => ({ ...prev, foto_perfil: file, remove_foto: false }));
-            const reader = new FileReader();
-            reader.onloadend = () => setImagePreview(reader.result);
-            reader.readAsDataURL(file);
+    useEffect(() => {
+        setAvatarLoadFailed(false);
+    }, [imagePreview]);
+
+    useEffect(() => {
+        if (usuario?.foto_perfil && !data.foto_perfil) {
+            setImagePreview(`/storage/${usuario.foto_perfil}`);
+        }
+    }, [usuario?.foto_perfil, data.foto_perfil]);
+
+    useEffect(() => {
+        themeSnapshotRef.current = captureThemeSnapshot();
+        return () => {
+            if (!themeSavedRef.current) restoreThemeSnapshot(themeSnapshotRef.current);
+        };
+    }, []);
+
+    const validateImageFile = useCallback((file, label) => validateImageSource(file, label), []);
+
+    const showFileAlert = useCallback((title, message) => {
+        setFileAlert({ title, message });
+    }, []);
+
+    const handleProfileFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const error = validateImageFile(file, 'Foto de perfil');
+        if (error) {
+            showFileAlert('Archivo no permitido', error);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
+        setIsCompressing(true);
+        try {
+            const compressed = await compressImageToWebp(file, {
+                maxDimension: 800,
+                quality: 0.85,
+                maxBytes: MAX_PROFILE_PHOTO_BYTES,
+            });
+
+            setData(prev => ({ ...prev, foto_perfil: compressed, remove_foto: false }));
+            setAvatarLoadFailed(false);
+            setImagePreview(URL.createObjectURL(compressed));
+        } catch (err) {
+            const message = err?.message === 'COMPRESS_TOO_LARGE'
+                ? 'La foto sigue siendo muy grande después de optimizarla. Prueba con una imagen de menor resolución.'
+                : 'No se pudo procesar la foto de perfil. Verifica que sea una imagen válida.';
+            showFileAlert('Error al procesar', message);
+            setData(prev => ({ ...prev, foto_perfil: null }));
+            setImagePreview(usuario?.foto_perfil ? `/storage/${usuario.foto_perfil}` : null);
+        } finally {
+            setIsCompressing(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
     const handleRemovePhoto = () => {
         setData(prev => ({ ...prev, foto_perfil: null, remove_foto: true }));
         setImagePreview(null);
+        setAvatarLoadFailed(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const handleBgFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            setData(prev => ({ ...prev, archivo_fondo: file, remove_fondo: false }));
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setSelectedBg(reader.result);
-                applyBackgroundCSS(reader.result);
-            };
-            reader.readAsDataURL(file);
+    const handleBgFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const error = validateImageFile(file, 'Fondo de pantalla');
+        if (error) {
+            showFileAlert('Archivo no permitido', error);
+            if (bgFileInputRef.current) bgFileInputRef.current.value = '';
+            return;
+        }
+
+        setIsCompressing(true);
+        try {
+            const compressed = await compressImageToWebp(file, {
+                maxDimension: 1920,
+                quality: 0.82,
+                maxBytes: MAX_BG_PHOTO_BYTES,
+            });
+
+            setData(prev => ({ ...prev, archivo_fondo: compressed, remove_fondo: false }));
+
+            const previewUrl = URL.createObjectURL(compressed);
+            setSelectedBg(previewUrl);
+            applyBackgroundCSS(previewUrl);
+            localStorage.setItem('bg_base', previewUrl);
+            window.dispatchEvent(new Event('theme-changed'));
+        } catch (err) {
+            const message = err?.message === 'COMPRESS_TOO_LARGE'
+                ? 'El fondo sigue siendo muy grande después de optimizarlo. Prueba con una imagen de menor resolución.'
+                : 'No se pudo procesar la imagen de fondo. Verifica que sea una imagen válida.';
+            showFileAlert('Error al procesar', message);
+            setData(prev => ({ ...prev, archivo_fondo: null }));
+        } finally {
+            setIsCompressing(false);
+            if (bgFileInputRef.current) bgFileInputRef.current.value = '';
         }
     };
 
@@ -122,7 +318,31 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         setData(prev => ({ ...prev, archivo_fondo: null, remove_fondo: true }));
         setSelectedBg('none');
         applyBackgroundCSS('none');
+        localStorage.setItem('bg_base', 'none');
+        window.dispatchEvent(new Event('theme-changed'));
+        if (bgFileInputRef.current) bgFileInputRef.current.value = '';
     };
+
+    const persistThemeToStorage = useCallback((overrides = {}) => {
+        const theme = {
+            modo:   overrides.modo   ?? (isDarkMode ? 'dark' : 'light'),
+            color:  overrides.color  ?? selectedColor,
+            bg:     overrides.bg     ?? selectedBg,
+            font:   overrides.font   ?? typography,
+            scale:  overrides.scale  ?? fontScale,
+            glass:  overrides.glass  ?? glassEffect,
+            layout: overrides.layout ?? sidebarLayout,
+        };
+
+        localStorage.setItem('theme', theme.modo);
+        localStorage.setItem('theme_color', theme.color);
+        localStorage.setItem('bg_base', theme.bg);
+        localStorage.setItem('theme_font', theme.font);
+        localStorage.setItem(FONT_SCALE_STORAGE_KEY, String(clampFontScale(theme.scale)));
+        localStorage.setItem('theme_glass', String(theme.glass));
+        localStorage.setItem('theme_layout', theme.layout);
+        window.dispatchEvent(new Event('theme-changed'));
+    }, [isDarkMode, selectedColor, selectedBg, typography, fontScale, glassEffect, sidebarLayout]);
 
     // --- SUBMIT: Blindado con JSON.stringify ---
     const submitProfile = (e) => {
@@ -150,14 +370,26 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             forceFormData:  true,
             preserveScroll: true,
             onSuccess: () => {
-                localStorage.setItem('theme',        isDarkMode ? 'dark' : 'light');
-                localStorage.setItem('theme_color',  selectedColor);
-                localStorage.setItem('bg_base',      selectedBg);
-                localStorage.setItem('theme_font',   typography);
-                localStorage.setItem(FONT_SCALE_STORAGE_KEY, String(fontScale));
-                localStorage.setItem('theme_glass',  glassEffect);
-                localStorage.setItem('theme_layout', sidebarLayout);
-                window.dispatchEvent(new Event('theme-changed'));
+                themeSavedRef.current = true;
+                const hadBgUpload = Boolean(data.archivo_fondo);
+
+                persistThemeToStorage();
+
+                router.reload({
+                    only: ['auth', 'tema_visual', 'perfilUsuario'],
+                    preserveScroll: true,
+                    preserveState: true,
+                    onSuccess: (page) => {
+                        const tv = page.props.tema_visual || {};
+                        if (hadBgUpload && tv.fondo_base) {
+                            localStorage.setItem('bg_base', tv.fondo_base);
+                            setSelectedBg(tv.fondo_base);
+                            applyBackgroundCSS(tv.fondo_base);
+                        }
+                        themeSnapshotRef.current = captureThemeSnapshot();
+                        window.dispatchEvent(new Event('theme-changed'));
+                    },
+                });
 
                 setSaveStatus('success');
                 if (fileInputRef.current)   fileInputRef.current.value   = '';
@@ -166,50 +398,17 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                 setIsBgModalOpen(false);
                 setTimeout(() => setSaveStatus(null), 4000);
             },
-            onError: () => {
+            onError: (errs) => {
+                if (errs?.foto_perfil) {
+                    showFileAlert('Foto de perfil', errs.foto_perfil);
+                } else if (errs?.archivo_fondo) {
+                    showFileAlert('Fondo de pantalla', errs.archivo_fondo);
+                }
                 setSaveStatus('error');
                 setTimeout(() => setSaveStatus(null), 5000);
             },
         });
     };
-
-    const accentColors      = { rosa: '#ec4899', azul: '#3b82f6', verde: '#10b981', amarillo: '#f59e0b' };
-    const backgroundOptions = ['blob', 'blobscene', 'circle', 'layered', 'peaks', 'polygon', 'square', 'stacked', 'steps', 'wave'];
-    const solidBackgrounds  = [
-        { name: 'Blanco',      hex: '#ffffff' },
-        { name: 'Negro',       hex: '#000000' },
-        { name: 'Gris Oscuro', hex: '#1e293b' },
-    ];
-    const presets = [
-        { name: 'Gelia Signature', modo: 'dark',  colorHex: '#ec4899', colorNombre: 'rosa',  bg: 'blob',    font: 'montserrat', escala: 1, glass: true,  layout: 'floating_left',  sound: true },
-        { name: 'GELIA Oasis',     modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins',     escala: 1, glass: false, layout: 'floating_right', sound: true },
-        { name: 'CyberTech',       modo: 'dark',  colorHex: '#3b82f6', colorNombre: 'azul',  bg: 'polygon', font: 'mono',        escala: 1, glass: false, layout: 'fixed',          sound: true },
-    ];
-    const fontFamilies = {
-        inter:      "'Inter', sans-serif",
-        montserrat: "'Montserrat', sans-serif",
-        poppins:    "'Poppins', sans-serif",
-        nunito:     "'Nunito', sans-serif",
-        roboto:     "'Roboto', sans-serif",
-        mono:       "'JetBrains Mono', monospace",
-    };
-
-    const bdColor  = tema_visual?.color_nombre?.toLowerCase() || 'rosa';
-    const bdModo   = tema_visual?.modo === 'dark';
-    const bdBg     = tema_visual?.fondo_base      || 'none';
-    const bdFont   = tema_visual?.fuente_principal || 'inter';
-    const bdScale  = clampFontScale(tema_visual?.escala_fuente ?? FONT_SCALE_DEFAULT);
-    const bdGlass  = tema_visual?.efecto_cristal   !== false;
-    const bdLayout = tema_visual?.layout_sidebar   || 'floating_left';
-
-    const [selectedColor, setSelectedColor] = useState(bdColor);
-    const [isDarkMode,    setIsDarkMode]    = useState(bdModo);
-    const [selectedBg,    setSelectedBg]    = useState(bdBg);
-    const [typography,    setTypography]    = useState(bdFont);
-    const [fontScale,     setFontScale]     = useState(bdScale);
-    const [glassEffect,   setGlassEffect]   = useState(bdGlass);
-    const [sidebarLayout, setSidebarLayout] = useState(bdLayout);
-    const [notifications, setNotifications] = useState({ sound: true });
 
     const getBackgroundType = (bg) => {
         if (!bg || bg === 'none')                                       return 'Sin Fondo';
@@ -222,6 +421,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         const syncThemeState = () => {
             const savedTheme = localStorage.getItem('theme');
             if (savedTheme) setIsDarkMode(savedTheme === 'dark');
+
+            const savedLayout = localStorage.getItem('theme_layout');
+            if (savedLayout) setSidebarLayout(savedLayout);
         };
         window.addEventListener('theme-changed', syncThemeState);
         return () => window.removeEventListener('theme-changed', syncThemeState);
@@ -233,100 +435,99 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             { translateY: [15, 0], opacity: [0, 1] },
             { easing: 'easeOutExpo', duration: 600, delay: (el, i) => i * 80 }
         );
-
-        const accentHex = accentColors[bdColor] || accentColors.rosa;
-        const root = document.documentElement;
-
-        if (bdModo) { root.classList.remove('light'); root.classList.add('dark'); }
-        else        { root.classList.remove('dark');  root.classList.add('light'); }
-
-        root.style.setProperty('--color-primario', accentHex);
-        root.style.setProperty('--font-principal', fontFamilies[bdFont] || fontFamilies.inter);
-
-        bdGlass ? root.classList.add('glass-active') : root.classList.remove('glass-active');
-
-        applyBackgroundCSS(bdBg);
-        applyFontScaleToRoot(bdScale);
     }, []);
 
     const handleFontScaleStep = (direction) => {
         setFontScale((prev) => {
             const next = clampFontScale(prev + direction * FONT_SCALE_STEP);
             applyFontScaleToRoot(next);
+            localStorage.setItem(FONT_SCALE_STORAGE_KEY, String(next));
+            window.dispatchEvent(new Event('theme-changed'));
             return next;
         });
     };
 
     const handleColorChange = (colorValue, isHex = false) => {
-        const hex = isHex ? colorValue : accentColors[colorValue];
-        setSelectedColor(colorValue);
+        const stored = isHex ? colorValue : colorValue;
+        const hex = resolveAccentHex(stored);
+        setSelectedColor(stored);
         document.documentElement.style.setProperty('--color-primario', hex);
+        localStorage.setItem('theme_color', stored);
+        window.dispatchEvent(new Event('theme-changed'));
     };
 
     const handleModeChange = (modo) => {
         const isDark = modo === 'dark';
         setIsDarkMode(isDark);
-        const root = document.documentElement;
-        if (isDark) { root.classList.remove('light'); root.classList.add('dark'); }
-        else        { root.classList.remove('dark');  root.classList.add('light'); }
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
         window.dispatchEvent(new Event('theme-changed'));
     };
 
     const handleFontChange = (fontValue) => {
         setTypography(fontValue);
         document.documentElement.style.setProperty('--font-principal', fontFamilies[fontValue] || fontFamilies.inter);
+        localStorage.setItem('theme_font', fontValue);
+        window.dispatchEvent(new Event('theme-changed'));
     };
 
     const handleGlassChange = (isActive) => {
         setGlassEffect(isActive);
         const root = document.documentElement;
         isActive ? root.classList.add('glass-active') : root.classList.remove('glass-active');
+        localStorage.setItem('theme_glass', String(isActive));
+        window.dispatchEvent(new Event('theme-changed'));
     };
 
     const handleLayoutChange = (layout) => {
         setSidebarLayout(layout);
+        localStorage.setItem('theme_layout', layout);
         window.dispatchEvent(new CustomEvent('theme-layout-preview', { detail: { layout } }));
-    };
-
-    const applyBackgroundCSS = (bgValue) => {
-        const root = document.documentElement;
-        root.style.removeProperty('--bg-image-pc');
-        root.style.removeProperty('--bg-image-movil');
-
-        if (!bgValue || bgValue === 'none') {
-            root.style.setProperty('--bg-image-pc',    'none');
-            root.style.setProperty('--bg-image-movil', 'none');
-        } else if (bgValue.startsWith('#')) {
-            root.style.setProperty('--bg-image-pc',    `linear-gradient(to right, ${bgValue}, ${bgValue})`);
-            root.style.setProperty('--bg-image-movil', `linear-gradient(to right, ${bgValue}, ${bgValue})`);
-        } else if (bgValue.startsWith('data:image') || bgValue.startsWith('/storage')) {
-            root.style.setProperty('--bg-image-pc',    `url(${bgValue})`);
-            root.style.setProperty('--bg-image-movil', `url(${bgValue})`);
-        } else {
-            root.style.setProperty('--bg-image-pc',    `url('/assets/backgrounds/${bgValue}_pc.svg')`);
-            root.style.setProperty('--bg-image-movil', `url('/assets/backgrounds/${bgValue}_movil.svg')`);
-        }
+        window.dispatchEvent(new Event('theme-changed'));
     };
 
     const handleBgChange = (bgValue) => {
         setSelectedBg(bgValue);
         setData('remove_fondo', false);
         applyBackgroundCSS(bgValue);
+        localStorage.setItem('bg_base', bgValue);
+        window.dispatchEvent(new Event('theme-changed'));
     };
 
     const applyPreset = (preset) => {
-        handleModeChange(preset.modo);
-        handleColorChange(preset.colorNombre || preset.colorHex, !preset.colorNombre);
-        handleBgChange(preset.bg);
-        if (preset.font   !== undefined) handleFontChange(preset.font);
-        if (preset.escala !== undefined) {
-            const scale = clampFontScale(preset.escala);
-            setFontScale(scale);
-            applyFontScaleToRoot(scale);
-        }
-        if (preset.glass  !== undefined) handleGlassChange(preset.glass);
-        if (preset.layout !== undefined) handleLayoutChange(preset.layout);
-        if (preset.sound  !== undefined) setNotifications({ sound: preset.sound });
+        const scale = preset.escala !== undefined ? clampFontScale(preset.escala) : fontScale;
+        const isDark = preset.modo === 'dark';
+        const color = preset.colorNombre || preset.colorHex;
+        const glass = preset.glass !== undefined ? preset.glass : glassEffect;
+        const layout = preset.layout !== undefined ? preset.layout : sidebarLayout;
+        const font = preset.font !== undefined ? preset.font : typography;
+
+        setIsDarkMode(isDark);
+        setSelectedColor(color);
+        setSelectedBg(preset.bg);
+        setTypography(font);
+        setFontScale(scale);
+        setGlassEffect(glass);
+        setSidebarLayout(layout);
+        if (preset.sound !== undefined) setNotifications({ sound: preset.sound });
+
+        document.documentElement.style.setProperty('--color-primario', resolveAccentHex(color));
+        document.documentElement.style.setProperty('--font-principal', fontFamilies[font] || fontFamilies.inter);
+        applyBackgroundCSS(preset.bg);
+        applyFontScaleToRoot(scale);
+        glass
+            ? document.documentElement.classList.add('glass-active')
+            : document.documentElement.classList.remove('glass-active');
+
+        persistThemeToStorage({
+            modo: isDark ? 'dark' : 'light',
+            color,
+            bg: preset.bg,
+            font,
+            scale,
+            glass,
+            layout,
+        });
+        window.dispatchEvent(new CustomEvent('theme-layout-preview', { detail: { layout } }));
     };
 
     const baseCardClass   = "fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300";
@@ -337,7 +538,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     return (
         <AppLayout>
             <Head title="Mi Perfil | GELIANV" />
-            <GeliaLoader isVisible={processing} message="Guardando cambios_" />
+            <GeliaLoader isVisible={processing || isCompressing} message={isCompressing ? 'Optimizando imagen_' : 'Guardando cambios_'} />
 
             {/* ---- FEEDBACK CENTRADO (MODAL PREMIUM CON LOGO FLUIDO) ---- */}
             {saveStatus && createPortal(
@@ -397,6 +598,43 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                 document.body
             )}
 
+            {fileAlert && createPortal(
+                <div
+                    className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in"
+                    onClick={() => setFileAlert(null)}
+                >
+                    <div
+                        className="relative w-full max-w-sm sm:max-w-md flex flex-col items-center gap-6 p-8 sm:p-10 rounded-[2.5rem] shadow-[0_0_60px_rgba(0,0,0,0.4)] border-2 border-red-400/40 bg-white dark:bg-[#111] backdrop-blur-xl animate-fade-in"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="relative z-10 w-20 h-20 rounded-full flex items-center justify-center shadow-xl bg-red-500/15">
+                            <AlertTriangle className="w-10 h-10 text-red-500" />
+                        </div>
+                        <div className="relative z-10 text-center space-y-2">
+                            <h3 className="text-xl font-black uppercase italic tracking-tighter m-0 text-red-600 dark:text-red-400">
+                                {fileAlert.title}
+                            </h3>
+                            <p className="text-sm font-bold theme-text-muted leading-snug">{fileAlert.message}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setFileAlert(null)}
+                            className="relative z-10 w-full py-4 rounded-2xl text-white font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-lg outline-none bg-red-500 hover:bg-red-600"
+                        >
+                            Entendido_
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFileAlert(null)}
+                            className="absolute top-4 right-4 z-10 p-2 theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors outline-none"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>,
+                document.body
+            )}
+
             <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
 
                 {/* --- HEADER --- */}
@@ -405,8 +643,19 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         <div className="relative flex flex-col items-center gap-2 shrink-0">
                             <div className="relative group shrink-0 cursor-pointer" onClick={() => setIsAvatarModalOpen(true)}>
                                 <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2rem] overflow-hidden border-[4px] shadow-2xl transition-transform duration-300 group-hover:scale-105 bg-[var(--color-primario)] flex items-center justify-center" style={{ borderColor: 'var(--color-primario)' }}>
-                                    {imagePreview ? (
-                                        <img src={imagePreview} alt="Perfil" className="w-full h-full object-cover" />
+                                    {imagePreview && !avatarLoadFailed ? (
+                                        <img
+                                            src={imagePreview}
+                                            alt="Perfil"
+                                            className="w-full h-full object-cover"
+                                            onError={() => {
+                                                setAvatarLoadFailed(true);
+                                                showFileAlert(
+                                                    'Imagen no disponible',
+                                                    'No se pudo cargar la foto de perfil. Verifica que el archivo exista o sube una nueva imagen.'
+                                                );
+                                            }}
+                                        />
                                     ) : (
                                         <span className="text-5xl md:text-7xl font-black text-white">{initialChar}</span>
                                     )}
@@ -916,13 +1165,27 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         </button>
                         <h3 className="text-lg font-black uppercase italic tracking-tighter theme-text-main m-0">Foto de Perfil_</h3>
                         <div className="w-36 h-36 rounded-full overflow-hidden border-4 shadow-lg flex items-center justify-center bg-[var(--color-primario)] shrink-0" style={{ borderColor: 'var(--color-primario)' }}>
-                            {imagePreview ? (
-                                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                            {imagePreview && !avatarLoadFailed ? (
+                                <img
+                                    src={imagePreview}
+                                    alt="Preview"
+                                    className="w-full h-full object-cover"
+                                    onError={() => {
+                                        setAvatarLoadFailed(true);
+                                        showFileAlert(
+                                            'Imagen no disponible',
+                                            'No se pudo cargar la vista previa de la foto de perfil.'
+                                        );
+                                    }}
+                                />
                             ) : (
                                 <span className="text-5xl font-black text-white">{initialChar}</span>
                             )}
                         </div>
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg, image/png, image/jpg, image/webp" onChange={handleProfileFileChange} />
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/jpg,image/webp,image/gif" onChange={handleProfileFileChange} />
+                        <p className="text-[10px] font-bold theme-text-muted text-center m-0">
+                            Hasta {Math.round(MAX_SOURCE_IMAGE_BYTES / (1024 * 1024))} MB · se optimiza a WebP
+                        </p>
                         <div className="flex w-full gap-3">
                             <button type="button" onClick={() => fileInputRef.current.click()} className="flex-1 py-3 px-4 theme-element border theme-border rounded-2xl text-xs font-bold theme-text-main transition-transform hover:scale-105 shadow-sm flex items-center justify-center gap-2 outline-none">
                                 <Upload className="w-4 h-4" /> Subir Foto
@@ -958,7 +1221,10 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 {getBackgroundType(selectedBg)}
                             </span>
                         </div>
-                        <input type="file" ref={bgFileInputRef} className="hidden" accept="image/jpeg, image/png, image/jpg, image/webp" onChange={handleBgFileChange} />
+                        <input type="file" ref={bgFileInputRef} className="hidden" accept="image/jpeg,image/png,image/jpg,image/webp,image/gif" onChange={handleBgFileChange} />
+                        <p className="text-[10px] font-bold theme-text-muted text-center m-0">
+                            Hasta {Math.round(MAX_SOURCE_IMAGE_BYTES / (1024 * 1024))} MB · se optimiza a WebP
+                        </p>
                         <div className="flex w-full gap-3">
                             <button type="button" onClick={() => bgFileInputRef.current.click()} className="flex-1 py-3 px-4 theme-element border theme-border rounded-2xl text-xs font-bold theme-text-main transition-transform hover:scale-105 shadow-sm flex items-center justify-center gap-2 outline-none">
                                 <Upload className="w-4 h-4" /> Subir Imagen

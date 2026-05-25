@@ -178,7 +178,7 @@ export default function AppLayout({ children }) {
             localStorage.setItem('theme', 'light');
         }
 
-        const nombreFondo = tema.fondo_base || (typeof window !== 'undefined' ? localStorage.getItem('bg_base') : null) || 'none';
+        const nombreFondo = (typeof window !== 'undefined' ? localStorage.getItem('bg_base') : null) || tema.fondo_base || 'none';
         if (nombreFondo === 'none') {
             root.style.setProperty('--bg-image-pc', 'none');
             root.style.setProperty('--bg-image-movil', 'none');

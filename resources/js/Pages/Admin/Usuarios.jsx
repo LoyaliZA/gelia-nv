@@ -10,6 +10,34 @@ import {
 import AppLayout from '../../Layouts/AppLayout';
 import PermisosAtomicos from './Partials/PermisosAtomicos'; // <-- Importamos tu nuevo Partial
 
+function UserAvatar({ usuario }) {
+    const [loadFailed, setLoadFailed] = useState(false);
+    const initial = (usuario.name || 'U').charAt(0).toUpperCase();
+    const hasPhoto = Boolean(usuario.foto_perfil) && !loadFailed;
+
+    useEffect(() => {
+        setLoadFailed(false);
+    }, [usuario.foto_perfil]);
+
+    return (
+        <div
+            className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center border-[3px] shadow-sm transition-colors shrink-0 bg-[var(--color-primario)]"
+            style={{ borderColor: 'var(--color-primario)' }}
+        >
+            {hasPhoto ? (
+                <img
+                    src={`/storage/${usuario.foto_perfil}`}
+                    alt={`${usuario.name || 'Usuario'}`}
+                    className="w-full h-full object-cover"
+                    onError={() => setLoadFailed(true)}
+                />
+            ) : (
+                <span className="text-xl font-black italic text-white">{initial}</span>
+            )}
+        </div>
+    );
+}
+
 export default function Usuarios({ auth, usuarios = [], departamentos = [], posiblesGerentes = [], roles = [], todosLosPermisos = [], sexos = [] }) {
     // --- ESTADOS LOCALES ---
     const [busqueda, setBusqueda] = useState('');
@@ -173,11 +201,7 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
                                 className="fade-in-user theme-surface rounded-[2rem] p-6 border-2 theme-border flex flex-col md:flex-row items-center justify-between gap-6 transition-all group hover:shadow-md"
                             >
                                 <div className="flex items-center gap-5 w-full md:w-auto">
-                                    <div className="w-14 h-14 rounded-full flex items-center justify-center border-[3px] shadow-sm transition-colors bg-white dark:bg-[#1A1A1A]" style={{ borderColor: 'var(--color-primario)' }}>
-                                        <span className="text-xl font-black italic" style={{ color: 'var(--color-primario)' }}>
-                                            {(usuario.name || 'U').charAt(0).toUpperCase()}
-                                        </span>
-                                    </div>
+                                    <UserAvatar usuario={usuario} />
                                     <div>
                                         <h3 className="theme-text-main font-black text-sm uppercase italic tracking-tighter leading-none">
                                             {(usuario.name || '').trim()} {(usuario.apellido_paterno || '').trim()}
