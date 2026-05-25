@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { animate } from 'animejs';
 import { Link, useForm, usePage } from '@inertiajs/react';
 import {
-    Menu, X, Moon, Sun, Bell, Home, ArrowLeft,
+    Menu, X, Moon, Sun, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
     FolderTree, Calculator, History, Map, FileText, Layers
@@ -12,7 +11,27 @@ import GeliaLogo from './GeliaLogo';
 
 import NotificationBell from './NotificationBell';
 
-/* --- DICCIONARIO FRONTEND --- */
+const SIDEBAR_MODE_STORAGE_KEY = 'theme_sidebar_mode';
+const SIDEBAR_MODES = { collapsed: 'collapsed', expanded: 'expanded' };
+const WIDGET_MS = 320;
+const MENU_OPEN_MS = 360;
+const MENU_CLOSE_MS = 300;
+const HOVER_LEAVE_DELAY_MS = 160;
+const EASE_SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
+const FIXED_POSITIONS = { left: 'left', right: 'right', top: 'top', bottom: 'bottom' };
+
+const prefixGroupClass = (visible, orientation) => {
+    const base = 'flex overflow-hidden shrink-0 sidebar-widget-reveal';
+    const pointer = visible ? 'pointer-events-auto' : 'pointer-events-none';
+    if (orientation === 'vertical') {
+        return `${base} ${pointer} flex-col items-center w-full ${visible ? 'max-h-[320px] opacity-100 gap-5 pt-5 border-t theme-border' : 'max-h-0 opacity-0 gap-0 pt-0 border-t-0'}`;
+    }
+    return `${base} ${pointer} flex-row items-center ${visible ? 'max-w-[11.5rem] opacity-100 gap-4 pl-3 ml-2 border-l theme-border' : 'max-w-0 opacity-0 gap-0 pl-0 ml-0 border-l-0'}`;
+};
+
+const suffixGroupClass = (visible) =>
+    `overflow-hidden shrink-0 sidebar-widget-reveal ${visible ? 'max-w-[3.75rem] opacity-100 mx-2 sm:mx-3 pointer-events-auto' : 'max-w-0 opacity-0 mx-0 pointer-events-none'}`;
 const ADMIN_MENU_CONFIG = [
     { id: 'enlaces', label: 'Generar Enlaces', path: '/admin/enlaces', routeName: 'admin.enlaces', icon: LinkIcon, permission: 'usuarios.gestionar' },
     { id: 'clientes', label: 'Base de Clientes', path: '/admin/clientes', routeName: 'admin.clientes', icon: Database, permission: 'clientes.ver' },
@@ -22,33 +41,30 @@ const ADMIN_MENU_CONFIG = [
     { id: 'auditorias', label: 'Auditorías de Sistema', path: '/admin/auditorias-sistema', routeName: 'admin.auditorias_sistema.index', icon: History, permission: 'sistema.auditorias.ver' },
 ];
 
-export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left' }) {
+export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left', sidebarMode = 'collapsed', fixedPosition = 'left' }) {
     const { url, props: { auth } } = usePage();
     const isAdminActive = url.startsWith('/admin');
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isMenuClosing, setIsMenuClosing] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
     const [isConfigExpanded, setIsConfigExpanded] = useState(isAdminActive);
     const [isMobile, setIsMobile] = useState(false);
 
-    const root = useRef(null);
-    const widgetRef = useRef(null);
-    const menuRef = useRef(null);
-    const menuContentRef = useRef(null);
-    const subMenuRef = useRef(null);
+    const closeTimerRef = useRef(null);
+    const menuCloseTimerRef = useRef(null);
     const { post } = useForm();
 
-    // --- ESTILOS INICIALES BLINDADOS (Previene conflictos React vs AnimeJS en el F5) ---
-    const isActuallyFixed = (window.innerWidth < 768) ? false : (layout === 'fixed');
-    const initialMenuStyle = useRef({
-        opacity: 0,
-        height: isActuallyFixed ? '100vh' : '0px',
-        width: isActuallyFixed ? '0px' : ''
-    });
-    const initialSubMenuStyle = useRef({ opacity: isAdminActive ? 1 : 0, height: isAdminActive ? 'auto' : '0px' });
+    const unreadCount = (auth?.notificaciones || []).filter(n => !n.read_at).length;
 
     useEffect(() => {
         if (isAdminActive) setIsConfigExpanded(true);
     }, [url, isAdminActive]);
+
+    useEffect(() => () => {
+        clearTimeout(closeTimerRef.current);
+        clearTimeout(menuCloseTimerRef.current);
+    }, []);
 
     const isRouteActive = (path) => {
         if (path === '/dashboard' && url === '/dashboard') return true;
@@ -71,6 +87,16 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const isFixed = effectiveLayout === 'fixed';
     const isRight = effectiveLayout === 'floating_right';
     const isMobileMode = effectiveLayout === 'mobile_bottom';
+    const fixedPos = FIXED_POSITIONS[fixedPosition] ? fixedPosition : FIXED_POSITIONS.left;
+    const isFixedVertical = isFixed && (fixedPos === FIXED_POSITIONS.left || fixedPos === FIXED_POSITIONS.right);
+    const isFixedHorizontal = isFixed && (fixedPos === FIXED_POSITIONS.top || fixedPos === FIXED_POSITIONS.bottom);
+    const widgetOrientation = isFixedVertical ? 'vertical' : 'horizontal';
+    const pinExpanded = !isMobileMode && sidebarMode === SIDEBAR_MODES.expanded;
+
+    const isMenuVisible = isMenuOpen || isMenuClosing;
+    const isWidgetExpanded = isMobileMode || pinExpanded || isHovered || isMenuVisible;
+    const showCollapsedWidget = !isMobileMode && !isWidgetExpanded;
+    const showSecondaryControls = isWidgetExpanded;
 
     // --- LÓGICA DE PERMISOS BLINDADA ---
     const can = (permission) => {
@@ -82,294 +108,490 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const showAdminMenu = ADMIN_MENU_CONFIG.some(item => can(item.permission));
     const showOperacionesMenu = can('listados.ver');
 
+    const openMenu = () => {
+        clearTimeout(closeTimerRef.current);
+        clearTimeout(menuCloseTimerRef.current);
+        setIsMenuClosing(false);
+        setIsMenuOpen(true);
+    };
+
+    const closeMenu = () => {
+        if (!isMenuOpen) return;
+
+        setIsMenuClosing(true);
+        setIsMenuOpen(false);
+
+        clearTimeout(menuCloseTimerRef.current);
+        menuCloseTimerRef.current = setTimeout(() => {
+            setIsMenuClosing(false);
+        }, MENU_CLOSE_MS);
+    };
+
     useEffect(() => {
-        if (root.current) {
-            animate(root.current, { y: [10, 0], opacity: [0, 1], duration: 400, ease: 'outExpo' });
+        if (pinExpanded) {
+            setIsHovered(true);
+            return;
         }
-    }, []);
+        if (!isMobileMode) {
+            setIsHovered(false);
+            if (isMenuOpen) closeMenu();
+        }
+    }, [pinExpanded, isMobileMode, sidebarMode]);
 
-    // --- ANIMACIONES CORREGIDAS (Sintaxis AnimeJS V4 con onComplete) ---
     const handleMenuToggle = () => {
-        const nextState = !isMenuOpen;
-        setIsMenuOpen(nextState);
-
-        if (menuRef.current && menuContentRef.current) {
-            if (nextState) {
-                if (isFixed) {
-                    animate(menuRef.current, { width: [0, 300], opacity: [0, 1], duration: 350, ease: 'outExpo' });
-                } else {
-                    // CORRECCIÓN: Forzamos que el ancho no sea 0 en móvil
-                    menuRef.current.style.width = isMobile ? '90vw' : '300px';
-
-                    menuRef.current.style.height = 'auto';
-                    const targetHeight = menuContentRef.current.scrollHeight;
-                    menuRef.current.style.height = '0px';
-
-                    animate(menuRef.current, {
-                        height: [0, targetHeight], opacity: [0, 1], duration: 350, ease: 'outExpo',
-                        onComplete: () => { menuRef.current.style.height = 'auto'; }
-                    });
-                }
-            } else {
-                if (isFixed) {
-                    animate(menuRef.current, { width: 0, opacity: 0, duration: 250, ease: 'inExpo' });
-                } else {
-                    const currentHeight = menuRef.current.offsetHeight;
-                    animate(menuRef.current, {
-                        height: [currentHeight, 0], opacity: [1, 0], duration: 250, ease: 'inExpo',
-                        onComplete: () => { menuRef.current.style.height = '0px'; }
-                    });
-                }
-            }
+        if (isMobileMode) {
+            if (isMenuOpen) closeMenu();
+            else openMenu();
+            return;
         }
+        if (isMenuOpen) closeMenu();
+    };
+
+    const handleHamburgerHover = () => {
+        if (isMobileMode) return;
+        clearTimeout(closeTimerRef.current);
+        openMenu();
+    };
+
+    const handleHoverEnter = () => {
+        if (isMobileMode) return;
+        clearTimeout(closeTimerRef.current);
+        setIsHovered(true);
+    };
+
+    const handleHoverLeave = () => {
+        if (isMobileMode) return;
+
+        closeTimerRef.current = setTimeout(() => {
+            closeMenu();
+
+            if (!pinExpanded) {
+                closeTimerRef.current = setTimeout(() => {
+                    setIsHovered(false);
+                }, WIDGET_MS);
+            }
+        }, HOVER_LEAVE_DELAY_MS);
     };
 
     const toggleConfigMenu = () => {
-        const nextState = !isConfigExpanded;
-        setIsConfigExpanded(nextState);
-
-        if (subMenuRef.current) {
-            if (nextState) {
-                subMenuRef.current.style.height = 'auto';
-                const targetHeight = subMenuRef.current.scrollHeight;
-                subMenuRef.current.style.height = '0px';
-
-                animate(subMenuRef.current, {
-                    height: [0, targetHeight], opacity: [0, 1], duration: 350, ease: 'outExpo',
-                    onComplete: () => { subMenuRef.current.style.height = 'auto'; }
-                });
-                animate('.chevron-config', { rotate: 90, duration: 350, ease: 'outExpo' });
-            } else {
-                const currentHeight = subMenuRef.current.offsetHeight;
-                animate(subMenuRef.current, {
-                    height: [currentHeight, 0], opacity: [1, 0], duration: 250, ease: 'inExpo',
-                    onComplete: () => { subMenuRef.current.style.height = '0px'; }
-                });
-                animate('.chevron-config', { rotate: 0, duration: 250, ease: 'inExpo' });
-            }
-        }
+        setIsConfigExpanded(prev => !prev);
     };
 
+    const renderAvatar = (compact = false) => (
+        <Link
+            href={route('profile.edit')}
+            className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border outline-none group shrink-0 ${
+                compact
+                    ? 'w-6 h-6 border-2'
+                    : isFixedVertical
+                        ? 'w-11 h-11 border'
+                        : 'w-9 h-9 sm:w-10 sm:h-10 border ml-1 sm:ml-2'
+            } ${isRouteActive('/perfil') ? 'border-[var(--color-primario)] shadow-md' : 'theme-element theme-border'}`}
+        >
+            {user?.foto_perfil ? (
+                <img src={`/storage/${user.foto_perfil}`} alt="Perfil" className="w-full h-full object-cover rounded-full transition-transform group-hover:scale-110" />
+            ) : (
+                <div className="flex items-center justify-center w-full h-full bg-transparent">
+                    <span
+                        className={`font-black leading-none select-none ${compact ? 'text-[10px]' : 'text-lg'}`}
+                        style={{ color: 'var(--color-primario)' }}
+                    >
+                        {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                    </span>
+                </div>
+            )}
+        </Link>
+    );
+
     // 1. Contenedor Base: Ocupa todo el ancho pero NO bloquea los clics
-    let navClasses = "fixed z-[200] flex pointer-events-none ";
-    if (isMobileMode) navClasses += "bottom-6 left-0 right-0 w-full flex-col-reverse items-center";
-    else if (isFixed) navClasses += "top-0 left-0 h-screen flex-row";
-    else navClasses += `top-6 flex-col ${isRight ? 'right-6 items-end' : 'left-6 items-start'}`;
+    let navClasses = "fixed z-[200] flex pointer-events-none sidebar-mount ";
+    if (isMobileMode) {
+        navClasses += "bottom-6 left-0 right-0 w-full flex-col-reverse items-center";
+    } else if (isFixed) {
+        if (fixedPos === FIXED_POSITIONS.right) navClasses += "top-0 right-0 h-screen flex-row-reverse";
+        else if (fixedPos === FIXED_POSITIONS.top) navClasses += "top-0 left-0 right-0 w-full flex-col items-start";
+        else if (fixedPos === FIXED_POSITIONS.bottom) navClasses += "bottom-0 left-0 right-0 w-full flex-col-reverse items-start";
+        else navClasses += "top-0 left-0 h-screen flex-row";
+    } else {
+        navClasses += `top-6 flex-col ${isRight ? 'right-6 items-end' : 'left-6 items-start'}`;
+    }
 
-    // 2. Botón (Widget): Reactiva los clics exclusivamente en esta área
-    let widgetClasses = "theme-surface theme-border sidebar-glass flex relative z-20 pointer-events-auto ";
-    if (isFixed) widgetClasses += "flex-col items-center py-6 w-20 h-full border-r rounded-none";
-    else widgetClasses += "items-center p-1.5 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.12)]";
+    let hoverContainerClasses = "pointer-events-auto flex ";
+    if (isFixedVertical) {
+        hoverContainerClasses += fixedPos === FIXED_POSITIONS.right ? "flex-row-reverse h-full" : "flex-row h-full";
+    } else if (isFixedHorizontal) {
+        hoverContainerClasses += fixedPos === FIXED_POSITIONS.bottom
+            ? "flex-col-reverse items-start w-full"
+            : "flex-col items-start w-full";
+    } else if (isMobileMode) {
+        hoverContainerClasses += "flex-col-reverse items-center";
+    } else {
+        hoverContainerClasses += `flex-col ${isRight ? 'items-end' : 'items-start'}`;
+    }
 
-    // 3. Menú: Previene que Flexbox lo aplaste (flex-shrink-0)
-    let menuClasses = `floating-menu border shadow-2xl overflow-hidden theme-surface theme-border sidebar-glass relative z-10 flex-shrink-0 ${isMenuOpen ? 'pointer-events-auto' : 'pointer-events-none'} `;
-    if (isFixed) menuClasses += "ml-0 rounded-r-[2.5rem] rounded-l-none border-l-0";
-    else if (isMobileMode) menuClasses += "mb-4 rounded-[2rem] w-[90vw] max-w-[320px]";
-    else menuClasses += "mt-4 rounded-[2.5rem] w-[300px]";
+    // 2. Botón (Widget): compacto en vista contraída (solo logo + avatar)
+    let widgetClasses = "theme-surface theme-border sidebar-glass relative z-20 sidebar-widget-shell ";
+    if (isFixedVertical) {
+        const edgeBorder = fixedPos === FIXED_POSITIONS.right ? 'border-l' : 'border-r';
+        widgetClasses += showCollapsedWidget
+            ? `flex flex-col items-center justify-center py-4 w-[4.25rem] h-full ${edgeBorder} rounded-none`
+            : `flex flex-col items-center py-5 w-[5.25rem] h-full ${edgeBorder} rounded-none`;
+    } else if (isFixedHorizontal) {
+        const edgeBorder = fixedPos === FIXED_POSITIONS.bottom ? 'border-t' : 'border-b';
+        widgetClasses += showCollapsedWidget
+            ? `inline-flex flex-row items-center h-[3.75rem] px-3 gap-2 w-full ${edgeBorder} rounded-none shadow-none`
+            : `inline-flex flex-row items-center h-16 px-4 sm:px-5 w-full ${edgeBorder} rounded-none shadow-none`;
+    } else {
+        widgetClasses += showCollapsedWidget
+            ? "inline-flex items-center py-1.5 px-1.5 gap-1.5 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.12)]"
+            : "inline-flex items-center py-2 px-3 sm:px-4 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.12)]";
+    }
+
+    const widgetShellStyle = {
+        transitionProperty: 'padding, gap, width, opacity, transform',
+        transitionDuration: `${WIDGET_MS}ms`,
+        transitionTimingFunction: EASE_SMOOTH,
+    };
+
+    const menuTransitionStyle = {
+        transitionDuration: `${isMenuOpen ? MENU_OPEN_MS : MENU_CLOSE_MS}ms`,
+        transitionTimingFunction: EASE_SMOOTH,
+    };
+
+    // 3. Menú: grid 0fr/1fr para altura fluida + transform GPU
+    let menuClasses = `floating-menu border shadow-2xl theme-surface theme-border sidebar-glass relative z-10 flex-shrink-0 sidebar-menu-shell sidebar-hamburger-menu ${isMenuVisible ? 'pointer-events-auto' : 'pointer-events-none'} ${isMenuOpen ? 'sidebar-hamburger-menu--open' : ''} `;
+
+    if (isFixedVertical) {
+        const menuFixedClass = fixedPos === FIXED_POSITIONS.right ? 'sidebar-menu-fixed-right' : 'sidebar-menu-fixed';
+        const menuRounding = fixedPos === FIXED_POSITIONS.right
+            ? 'rounded-l-[2.5rem] rounded-r-none border-r-0'
+            : 'rounded-r-[2.5rem] rounded-l-none border-l-0';
+        menuClasses += ` h-screen ml-0 ${menuRounding} ${menuFixedClass} ${isMenuOpen ? `${menuFixedClass}--open` : ''}`;
+    } else if (isFixedHorizontal) {
+        menuClasses += ` rounded-[2rem] w-[300px] max-w-[90vw] sidebar-menu-float ${fixedPos === FIXED_POSITIONS.bottom ? 'mb-3' : 'mt-0'} ${isMenuOpen ? 'sidebar-menu-float--open' : ''}`;
+    } else if (isMobileMode) {
+        menuClasses += ` rounded-[2rem] w-[90vw] max-w-[320px] mb-4 sidebar-menu-float ${isMenuOpen ? 'sidebar-menu-float--open' : ''}`;
+    } else {
+        menuClasses += ` rounded-[2.5rem] w-[300px] mt-4 sidebar-menu-float ${isMenuOpen ? 'sidebar-menu-float--open' : ''}`;
+    }
+
+    const logoGlowClass = "drop-shadow-[0_0_12px_color-mix(in_srgb,var(--color-primario)_60%,transparent)]";
+    const logoSizeClass = showCollapsedWidget
+        ? `${isFixedVertical ? 'w-11 h-11' : 'w-12 h-12'} ${logoGlowClass}`
+        : 'w-7 h-7 drop-shadow-sm';
+
+    const innerFlexClass = widgetOrientation === 'vertical'
+        ? 'flex-col w-full'
+        : 'flex-row';
+
+    const innerGapClass = showCollapsedWidget
+        ? (widgetOrientation === 'vertical' ? 'gap-3' : 'gap-1.5')
+        : (widgetOrientation === 'vertical' ? 'gap-5 py-2' : 'gap-1 sm:gap-2');
 
     return (
-        <nav ref={root} className={navClasses} style={{ opacity: 0 }}>
-            <div ref={widgetRef} className={widgetClasses}>
-                <button onClick={handleMenuToggle} className={`rounded-full transition-colors theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none ${isFixed ? 'p-3 mb-8' : 'p-2.5 mx-1'}`}>
-                    {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-                </button>
-
-                <div className={`flex theme-border ${isFixed ? 'flex-col items-center space-y-8 pt-8 border-t w-full' : 'items-center px-3 sm:px-4 border-l space-x-3 sm:space-x-5'}`}>
-                    
-                    {/* 1. Botón de Tema (Ahora en la posición del Home) */}
-                    <button onClick={toggleTheme} className="transition-transform active:scale-90 hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
-                        {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                    </button>
-
-                    {/* 2. Botón de Atrás (Se mantiene en su posición) */}
-                    <button onClick={() => window.history.back()} className="transition-all hover:scale-110 theme-text-muted hover:theme-text-main outline-none">
-                        <ArrowLeft className="w-5 h-5" />
-                    </button>
-
-                    {/* 3. Botón Home con Diamante (Ahora en el centro) */}
-                    <Link href={route('dashboard')} className="transition-transform hover:scale-110 active:scale-90 outline-none flex items-center justify-center">
-                        <GeliaLogo variant="sparkle" className="w-7 h-7 drop-shadow-sm" />
-                    </Link>
-
-                    {/* 4. Campana de Notificaciones (Se mantiene) */}
-                    <NotificationBell notifications={auth?.notificaciones || []} />
-
-                    {/* 5. Avatar de Perfil (Se mantiene) */}
-                    <Link
-                        href={route('profile.edit')}
-                        className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all border outline-none group ${isFixed ? 'w-12 h-12 mt-4' : 'w-9 h-9 sm:w-10 sm:h-10'} ${isRouteActive('/perfil') ? 'border-[var(--color-primario)] shadow-md' : 'theme-element theme-border'}`}
-                    >
-                        {user?.foto_perfil ? (
-                            <img src={`/storage/${user.foto_perfil}`} alt="Perfil" className="w-full h-full object-cover rounded-full transition-transform group-hover:scale-110" />
-                        ) : (
-                            <div className="flex items-center justify-center w-full h-full bg-transparent">
-                                <span className="font-black text-lg leading-none select-none" style={{ color: 'var(--color-primario)' }}>
-                                    {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                                </span>
-                            </div>
+        <>
+            <nav className={navClasses}>
+                <div
+                    className={hoverContainerClasses}
+                    onMouseEnter={handleHoverEnter}
+                    onMouseLeave={handleHoverLeave}
+                >
+                    <div className={widgetClasses} style={widgetShellStyle}>
+                        {showCollapsedWidget && unreadCount > 0 && (
+                            <span
+                                className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full border border-white/20 theme-surface animate-pulse z-30"
+                                style={{ backgroundColor: 'var(--color-primario)' }}
+                                aria-label={`${unreadCount} notificaciones nuevas`}
+                            />
                         )}
-                    </Link>
-                </div>
-            </div>
 
-            <div ref={menuRef} className={menuClasses} style={initialMenuStyle.current}>
-                <div ref={menuContentRef} className={`p-5 flex flex-col space-y-3 overflow-y-auto custom-scrollbar ${isFixed ? 'w-[300px] h-full pt-10' : 'max-h-[85vh]'}`}>
-                    <span className="text-[11px] font-black tracking-[0.3em] px-5 mb-1 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
-                        ACCESOS_
-                    </span>
+                        <div className={`flex items-center ${innerFlexClass} ${innerGapClass} ${isFixedHorizontal ? 'w-full justify-start' : ''}`}>
+                            <div
+                                className={prefixGroupClass(showSecondaryControls, widgetOrientation)}
+                                aria-hidden={!showSecondaryControls}
+                            >
+                                <button
+                                    onClick={handleMenuToggle}
+                                    onMouseEnter={handleHamburgerHover}
+                                    className={`relative flex items-center justify-center rounded-full theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none shrink-0 ${widgetOrientation === 'vertical' ? 'w-11 h-11' : 'w-10 h-10 mx-0.5'}`}
+                                    aria-label={isMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+                                >
+                                    <Menu className={`absolute w-5 h-5 sidebar-hamburger-icon ${isMenuOpen ? 'sidebar-hamburger-icon--hidden' : 'sidebar-hamburger-icon--visible'}`} />
+                                    <X className={`absolute w-5 h-5 sidebar-hamburger-icon ${isMenuOpen ? 'sidebar-hamburger-icon--visible' : 'sidebar-hamburger-icon--hidden'}`} />
+                                </button>
 
-                    <Link
-                        href={route('dashboard')}
-                        className={linkBaseClass + (isRouteActive('/dashboard') ? linkActiveClass : linkInactiveClass)}
-                        onMouseEnter={(e) => { if (!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                        onMouseLeave={(e) => { if (!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'transparent' }}
-                    >
-                        <div className="flex items-center">
-                            <LayoutDashboard className="w-4 h-4 mr-4" style={{ color: isRouteActive('/dashboard') ? '#ffffff' : 'var(--color-primario)' }} />
-                            <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Panel Principal_</span>
+                                <button
+                                    onClick={toggleTheme}
+                                    className="active:scale-90 hover:scale-110 theme-text-muted hover:theme-text-main outline-none shrink-0"
+                                >
+                                    {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                                </button>
+
+                                <button
+                                    onClick={() => window.history.back()}
+                                    className="hover:scale-110 theme-text-muted hover:theme-text-main outline-none shrink-0"
+                                >
+                                    <ArrowLeft className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <Link
+                                href={route('dashboard')}
+                                className={`hover:scale-110 active:scale-90 outline-none flex items-center justify-center shrink-0 sidebar-logo-link ${!showCollapsedWidget && widgetOrientation === 'horizontal' ? 'mx-1 sm:mx-2' : ''}`}
+                            >
+                                <GeliaLogo variant="sparkle" className={`sidebar-logo-mark ${logoSizeClass}`} />
+                            </Link>
+
+                            <div
+                                className={suffixGroupClass(showSecondaryControls)}
+                                aria-hidden={!showSecondaryControls}
+                            >
+                                <NotificationBell notifications={auth?.notificaciones || []} />
+                            </div>
+
+                            {renderAvatar(showCollapsedWidget)}
                         </div>
-                    </Link>
+                    </div>
 
-                    {can('solicitudes.ver_listado') && (
-                        <Link
-                            href={route('solicitudes.index')}
-                            className={linkBaseClass + (isRouteActive('/solicitudes') ? linkActiveClass : linkInactiveClass)}
-                            onMouseEnter={(e) => { if (!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                            onMouseLeave={(e) => { if (!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'transparent' }}
-                        >
-                            <Briefcase className="w-4 h-4 mr-4" />
-                            <span className="text-xs font-black uppercase italic tracking-tighter">Solicitudes_</span>
-                        </Link>
-                    )}
+                    <div className={menuClasses} style={menuTransitionStyle}>
+                        <div className="sidebar-menu-grid-inner overflow-hidden min-h-0">
+                            <div className={`sidebar-menu-content p-5 flex flex-col space-y-3 overflow-y-auto custom-scrollbar ${isFixedVertical ? 'w-[300px] h-full pt-10' : 'max-h-[85vh]'}`}>
+                            <span className="text-[11px] font-black tracking-[0.3em] px-5 mb-1 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
+                                ACCESOS_
+                            </span>
 
-                    {/* NUEVO ENLACE: MIS CLIENTES */}
-                    {can('mis_clientes.gestionar') && (
-                        <Link
-                            href={route('mis_clientes.index')}
-                            className={linkBaseClass + (isRouteActive('/mis-clientes') ? linkActiveClass : linkInactiveClass)}
-                            onMouseEnter={(e) => { if (!isRouteActive('/mis-clientes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                            onMouseLeave={(e) => { if (!isRouteActive('/mis-clientes')) e.currentTarget.style.borderColor = 'transparent' }}
-                        >
-                            <div className="flex items-center">
-                                <Users className="w-4 h-4 mr-4" style={{ color: isRouteActive('/mis-clientes') ? '#ffffff' : 'var(--color-primario)' }} />
-                                <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mis Clientes_</span>
-                            </div>
-                        </Link>
-                    )}
+                            <Link
+                                href={route('dashboard')}
+                                className={linkBaseClass + (isRouteActive('/dashboard') ? linkActiveClass : linkInactiveClass)}
+                                onMouseEnter={(e) => { if (!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                onMouseLeave={(e) => { if (!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'transparent' }}
+                            >
+                                <div className="flex items-center">
+                                    <LayoutDashboard className="w-4 h-4 mr-4" style={{ color: isRouteActive('/dashboard') ? '#ffffff' : 'var(--color-primario)' }} />
+                                    <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Panel Principal_</span>
+                                </div>
+                            </Link>
 
-                    {/* NUEVO ENLACE: ÁREA LOGÍSTICA / ENTREGAS */}
-                    {can('entregas.cotizar') && (
-                        <Link
-                            href={route('entregas.index')}
-                            className={linkBaseClass + (isRouteActive('/entregas') ? linkActiveClass : linkInactiveClass)}
-                            onMouseEnter={(e) => { if (!isRouteActive('/entregas')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                            onMouseLeave={(e) => { if (!isRouteActive('/entregas')) e.currentTarget.style.borderColor = 'transparent' }}
-                        >
-                            <div className="flex items-center">
-                                <Map className="w-4 h-4 mr-4" style={{ color: isRouteActive('/entregas') ? '#ffffff' : 'var(--color-primario)' }} />
-                                <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Cotizar Entregas</span>
-                            </div>
-                        </Link>
-                    )}
-
-                    {can('entregas.configurar_zonas') && (
-                        <Link
-                            href={route('admin.mapa_logistico.index')}
-                            className={linkBaseClass + (isRouteActive('/admin/mapa-logistico') ? linkActiveClass : linkInactiveClass)}
-                            onMouseEnter={(e) => { if (!isRouteActive('/admin/mapa-logistico')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                            onMouseLeave={(e) => { if (!isRouteActive('/admin/mapa-logistico')) e.currentTarget.style.borderColor = 'transparent' }}
-                        >
-                            <div className="flex items-center">
-                                <Layers className="w-4 h-4 mr-4" style={{ color: isRouteActive('/admin/mapa-logistico') ? '#ffffff' : 'var(--color-primario)' }} />
-                                <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mapa Logístico</span>
-                            </div>
-                        </Link>
-                    )}
-
-                    {/* --- NUEVA SECCIÓN: FUNCIONES OPERATIVAS --- */}
-                    {/* 1. Evaluamos el Interruptor Maestro. Si tiene AL MENOS UN permiso, entra. */}
-                    {showOperacionesMenu && (
-                        <div className="flex flex-col">
-                            
-                            {/* Etiqueta del Grupo */}
-                            <div className="pt-3 pb-1">
-                                <span className="text-[11px] font-black tracking-[0.3em] px-5 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
-                                    FUNCIONES OPERATIVAS_
-                                </span>
-                            </div>
-
-                            {/* 2. Evaluamos el Interruptor Individual de Listados */}
-                            {can('listados.ver') && (
+                            {can('solicitudes.ver_listado') && (
                                 <Link
-                                    href={route('listados.index')}
-                                    className={linkBaseClass + (isRouteActive('/listados') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/listados')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/listados')) e.currentTarget.style.borderColor = 'transparent' }}
+                                    href={route('solicitudes.index')}
+                                    className={linkBaseClass + (isRouteActive('/solicitudes') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <Briefcase className="w-4 h-4 mr-4" />
+                                    <span className="text-xs font-black uppercase italic tracking-tighter">Solicitudes_</span>
+                                </Link>
+                            )}
+
+                            {can('mis_clientes.gestionar') && (
+                                <Link
+                                    href={route('mis_clientes.index')}
+                                    className={linkBaseClass + (isRouteActive('/mis-clientes') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/mis-clientes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/mis-clientes')) e.currentTarget.style.borderColor = 'transparent' }}
                                 >
                                     <div className="flex items-center">
-                                        <FileText className="w-4 h-4 mr-4" style={{ color: isRouteActive('/listados') ? '#ffffff' : 'var(--color-primario)' }} />
-                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Listados_</span>
+                                        <Users className="w-4 h-4 mr-4" style={{ color: isRouteActive('/mis-clientes') ? '#ffffff' : 'var(--color-primario)' }} />
+                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mis Clientes_</span>
                                     </div>
                                 </Link>
                             )}
 
-                            {/* 💡 AQUÍ ABAJO IRÁN TUS FUTUROS DESARROLLOS */}
-                            {/* {can('tu_nueva_funcion.ver') && (
-                                <Link href="..."> ... </Link>
-                            )} 
-                            */}
+                            {can('entregas.cotizar') && (
+                                <Link
+                                    href={route('entregas.index')}
+                                    className={linkBaseClass + (isRouteActive('/entregas') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/entregas')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/entregas')) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <div className="flex items-center">
+                                        <Map className="w-4 h-4 mr-4" style={{ color: isRouteActive('/entregas') ? '#ffffff' : 'var(--color-primario)' }} />
+                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Cotizar Entregas</span>
+                                    </div>
+                                </Link>
+                            )}
 
-                        </div>
-                    )}
+                            {can('entregas.configurar_zonas') && (
+                                <Link
+                                    href={route('admin.mapa_logistico.index')}
+                                    className={linkBaseClass + (isRouteActive('/admin/mapa-logistico') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/admin/mapa-logistico')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/admin/mapa-logistico')) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <div className="flex items-center">
+                                        <Layers className="w-4 h-4 mr-4" style={{ color: isRouteActive('/admin/mapa-logistico') ? '#ffffff' : 'var(--color-primario)' }} />
+                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mapa Logístico</span>
+                                    </div>
+                                </Link>
+                            )}
 
-                    {showAdminMenu && (
-                        <div className="mt-2 pt-3 border-t theme-border flex flex-col">
-                            <button
-                                onClick={toggleConfigMenu}
-                                className={`flex items-center justify-between w-full px-6 py-4 rounded-3xl transition-all outline-none z-10 ${isAdminActive ? 'theme-element border-[var(--color-primario)] text-[var(--color-primario)] shadow-sm' : 'theme-element theme-text-muted hover:theme-text-main border border-transparent'}`}
-                            >
-                                <div className="flex items-center">
-                                    <Settings className="w-4 h-4 mr-4" />
-                                    <span className="text-xs font-black uppercase italic tracking-tighter">Administración_</span>
+                            {showOperacionesMenu && (
+                                <div className="flex flex-col">
+                                    <div className="pt-3 pb-1">
+                                        <span className="text-[11px] font-black tracking-[0.3em] px-5 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
+                                            FUNCIONES OPERATIVAS_
+                                        </span>
+                                    </div>
+
+                                    {can('listados.ver') && (
+                                        <Link
+                                            href={route('listados.index')}
+                                            className={linkBaseClass + (isRouteActive('/listados') ? linkActiveClass : linkInactiveClass)}
+                                            onMouseEnter={(e) => { if (!isRouteActive('/listados')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                            onMouseLeave={(e) => { if (!isRouteActive('/listados')) e.currentTarget.style.borderColor = 'transparent' }}
+                                        >
+                                            <div className="flex items-center">
+                                                <FileText className="w-4 h-4 mr-4" style={{ color: isRouteActive('/listados') ? '#ffffff' : 'var(--color-primario)' }} />
+                                                <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Listados_</span>
+                                            </div>
+                                        </Link>
+                                    )}
                                 </div>
-                                <ChevronRight className={`w-3 h-3 transition-transform duration-300 ${isConfigExpanded ? 'rotate-90' : ''}`} />
-                            </button>
+                            )}
 
-                            <div ref={subMenuRef} className="overflow-hidden px-2 mt-2" style={initialSubMenuStyle.current}>
-                                <div className="flex flex-col space-y-2">
-                                    {ADMIN_MENU_CONFIG.filter(item => can(item.permission)).map((item) => {
-                                        const IconComponent = item.icon;
-                                        const isActive = isRouteActive(item.path);
-                                        return (
-                                            <Link
-                                                key={item.id}
-                                                href={route(item.routeName)}
-                                                className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all outline-none ${isActive ? 'bg-[var(--color-primario)] text-white shadow-md' : 'theme-element theme-text-muted hover:theme-text-main hover:shadow-sm border border-transparent hover:border-[var(--color-primario)]'}`}
-                                            >
-                                                <IconComponent className="w-3.5 h-3.5 mr-4" /> {item.label}
-                                            </Link>
-                                        );
-                                    })}
+                            {showAdminMenu && (
+                                <div className="mt-2 pt-3 border-t theme-border flex flex-col">
+                                    <button
+                                        onClick={toggleConfigMenu}
+                                        className={`flex items-center justify-between w-full px-6 py-4 rounded-3xl transition-all outline-none z-10 ${isAdminActive ? 'theme-element border-[var(--color-primario)] text-[var(--color-primario)] shadow-sm' : 'theme-element theme-text-muted hover:theme-text-main border border-transparent'}`}
+                                    >
+                                        <div className="flex items-center">
+                                            <Settings className="w-4 h-4 mr-4" />
+                                            <span className="text-xs font-black uppercase italic tracking-tighter">Administración_</span>
+                                        </div>
+                                        <ChevronRight className={`w-3 h-3 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${isConfigExpanded ? 'rotate-90' : ''}`} />
+                                    </button>
+
+                                    <div className={`overflow-hidden px-2 mt-2 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${isConfigExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                                        <div className="flex flex-col space-y-2">
+                                            {ADMIN_MENU_CONFIG.filter(item => can(item.permission)).map((item) => {
+                                                const IconComponent = item.icon;
+                                                const isActive = isRouteActive(item.path);
+                                                return (
+                                                    <Link
+                                                        key={item.id}
+                                                        href={route(item.routeName)}
+                                                        className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all outline-none ${isActive ? 'bg-[var(--color-primario)] text-white shadow-md' : 'theme-element theme-text-muted hover:theme-text-main hover:shadow-sm border border-transparent hover:border-[var(--color-primario)]'}`}
+                                                    >
+                                                        <IconComponent className="w-3.5 h-3.5 mr-4" /> {item.label}
+                                                    </Link>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 </div>
+                            )}
+
+                            <div className="mt-auto pt-6 pb-2">
+                                <button
+                                    onClick={() => {
+                                        localStorage.clear();
+                                        post(route('logout'));
+                                    }}
+                                    className="flex items-center w-full px-6 py-4 rounded-3xl transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group">
+                                    <LogOut className="w-4 h-4 mr-4 text-red-500 group-hover:text-red-600 transition-colors" />
+                                    <span className="text-xs font-black uppercase italic tracking-widest text-red-500 group-hover:text-red-600 transition-colors">Cerrar Sesión_</span>
+                                </button>
                             </div>
                         </div>
-                    )}
-
-                    <div className="mt-auto pt-6 pb-2">
-                        <button
-                            onClick={() => {
-                                // 1. Limpiamos toda la memoria gráfica y configuraciones del navegador
-                                localStorage.clear();
-                                // 2. Ejecutamos el logout en el servidor
-                                post(route('logout'));
-                            }}
-                            className="flex items-center w-full px-6 py-4 rounded-3xl transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group">
-                            <LogOut className="w-4 h-4 mr-4 text-red-500 group-hover:text-red-600 transition-colors" />
-                            <span className="text-xs font-black uppercase italic tracking-widest text-red-500 group-hover:text-red-600 transition-colors">Cerrar Sesión_</span>
-                        </button>
                     </div>
                 </div>
             </div>
-        </nav>
+            </nav>
+
+            <style>{`
+                @keyframes sidebarMount {
+                    from { opacity: 0; transform: translate3d(0, 10px, 0); }
+                    to { opacity: 1; transform: translate3d(0, 0, 0); }
+                }
+                .sidebar-mount {
+                    animation: sidebarMount 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+                }
+                .sidebar-widget-shell {
+                    will-change: padding, gap, width, transform;
+                    backface-visibility: hidden;
+                }
+                .sidebar-widget-reveal {
+                    transition-property: max-width, max-height, opacity, gap, padding, margin, border-color;
+                    transition-duration: ${WIDGET_MS}ms;
+                    transition-timing-function: ${EASE_SMOOTH};
+                    pointer-events: auto;
+                }
+                .sidebar-logo-link {
+                    transition: transform ${WIDGET_MS}ms ${EASE_SMOOTH};
+                }
+                .sidebar-logo-mark {
+                    transition: width ${WIDGET_MS}ms ${EASE_SMOOTH}, height ${WIDGET_MS}ms ${EASE_SMOOTH}, filter ${WIDGET_MS}ms ${EASE_SMOOTH};
+                    will-change: width, height, transform;
+                }
+                .sidebar-menu-shell {
+                    overflow: hidden;
+                    will-change: transform, opacity, width, grid-template-rows;
+                    backface-visibility: hidden;
+                }
+                .sidebar-menu-float {
+                    display: grid;
+                    grid-template-rows: 0fr;
+                    opacity: 0;
+                    transform: translate3d(0, -6px, 0) scale(0.985);
+                    transition-property: grid-template-rows, opacity, transform, margin;
+                }
+                .sidebar-menu-float--open {
+                    grid-template-rows: 1fr;
+                    opacity: 1;
+                    transform: translate3d(0, 0, 0) scale(1);
+                }
+                .sidebar-menu-fixed {
+                    width: 0;
+                    opacity: 0;
+                    transform: translate3d(-8px, 0, 0);
+                    transition-property: width, opacity, transform;
+                }
+                .sidebar-menu-fixed--open {
+                    width: 300px;
+                    opacity: 1;
+                    transform: translate3d(0, 0, 0);
+                }
+                .sidebar-menu-fixed-right {
+                    width: 0;
+                    opacity: 0;
+                    transform: translate3d(8px, 0, 0);
+                    transition-property: width, opacity, transform;
+                }
+                .sidebar-menu-fixed-right--open {
+                    width: 300px;
+                    opacity: 1;
+                    transform: translate3d(0, 0, 0);
+                }
+                .sidebar-hamburger-icon {
+                    transition: opacity ${MENU_OPEN_MS}ms ${EASE_SMOOTH}, transform ${MENU_OPEN_MS}ms ${EASE_SMOOTH};
+                    will-change: opacity, transform;
+                }
+                .sidebar-hamburger-icon--visible {
+                    opacity: 1;
+                    transform: rotate(0deg) scale(1);
+                }
+                .sidebar-hamburger-icon--hidden {
+                    opacity: 0;
+                    transform: rotate(-90deg) scale(0.72);
+                    pointer-events: none;
+                }
+                .sidebar-hamburger-menu .sidebar-menu-content {
+                    opacity: 0;
+                    transform: translate3d(0, -12px, 0);
+                    transition: opacity ${MENU_OPEN_MS}ms ${EASE_SMOOTH}, transform ${MENU_OPEN_MS}ms ${EASE_SMOOTH};
+                }
+                .sidebar-hamburger-menu--open .sidebar-menu-content {
+                    opacity: 1;
+                    transform: translate3d(0, 0, 0);
+                    transition-delay: 90ms;
+                }
+                .sidebar-hamburger-menu:not(.sidebar-hamburger-menu--open) .sidebar-menu-content {
+                    transition-delay: 0ms;
+                    transition-duration: ${MENU_CLOSE_MS}ms;
+                }
+            `}</style>
+        </>
     );
 }

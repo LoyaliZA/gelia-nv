@@ -115,6 +115,32 @@ export default function AppLayout({ children }) {
         return 'floating_left';
     });
 
+    const [sidebarMode, setSidebarMode] = useState(() => {
+        if (typeof window !== 'undefined') return localStorage.getItem('theme_sidebar_mode') || auth?.tema_visual?.sidebar_modo || 'collapsed';
+        return 'collapsed';
+    });
+
+    const [fixedPosition, setFixedPosition] = useState(() => {
+        if (typeof window !== 'undefined') return localStorage.getItem('theme_fixed_position') || auth?.tema_visual?.sidebar_posicion_fija || 'left';
+        return 'left';
+    });
+
+    const getMainLayoutClasses = () => {
+        if (sidebarLayout !== 'fixed') {
+            return 'pt-6 md:pt-24';
+        }
+        switch (fixedPosition) {
+            case 'right':
+                return 'md:mr-[5.5rem] pt-6 md:pt-12';
+            case 'top':
+                return 'pt-[4.75rem] md:pt-20 pb-32 md:pb-20';
+            case 'bottom':
+                return 'pt-6 md:pt-12 pb-28 md:pb-24';
+            default:
+                return 'md:ml-[5.5rem] pt-6 md:pt-12';
+        }
+    };
+
     const openModal = (content) => {
         setModalContent(content);
         setIsModalOpen(true);
@@ -140,26 +166,58 @@ export default function AppLayout({ children }) {
                 || auth?.tema_visual?.layout_sidebar
                 || 'floating_left';
             setSidebarLayout(savedLayout);
+
+            const savedSidebarMode = localStorage.getItem('theme_sidebar_mode')
+                || auth?.tema_visual?.sidebar_modo
+                || 'collapsed';
+            setSidebarMode(savedSidebarMode);
+
+            const savedFixedPosition = localStorage.getItem('theme_fixed_position')
+                || auth?.tema_visual?.sidebar_posicion_fija
+                || 'left';
+            setFixedPosition(savedFixedPosition);
         };
 
         const onLayoutPreview = (event) => {
             if (event.detail?.layout) setSidebarLayout(event.detail.layout);
         };
 
+        const onSidebarModePreview = (event) => {
+            if (event.detail?.mode) setSidebarMode(event.detail.mode);
+        };
+
+        const onFixedPositionPreview = (event) => {
+            if (event.detail?.position) setFixedPosition(event.detail.position);
+        };
+
         window.addEventListener('theme-changed', syncThemeState);
         window.addEventListener('theme-layout-preview', onLayoutPreview);
+        window.addEventListener('theme-sidebar-mode-preview', onSidebarModePreview);
+        window.addEventListener('theme-fixed-position-preview', onFixedPositionPreview);
         return () => {
             window.removeEventListener('theme-changed', syncThemeState);
             window.removeEventListener('theme-layout-preview', onLayoutPreview);
+            window.removeEventListener('theme-sidebar-mode-preview', onSidebarModePreview);
+            window.removeEventListener('theme-fixed-position-preview', onFixedPositionPreview);
         };
-    }, [auth?.tema_visual?.layout_sidebar]);
+    }, [auth?.tema_visual?.layout_sidebar, auth?.tema_visual?.sidebar_modo, auth?.tema_visual?.sidebar_posicion_fija]);
 
     useEffect(() => {
         const layout = localStorage.getItem('theme_layout')
             || auth?.tema_visual?.layout_sidebar
             || 'floating_left';
         setSidebarLayout(layout);
-    }, [url, auth?.tema_visual?.layout_sidebar]);
+
+        const mode = localStorage.getItem('theme_sidebar_mode')
+            || auth?.tema_visual?.sidebar_modo
+            || 'collapsed';
+        setSidebarMode(mode);
+
+        const position = localStorage.getItem('theme_fixed_position')
+            || auth?.tema_visual?.sidebar_posicion_fija
+            || 'left';
+        setFixedPosition(position);
+    }, [url, auth?.tema_visual?.layout_sidebar, auth?.tema_visual?.sidebar_modo, auth?.tema_visual?.sidebar_posicion_fija]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -256,11 +314,13 @@ export default function AppLayout({ children }) {
                     user={auth?.user}
                     permissions={auth?.user?.permissions || []}
                     layout={sidebarLayout}
+                    sidebarMode={sidebarMode}
+                    fixedPosition={fixedPosition}
                 />
 
                 {/* Zoom solo en contenido: el sidebar fixed queda fuera y funciona igual en /perfil */}
                 <div className="gelia-ui-scale min-h-dvh w-full">
-                    <main className={`transition-all duration-500 bg-transparent max-w-7xl mx-auto min-h-screen px-4 md:px-6 pb-32 md:pb-20 ${sidebarLayout === 'fixed' ? 'md:ml-24 pt-6 md:pt-12' : 'pt-6 md:pt-24'}`}>
+                    <main className={`transition-all duration-500 bg-transparent max-w-7xl mx-auto min-h-screen px-4 md:px-6 pb-32 md:pb-20 ${getMainLayoutClasses()}`}>
                         <div key={url} className="animate-page-reveal">
                             {children}
                         </div>

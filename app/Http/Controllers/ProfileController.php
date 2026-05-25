@@ -74,6 +74,8 @@ class ProfileController extends Controller
             'tema_visual.fuente_principal' => 'nullable|string|max:50',
             'tema_visual.escala_fuente'    => 'nullable|numeric|min:0.875|max:1.5',
             'tema_visual.layout_sidebar'   => 'nullable|string|max:50',
+            'tema_visual.sidebar_modo'     => 'nullable|string|in:collapsed,expanded',
+            'tema_visual.sidebar_posicion_fija' => 'nullable|string|in:left,right,top,bottom',
             'tema_visual.efecto_cristal'   => 'nullable|boolean',
         ]);
 

@@ -52,6 +52,8 @@ function readStoredTheme(temaVisual = {}) {
             scale: clampFontScale(temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT),
             glass: temaVisual?.efecto_cristal !== false,
             layout: temaVisual?.layout_sidebar || 'floating_left',
+            sidebarMode: temaVisual?.sidebar_modo || 'collapsed',
+            fixedPosition: temaVisual?.sidebar_posicion_fija || 'left',
         };
     }
     const savedGlass = localStorage.getItem('theme_glass');
@@ -67,6 +69,8 @@ function readStoredTheme(temaVisual = {}) {
         ),
         glass: savedGlass !== null ? savedGlass === 'true' : temaVisual?.efecto_cristal !== false,
         layout: localStorage.getItem('theme_layout') || temaVisual?.layout_sidebar || 'floating_left',
+        sidebarMode: localStorage.getItem('theme_sidebar_mode') || temaVisual?.sidebar_modo || 'collapsed',
+        fixedPosition: localStorage.getItem('theme_fixed_position') || temaVisual?.sidebar_posicion_fija || 'left',
     };
 }
 
@@ -80,6 +84,8 @@ function captureThemeSnapshot() {
         [FONT_SCALE_STORAGE_KEY]: localStorage.getItem(FONT_SCALE_STORAGE_KEY),
         theme_glass: localStorage.getItem('theme_glass'),
         theme_layout: localStorage.getItem('theme_layout'),
+        theme_sidebar_mode: localStorage.getItem('theme_sidebar_mode'),
+        theme_fixed_position: localStorage.getItem('theme_fixed_position'),
     };
 }
 
@@ -203,6 +209,8 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [fontScale,     setFontScale]     = useState(initialTheme.scale);
     const [glassEffect,   setGlassEffect]   = useState(initialTheme.glass);
     const [sidebarLayout, setSidebarLayout] = useState(initialTheme.layout);
+    const [sidebarMode, setSidebarMode] = useState(initialTheme.sidebarMode);
+    const [fixedPosition, setFixedPosition] = useState(initialTheme.fixedPosition);
     const [notifications, setNotifications] = useState({ sound: true });
 
     useEffect(() => {
@@ -332,6 +340,8 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             scale:  overrides.scale  ?? fontScale,
             glass:  overrides.glass  ?? glassEffect,
             layout: overrides.layout ?? sidebarLayout,
+            sidebarMode: overrides.sidebarMode ?? sidebarMode,
+            fixedPosition: overrides.fixedPosition ?? fixedPosition,
         };
 
         localStorage.setItem('theme', theme.modo);
@@ -341,8 +351,10 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         localStorage.setItem(FONT_SCALE_STORAGE_KEY, String(clampFontScale(theme.scale)));
         localStorage.setItem('theme_glass', String(theme.glass));
         localStorage.setItem('theme_layout', theme.layout);
+        localStorage.setItem('theme_sidebar_mode', theme.sidebarMode);
+        localStorage.setItem('theme_fixed_position', theme.fixedPosition);
         window.dispatchEvent(new Event('theme-changed'));
-    }, [isDarkMode, selectedColor, selectedBg, typography, fontScale, glassEffect, sidebarLayout]);
+    }, [isDarkMode, selectedColor, selectedBg, typography, fontScale, glassEffect, sidebarLayout, sidebarMode, fixedPosition]);
 
     // --- SUBMIT: Blindado con JSON.stringify ---
     const submitProfile = (e) => {
@@ -356,6 +368,8 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             fuente_principal: typography,
             escala_fuente:    fontScale,
             layout_sidebar:   sidebarLayout,
+            sidebar_modo:    sidebarMode,
+            sidebar_posicion_fija: fixedPosition,
             efecto_cristal:   glassEffect,
         };
 
@@ -485,6 +499,20 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         window.dispatchEvent(new Event('theme-changed'));
     };
 
+    const handleSidebarModeChange = (mode) => {
+        setSidebarMode(mode);
+        localStorage.setItem('theme_sidebar_mode', mode);
+        window.dispatchEvent(new CustomEvent('theme-sidebar-mode-preview', { detail: { mode } }));
+        window.dispatchEvent(new Event('theme-changed'));
+    };
+
+    const handleFixedPositionChange = (position) => {
+        setFixedPosition(position);
+        localStorage.setItem('theme_fixed_position', position);
+        window.dispatchEvent(new CustomEvent('theme-fixed-position-preview', { detail: { position } }));
+        window.dispatchEvent(new Event('theme-changed'));
+    };
+
     const handleBgChange = (bgValue) => {
         setSelectedBg(bgValue);
         setData('remove_fondo', false);
@@ -526,8 +554,12 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             scale,
             glass,
             layout,
+            sidebarMode,
+            fixedPosition,
         });
         window.dispatchEvent(new CustomEvent('theme-layout-preview', { detail: { layout } }));
+        window.dispatchEvent(new CustomEvent('theme-sidebar-mode-preview', { detail: { mode: sidebarMode } }));
+        window.dispatchEvent(new CustomEvent('theme-fixed-position-preview', { detail: { position: fixedPosition } }));
     };
 
     const baseCardClass   = "fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300";
@@ -1058,6 +1090,36 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 </button>
                                 <button type="button" onClick={() => handleLayoutChange('floating_right')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'floating_right'}>
                                     Flot. Der
+                                </button>
+                            </div>
+                        </SettingsRow>
+
+                        {sidebarLayout === 'fixed' && (
+                            <SettingsRow icon={PanelLeft} title="Posición barra fija" subtitle="Como la barra de tareas: borde de pantalla" stackOnMobile={true}>
+                                <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm flex-wrap sm:flex-nowrap">
+                                    <button type="button" onClick={() => handleFixedPositionChange('left')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'left'}>
+                                        Izquierda
+                                    </button>
+                                    <button type="button" onClick={() => handleFixedPositionChange('right')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'right'}>
+                                        Derecha
+                                    </button>
+                                    <button type="button" onClick={() => handleFixedPositionChange('top')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'top'}>
+                                        Arriba
+                                    </button>
+                                    <button type="button" onClick={() => handleFixedPositionChange('bottom')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'bottom'}>
+                                        Abajo
+                                    </button>
+                                </div>
+                            </SettingsRow>
+                        )}
+
+                        <SettingsRow icon={PanelLeft} title="Estado del Sidebar" subtitle="Contraído al pasar el mouse o siempre desplegado" stackOnMobile={true}>
+                            <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
+                                <button type="button" onClick={() => handleSidebarModeChange('collapsed')} className="gelia-segment-btn px-5 sm:px-6" data-active={sidebarMode === 'collapsed'}>
+                                    Contraída
+                                </button>
+                                <button type="button" onClick={() => handleSidebarModeChange('expanded')} className="gelia-segment-btn px-5 sm:px-6" data-active={sidebarMode === 'expanded'}>
+                                    Desplegada
                                 </button>
                             </div>
                         </SettingsRow>
