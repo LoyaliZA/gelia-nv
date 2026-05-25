@@ -24,6 +24,8 @@ use App\Models\Area;
 use App\Models\CatalogoSexo;
 use App\Models\CatalogoZonaEntrega;
 use App\Models\CatalogoHorarioEntrega;
+use App\Models\CatalogoPorcentajeEscalonamientoLista;
+use App\Models\CatalogoPorcentajeListadoLista;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
 
 class AdminController extends Controller
@@ -45,6 +47,8 @@ class AdminController extends Controller
             'tipos_cliente' => CatalogoTipoCliente::orderBy('nombre')->get(), // <-- Añadido
             'zonas_entrega' => CatalogoZonaEntrega::orderBy('nombre')->get(), // <-- Añadido
             'horarios_entrega' => CatalogoHorarioEntrega::with('zona')->get(),
+            'porcentajes_escalonamiento' => CatalogoPorcentajeEscalonamientoLista::with('listaDescuento')->get(),
+            'porcentajes_listado' => CatalogoPorcentajeListadoLista::with('listaDescuento')->get(),
         ]);
     }
 

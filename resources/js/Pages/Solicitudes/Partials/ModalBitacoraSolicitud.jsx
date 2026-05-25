@@ -72,13 +72,46 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             </div>
                             <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Cotización Final</p><p className="text-base font-black theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud?.monto_cotizado || 0)}</p></div>
                             <div>
-                                <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Evidencia Vigente (Vendedora)</p>
-                                {solicitud?.evidencia_path ? (
-                                    <a href={`/storage/${solicitud.evidencia_path}`} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border theme-border hover:ring-2 transition-all h-56">
-                                        <img src={`/storage/${solicitud.evidencia_path}`} className="w-full h-full object-cover hover:scale-105 transition-transform" alt="Evidencia" />
-                                    </a>
-                                ) : (<p className="text-sm font-bold theme-text-muted italic">Sin evidencia adjunta.</p>)}
+                                <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Comentario de la Vendedora</p>
+                                {solicitud?.observaciones_vendedor?.trim() ? (
+                                    <p className="text-sm font-bold theme-text-main italic leading-relaxed p-4 rounded-2xl border theme-border bg-black/5 dark:bg-white/5">
+                                        {solicitud.observaciones_vendedor}
+                                    </p>
+                                ) : (
+                                    <p className="text-sm font-bold theme-text-muted italic">Sin comentario registrado.</p>
+                                )}
                             </div>
+                            {(solicitud?.monto_final_tentativo || solicitud?.total_proyectado_neto) && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    {solicitud.monto_final_tentativo != null && (
+                                        <div>
+                                            <p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Pago Tentativo</p>
+                                            <p className="text-sm font-black theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_final_tentativo)}</p>
+                                        </div>
+                                    )}
+                                    {solicitud.total_proyectado_neto != null && (
+                                        <div>
+                                            <p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Total Neto Proyectado</p>
+                                            <p className={`text-sm font-black ${parseFloat(solicitud.total_proyectado_neto) >= parseFloat(objListaActual?.monto_requerido || 0) ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.total_proyectado_neto)}
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {solicitud?.confirmo_informacion_escalonamiento && (
+                                <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+                                    Vendedora confirmó haber informado al cliente sobre el escalonamiento.
+                                </p>
+                            )}
+                            {solicitud?.evidencia_path && (
+                                <div>
+                                    <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Evidencia Histórica</p>
+                                    <a href={`/storage/${solicitud.evidencia_path}`} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border theme-border hover:ring-2 transition-all h-40">
+                                        <img src={`/storage/${solicitud.evidencia_path}`} className="w-full h-full object-cover hover:scale-105 transition-transform" alt="Evidencia histórica" />
+                                    </a>
+                                </div>
+                            )}
                         </div>
                     </div>
 

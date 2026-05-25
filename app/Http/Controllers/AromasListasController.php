@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\CustomList;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
+use App\Services\Listados\PorcentajesListadoService;
 use Inertia\Inertia;
 use Exception;
 
@@ -167,20 +168,7 @@ class AromasListasController extends Controller
         set_time_limit(0);
         ini_set('memory_limit', '-1');
 
-        $settings = DB::table('gelia_settings')->pluck('value', 'key');
-
-        $multiplicadores = [
-            'bronce'         => 1 - ((float)($settings['pct_bronce'] ?? 12.39) / 100),
-            'plata'          => 1 - ((float)($settings['pct_plata'] ?? 14.14) / 100),
-            'oro'            => 1 - ((float)($settings['pct_oro'] ?? 15.89) / 100),
-            'diamante'       => 1 - ((float)($settings['pct_diamante'] ?? 17.65) / 100),
-            'plataformas'    => 1 - ((float)($settings['pct_plataformas'] ?? 23.00) / 100),
-            'lista3'         => 1 - ((float)($settings['pct_lista3'] ?? 14.28) / 100),
-            'lista4'         => 1 - ((float)($settings['pct_lista4'] ?? 17.71) / 100),
-            'venta_especial' => 1 - ((float)($settings['pct_venta_especial'] ?? 25.00) / 100),
-            'boutique'       => 0.75,
-            'divisor_costo'  => 1.3827
-        ];
+        $multiplicadores = app(PorcentajesListadoService::class)->obtenerMultiplicadores();
 
         $tipoLista = $request->input('tipo_lista', 'PERSONALIZADA');
         $fecha = date('d-m-y');

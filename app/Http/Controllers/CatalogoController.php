@@ -12,6 +12,8 @@ use App\Models\Departamento; // <-- NUEVO
 use App\Models\Area;         // <-- NUEVO
 use App\Models\CatalogoZonaEntrega; // <-- NUEVO
 use App\Models\CatalogoHorarioEntrega;
+use App\Models\CatalogoPorcentajeEscalonamientoLista;
+use App\Models\CatalogoPorcentajeListadoLista;
 use Illuminate\Support\Facades\DB;
 
 class CatalogoController extends Controller
@@ -190,5 +192,55 @@ class CatalogoController extends Controller
     public function destroyHorarioEntrega($id) {
         CatalogoHorarioEntrega::findOrFail($id)->delete();
         return back()->with('success', 'Horario de entrega eliminado.');
+    }
+
+    // --- 9. PORCENTAJES ESCALONAMIENTO (cotización / solicitudes) ---
+    public function storePorcentajeEscalonamiento(Request $request) {
+        CatalogoPorcentajeEscalonamientoLista::create($request->validate([
+            'catalogo_lista_descuento_id' => 'required|exists:catalogo_listas_descuento,id|unique:catalogo_porcentajes_escalonamiento_lista,catalogo_lista_descuento_id',
+            'porcentaje_descuento' => 'required|numeric|min:0|max:100',
+            'activo' => 'boolean',
+        ]));
+        return back()->with('success', 'Porcentaje de escalonamiento registrado.');
+    }
+
+    public function updatePorcentajeEscalonamiento(Request $request, $id) {
+        $porcentaje = CatalogoPorcentajeEscalonamientoLista::findOrFail($id);
+        $porcentaje->update($request->validate([
+            'catalogo_lista_descuento_id' => 'required|exists:catalogo_listas_descuento,id|unique:catalogo_porcentajes_escalonamiento_lista,catalogo_lista_descuento_id,' . $id,
+            'porcentaje_descuento' => 'required|numeric|min:0|max:100',
+            'activo' => 'boolean',
+        ]));
+        return back()->with('success', 'Porcentaje de escalonamiento actualizado.');
+    }
+
+    public function destroyPorcentajeEscalonamiento($id) {
+        CatalogoPorcentajeEscalonamientoLista::findOrFail($id)->delete();
+        return back()->with('success', 'Porcentaje de escalonamiento eliminado.');
+    }
+
+    // --- 10. PORCENTAJES LISTADO (resurtido / export Excel) ---
+    public function storePorcentajeListado(Request $request) {
+        CatalogoPorcentajeListadoLista::create($request->validate([
+            'catalogo_lista_descuento_id' => 'required|exists:catalogo_listas_descuento,id|unique:catalogo_porcentajes_listado_lista,catalogo_lista_descuento_id',
+            'porcentaje_descuento' => 'required|numeric|min:0|max:100',
+            'activo' => 'boolean',
+        ]));
+        return back()->with('success', 'Porcentaje de listado registrado.');
+    }
+
+    public function updatePorcentajeListado(Request $request, $id) {
+        $porcentaje = CatalogoPorcentajeListadoLista::findOrFail($id);
+        $porcentaje->update($request->validate([
+            'catalogo_lista_descuento_id' => 'required|exists:catalogo_listas_descuento,id|unique:catalogo_porcentajes_listado_lista,catalogo_lista_descuento_id,' . $id,
+            'porcentaje_descuento' => 'required|numeric|min:0|max:100',
+            'activo' => 'boolean',
+        ]));
+        return back()->with('success', 'Porcentaje de listado actualizado.');
+    }
+
+    public function destroyPorcentajeListado($id) {
+        CatalogoPorcentajeListadoLista::findOrFail($id)->delete();
+        return back()->with('success', 'Porcentaje de listado eliminado.');
     }
 }

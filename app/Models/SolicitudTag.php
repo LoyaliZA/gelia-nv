@@ -26,13 +26,19 @@ class SolicitudTag extends Model
         'evidencia_path',
         'catalogo_tipo_cliente_id',
         'catalogo_lista_descuento_id', // <-- NUEVO CAMPO AÑADIDO
+        'confirmo_informacion_escalonamiento',
+        'monto_final_tentativo',
+        'total_proyectado_neto',
         'motivo_incorrecta',
         'rollback_confirmado_at',
     ];
 
     protected $casts = [
         'monto_cotizado' => 'decimal:2',
+        'monto_final_tentativo' => 'decimal:2',
+        'total_proyectado_neto' => 'decimal:2',
         'pago_confirmado' => 'boolean',
+        'confirmo_informacion_escalonamiento' => 'boolean',
         'rollback_confirmado_at' => 'datetime',
     ];
 

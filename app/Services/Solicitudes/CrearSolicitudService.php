@@ -33,11 +33,14 @@ class CrearSolicitudService
                 $evidenciaPath = $datos['evidencia']->store('evidencias_solicitudes', 'public');
             }
 
+            $montoFinalTentativo = isset($datos['monto_final_tentativo']) ? (float) $datos['monto_final_tentativo'] : null;
+            $totalProyectadoNeto = isset($datos['total_proyectado_neto']) ? (float) $datos['total_proyectado_neto'] : null;
+
             // 3. Creación de la Solicitud
             $solicitud = SolicitudTag::create([
                 'cliente_id' => $clienteId,
                 'vendedor_id' => $vendedorId,
-                'departamento_id' => $departamentoOrigenId, // <-- INYECCIÓN DE DEPENDENCIA DEPARTAMENTAL
+                'departamento_id' => $departamentoOrigenId,
                 'catalogo_proceso_id' => $datos['catalogo_proceso_id'],
                 'catalogo_estado_solicitud_id' => $estadoPendiente->id,
                 'monto_cotizado' => $datos['monto_cotizado'],
@@ -46,6 +49,9 @@ class CrearSolicitudService
                 'evidencia_path' => $evidenciaPath,
                 'catalogo_tipo_cliente_id' => $datos['catalogo_tipo_cliente_id'] ?? null,
                 'catalogo_lista_descuento_id' => $datos['catalogo_lista_descuento_id'] ?? null,
+                'confirmo_informacion_escalonamiento' => filter_var($datos['confirmo_informacion_escalonamiento'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                'monto_final_tentativo' => $montoFinalTentativo,
+                'total_proyectado_neto' => $totalProyectadoNeto,
             ]);
 
             // 3. Registro del Snapshot Inicial (Auditoría V1)
@@ -60,6 +66,9 @@ class CrearSolicitudService
                     'proceso_id' => $solicitud->catalogo_proceso_id,
                     'evidencia_path' => $solicitud->evidencia_path,
                     'lista_descuento_id' => $solicitud->catalogo_lista_descuento_id,
+                    'monto_final_tentativo' => $solicitud->monto_final_tentativo,
+                    'total_proyectado_neto' => $solicitud->total_proyectado_neto,
+                    'confirmo_informacion_escalonamiento' => $solicitud->confirmo_informacion_escalonamiento,
                     'antes' => $this->snapshotClienteAlCrear($clienteId),
                 ]
             ]);

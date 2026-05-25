@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\CatalogoProceso;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoTipoCliente;
+use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -26,7 +27,9 @@ class StoreSolicitudRequest extends FormRequest
             'catalogo_lista_descuento_id' => ['nullable', 'exists:catalogo_listas_descuento,id'],
             'monto_cotizado' => ['required', 'numeric', 'min:0'],
             'observaciones_vendedor' => ['nullable', 'string'],
-            'evidencia' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'confirmo_informacion_escalonamiento' => ['nullable', 'boolean'],
+            'monto_final_tentativo' => ['nullable', 'numeric', 'min:0'],
+            'total_proyectado_neto' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 
@@ -56,17 +59,17 @@ class StoreSolicitudRequest extends FormRequest
                 // 2. SEGURO DE TIPOS DE CLIENTE (CANDADO DE COMISIONES)
                 if ($tipoClienteId && $cliente->es_heredado) {
                     $tipoCliente = CatalogoTipoCliente::find($tipoClienteId);
-                    // Si el tipo seleccionado NO tiene la palabra "heredado" en su nombre, bloqueamos.
                     if ($tipoCliente && stripos($tipoCliente->nombre, 'HEREDADO') === false) {
                         $validator->errors()->add('catalogo_tipo_cliente_id', 'OPERACIÓN DENEGADA: Este es un cliente protegido (Heredado). Solo puedes asignarle tipos de cliente de categoría "Heredado".');
                     }
                 }
 
+                $montoVentaActual = (float) ($cliente->monto_venta_actual ?? 0);
+                $montoProyectado = $montoVentaActual + $montoCotizado;
+
                 // 3. SEGUROS DE ASIGNACIÓN DE LISTAS
                 if ($listaSolicitadaId) {
-                    $listaSolicitada = CatalogoListaDescuento::find($listaSolicitadaId);
-                    $montoVentaActual = (float) ($cliente->monto_venta_actual ?? 0);
-                    $montoProyectado = $montoVentaActual + $montoCotizado;
+                    $listaSolicitada = CatalogoListaDescuento::with('porcentajeEscalonamiento')->find($listaSolicitadaId);
 
                     $esListaEspecial = str_contains(strtoupper($listaSolicitada->nombre), 'COLABORADOR');
                     $esClienteColaborador = str_contains(strtoupper($cliente->lista_actual ?? ''), 'COLABORADOR');
@@ -81,6 +84,31 @@ class StoreSolicitudRequest extends FormRequest
                         if ($listaSolicitada->monto_maximo > 0 && $montoProyectado > (float) $listaSolicitada->monto_maximo) {
                             $validator->errors()->add('catalogo_lista_descuento_id', 'Advertencia: El monto proyectado supera el límite de la lista ' . $listaSolicitada->nombre . '. Debes promover al cliente a una lista superior.');
                         }
+                    }
+                }
+
+                // 4. ESCALONAMIENTO: confirmación si el pago neto no mantiene la lista anticipada
+                if ($montoCotizado > 0) {
+                    $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
+                    $listaActual = $cliente->lista_actual_id
+                        ? $listas->firstWhere('id', $cliente->lista_actual_id)
+                        : null;
+                    $requisitoActual = $listaActual ? (float) $listaActual->monto_requerido : 0;
+
+                    $escalonamiento = app(EscalonamientoService::class)->evaluar(
+                        $montoVentaActual,
+                        $montoCotizado,
+                        $listaSolicitadaId ? (int) $listaSolicitadaId : null,
+                        $listas,
+                        $requisitoActual
+                    );
+
+                    if ($escalonamiento['bruto_califica_neto_no']
+                        && !filter_var($this->input('confirmo_informacion_escalonamiento'), FILTER_VALIDATE_BOOLEAN)) {
+                        $validator->errors()->add(
+                            'confirmo_informacion_escalonamiento',
+                            'Debes confirmar que informaste al cliente el monto bruto necesario para mantener la lista con el descuento aplicado.'
+                        );
                     }
                 }
             }

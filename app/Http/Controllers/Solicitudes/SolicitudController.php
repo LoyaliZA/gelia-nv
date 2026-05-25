@@ -45,7 +45,7 @@ class SolicitudController extends Controller
             'solicitudes' => $solicitudes,
             'filtros' => $request->all(), // Pasamos los filtros actuales para mantener el estado en React
             'procesos' => $procesos,
-            'listas' => CatalogoListaDescuento::where('activo', true)->get(),
+            'listas' => CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get(),
             'tipos_cliente' => CatalogoTipoCliente::where('activo', true)->orderBy('nombre')->get(),
             'vendedores' => $vendedores, // Nueva variable enviada al frontend
         ]);
@@ -256,25 +256,16 @@ class SolicitudController extends Controller
             'catalogo_proceso_id' => 'required|exists:catalogo_procesos,id',
             'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
             'catalogo_lista_descuento_id' => 'nullable|exists:catalogo_listas_descuento,id',
-            'evidencia' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:5120',
+            'observaciones_vendedor' => 'nullable|string',
         ]);
 
         DB::transaction(function () use ($solicitud, $request) {
-            $rutaEvidencia = $solicitud->evidencia_path;
-
-            if ($request->hasFile('evidencia')) {
-                if ($rutaEvidencia && Storage::disk('public')->exists($rutaEvidencia)) {
-                    Storage::disk('public')->delete($rutaEvidencia);
-                }
-                $rutaEvidencia = $request->file('evidencia')->store('evidencias_solicitudes', 'public');
-            }
-
             $solicitud->update([
                 'monto_cotizado' => $request->monto_cotizado,
                 'catalogo_proceso_id' => $request->catalogo_proceso_id,
                 'catalogo_tipo_cliente_id' => $request->catalogo_tipo_cliente_id,
                 'catalogo_lista_descuento_id' => $request->catalogo_lista_descuento_id,
-                'evidencia_path' => $rutaEvidencia,
+                'observaciones_vendedor' => $request->observaciones_vendedor,
                 'catalogo_estado_solicitud_id' => 1,
                 'motivo_incorrecta' => null,
             ]);
@@ -290,13 +281,13 @@ class SolicitudController extends Controller
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => 4,
                 'estado_nuevo_id' => 1,
-                'motivo_reporte' => 'El colaborador corrigió la solicitud y subió nueva evidencia.',
+                'motivo_reporte' => 'El colaborador corrigió la solicitud.',
                 'datos_snapshot' => array_merge([
                     'monto_cotizado' => $request->monto_cotizado,
                     'proceso_id' => $request->catalogo_proceso_id,
                     'tipo_cliente_id' => $request->catalogo_tipo_cliente_id,
                     'lista_descuento_id' => $request->catalogo_lista_descuento_id,
-                    'evidencia_path' => $rutaEvidencia,
+                    'observaciones_vendedor' => $request->observaciones_vendedor,
                 ], $clienteSnapshot ?? []),
             ]);
 

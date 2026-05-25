@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head } from '@inertiajs/react';
-import { Building2, MapPin, ListTree, Tags, Activity, UserCheck, Map, Clock } from 'lucide-react';
+import { Building2, MapPin, ListTree, Tags, Activity, UserCheck, Map, Clock, Percent, TrendingUp } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
 // Importamos los nuevos sub-componentes (Crea esta carpeta en el siguiente paso)
@@ -12,9 +12,11 @@ import TablaEstados from './Partials/Catalogos/TablaEstados';
 import TablaTipoClientes from './Partials/Catalogos/TablaTipoClientes';
 import TablaZonasEntrega from './Partials/Catalogos/TablaZonasEntrega';
 import TablaHorariosEntrega from './Partials/Catalogos/TablaHorariosEntrega';
+import TablaPorcentajesEscalonamiento from './Partials/Catalogos/TablaPorcentajesEscalonamiento';
+import TablaPorcentajesListado from './Partials/Catalogos/TablaPorcentajesListado';
 
 
-export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega, horarios_entrega }) {
+export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [] }) {
     const [tabActiva, setTabActiva] = useState('departamentos');
     const [glassEffect] = useState(() => localStorage.getItem('theme_glass') !== 'false');
 
@@ -26,6 +28,8 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
         { id: 'areas',         label: 'Áreas',         icon: MapPin },
         { id: 'procesos',      label: 'Procesos',      icon: ListTree },
         { id: 'listas',        label: 'Listas',        icon: Tags },
+        { id: 'porcentajes_escalonamiento', label: 'Escalonamiento', icon: TrendingUp },
+        { id: 'porcentajes_listado', label: 'Listados', icon: Percent },
         { id: 'estados',       label: 'Estados',       icon: Activity },
         { id: 'zonas_entrega', label: 'Zonas Logísticas', icon: Map },
         { id: 'horarios_entrega', label: 'Horarios Entrega', icon: Clock }
@@ -71,6 +75,8 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
                     {tabActiva === 'areas' && <TablaAreas datos={areas} departamentos={departamentos} />}
                     {tabActiva === 'procesos' && <TablaProcesos datos={procesos} />}
                     {tabActiva === 'listas' && <TablaListas datos={listas} />}
+                    {tabActiva === 'porcentajes_escalonamiento' && <TablaPorcentajesEscalonamiento datos={porcentajes_escalonamiento} listas={listas} />}
+                    {tabActiva === 'porcentajes_listado' && <TablaPorcentajesListado datos={porcentajes_listado} listas={listas} />}
                     {tabActiva === 'estados' && <TablaEstados datos={estados} />}
                     {tabActiva === 'tipos_cliente' && <TablaTipoClientes datos={tipos_cliente} />}
                     {tabActiva === 'zonas_entrega' && <TablaZonasEntrega datos={zonas_entrega} auth={auth} />}
