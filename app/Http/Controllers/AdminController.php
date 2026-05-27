@@ -27,13 +27,39 @@ use App\Models\CatalogoHorarioEntrega;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
+use App\Services\Permisos\AsignarPermisosUsuarioService;
+use App\Services\Permisos\ValidarAsignacionPermisosService;
 
 class AdminController extends Controller
 {
     // --- VISTAS DE ENLACES Y CATÁLOGOS ---
     public function enlaces(): Response
     {
-        return Inertia::render('Admin/Enlaces');
+        $user = Auth::user();
+        $esSuperAdmin = ValidarAsignacionPermisosService::esSuperAdmin($user);
+        $permisosUsuario = ValidarAsignacionPermisosService::permisosDelUsuario($user);
+
+        $rolesQuery = Role::with('permissions')->whereNotIn('name', ['Super Admin']);
+
+        if (!$esSuperAdmin && $user->hasRole('Gerente')) {
+            $rolesQuery->whereNotIn('name', ['Administrador']);
+        }
+
+        $roles = ValidarAsignacionPermisosService::filtrarRolesAsignables(
+            $rolesQuery->get(),
+            $user
+        );
+
+        $todosLosPermisos = $esSuperAdmin
+            ? Permission::all()
+            : Permission::whereIn('name', $permisosUsuario)->get();
+
+        return Inertia::render('Admin/Enlaces', [
+            'roles' => $roles,
+            'todosLosPermisos' => $todosLosPermisos,
+            'permisosUsuario' => $permisosUsuario,
+            'esSuperAdmin' => $esSuperAdmin,
+        ]);
     }
 
     public function catalogos(): Response
@@ -59,18 +85,35 @@ class AdminController extends Controller
         $isGlobalAdmin = $user->hasRole(['Super Admin', 'Administrador']);
 
         if ($isGlobalAdmin) {
-            $usuarios = User::with(['areas', 'departamentos', 'gerentes', 'roles', 'permissions'])->get();
+            $usuarios = User::with([
+                'areas',
+                'departamentos',
+                'gerentes',
+                'roles',
+                'permissions',
+                'permisoProcedencia.permission',
+                'permisoProcedencia.asignadoPor',
+            ])->get();
             $departamentos = Departamento::with('areas')->where('activo', true)->get();
             $posiblesGerentes = User::role(['Super Admin', 'Administrador', 'Gerente'])
                 ->select('id', 'name', 'apellido_paterno')
                 ->get();
 
-            $roles = Role::all();
+            $roles = Role::with('permissions')->get();
+            $rolesConfig = Role::with('permissions')->where('name', '!=', 'Super Admin')->get();
             $todosLosPermisos = Permission::all();
         } else {
             $usuarios = User::whereHas('gerentes', function ($query) use ($user) {
                 $query->where('gerente_id', $user->id);
-            })->with(['areas', 'departamentos', 'gerentes', 'roles', 'permissions'])->get();
+            })->with([
+                'areas',
+                'departamentos',
+                'gerentes',
+                'roles',
+                'permissions',
+                'permisoProcedencia.permission',
+                'permisoProcedencia.asignadoPor',
+            ])->get();
 
             $misAreasIds = $user->areas()->pluck('areas.id');
             $departamentos = $user->departamentos()->with(['areas' => function ($query) use ($misAreasIds) {
@@ -81,19 +124,79 @@ class AdminController extends Controller
 
             // PREVENCIÓN DE ESCALADA DE PRIVILEGIOS
             // Un gerente no puede crear otros Administradores ni Super Admins
-            $roles = Role::whereNotIn('name', ['Super Admin', 'Administrador'])->get();
+            $roles = Role::with('permissions')->whereNotIn('name', ['Super Admin', 'Administrador'])->get();
+            $rolesConfig = Role::with('permissions')->whereNotIn('name', ['Super Admin', 'Administrador'])->get();
             // Un gerente solo puede asignar los permisos que él mismo tiene en su sesión
             $todosLosPermisos = $user->getAllPermissions();
         }
 
         return Inertia::render('Admin/Usuarios', [
-            'usuarios' => $usuarios,
+            'usuarios' => $usuarios->map(fn (User $u) => $this->serializarUsuarioConProcedencia($u)),
             'departamentos' => $departamentos,
             'posiblesGerentes' => $posiblesGerentes,
             'roles' => $roles,
+            'rolesConfig' => $rolesConfig,
             'todosLosPermisos' => $todosLosPermisos,
             'sexos' => CatalogoSexo::all() ?? [],
+            'esSuperAdmin' => $user->hasRole('Super Admin'),
+            'permisosUsuario' => ValidarAsignacionPermisosService::permisosDelUsuario($user),
         ]);
+    }
+
+    /**
+     * Actualiza los permisos heredados de un rol/grupo. Solo Super Admin.
+     */
+    public function updateRolePermisosHerencia(Request $request, Role $role)
+    {
+        if (!Auth::user()->hasRole('Super Admin')) {
+            abort(403, 'Solo Super Admin puede modificar permisos heredados.');
+        }
+
+        if ($role->name === 'Super Admin') {
+            abort(403, 'No se puede modificar la herencia del rol Super Admin.');
+        }
+
+        $data = $request->validate([
+            'permisos_heredados' => 'nullable|array',
+            'permisos_heredados.*' => 'exists:permissions,name',
+        ]);
+
+        $role->syncPermissions($data['permisos_heredados'] ?? []);
+
+        return back()->with('success', "Plantilla del rol «{$role->name}» actualizada.");
+    }
+
+    /**
+     * Crea un grupo predefinido (rol con prefijo Grupo:). Solo Super Admin.
+     */
+    public function storeGrupoPredefinido(Request $request)
+    {
+        if (!Auth::user()->hasRole('Super Admin')) {
+            abort(403, 'Solo Super Admin puede crear grupos predefinidos.');
+        }
+
+        $data = $request->validate([
+            'nombre' => 'required|string|max:100',
+            'permisos_heredados' => 'nullable|array',
+            'permisos_heredados.*' => 'exists:permissions,name',
+        ]);
+
+        $nombreGrupo = str_starts_with($data['nombre'], 'Grupo:')
+            ? $data['nombre']
+            : 'Grupo: ' . trim($data['nombre']);
+
+        if (Role::where('name', $nombreGrupo)->exists()) {
+            return back()->withErrors(['nombre' => 'Ya existe un grupo con ese nombre.']);
+        }
+
+        $rol = Role::create([
+            'name' => $nombreGrupo,
+            'guard_name' => 'web',
+        ]);
+
+        $rol->syncPermissions($data['permisos_heredados'] ?? []);
+
+        return back()->with('success', "Grupo «{$nombreGrupo}» creado correctamente.");
     }
 
     public function storeUsuario(Request $request)
@@ -112,17 +215,30 @@ class AdminController extends Controller
             'areas' => 'nullable|array',
             'gerentes' => 'nullable|array',
             'roles_asignados' => 'array',
-            'permisos_individuales' => 'array'
+            'permisos_individuales' => 'array',
+            'plantilla_origen' => 'nullable|string|max:100',
+            'plantilla_por_permiso' => 'nullable|array',
         ]);
+
+        $rolesJerarquicos = collect($data['roles_asignados'] ?? [])
+            ->reject(fn ($r) => str_contains($r, 'Grupo:'))
+            ->values()
+            ->all();
+
+        ValidarAsignacionPermisosService::assertPuedeAsignar(
+            Auth::user(),
+            [],
+            $data['permisos_individuales'] ?? []
+        );
 
         $usuario = User::create([
             'name' => $data['name'],
             'apellido_paterno' => $data['apellido_paterno'],
-            'apellido_materno' => $data['apellido_materno'],
+            'apellido_materno' => $data['apellido_materno'] ?? null,
             'username' => $data['username'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
-            'telefono' => $data['telefono'],
+            'telefono' => $data['telefono'] ?? null,
             'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
             'catalogo_sexo_id' => $data['catalogo_sexo_id'] ?? null,
         ]);
@@ -131,8 +247,15 @@ class AdminController extends Controller
         if (isset($data['areas'])) $usuario->areas()->sync($data['areas']);
         if (isset($data['gerentes'])) $usuario->gerentes()->sync($data['gerentes']);
 
-        $usuario->syncRoles($data['roles_asignados'] ?? []);
-        $usuario->syncPermissions($data['permisos_individuales'] ?? []);
+        $usuario->syncRoles($rolesJerarquicos);
+
+        AsignarPermisosUsuarioService::asignar(
+            $usuario,
+            $data['permisos_individuales'] ?? [],
+            Auth::user(),
+            $data['plantilla_origen'] ?? null,
+            $data['plantilla_por_permiso'] ?? null
+        );
 
         return back()->with('success', 'Colaborador registrado exitosamente.');
     }
@@ -152,8 +275,21 @@ class AdminController extends Controller
             'areas' => 'nullable|array',
             'gerentes' => 'nullable|array',
             'roles_asignados' => 'array',
-            'permisos_individuales' => 'array'
+            'permisos_individuales' => 'array',
+            'plantilla_origen' => 'nullable|string|max:100',
+            'plantilla_por_permiso' => 'nullable|array',
         ]);
+
+        $rolesJerarquicos = collect($data['roles_asignados'] ?? [])
+            ->reject(fn ($r) => str_contains($r, 'Grupo:'))
+            ->values()
+            ->all();
+
+        ValidarAsignacionPermisosService::assertPuedeAsignar(
+            Auth::user(),
+            [],
+            $data['permisos_individuales'] ?? []
+        );
 
         $user->update([
             'name' => $data['name'],
@@ -174,8 +310,15 @@ class AdminController extends Controller
         $user->areas()->sync($data['areas'] ?? []);
         $user->gerentes()->sync($data['gerentes'] ?? []);
 
-        $user->syncRoles($data['roles_asignados'] ?? []);
-        $user->syncPermissions($data['permisos_individuales'] ?? []);
+        $user->syncRoles($rolesJerarquicos);
+
+        AsignarPermisosUsuarioService::asignar(
+            $user,
+            $data['permisos_individuales'] ?? [],
+            Auth::user(),
+            $data['plantilla_origen'] ?? null,
+            $data['plantilla_por_permiso'] ?? null
+        );
 
         return back()->with('success', 'Perfil actualizado.');
     }
@@ -261,5 +404,33 @@ class AdminController extends Controller
         auth()->user()->notifications()->delete();
 
         return back();
+    }
+
+    private function serializarUsuarioConProcedencia(User $usuario): array
+    {
+        $data = $usuario->toArray();
+        $data['roles'] = $usuario->roles->toArray();
+        $data['permissions'] = $usuario->permissions->map(fn ($p) => [
+            'id' => $p->id,
+            'name' => $p->name,
+        ])->values()->all();
+        $data['departamentos'] = $usuario->departamentos->toArray();
+        $data['areas'] = $usuario->areas->toArray();
+        $data['gerentes'] = $usuario->gerentes->toArray();
+
+        $data['permisos_procedencia'] = $usuario->permisoProcedencia->map(function ($proc) {
+            $asignador = $proc->asignadoPor;
+
+            return [
+                'permiso' => $proc->permission?->name,
+                'plantilla_origen' => $proc->plantilla_origen,
+                'asignado_por' => $asignador ? [
+                    'id' => $asignador->id,
+                    'nombre' => trim("{$asignador->name} {$asignador->apellido_paterno}"),
+                ] : null,
+            ];
+        })->filter(fn ($p) => $p['permiso'])->values()->all();
+
+        return $data;
     }
 }

@@ -3,20 +3,7 @@ import { createPortal } from 'react-dom';
 import { Bell, BellRing, CheckCircle2, AlertCircle, X, MailOpen } from 'lucide-react';
 import { usePage, router } from '@inertiajs/react';
 import NotificationBrowserService from '@/Services/NotificationBrowserService';
-
-const ETIQUETAS_TIPO = {
-    nueva: 'Nueva solicitud',
-    reparada: 'Solicitud reparada',
-    rechazada: 'Error reportado',
-    pago_rechazado: 'Pago vencido',
-    pago_confirmado: 'Pago confirmado',
-    actualizacion: 'Actualización',
-    alerta_pago_insuficiente: 'Pago insuficiente',
-    alerta_ascenso_lista: 'Ascenso de lista',
-    consulta_nueva: 'Consulta TAG/Lista',
-    consulta_respondida: 'Consulta respondida',
-    rollback_confirmado: 'Reversión confirmada',
-};
+import { ALERTAS_TIPOS } from '@/utils/alertasPrefs';
 
 const ordenarPorFecha = (lista) =>
     [...lista].sort((a, b) => {
@@ -69,34 +56,28 @@ export default function NotificationBell({ notifications: propNotifications = []
     }, [auth?.notificaciones, propNotifications]);
 
     useEffect(() => {
-        if (auth?.user && typeof window !== 'undefined' && window.Echo) {
-            const channel = window.Echo.private(`App.Models.User.${auth.user.id}`);
+        const handleNotificationReceived = (event) => {
+            const notification = event.detail;
+            if (!notification?.id) return;
 
-            channel.notification((notification) => {
-                NotificationBrowserService.triggerFullAlert(
-                    'Gelia ERP',
-                    notification.mensaje || 'Nueva notificación operativa.',
-                    notification.mensaje_voz
-                );
-
-                setNotifications(prev => {
-                    if (prev.some(n => n.id === notification.id)) return prev;
-                    return ordenarPorFecha([
-                        {
-                            id: notification.id,
-                            data: notification,
-                            read_at: null,
-                            created_at: new Date().toISOString(),
-                            type: notification.tipo || notification.type,
-                        },
-                        ...prev,
-                    ]);
-                });
+            setNotifications(prev => {
+                if (prev.some(n => n.id === notification.id)) return prev;
+                return ordenarPorFecha([
+                    {
+                        id: notification.id,
+                        data: notification,
+                        read_at: null,
+                        created_at: new Date().toISOString(),
+                        type: notification.tipo || notification.type,
+                    },
+                    ...prev,
+                ]);
             });
+        };
 
-            return () => window.Echo.leave(`App.Models.User.${auth.user.id}`);
-        }
-    }, [auth]);
+        window.addEventListener('notification-received', handleNotificationReceived);
+        return () => window.removeEventListener('notification-received', handleNotificationReceived);
+    }, []);
 
     const handleNotificationClick = (n) => {
         const destino = n.data?.solicitud_id
@@ -175,7 +156,7 @@ export default function NotificationBell({ notifications: propNotifications = []
                                 const bgClase = n.read_at
                                     ? 'theme-surface opacity-60 border-transparent shadow-none'
                                     : 'theme-element border-[var(--color-primario)] shadow-lg';
-                                const etiqueta = ETIQUETAS_TIPO[tipo] || (esResumen ? 'Reporte automático' : 'Sistema');
+                                const etiqueta = ALERTAS_TIPOS[tipo] || (esResumen ? ALERTAS_TIPOS.resumen_vencidos : 'Sistema');
 
                                 return (
                                     <div

@@ -8,68 +8,140 @@ use Illuminate\Support\Facades\URL;
 use App\Models\User;
 use App\Models\CatalogoSexo;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
+use App\Services\Permisos\AsignarPermisosUsuarioService;
+use App\Services\Permisos\ValidarAsignacionPermisosService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log; // <-- AGREGADO: Fachada de Logs
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Illuminate\Validation\ValidationException;
+use Carbon\Carbon;
 
 class RegistroController extends Controller
 {
-    /**
-     * Genera un enlace firmado válido por 48 horas.
-     */
     public function generarEnlaceInvitacion(Request $request)
     {
-        $request->validate(['role_name' => 'required|exists:roles,name']);
+        $request->validate([
+            'role_name' => 'required|exists:roles,name',
+            'grupo_name' => 'nullable|exists:roles,name',
+            'permisos_asignados' => 'nullable|array',
+            'permisos_asignados.*' => 'exists:permissions,name',
+            'permisos_individuales' => 'nullable|array',
+            'permisos_individuales.*' => 'exists:permissions,name',
+        ]);
 
         $user = auth()->user();
-        if (!$user->hasRole('Administrador') && in_array($request->role_name, ['Administrador', 'Gerente'])) {
+
+        if (!$user->can('usuarios.generar_permisos')) {
+            abort(403, 'No tienes permiso para generar enlaces de acceso.');
+        }
+
+        if (!$user->hasRole('Super Admin') && in_array($request->role_name, ['Administrador', 'Gerente'])) {
             abort(403, 'No tienes la autoridad suficiente para generar enlaces de este nivel.');
+        }
+
+        if ($request->filled('grupo_name') && !str_contains($request->grupo_name, 'Grupo:')) {
+            abort(422, 'El grupo seleccionado no es un grupo predefinido válido.');
+        }
+
+        $permisosCompletos = collect($request->input('permisos_asignados', $request->input('permisos_individuales', [])))
+            ->unique()
+            ->values()
+            ->all();
+
+        ValidarAsignacionPermisosService::assertPuedeAsignar($user, [], $permisosCompletos);
+
+        $routeParams = [
+            'rol' => $request->role_name,
+            'supervisor_id' => $user->id,
+        ];
+
+        if ($request->filled('grupo_name')) {
+            $routeParams['plantilla'] = $request->grupo_name;
+        }
+
+        if (!empty($permisosCompletos)) {
+            $routeParams['permisos'] = $permisosCompletos;
         }
 
         $url = URL::temporarySignedRoute(
             'registro.formulario',
             now()->addHours(48),
-            [
-                'rol' => $request->role_name,
-                'supervisor_id' => $user->id
-            ]
+            $routeParams
         );
 
         return response()->json(['enlace' => $url]);
     }
 
-    /**
-     * Muestra el formulario de registro.
-     */
     public function mostrarFormulario(Request $request)
     {
-        if (! $request->hasValidSignature()) {
+        if (!$request->hasValidSignature()) {
             abort(403, 'El enlace de registro de GELIA es inválido o ha expirado.');
         }
 
         $sexos = CatalogoSexo::all();
+        $rolAsignado = $request->query('rol');
+        $plantillaOrigen = $request->query('plantilla') ?? $request->query('grupo');
+        $permisosAsignados = $this->permisosDesdeQuery($request);
+        $supervisorId = $request->query('supervisor_id');
+
+        $supervisor = $supervisorId ? User::find($supervisorId) : null;
+        $supervisorNombre = $supervisor
+            ? trim("{$supervisor->name} {$supervisor->apellido_paterno}")
+            : null;
+
+        $expiresAt = $request->query('expires')
+            ? Carbon::createFromTimestamp((int) $request->query('expires'))
+            : now()->addHours(48);
+
+        $registroAction = URL::temporarySignedRoute(
+            'registro.store',
+            $expiresAt,
+            array_filter([
+                'rol' => $rolAsignado,
+                'plantilla' => $plantillaOrigen,
+                'supervisor_id' => $supervisorId,
+                'permisos' => $permisosAsignados ?: null,
+            ], fn ($v) => $v !== null && $v !== [])
+        );
+
+        session([
+            'registro_invitacion' => [
+                'rol' => $rolAsignado,
+                'plantilla' => $plantillaOrigen,
+                'supervisor_id' => $supervisorId,
+                'permisos' => $permisosAsignados,
+            ],
+        ]);
 
         return Inertia::render('Auth/Registro', [
-            'rol_asignado' => $request->query('rol'),
-            'catalogos' => ['sexos' => $sexos]
+            'rol_asignado' => $rolAsignado,
+            'plantilla_origen' => $plantillaOrigen,
+            'supervisor_nombre' => $supervisorNombre,
+            'permisos_asignados' => $permisosAsignados,
+            'registro_action' => $registroAction,
+            'catalogos' => ['sexos' => $sexos],
         ]);
     }
 
-    /**
-     * Procesa la creación del usuario con trazabilidad inyectada.
-     */
     public function almacenar(Request $request)
     {
-        // 1. TRAZABILIDAD: Verificamos si la petición logra tocar el controlador
         Log::channel('single')->info('--- INICIO DE REGISTRO GELIA ---');
-        Log::channel('single')->info('Parámetros de URL recibidos:', $request->query());
-        Log::channel('single')->info('Datos POST recibidos (Sin contraseña):', $request->except(['password', 'foto_perfil']));
-        Log::channel('single')->info('¿Contiene archivo de imagen?: ' . ($request->hasFile('foto_perfil') ? 'Sí' : 'No'));
+
+        $rolFirmado = $request->query('rol') ?? session('registro_invitacion.rol');
+        $plantillaFirmada = $request->query('plantilla') ?? $request->query('grupo') ?? session('registro_invitacion.plantilla');
+        $supervisorFirmado = $request->query('supervisor_id') ?? session('registro_invitacion.supervisor_id');
+        $permisosFirmados = $this->permisosDesdeQuery($request);
+        if (empty($permisosFirmados)) {
+            $permisosFirmados = session('registro_invitacion.permisos', []);
+        }
+
+        if (!$rolFirmado) {
+            abort(403, 'Rol de seguridad no proporcionado en la firma.');
+        }
 
         try {
-            // 2. Validación de Datos Personales
             $datos = $request->validate([
                 'name' => 'required|string|max:255',
                 'apellido_paterno' => 'required|string|max:255',
@@ -80,18 +152,21 @@ class RegistroController extends Controller
                 'telefono' => 'nullable|string',
                 'fecha_nacimiento' => 'required|date',
                 'catalogo_sexo_id' => 'nullable|exists:catalogo_sexos,id',
-                'foto_perfil' => 'nullable|image|max:2048' // 2048 KB = 2MB
+                'foto_perfil' => 'nullable|image|max:2048',
             ]);
 
-            Log::channel('single')->info('Validación superada correctamente.');
+            if (!Role::where('name', $rolFirmado)->exists()) {
+                abort(403, 'Rol de seguridad inválido.');
+            }
 
-            // 3. Verificación de Seguridad de la URL
-            $rolFirmado = $request->query('rol');
-            $supervisorFirmado = $request->query('supervisor_id');
+            if ($plantillaFirmada && !Role::where('name', $plantillaFirmada)->exists()) {
+                abort(403, 'Plantilla de seguridad inválida.');
+            }
 
-            if (!$rolFirmado) {
-                Log::channel('single')->error('Fallo de seguridad: Rol no proporcionado en la firma.');
-                abort(403, 'Rol de seguridad no proporcionado en la firma.');
+            foreach ($permisosFirmados as $permiso) {
+                if (!Permission::where('name', $permiso)->exists()) {
+                    abort(403, "Permiso inválido en la firma: {$permiso}");
+                }
             }
 
             DB::beginTransaction();
@@ -99,62 +174,106 @@ class RegistroController extends Controller
             $rutaFoto = null;
             if ($request->hasFile('foto_perfil')) {
                 $rutaFoto = $request->file('foto_perfil')->store('perfiles', 'public');
-                Log::channel('single')->info('Fotografía almacenada en: ' . $rutaFoto);
             }
 
-            // 4. Creación en Base de Datos
             $user = User::create([
                 'name' => $datos['name'],
                 'apellido_paterno' => $datos['apellido_paterno'],
-                'apellido_materno' => $datos['apellido_materno'],
+                'apellido_materno' => $datos['apellido_materno'] ?? null,
                 'username' => $datos['username'],
                 'email' => $datos['email'],
                 'password' => Hash::make($datos['password']),
-                'telefono' => $datos['telefono'],
+                'telefono' => $datos['telefono'] ?? null,
                 'fecha_nacimiento' => $datos['fecha_nacimiento'],
                 'catalogo_sexo_id' => $datos['catalogo_sexo_id'] ?? null,
                 'foto_perfil' => $rutaFoto,
             ]);
 
-            Log::channel('single')->info('Usuario insertado en DB con ID: ' . $user->id);
-
-            // 5. Acoplamiento matricial
+            $supervisor = null;
             if ($supervisorFirmado) {
-                $user->gerentes()->attach($supervisorFirmado);
-                Log::channel('single')->info('Acoplado al gerente ID: ' . $supervisorFirmado);
+                $supervisor = User::find($supervisorFirmado);
+                if ($supervisor) {
+                    $user->gerentes()->attach($supervisor->id);
+                }
             }
 
-            // 6. Asignación de Roles
-            $user->assignRole($rolFirmado);
-            Log::channel('single')->info('Rol asignado: ' . $rolFirmado);
+            $user->syncRoles([$rolFirmado]);
 
-            // 7. Configuración Visual Base
+            $plantillaPorPermiso = $this->plantillaPorPermiso($permisosFirmados, $plantillaFirmada);
+
+            AsignarPermisosUsuarioService::asignar(
+                $user,
+                $permisosFirmados,
+                $supervisor,
+                $plantillaFirmada,
+                $plantillaPorPermiso
+            );
+
             DB::table('configuraciones_usuarios')->insert([
                 'user_id' => $user->id,
-                'tema_visual' => json_encode(['modo' => 'light', 'color_nombre' => 'azul']),
+                'tema_visual' => json_encode([
+                    'modo' => 'light',
+                    'color_nombre' => 'azul',
+                    'alertas_prefs' => config('alertas.defaults'),
+                ]),
                 'dashboard_prefs' => json_encode(['ocultos' => []]),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
 
             DB::commit();
-            Log::channel('single')->info('--- REGISTRO COMPLETADO EXITOSAMENTE ---');
+            session()->forget('registro_invitacion');
 
             return redirect()->route('login')->with('success', 'Identidad operativa registrada correctamente.');
-            
+
         } catch (ValidationException $e) {
-            // Manejo específico para errores de validación
-            Log::channel('single')->warning('Fallo de Validación: ', $e->errors());
-            throw $e; // Dejamos que Laravel maneje el retorno al frontend
-            
+            throw $e;
+
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            throw $e;
+
         } catch (\Throwable $e) {
-            // Manejo de errores críticos
-            DB::rollBack();
-            Log::channel('single')->error('Fallo Crítico en Matriz de Registro: ' . $e->getMessage() . ' en la línea ' . $e->getLine() . ' del archivo ' . $e->getFile());
-            
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            Log::channel('single')->error('Fallo Crítico en Matriz de Registro: ' . $e->getMessage());
+
             return back()->withErrors([
-                'error' => 'Falla en la matriz de registro: Revisa el archivo de logs para más detalles.'
+                'error' => 'Falla en la matriz de registro: Revisa el archivo de logs para más detalles.',
             ]);
         }
+    }
+
+    private function permisosDesdeQuery(Request $request): array
+    {
+        $permisos = $request->query('permisos', []);
+
+        if (is_string($permisos)) {
+            return array_filter([$permisos]);
+        }
+
+        return is_array($permisos) ? array_values(array_filter($permisos)) : [];
+    }
+
+    /**
+     * @param  array<string>  $permisos
+     * @return array<string, string|null>
+     */
+    private function plantillaPorPermiso(array $permisos, ?string $plantillaOrigen): array
+    {
+        if (!$plantillaOrigen) {
+            return [];
+        }
+
+        $permisosPlantilla = ValidarAsignacionPermisosService::permisosDePlantilla([$plantillaOrigen]);
+        $map = [];
+
+        foreach ($permisos as $permiso) {
+            if (in_array($permiso, $permisosPlantilla, true)) {
+                $map[$permiso] = $plantillaOrigen;
+            }
+        }
+
+        return $map;
     }
 }

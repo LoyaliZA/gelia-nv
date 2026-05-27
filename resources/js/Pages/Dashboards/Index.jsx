@@ -55,7 +55,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [] }) {
 
     const catalogoTarjetas = [
         { id: 'card_usuarios', titulo: 'Control de Usuarios', permiso: 'usuarios.gestionar', componente: ModuleUsuarios },
-        { id: 'card_enlaces', titulo: 'Generar Accesos', permiso: 'usuarios.gestionar', componente: ModuleAccesos },
+        { id: 'card_enlaces', titulo: 'Generar Accesos', permiso: 'usuarios.generar_permisos', componente: ModuleAccesos },
         { id: 'card_catalogos', titulo: 'Catálogos Centrales', permiso: 'catalogos.gestionar', componente: ModuleCatalogos },
         { id: 'card_clientes_bd', titulo: 'Base de Clientes', permiso: 'clientes.ver', componente: ModuleClientes },
         { id: 'card_solicitudes', titulo: 'Panel Solicitudes', permiso: 'solicitudes.ver_listado', componente: ModuleSolicitudes },

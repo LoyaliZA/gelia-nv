@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use App\Models\ConfiguracionUsuario;
+use App\Services\PersonalizacionCatalogoService;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -45,8 +46,13 @@ class HandleInertiaRequests extends Middleware
                 : $configuracion->tema_visual;
         }
 
+        $tonosAlertas = PersonalizacionCatalogoService::tonosActivos();
+
         return [
             ...parent::share($request),
+            'tonos_alertas' => $tonosAlertas,
+            'catalogo_fondos' => PersonalizacionCatalogoService::fondosActivos(),
+            'catalogo_temas'  => PersonalizacionCatalogoService::temasActivos(),
             'auth' => [
                 'user' => $user ? array_merge($user->toArray(), [
                     'roles' => $user->getRoleNames(), 

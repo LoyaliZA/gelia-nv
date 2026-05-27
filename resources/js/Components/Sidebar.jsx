@@ -4,7 +4,7 @@ import {
     Menu, X, Moon, Sun, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History, Map, FileText, Layers
+    FolderTree, Calculator, History, Map, FileText, Layers, Palette
 } from 'lucide-react';
 
 import GeliaLogo from './GeliaLogo';
@@ -33,9 +33,10 @@ const prefixGroupClass = (visible, orientation) => {
 const suffixGroupClass = (visible) =>
     `shrink-0 sidebar-widget-reveal ${visible ? 'max-w-[3.75rem] opacity-100 mx-2 sm:mx-3 pointer-events-auto overflow-visible py-0.5 pr-1' : 'max-w-0 opacity-0 mx-0 pointer-events-none overflow-hidden'}`;
 const ADMIN_MENU_CONFIG = [
-    { id: 'enlaces', label: 'Generar Enlaces', path: '/admin/enlaces', routeName: 'admin.enlaces', icon: LinkIcon, permission: 'usuarios.gestionar' },
+    { id: 'enlaces', label: 'Generar Enlaces', path: '/admin/enlaces', routeName: 'admin.enlaces', icon: LinkIcon, permission: 'usuarios.generar_permisos' },
     { id: 'clientes', label: 'Base de Clientes', path: '/admin/clientes', routeName: 'admin.clientes', icon: Database, permission: 'clientes.ver' },
     { id: 'catalogos', label: 'Catálogos Globales', path: '/admin/catalogos', routeName: 'admin.catalogos', icon: FolderTree, permission: 'catalogos.gestionar' },
+    { id: 'personalizacion', label: 'Personalización', path: '/admin/personalizacion', routeName: 'admin.personalizacion.index', icon: Palette, permission: 'personalizacion.gestionar' },
     { id: 'comisiones', label: 'Comisiones', path: '/admin/comisiones', routeName: 'admin.comisiones', icon: Calculator, permission: 'comisiones.gestionar' },
     { id: 'usuarios', label: 'Usuarios', path: '/admin/usuarios', routeName: 'admin.usuarios', icon: Users, permission: 'usuarios.gestionar' },
     { id: 'auditorias', label: 'Auditorías de Sistema', path: '/admin/auditorias-sistema', routeName: 'admin.auditorias_sistema.index', icon: History, permission: 'sistema.auditorias.ver' },

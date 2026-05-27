@@ -3,11 +3,10 @@ import { Head, useForm } from '@inertiajs/react';
 import { 
     UserPlus, Upload, ShieldCheck, User, Mail, 
     Lock, Phone, Calendar, ChevronDown, CheckCircle2,
-    Briefcase, AlertTriangle // <-- AGREGADO: Icono para errores críticos
+    Briefcase, AlertTriangle, Key, Layers
 } from 'lucide-react';
 
-export default function Registro({ rol_asignado, catalogos }) {
-    // --- SECCIÓN 1: ESTADO Y FORMULARIO ---
+export default function Registro({ rol_asignado, plantilla_origen, supervisor_nombre, permisos_asignados = [], registro_action, catalogos }) {
     const { data, setData, post, processing, errors, transform } = useForm({
         name: '',
         apellido_paterno: '',
@@ -24,7 +23,6 @@ export default function Registro({ rol_asignado, catalogos }) {
     const [previewUrl, setPreviewUrl] = useState(null);
     const [isDarkMode, setIsDarkMode] = useState(false);
     
-    // Detección de tema del sistema
     useEffect(() => {
         if (typeof window !== 'undefined') {
             const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -32,7 +30,22 @@ export default function Registro({ rol_asignado, catalogos }) {
         }
     }, []);
 
-    // --- SECCIÓN 2: MANEJADORES DE EVENTOS ---
+    useEffect(() => {
+        transform((currentData) => {
+            const sanitizedData = { ...currentData };
+
+            if (sanitizedData.catalogo_sexo_id === '') sanitizedData.catalogo_sexo_id = null;
+            if (sanitizedData.apellido_materno === '') sanitizedData.apellido_materno = null;
+            if (sanitizedData.telefono === '') sanitizedData.telefono = null;
+
+            if (!sanitizedData.foto_perfil) {
+                delete sanitizedData.foto_perfil;
+            }
+
+            return sanitizedData;
+        });
+    }, [transform]);
+
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         setData('foto_perfil', file);
@@ -43,37 +56,27 @@ export default function Registro({ rol_asignado, catalogos }) {
         }
     };
 
-    /**
-     * Procesa y envía el formulario de registro.
-     * Aplica el Principio de Responsabilidad Única delegando la sanitización a transform()
-     */
     const handleSubmit = (e) => {
         e.preventDefault();
-        
-        // 1. SANITIZACIÓN TÁCTICA (Zero Trust)
-        // Interceptamos los datos antes de enviarlos para evitar errores de tipado en DB
-        transform((currentData) => {
-            const sanitizedData = { ...currentData };
-            
-            // Convertimos strings vacíos a null real para la base de datos
-            if (sanitizedData.catalogo_sexo_id === '') sanitizedData.catalogo_sexo_id = null;
-            if (sanitizedData.apellido_materno === '') sanitizedData.apellido_materno = null;
-            if (sanitizedData.telefono === '') sanitizedData.telefono = null;
-            
-            // Si no hay foto, eliminamos la propiedad para forzar un envío JSON en lugar de Multipart
-            if (!sanitizedData.foto_perfil) {
-                delete sanitizedData.foto_perfil;
-            }
-            
-            return sanitizedData;
+
+        if (!registro_action) {
+            alert('Enlace de registro inválido. Solicita un nuevo enlace al administrador.');
+            return;
+        }
+
+        let submitUrl = registro_action;
+        try {
+            const parsed = new URL(registro_action, window.location.origin);
+            submitUrl = `${parsed.pathname}${parsed.search}`;
+        } catch {
+            // usar registro_action tal cual
+        }
+
+        post(submitUrl, {
+            forceFormData: Boolean(data.foto_perfil),
+            preserveScroll: true,
         });
-
-        // 2. ENVÍO SEGURO
-        // Enviamos a la URL exacta actual para preservar la firma criptográfica intacta
-        post(window.location.href);
     };
-
-    // --- SECCIÓN 3: RENDERIZADO UX/UI ---
     return (
         <div className={`min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-[#0a0a0a]' : 'bg-[#FAFAFA]'}`}>
             <Head title="Registro de Identidad | GELIA" />
@@ -91,11 +94,40 @@ export default function Registro({ rol_asignado, catalogos }) {
                         REGISTRO <span style={{ color: 'var(--color-primario)' }}>GELIA</span>
                     </h1>
                     
-                    <div className="mt-6 flex items-center justify-center gap-2 bg-black/5 dark:bg-white/5 border theme-border px-5 py-2.5 rounded-xl">
-                        <Briefcase className="w-4 h-4 theme-text-muted" />
-                        <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Nivel Asignado:</span>
-                        <span className="text-[11px] font-black uppercase tracking-widest theme-text-main">{rol_asignado}</span>
+                    <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                        <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 border theme-border px-5 py-2.5 rounded-xl">
+                            <Briefcase className="w-4 h-4 theme-text-muted" />
+                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Rol:</span>
+                            <span className="text-[11px] font-black uppercase tracking-widest theme-text-main">{rol_asignado}</span>
+                        </div>
+                        {plantilla_origen && (
+                            <div className="flex items-center gap-2 bg-purple-500/5 border border-purple-500/20 px-5 py-2.5 rounded-xl">
+                                <Layers className="w-4 h-4 text-purple-500" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-purple-600">Plantilla:</span>
+                                <span className="text-[11px] font-black uppercase tracking-widest theme-text-main">{plantilla_origen}</span>
+                            </div>
+                        )}
+                        {supervisor_nombre && (
+                            <div className="flex items-center gap-2 bg-blue-500/5 border border-blue-500/20 px-5 py-2.5 rounded-xl">
+                                <User className="w-4 h-4 text-blue-500" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Superior:</span>
+                                <span className="text-[11px] font-black uppercase tracking-widest theme-text-main">{supervisor_nombre}</span>
+                            </div>
+                        )}
                     </div>
+
+                    {permisos_asignados?.length > 0 && (
+                        <div className="mt-4 p-4 rounded-xl bg-orange-500/5 border border-orange-500/20 max-w-lg w-full">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-orange-600 mb-2 flex items-center gap-1.5 justify-center">
+                                <Key className="w-3 h-3" /> Permisos asignados{supervisor_nombre ? ` por ${supervisor_nombre}` : ''}
+                            </p>
+                            <ul className="space-y-1">
+                                {permisos_asignados.map((permiso) => (
+                                    <li key={permiso} className="text-[10px] font-bold theme-text-main text-center">{permiso}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
 
                 {/* --- ALERTA DE ERRORES CRÍTICOS DEL SISTEMA --- */}

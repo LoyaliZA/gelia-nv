@@ -5,10 +5,12 @@ import { createPortal } from 'react-dom';
 import { 
     Users, UserPlus, Search, Edit3, Trash2, 
     ShieldCheck, X, Briefcase, Check, MapPin, 
-    Mail, User, Lock, Smartphone, Save, Network
+    Mail, User, Lock, Smartphone, Save, Network, Layers
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
-import PermisosAtomicos from './Partials/PermisosAtomicos'; // <-- Importamos tu nuevo Partial
+import PermisosAtomicos from './Partials/PermisosAtomicos';
+import ConfiguracionHerencia from './Partials/ConfiguracionHerencia';
+import { deduplicarPermisos, permisosDePlantilla } from '../../utils/permisos';
 
 function UserAvatar({ usuario }) {
     const [loadFailed, setLoadFailed] = useState(false);
@@ -38,11 +40,14 @@ function UserAvatar({ usuario }) {
     );
 }
 
-export default function Usuarios({ auth, usuarios = [], departamentos = [], posiblesGerentes = [], roles = [], todosLosPermisos = [], sexos = [] }) {
+export default function Usuarios({ auth, usuarios = [], departamentos = [], posiblesGerentes = [], roles = [], rolesConfig = [], todosLosPermisos = [], sexos = [], esSuperAdmin = false, permisosUsuario = [] }) {
     // --- ESTADOS LOCALES ---
     const [busqueda, setBusqueda] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [usuarioEditando, setUsuarioEditando] = useState(null);
+    const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
+    const [plantillaPorPermiso, setPlantillaPorPermiso] = useState({});
+    const [procedenciaActual, setProcedenciaActual] = useState({});
 
     // --- FORMULARIO MATRICIAL ---
     const { data, setData, post, put, processing, reset } = useForm({
@@ -58,18 +63,12 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
         departamentos: [],
         areas: [],
         gerentes: [],
-        roles_asignados: [], 
-        permisos_individuales: [] 
+        roles_asignados: [],
+        permisos_individuales: [],
+        plantilla_origen: '',
+        plantilla_por_permiso: {},
     });
     
-    // Función de validación (Mantenida aquí para limpiar los datos antes de enviarlos a Laravel)
-    const permisoHeredado = (permisoName) => {
-        const asignados = data.roles_asignados || [];
-        return (roles || [])
-            .filter(r => asignados.includes(r.name))
-            .some(r => (r.permissions || []).some(p => p.name === permisoName));
-    };
-
     // --- ANIMACIONES ---
     useEffect(() => {
         animate('.fade-in-user', {
@@ -89,28 +88,52 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
     );
 
     const rolesJerarquia = (roles || []).filter(rol => rol?.name && !rol.name.includes('Grupo:'));
+    const rolesGrupos = (roles || []).filter(rol => rol?.name?.includes('Grupo:'));
 
     // --- MANEJADORES DE EVENTOS ---
     const abrirModal = (usuario = null) => {
         setUsuarioEditando(usuario);
         if (usuario) {
+            const rolesJerarquicos = (usuario.roles || [])
+                .map(r => r.name)
+                .filter(n => !n.includes('Grupo:'));
+
+            const procMap = {};
+            (usuario.permisos_procedencia || []).forEach((p) => {
+                if (p.permiso) procMap[p.permiso] = p;
+            });
+
+            const plantillaMap = {};
+            Object.entries(procMap).forEach(([permiso, meta]) => {
+                if (meta.plantilla_origen) plantillaMap[permiso] = meta.plantilla_origen;
+            });
+
+            setPlantillaSeleccionada('');
+            setPlantillaPorPermiso(plantillaMap);
+            setProcedenciaActual(procMap);
+
             setData({
                 name: (usuario.name || '').trim(),
                 apellido_paterno: (usuario.apellido_paterno || '').trim(),
                 apellido_materno: (usuario.apellido_materno || '').trim(),
                 username: (usuario.username || '').trim(),
                 email: (usuario.email || '').trim(),
-                password: '', 
+                password: '',
                 telefono: (usuario.telefono || '').trim(),
                 fecha_nacimiento: usuario.fecha_nacimiento || '',
                 catalogo_sexo_id: usuario.catalogo_sexo_id || '',
                 departamentos: usuario.departamentos ? usuario.departamentos.map(d => d.id) : [],
                 areas: usuario.areas ? usuario.areas.map(a => a.id) : [],
                 gerentes: usuario.gerentes ? usuario.gerentes.map(g => g.id) : [],
-                roles_asignados: usuario.roles ? usuario.roles.map(r => r.name) : [],
-                permisos_individuales: usuario.permissions ? usuario.permissions.map(p => p.name) : []
+                roles_asignados: rolesJerarquicos,
+                permisos_individuales: usuario.permissions ? usuario.permissions.map(p => p.name) : [],
+                plantilla_origen: '',
+                plantilla_por_permiso: plantillaMap,
             });
         } else {
+            setPlantillaSeleccionada('');
+            setPlantillaPorPermiso({});
+            setProcedenciaActual({});
             reset();
         }
         setShowModal(true);
@@ -118,7 +141,10 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
 
     const cerrarModal = () => {
         setShowModal(false);
-        setTimeout(() => reset(), 300); 
+        setTimeout(() => {
+            reset();
+            setUsuarioEditando(null);
+        }, 300);
     };
 
     const toggleSelection = (campo, idOrName) => {
@@ -129,12 +155,85 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
         setData(campo, nuevos);
     };
 
+    const aplicarPlantilla = (nombreGrupo) => {
+        if (plantillaSeleccionada === nombreGrupo) {
+            const permisosAnteriores = permisosDePlantilla([nombreGrupo], roles);
+            setPermisosIndividualesViaForm((prev) =>
+                prev.filter((p) => {
+                    if (!permisosAnteriores.includes(p)) return true;
+                    return plantillaPorPermiso[p] !== nombreGrupo;
+                })
+            );
+            setPlantillaPorPermiso((prev) => {
+                const next = { ...prev };
+                Object.entries(next).forEach(([permiso, plantilla]) => {
+                    if (plantilla === nombreGrupo) delete next[permiso];
+                });
+                return next;
+            });
+            setPlantillaSeleccionada('');
+            setData('plantilla_origen', '');
+            return;
+        }
+
+        if (plantillaSeleccionada) {
+            const permisosAnteriores = permisosDePlantilla([plantillaSeleccionada], roles);
+            setPermisosIndividualesViaForm((prev) =>
+                prev.filter((p) => {
+                    if (!permisosAnteriores.includes(p)) return true;
+                    return plantillaPorPermiso[p] !== plantillaSeleccionada;
+                })
+            );
+            setPlantillaPorPermiso((prev) => {
+                const next = { ...prev };
+                Object.entries(next).forEach(([permiso, plantilla]) => {
+                    if (plantilla === plantillaSeleccionada) delete next[permiso];
+                });
+                return next;
+            });
+        }
+
+        const nuevosPermisos = permisosDePlantilla([nombreGrupo], roles);
+        setPlantillaSeleccionada(nombreGrupo);
+        setData('plantilla_origen', nombreGrupo);
+        setPermisosIndividualesViaForm((prev) => [...new Set([...prev, ...nuevosPermisos])]);
+        setPlantillaPorPermiso((prev) => {
+            const next = { ...prev };
+            nuevosPermisos.forEach((p) => { next[p] = nombreGrupo; });
+            setData('plantilla_por_permiso', next);
+            return next;
+        });
+    };
+
+    const setPermisosIndividualesViaForm = (updater) => {
+        const actuales = data.permisos_individuales || [];
+        const nuevos = typeof updater === 'function' ? updater(actuales) : updater;
+        setPlantillaPorPermiso((prevPlantilla) => {
+            const nextPlantilla = { ...prevPlantilla };
+            Object.keys(nextPlantilla).forEach((k) => {
+                if (!nuevos.includes(k)) delete nextPlantilla[k];
+            });
+            setData('plantilla_por_permiso', nextPlantilla);
+            return nextPlantilla;
+        });
+        setData('permisos_individuales', nuevos);
+    };
+
+    const permisosFormData = {
+        ...data,
+        plantillas_activas: plantillaSeleccionada ? [plantillaSeleccionada] : [],
+        plantilla_por_permiso: plantillaPorPermiso,
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Sanitización antes de enviar a Laravel
-        const actuales = data.permisos_individuales || [];
-        const permisosLimpios = actuales.filter(p => !permisoHeredado(p));
-        const payload = { ...data, permisos_individuales: permisosLimpios };
+        const permisosLimpios = deduplicarPermisos(data.permisos_individuales);
+        const payload = {
+            ...data,
+            permisos_individuales: permisosLimpios,
+            plantilla_origen: plantillaSeleccionada || null,
+            plantilla_por_permiso: plantillaPorPermiso,
+        };
 
         if (usuarioEditando) {
             put(route('admin.usuarios.update', usuarioEditando.id), payload, {
@@ -186,6 +285,15 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
                         </button>
                     </div>
                 </div>
+
+                {/* --- CONFIGURACIÓN DE HERENCIA (solo Super Admin) --- */}
+                {esSuperAdmin && (
+                    <ConfiguracionHerencia
+                        rolesConfig={rolesConfig}
+                        todosLosPermisos={todosLosPermisos}
+                        esSuperAdmin={esSuperAdmin}
+                    />
+                )}
 
                 {/* --- LISTADO --- */}
                 <div className="grid grid-cols-1 gap-4">
@@ -433,12 +541,42 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
                                         </div>
                                     </div>
 
+                                    {rolesGrupos.length > 0 && (
+                                        <div className="mt-4">
+                                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-2 mb-3 flex items-center gap-2">
+                                                <Layers className="w-3.5 h-3.5" /> Plantillas de Grupo (pre-relleno)_
+                                            </p>
+                                            <div className="flex flex-wrap gap-3">
+                                                {rolesGrupos.map(rol => (
+                                                    <button
+                                                        key={rol.id} type="button" onClick={() => aplicarPlantilla(rol.name)}
+                                                        className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 transition-all flex items-center gap-2 ${plantillaSeleccionada === rol.name ? 'shadow-md text-white' : 'theme-element theme-border theme-text-muted'}`}
+                                                        style={plantillaSeleccionada === rol.name ? { borderColor: 'var(--color-primario)', backgroundColor: 'var(--color-primario)' } : {}}
+                                                    >
+                                                        {plantillaSeleccionada === rol.name && <Check className="w-3 h-3" />}
+                                                        {rol.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* 5. PERMISOS ATÓMICOS MIGRADO AL PARTIAL */}
-                                    <PermisosAtomicos 
-                                        data={data}
-                                        setData={setData}
+                                    <PermisosAtomicos
+                                        data={permisosFormData}
+                                        setData={(campo, valor) => {
+                                            if (campo === 'permisos_individuales') {
+                                                setPermisosIndividualesViaForm(valor);
+                                            } else {
+                                                setData(campo, valor);
+                                            }
+                                        }}
                                         roles={roles}
                                         todosLosPermisos={todosLosPermisos}
+                                        permisosUsuario={permisosUsuario}
+                                        esSuperAdmin={esSuperAdmin}
+                                        procedencia={procedenciaActual}
+                                        onPlantillaPorPermisoChange={setPlantillaPorPermiso}
                                     />
                                     
                                 </div>

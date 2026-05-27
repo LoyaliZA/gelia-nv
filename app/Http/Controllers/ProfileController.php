@@ -10,6 +10,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
 use Carbon\Carbon;
+use App\Services\PersonalizacionCatalogoService;
 
 class ProfileController extends Controller
 {
@@ -92,6 +93,10 @@ class ProfileController extends Controller
             $configVisual['escala_fuente'] = max(0.875, min(1.5, $escala));
         }
 
+        if (isset($configVisual['alertas_prefs']) && is_array($configVisual['alertas_prefs'])) {
+            $configVisual['alertas_prefs'] = $this->normalizarAlertasPrefs($configVisual['alertas_prefs']);
+        }
+
         // 3. GESTIÓN DE CONTRASEÑA
         if (!empty($datos['password'])) {
             $datos['password'] = Hash::make($datos['password']);
@@ -161,5 +166,41 @@ class ProfileController extends Controller
         }
 
         return back()->with('success', 'Perfil actualizado exitosamente.');
+    }
+
+    /**
+     * Normaliza y valida las preferencias de alertas del usuario.
+     */
+    private function normalizarAlertasPrefs(array $prefs): array
+    {
+        $defaults = config('alertas.defaults', []);
+        $tonosValidos = PersonalizacionCatalogoService::tonoIdsValidos();
+        $tiposValidos = array_keys($defaults['tipos'] ?? []);
+
+        $canales = array_merge(
+            $defaults['canales'] ?? [],
+            array_intersect_key($prefs['canales'] ?? [], array_flip(['sonido', 'voz', 'escritorio', 'app']))
+        );
+
+        foreach (['sonido', 'voz', 'escritorio', 'app'] as $canal) {
+            $canales[$canal] = filter_var($canales[$canal] ?? true, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        $tonoId = $prefs['tono_id'] ?? ($defaults['tono_id'] ?? 'default');
+        if (!in_array($tonoId, $tonosValidos, true)) {
+            $tonoId = $defaults['tono_id'] ?? 'default';
+        }
+
+        $tipos = array_merge($defaults['tipos'] ?? [], $prefs['tipos'] ?? []);
+        $tipos = array_intersect_key($tipos, array_flip($tiposValidos));
+        foreach ($tipos as $tipo => $valor) {
+            $tipos[$tipo] = filter_var($valor, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return [
+            'canales' => $canales,
+            'tono_id' => $tonoId,
+            'tipos'   => $tipos,
+        ];
     }
 }

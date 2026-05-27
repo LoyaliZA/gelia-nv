@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\CotizacionEntregaController;
 use App\Http\Controllers\Api\ClienteApiController;
 use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\Admin\AuditoriaListaDescuentoController;
+use App\Http\Controllers\Admin\PersonalizacionController;
 use App\Http\Controllers\AromasListasController;
 
 // ══════════════════════════════════════════════════════════════════════
@@ -138,12 +139,18 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('admin')->name('admin.')->group(function () {
 
-        // --- 1. Gestión de Usuarios y Accesos ---
+        // --- 1. Gestión de Usuarios ---
         Route::middleware(['can:usuarios.gestionar'])->group(function () {
             Route::get('/usuarios', [AdminController::class, 'usuarios'])->name('usuarios');
             Route::post('/usuarios', [AdminController::class, 'storeUsuario'])->name('usuarios.store');
             Route::put('/usuarios/{user}', [AdminController::class, 'updateUsuario'])->name('usuarios.update');
 
+            Route::put('/roles/{role}/permisos-heredados', [AdminController::class, 'updateRolePermisosHerencia'])->name('roles.permisos.update');
+            Route::post('/roles/grupos', [AdminController::class, 'storeGrupoPredefinido'])->name('roles.grupos.store');
+        });
+
+        // --- 1b. Generación de Accesos (permiso separado) ---
+        Route::middleware(['can:usuarios.generar_permisos'])->group(function () {
             Route::get('/enlaces', [AdminController::class, 'enlaces'])->name('enlaces');
             Route::post('/generar-enlace-registro', [RegistroController::class, 'generarEnlaceInvitacion'])->name('enlaces.generar');
         });
@@ -224,6 +231,23 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['can:comisiones.gestionar'])->group(function () {
             Route::get('/comisiones', [AdminController::class, 'comisiones'])->name('comisiones');
             Route::put('/comisiones/{id}', [AdminController::class, 'actualizarComision'])->name('comisiones.update');
+        });
+
+        // --- 5. Gestor de Personalización ---
+        Route::middleware(['can:personalizacion.gestionar'])->prefix('personalizacion')->name('personalizacion.')->group(function () {
+            Route::get('/', [PersonalizacionController::class, 'index'])->name('index');
+
+            Route::post('/tonos', [PersonalizacionController::class, 'storeTono'])->name('tonos.store');
+            Route::post('/tonos/{id}', [PersonalizacionController::class, 'updateTono'])->name('tonos.update');
+            Route::delete('/tonos/{id}', [PersonalizacionController::class, 'destroyTono'])->name('tonos.destroy');
+
+            Route::post('/fondos', [PersonalizacionController::class, 'storeFondo'])->name('fondos.store');
+            Route::post('/fondos/{id}', [PersonalizacionController::class, 'updateFondo'])->name('fondos.update');
+            Route::delete('/fondos/{id}', [PersonalizacionController::class, 'destroyFondo'])->name('fondos.destroy');
+
+            Route::post('/temas', [PersonalizacionController::class, 'storeTema'])->name('temas.store');
+            Route::put('/temas/{id}', [PersonalizacionController::class, 'updateTema'])->name('temas.update');
+            Route::delete('/temas/{id}', [PersonalizacionController::class, 'destroyTema'])->name('temas.destroy');
         });
 
         // --- 5. Auditorías del Sistema ---

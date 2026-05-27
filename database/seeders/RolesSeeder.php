@@ -27,6 +27,7 @@ class RolesSeeder extends Seeder
             'clientes.carga_masiva',
             'configuracion.ver_auditoria',
             'usuarios.gestionar',
+            'usuarios.generar_permisos',
             'catalogos.comisiones.ver',
             'catalogos.comisiones.gestionar'
         ];
@@ -62,5 +63,6 @@ class RolesSeeder extends Seeder
         );
 
         $user->assignRole($roleSuperAdmin);
+        $user->syncPermissions(Permission::all());
     }
 }
