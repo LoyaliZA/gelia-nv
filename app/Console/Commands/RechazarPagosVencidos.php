@@ -21,9 +21,8 @@ class RechazarPagosVencidos extends Command
 
     public function handle()
     {
-        $solicitudesVencidas = SolicitudTag::with('cliente.vendedor', 'cliente.listaDescuento', 'cliente.tipo')
-            ->where('pago_confirmado', false)
-            ->whereIn('catalogo_estado_solicitud_id', [1, 2])
+        $solicitudesVencidas = SolicitudTag::with(['cliente.vendedor', 'cliente.listaDescuento', 'cliente.tipo', 'proceso'])
+            ->sujetasAPlazoDePago()
             ->where('created_at', '<', now()->subHours(48))
             ->get();
 
@@ -37,6 +36,10 @@ class RechazarPagosVencidos extends Command
         $contador = 0;
 
         foreach ($solicitudesVencidas as $solicitud) {
+            if ($solicitud->esProcesoOperativo()) {
+                continue;
+            }
+
             DB::transaction(function () use ($solicitud, $listas, &$contador) {
                 $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
                 $cliente = $solicitud->cliente;

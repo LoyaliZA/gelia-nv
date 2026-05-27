@@ -14,6 +14,7 @@ use App\Models\CatalogoZonaEntrega; // <-- NUEVO
 use App\Models\CatalogoHorarioEntrega;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
+use App\Models\CatalogoBanco;
 use Illuminate\Support\Facades\DB;
 
 class CatalogoController extends Controller
@@ -242,5 +243,27 @@ class CatalogoController extends Controller
     public function destroyPorcentajeListado($id) {
         CatalogoPorcentajeListadoLista::findOrFail($id)->delete();
         return back()->with('success', 'Porcentaje de listado eliminado.');
+    }
+
+    // --- 11. CATÁLOGO DE BANCOS ---
+    public function storeBanco(Request $request) {
+        CatalogoBanco::create($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_bancos,nombre',
+            'activo' => 'boolean',
+        ]));
+        return back()->with('success', 'Banco registrado correctamente.');
+    }
+
+    public function updateBanco(Request $request, $id) {
+        CatalogoBanco::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_bancos,nombre,' . $id,
+            'activo' => 'boolean',
+        ]));
+        return back()->with('success', 'Banco actualizado.');
+    }
+
+    public function destroyBanco($id) {
+        CatalogoBanco::findOrFail($id)->delete();
+        return back()->with('success', 'Banco eliminado.');
     }
 }

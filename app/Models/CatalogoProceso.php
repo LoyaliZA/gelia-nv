@@ -12,8 +12,22 @@ class CatalogoProceso extends Model
     protected $fillable = [
         'nombre',
         'descripcion',
-        'activo'
+        'categoria_flujo',
+        'activo',
     ];
+
+    public const CATEGORIA_FINANCIERO = 'financiero';
+    public const CATEGORIA_OPERATIVO = 'operativo';
+
+    public function esOperativo(): bool
+    {
+        return $this->categoria_flujo === self::CATEGORIA_OPERATIVO;
+    }
+
+    public function esFinanciero(): bool
+    {
+        return $this->categoria_flujo !== self::CATEGORIA_OPERATIVO;
+    }
 
     protected $casts = [
         'activo' => 'boolean',

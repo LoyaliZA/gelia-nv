@@ -2,7 +2,19 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle } from 'lucide-react';
+import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash } from 'lucide-react';
+
+const obtenerProceso = (procesos, procesoId) => procesos.find(p => String(p.id) === String(procesoId)) || null;
+
+const esProcesoOperativo = (procesos, procesoId) => obtenerProceso(procesos, procesoId)?.categoria_flujo === 'operativo';
+
+const tipoOperativo = (procesos, procesoId) => {
+    const nombre = obtenerProceso(procesos, procesoId)?.nombre?.toUpperCase() || '';
+    if (nombre.includes('REMISIÓN') || nombre.includes('REMISION')) return 'remision';
+    if (nombre.includes('PEDIDO') && nombre.includes('CANCEL')) return 'pedido';
+    if (nombre.includes('COTIZACIÓN') || nombre.includes('COTIZACION')) return 'cotizacion_pedido';
+    return 'generico';
+};
 
 const obtenerPorcentajeEscalonamiento = (lista) => {
     if (!lista) return 0;
@@ -130,7 +142,7 @@ const evaluarEscalonamiento = (cliente, cotizacion, catalogoListas, listaActualO
     };
 };
 
-export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCliente = [], modoEdicion, solicitudAEditar }) {
+export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCliente = [], bancos = [], modoEdicion, solicitudAEditar }) {
 
     const infoClienteInicial = solicitudAEditar?.cliente || null;
     const [infoCliente, setInfoCliente] = useState(infoClienteInicial);
@@ -154,7 +166,16 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         confirmo_informacion_escalonamiento: false,
         monto_final_tentativo: '',
         total_proyectado_neto: '',
+        numero_remision: solicitudAEditar?.numero_remision || '',
+        numero_pedido: solicitudAEditar?.numero_pedido || '',
+        fecha_operacion: solicitudAEditar?.fecha_operacion || '',
+        motivo_operacion: solicitudAEditar?.motivo_operacion || '',
+        catalogo_banco_id: solicitudAEditar?.catalogo_banco_id || '',
+        solicitar_cotizacion: solicitudAEditar?.solicitar_cotizacion || false,
     });
+
+    const esOperativo = esProcesoOperativo(procesos, data.catalogo_proceso_id);
+    const subtipoOperativo = tipoOperativo(procesos, data.catalogo_proceso_id);
 
     const opcionesTipoCliente = infoCliente?.es_heredado
         ? tiposCliente.filter(t => t.nombre.toUpperCase().includes('HEREDADO'))
@@ -170,50 +191,53 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     };
 
     useEffect(() => {
-        if (infoCliente && data.monto_cotizado && !isNaN(data.monto_cotizado)) {
-            const listaActualObj = obtenerListaActual();
-            const analisis = evaluarEscalonamiento(
-                infoCliente,
-                data.monto_cotizado,
-                listas,
-                listaActualObj,
-                data.catalogo_lista_descuento_id || null
-            );
-
-            setAnalisisFinanciero(analisis);
-            setData('monto_final_tentativo', analisis.montoFinalTentativo);
-            setData('total_proyectado_neto', analisis.totalProyectadoNeto);
-
-            if (analisis.esAscenso && !data.catalogo_lista_descuento_id && analisis.listaCalificadaBruto) {
-                setData('catalogo_lista_descuento_id', analisis.listaCalificadaBruto.id);
-            }
-
-            if (analisis.esAscenso) {
-                setAlertaLista({
-                    mensaje: `¡Total proyectado alcanza nivel ${analisis.listaCalificadaBruto.nombre}!`
-                });
-            } else if (analisis.listaAnticipada && analisis.mantieneListaAnticipada) {
-                setAlertaLista({
-                    mensaje: `Pago final mantiene nivel ${analisis.listaAnticipada.nombre}`
-                });
-            } else {
+        if (esOperativo || !infoCliente || !data.monto_cotizado || isNaN(data.monto_cotizado)) {
+            if (!esOperativo) {
+                setAnalisisFinanciero(null);
                 setAlertaLista(null);
-            }
-
-            if (analisis.mantieneListaAnticipada) {
+                if (!modoEdicion) {
+                    setData('catalogo_lista_descuento_id', '');
+                }
                 setData('confirmo_informacion_escalonamiento', false);
+                setData('monto_final_tentativo', '');
+                setData('total_proyectado_neto', '');
             }
-        } else {
-            setAnalisisFinanciero(null);
-            setAlertaLista(null);
-            if (!modoEdicion) {
-                setData('catalogo_lista_descuento_id', '');
-            }
-            setData('confirmo_informacion_escalonamiento', false);
-            setData('monto_final_tentativo', '');
-            setData('total_proyectado_neto', '');
+            return;
         }
-    }, [data.monto_cotizado, data.catalogo_lista_descuento_id, infoCliente, listas]);
+
+        const listaActualObj = obtenerListaActual();
+        const analisis = evaluarEscalonamiento(
+            infoCliente,
+            data.monto_cotizado,
+            listas,
+            listaActualObj,
+            data.catalogo_lista_descuento_id || null
+        );
+
+        setAnalisisFinanciero(analisis);
+        setData('monto_final_tentativo', analisis.montoFinalTentativo);
+        setData('total_proyectado_neto', analisis.totalProyectadoNeto);
+
+        if (analisis.esAscenso && !data.catalogo_lista_descuento_id && analisis.listaCalificadaBruto) {
+            setData('catalogo_lista_descuento_id', analisis.listaCalificadaBruto.id);
+        }
+
+        if (analisis.esAscenso) {
+            setAlertaLista({
+                mensaje: `¡Total proyectado alcanza nivel ${analisis.listaCalificadaBruto.nombre}!`
+            });
+        } else if (analisis.listaAnticipada && analisis.mantieneListaAnticipada) {
+            setAlertaLista({
+                mensaje: `Pago final mantiene nivel ${analisis.listaAnticipada.nombre}`
+            });
+        } else {
+            setAlertaLista(null);
+        }
+
+        if (analisis.mantieneListaAnticipada) {
+            setData('confirmo_informacion_escalonamiento', false);
+        }
+    }, [data.monto_cotizado, data.catalogo_lista_descuento_id, data.catalogo_proceso_id, infoCliente, listas, esOperativo]);
 
     const fetchClientes = async (term = '') => {
         if (!term) return;
@@ -264,7 +288,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
             return;
         }
 
-        if (requiereConfirmacionEscalonamiento && !data.confirmo_informacion_escalonamiento) {
+        if (!esOperativo && requiereConfirmacionEscalonamiento && !data.confirmo_informacion_escalonamiento) {
             return;
         }
 
@@ -300,6 +324,25 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                 )}
 
                 <form onSubmit={guardarSolicitud} className="grid grid-cols-1 lg:grid-cols-2 gap-10 relative z-10">
+
+                    <div className="lg:col-span-2 space-y-2">
+                        <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipo de Solicitud_</label>
+                        <div className="relative">
+                            <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
+                            <select
+                                value={data.catalogo_proceso_id}
+                                required
+                                onChange={e => setData('catalogo_proceso_id', e.target.value)}
+                                disabled={modoEdicion}
+                                className="w-full pl-9 pr-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-xs font-bold outline-none appearance-none focus:ring-2 shadow-sm cursor-pointer"
+                            >
+                                <option value="">Selecciona el tipo de solicitud...</option>
+                                {procesos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                            </select>
+                        </div>
+                        {errors.catalogo_proceso_id && <p className="text-xs text-red-500">{errors.catalogo_proceso_id}</p>}
+                    </div>
+
                     <div className="space-y-8">
 
                         <div className="space-y-2 relative">
@@ -333,6 +376,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             )}
                         </div>
 
+                        {!esOperativo && (
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cotización Autorizada_</label>
                             <div className="relative">
@@ -340,30 +384,79 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 <input type="number" step="0.01" required value={data.monto_cotizado} onChange={e => setData('monto_cotizado', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-black outline-none focus:ring-2 transition-all shadow-sm" />
                             </div>
                         </div>
+                        )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Proceso_</label>
-                                <div className="relative">
-                                    <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
-                                    <select value={data.catalogo_proceso_id} required onChange={e => setData('catalogo_proceso_id', e.target.value)} className="w-full pl-9 pr-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-xs font-bold outline-none appearance-none focus:ring-2 shadow-sm cursor-pointer">
-                                        <option value="">Selecciona...</option>
-                                        {procesos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                                    </select>
+                        {esOperativo && subtipoOperativo === 'remision' && (
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">N° Remisión_</label>
+                                    <div className="relative">
+                                        <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                        <input type="text" required value={data.numero_remision} onChange={e => setData('numero_remision', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 shadow-sm" />
+                                    </div>
+                                    {errors.numero_remision && <p className="text-xs text-red-500">{errors.numero_remision}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Fecha_</label>
+                                    <div className="relative">
+                                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                        <input type="date" required value={data.fecha_operacion} onChange={e => setData('fecha_operacion', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 shadow-sm" />
+                                    </div>
+                                    {errors.fecha_operacion && <p className="text-xs text-red-500">{errors.fecha_operacion}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Motivo_</label>
+                                    <div className="relative">
+                                        <FileText className="absolute left-4 top-4 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                        <textarea required value={data.motivo_operacion} onChange={e => setData('motivo_operacion', e.target.value)} rows={3} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 shadow-sm resize-none" />
+                                    </div>
+                                    {errors.motivo_operacion && <p className="text-xs text-red-500">{errors.motivo_operacion}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Banco_</label>
+                                    <div className="relative">
+                                        <Landmark className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                        <select required value={data.catalogo_banco_id} onChange={e => setData('catalogo_banco_id', e.target.value)} className="w-full pl-12 pr-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none focus:ring-2 shadow-sm cursor-pointer">
+                                            <option value="">Selecciona banco...</option>
+                                            {bancos.map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+                                        </select>
+                                    </div>
+                                    {errors.catalogo_banco_id && <p className="text-xs text-red-500">{errors.catalogo_banco_id}</p>}
                                 </div>
                             </div>
+                        )}
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Clasificación_</label>
-                                <div className="relative">
-                                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
-                                    <select value={data.catalogo_tipo_cliente_id} onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)} className="w-full pl-9 pr-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-xs font-bold outline-none appearance-none focus:ring-2 shadow-sm cursor-pointer">
-                                        <option value="">Asignar Tipo</option>
-                                        {opcionesTipoCliente.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                                    </select>
+                        {(esOperativo && (subtipoOperativo === 'pedido' || subtipoOperativo === 'cotizacion_pedido')) && (
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">N° Pedido_</label>
+                                    <div className="relative">
+                                        <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                        <input type="text" required value={data.numero_pedido} onChange={e => setData('numero_pedido', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 shadow-sm" />
+                                    </div>
+                                    {errors.numero_pedido && <p className="text-xs text-red-500">{errors.numero_pedido}</p>}
                                 </div>
+                                {subtipoOperativo === 'pedido' && (
+                                    <label className="flex items-start gap-3 p-4 rounded-xl border theme-border cursor-pointer">
+                                        <input type="checkbox" checked={!!data.solicitar_cotizacion} onChange={e => setData('solicitar_cotizacion', e.target.checked)} className="mt-1 w-4 h-4" />
+                                        <span className="text-sm font-bold theme-text-main leading-relaxed">Solicitar cotización sobre este pedido</span>
+                                    </label>
+                                )}
+                            </div>
+                        )}
+
+                        {!esOperativo && (
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Clasificación_</label>
+                            <div className="relative">
+                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
+                                <select value={data.catalogo_tipo_cliente_id} onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)} className="w-full pl-9 pr-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-xs font-bold outline-none appearance-none focus:ring-2 shadow-sm cursor-pointer">
+                                    <option value="">Asignar Tipo</option>
+                                    {opcionesTipoCliente.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                                </select>
                             </div>
                         </div>
+                        )}
                     </div>
 
                     <div className="space-y-8 flex flex-col">
@@ -386,6 +479,8 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                     </div>
 
                     <div className="lg:col-span-2 space-y-3">
+                        {!esOperativo && (
+                        <>
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2 mb-1 px-1">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Lista Solicitada_</label>
                             {alertaLista && (
@@ -588,6 +683,8 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                         )}
                         {errors.confirmo_informacion_escalonamiento && (
                             <p className="text-xs text-red-500 mt-1">{errors.confirmo_informacion_escalonamiento}</p>
+                        )}
+                        </>
                         )}
                     </div>
 

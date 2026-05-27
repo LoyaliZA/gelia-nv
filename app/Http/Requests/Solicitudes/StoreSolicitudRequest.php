@@ -14,29 +14,84 @@ class StoreSolicitudRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() && $this->user()->can('solicitudes.crear'); 
+        return $this->user() && $this->user()->can('solicitudes.crear');
     }
 
     public function rules(): array
     {
-        return [
-            'numero_cliente' => ['nullable', 'string', 'max:255'],
+        $proceso = $this->resolverProceso();
+        $esOperativo = $proceso?->esOperativo() ?? false;
+
+        $reglas = [
+            'numero_cliente' => [$esOperativo ? 'required' : 'nullable', 'string', 'max:255'],
             'nombre_cliente' => ['nullable', 'string', 'max:255'],
             'catalogo_proceso_id' => ['required', 'exists:catalogo_procesos,id'],
-            'catalogo_tipo_cliente_id' => ['nullable', 'exists:catalogo_tipo_clientes,id'],
-            'catalogo_lista_descuento_id' => ['nullable', 'exists:catalogo_listas_descuento,id'],
-            'monto_cotizado' => ['required', 'numeric', 'min:0'],
             'observaciones_vendedor' => ['nullable', 'string'],
-            'confirmo_informacion_escalonamiento' => ['nullable', 'boolean'],
-            'monto_final_tentativo' => ['nullable', 'numeric', 'min:0'],
-            'total_proyectado_neto' => ['nullable', 'numeric', 'min:0'],
         ];
+
+        if ($esOperativo) {
+            $reglas = array_merge($reglas, $this->reglasOperativas($proceso));
+        } else {
+            $reglas = array_merge($reglas, [
+                'catalogo_tipo_cliente_id' => ['nullable', 'exists:catalogo_tipo_clientes,id'],
+                'catalogo_lista_descuento_id' => ['nullable', 'exists:catalogo_listas_descuento,id'],
+                'monto_cotizado' => ['required', 'numeric', 'min:0'],
+                'confirmo_informacion_escalonamiento' => ['nullable', 'boolean'],
+                'monto_final_tentativo' => ['nullable', 'numeric', 'min:0'],
+                'total_proyectado_neto' => ['nullable', 'numeric', 'min:0'],
+            ]);
+        }
+
+        return $reglas;
+    }
+
+    private function reglasOperativas(?CatalogoProceso $proceso): array
+    {
+        $nombre = strtoupper($proceso?->nombre ?? '');
+
+        $reglas = [
+            'monto_cotizado' => ['nullable', 'numeric', 'min:0'],
+            'numero_remision' => ['nullable', 'string', 'max:255'],
+            'numero_pedido' => ['nullable', 'string', 'max:255'],
+            'fecha_operacion' => ['nullable', 'date'],
+            'motivo_operacion' => ['nullable', 'string'],
+            'catalogo_banco_id' => ['nullable', 'exists:catalogo_bancos,id'],
+            'solicitar_cotizacion' => ['nullable', 'boolean'],
+        ];
+
+        if (str_contains($nombre, 'REMISIÓN') || str_contains($nombre, 'REMISION')) {
+            $reglas['numero_remision'] = ['required', 'string', 'max:255'];
+            $reglas['fecha_operacion'] = ['required', 'date'];
+            $reglas['motivo_operacion'] = ['required', 'string', 'min:5'];
+            $reglas['catalogo_banco_id'] = ['required', 'exists:catalogo_bancos,id'];
+        } elseif (str_contains($nombre, 'PEDIDO')) {
+            $reglas['numero_pedido'] = ['required', 'string', 'max:255'];
+        } elseif (str_contains($nombre, 'COTIZACIÓN') || str_contains($nombre, 'COTIZACION')) {
+            $reglas['numero_pedido'] = ['required', 'string', 'max:255'];
+        }
+
+        return $reglas;
+    }
+
+    private function resolverProceso(): ?CatalogoProceso
+    {
+        $procesoId = $this->input('catalogo_proceso_id');
+        if (!$procesoId) {
+            return null;
+        }
+
+        return CatalogoProceso::find($procesoId);
     }
 
     public function after(): array
     {
         return [
             function (Validator $validator) {
+                $proceso = $this->resolverProceso();
+                if ($proceso?->esOperativo()) {
+                    return;
+                }
+
                 $numeroCliente = $this->input('numero_cliente');
                 $procesoId = $this->input('catalogo_proceso_id');
                 $listaSolicitadaId = $this->input('catalogo_lista_descuento_id');
@@ -47,16 +102,14 @@ class StoreSolicitudRequest extends FormRequest
 
                 $cliente = Cliente::where('numero_cliente', $numeroCliente)->first();
                 if (!$cliente) return;
-                
-                // 1. SEGURO DE PROCESOS HEREDADOS
+
                 if ($procesoId && $cliente->es_heredado) {
-                    $proceso = CatalogoProceso::find($procesoId);
-                    if ($proceso && in_array($proceso->nombre, ['ASIGNAR CLIENTE REACTIVADO', 'ASIGNAR CLIENTE REACTIVADO Y CAMBIO DE LISTA'])) {
+                    $procesoObj = CatalogoProceso::find($procesoId);
+                    if ($procesoObj && in_array($procesoObj->nombre, ['ASIGNAR CLIENTE REACTIVADO', 'ASIGNAR CLIENTE REACTIVADO Y CAMBIO DE LISTA'])) {
                         $validator->errors()->add('catalogo_proceso_id', 'ALERTA: Este es un cliente heredado. Selecciona el proceso específico para clientes heredados.');
                     }
                 }
 
-                // 2. SEGURO DE TIPOS DE CLIENTE (CANDADO DE COMISIONES)
                 if ($tipoClienteId && $cliente->es_heredado) {
                     $tipoCliente = CatalogoTipoCliente::find($tipoClienteId);
                     if ($tipoCliente && stripos($tipoCliente->nombre, 'HEREDADO') === false) {
@@ -67,7 +120,6 @@ class StoreSolicitudRequest extends FormRequest
                 $montoVentaActual = (float) ($cliente->monto_venta_actual ?? 0);
                 $montoProyectado = $montoVentaActual + $montoCotizado;
 
-                // 3. SEGUROS DE ASIGNACIÓN DE LISTAS
                 if ($listaSolicitadaId) {
                     $listaSolicitada = CatalogoListaDescuento::with('porcentajeEscalonamiento')->find($listaSolicitadaId);
 
@@ -87,7 +139,6 @@ class StoreSolicitudRequest extends FormRequest
                     }
                 }
 
-                // 4. ESCALONAMIENTO: confirmación si el pago neto no mantiene la lista anticipada
                 if ($montoCotizado > 0) {
                     $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
                     $listaActual = $cliente->lista_actual_id

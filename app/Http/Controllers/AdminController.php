@@ -24,6 +24,7 @@ use App\Models\Area;
 use App\Models\CatalogoSexo;
 use App\Models\CatalogoZonaEntrega;
 use App\Models\CatalogoHorarioEntrega;
+use App\Models\CatalogoBanco;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
@@ -75,6 +76,7 @@ class AdminController extends Controller
             'horarios_entrega' => CatalogoHorarioEntrega::with('zona')->get(),
             'porcentajes_escalonamiento' => CatalogoPorcentajeEscalonamientoLista::with('listaDescuento')->get(),
             'porcentajes_listado' => CatalogoPorcentajeListadoLista::with('listaDescuento')->get(),
+            'bancos' => CatalogoBanco::orderBy('nombre')->get(),
         ]);
     }
 

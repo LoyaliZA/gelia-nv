@@ -14,40 +14,76 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
 {
     use Queueable;
 
-    public $solicitud;
-    public $tipoAlerta;
-    public $mensaje;
-    public $extras;
+    public SolicitudTag $solicitud;
+    public string $tipoAlerta;
+    public string $mensaje;
+    public array $extras;
+    public string $titulo;
+    public string $mensajeVisible;
 
-    public function __construct(SolicitudTag $solicitud, $tipoAlerta, $mensaje, array $extras = [])
+    private string $mensajeBase;
+
+    private const ETIQUETAS_TIPO = [
+        'nueva' => 'Nueva solicitud',
+        'reparada' => 'Solicitud reparada',
+        'rechazada' => 'Error reportado',
+        'pago_rechazado' => 'Pago vencido',
+        'pago_confirmado' => 'Pago confirmado',
+        'actualizacion' => 'Actualización',
+        'alerta_pago_insuficiente' => 'Pago insuficiente',
+        'alerta_ascenso_lista' => 'Ascenso de lista',
+        'consulta_nueva' => 'Consulta TAG/Lista',
+        'consulta_respondida' => 'Consulta respondida',
+        'rollback_confirmado' => 'Reversión confirmada',
+        'cancelacion_solicitada' => 'Cancelación solicitada',
+        'cancelada' => 'Solicitud cancelada',
+    ];
+
+    public function __construct(SolicitudTag $solicitud, string $tipoAlerta, string $mensaje, array $extras = [])
     {
-        $this->solicitud = $solicitud->loadMissing(['cliente', 'proceso', 'estado', 'vendedor', 'listaDescuento']);
+        $this->solicitud = $solicitud->loadMissing([
+            'cliente',
+            'proceso',
+            'estado',
+            'vendedor',
+            'listaDescuento',
+            'banco',
+        ]);
         $this->tipoAlerta = $tipoAlerta;
-        $this->mensaje = $mensaje;
         $this->extras = $extras;
+        $this->mensajeBase = $mensaje;
+        $this->titulo = $this->construirTitulo();
+        $this->mensajeVisible = $this->construirMensajeVisible();
+        $this->mensaje = $this->enriquecerMensaje($mensaje);
     }
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail', 'broadcast'];
+        // database y broadcast primero: si el correo falla (SMTP), no debe bloquear alertas en vivo.
+        $channels = ['database', 'broadcast'];
+
+        if (config('alertas.enviar_correo', false)) {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     public function toMail(object $notifiable): MailMessage
     {
         $url = url('/solicitudes?folio=' . $this->solicitud->id);
-        $payload = $this->construirPayload();
+        $proceso = $this->nombreProceso();
 
         $mail = (new MailMessage)
-            ->subject('Alerta de Solicitud GELIA: FOL-' . $this->solicitud->id)
+            ->subject("GELIA · {$proceso} · FOL-{$this->solicitud->id}")
             ->greeting('Hola, ' . $notifiable->name . '!')
-            ->line('Se ha registrado una actualización en el sistema:')
-            ->line('**Aviso:** ' . $this->mensaje)
-            ->line('**Cliente:** ' . ($payload['cliente'] ?? 'N/A'))
-            ->line('**Proceso:** ' . ($payload['proceso'] ?? 'N/A'))
-            ->line('**Estado:** ' . ($payload['estado'] ?? 'N/A'))
-            ->action('Ver Solicitud en el ERP', $url);
+            ->line($this->titulo)
+            ->line('**Tipo de solicitud:** ' . $proceso)
+            ->line('**Detalle:** ' . $this->mensajeVisible)
+            ->line('**Estado:** ' . ($this->solicitud->estado->nombre ?? 'N/A'))
+            ->action('Ver solicitud en el ERP', $url);
 
-        if (in_array($this->tipoAlerta, ['pago_rechazado', 'rechazada', 'alerta_pago_insuficiente'], true)) {
+        if (in_array($this->tipoAlerta, ['pago_rechazado', 'rechazada', 'alerta_pago_insuficiente', 'cancelada'], true)) {
             $mail->error();
         }
 
@@ -69,21 +105,48 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
 
     private function construirPayload(): array
     {
-        $cliente = $this->solicitud->cliente;
+        $proceso = $this->solicitud->proceso;
 
         return array_merge([
             'solicitud_id' => $this->solicitud->id,
             'tipo' => $this->tipoAlerta,
-            'mensaje' => $this->mensaje,
-            'cliente' => $cliente->nombre ?? 'N/A',
-            'cliente_numero' => $cliente->numero_cliente ?? null,
-            'proceso' => $this->solicitud->proceso->nombre ?? null,
+            'titulo' => $this->titulo,
+            'mensaje' => $this->mensajeVisible,
+            'mensaje_visible' => $this->mensajeVisible,
+            'proceso' => $proceso->nombre ?? null,
+            'proceso_categoria' => $proceso->categoria_flujo ?? 'financiero',
             'estado' => $this->solicitud->estado->nombre ?? null,
             'vendedora' => $this->solicitud->vendedor->name ?? null,
-            'monto' => $this->solicitud->monto_cotizado,
-            'lista_solicitada' => $this->solicitud->listaDescuento->nombre ?? null,
             'fecha' => now()->toDateTimeString(),
         ], $this->extras);
+    }
+
+    private function nombreProceso(): string
+    {
+        return $this->solicitud->proceso->nombre ?? 'Solicitud';
+    }
+
+    private function construirTitulo(): string
+    {
+        $etiqueta = self::ETIQUETAS_TIPO[$this->tipoAlerta] ?? 'Notificación';
+        return "{$etiqueta}: {$this->nombreProceso()}";
+    }
+
+    private function construirMensajeVisible(): string
+    {
+        return "{$this->mensajeBase} · FOL-{$this->solicitud->id}";
+    }
+
+    private function enriquecerMensaje(string $mensaje): string
+    {
+        $proceso = $this->nombreProceso();
+        $folio = "FOL-{$this->solicitud->id}";
+
+        if (stripos($mensaje, $proceso) !== false && stripos($mensaje, $folio) !== false) {
+            return $mensaje;
+        }
+
+        return "{$mensaje} · {$proceso} · {$folio}";
     }
 
     private function construirMensajeVoz(object $notifiable): string
@@ -91,36 +154,48 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
         $nombreDestinatario = explode(' ', trim($notifiable->name))[0];
         $nombreVendedor = explode(' ', trim($this->solicitud->vendedor->name ?? 'un colaborador'))[0];
         $esVendedorOriginal = ($this->solicitud->vendedor_id === $notifiable->id);
+        $proceso = $this->nombreProceso();
+        $folio = "FOL-{$this->solicitud->id}";
 
         switch ($this->tipoAlerta) {
             case 'nueva':
-                return "Atención {$nombreDestinatario}, {$nombreVendedor} ha realizado una nueva solicitud.";
+                return "Atención {$nombreDestinatario}, {$nombreVendedor} envió una solicitud de {$proceso}, {$folio}.";
             case 'alerta_ascenso_lista':
-                return "Atención {$nombreDestinatario}, el pago procesado por {$nombreVendedor} ha permitido ascender al cliente de categoría.";
+                return "Atención {$nombreDestinatario}, el pago de {$nombreVendedor} en {$proceso} permite ascender al cliente de categoría, {$folio}.";
             case 'rechazada':
             case 'pago_rechazado':
                 if ($esVendedorOriginal) {
-                    return "{$nombreDestinatario}, se ha encontrado un error en tu solicitud. Por favor, inicia una nueva solicitud si el pago venció.";
+                    return "{$nombreDestinatario}, se reportó un error en tu solicitud de {$proceso}, {$folio}. Revisa o inicia una nueva si el pago venció.";
                 }
-                return "{$nombreDestinatario}, {$nombreVendedor} ha recibido una observación en su solicitud.";
+                return "{$nombreDestinatario}, {$nombreVendedor} recibió una observación en su solicitud de {$proceso}, {$folio}.";
             case 'reparada':
-                return "Atención {$nombreDestinatario}, {$nombreVendedor} ha corregido su solicitud y está lista para revisión.";
+                return "Atención {$nombreDestinatario}, {$nombreVendedor} reparó su solicitud de {$proceso}, {$folio}, y está lista para revisión.";
             case 'pago_confirmado':
-                return "{$nombreDestinatario}, {$nombreVendedor} ha confirmado el pago del cliente en el folio {$this->solicitud->id}.";
+                return "{$nombreDestinatario}, {$nombreVendedor} confirmó el pago de la solicitud de {$proceso}, {$folio}.";
             case 'consulta_nueva':
-                return "Atención {$nombreDestinatario}, {$nombreVendedor} solicita verificación de TAG o lista antes de confirmar el pago.";
+                $temas = implode(' y ', $this->extras['consulta_temas'] ?? ['TAG o lista']);
+                return "Atención {$nombreDestinatario}, {$nombreVendedor} consulta {$temas} en la solicitud de {$proceso}, {$folio}.";
             case 'consulta_respondida':
                 $resultado = ($this->extras['respuesta_positiva'] ?? false) ? 'confirmada' : 'rechazada';
-                return "{$nombreDestinatario}, tu consulta de TAG o lista fue {$resultado}.";
+                return "{$nombreDestinatario}, tu consulta de {$proceso}, {$folio}, fue {$resultado}.";
             case 'rollback_confirmado':
-                return "{$nombreDestinatario}, la encargada confirmó la reversión del folio vencido. Debes iniciar una nueva solicitud.";
+                return "{$nombreDestinatario}, se confirmó la reversión de la solicitud de {$proceso}, {$folio}. Debes iniciar una nueva solicitud.";
+            case 'cancelacion_solicitada':
+                return "Atención {$nombreDestinatario}, {$nombreVendedor} solicita cancelar la solicitud de {$proceso}, {$folio}.";
+            case 'cancelada':
+                if ($esVendedorOriginal) {
+                    return "{$nombreDestinatario}, tu solicitud de {$proceso}, {$folio}, fue cancelada.";
+                }
+                return "{$nombreDestinatario}, se confirmó la cancelación de la solicitud de {$proceso}, {$folio}.";
+            case 'alerta_pago_insuficiente':
+                return "Atención {$nombreDestinatario}, el pago de {$nombreVendedor} en {$proceso} es insuficiente para la lista solicitada, {$folio}.";
             case 'actualizacion':
                 if ($esVendedorOriginal) {
-                    return "{$nombreDestinatario}, el área administrativa respondió tu solicitud.";
+                    return "{$nombreDestinatario}, el área administrativa respondió tu solicitud de {$proceso}, {$folio}.";
                 }
-                return "{$nombreDestinatario}, {$nombreVendedor} tiene una nueva actualización en su folio.";
+                return "{$nombreDestinatario}, hay una actualización en la solicitud de {$proceso} de {$nombreVendedor}, {$folio}.";
             default:
-                return "{$nombreDestinatario}, tienes una notificación operativa de {$nombreVendedor}.";
+                return "{$nombreDestinatario}, tienes una notificación sobre la solicitud de {$proceso}, {$folio}.";
         }
     }
 }

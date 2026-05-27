@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Calendar, Filter, AlertOctagon, SlidersHorizontal, X } from 'lucide-react';
 
-const TABS = ['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'INCORRECTAS'];
+const TABS = ['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'INCORRECTAS', 'CANCELADAS'];
 
 export default function FiltrosSolicitudes({
     tabActiva,

@@ -58,13 +58,17 @@ export default function NotificationBell({ notifications: propNotifications = []
     useEffect(() => {
         const handleNotificationReceived = (event) => {
             const notification = event.detail;
-            if (!notification?.id) return;
+            const entryId = notification?.id
+                || (notification?.solicitud_id
+                    ? `live-${notification.solicitud_id}-${notification.tipo || 'evt'}-${Date.now()}`
+                    : null);
+            if (!entryId) return;
 
             setNotifications(prev => {
-                if (prev.some(n => n.id === notification.id)) return prev;
+                if (prev.some(n => n.id === entryId)) return prev;
                 return ordenarPorFecha([
                     {
-                        id: notification.id,
+                        id: entryId,
                         data: notification,
                         read_at: null,
                         created_at: new Date().toISOString(),
@@ -151,12 +155,14 @@ export default function NotificationBell({ notifications: propNotifications = []
                             {notifications.length > 0 ? notifications.map((n, i) => {
                                 const tipo = n.type || n.data?.tipo;
                                 const esResumen = n.data?.total_vencidos !== undefined;
-                                const isError = tipo === 'pago_rechazado' || tipo === 'rechazada' || tipo === 'alerta_pago_insuficiente' || esResumen;
+                                const isError = tipo === 'pago_rechazado' || tipo === 'rechazada' || tipo === 'alerta_pago_insuficiente' || tipo === 'cancelada' || esResumen;
                                 const iconColor = isError ? 'text-red-500' : 'text-[var(--color-primario)]';
                                 const bgClase = n.read_at
                                     ? 'theme-surface opacity-60 border-transparent shadow-none'
                                     : 'theme-element border-[var(--color-primario)] shadow-lg';
                                 const etiqueta = ALERTAS_TIPOS[tipo] || (esResumen ? ALERTAS_TIPOS.resumen_vencidos : 'Sistema');
+                                const tituloProceso = n.data?.titulo || n.data?.proceso || etiqueta;
+                                const textoVisible = n.data?.mensaje_visible || n.data?.mensaje || 'Nueva actividad en el sistema';
 
                                 return (
                                     <div
@@ -175,48 +181,21 @@ export default function NotificationBell({ notifications: propNotifications = []
                                                             {etiqueta}
                                                         </span>
                                                         <p className="text-[11px] font-black uppercase tracking-widest mt-1" style={{ color: isError ? '#ef4444' : 'var(--color-primario)' }}>
-                                                            {n.data?.cliente || (esResumen ? 'Reporte Automático' : 'Sistema Global')}
+                                                            {tituloProceso}
                                                         </p>
                                                     </div>
                                                     <span className="text-[9px] font-bold theme-text-muted uppercase shrink-0">
                                                         {formatearFecha(n.created_at)}
                                                     </span>
                                                 </div>
-                                                <p className="text-xs font-bold theme-text-main leading-snug">
-                                                    {n.data?.mensaje || 'Nueva actividad en el sistema'}
+                                                <p className="text-xs font-bold theme-text-main leading-snug line-clamp-2">
+                                                    {textoVisible}
                                                 </p>
-                                                <div className="flex flex-wrap gap-2 pt-1">
-                                                    {n.data?.solicitud_id && (
-                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20">
-                                                            FOL-{n.data.solicitud_id}
-                                                        </span>
-                                                    )}
-                                                    {n.data?.cliente_numero && (
-                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-slate-500/10 text-slate-500 border border-slate-500/20">
-                                                            #{n.data.cliente_numero}
-                                                        </span>
-                                                    )}
-                                                    {n.data?.proceso && (
-                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                                                            {n.data.proceso}
-                                                        </span>
-                                                    )}
-                                                    {n.data?.monto != null && (
-                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                                                            ${Number(n.data.monto).toLocaleString('es-MX')}
-                                                        </span>
-                                                    )}
-                                                    {n.data?.consulta_temas?.length > 0 && (
-                                                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                                                            {n.data.consulta_temas.join(' + ')}
-                                                        </span>
-                                                    )}
-                                                    {n.data?.respuesta_positiva != null && (
-                                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${n.data.respuesta_positiva ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                                                            {n.data.respuesta_positiva ? 'Respuesta positiva' : 'Respuesta negativa'}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                {n.data?.solicitud_id && (
+                                                    <span className="inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20 mt-1">
+                                                        FOL-{n.data.solicitud_id}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

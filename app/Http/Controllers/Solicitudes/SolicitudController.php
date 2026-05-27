@@ -9,6 +9,8 @@ use App\Services\Solicitudes\CrearConsultaSolicitudService;
 use App\Services\Solicitudes\ListarSolicitudesService;
 use App\Services\Solicitudes\EliminarSolicitudService;
 use App\Services\Solicitudes\ResponderConsultaSolicitudService;
+use App\Services\Solicitudes\CancelarSolicitudService;
+use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use Illuminate\Http\RedirectResponse;
 use App\Models\SolicitudTag;
 use App\Models\ConsultaSolicitud;
@@ -19,6 +21,7 @@ use App\Notifications\AlertaSolicitud;
 use App\Models\CatalogoProceso;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoTipoCliente;
+use App\Models\CatalogoBanco;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -47,7 +50,8 @@ class SolicitudController extends Controller
             'procesos' => $procesos,
             'listas' => CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get(),
             'tipos_cliente' => CatalogoTipoCliente::where('activo', true)->orderBy('nombre')->get(),
-            'vendedores' => $vendedores, // Nueva variable enviada al frontend
+            'vendedores' => $vendedores,
+            'bancos' => CatalogoBanco::where('activo', true)->orderBy('nombre')->get(),
         ]);
     }
 
@@ -61,6 +65,11 @@ class SolicitudController extends Controller
 
     public function confirmarPago(Request $request, SolicitudTag $solicitud)
     {
+        $solicitud->loadMissing('proceso');
+        if ($solicitud->proceso?->esOperativo()) {
+            abort(403, 'Las solicitudes operativas no requieren confirmación de pago.');
+        }
+
         if ($solicitud->catalogo_estado_solicitud_id != 2) {
             abort(403, 'Acción Bloqueada: El pago solo puede confirmarse después de que la encargada haya emitido una resolución aprobatoria.');
         }
@@ -356,10 +365,12 @@ class SolicitudController extends Controller
             ]);
 
             $estadosAprobatorios = [2, 3];
+            $solicitud->loadMissing('proceso');
+            $esFinanciero = $solicitud->proceso?->esFinanciero() ?? true;
 
-            if (in_array($estadoNuevoId, $estadosAprobatorios) && !in_array($estadoAnteriorId, $estadosAprobatorios)) {
+            if ($esFinanciero && in_array($estadoNuevoId, $estadosAprobatorios) && !in_array($estadoAnteriorId, $estadosAprobatorios)) {
                 $snapshotDiff = $this->aplicarBeneficiosCliente($solicitud);
-            } elseif ($estadoNuevoId == 4 && in_array($estadoAnteriorId, $estadosAprobatorios)) {
+            } elseif ($esFinanciero && $estadoNuevoId == 4 && in_array($estadoAnteriorId, $estadosAprobatorios)) {
                 $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
             }
 
@@ -413,6 +424,14 @@ class SolicitudController extends Controller
                 'Monto Cotizado ($)' => $solicitud->monto_cotizado,
                 'Pago Confirmado' => $solicitud->pago_confirmado ? 'Sí' : 'No',
                 'Observaciones' => $solicitud->observaciones_vendedor ?? 'Ninguna',
+                'N° Remisión' => $solicitud->numero_remision ?? '',
+                'N° Pedido' => $solicitud->numero_pedido ?? '',
+                'Fecha Operación' => $solicitud->fecha_operacion?->format('Y-m-d') ?? '',
+                'Motivo Operación' => $solicitud->motivo_operacion ?? '',
+                'Banco' => $solicitud->banco?->nombre ?? '',
+                'Solicitar Cotización' => $solicitud->solicitar_cotizacion ? 'Sí' : 'No',
+                'Cancelación Solicitada' => $solicitud->cancelacion_solicitada_at?->format('Y-m-d H:i') ?? '',
+                'Motivo Cancelación' => $solicitud->motivo_cancelacion ?? '',
             ];
         });
     }
@@ -548,6 +567,30 @@ class SolicitudController extends Controller
         $consulta->update(['leido_vendedor_at' => now()]);
 
         return back()->with('success', 'Respuesta marcada como leída.');
+    }
+
+    public function solicitarCancelacion(Request $request, SolicitudTag $solicitud, SolicitarCancelacionSolicitudService $service): RedirectResponse
+    {
+        $request->validate([
+            'motivo_cancelacion' => 'required|string|min:10|max:1000',
+        ]);
+
+        $service->ejecutar($solicitud, $request->motivo_cancelacion);
+
+        return back()->with('success', 'Solicitud de cancelación enviada al área administrativa.');
+    }
+
+    public function cancelar(Request $request, SolicitudTag $solicitud, CancelarSolicitudService $service): RedirectResponse
+    {
+        Gate::authorize('solicitudes.cancelar');
+
+        $request->validate([
+            'motivo_cancelacion' => 'nullable|string|max:1000',
+        ]);
+
+        $service->ejecutar($solicitud, $request->motivo_cancelacion);
+
+        return back()->with('success', 'La solicitud ha sido cancelada correctamente.');
     }
 
     public function confirmarRollback(Request $request, SolicitudTag $solicitud): RedirectResponse

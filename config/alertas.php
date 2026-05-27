@@ -4,6 +4,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Enviar copia por correo en AlertaSolicitud
+    |--------------------------------------------------------------------------
+    | Desactivado por defecto: un fallo SMTP no debe impedir sonido/toast/Reverb.
+    | Activar cuando MAIL_* esté configurado: ALERTAS_ENVIAR_CORREO=true
+    */
+    'enviar_correo' => env('ALERTAS_ENVIAR_CORREO', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Tonos de notificación disponibles
     |--------------------------------------------------------------------------
     | Agregar entradas aquí al subir nuevos MP3 en public/assets/sounds/
@@ -41,6 +50,8 @@ return [
             'consulta_nueva'           => true,
             'consulta_respondida'      => true,
             'rollback_confirmado'      => true,
+            'cancelacion_solicitada'   => true,
+            'cancelada'                => true,
             'resumen_vencidos'         => true,
         ],
     ],

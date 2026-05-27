@@ -4,7 +4,7 @@ import { Head, router, useForm } from '@inertiajs/react';
 import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
     History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
-    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye
+    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -52,10 +52,12 @@ const ESTILOS_ADICIONALES = `
     .status-incidencia { background-color: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
     .status-verificado { background-color: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
     .status-revision { background-color: #fffbeb; color: #d97706; border-color: #fde68a; }
+    .status-cancelada { background-color: #f3f4f6; color: #6b7280; border-color: #d1d5db; }
     .dark .status-aprobado { background-color: rgba(16, 185, 129, 0.1); color: #34d399; border-color: rgba(52, 211, 153, 0.3); }
     .dark .status-incidencia { background-color: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
     .dark .status-verificado { background-color: rgba(59, 130, 246, 0.1); color: #60a5fa; border-color: rgba(96, 165, 250, 0.3); }
     .dark .status-revision { background-color: rgba(245, 158, 11, 0.1); color: #fbbf24; border-color: rgba(251, 191, 36, 0.3); }
+    .dark .status-cancelada { background-color: rgba(107, 114, 128, 0.15); color: #9ca3af; border-color: rgba(156, 163, 175, 0.3); }
 
     .sticky-actions { position: sticky; right: 0; z-index: 30; background-color: #ffffff; }
     .dark .sticky-actions { background-color: #121212; }
@@ -70,6 +72,7 @@ const ESTILOS_ADICIONALES = `
 
 const EtiquetasOperacion = ({ solicitud, listas }) => {
     const nombreProceso = solicitud.proceso?.nombre || '';
+    const esOperativo = solicitud.proceso?.categoria_flujo === 'operativo';
     const esTag = nombreProceso.toUpperCase().includes('TAG');
     const esCambioLista = nombreProceso.toUpperCase().includes('LISTA');
     const objLista = solicitud.lista_descuento || solicitud.listaDescuento;
@@ -80,6 +83,23 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
 
     return (
         <div className="flex flex-wrap gap-1.5">
+            {esOperativo && solicitud.numero_remision && (
+                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-orange-500/10 text-orange-600 border border-orange-500/20">
+                    Remisión: {solicitud.numero_remision}
+                </span>
+            )}
+            {esOperativo && solicitud.numero_pedido && (
+                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-600 border border-cyan-500/20">
+                    Pedido: {solicitud.numero_pedido}
+                </span>
+            )}
+            {esOperativo && solicitud.solicitar_cotizacion && (
+                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-violet-500/10 text-violet-600 border border-violet-500/20">
+                    + Cotización
+                </span>
+            )}
+            {!esOperativo && (
+            <>
             <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-slate-500/10 text-slate-500 border border-slate-500/20 flex items-center gap-1">
                 Lista actual: {listaActual}
             </span>
@@ -96,6 +116,13 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
             {objTipo && (
                 <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 flex items-center gap-1">
                     <Users className="w-3 h-3" /> {objTipo.nombre}
+                </span>
+            )}
+            </>
+            )}
+            {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
+                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-red-500/10 text-red-600 border border-red-500/20 flex items-center gap-1">
+                    <Ban className="w-3 h-3" /> Cancelación solicitada
                 </span>
             )}
         </div>
@@ -240,6 +267,93 @@ const FeedbackYComentarios = ({ solicitud }) => {
     );
 };
 
+const tieneMotivoCancelacionVisible = (solicitud) => {
+    const motivo = solicitud?.motivo_cancelacion?.trim();
+    if (!motivo) return false;
+    return !!solicitud.cancelacion_solicitada_at || solicitud.estado?.nombre === 'Cancelada';
+};
+
+const MotivoCancelacionBloque = ({ solicitud, compacto = false }) => {
+    if (!tieneMotivoCancelacionVisible(solicitud)) return null;
+
+    const pendiente = solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada';
+    const titulo = pendiente ? 'Motivo de cancelación solicitada' : 'Motivo de cancelación';
+    const fechaSolicitud = solicitud.cancelacion_solicitada_at
+        ? formatearTiempoRelativo(solicitud.cancelacion_solicitada_at)
+        : null;
+
+    return (
+        <div
+            className={`${compacto ? 'mt-2' : 'mt-3'} p-3 rounded-2xl border flex flex-col gap-1.5 shadow-sm ${
+                pendiente
+                    ? 'bg-red-50 dark:bg-red-500/5 border-red-200 dark:border-red-500/25'
+                    : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-600'
+            }`}
+        >
+            <div className="flex items-start gap-2">
+                <Ban className={`w-4 h-4 shrink-0 mt-0.5 ${pendiente ? 'text-red-500' : 'text-slate-500'}`} />
+                <div className="flex-1 min-w-0">
+                    <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${pendiente ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                        {titulo}
+                    </p>
+                    {fechaSolicitud && pendiente && (
+                        <p className="text-[9px] font-bold theme-text-muted mb-1">Solicitada {fechaSolicitud}</p>
+                    )}
+                    <p className={`text-xs font-bold leading-snug whitespace-pre-wrap break-words ${pendiente ? 'text-red-800 dark:text-red-200' : 'theme-text-main italic'}`}>
+                        {solicitud.motivo_cancelacion}
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ModalConfirmarCancelacion = ({ onClose, solicitud, onProcesando }) => {
+    const { put, processing } = useForm({});
+
+    const submit = (e) => {
+        e.preventDefault();
+        onProcesando?.(true);
+        put(route('solicitudes.cancelar', solicitud.id), {
+            onSuccess: () => onClose(),
+            onFinish: () => onProcesando?.(false),
+        });
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
+            <div className="w-full max-w-md theme-surface border theme-border rounded-[2rem] p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none"><X className="w-5 h-5" /></button>
+                <div className="flex items-center gap-3 mb-4">
+                    <XCircle className="w-6 h-6 text-red-500" />
+                    <h3 className="text-xl font-black italic theme-text-main uppercase m-0">Confirmar Cancelación</h3>
+                </div>
+                <p className="text-sm theme-text-muted mb-4">
+                    FOL-{solicitud.id} — Se revertirán los cambios al cliente si la solicitud ya fue aprobada.
+                </p>
+                <MotivoCancelacionBloque solicitud={solicitud} compacto />
+                <form onSubmit={submit} className="mt-6 flex flex-col gap-3">
+                    <button
+                        type="submit"
+                        disabled={processing}
+                        className="w-full py-4 text-white rounded-xl font-black uppercase text-[11px] tracking-widest bg-red-600 hover:bg-red-700 transition-all shadow-lg outline-none disabled:opacity-50"
+                    >
+                        Confirmar cancelación
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="w-full py-3 rounded-xl font-black uppercase text-[10px] tracking-widest theme-element border theme-border theme-text-muted hover:theme-text-main transition-colors outline-none"
+                    >
+                        Volver
+                    </button>
+                </form>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 const ModalConfirmarPago = ({ onClose, solicitud, onConfirmar }) => {
     const { data, setData, processing } = useForm({ monto_final_pagado: solicitud?.monto_cotizado || '' });
     const submit = (e) => { e.preventDefault(); onConfirmar(solicitud.id, data); };
@@ -268,34 +382,87 @@ const ModalConfirmarPago = ({ onClose, solicitud, onConfirmar }) => {
     );
 };
 
+const ModalSolicitarCancelacion = ({ onClose, solicitud, onConfirmar }) => {
+    const { data, setData, post, processing } = useForm({ motivo_cancelacion: '' });
+
+    const submit = (e) => {
+        e.preventDefault();
+        post(route('solicitudes.solicitar_cancelacion', solicitud.id), {
+            onSuccess: () => { onConfirmar?.(); onClose(); },
+        });
+    };
+
+    return createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
+            <div className="w-full max-w-md theme-surface border theme-border rounded-[2rem] p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none"><X className="w-5 h-5" /></button>
+                <div className="flex items-center gap-3 mb-6">
+                    <Ban className="w-6 h-6 text-red-500" />
+                    <h3 className="text-xl font-black italic theme-text-main uppercase m-0">Solicitar Cancelación</h3>
+                </div>
+                <p className="text-sm theme-text-muted mb-4">FOL-{solicitud.id} — La encargada o administrador deberá confirmar la cancelación.</p>
+                <form onSubmit={submit} className="space-y-4">
+                    <textarea
+                        required
+                        minLength={10}
+                        value={data.motivo_cancelacion}
+                        onChange={e => setData('motivo_cancelacion', e.target.value)}
+                        placeholder="Describe el motivo de la cancelación (mín. 10 caracteres)..."
+                        rows={4}
+                        className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 resize-none"
+                    />
+                    <button type="submit" disabled={processing} className="w-full py-4 text-white rounded-xl font-black uppercase text-[11px] tracking-widest bg-red-600 hover:bg-red-700 transition-all shadow-lg outline-none disabled:opacity-50">
+                        Enviar Solicitud
+                    </button>
+                </form>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 // =============================================
 // MENÚ ACCIONES — Portal
 // =============================================
-const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, setModalConsulta, setModalRespuestaConsulta, abrirModalPago, confirmarCambioLista, confirmarRollback, eliminarSolicitud, can, auth }) => {
+const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, setModalConsulta, setModalRespuestaConsulta, abrirModalPago, confirmarCambioLista, confirmarRollback, eliminarSolicitud, abrirModalCancelacion, abrirModalConfirmarCancelacion, can, auth }) => {
     if (!menuAbierto || !menuSolicitud) return null;
     const solicitud = menuSolicitud;
+    const esOperativo = solicitud.proceso?.categoria_flujo === 'operativo';
+    const esCancelada = solicitud.estado?.nombre === 'Cancelada';
+    const estadosActivos = ['Pendiente', 'Respondida', 'Verificada'];
 
     const roles = auth?.user?.roles || [];
     const esGerente = roles.some(r => String(r).toLowerCase().includes('gerente'));
     const puedeReportarError = (can('solicitudes.reportar') || can('solicitudes.verificar') || esGerente)
-        && solicitud.estado?.nombre !== 'Incorrecta';
+        && solicitud.estado?.nombre !== 'Incorrecta'
+        && !esCancelada;
 
     const auditoriasOrdenadas = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id);
     const ultimaAuditoria = auditoriasOrdenadas.find(a => !a.motivo_reporte?.toUpperCase().includes('AUTOMÁTICAMENTE'));
     const esAlertaPago = ultimaAuditoria?.motivo_reporte?.toUpperCase().includes('ALERTA DE PAGO');
     const esVencimiento = solicitud.motivo_incorrecta === 'vencimiento_pago';
     const consultaPendiente = (solicitud.consultas || []).find(c => c.estado === 'pendiente');
-    const puedeConsultar = can('solicitudes.consultar')
+    const puedeConsultar = !esOperativo && can('solicitudes.consultar')
         && solicitud.vendedor_id === auth.user.id
         && solicitud.estado?.nombre === 'Respondida'
         && !solicitud.pago_confirmado
         && !consultaPendiente
         && !esAlertaPago;
 
+    const puedeSolicitarCancelacion = solicitud.vendedor_id === auth.user.id
+        && estadosActivos.includes(solicitud.estado?.nombre)
+        && !solicitud.cancelacion_solicitada_at
+        && !esVencimiento
+        && !esCancelada;
+
+    const puedeConfirmarCancelacion = can('solicitudes.cancelar')
+        && solicitud.cancelacion_solicitada_at
+        && !esCancelada;
+
     return createPortal(
         <>
             <div className="fixed inset-0 z-[999]" onClick={() => setMenuAbierto(null)}></div>
-            <div className="fixed z-[1000] theme-surface border theme-border shadow-2xl rounded-2xl p-2 w-56 flex flex-col gap-1 backdrop-blur-xl animate-fade-in" style={{ top: menuPos.top, left: menuPos.left }}>
+            <div className={`fixed z-[1000] theme-surface border theme-border shadow-2xl rounded-2xl p-2 flex flex-col gap-1 backdrop-blur-xl animate-fade-in ${puedeConfirmarCancelacion && solicitud.motivo_cancelacion ? 'w-72' : 'w-56'}`} style={{ top: menuPos.top, left: menuPos.left }}>
 
                 {/* Confirmar Cambio de Lista (Solo si hay alerta) */}
                 {esAlertaPago && can('solicitudes.confirmar_cambio_lista') && (
@@ -335,22 +502,43 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Confirmar Pago - CORREGIDO: Ahora exige estrictamente que el estado sea 'Respondida' (Estado 2) */}
-                {(can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id) && !solicitud.pago_confirmado && solicitud.estado?.nombre === 'Respondida' && !esAlertaPago && (
+                {/* Confirmar Pago - solo procesos financieros */}
+                {!esOperativo && (can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id) && !solicitud.pago_confirmado && solicitud.estado?.nombre === 'Respondida' && !esAlertaPago && (
                     <button onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
                         <CreditCard className="w-4 h-4" /> Confirmar Pago
                     </button>
                 )}
 
+                {puedeSolicitarCancelacion && (
+                    <button onClick={() => { setMenuAbierto(null); abrirModalCancelacion(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                        <Ban className="w-4 h-4" /> Solicitar Cancelación
+                    </button>
+                )}
+
+                {puedeConfirmarCancelacion && solicitud.motivo_cancelacion && (
+                    <div className="px-3 py-2 mb-1 border-b theme-border">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 mb-1">Motivo del vendedor</p>
+                        <p className="text-[10px] font-bold theme-text-main leading-snug line-clamp-4 italic">
+                            {solicitud.motivo_cancelacion}
+                        </p>
+                    </div>
+                )}
+
+                {puedeConfirmarCancelacion && (
+                    <button onClick={() => { setMenuAbierto(null); abrirModalConfirmarCancelacion(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                        <XCircle className="w-4 h-4" /> Confirmar Cancelación
+                    </button>
+                )}
+
                 {/* Verificado (Paso final de la auxiliar) */}
-                {can('solicitudes.verificar') && !esAlertaPago && (
+                {can('solicitudes.verificar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre !== 'Incorrecta' && (
                     <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 3 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
                         <CheckSquare className="w-4 h-4" /> Verificado
                     </button>
                 )}
 
                 {/* Aprobar (Encargada) — solo Pendiente */}
-                {can('solicitudes.reportar') && !esAlertaPago && solicitud.estado?.nombre === 'Pendiente' && (
+                {can('solicitudes.reportar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre === 'Pendiente' && (
                     <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 2 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3" style={{ color: 'var(--color-primario)' }}>
                         <CheckCircle2 className="w-4 h-4" /> Aprobar Proceso
                     </button>
@@ -412,6 +600,7 @@ export default function Index({
     listas = [],
     tipos_cliente = [],
     vendedores = [],
+    bancos = [],
     filtros = {},
     auth
 }) {
@@ -422,6 +611,8 @@ export default function Index({
     const [modalConsulta, setModalConsulta] = useState({ abierto: false, solicitud: null });
     const [modalRespuestaConsulta, setModalRespuestaConsulta] = useState({ abierto: false, solicitud: null, consulta: null });
     const [modalPago, setModalPago] = useState({ abierto: false, solicitud: null });
+    const [modalCancelacion, setModalCancelacion] = useState({ abierto: false, solicitud: null });
+    const [modalConfirmarCancelacion, setModalConfirmarCancelacion] = useState({ abierto: false, solicitud: null });
     const [menuAbierto, setMenuAbierto] = useState(null);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
     const [menuSolicitud, setMenuSolicitud] = useState(null);
@@ -596,6 +787,7 @@ export default function Index({
             case 'respondida': return { clase: 'status-aprobado', icon: CheckCircle2, label: 'Aprobado' };
             case 'incorrecta': return { clase: 'status-incidencia', icon: AlertOctagon, label: 'Reporte' };
             case 'verificada': return { clase: 'status-verificado', icon: CheckSquare, label: 'Verificada' };
+            case 'cancelada': return { clase: 'status-cancelada', icon: XCircle, label: 'Cancelada' };
             default: return { clase: 'status-revision', icon: Clock, label: 'Pendiente' };
         }
     };
@@ -635,11 +827,21 @@ export default function Index({
                 abrirModalPago={(s) => setModalPago({ abierto: true, solicitud: s })}
                 confirmarCambioLista={confirmarCambioLista}
                 confirmarRollback={confirmarRollback}
+                abrirModalConfirmarCancelacion={(s) => setModalConfirmarCancelacion({ abierto: true, solicitud: s })}
+                abrirModalCancelacion={(s) => setModalCancelacion({ abierto: true, solicitud: s })}
                 eliminarSolicitud={eliminarSolicitud}
                 can={can}
                 auth={auth}
             />
             {modalPago.abierto && <ModalConfirmarPago onClose={() => setModalPago({ abierto: false, solicitud: null })} solicitud={modalPago.solicitud} onConfirmar={confirmarPagoConMonto} />}
+            {modalCancelacion.abierto && <ModalSolicitarCancelacion onClose={() => setModalCancelacion({ abierto: false, solicitud: null })} solicitud={modalCancelacion.solicitud} />}
+            {modalConfirmarCancelacion.abierto && (
+                <ModalConfirmarCancelacion
+                    onClose={() => setModalConfirmarCancelacion({ abierto: false, solicitud: null })}
+                    solicitud={modalConfirmarCancelacion.solicitud}
+                    onProcesando={setProcesandoAccion}
+                />
+            )}
 
             <div className="max-w-[1440px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
                 <header className="animate-page-reveal theme-surface rounded-3xl md:rounded-[2.5rem] p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 border theme-border shadow-xl">
@@ -723,6 +925,7 @@ export default function Index({
                                         procesando={procesandoAccion}
                                     />
                                     <FeedbackYComentarios solicitud={solicitud} />
+                                    <MotivoCancelacionBloque solicitud={solicitud} />
                                     <div className="flex items-center justify-between pt-2 border-t theme-border">
                                         <div>
                                             <div className="font-black italic theme-text-main text-sm">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
@@ -806,6 +1009,7 @@ export default function Index({
                                                     procesando={procesandoAccion}
                                                 />
                                                 <FeedbackYComentarios solicitud={solicitud} />
+                                                <MotivoCancelacionBloque solicitud={solicitud} />
                                             </td>
                                             <td className="p-6 align-top">
                                                 <div className="font-black italic theme-text-main text-sm bg-black/5 dark:bg-white/5 px-3 py-1.5 rounded-lg inline-block border theme-border">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
@@ -828,7 +1032,7 @@ export default function Index({
                 <Paginacion solicitudes={solicitudes} onIrAPagina={irAPagina} />
             </div>
 
-            {modalForm.abierto && <ModalFormSolicitud onClose={() => setModalForm({ ...modalForm, abierto: false })} procesos={procesos} listas={listas} tiposCliente={tipos_cliente} modoEdicion={modalForm.modoEdicion} solicitudAEditar={modalForm.solicitud} />}
+            {modalForm.abierto && <ModalFormSolicitud onClose={() => setModalForm({ ...modalForm, abierto: false })} procesos={procesos} listas={listas} tiposCliente={tipos_cliente} bancos={bancos} modoEdicion={modalForm.modoEdicion} solicitudAEditar={modalForm.solicitud} />}
             {modalRespuesta.abierto && <ModalRespuestaSolicitud onClose={() => setModalRespuesta({ ...modalRespuesta, abierto: false })} solicitud={modalRespuesta.solicitud} estadoId={modalRespuesta.estadoId} />}
             {modalBitacora.abierto && <ModalBitacoraSolicitud onClose={() => setModalBitacora({ ...modalBitacora, abierto: false })} solicitud={modalBitacora.solicitud} listas={listas} tiposCliente={tipos_cliente} />}
             {modalConsulta.abierto && <ModalConsultaSolicitud onClose={() => setModalConsulta({ ...modalConsulta, abierto: false })} solicitud={modalConsulta.solicitud} />}

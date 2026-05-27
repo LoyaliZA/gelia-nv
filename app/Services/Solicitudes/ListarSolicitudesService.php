@@ -2,6 +2,7 @@
 
 namespace App\Services\Solicitudes;
 
+use App\Models\CatalogoEstadoSolicitud;
 use App\Models\SolicitudTag;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,6 +17,7 @@ class ListarSolicitudesService
             'departamento',
             'proceso',
             'estado',
+            'banco',
             'auditorias.usuario',
             'auditorias.estadoNuevo',
             'listaDescuento',
@@ -64,14 +66,7 @@ class ListarSolicitudesService
     private function aplicarFiltros(Builder $query, array $filtros): void
     {
         if (!empty($filtros['tab']) && $filtros['tab'] !== 'TODAS') {
-            $estadoPorTab = [
-                'PENDIENTES' => 1,
-                'RESPONDIDAS' => 2,
-                'INCORRECTAS' => 4,
-            ];
-            if (isset($estadoPorTab[$filtros['tab']])) {
-                $query->where('catalogo_estado_solicitud_id', $estadoPorTab[$filtros['tab']]);
-            }
+            $this->aplicarFiltroTab($query, $filtros['tab']);
         }
 
         if (!empty($filtros['estado_id'])) {
@@ -127,6 +122,29 @@ class ListarSolicitudesService
         if (!empty($filtros['motivo_incorrecta'])) {
             $this->aplicarFiltroMotivoIncidencia($query, $filtros['motivo_incorrecta']);
         }
+    }
+
+    private function aplicarFiltroTab(Builder $query, string $tab): void
+    {
+        $idCancelada = CatalogoEstadoSolicitud::where('nombre', 'Cancelada')->value('id');
+
+        match ($tab) {
+            'PENDIENTES' => $query->where(function (Builder $q) use ($idCancelada) {
+                $q->where('catalogo_estado_solicitud_id', 1)
+                    ->orWhere(function (Builder $sub) use ($idCancelada) {
+                        $sub->whereNotNull('cancelacion_solicitada_at');
+                        if ($idCancelada) {
+                            $sub->where('catalogo_estado_solicitud_id', '!=', $idCancelada);
+                        }
+                    });
+            }),
+            'RESPONDIDAS' => $query->where('catalogo_estado_solicitud_id', 2),
+            'INCORRECTAS' => $query->where('catalogo_estado_solicitud_id', 4),
+            'CANCELADAS' => $idCancelada
+                ? $query->where('catalogo_estado_solicitud_id', $idCancelada)
+                : $query->whereRaw('1 = 0'),
+            default => null,
+        };
     }
 
     private function aplicarFiltroMotivoIncidencia(Builder $query, string $motivo): void

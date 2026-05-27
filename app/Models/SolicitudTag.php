@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -31,6 +32,14 @@ class SolicitudTag extends Model
         'total_proyectado_neto',
         'motivo_incorrecta',
         'rollback_confirmado_at',
+        'numero_remision',
+        'numero_pedido',
+        'fecha_operacion',
+        'motivo_operacion',
+        'catalogo_banco_id',
+        'solicitar_cotizacion',
+        'cancelacion_solicitada_at',
+        'motivo_cancelacion',
     ];
 
     protected $casts = [
@@ -40,6 +49,9 @@ class SolicitudTag extends Model
         'pago_confirmado' => 'boolean',
         'confirmo_informacion_escalonamiento' => 'boolean',
         'rollback_confirmado_at' => 'datetime',
+        'fecha_operacion' => 'date',
+        'solicitar_cotizacion' => 'boolean',
+        'cancelacion_solicitada_at' => 'datetime',
     ];
 
     // Relaciones (BelongsTo) hacia los catálogos y entidades
@@ -61,5 +73,30 @@ class SolicitudTag extends Model
     public function consultas(): HasMany
     {
         return $this->hasMany(ConsultaSolicitud::class, 'solicitud_id');
+    }
+
+    public function banco(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoBanco::class, 'catalogo_banco_id');
+    }
+
+    public function esProcesoOperativo(): bool
+    {
+        return $this->proceso?->esOperativo() ?? false;
+    }
+
+    /**
+     * Solicitudes sujetas al plazo de 48 h por falta de pago.
+     * Excluye procesos operativos (cancelación remisión/pedido, cotización sobre pedido, etc.):
+     * no requieren monto de cotización ni confirmación de pago.
+     */
+    public function scopeSujetasAPlazoDePago(Builder $query): Builder
+    {
+        return $query
+            ->where('pago_confirmado', false)
+            ->whereIn('catalogo_estado_solicitud_id', [1, 2])
+            ->whereHas('proceso', function (Builder $proceso) {
+                $proceso->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);
+            });
     }
 }

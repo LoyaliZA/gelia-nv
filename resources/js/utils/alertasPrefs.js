@@ -12,6 +12,8 @@ export const ALERTAS_TIPOS = {
     consulta_nueva: 'Consulta TAG/Lista',
     consulta_respondida: 'Consulta respondida',
     rollback_confirmado: 'Reversión confirmada',
+    cancelacion_solicitada: 'Cancelación solicitada',
+    cancelada: 'Solicitud cancelada',
     resumen_vencidos: 'Reporte de pagos vencidos',
 };
 
@@ -73,12 +75,11 @@ export function getTipoAlerta(notification = {}) {
     if (notification?.total_vencidos !== undefined) return 'resumen_vencidos';
     if (notification?.data?.total_vencidos !== undefined) return 'resumen_vencidos';
 
-    return (
-        notification?.tipo
-        || notification?.data?.tipo
-        || notification?.type
-        || 'actualizacion'
-    );
+    const tipoExplicito = notification?.tipo || notification?.data?.tipo;
+    if (tipoExplicito) return tipoExplicito;
+
+    // Laravel envía `type` como nombre de clase PHP; no usarlo como clave de preferencias.
+    return 'actualizacion';
 }
 
 export function isTipoAlertaEnabled(prefs, tipo) {

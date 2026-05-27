@@ -36,6 +36,10 @@ class CrearSolicitudService
             $montoFinalTentativo = isset($datos['monto_final_tentativo']) ? (float) $datos['monto_final_tentativo'] : null;
             $totalProyectadoNeto = isset($datos['total_proyectado_neto']) ? (float) $datos['total_proyectado_neto'] : null;
 
+            $proceso = \App\Models\CatalogoProceso::find($datos['catalogo_proceso_id']);
+            $esOperativo = $proceso?->esOperativo() ?? false;
+            $montoCotizado = $esOperativo ? 0 : ($datos['monto_cotizado'] ?? 0);
+
             // 3. Creación de la Solicitud
             $solicitud = SolicitudTag::create([
                 'cliente_id' => $clienteId,
@@ -43,15 +47,21 @@ class CrearSolicitudService
                 'departamento_id' => $departamentoOrigenId,
                 'catalogo_proceso_id' => $datos['catalogo_proceso_id'],
                 'catalogo_estado_solicitud_id' => $estadoPendiente->id,
-                'monto_cotizado' => $datos['monto_cotizado'],
+                'monto_cotizado' => $montoCotizado,
                 'pago_confirmado' => filter_var($datos['pago_confirmado'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? null,
                 'evidencia_path' => $evidenciaPath,
-                'catalogo_tipo_cliente_id' => $datos['catalogo_tipo_cliente_id'] ?? null,
-                'catalogo_lista_descuento_id' => $datos['catalogo_lista_descuento_id'] ?? null,
-                'confirmo_informacion_escalonamiento' => filter_var($datos['confirmo_informacion_escalonamiento'] ?? false, FILTER_VALIDATE_BOOLEAN),
-                'monto_final_tentativo' => $montoFinalTentativo,
-                'total_proyectado_neto' => $totalProyectadoNeto,
+                'catalogo_tipo_cliente_id' => $esOperativo ? null : ($datos['catalogo_tipo_cliente_id'] ?? null),
+                'catalogo_lista_descuento_id' => $esOperativo ? null : ($datos['catalogo_lista_descuento_id'] ?? null),
+                'confirmo_informacion_escalonamiento' => $esOperativo ? false : filter_var($datos['confirmo_informacion_escalonamiento'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                'monto_final_tentativo' => $esOperativo ? null : $montoFinalTentativo,
+                'total_proyectado_neto' => $esOperativo ? null : $totalProyectadoNeto,
+                'numero_remision' => $datos['numero_remision'] ?? null,
+                'numero_pedido' => $datos['numero_pedido'] ?? null,
+                'fecha_operacion' => $datos['fecha_operacion'] ?? null,
+                'motivo_operacion' => $datos['motivo_operacion'] ?? null,
+                'catalogo_banco_id' => $datos['catalogo_banco_id'] ?? null,
+                'solicitar_cotizacion' => filter_var($datos['solicitar_cotizacion'] ?? false, FILTER_VALIDATE_BOOLEAN),
             ]);
 
             // 3. Registro del Snapshot Inicial (Auditoría V1)
@@ -69,6 +79,12 @@ class CrearSolicitudService
                     'monto_final_tentativo' => $solicitud->monto_final_tentativo,
                     'total_proyectado_neto' => $solicitud->total_proyectado_neto,
                     'confirmo_informacion_escalonamiento' => $solicitud->confirmo_informacion_escalonamiento,
+                    'numero_remision' => $solicitud->numero_remision,
+                    'numero_pedido' => $solicitud->numero_pedido,
+                    'fecha_operacion' => $solicitud->fecha_operacion?->format('Y-m-d'),
+                    'motivo_operacion' => $solicitud->motivo_operacion,
+                    'catalogo_banco_id' => $solicitud->catalogo_banco_id,
+                    'solicitar_cotizacion' => $solicitud->solicitar_cotizacion,
                     'antes' => $this->snapshotClienteAlCrear($clienteId),
                 ]
             ]);

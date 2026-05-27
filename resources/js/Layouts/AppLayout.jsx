@@ -98,11 +98,13 @@ export default function AppLayout({ children }) {
 
             window.Echo.private(channelName)
                 .notification((notification) => {
-                    const prefs = resolveAlertasPrefs(auth);
+                    const prefs = resolveAlertasPrefs(auth?.tema_visual);
                     const tipo = getTipoAlerta(notification);
 
                     if (shouldTriggerChannel(prefs, tipo, 'app')) {
-                        addToast({ mensaje: notification.mensaje });
+                        const tituloToast = notification.titulo || notification.proceso || 'GELIA ERP';
+                        const texto = notification.mensaje_visible || notification.mensaje || 'Nueva actividad';
+                        addToast({ mensaje: `${tituloToast} — ${texto}` });
                     }
 
                     const sonido = shouldTriggerChannel(prefs, tipo, 'sonido');
@@ -111,8 +113,8 @@ export default function AppLayout({ children }) {
 
                     if (sonido || voz || escritorio) {
                         NotificationService.triggerFullAlert(
-                            'GELIA ERP',
-                            notification.mensaje || 'Nueva notificación operativa.',
+                            notification.titulo || notification.proceso || 'GELIA ERP',
+                            notification.mensaje_visible || notification.mensaje || 'Nueva notificación operativa.',
                             notification.mensaje_voz,
                             { sonido, voz, escritorio }
                         );
