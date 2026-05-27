@@ -5,7 +5,12 @@ import Sidebar from '../Components/Sidebar';
 import { Bell, X } from 'lucide-react';
 
 import NotificationService from '../Services/NotificationBrowserService';
-import GeliaLoader from '../Components/GeliaLoader'; // <-- 1. IMPORTAMOS EL LOADER
+import GeliaLoader from '../Components/GeliaLoader';
+import {
+    resolveAlertasPrefs,
+    getTipoAlerta,
+    shouldTriggerChannel,
+} from '../utils/alertasPrefs';
 import {
     clampFontScale,
     FONT_SCALE_DEFAULT,
@@ -17,7 +22,7 @@ const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
 
 export default function AppLayout({ children }) {
-    const { props: { auth }, url } = usePage();
+    const { props: { auth, tonos_alertas = [] }, url } = usePage();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState(null);
@@ -37,10 +42,21 @@ export default function AppLayout({ children }) {
         }, 5000);
     };
 
-    // INICIALIZAR PERMISOS AL CARGAR LA APP
+    // INICIALIZAR PERMISOS Y PREFERENCIAS DE ALERTAS
     useEffect(() => {
         NotificationService.requestDesktopPermissions();
-    }, []);
+
+        const prefs = resolveAlertasPrefs(auth);
+        NotificationService.setTonosCatalog(tonos_alertas);
+        NotificationService.setPreferences(prefs);
+
+        const onPrefsChanged = (event) => {
+            NotificationService.setPreferences(event.detail);
+        };
+
+        window.addEventListener('alertas-prefs-changed', onPrefsChanged);
+        return () => window.removeEventListener('alertas-prefs-changed', onPrefsChanged);
+    }, [auth?.tema_visual?.alertas_prefs, tonos_alertas]);
 
     // --- ESCUCHADORES DE EVENTOS GLOBALES DE INERTIA ---
     useEffect(() => {
@@ -82,8 +98,28 @@ export default function AppLayout({ children }) {
 
             window.Echo.private(channelName)
                 .notification((notification) => {
-                    addToast({ mensaje: notification.mensaje });
-                    NotificationService.triggerFullAlert('GELIA ERP', notification.mensaje);
+                    const prefs = resolveAlertasPrefs(auth);
+                    const tipo = getTipoAlerta(notification);
+
+                    if (shouldTriggerChannel(prefs, tipo, 'app')) {
+                        addToast({ mensaje: notification.mensaje });
+                    }
+
+                    const sonido = shouldTriggerChannel(prefs, tipo, 'sonido');
+                    const voz = shouldTriggerChannel(prefs, tipo, 'voz');
+                    const escritorio = shouldTriggerChannel(prefs, tipo, 'escritorio');
+
+                    if (sonido || voz || escritorio) {
+                        NotificationService.triggerFullAlert(
+                            'GELIA ERP',
+                            notification.mensaje || 'Nueva notificación operativa.',
+                            notification.mensaje_voz,
+                            { sonido, voz, escritorio }
+                        );
+                    }
+
+                    window.dispatchEvent(new CustomEvent('notification-received', { detail: notification }));
+
                     router.reload({ only: ['auth'], preserveScroll: true, preserveState: true });
                 });
         }
@@ -298,7 +334,7 @@ export default function AppLayout({ children }) {
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     backgroundAttachment: 'fixed',
-                    backgroundRepeat: 'no-repeat'
+                    backgroundRepeat: 'no-repeat',
                 }}
             >
                 {/* --- 4. INSTANCIA ÚNICA DEL LOADER --- */}
@@ -375,7 +411,7 @@ export default function AppLayout({ children }) {
                     .theme-text-muted { color: #71717a; }
                     .theme-border { border-color: #e4e4e7; }
                     .theme-placeholder::placeholder { color: #a1a1aa; }
-                    
+
                     .dark .theme-surface { background-color: #121212; border-color: #222222; }
                     .dark .theme-element { background-color: rgba(30, 30, 30, 1) !important; border-color: #2A2A2A !important; }
                     .dark .theme-text-main { color: #ffffff; }

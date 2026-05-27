@@ -8,11 +8,19 @@ import {
     Image as ImageIcon, Type, Droplet, 
     PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, XCircle,
     Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, Eye, EyeOff,
-    Minus, Plus
+    Minus, Plus, Volume2, Mic, Monitor, Bell
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
-import GeliaLogo from '../../Components/GeliaLogo'; // <-- Importamos el logotipo maestro
+import GeliaLogo from '../../Components/GeliaLogo';
+import NotificationBrowserService from '@/Services/NotificationBrowserService';
+import {
+    readStoredAlertasPrefs,
+    persistAlertasPrefsToStorage,
+    mergeAlertasPrefs,
+    ALERTAS_TIPOS,
+    resolveTonoPath,
+} from '../../utils/alertasPrefs';
 import {
     clampFontScale,
     formatFontScaleLabel,
@@ -144,7 +152,7 @@ const SettingsRow = ({ icon: Icon, title, subtitle, children, border = true, sta
 );
 
 export default function Edit({ tema_visual, perfilUsuario = {} }) {
-    const { auth } = usePage().props;
+    const { auth, tonos_alertas = [], catalogo_temas = [], catalogo_fondos = [] } = usePage().props;
     const usuario = { ...auth?.user, ...perfilUsuario };
 
     const fileInputRef    = useRef(null);
@@ -190,17 +198,28 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         tema_visual:           tema_visual || {},
     });
 
-    const backgroundOptions = ['blob', 'blobscene', 'circle', 'layered', 'peaks', 'polygon', 'square', 'stacked', 'steps', 'wave'];
+    const FALLBACK_BACKGROUNDS = ['blob', 'blobscene', 'circle', 'layered', 'peaks', 'polygon', 'square', 'stacked', 'steps', 'wave'];
     const solidBackgrounds  = [
         { name: 'Blanco',      hex: '#ffffff' },
         { name: 'Negro',       hex: '#000000' },
         { name: 'Gris Oscuro', hex: '#1e293b' },
     ];
-    const presets = [
+    const FALLBACK_PRESETS = [
         { name: 'Gelia Signature', modo: 'dark',  colorHex: '#ec4899', colorNombre: 'rosa',  bg: 'blob',    font: 'montserrat', escala: 1, glass: true,  layout: 'floating_left',  sound: true },
         { name: 'GELIA Oasis',     modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins',     escala: 1, glass: false, layout: 'floating_right', sound: true },
         { name: 'CyberTech',       modo: 'dark',  colorHex: '#3b82f6', colorNombre: 'azul',  bg: 'polygon', font: 'mono',        escala: 1, glass: false, layout: 'fixed',          sound: true },
     ];
+    const presets = catalogo_temas.length > 0 ? catalogo_temas : FALLBACK_PRESETS;
+    const fondosDisponibles = catalogo_fondos.length > 0
+        ? catalogo_fondos
+        : FALLBACK_BACKGROUNDS.map((slug) => ({
+            id: slug,
+            slug,
+            nombre: slug.charAt(0).toUpperCase() + slug.slice(1),
+            tipo: 'vector',
+            valor: slug,
+            preview: `/assets/backgrounds/${slug}_movil.svg`,
+        }));
 
     const [selectedColor, setSelectedColor] = useState(initialTheme.color);
     const [isDarkMode,    setIsDarkMode]    = useState(initialTheme.dark);
@@ -211,7 +230,35 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [sidebarLayout, setSidebarLayout] = useState(initialTheme.layout);
     const [sidebarMode, setSidebarMode] = useState(initialTheme.sidebarMode);
     const [fixedPosition, setFixedPosition] = useState(initialTheme.fixedPosition);
-    const [notifications, setNotifications] = useState({ sound: true });
+    const [alertasPrefs, setAlertasPrefs] = useState(() => readStoredAlertasPrefs(tema_visual));
+
+    const updateAlertasPrefs = useCallback((updater) => {
+        setAlertasPrefs((prev) => {
+            const next = typeof updater === 'function' ? updater(prev) : updater;
+            persistAlertasPrefsToStorage(next);
+            NotificationBrowserService.setPreferences(next);
+            return next;
+        });
+    }, []);
+
+    const toggleCanalAlerta = (canal) => {
+        updateAlertasPrefs((prev) => ({
+            ...prev,
+            canales: { ...prev.canales, [canal]: !prev.canales[canal] },
+        }));
+    };
+
+    const toggleTipoAlerta = (tipo) => {
+        updateAlertasPrefs((prev) => ({
+            ...prev,
+            tipos: { ...prev.tipos, [tipo]: !prev.tipos[tipo] },
+        }));
+    };
+
+    useEffect(() => {
+        NotificationBrowserService.setTonosCatalog(tonos_alertas);
+        NotificationBrowserService.setPreferences(alertasPrefs);
+    }, [tonos_alertas, alertasPrefs]);
 
     useEffect(() => {
         if (isAvatarModalOpen || isBgModalOpen) document.body.style.overflow = 'hidden';
@@ -371,6 +418,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             sidebar_modo:    sidebarMode,
             sidebar_posicion_fija: fixedPosition,
             efecto_cristal:   glassEffect,
+            alertas_prefs:    alertasPrefs,
         };
 
         transform((data) => ({
@@ -400,6 +448,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             setSelectedBg(tv.fondo_base);
                             applyBackgroundCSS(tv.fondo_base);
                         }
+                        const syncedAlertas = mergeAlertasPrefs(tv.alertas_prefs);
+                        setAlertasPrefs(syncedAlertas);
+                        persistAlertasPrefsToStorage(syncedAlertas);
                         themeSnapshotRef.current = captureThemeSnapshot();
                         window.dispatchEvent(new Event('theme-changed'));
                     },
@@ -536,7 +587,12 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         setFontScale(scale);
         setGlassEffect(glass);
         setSidebarLayout(layout);
-        if (preset.sound !== undefined) setNotifications({ sound: preset.sound });
+        if (preset.sound !== undefined) {
+            updateAlertasPrefs((prev) => ({
+                ...prev,
+                canales: { ...prev.canales, sonido: preset.sound },
+            }));
+        }
 
         document.documentElement.style.setProperty('--color-primario', resolveAccentHex(color));
         document.documentElement.style.setProperty('--font-principal', fontFamilies[font] || fontFamilies.inter);
@@ -947,18 +1003,18 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             Temas Predefinidos_
                         </h2>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                         {presets.map((preset, idx) => {
                             const isPresetDark = preset.modo === 'dark';
                             return (
                                 <button
-                                    key={idx} type="button" onClick={() => applyPreset(preset)}
+                                    key={preset.id || preset.slug || idx} type="button" onClick={() => applyPreset(preset)}
                                     className="p-6 rounded-[2rem] flex flex-col items-start gap-4 hover:scale-[1.03] hover:shadow-2xl transition-all text-left shadow-md group relative overflow-hidden border-2"
                                     style={{ backgroundColor: isPresetDark ? '#111113' : '#f8f9fa', borderColor: preset.colorHex + '55' }}
                                 >
                                     <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-20 group-hover:opacity-40 transition-opacity blur-2xl" style={{ backgroundColor: preset.colorHex }} />
                                     <div className="w-full flex justify-between items-center relative z-10">
-                                        <div className="w-7 h-7 rounded-full shadow-lg group-hover:scale-110 transition-transform ring-2 ring-white/20" style={{ backgroundColor: preset.colorHex }}></div>
+                                        <div className="w-7 h-7 rounded-full shadow-lg group-hover:scale-110 transition-transform ring-2 ring-white/20" style={{ backgroundColor: preset.colorHex }} />
                                         <span className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full" style={{ backgroundColor: preset.colorHex + '22', color: preset.colorHex }}>{preset.modo}</span>
                                     </div>
                                     <div className="relative z-10">
@@ -1124,11 +1180,65 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             </div>
                         </SettingsRow>
 
-                        <SettingsRow icon={BellRing} title="Sonidos de notificación" subtitle="Alertas sonoras del sistema" border={false} stackOnMobile={false}>
-                            <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={notifications.sound} onClick={() => setNotifications({ sound: !notifications.sound })}>
+                        <SettingsRow icon={Volume2} title="Timbres de alerta" subtitle="Reproducir sonido al recibir alertas" stackOnMobile={false}>
+                            <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={alertasPrefs.canales.sonido} onClick={() => toggleCanalAlerta('sonido')}>
                                 <div className="gelia-switch-thumb shadow-md" />
                             </button>
                         </SettingsRow>
+
+                        <SettingsRow icon={Mic} title="Texto a voz" subtitle="Leer alertas en voz alta" stackOnMobile={false}>
+                            <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={alertasPrefs.canales.voz} onClick={() => toggleCanalAlerta('voz')}>
+                                <div className="gelia-switch-thumb shadow-md" />
+                            </button>
+                        </SettingsRow>
+
+                        <SettingsRow icon={Monitor} title="Notificaciones de escritorio" subtitle="Alertas nativas del sistema operativo" stackOnMobile={false}>
+                            <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={alertasPrefs.canales.escritorio} onClick={() => toggleCanalAlerta('escritorio')}>
+                                <div className="gelia-switch-thumb shadow-md" />
+                            </button>
+                        </SettingsRow>
+
+                        <SettingsRow icon={Bell} title="Notificaciones GeliaNV" subtitle="Toasts flotantes en la aplicación" stackOnMobile={false}>
+                            <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={alertasPrefs.canales.app} onClick={() => toggleCanalAlerta('app')}>
+                                <div className="gelia-switch-thumb shadow-md" />
+                            </button>
+                        </SettingsRow>
+
+                        <SettingsRow icon={Volume2} title="Tono de notificación" subtitle="Sonido al recibir una alerta" stackOnMobile={true}>
+                            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                <select
+                                    value={alertasPrefs.tono_id}
+                                    onChange={(e) => updateAlertasPrefs((prev) => ({ ...prev, tono_id: e.target.value }))}
+                                    className="w-full sm:w-52 px-4 py-2.5 rounded-xl text-xs font-bold theme-element border theme-border theme-text-main outline-none focus:border-[var(--color-primario)]"
+                                >
+                                    {(tonos_alertas.length > 0 ? tonos_alertas : [{ id: 'default', nombre: 'Campana clásica' }]).map((tono) => (
+                                        <option key={tono.id} value={tono.id}>{tono.nombre}</option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => NotificationBrowserService.previewTone(resolveTonoPath(tonos_alertas, alertasPrefs.tono_id))}
+                                    className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border theme-text-main hover:border-[var(--color-primario)] transition-colors whitespace-nowrap"
+                                >
+                                    Probar tono
+                                </button>
+                            </div>
+                        </SettingsRow>
+
+                        <div className="pt-4 border-t theme-border space-y-3">
+                            <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipos de alerta a recibir</p>
+                            <p className="text-[10px] font-bold theme-text-muted ml-1 leading-relaxed">Desactivar un tipo silencia sonido, voz, escritorio y toasts. El historial en el Centro de Alertas se conserva.</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {Object.entries(ALERTAS_TIPOS).map(([tipo, label]) => (
+                                    <div key={tipo} className="flex items-center justify-between gap-3 p-3 rounded-xl theme-element border theme-border">
+                                        <span className="text-[10px] font-bold theme-text-main leading-snug">{label}</span>
+                                        <button type="button" className="gelia-switch shrink-0 scale-110 origin-right" data-active={alertasPrefs.tipos[tipo] !== false} onClick={() => toggleTipoAlerta(tipo)}>
+                                            <div className="gelia-switch-thumb shadow-md" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -1143,21 +1253,27 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
 
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Diseños Vectoriales</p>
+                            <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Fondos del catálogo</p>
                             <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border theme-border theme-text-main opacity-80">
                                 Actual: {getBackgroundType(selectedBg)}
                             </span>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                            {backgroundOptions.map((bg) => (
+                            {fondosDisponibles.map((fondo) => {
+                                const bgValue = fondo.valor;
+                                const previewSrc = fondo.preview || (fondo.tipo === 'vector'
+                                    ? `/assets/backgrounds/${fondo.valor}_movil.svg`
+                                    : fondo.valor);
+                                return (
                                 <button
-                                    key={bg} type="button" onClick={() => handleBgChange(bg)}
-                                    className={`relative h-24 rounded-2xl overflow-hidden border-[3px] transition-all duration-300 group ${selectedBg === bg ? 'shadow-2xl scale-105 ring-2 ring-offset-2 dark:ring-offset-[#141414]' : 'border-transparent opacity-60 hover:opacity-100 hover:shadow-lg hover:-translate-y-1'}`}
-                                    style={{ '--tw-ring-color': 'var(--color-primario)', borderColor: selectedBg === bg ? 'var(--color-primario)' : '' }} title={bg}
+                                    key={fondo.id || fondo.slug} type="button" onClick={() => handleBgChange(bgValue)}
+                                    className={`relative h-24 rounded-2xl overflow-hidden border-[3px] transition-all duration-300 group ${selectedBg === bgValue ? 'shadow-2xl scale-105 ring-2 ring-offset-2 dark:ring-offset-[#141414]' : 'border-transparent opacity-60 hover:opacity-100 hover:shadow-lg hover:-translate-y-1'}`}
+                                    style={{ '--tw-ring-color': 'var(--color-primario)', borderColor: selectedBg === bgValue ? 'var(--color-primario)' : '' }} title={fondo.nombre}
                                 >
-                                    <img src={`/assets/backgrounds/${bg}_movil.svg`} alt={bg} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                    <img src={previewSrc} alt={fondo.nombre} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                                 </button>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
 
