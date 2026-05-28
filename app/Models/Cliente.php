@@ -14,6 +14,12 @@ class Cliente extends Model
     protected $fillable = [
         'numero_cliente',
         'nombre',
+        'rfc',
+        'codigo_postal',
+        'regimen_fiscal',
+        'correo_electronico',
+        'uso_factura',
+        'nombre_razon_social',
         'lista_actual_id',
         'vendedor_id',
         'vendedor_original_id', // Agregado a la asignación masiva

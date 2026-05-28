@@ -318,7 +318,9 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                     <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7)<br />
                                     <strong style={{ color: 'var(--color-primario)' }}>monto_venta_actual</strong><br />
                                     <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)<br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)
+                                    <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)<br /><br />
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-500">Datos fiscales (opcionales, importación futura):</span><br />
+                                    <strong style={{ color: 'var(--color-primario)' }}>rfc</strong>, <strong style={{ color: 'var(--color-primario)' }}>codigo_postal</strong>, <strong style={{ color: 'var(--color-primario)' }}>regimen_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>correo_electronico</strong>, <strong style={{ color: 'var(--color-primario)' }}>uso_factura</strong>, <strong style={{ color: 'var(--color-primario)' }}>nombre_razon_social</strong>
                                 </p>
                             </div>
                         </section>
@@ -406,6 +408,15 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                                             {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cliente.monto_venta_actual)}
                                                         </span>
                                                     </div>
+                                                    {cliente.rfc || cliente.correo_electronico || cliente.nombre_razon_social ? (
+                                                        <p className="text-[9px] font-bold theme-text-muted mt-1.5 truncate max-w-[280px]">
+                                                            {[cliente.rfc, cliente.codigo_postal, cliente.correo_electronico].filter(Boolean).join(' · ')}
+                                                        </p>
+                                                    ) : (
+                                                        <span className="inline-block mt-1.5 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-slate-500/10 text-slate-500 border border-slate-500/20">
+                                                            Sin datos fiscales
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
 

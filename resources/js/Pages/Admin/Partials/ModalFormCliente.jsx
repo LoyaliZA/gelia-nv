@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
-import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered } from 'lucide-react';
+import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered, FileText } from 'lucide-react';
 
 export default function ModalFormCliente({ onClose, modoModal, clienteActual, tiposCliente = [], vendedores = [], listas = [] }) {
     
@@ -15,6 +15,12 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
         monto_venta_actual: clienteActual?.monto_venta_actual || 0,
         lista_actual_id: clienteActual?.lista_actual_id || '',
         lista_bloqueada: clienteActual?.lista_bloqueada === 1 || clienteActual?.lista_bloqueada === true,
+        rfc: clienteActual?.rfc || '',
+        codigo_postal: clienteActual?.codigo_postal || '',
+        regimen_fiscal: clienteActual?.regimen_fiscal || '',
+        correo_electronico: clienteActual?.correo_electronico || '',
+        uso_factura: clienteActual?.uso_factura || '',
+        nombre_razon_social: clienteActual?.nombre_razon_social || '',
     });
 
     const guardarCliente = (e) => {
@@ -165,6 +171,43 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                     <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
                                         <ChevronDown className="w-4 h-4 theme-text-muted" />
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* --- BLOQUE: DATOS FISCALES --- */}
+                        <div className="p-6 theme-element border theme-border rounded-2xl space-y-4 shadow-sm">
+                            <div className="flex items-center gap-2 mb-2">
+                                <FileText className="w-4 h-4 text-blue-500 drop-shadow-sm" />
+                                <span className="text-[10px] font-black uppercase tracking-widest theme-text-main">Datos Fiscales_</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">RFC</label>
+                                    <input type="text" value={data.rfc} onChange={e => setData('rfc', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    {errors.rfc && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.rfc}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Código Postal</label>
+                                    <input type="text" value={data.codigo_postal} onChange={e => setData('codigo_postal', e.target.value)} maxLength={5} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    {errors.codigo_postal && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.codigo_postal}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Régimen Fiscal</label>
+                                    <input type="text" value={data.regimen_fiscal} onChange={e => setData('regimen_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Correo Electrónico</label>
+                                    <input type="email" value={data.correo_electronico} onChange={e => setData('correo_electronico', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                    {errors.correo_electronico && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.correo_electronico}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Uso de Factura</label>
+                                    <input type="text" value={data.uso_factura} onChange={e => setData('uso_factura', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre (Razón Social)</label>
+                                    <input type="text" value={data.nombre_razon_social} onChange={e => setData('nombre_razon_social', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                             </div>
                         </div>

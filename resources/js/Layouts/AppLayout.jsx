@@ -46,9 +46,13 @@ export default function AppLayout({ children }) {
     useEffect(() => {
         NotificationService.requestDesktopPermissions();
 
-        const prefs = resolveAlertasPrefs(auth);
-        NotificationService.setTonosCatalog(tonos_alertas);
-        NotificationService.setPreferences(prefs);
+        const syncPrefs = () => {
+            const prefs = resolveAlertasPrefs(auth);
+            NotificationService.setTonosCatalog(tonos_alertas);
+            NotificationService.setPreferences(prefs);
+        };
+
+        syncPrefs();
 
         const onPrefsChanged = (event) => {
             NotificationService.setPreferences(event.detail);
@@ -56,7 +60,7 @@ export default function AppLayout({ children }) {
 
         window.addEventListener('alertas-prefs-changed', onPrefsChanged);
         return () => window.removeEventListener('alertas-prefs-changed', onPrefsChanged);
-    }, [auth?.tema_visual?.alertas_prefs, tonos_alertas]);
+    }, [auth?.tema_visual?.alertas_prefs, tonos_alertas, auth]);
 
     // --- ESCUCHADORES DE EVENTOS GLOBALES DE INERTIA ---
     useEffect(() => {
@@ -98,7 +102,7 @@ export default function AppLayout({ children }) {
 
             window.Echo.private(channelName)
                 .notification((notification) => {
-                    const prefs = resolveAlertasPrefs(auth?.tema_visual);
+                    const prefs = resolveAlertasPrefs(auth);
                     const tipo = getTipoAlerta(notification);
 
                     if (shouldTriggerChannel(prefs, tipo, 'app')) {

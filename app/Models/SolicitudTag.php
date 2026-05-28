@@ -42,6 +42,9 @@ class SolicitudTag extends Model
         'cancelacion_solicitada_at',
         'motivo_cancelacion',
         'catalogo_lista_rebaja_id',
+        'factura_razon_social',
+        'archivo_facturas_path',
+        'factura_datos_fiscales',
     ];
 
     protected $casts = [
@@ -55,6 +58,7 @@ class SolicitudTag extends Model
         'solicitar_cotizacion' => 'boolean',
         'compra_en_tienda' => 'boolean',
         'cancelacion_solicitada_at' => 'datetime',
+        'factura_datos_fiscales' => 'array',
     ];
 
     // Relaciones (BelongsTo) hacia los catálogos y entidades
@@ -82,6 +86,18 @@ class SolicitudTag extends Model
     public function banco(): BelongsTo
     {
         return $this->belongsTo(CatalogoBanco::class, 'catalogo_banco_id');
+    }
+
+    public function remisionesFactura(): HasMany
+    {
+        return $this->hasMany(SolicitudFacturaRemision::class, 'solicitud_id')->orderBy('orden');
+    }
+
+    public function esProcesoFactura(): bool
+    {
+        $nombre = strtoupper($this->proceso?->nombre ?? '');
+
+        return str_contains($nombre, 'FACTURA');
     }
 
     public function esProcesoOperativo(): bool

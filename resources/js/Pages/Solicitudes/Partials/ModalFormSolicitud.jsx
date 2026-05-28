@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store } from 'lucide-react';
+import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, FileSpreadsheet, Upload, Trash2, Download } from 'lucide-react';
 
 const obtenerProceso = (procesos, procesoId) => procesos.find(p => String(p.id) === String(procesoId)) || null;
 
@@ -22,6 +22,7 @@ const resolverListaBronce = (catalogoListas) => {
 const tipoOperativo = (procesos, procesoId) => {
     const nombre = obtenerProceso(procesos, procesoId)?.nombre?.toUpperCase() || '';
     if (nombre.includes('REMISIÓN') || nombre.includes('REMISION')) return 'remision';
+    if (nombre.includes('FACTURA')) return 'factura';
     if (nombre.includes('PEDIDO') && nombre.includes('CANCEL')) return 'pedido';
     if (nombre.includes('COTIZACIÓN') || nombre.includes('COTIZACION')) return 'cotizacion_pedido';
     return 'generico';
@@ -163,6 +164,10 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     const [alertaLista, setAlertaLista] = useState(null);
     const [alertaHeredado, setAlertaHeredado] = useState(false);
     const [analisisFinanciero, setAnalisisFinanciero] = useState(null);
+    const [pdfsRemision, setPdfsRemision] = useState([]);
+    const [dragExcel, setDragExcel] = useState(false);
+    const excelInputRef = useRef(null);
+    const pdfInputRef = useRef(null);
 
     const temporizadorBusqueda = useRef(null);
 
@@ -184,12 +189,16 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         catalogo_banco_id: solicitudAEditar?.catalogo_banco_id || '',
         solicitar_cotizacion: solicitudAEditar?.solicitar_cotizacion || false,
         compra_en_tienda: false,
+        factura_razon_social: solicitudAEditar?.factura_razon_social || '',
+        archivo_facturas: null,
+        remisiones_pdf: [],
     });
 
     const esOperativo = esProcesoOperativo(procesos, data.catalogo_proceso_id);
     const esClienteNuevo = esProcesoClienteNuevo(procesos, data.catalogo_proceso_id);
     const listaBronce = resolverListaBronce(listas);
     const subtipoOperativo = tipoOperativo(procesos, data.catalogo_proceso_id);
+    const esFactura = subtipoOperativo === 'factura';
     const cotizacionOpcional = esClienteNuevo && data.compra_en_tienda;
 
     const opcionesTipoCliente = infoCliente?.es_heredado
@@ -327,18 +336,33 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
             return;
         }
 
+        const usaArchivos = esFactura && !modoEdicion;
         const config = {
-            onSuccess: () => { reset(); onClose(); },
-            forceFormData: false,
+            onSuccess: () => { reset(); setPdfsRemision([]); onClose(); },
+            forceFormData: usaArchivos,
+            preserveScroll: true,
         };
 
         if (modoEdicion) {
             transform((d) => ({ ...d, _method: 'put' }));
             post(route('solicitudes.update', solicitudAEditar.id), config);
+        } else if (usaArchivos) {
+            transform((d) => ({ ...d, remisiones_pdf: pdfsRemision }));
+            post(route('solicitudes.store'), config);
         } else {
             transform((d) => d);
             post(route('solicitudes.store'), config);
         }
+    };
+
+    const agregarPdfs = (files) => {
+        const nuevos = Array.from(files || []).filter(f => f.type === 'application/pdf');
+        const combinados = [...pdfsRemision, ...nuevos].slice(0, 10);
+        setPdfsRemision(combinados);
+    };
+
+    const quitarPdf = (index) => {
+        setPdfsRemision(prev => prev.filter((_, i) => i !== index));
     };
 
     return createPortal(
@@ -380,6 +404,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                     <div className="space-y-8">
 
+                        {!esFactura && (
                         <div className="space-y-2 relative">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cliente (Buscador)_</label>
                             <div className="relative">
@@ -410,6 +435,69 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 </div>
                             )}
                         </div>
+                        )}
+
+                        {esFactura && !modoEdicion && (
+                            <div className="space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Razón Social_</label>
+                                    <input type="text" required value={data.factura_razon_social} onChange={e => setData('factura_razon_social', e.target.value)} placeholder="Nombre o razón social a facturar" className="w-full px-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 shadow-sm" />
+                                    {errors.factura_razon_social && <p className="text-xs text-red-500">{errors.factura_razon_social}</p>}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between gap-3 ml-1">
+                                        <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Excel datos fiscales (opcional)_</label>
+                                        <a
+                                            href={route('solicitudes.plantilla_facturas')}
+                                            className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)] hover:underline shrink-0"
+                                        >
+                                            <Download className="w-3.5 h-3.5" />
+                                            Descargar plantilla
+                                        </a>
+                                    </div>
+                                    <div
+                                        className="border-2 border-dashed theme-border rounded-2xl p-6 flex flex-col items-center gap-3 cursor-pointer transition-all"
+                                        style={{ borderColor: dragExcel ? 'var(--color-primario)' : undefined }}
+                                        onDragOver={e => { e.preventDefault(); setDragExcel(true); }}
+                                        onDragLeave={() => setDragExcel(false)}
+                                        onDrop={e => { e.preventDefault(); setDragExcel(false); if (e.dataTransfer.files[0]) setData('archivo_facturas', e.dataTransfer.files[0]); }}
+                                        onClick={() => excelInputRef.current?.click()}
+                                    >
+                                        <FileSpreadsheet className="w-8 h-8 theme-text-muted" style={{ color: data.archivo_facturas ? 'var(--color-primario)' : undefined }} />
+                                        <p className="text-xs font-black theme-text-main uppercase text-center">Arrastra o selecciona Excel / CSV</p>
+                                        <p className="text-[10px] theme-text-muted italic text-center">Opcional. Use la plantilla con las columnas: RFC, CODIGO POSTAL, REGIMEN FISCAL, CORREO ELECTRONICO, USO DE FACTURA, NOMBRE (RAZON SOCIAL) — una sola fila de datos.</p>
+                                        {data.archivo_facturas && (
+                                            <p className="text-[10px] font-bold text-emerald-600">{data.archivo_facturas.name}</p>
+                                        )}
+                                        <input ref={excelInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={e => setData('archivo_facturas', e.target.files[0] || null)} />
+                                    </div>
+                                    {errors.archivo_facturas && <p className="text-xs text-red-500">{errors.archivo_facturas}</p>}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">PDFs de remisiones (opcional, máx. 10)_</label>
+                                        <span className="text-[9px] font-black theme-text-muted">{pdfsRemision.length}/10</span>
+                                    </div>
+                                    <div className="border theme-border rounded-2xl p-4 space-y-3">
+                                        {pdfsRemision.map((pdf, i) => (
+                                            <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5">
+                                                <span className="text-[10px] font-bold theme-text-main truncate">{pdf.name}</span>
+                                                <button type="button" onClick={() => quitarPdf(i)} className="p-1 text-red-500 hover:bg-red-500/10 rounded-lg outline-none"><Trash2 className="w-4 h-4" /></button>
+                                            </div>
+                                        ))}
+                                        {pdfsRemision.length < 10 && (
+                                            <button type="button" onClick={() => pdfInputRef.current?.click()} className="w-full py-3 border border-dashed theme-border rounded-xl text-[10px] font-black uppercase tracking-widest theme-text-muted hover:border-[var(--color-primario)] flex items-center justify-center gap-2 outline-none">
+                                                <Upload className="w-4 h-4" /> Agregar PDF
+                                            </button>
+                                        )}
+                                        <input ref={pdfInputRef} type="file" className="hidden" accept=".pdf" multiple onChange={e => { agregarPdfs(e.target.files); e.target.value = ''; }} />
+                                    </div>
+                                    {errors['remisiones_pdf.0'] && <p className="text-xs text-red-500">{errors['remisiones_pdf.0']}</p>}
+                                </div>
+                            </div>
+                        )}
 
                         {!esOperativo && esClienteNuevo && !modoEdicion && (
                             <label className="flex items-start gap-3 p-4 rounded-2xl border-2 border-[#cd7f32]/40 bg-[#cd7f32]/10 cursor-pointer">

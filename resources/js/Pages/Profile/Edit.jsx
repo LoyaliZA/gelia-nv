@@ -242,17 +242,23 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     }, []);
 
     const toggleCanalAlerta = (canal) => {
-        updateAlertasPrefs((prev) => ({
-            ...prev,
-            canales: { ...prev.canales, [canal]: !prev.canales[canal] },
-        }));
+        updateAlertasPrefs((prev) => {
+            const activo = prev.canales?.[canal] !== false;
+            return {
+                ...prev,
+                canales: { ...prev.canales, [canal]: !activo },
+            };
+        });
     };
 
     const toggleTipoAlerta = (tipo) => {
-        updateAlertasPrefs((prev) => ({
-            ...prev,
-            tipos: { ...prev.tipos, [tipo]: !prev.tipos[tipo] },
-        }));
+        updateAlertasPrefs((prev) => {
+            const activo = prev.tipos?.[tipo] !== false;
+            return {
+                ...prev,
+                tipos: { ...prev.tipos, [tipo]: !activo },
+            };
+        });
     };
 
     useEffect(() => {

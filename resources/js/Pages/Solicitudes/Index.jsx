@@ -4,7 +4,8 @@ import { Head, router, useForm } from '@inertiajs/react';
 import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
     History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
-    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle
+    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle,
+    FileSpreadsheet, FileText, FolderOpen
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -14,6 +15,7 @@ import ModalRespuestaSolicitud from './Partials/ModalRespuestaSolicitud';
 import ModalBitacoraSolicitud from './Partials/ModalBitacoraSolicitud';
 import ModalConsultaSolicitud from './Partials/ModalConsultaSolicitud';
 import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
+import ModalExpedienteFacturas from './Partials/ModalExpedienteFacturas';
 import FiltrosSolicitudes from './Partials/FiltrosSolicitudes';
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
@@ -70,6 +72,11 @@ const ESTILOS_ADICIONALES = `
     .paginacion-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 `;
 
+const esProcesoFactura = (solicitud) => {
+    const nombre = solicitud?.proceso?.nombre?.toUpperCase() || '';
+    return nombre.includes('FACTURA');
+};
+
 const EtiquetasOperacion = ({ solicitud, listas }) => {
     const nombreProceso = solicitud.proceso?.nombre || '';
     const esOperativo = solicitud.proceso?.categoria_flujo === 'operativo';
@@ -96,6 +103,11 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
             {esOperativo && solicitud.solicitar_cotizacion && (
                 <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-violet-500/10 text-violet-600 border border-violet-500/20">
                     + Cotización
+                </span>
+            )}
+            {esOperativo && esProcesoFactura(solicitud) && solicitud.factura_razon_social && (
+                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                    Factura: {solicitud.factura_razon_social.length > 24 ? `${solicitud.factura_razon_social.slice(0, 24)}…` : solicitud.factura_razon_social}
                 </span>
             )}
             {!esOperativo && (
@@ -129,6 +141,40 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
                 <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-red-500/10 text-red-600 border border-red-500/20 flex items-center gap-1">
                     <Ban className="w-3 h-3" /> Cancelación solicitada
                 </span>
+            )}
+        </div>
+    );
+};
+
+const DetalleFacturasBloque = ({ solicitud, onVerExpediente }) => {
+    if (!esProcesoFactura(solicitud)) return null;
+
+    const remisiones = solicitud.remisiones_factura || solicitud.remisionesFactura || [];
+    const tieneExcel = !!solicitud.archivo_facturas_path;
+
+    return (
+        <div className="mt-3 p-3 rounded-2xl border theme-border theme-element flex flex-col gap-2 shadow-sm">
+            <div className="flex items-start gap-2">
+                <FileText className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
+                <div className="flex-1 min-w-0">
+                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-0.5">Solicitud de factura</p>
+                    <p className="text-xs font-bold theme-text-main leading-snug truncate">{solicitud.factura_razon_social || '—'}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md border ${tieneExcel ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}>
+                            {tieneExcel ? 'Excel adjunto' : 'Sin Excel'}
+                        </span>
+                        {remisiones.length > 0 && (
+                            <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 border border-orange-500/20">
+                                {remisiones.length} PDF{remisiones.length !== 1 ? 's' : ''}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+            {(tieneExcel || remisiones.length > 0) && (
+                <button type="button" onClick={() => onVerExpediente?.(solicitud)} className="self-start flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 hover:underline outline-none">
+                    <FolderOpen className="w-3.5 h-3.5" /> Ver expediente
+                </button>
             )}
         </div>
     );
@@ -169,7 +215,7 @@ const RespuestaConsultaEncargada = ({ solicitud, auth, onMarcarLeido, procesando
     const esPositiva = consulta.respuesta_positiva;
 
     return (
-        <div className={`mt-3 p-4 rounded-2xl border flex flex-col gap-3 shadow-sm ${esPositiva ? 'bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20' : 'bg-red-50 dark:bg-red-500/5 border-red-200 dark:border-red-500/20'}`}>
+        <div className={`mt-3 p-4 rounded-2xl border flex flex-col gap-3 shadow-sm ${esPositiva ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-red-500/10 border-red-500/25'}`}>
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2 flex-1">
                     <MessageSquare className={`w-4 h-4 shrink-0 mt-0.5 ${esPositiva ? 'text-emerald-500' : 'text-red-500'}`} />
@@ -230,8 +276,8 @@ const FeedbackYComentarios = ({ solicitud }) => {
 
     // Configuración visual dinámica
     const colorContenedor = esAlertaPago
-        ? 'bg-amber-50 dark:bg-amber-500/5 border-amber-200 dark:border-amber-500/20'
-        : (esError ? 'bg-red-50 dark:bg-red-500/5 border-red-200 dark:border-red-500/20' : 'bg-emerald-50 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20');
+        ? 'bg-amber-500/10 border-amber-500/25'
+        : (esError ? 'bg-red-500/10 border-red-500/25' : 'bg-emerald-500/10 border-emerald-500/25');
 
     const Icono = esAlertaPago ? AlertTriangle : (esError ? AlertOctagon : CheckCircle2);
     const colorIcono = esAlertaPago ? 'text-amber-500' : (esError ? 'text-red-500' : 'text-emerald-500');
@@ -241,11 +287,11 @@ const FeedbackYComentarios = ({ solicitud }) => {
     return (
         <div className="mt-3 flex flex-col gap-2">
             {tieneObservacion && !esAlertaPago && (
-                <div className="p-3 rounded-2xl border bg-slate-100 dark:bg-slate-800/90 border-slate-200 dark:border-slate-600 flex items-start gap-2 shadow-sm">
-                    <MessageSquare className="w-4 h-4 text-slate-600 dark:text-slate-300 mt-0.5 shrink-0" />
+                <div className="p-3 rounded-2xl border theme-element theme-border flex items-start gap-2 shadow-sm">
+                    <MessageSquare className="w-4 h-4 theme-text-muted mt-0.5 shrink-0" />
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 mb-0.5">Nota de Vendedora</p>
-                        <p className="text-xs font-bold text-slate-900 dark:text-slate-50 italic leading-snug">{solicitud.observaciones_vendedor}</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-0.5">Nota de Vendedora</p>
+                        <p className="text-xs font-bold theme-text-main italic leading-snug">{solicitud.observaciones_vendedor}</p>
                     </div>
                 </div>
             )}
@@ -315,14 +361,14 @@ const MotivoCancelacionBloque = ({ solicitud, compacto = false }) => {
         <div
             className={`${compacto ? 'mt-2' : 'mt-3'} p-3 rounded-2xl border flex flex-col gap-1.5 shadow-sm ${
                 pendiente
-                    ? 'bg-red-50 dark:bg-red-500/5 border-red-200 dark:border-red-500/25'
-                    : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-600'
+                    ? 'bg-red-500/10 border-red-500/25'
+                    : 'theme-element theme-border'
             }`}
         >
             <div className="flex items-start gap-2">
-                <Ban className={`w-4 h-4 shrink-0 mt-0.5 ${pendiente ? 'text-red-500' : 'text-slate-500'}`} />
+                <Ban className={`w-4 h-4 shrink-0 mt-0.5 ${pendiente ? 'text-red-500' : 'theme-text-muted'}`} />
                 <div className="flex-1 min-w-0">
-                    <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${pendiente ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                    <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${pendiente ? 'text-red-600 dark:text-red-400' : 'theme-text-muted'}`}>
                         {titulo}
                     </p>
                     {fechaSolicitud && pendiente && (
@@ -687,6 +733,7 @@ export default function Index({
     const [modalPago, setModalPago] = useState({ abierto: false, solicitud: null });
     const [modalCancelacion, setModalCancelacion] = useState({ abierto: false, solicitud: null });
     const [modalConfirmarCancelacion, setModalConfirmarCancelacion] = useState({ abierto: false, solicitud: null });
+    const [modalExpedienteFacturas, setModalExpedienteFacturas] = useState({ abierto: false, solicitud: null });
     const [menuAbierto, setMenuAbierto] = useState(null);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
     const [menuSolicitud, setMenuSolicitud] = useState(null);
@@ -922,6 +969,12 @@ export default function Index({
                     onProcesando={setProcesandoAccion}
                 />
             )}
+            {modalExpedienteFacturas.abierto && (
+                <ModalExpedienteFacturas
+                    onClose={() => setModalExpedienteFacturas({ abierto: false, solicitud: null })}
+                    solicitud={modalExpedienteFacturas.solicitud}
+                />
+            )}
 
             <div className="max-w-[1440px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
                 <header className="animate-page-reveal theme-surface rounded-3xl md:rounded-[2.5rem] p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 border theme-border shadow-xl">
@@ -998,6 +1051,7 @@ export default function Index({
                                         <span className="text-[10px] font-black uppercase tracking-widest theme-text-main block">{nombreProceso}</span>
                                         <EtiquetasOperacion solicitud={solicitud} listas={listas} />
                                     </div>
+                                    <DetalleFacturasBloque solicitud={solicitud} onVerExpediente={(s) => setModalExpedienteFacturas({ abierto: true, solicitud: s })} />
                                     <RespuestaConsultaEncargada
                                         solicitud={solicitud}
                                         auth={auth}
@@ -1019,7 +1073,7 @@ export default function Index({
                     )}
                 </div>
 
-                <div className="hidden lg:block animate-page-reveal theme-surface rounded-[2.5rem] border theme-border shadow-2xl overflow-hidden bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl" style={{ animationDelay: '200ms' }}>
+                <div className="hidden lg:block animate-page-reveal theme-surface rounded-[2.5rem] border theme-border shadow-2xl overflow-hidden backdrop-blur-xl" style={{ animationDelay: '200ms' }}>
                     <div className="overflow-x-auto pb-4 custom-scrollbar">
                         <table className="w-full text-left border-collapse min-w-[1000px]">
                             <thead>
@@ -1067,6 +1121,7 @@ export default function Index({
                                             <td className="p-6 align-top">
                                                 <div className="inline-block px-3 py-1 rounded-lg theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-main mb-2">{nombreProceso}</div>
                                                 <EtiquetasOperacion solicitud={solicitud} listas={listas} />
+                                                <DetalleFacturasBloque solicitud={solicitud} onVerExpediente={(s) => setModalExpedienteFacturas({ abierto: true, solicitud: s })} />
                                                 {(solicitud.consultas || []).some(c => c.estado === 'pendiente') && (
                                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 mt-1">
                                                         <MessageSquare className="w-3 h-3" /> Consulta pendiente
@@ -1098,7 +1153,7 @@ export default function Index({
                                             <td className="p-6 align-top">
                                                 <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${estatus.clase} whitespace-nowrap shadow-sm`}><StatusIcon className="w-4 h-4" /><span className="text-[10px] font-black uppercase tracking-wider italic">{estatus.label}</span></div>
                                             </td>
-                                            <td className="p-6 text-center sticky-actions group-hover:bg-slate-50 dark:group-hover:bg-white/5 transition-colors align-top">
+                                            <td className="p-6 text-center sticky-actions group-hover:bg-black/5 dark:group-hover:bg-white/5 transition-colors align-top">
                                                 <button onClick={(e) => abrirMenu(e, solicitud)} className="p-3 theme-element border theme-border hover:border-[var(--color-primario)] rounded-2xl transition-all shadow-sm outline-none"><MoreVertical className="w-5 h-5 theme-text-main" /></button>
                                             </td>
                                         </tr>

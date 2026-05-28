@@ -22,11 +22,21 @@ class ClienteController extends Controller
             'numero_cliente'           => 'required|string|max:255|unique:clientes,numero_cliente',
             'nombre'                   => 'required|string|max:255',
             'vendedor_id'              => 'nullable|exists:users,id',
-            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id'
+            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
+            'monto_venta_actual'       => 'nullable|numeric|min:0',
+            'lista_actual_id'          => 'nullable|exists:catalogo_listas_descuento,id',
+            'lista_bloqueada'          => 'nullable|boolean',
+            'rfc'                      => 'nullable|string|max:13',
+            'codigo_postal'            => 'nullable|string|regex:/^\d{5}$/',
+            'regimen_fiscal'           => 'nullable|string|max:255',
+            'correo_electronico'       => 'nullable|email|max:255',
+            'uso_factura'              => 'nullable|string|max:255',
+            'nombre_razon_social'      => 'nullable|string|max:255',
         ]);
 
         // Forzamos la captura del booleano para que no dependa de si el input llegó o no
         $validated['es_heredado'] = $request->boolean('es_heredado');
+        $validated['lista_bloqueada'] = $request->boolean('lista_bloqueada');
 
         Cliente::create($validated);
 
@@ -42,12 +52,22 @@ class ClienteController extends Controller
             'numero_cliente'           => 'required|string|max:255|unique:clientes,numero_cliente,' . $cliente->id,
             'nombre'                   => 'required|string|max:255',
             'vendedor_id'              => 'nullable|exists:users,id',
-            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id'
+            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
+            'monto_venta_actual'       => 'nullable|numeric|min:0',
+            'lista_actual_id'          => 'nullable|exists:catalogo_listas_descuento,id',
+            'lista_bloqueada'          => 'nullable|boolean',
+            'rfc'                      => 'nullable|string|max:13',
+            'codigo_postal'            => 'nullable|string|regex:/^\d{5}$/',
+            'regimen_fiscal'           => 'nullable|string|max:255',
+            'correo_electronico'       => 'nullable|email|max:255',
+            'uso_factura'              => 'nullable|string|max:255',
+            'nombre_razon_social'      => 'nullable|string|max:255',
         ]);
 
         // Al usar boolean(), si el checkbox no se marcó, devolverá false automáticamente
         // Esto permite "desactivar" la herencia si ya estaba activa.
         $validated['es_heredado'] = $request->boolean('es_heredado');
+        $validated['lista_bloqueada'] = $request->boolean('lista_bloqueada');
 
         $cliente->update($validated);
 

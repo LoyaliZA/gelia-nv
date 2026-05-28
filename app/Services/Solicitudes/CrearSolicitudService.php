@@ -7,6 +7,7 @@ use App\Models\SolicitudTag;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoListaDescuento;
 use App\Models\AuditoriaSolicitud;
+use App\Models\SolicitudFacturaRemision;
 use App\Models\User;
 use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ class CrearSolicitudService
 
             $proceso = \App\Models\CatalogoProceso::find($datos['catalogo_proceso_id']);
             $esOperativo = $proceso?->esOperativo() ?? false;
+            $esFactura = str_contains(strtoupper($proceso?->nombre ?? ''), 'FACTURA');
             $compraEnTienda = $this->aplicaCompraEnTienda($proceso, $datos);
 
             $listaDescuentoId = $esOperativo ? null : ($datos['catalogo_lista_descuento_id'] ?? null);
@@ -48,6 +50,17 @@ class CrearSolicitudService
                 $listaBronce = $this->resolverListaBronce();
                 $listaDescuentoId = $listaBronce?->id;
                 $montoCotizado = 0;
+            }
+
+            $archivoFacturasPath = null;
+            $facturaDatosFiscales = null;
+            if ($esFactura && isset($datos['archivo_facturas']) && $datos['archivo_facturas'] instanceof UploadedFile && $datos['archivo_facturas']->isValid()) {
+                $facturaDatosFiscales = app(ImportarFacturasSolicitudService::class)->extraer($datos['archivo_facturas']);
+                $archivoFacturasPath = $datos['archivo_facturas']->store('solicitudes_facturas/excel', 'public');
+            }
+
+            if ($esFactura) {
+                $clienteId = null;
             }
 
             // 3. Creación de la Solicitud
@@ -73,7 +86,27 @@ class CrearSolicitudService
                 'motivo_operacion' => $datos['motivo_operacion'] ?? null,
                 'catalogo_banco_id' => $datos['catalogo_banco_id'] ?? null,
                 'solicitar_cotizacion' => filter_var($datos['solicitar_cotizacion'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                'factura_razon_social' => $esFactura ? ($datos['factura_razon_social'] ?? null) : null,
+                'archivo_facturas_path' => $archivoFacturasPath,
+                'factura_datos_fiscales' => $facturaDatosFiscales,
             ]);
+
+            if ($esFactura && !empty($datos['remisiones_pdf']) && is_array($datos['remisiones_pdf'])) {
+                $orden = 1;
+                foreach ($datos['remisiones_pdf'] as $pdf) {
+                    if (!$pdf instanceof UploadedFile || !$pdf->isValid()) {
+                        continue;
+                    }
+                    SolicitudFacturaRemision::create([
+                        'solicitud_id' => $solicitud->id,
+                        'path' => $pdf->store('solicitudes_facturas/remisiones', 'public'),
+                        'nombre_original' => $pdf->getClientOriginalName(),
+                        'orden' => $orden++,
+                    ]);
+                }
+            }
+
+            $solicitud->load('remisionesFactura');
 
             // 3. Registro del Snapshot Inicial (Auditoría V1)
             AuditoriaSolicitud::create([
@@ -103,6 +136,14 @@ class CrearSolicitudService
                     'motivo_operacion' => $solicitud->motivo_operacion,
                     'catalogo_banco_id' => $solicitud->catalogo_banco_id,
                     'solicitar_cotizacion' => $solicitud->solicitar_cotizacion,
+                    'factura_razon_social' => $solicitud->factura_razon_social,
+                    'archivo_facturas_path' => $solicitud->archivo_facturas_path,
+                    'factura_datos_fiscales' => $solicitud->factura_datos_fiscales,
+                    'remisiones_factura' => $solicitud->remisionesFactura->map(fn ($r) => [
+                        'path' => $r->path,
+                        'nombre_original' => $r->nombre_original,
+                        'orden' => $r->orden,
+                    ])->values()->all(),
                     'antes' => $this->snapshotClienteAlCrear($clienteId),
                 ]
             ]);

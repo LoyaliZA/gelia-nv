@@ -31,16 +31,26 @@ export const DEFAULT_ALERTAS_PREFS = {
 function mergePrefs(stored) {
     if (!stored || typeof stored !== 'object') return { ...DEFAULT_ALERTAS_PREFS };
 
+    const canales = {
+        ...DEFAULT_ALERTAS_PREFS.canales,
+        ...(stored.canales || {}),
+    };
+    Object.keys(DEFAULT_ALERTAS_PREFS.canales).forEach((canal) => {
+        canales[canal] = canales[canal] !== false;
+    });
+
+    const tipos = {
+        ...DEFAULT_ALERTAS_PREFS.tipos,
+        ...(stored.tipos || {}),
+    };
+    Object.keys(DEFAULT_ALERTAS_PREFS.tipos).forEach((tipo) => {
+        tipos[tipo] = tipos[tipo] !== false;
+    });
+
     return {
-        canales: {
-            ...DEFAULT_ALERTAS_PREFS.canales,
-            ...(stored.canales || {}),
-        },
+        canales,
         tono_id: stored.tono_id || DEFAULT_ALERTAS_PREFS.tono_id,
-        tipos: {
-            ...DEFAULT_ALERTAS_PREFS.tipos,
-            ...(stored.tipos || {}),
-        },
+        tipos,
     };
 }
 
@@ -67,8 +77,9 @@ export function persistAlertasPrefsToStorage(prefs) {
     window.dispatchEvent(new CustomEvent('alertas-prefs-changed', { detail: prefs }));
 }
 
-export function resolveAlertasPrefs(auth = {}) {
-    return readStoredAlertasPrefs(auth?.tema_visual);
+export function resolveAlertasPrefs(source = {}) {
+    const temaVisual = source?.tema_visual ?? source;
+    return readStoredAlertasPrefs(temaVisual);
 }
 
 export function getTipoAlerta(notification = {}) {

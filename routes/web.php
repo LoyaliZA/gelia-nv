@@ -75,9 +75,11 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:solicitudes.ver_listado'])->group(function () {
         Route::get('/solicitudes', [SolicitudController::class, 'index'])->name('solicitudes.index');
         Route::get('/solicitudes/exportar', [SolicitudController::class, 'exportar'])->name('solicitudes.exportar');
+        Route::get('/solicitudes/{solicitud}/datos-fiscales', [SolicitudController::class, 'datosFiscales'])->name('solicitudes.datos_fiscales');
     });
 
     Route::middleware(['can:solicitudes.crear'])->group(function () {
+        Route::get('/solicitudes/plantilla-facturas', [SolicitudController::class, 'descargarPlantillaFacturas'])->name('solicitudes.plantilla_facturas');
         Route::post('/solicitudes', [SolicitudController::class, 'store'])->name('solicitudes.store');
     });
 

@@ -74,7 +74,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             <div>
                                 <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Comentario de la Vendedora</p>
                                 {solicitud?.observaciones_vendedor?.trim() ? (
-                                    <p className="text-sm font-bold text-slate-900 dark:text-slate-50 italic leading-relaxed p-4 rounded-2xl border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/90">
+                                    <p className="text-sm font-bold theme-text-main italic leading-relaxed p-4 rounded-2xl border theme-border theme-element">
                                         {solicitud.observaciones_vendedor}
                                     </p>
                                 ) : (

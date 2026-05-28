@@ -25,6 +25,7 @@ class ListarSolicitudesService
             'tipoCliente',
             'consultas.encargada',
             'consultas.vendedor',
+            'remisionesFactura',
         ])->orderBy('created_at', 'desc');
 
         if ($usuario) {

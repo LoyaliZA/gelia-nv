@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Solicitudes;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Solicitudes\StoreSolicitudRequest;
+use App\Services\Solicitudes\ImportarFacturasSolicitudService;
 use App\Services\Solicitudes\CrearSolicitudService;
 use App\Services\Solicitudes\CrearConsultaSolicitudService;
 use App\Services\Solicitudes\ListarSolicitudesService;
@@ -12,6 +13,7 @@ use App\Services\Solicitudes\ResponderConsultaSolicitudService;
 use App\Services\Solicitudes\CancelarSolicitudService;
 use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use App\Models\SolicitudTag;
 use App\Models\ConsultaSolicitud;
 use App\Models\AuditoriaSolicitud;
@@ -55,12 +57,71 @@ class SolicitudController extends Controller
         ]);
     }
 
+    public function descargarPlantillaFacturas(ImportarFacturasSolicitudService $importarFacturasSolicitudService)
+    {
+        return $importarFacturasSolicitudService->descargarPlantilla();
+    }
+
     public function store(StoreSolicitudRequest $request, CrearSolicitudService $crearSolicitudService): RedirectResponse
     {
         $datosValidados = $request->validated();
+
+        if ($request->hasFile('archivo_facturas')) {
+            $datosValidados['archivo_facturas'] = $request->file('archivo_facturas');
+        }
+        if ($request->hasFile('remisiones_pdf')) {
+            $datosValidados['remisiones_pdf'] = $request->file('remisiones_pdf');
+        }
+
         $crearSolicitudService->ejecutar($datosValidados, Auth::id());
 
         return redirect()->back()->with('success', 'Solicitud creada correctamente.');
+    }
+
+    public function datosFiscales(SolicitudTag $solicitud, ImportarFacturasSolicitudService $importarFacturasSolicitudService): JsonResponse
+    {
+        $solicitud->loadMissing('proceso');
+
+        if (!$solicitud->esProcesoFactura()) {
+            abort(404);
+        }
+
+        $etiquetas = $importarFacturasSolicitudService->etiquetasParaUi();
+
+        if (!empty($solicitud->factura_datos_fiscales)) {
+            return response()->json([
+                'datos' => $solicitud->factura_datos_fiscales,
+                'etiquetas' => $etiquetas,
+            ]);
+        }
+
+        if (!$solicitud->archivo_facturas_path || !Storage::disk('public')->exists($solicitud->archivo_facturas_path)) {
+            return response()->json([
+                'datos' => null,
+                'etiquetas' => $etiquetas,
+            ]);
+        }
+
+        try {
+            $extension = strtolower(pathinfo($solicitud->archivo_facturas_path, PATHINFO_EXTENSION));
+            $rutaAbsoluta = Storage::disk('public')->path($solicitud->archivo_facturas_path);
+            $datos = $importarFacturasSolicitudService->extraerDesdeRuta($rutaAbsoluta, $extension);
+
+            $solicitud->update(['factura_datos_fiscales' => $datos]);
+
+            return response()->json([
+                'datos' => $datos,
+                'etiquetas' => $etiquetas,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $mensaje = collect($e->errors())->flatten()->first() ?? 'No se pudieron extraer los datos fiscales del Excel.';
+
+            return response()->json([
+                'datos' => null,
+                'etiquetas' => $etiquetas,
+                'error' => $mensaje,
+            ], 422);
+        }
     }
 
     public function confirmarPago(Request $request, SolicitudTag $solicitud)
@@ -433,6 +494,9 @@ class SolicitudController extends Controller
                 'Cancelación Solicitada' => $solicitud->cancelacion_solicitada_at?->format('Y-m-d H:i') ?? '',
                 'Motivo Cancelación' => $solicitud->motivo_cancelacion ?? '',
                 'Lista Rebaja Cancelación' => $solicitud->listaRebaja?->nombre ?? '',
+                'Razón Social Factura' => $solicitud->factura_razon_social ?? '',
+                'Excel Factura' => $solicitud->archivo_facturas_path ? 'Sí' : 'No',
+                'PDFs Remisiones' => $solicitud->remisionesFactura?->count() ?? 0,
             ];
         });
     }
