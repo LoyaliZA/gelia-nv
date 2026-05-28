@@ -15,6 +15,14 @@ export const ALERTAS_TIPOS = {
     cancelacion_solicitada: 'Cancelación solicitada',
     cancelada: 'Solicitud cancelada',
     resumen_vencidos: 'Reporte de pagos vencidos',
+    activo_asignado: 'Activo asignado',
+    activo_devuelto: 'Activo devuelto',
+    activo_transferido: 'Activo transferido',
+    activo_mantenimiento: 'Mantenimiento de activo',
+    activo_baja: 'Activo dado de baja',
+    activo_vencimiento: 'Vencimiento de activo',
+    activo_mantenimiento_proximo: 'Mantenimiento próximo',
+    resumen_activos: 'Resumen de activos',
 };
 
 export const DEFAULT_ALERTAS_PREFS = {
@@ -85,6 +93,8 @@ export function resolveAlertasPrefs(source = {}) {
 export function getTipoAlerta(notification = {}) {
     if (notification?.total_vencidos !== undefined) return 'resumen_vencidos';
     if (notification?.data?.total_vencidos !== undefined) return 'resumen_vencidos';
+    if (notification?.total_activos !== undefined) return 'resumen_activos';
+    if (notification?.data?.total_activos !== undefined) return 'resumen_activos';
 
     const tipoExplicito = notification?.tipo || notification?.data?.tipo;
     if (tipoExplicito) return tipoExplicito;

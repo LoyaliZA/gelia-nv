@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head } from '@inertiajs/react';
-import { Building2, MapPin, ListTree, Tags, Activity, UserCheck, Map, Clock, Percent, TrendingUp, Landmark } from 'lucide-react';
+import { Building2, MapPin, ListTree, Tags, Activity, UserCheck, Map, Clock, Percent, TrendingUp, Landmark, Package } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 
 // Importamos los nuevos sub-componentes (Crea esta carpeta en el siguiente paso)
@@ -15,9 +15,10 @@ import TablaHorariosEntrega from './Partials/Catalogos/TablaHorariosEntrega';
 import TablaPorcentajesEscalonamiento from './Partials/Catalogos/TablaPorcentajesEscalonamiento';
 import TablaPorcentajesListado from './Partials/Catalogos/TablaPorcentajesListado';
 import TablaBancos from './Partials/Catalogos/TablaBancos';
+import TablaTiposActivo from './Partials/Catalogos/TablaTiposActivo';
 
 
-export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [], bancos = [] }) {
+export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [], bancos = [], tipos_activo = [] }) {
     const [tabActiva, setTabActiva] = useState('departamentos');
     const [glassEffect] = useState(() => localStorage.getItem('theme_glass') !== 'false');
 
@@ -33,6 +34,7 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
         { id: 'porcentajes_listado', label: 'Listados', icon: Percent },
         { id: 'estados',       label: 'Estados',       icon: Activity },
         { id: 'bancos',        label: 'Bancos',        icon: Landmark },
+        { id: 'tipos_activo', label: 'Tipos Activo', icon: Package },
         { id: 'zonas_entrega', label: 'Zonas Logísticas', icon: Map },
         { id: 'horarios_entrega', label: 'Horarios Entrega', icon: Clock }
     ];
@@ -81,6 +83,7 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
                     {tabActiva === 'porcentajes_listado' && <TablaPorcentajesListado datos={porcentajes_listado} listas={listas} />}
                     {tabActiva === 'estados' && <TablaEstados datos={estados} />}
                     {tabActiva === 'bancos' && <TablaBancos datos={bancos} />}
+                    {tabActiva === 'tipos_activo' && <TablaTiposActivo datos={tipos_activo} />}
                     {tabActiva === 'tipos_cliente' && <TablaTipoClientes datos={tipos_cliente} />}
                     {tabActiva === 'zonas_entrega' && <TablaZonasEntrega datos={zonas_entrega} auth={auth} />}
                     {tabActiva === 'horarios_entrega' && <TablaHorariosEntrega datos={horarios_entrega} zonas_entrega={zonas_entrega} auth={auth} />}

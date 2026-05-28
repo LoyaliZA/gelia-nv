@@ -15,6 +15,8 @@ use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\Admin\AuditoriaListaDescuentoController;
 use App\Http\Controllers\Admin\PersonalizacionController;
 use App\Http\Controllers\AromasListasController;
+use App\Http\Controllers\Activos\ActivoController;
+use App\Http\Controllers\Activos\TipoActivoController;
 
 // ══════════════════════════════════════════════════════════════════════
 // 1. REDIRECCIÓN INICIAL
@@ -143,6 +145,28 @@ Route::middleware(['auth'])->group(function () {
 
 
     // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: CONTROL DE ACTIVOS
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:activos.ver'])->prefix('activos')->name('activos.')->group(function () {
+        Route::get('/', [ActivoController::class, 'index'])->name('index');
+        Route::get('/exportar', [ActivoController::class, 'exportar'])->middleware('can:activos.exportar')->name('exportar');
+        Route::get('/alertas', [ActivoController::class, 'alertas'])->name('alertas');
+        Route::get('/{activo}', [ActivoController::class, 'show'])->name('show');
+
+        Route::post('/', [ActivoController::class, 'store'])->middleware('can:activos.crear')->name('store');
+        Route::put('/{activo}', [ActivoController::class, 'update'])->middleware('can:activos.editar')->name('update');
+        Route::post('/{activo}/asignar', [ActivoController::class, 'asignar'])->middleware('can:activos.asignar')->name('asignar');
+        Route::post('/{activo}/devolver', [ActivoController::class, 'devolver'])->middleware('can:activos.asignar')->name('devolver');
+        Route::post('/{activo}/transferir', [ActivoController::class, 'transferir'])->middleware('can:activos.transferir')->name('transferir');
+        Route::post('/{activo}/estado', [ActivoController::class, 'cambiarEstado'])->middleware('can:activos.cambiar_estado')->name('estado');
+        Route::post('/{activo}/mantenimiento', [ActivoController::class, 'programarMantenimiento'])->middleware('can:activos.cambiar_estado')->name('mantenimiento');
+        Route::post('/{activo}/mantenimiento/{mantenimiento}/completar', [ActivoController::class, 'completarMantenimiento'])->middleware('can:activos.cambiar_estado')->name('mantenimiento.completar');
+        Route::post('/{activo}/fotos', [ActivoController::class, 'subirFotos'])->middleware('can:activos.editar')->name('fotos.store');
+        Route::delete('/{activo}/fotos/{foto}', [ActivoController::class, 'eliminarFoto'])->middleware('can:activos.editar')->name('fotos.destroy');
+    });
+
+
+    // ══════════════════════════════════════════════════════════════════════
     // MÓDULO DE ADMINISTRACIÓN (GELIANV CORE)
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('admin')->name('admin.')->group(function () {
@@ -237,6 +261,11 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/bancos', [CatalogoController::class, 'storeBanco'])->name('bancos.store');
                 Route::put('/bancos/{id}', [CatalogoController::class, 'updateBanco'])->name('bancos.update');
                 Route::delete('/bancos/{id}', [CatalogoController::class, 'destroyBanco'])->name('bancos.destroy');
+
+                // Tipos de Activo
+                Route::post('/tipos-activo', [TipoActivoController::class, 'store'])->name('tipos_activo.store')->middleware('can:activos.configurar_tipos');
+                Route::put('/tipos-activo/{id}', [TipoActivoController::class, 'update'])->name('tipos_activo.update')->middleware('can:activos.configurar_tipos');
+                Route::delete('/tipos-activo/{id}', [TipoActivoController::class, 'destroy'])->name('tipos_activo.destroy')->middleware('can:activos.configurar_tipos');
             });
         });
 
@@ -277,6 +306,9 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('api')->name('api.')->group(function () {
         Route::get('/clientes', [ClienteApiController::class, 'index'])->name('clientes.index');
         Route::get('/clientes/{numero}', [ClienteApiController::class, 'show'])->name('clientes.show');
+        Route::get('/activos/usuarios', [ActivoController::class, 'buscarUsuarios'])->name('activos.usuarios');
+        Route::get('/activos/marcas', [ActivoController::class, 'buscarMarcas'])->name('activos.marcas');
+        Route::get('/activos/modelos', [ActivoController::class, 'buscarModelos'])->name('activos.modelos');
         Route::middleware(['auth'])->post('/entregas/cotizar', [CotizacionEntregaController::class, 'calcularCosto'])->name('entregas.cotizar');
     });
 });

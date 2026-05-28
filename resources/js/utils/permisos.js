@@ -28,6 +28,15 @@ export const DESCRIPCIONES_PERMISOS = {
     'listados.crear': 'Permite crear listados de productos.',
     'listados.editar': 'Permite editar listados de productos.',
     'listados.eliminar': 'Permite eliminar listados de productos.',
+    'activos.ver': 'Permite ver el listado y detalle de activos.',
+    'activos.crear': 'Permite registrar nuevos activos.',
+    'activos.editar': 'Permite editar activos existentes.',
+    'activos.asignar': 'Permite asignar activos a usuarios Gelia.',
+    'activos.transferir': 'Permite transferir activos entre departamentos.',
+    'activos.cambiar_estado': 'Permite cambiar el estado del activo (mantenimiento, baja).',
+    'activos.ver_todos': 'Permite ver activos de todos los departamentos.',
+    'activos.configurar_tipos': 'Permite gestionar el catálogo de tipos de activo.',
+    'activos.exportar': 'Permite exportar activos a Excel.',
     'personalizacion.gestionar': 'Permite gestionar temas y personalización visual.',
 };
 

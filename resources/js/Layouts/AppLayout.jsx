@@ -380,7 +380,7 @@ export default function AppLayout({ children }) {
                     {/* TOASTS FLOTANTES */}
                     <div className="fixed top-6 right-6 z-[10000] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
                     {toasts.map((toast) => (
-                        <div key={toast.id} className="pointer-events-auto theme-surface border theme-border shadow-2xl rounded-2xl p-4 flex items-start gap-4 animate-slide-in-right overflow-hidden relative group">
+                        <div key={toast.id} className="pointer-events-auto theme-surface theme-no-blur border theme-border shadow-2xl rounded-2xl p-4 flex items-start gap-4 animate-slide-in-right overflow-hidden relative group">
                             <div className="absolute bottom-0 left-0 h-1 bg-[var(--color-primario)] animate-progress-shrink" />
                             <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
                                 <Bell className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
@@ -424,6 +424,10 @@ export default function AppLayout({ children }) {
                     .dark .theme-text-muted { color: #a1a1aa; }
                     .dark .theme-border { border-color: #27272a; }
                     .dark .theme-placeholder::placeholder { color: #52525b; }
+
+                    select.theme-element, select.theme-text-main { color: inherit; }
+                    select option { background-color: #ffffff; color: #18181b; }
+                    .dark select option { background-color: #1e1e1e; color: #ffffff; }
 
                     html.glass-active .theme-surface, html.glass-active .theme-element, html.glass-active .sidebar-glass { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
                     html.glass-active .theme-surface { background-color: rgba(255, 255, 255, 0.75); border-color: rgba(255, 255, 255, 0.8); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); }

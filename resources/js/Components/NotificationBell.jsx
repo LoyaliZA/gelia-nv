@@ -59,7 +59,9 @@ export default function NotificationBell({ notifications: propNotifications = []
         const handleNotificationReceived = (event) => {
             const notification = event.detail;
             const entryId = notification?.id
-                || (notification?.solicitud_id
+                || (notification?.activo_id
+                    ? `live-activo-${notification.activo_id}-${notification.tipo || 'evt'}-${Date.now()}`
+                    : notification?.solicitud_id
                     ? `live-${notification.solicitud_id}-${notification.tipo || 'evt'}-${Date.now()}`
                     : null);
             if (!entryId) return;
@@ -84,9 +86,13 @@ export default function NotificationBell({ notifications: propNotifications = []
     }, []);
 
     const handleNotificationClick = (n) => {
-        const destino = n.data?.solicitud_id
-            ? `/solicitudes?folio=${n.data.solicitud_id}`
-            : '/solicitudes';
+        let destino = '/solicitudes';
+
+        if (n.data?.activo_id) {
+            destino = `/activos/${n.data.activo_id}`;
+        } else if (n.data?.solicitud_id) {
+            destino = `/solicitudes?folio=${n.data.solicitud_id}`;
+        }
 
         router.visit(destino);
         setIsOpen(false);
@@ -154,8 +160,8 @@ export default function NotificationBell({ notifications: propNotifications = []
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
                             {notifications.length > 0 ? notifications.map((n, i) => {
                                 const tipo = n.type || n.data?.tipo;
-                                const esResumen = n.data?.total_vencidos !== undefined;
-                                const isError = tipo === 'pago_rechazado' || tipo === 'rechazada' || tipo === 'alerta_pago_insuficiente' || tipo === 'cancelada' || esResumen;
+                                const esResumen = n.data?.total_vencidos !== undefined || n.data?.total_activos !== undefined;
+                                const isError = tipo === 'pago_rechazado' || tipo === 'rechazada' || tipo === 'alerta_pago_insuficiente' || tipo === 'cancelada' || tipo === 'activo_baja' || tipo === 'activo_vencimiento' || esResumen;
                                 const iconColor = isError ? 'text-red-500' : 'text-[var(--color-primario)]';
                                 const bgClase = n.read_at
                                     ? 'theme-surface opacity-60 border-transparent shadow-none'
@@ -191,6 +197,11 @@ export default function NotificationBell({ notifications: propNotifications = []
                                                 <p className="text-xs font-bold theme-text-main leading-snug line-clamp-2">
                                                     {textoVisible}
                                                 </p>
+                                                {n.data?.activo_id && (
+                                                    <span className="inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 mt-1">
+                                                        {n.data?.folio || `ACT-${n.data.activo_id}`}
+                                                    </span>
+                                                )}
                                                 {n.data?.solicitud_id && (
                                                     <span className="inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20 mt-1">
                                                         FOL-{n.data.solicitud_id}

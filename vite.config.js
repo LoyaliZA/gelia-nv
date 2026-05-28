@@ -15,6 +15,10 @@ export default defineConfig({
         react(),
         tailwindcss(),
     ],
+    test: {
+        environment: 'node',
+        include: ['resources/js/**/*.test.js'],
+    },
     server: {
         host: '0.0.0.0', // Permite conexiones desde fuera del contenedor
         cors: true,      // Habilita las políticas de CORS

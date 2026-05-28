@@ -1,0 +1,264 @@
+<?php
+
+namespace App\Http\Controllers\Activos;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Activos\AsignarActivoRequest;
+use App\Http\Requests\Activos\CambiarEstadoActivoRequest;
+use App\Http\Requests\Activos\ProgramarMantenimientoRequest;
+use App\Http\Requests\Activos\StoreActivoRequest;
+use App\Http\Requests\Activos\TransferirActivoRequest;
+use App\Http\Requests\Activos\UpdateActivoRequest;
+use App\Models\Activo;
+use App\Models\ActivoFoto;
+use App\Models\ActivoMantenimiento;
+use App\Models\CatalogoTipoActivo;
+use App\Models\Departamento;
+use App\Models\User;
+use App\Services\Activos\ActualizarActivoService;
+use App\Services\Activos\AlertasActivosService;
+use App\Services\Activos\AsignarActivoService;
+use App\Services\Activos\BuscarMarcasModelosActivoService;
+use App\Services\Activos\BuscarUsuariosActivoService;
+use App\Services\Activos\CambiarEstadoActivoService;
+use App\Services\Activos\CompletarMantenimientoActivoService;
+use App\Services\Activos\CrearActivoService;
+use App\Services\Activos\DevolverActivoService;
+use App\Services\Activos\EliminarFotoActivoService;
+use App\Services\Activos\ExportarActivosService;
+use App\Services\Activos\ListarActivosService;
+use App\Services\Activos\ProgramarMantenimientoActivoService;
+use App\Services\Activos\SubirFotosActivoService;
+use App\Services\Activos\TransferirActivoService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
+use Inertia\Response;
+use Rap2hpoutre\FastExcel\FastExcel;
+
+class ActivoController extends Controller
+{
+    public function index(Request $request, ListarActivosService $listarService, AlertasActivosService $alertasService): Response
+    {
+        $filtros = $request->only([
+            'busqueda', 'catalogo_tipo_activo_id', 'departamento_id',
+            'estado', 'responsable_user_id', 'mis_activos', 'sin_asignar', 'en_mantenimiento',
+        ]);
+
+        $alertas = $alertasService->ejecutar(Auth::user());
+
+        return Inertia::render('Activos/Index', [
+            'activos' => $listarService->ejecutar(Auth::user(), $filtros),
+            'tipos' => CatalogoTipoActivo::where('activo', true)->orderBy('nombre')->get(),
+            'departamentos' => Departamento::where('activo', true)->orderBy('nombre')->get(),
+            'usuarios' => User::select(['id', 'name', 'email'])->orderBy('name')->get(),
+            'filtros' => $filtros,
+            'alertasResumen' => [
+                'vencidos' => count($alertas['vencidos']),
+                'proximos_7' => count($alertas['proximos_7']),
+                'proximos_30' => count($alertas['proximos_30']),
+                'mantenimiento' => count($alertas['mantenimiento']),
+            ],
+            'alertas' => $alertas,
+        ]);
+    }
+
+    public function show(Activo $activo): Response
+    {
+        $this->autorizarAccesoActivo($activo);
+
+        $activo->load([
+            'tipo',
+            'departamento',
+            'area',
+            'responsable',
+            'registradoPor',
+            'fotos',
+            'asignaciones.usuario',
+            'asignaciones.asignadoPor',
+            'mantenimientos.usuario',
+            'mantenimientoActivo.usuario',
+            'movimientos.usuario',
+            'movimientos.userDestino',
+            'movimientos.departamentoOrigen',
+            'movimientos.departamentoDestino',
+        ]);
+
+        return Inertia::render('Activos/Show', [
+            'activo' => $activo,
+            'tipos' => CatalogoTipoActivo::where('activo', true)->orderBy('nombre')->get(),
+            'departamentos' => Departamento::where('activo', true)->with('areas')->orderBy('nombre')->get(),
+        ]);
+    }
+
+    public function store(StoreActivoRequest $request, CrearActivoService $crearService, SubirFotosActivoService $fotosService)
+    {
+        $activo = $crearService->ejecutar(Auth::user(), $request->validated());
+
+        if ($request->hasFile('fotos')) {
+            $fotosService->ejecutar($activo, $request->file('fotos'));
+        }
+
+        return redirect()->route('activos.show', $activo)->with('success', 'Activo registrado correctamente.');
+    }
+
+    public function update(UpdateActivoRequest $request, Activo $activo, ActualizarActivoService $service, SubirFotosActivoService $fotosService)
+    {
+        $this->autorizarAccesoActivo($activo);
+        $service->ejecutar($activo, Auth::user(), $request->validated());
+
+        if ($request->hasFile('fotos')) {
+            $fotosService->ejecutar($activo, $request->file('fotos'));
+        }
+
+        return back()->with('success', 'Activo actualizado correctamente.');
+    }
+
+    public function asignar(AsignarActivoRequest $request, Activo $activo, AsignarActivoService $service)
+    {
+        $this->autorizarAccesoActivo($activo);
+        $service->ejecutar($activo, Auth::user(), $request->validated('user_id'), $request->validated('notas'));
+
+        return back()->with('success', 'Activo asignado correctamente.');
+    }
+
+    public function devolver(Request $request, Activo $activo, DevolverActivoService $service)
+    {
+        $this->autorizarAccesoActivo($activo);
+        $request->validate(['notas' => 'nullable|string|max:1000']);
+        $service->ejecutar($activo, Auth::user(), $request->input('notas'));
+
+        return back()->with('success', 'Activo devuelto correctamente.');
+    }
+
+    public function transferir(TransferirActivoRequest $request, Activo $activo, TransferirActivoService $service)
+    {
+        $this->autorizarAccesoActivo($activo);
+        $service->ejecutar(
+            $activo,
+            Auth::user(),
+            $request->validated('departamento_destino_id'),
+            $request->validated('motivo'),
+            $request->validated('notas'),
+        );
+
+        return back()->with('success', 'Activo transferido correctamente.');
+    }
+
+    public function cambiarEstado(CambiarEstadoActivoRequest $request, Activo $activo, CambiarEstadoActivoService $service)
+    {
+        $this->autorizarAccesoActivo($activo);
+        $service->ejecutar(
+            $activo,
+            Auth::user(),
+            $request->validated('estado'),
+            $request->validated('motivo'),
+            $request->validated('notas'),
+        );
+
+        return back()->with('success', 'Estado del activo actualizado.');
+    }
+
+    public function programarMantenimiento(ProgramarMantenimientoRequest $request, Activo $activo, ProgramarMantenimientoActivoService $service)
+    {
+        $this->autorizarAccesoActivo($activo);
+        $service->ejecutar($activo, Auth::user(), $request->validated());
+
+        return back()->with('success', 'Mantenimiento programado correctamente.');
+    }
+
+    public function completarMantenimiento(Request $request, Activo $activo, ActivoMantenimiento $mantenimiento, CompletarMantenimientoActivoService $service)
+    {
+        $this->autorizarAccesoActivo($activo);
+        $request->validate(['notas' => 'nullable|string|max:1000']);
+        $service->ejecutar($activo, $mantenimiento, Auth::user(), $request->input('notas'));
+
+        return back()->with('success', 'Mantenimiento completado.');
+    }
+
+    public function subirFotos(Request $request, Activo $activo, SubirFotosActivoService $service)
+    {
+        $this->autorizarAccesoActivo($activo);
+        $request->validate([
+            'fotos' => 'required|array|max:5',
+            'fotos.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
+        ]);
+        $service->ejecutar($activo, $request->file('fotos'));
+
+        return back()->with('success', 'Fotografías subidas correctamente.');
+    }
+
+    public function eliminarFoto(Activo $activo, ActivoFoto $foto, EliminarFotoActivoService $service)
+    {
+        $this->autorizarAccesoActivo($activo);
+        if ($foto->activo_id !== $activo->id) {
+            abort(404);
+        }
+        $service->ejecutar($foto);
+
+        return back()->with('success', 'Fotografía eliminada.');
+    }
+
+    public function alertas(AlertasActivosService $service)
+    {
+        return response()->json($service->ejecutar(Auth::user()));
+    }
+
+    public function exportar(Request $request, ExportarActivosService $service)
+    {
+        $filtros = $request->only([
+            'busqueda', 'catalogo_tipo_activo_id', 'departamento_id',
+            'estado', 'responsable_user_id', 'mis_activos', 'sin_asignar', 'en_mantenimiento',
+        ]);
+
+        $activos = $service->ejecutar(Auth::user(), $filtros);
+        $nombreArchivo = 'activos-' . now()->format('Y-m-d-His') . '.xlsx';
+
+        return (new FastExcel($service->filas($activos)))->download($nombreArchivo);
+    }
+
+    public function buscarUsuarios(Request $request, BuscarUsuariosActivoService $service)
+    {
+        return response()->json(
+            $service->ejecutar(
+                $request->input('q'),
+                $request->integer('departamento_id') ?: null,
+            )
+        );
+    }
+
+    public function buscarMarcas(Request $request, BuscarMarcasModelosActivoService $service)
+    {
+        return response()->json(
+            $service->marcas(
+                $request->integer('tipo_id') ?: null,
+                $request->input('q'),
+            )
+        );
+    }
+
+    public function buscarModelos(Request $request, BuscarMarcasModelosActivoService $service)
+    {
+        return response()->json(
+            $service->modelos(
+                $request->integer('marca_id') ?: null,
+                $request->input('q'),
+            )
+        );
+    }
+
+    private function autorizarAccesoActivo(Activo $activo): void
+    {
+        $usuario = Auth::user();
+
+        if ($usuario->hasRole(['Super Admin', 'Administrador']) || $usuario->can('activos.ver_todos')) {
+            return;
+        }
+
+        $departamentos = $usuario->departamentos->pluck('id')->toArray();
+
+        if (!in_array($activo->departamento_id, $departamentos, true)) {
+            abort(403, 'No tiene acceso a este activo.');
+        }
+    }
+}

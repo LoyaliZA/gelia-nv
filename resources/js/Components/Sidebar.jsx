@@ -4,7 +4,7 @@ import {
     Menu, X, Moon, Sun, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History, Map, FileText, Layers, Palette
+    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package
 } from 'lucide-react';
 
 import GeliaLogo from './GeliaLogo';
@@ -394,6 +394,20 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                     <div className="flex items-center">
                                         <Users className="w-4 h-4 mr-4" style={{ color: isRouteActive('/mis-clientes') ? '#ffffff' : 'var(--color-primario)' }} />
                                         <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mis Clientes_</span>
+                                    </div>
+                                </Link>
+                            )}
+
+                            {can('activos.ver') && (
+                                <Link
+                                    href={route('activos.index')}
+                                    className={linkBaseClass + (isRouteActive('/activos') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/activos')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/activos')) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <div className="flex items-center">
+                                        <Package className="w-4 h-4 mr-4" style={{ color: isRouteActive('/activos') ? '#ffffff' : 'var(--color-primario)' }} />
+                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Control de Activos_</span>
                                     </div>
                                 </Link>
                             )}

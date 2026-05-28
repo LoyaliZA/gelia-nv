@@ -1,39 +1,73 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GripVertical, Maximize2 } from 'lucide-react';
 import {
     GRID_COLS,
     GRID_GAP_PX,
     ROW_HEIGHT_PX,
-    layoutToGridStyle,
+    applyLayoutChange,
+    getCollisions,
+    gridHeightFromLayout,
+    layoutToPixelStyle,
     moveItem,
-    orderPanelsByLayout,
     pointerToGridCell,
     resizeItemFromDelta,
+    resolveCollisionsOnly,
 } from './dashboardLayoutUtils';
 
 const ESTILOS_GRID = `
+    .dashboard-layout-absolute {
+        position: relative;
+        width: 100%;
+        --dg-cols: ${GRID_COLS};
+        --dg-row: ${ROW_HEIGHT_PX}px;
+        --dg-gap: ${GRID_GAP_PX}px;
+        transition: height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
     .dashboard-layout-grid--edit {
         background-image:
             linear-gradient(to right, color-mix(in srgb, var(--color-primario) 12%, transparent) 1px, transparent 1px),
             linear-gradient(to bottom, color-mix(in srgb, var(--color-primario) 12%, transparent) 1px, transparent 1px);
-        background-size: calc((100% - ${(GRID_COLS - 1) * GRID_GAP_PX}px) / ${GRID_COLS}) ${ROW_HEIGHT_PX + GRID_GAP_PX}px;
+        background-size: calc((100% - (var(--dg-cols) - 1) * var(--dg-gap)) / var(--dg-cols)) calc(var(--dg-row) + var(--dg-gap));
         background-position: 0 0;
     }
+
     .dashboard-grid-item {
+        position: absolute;
         min-height: 0;
         min-width: 0;
         overflow: hidden;
     }
+
+    .dashboard-grid-item--animate {
+        transition:
+            left 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+            top 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+            width 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+            height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .dashboard-grid-item--interacting {
+        transition: none !important;
+        z-index: 30;
+    }
+
     .dashboard-grid-item--edit {
         outline: 2px dashed color-mix(in srgb, var(--color-primario) 45%, transparent);
         outline-offset: 2px;
     }
+
+    .dashboard-grid-item--collision {
+        outline-color: color-mix(in srgb, #ef4444 55%, transparent);
+    }
+
     .dashboard-grid-item__inner {
         height: 100%;
         min-height: 0;
         display: flex;
         flex-direction: column;
     }
+
     .dashboard-grid-item__content {
         flex: 1;
         min-height: 0;
@@ -41,13 +75,48 @@ const ESTILOS_GRID = `
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        height: 100%;
+    }
+
+    .dashboard-grid-item__content > * {
+        flex: 1;
+        min-height: 0;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .dashboard-module-card {
+        transition:
+            padding 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+            border-radius 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+            border-color 0.2s ease;
+    }
+
+    .dashboard-module-card__title,
+    .dashboard-module-card__subtitle {
+        transition: font-size 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+    }
+
+    .dashboard-module-card__icon-wrap {
+        transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1), height 0.35s cubic-bezier(0.16, 1, 0.3, 1), margin 0.35s ease;
     }
 `;
 
-function DashboardGridItem({ item, editMode, onMove, onResize, children }) {
+function DashboardGridItem({
+    item,
+    editMode,
+    hasCollision,
+    isInteracting,
+    animateLayout,
+    gridWidth,
+    onInteractionStart,
+    onInteractionEnd,
+    onMove,
+    onResize,
+    children,
+}) {
     const itemRef = useRef(null);
-    const dragRef = useRef(null);
-    const resizeRef = useRef(null);
 
     const onDragPointerDown = useCallback(
         (e) => {
@@ -58,22 +127,20 @@ function DashboardGridItem({ item, editMode, onMove, onResize, children }) {
             const gridEl = itemRef.current?.closest('[data-dashboard-grid]');
             if (!gridEl) return;
 
-            dragRef.current = {
-                itemId: item.i,
-                w: item.w,
-                h: item.h,
-            };
+            onInteractionStart(item.i);
+
+            const snapshot = { itemId: item.i, w: item.w, h: item.h };
 
             const onMovePointer = (ev) => {
                 const rect = gridEl.getBoundingClientRect();
                 const cell = pointerToGridCell(ev.clientX, ev.clientY, rect);
-                const nx = Math.min(GRID_COLS - dragRef.current.w, Math.max(0, cell.x));
+                const nx = Math.min(GRID_COLS - snapshot.w, Math.max(0, cell.x));
                 const ny = Math.max(0, cell.y);
-                onMove(dragRef.current.itemId, nx, ny);
+                onMove(snapshot.itemId, nx, ny);
             };
 
             const onUp = () => {
-                dragRef.current = null;
+                onInteractionEnd(snapshot.itemId);
                 window.removeEventListener('pointermove', onMovePointer);
                 window.removeEventListener('pointerup', onUp);
             };
@@ -81,7 +148,7 @@ function DashboardGridItem({ item, editMode, onMove, onResize, children }) {
             window.addEventListener('pointermove', onMovePointer);
             window.addEventListener('pointerup', onUp);
         },
-        [editMode, item, onMove]
+        [editMode, item, onMove, onInteractionStart, onInteractionEnd]
     );
 
     const onResizePointerDown = useCallback(
@@ -93,24 +160,23 @@ function DashboardGridItem({ item, editMode, onMove, onResize, children }) {
             const gridEl = itemRef.current?.closest('[data-dashboard-grid]');
             if (!gridEl) return;
 
+            onInteractionStart(item.i);
+
             const rect = gridEl.getBoundingClientRect();
             const colWidth = rect.width / GRID_COLS;
             const rowStride = ROW_HEIGHT_PX + GRID_GAP_PX;
             const startX = e.clientX;
             const startY = e.clientY;
-            const origW = item.w;
-            const origH = item.h;
-
-            resizeRef.current = { itemId: item.i };
+            const snapshot = { ...item };
 
             const onMovePointer = (ev) => {
                 const deltaCols = Math.round((ev.clientX - startX) / colWidth);
                 const deltaRows = Math.round((ev.clientY - startY) / rowStride);
-                onResize(resizeRef.current.itemId, origW, origH, deltaCols, deltaRows);
+                onResize(snapshot, deltaCols, deltaRows);
             };
 
             const onUp = () => {
-                resizeRef.current = null;
+                onInteractionEnd(snapshot.i);
                 window.removeEventListener('pointermove', onMovePointer);
                 window.removeEventListener('pointerup', onUp);
             };
@@ -118,14 +184,17 @@ function DashboardGridItem({ item, editMode, onMove, onResize, children }) {
             window.addEventListener('pointermove', onMovePointer);
             window.addEventListener('pointerup', onUp);
         },
-        [editMode, item, onResize]
+        [editMode, item, onResize, onInteractionStart, onInteractionEnd]
     );
+
+    const animateClass = animateLayout && !isInteracting ? 'dashboard-grid-item--animate' : '';
+    const interactingClass = isInteracting ? 'dashboard-grid-item--interacting' : '';
 
     return (
         <div
             ref={itemRef}
-            className={`dashboard-grid-item relative ${editMode ? 'dashboard-grid-item--edit z-20' : 'z-10'}`}
-            style={layoutToGridStyle(item)}
+            className={`dashboard-grid-item relative ${animateClass} ${interactingClass} ${editMode ? 'dashboard-grid-item--edit z-20' : 'z-10'} ${hasCollision ? 'dashboard-grid-item--collision' : ''}`}
+            style={layoutToPixelStyle(item, gridWidth)}
         >
             {editMode && (
                 <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-30 pointer-events-none">
@@ -141,8 +210,14 @@ function DashboardGridItem({ item, editMode, onMove, onResize, children }) {
                 </div>
             )}
 
+            {editMode && (
+                <span className="dashboard-grid-size-badge" aria-hidden="true">
+                    {item.w}×{item.h}
+                </span>
+            )}
+
             <div className={`dashboard-grid-item__inner ${editMode ? 'pt-10' : ''}`}>
-                <div className="dashboard-grid-item__content">{children}</div>
+                <div className="dashboard-grid-item__content h-full">{children}</div>
             </div>
 
             {editMode && (
@@ -159,79 +234,118 @@ function DashboardGridItem({ item, editMode, onMove, onResize, children }) {
     );
 }
 
-function DashboardMobileStack({ layout, visiblePanelIds, panels }) {
-    const orderedIds = orderPanelsByLayout(layout, visiblePanelIds);
-
-    return (
-        <div className="flex flex-col gap-6 w-full min-w-0">
-            {orderedIds.map((id) => (
-                <div key={id} className="w-full min-w-0 shrink-0">
-                    {panels[id]}
-                </div>
-            ))}
-        </div>
-    );
-}
-
 export default function DashboardLayoutGrid({
     layout,
     editMode,
     onLayoutChange,
     panels,
-    isMobile,
     visiblePanelIds,
+    animateLayout = true,
 }) {
-    const resizeSnapshot = useRef({});
+    const gridRef = useRef(null);
+    const [gridWidth, setGridWidth] = useState(0);
+
+    useEffect(() => {
+        const el = gridRef.current;
+        if (!el) return undefined;
+
+        const measure = () => setGridWidth(el.clientWidth);
+        measure();
+
+        const observer = new ResizeObserver(measure);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+    const interactionRef = useRef(null);
+    const layoutSnapshotRef = useRef(null);
+    const draftLayoutRef = useRef(layout);
+    const layoutRef = useRef(layout);
+    const [interactingId, setInteractingId] = useState(null);
+
+    useEffect(() => {
+        layoutRef.current = layout;
+        if (!interactionRef.current) {
+            draftLayoutRef.current = layout;
+        }
+    }, [layout]);
+
+    const handleInteractionStart = useCallback((itemId) => {
+        interactionRef.current = itemId;
+        layoutSnapshotRef.current = layoutRef.current.map((entry) => ({ ...entry }));
+        draftLayoutRef.current = layoutRef.current;
+        setInteractingId(itemId);
+    }, []);
+
+    const handleInteractionEnd = useCallback(
+        (itemId) => {
+            interactionRef.current = null;
+            layoutSnapshotRef.current = null;
+            setInteractingId(null);
+            const finalized = applyLayoutChange(draftLayoutRef.current, itemId);
+            draftLayoutRef.current = finalized;
+            onLayoutChange(finalized);
+        },
+        [onLayoutChange]
+    );
 
     const handleMove = useCallback(
         (itemId, x, y) => {
-            onLayoutChange(layout.map((entry) => (entry.i === itemId ? moveItem(entry, x, y) : entry)));
+            const base = layoutSnapshotRef.current ?? layoutRef.current;
+            const moved = base.map((entry) => (entry.i === itemId ? moveItem(entry, x, y) : entry));
+            const next = resolveCollisionsOnly(moved, itemId);
+            draftLayoutRef.current = next;
+            onLayoutChange(next);
         },
-        [layout, onLayoutChange]
+        [onLayoutChange]
     );
 
     const handleResize = useCallback(
-        (itemId, origW, origH, deltaCols, deltaRows) => {
-            onLayoutChange(
-                layout.map((entry) => {
-                    if (entry.i !== itemId) return entry;
-                    const key = itemId;
-                    if (!resizeSnapshot.current[key]) {
-                        resizeSnapshot.current[key] = { w: origW, h: origH };
-                    }
-                    const base = resizeSnapshot.current[key];
-                    return resizeItemFromDelta({ ...entry, w: base.w, h: base.h }, deltaCols, deltaRows);
-                })
-            );
+        (snapshot, deltaCols, deltaRows) => {
+            const resized = (layoutSnapshotRef.current ?? layoutRef.current).map((entry) => {
+                if (entry.i !== snapshot.i) return entry;
+                return resizeItemFromDelta(snapshot, deltaCols, deltaRows);
+            });
+            draftLayoutRef.current = resized;
+            onLayoutChange(resized);
         },
-        [layout, onLayoutChange]
+        [onLayoutChange]
     );
 
+    const collisionIds =
+        editMode && !interactingId
+            ? new Set(layout.flatMap((entry) => getCollisions(layout, entry.i).map((other) => other.i)))
+            : new Set();
+
     useEffect(() => {
-        if (!editMode) resizeSnapshot.current = {};
+        if (!editMode) {
+            interactionRef.current = null;
+            layoutSnapshotRef.current = null;
+            setInteractingId(null);
+        }
     }, [editMode]);
 
-    if (isMobile) {
-        return <DashboardMobileStack layout={layout} visiblePanelIds={visiblePanelIds} panels={panels} />;
-    }
+    const gridHeight = gridHeightFromLayout(layout);
 
     return (
         <>
             <style>{ESTILOS_GRID}</style>
             <div
+                ref={gridRef}
                 data-dashboard-grid
-                className={`grid relative w-full min-w-0 ${editMode ? 'dashboard-layout-grid--edit rounded-[2rem] p-2' : ''}`}
-                style={{
-                    gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
-                    gridAutoRows: `${ROW_HEIGHT_PX}px`,
-                    gap: `${GRID_GAP_PX}px`,
-                }}
+                className={`dashboard-layout-absolute ${editMode ? 'dashboard-layout-grid--edit rounded-[2rem] p-2' : ''}`}
+                style={{ height: `${gridHeight}px`, minHeight: `${gridHeight}px` }}
             >
                 {layout.map((item) => (
                     <DashboardGridItem
                         key={item.i}
                         item={item}
                         editMode={editMode}
+                        hasCollision={collisionIds.has(item.i)}
+                        isInteracting={interactingId === item.i}
+                        animateLayout={animateLayout}
+                        gridWidth={gridWidth}
+                        onInteractionStart={handleInteractionStart}
+                        onInteractionEnd={handleInteractionEnd}
                         onMove={handleMove}
                         onResize={handleResize}
                     >

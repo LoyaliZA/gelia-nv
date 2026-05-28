@@ -11,4 +11,5 @@ Artisan::command('inspire', function () {
 // Configuración para ejecución diaria fija a las 09:00 AM
 Schedule::command('pagos:rechazar-vencidos')->dailyAt('09:00');
 
+Schedule::command('activos:alertas-programadas')->dailyAt('08:00');
 

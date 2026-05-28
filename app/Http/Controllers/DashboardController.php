@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\SolicitudTag;
 use App\Models\User;
+use App\Services\Activos\AlertasActivosService;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -17,7 +18,9 @@ class DashboardController extends Controller
     {
         $user = $request->user();
         $estadisticas = [];
-        $ultimasSolicitudes = []; // Inicializamos la variable vacía por defecto
+        $ultimasSolicitudes = [];
+        $alertasActivosResumen = [];
+        $alertasActivosDestacadas = [];
 
         // Estadísticas operativas (Ejemplo: Vendedores/Asesores)
         if ($user->can('solicitudes.crear') || $user->can('solicitudes.gestionar')) {
@@ -52,11 +55,26 @@ class DashboardController extends Controller
                 ->get();
         }
 
-        // Asegúrate de que la ruta del render coincida con la ubicación real de tu componente en React
-        // Ejemplo: si tu archivo está en resources/js/Pages/Admin/AdminDashboard.jsx, usa 'Admin/AdminDashboard'
+        if ($user->can('activos.ver')) {
+            $alertas = app(AlertasActivosService::class)->ejecutar($user);
+            $alertasActivosResumen = [
+                'vencidos' => count($alertas['vencidos']),
+                'proximos_7' => count($alertas['proximos_7']),
+                'proximos_30' => count($alertas['proximos_30']),
+                'mantenimiento' => count($alertas['mantenimiento']),
+            ];
+            $alertasActivosDestacadas = array_values(array_merge(
+                array_slice($alertas['vencidos'], 0, 2),
+                array_slice($alertas['proximos_7'], 0, 2),
+                array_slice($alertas['mantenimiento'], 0, 2),
+            ));
+        }
+
         return Inertia::render('Dashboards/Index', [
             'estadisticas' => $estadisticas,
-            'ultimas_solicitudes' => $ultimasSolicitudes // Enviamos la data a Inertia/React
+            'ultimas_solicitudes' => $ultimasSolicitudes,
+            'alertas_activos_resumen' => $alertasActivosResumen,
+            'alertas_activos_destacadas' => $alertasActivosDestacadas,
         ]);
 
     }
