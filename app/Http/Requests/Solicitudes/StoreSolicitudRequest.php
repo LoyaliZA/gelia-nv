@@ -70,6 +70,9 @@ class StoreSolicitudRequest extends FormRequest
             $reglas['catalogo_banco_id'] = ['required', 'exists:catalogo_bancos,id'];
         } elseif (str_contains($nombre, 'PEDIDO')) {
             $reglas['numero_pedido'] = ['required', 'string', 'max:255'];
+            if (str_contains($nombre, 'CANCEL')) {
+                $reglas['motivo_operacion'] = ['required', 'string', 'min:5'];
+            }
         } elseif (str_contains($nombre, 'COTIZACIÓN') || str_contains($nombre, 'COTIZACION')) {
             $reglas['numero_pedido'] = ['required', 'string', 'max:255'];
         } elseif (str_contains($nombre, 'FACTURA')) {

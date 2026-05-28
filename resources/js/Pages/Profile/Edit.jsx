@@ -624,13 +624,10 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         window.dispatchEvent(new CustomEvent('theme-fixed-position-preview', { detail: { position: fixedPosition } }));
     };
 
-    const baseCardClass   = "fade-up rounded-[2.5rem] relative z-10 transition-all duration-300";
-    const glassCardClass  = "theme-surface theme-border border shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]";
+    const baseCardClass   = "fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300";
+    const glassCardClass  = "bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px] border-[1.5px] border-white/80 dark:border-zinc-700/60 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]";
     const solidCardClass  = "bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)]";
     const activeCardClass = `${baseCardClass} ${glassEffect ? glassCardClass : solidCardClass}`;
-    const innerZoneClass  = glassEffect
-        ? 'border-zinc-300 dark:border-zinc-700 theme-element shadow-inner'
-        : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60';
 
     return (
         <AppLayout>
@@ -815,7 +812,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         <p className="text-[10px] font-black uppercase tracking-widest mb-4 ml-1 drop-shadow-sm" style={{ color: 'var(--color-primario)' }}>
                             Datos Personales
                         </p>
-                        <div className={`border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${innerZoneClass}`}>
+                        <div className={`border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
 
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre(s)</label>
@@ -887,7 +884,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         </button>
 
                         {showSensitive && (
-                            <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${innerZoneClass}`}>
+                            <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
 
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Fecha de Nacimiento</label>
@@ -967,7 +964,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         </button>
 
                         {showInstitutional && (
-                            <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 transition-colors ${innerZoneClass}`}>
+                            <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
 
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Correo Institucional</label>
@@ -1074,7 +1071,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             </div>
                         </SettingsRow>
 
-                        <SettingsRow icon={Droplet} title="Desenfoque en contenedores" subtitle="Activa blur de fondo en tarjetas y paneles (sin transparencia)" stackOnMobile={false}>
+                        <SettingsRow icon={Droplet} title="Efectos de transparencia" subtitle="Aplica el efecto traslúcido (Glassmorphism)" stackOnMobile={false}>
                             <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={glassEffect} onClick={() => handleGlassChange(!glassEffect)}>
                                 <div className="gelia-switch-thumb shadow-md" />
                             </button>

@@ -5,7 +5,7 @@ import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
     History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
     ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle,
-    FileSpreadsheet, FileText, FolderOpen
+    FileSpreadsheet, FileText, FolderOpen, Hash, Calendar, Landmark
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -75,6 +75,68 @@ const ESTILOS_ADICIONALES = `
 const esProcesoFactura = (solicitud) => {
     const nombre = solicitud?.proceso?.nombre?.toUpperCase() || '';
     return nombre.includes('FACTURA');
+};
+
+const esProcesoOperativoSolicitud = (solicitud) =>
+    solicitud?.proceso?.categoria_flujo === 'operativo';
+
+const esProcesoCancelacionOperativa = (solicitud) => {
+    const nombre = solicitud?.proceso?.nombre?.toUpperCase() || '';
+    return esProcesoOperativoSolicitud(solicitud) && nombre.includes('CANCEL');
+};
+
+const formatearFechaOperacion = (fecha) => {
+    if (!fecha) return null;
+    const normalizada = String(fecha).includes('T') ? fecha : `${fecha}T12:00:00`;
+    return new Date(normalizada).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const tieneDetalleOperacion = (solicitud) => {
+    if (!esProcesoOperativoSolicitud(solicitud) || esProcesoFactura(solicitud)) return false;
+
+    return !!(
+        solicitud.numero_remision ||
+        solicitud.numero_pedido ||
+        solicitud.motivo_operacion ||
+        solicitud.fecha_operacion ||
+        solicitud.banco?.nombre
+    );
+};
+
+const DetalleOperacionBloque = ({ solicitud, compacto = false }) => {
+    if (!tieneDetalleOperacion(solicitud)) return null;
+
+    const esCancelacion = esProcesoCancelacionOperativa(solicitud);
+    const bancoNombre = solicitud.banco?.nombre;
+
+    const filas = [
+        solicitud.numero_remision ? { icon: Hash, label: 'N° Remisión', value: solicitud.numero_remision } : null,
+        solicitud.numero_pedido ? { icon: Hash, label: 'N° Pedido', value: solicitud.numero_pedido } : null,
+        solicitud.fecha_operacion ? { icon: Calendar, label: 'Fecha', value: formatearFechaOperacion(solicitud.fecha_operacion) } : null,
+        bancoNombre ? { icon: Landmark, label: 'Banco', value: bancoNombre } : null,
+        solicitud.motivo_operacion ? { icon: FileText, label: 'Motivo', value: solicitud.motivo_operacion, multiline: true } : null,
+    ].filter(Boolean);
+
+    return (
+        <div className={`${compacto ? 'mt-2' : 'mt-3'} p-3 rounded-2xl border theme-border theme-element flex flex-col gap-2 shadow-sm`}>
+            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted">
+                {esCancelacion ? 'Detalle de cancelación' : 'Detalle operativo'}
+            </p>
+            <div className="space-y-2">
+                {filas.map(({ icon: Icon, label, value, multiline }) => (
+                    <div key={label} className="flex items-start gap-2">
+                        <Icon className="w-3.5 h-3.5 shrink-0 mt-0.5 theme-text-muted" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[8px] font-black uppercase tracking-widest theme-text-muted">{label}</p>
+                            <p className={`text-xs font-bold theme-text-main ${multiline ? 'whitespace-pre-wrap break-words leading-snug' : 'truncate'}`}>
+                                {value}
+                            </p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 };
 
 const EtiquetasOperacion = ({ solicitud, listas }) => {
@@ -1051,6 +1113,7 @@ export default function Index({
                                         <span className="text-[10px] font-black uppercase tracking-widest theme-text-main block">{nombreProceso}</span>
                                         <EtiquetasOperacion solicitud={solicitud} listas={listas} />
                                     </div>
+                                    <DetalleOperacionBloque solicitud={solicitud} />
                                     <DetalleFacturasBloque solicitud={solicitud} onVerExpediente={(s) => setModalExpedienteFacturas({ abierto: true, solicitud: s })} />
                                     <RespuestaConsultaEncargada
                                         solicitud={solicitud}
@@ -1121,6 +1184,7 @@ export default function Index({
                                             <td className="p-6 align-top">
                                                 <div className="inline-block px-3 py-1 rounded-lg theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-main mb-2">{nombreProceso}</div>
                                                 <EtiquetasOperacion solicitud={solicitud} listas={listas} />
+                                                <DetalleOperacionBloque solicitud={solicitud} compacto />
                                                 <DetalleFacturasBloque solicitud={solicitud} onVerExpediente={(s) => setModalExpedienteFacturas({ abierto: true, solicitud: s })} />
                                                 {(solicitud.consultas || []).some(c => c.estado === 'pendiente') && (
                                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 mt-1">

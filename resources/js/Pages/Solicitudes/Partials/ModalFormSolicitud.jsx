@@ -592,10 +592,20 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     {errors.numero_pedido && <p className="text-xs text-red-500">{errors.numero_pedido}</p>}
                                 </div>
                                 {subtipoOperativo === 'pedido' && (
-                                    <label className="flex items-start gap-3 p-4 rounded-xl border theme-border cursor-pointer">
-                                        <input type="checkbox" checked={!!data.solicitar_cotizacion} onChange={e => setData('solicitar_cotizacion', e.target.checked)} className="mt-1 w-4 h-4" />
-                                        <span className="text-sm font-bold theme-text-main leading-relaxed">Solicitar cotización sobre este pedido</span>
-                                    </label>
+                                    <>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Motivo_</label>
+                                            <div className="relative">
+                                                <FileText className="absolute left-4 top-4 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                                                <textarea required value={data.motivo_operacion} onChange={e => setData('motivo_operacion', e.target.value)} rows={3} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 shadow-sm resize-none" />
+                                            </div>
+                                            {errors.motivo_operacion && <p className="text-xs text-red-500">{errors.motivo_operacion}</p>}
+                                        </div>
+                                        <label className="flex items-start gap-3 p-4 rounded-xl border theme-border cursor-pointer">
+                                            <input type="checkbox" checked={!!data.solicitar_cotizacion} onChange={e => setData('solicitar_cotizacion', e.target.checked)} className="mt-1 w-4 h-4" />
+                                            <span className="text-sm font-bold theme-text-main leading-relaxed">Solicitar cotización sobre este pedido</span>
+                                        </label>
+                                    </>
                                 )}
                             </div>
                         )}
