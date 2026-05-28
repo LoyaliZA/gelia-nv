@@ -21,6 +21,7 @@ class ListarSolicitudesService
             'auditorias.usuario',
             'auditorias.estadoNuevo',
             'listaDescuento',
+            'listaRebaja',
             'tipoCliente',
             'consultas.encargada',
             'consultas.vendedor',
@@ -42,7 +43,7 @@ class ListarSolicitudesService
         }
 
         $tieneVisibilidadArea = $usuario->hasRole('Gerente') ||
-            $usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar']);
+            $usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar', 'solicitudes.cancelar']);
 
         if ($tieneVisibilidadArea) {
             $this->filtrarPorDepartamento($query, $usuario);

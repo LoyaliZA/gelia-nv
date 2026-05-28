@@ -5,6 +5,7 @@ import {
     plantillasDePermiso,
     filtrarPermisosAsignables,
     usuarioPuedeAsignarPermiso,
+    descripcionPermiso,
 } from '../../../utils/permisos';
 
 export default function PermisosAtomicos({
@@ -93,6 +94,7 @@ export default function PermisosAtomicos({
                                 const sugeridoDe = plantillasDePermiso(permiso.name, plantillasActivas, roles);
                                 const meta = procedencia[permiso.name];
                                 const puedeAsignar = usuarioPuedeAsignarPermiso(permiso.name, permisosUsuario, esSuperAdmin);
+                                const ayuda = descripcionPermiso(permiso.name);
 
                                 return (
                                     <button
@@ -120,6 +122,11 @@ export default function PermisosAtomicos({
                                                 <Lock className="w-3 h-3 shrink-0 opacity-50" />
                                             ) : null}
                                         </span>
+                                        {ayuda && (
+                                            <span className="text-[8px] font-medium normal-case tracking-normal opacity-80 leading-snug">
+                                                {ayuda}
+                                            </span>
+                                        )}
                                         {isDePlantilla && sugeridoDe.length > 0 && !meta && (
                                             <span className="text-[8px] font-bold normal-case tracking-wide opacity-80 italic">
                                                 plantilla: {sugeridoDe.join(', ')}

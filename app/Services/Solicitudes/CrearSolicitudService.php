@@ -5,6 +5,7 @@ namespace App\Services\Solicitudes;
 use App\Models\Cliente;
 use App\Models\SolicitudTag;
 use App\Models\CatalogoEstadoSolicitud;
+use App\Models\CatalogoListaDescuento;
 use App\Models\AuditoriaSolicitud;
 use App\Models\User;
 use App\Notifications\AlertaSolicitud;
@@ -38,7 +39,16 @@ class CrearSolicitudService
 
             $proceso = \App\Models\CatalogoProceso::find($datos['catalogo_proceso_id']);
             $esOperativo = $proceso?->esOperativo() ?? false;
-            $montoCotizado = $esOperativo ? 0 : ($datos['monto_cotizado'] ?? 0);
+            $compraEnTienda = $this->aplicaCompraEnTienda($proceso, $datos);
+
+            $listaDescuentoId = $esOperativo ? null : ($datos['catalogo_lista_descuento_id'] ?? null);
+            $montoCotizado = $esOperativo ? 0 : (float) ($datos['monto_cotizado'] ?? 0);
+
+            if ($compraEnTienda) {
+                $listaBronce = $this->resolverListaBronce();
+                $listaDescuentoId = $listaBronce?->id;
+                $montoCotizado = 0;
+            }
 
             // 3. Creación de la Solicitud
             $solicitud = SolicitudTag::create([
@@ -52,7 +62,8 @@ class CrearSolicitudService
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? null,
                 'evidencia_path' => $evidenciaPath,
                 'catalogo_tipo_cliente_id' => $esOperativo ? null : ($datos['catalogo_tipo_cliente_id'] ?? null),
-                'catalogo_lista_descuento_id' => $esOperativo ? null : ($datos['catalogo_lista_descuento_id'] ?? null),
+                'catalogo_lista_descuento_id' => $esOperativo ? null : $listaDescuentoId,
+                'compra_en_tienda' => $compraEnTienda,
                 'confirmo_informacion_escalonamiento' => $esOperativo ? false : filter_var($datos['confirmo_informacion_escalonamiento'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'monto_final_tentativo' => $esOperativo ? null : $montoFinalTentativo,
                 'total_proyectado_neto' => $esOperativo ? null : $totalProyectadoNeto,
@@ -70,10 +81,17 @@ class CrearSolicitudService
                 'usuario_id' => $vendedorId,
                 'estado_anterior_id' => null, // Es nuevo, no hay estado anterior
                 'estado_nuevo_id' => $estadoPendiente->id,
-                'motivo_reporte' => 'Creación original de la solicitud.',
+                'motivo_reporte' => $compraEnTienda
+                    ? 'Creación de solicitud. Compra en tienda: lista Bronce asignada automáticamente. Cotización no requerida.'
+                    : 'Creación original de la solicitud.',
                 'datos_snapshot' => [
                     'monto_cotizado' => $solicitud->monto_cotizado,
                     'proceso_id' => $solicitud->catalogo_proceso_id,
+                    'compra_en_tienda' => $compraEnTienda,
+                    'lista_bronce_autoasignada' => $compraEnTienda,
+                    'lista_descuento_nombre' => $compraEnTienda
+                        ? CatalogoListaDescuento::find($listaDescuentoId)?->nombre
+                        : null,
                     'evidencia_path' => $solicitud->evidencia_path,
                     'lista_descuento_id' => $solicitud->catalogo_lista_descuento_id,
                     'monto_final_tentativo' => $solicitud->monto_final_tentativo,
@@ -109,6 +127,30 @@ class CrearSolicitudService
 
             return $solicitud;
         });
+    }
+
+    private function aplicaCompraEnTienda(?\App\Models\CatalogoProceso $proceso, array $datos): bool
+    {
+        if (!$proceso || $proceso->esOperativo()) {
+            return false;
+        }
+
+        $esClienteNuevo = str_contains(strtoupper($proceso->nombre), 'ASIGNAR CLIENTE NUEVO');
+
+        return $esClienteNuevo && filter_var($datos['compra_en_tienda'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function resolverListaBronce(): ?CatalogoListaDescuento
+    {
+        return CatalogoListaDescuento::query()
+            ->where('activo', true)
+            ->where(function ($q) {
+                $q->where('nombre', 'MAYOREO BRONCE')
+                    ->orWhere('nombre', 'like', '%BRONCE%');
+            })
+            ->orderByRaw("CASE WHEN nombre = 'MAYOREO BRONCE' THEN 0 ELSE 1 END")
+            ->orderBy('monto_requerido')
+            ->first();
     }
 
     private function resolverClienteId(array $datos, int $vendedorId): ?int

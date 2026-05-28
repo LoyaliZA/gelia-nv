@@ -3,6 +3,38 @@ export function permisoHeredado(permisoName, rolesAsignados, roles) {
     return permisoDePlantilla(permisoName, rolesAsignados, roles);
 }
 
+export const DESCRIPCIONES_PERMISOS = {
+    'solicitudes.ver_listado': 'Permite acceder al listado general de solicitudes.',
+    'solicitudes.ver_detalle': 'Permite ver el detalle completo de una solicitud.',
+    'solicitudes.crear': 'Permite crear nuevas solicitudes de proceso.',
+    'solicitudes.editar': 'Permite editar solicitudes en estado editable.',
+    'solicitudes.verificar': 'Permite marcar solicitudes como verificadas (auxiliar).',
+    'solicitudes.reportar': 'Permite aprobar procesos, reportar errores y responder consultas.',
+    'solicitudes.consultar': 'Permite consultar TAG o lista sobre una solicitud respondida.',
+    'solicitudes.confirmar_pago': 'Permite confirmar el pago de una solicitud (encargada).',
+    'solicitudes.solicitar_cancelacion': 'Permite solicitar la cancelación de folios propios activos.',
+    'solicitudes.cancelar': 'Permite confirmar cancelaciones pendientes y revertir cambios al cliente.',
+    'solicitudes.confirmar_cambio_lista': 'Permite confirmar el ajuste de lista tras alerta de pago insuficiente.',
+    'solicitudes.eliminar': 'Permite eliminar registros de solicitudes con respaldo en auditoría.',
+    'clientes.ver': 'Permite consultar el catálogo de clientes.',
+    'clientes.crear': 'Permite registrar clientes manualmente.',
+    'clientes.carga_masiva': 'Permite importar clientes de forma masiva.',
+    'configuracion.ver_auditoria': 'Permite consultar la bitácora de auditoría de solicitudes.',
+    'usuarios.gestionar': 'Permite administrar usuarios del sistema.',
+    'usuarios.generar_permisos': 'Permite asignar permisos a otros usuarios.',
+    'catalogos.comisiones.ver': 'Permite consultar el catálogo de comisiones.',
+    'catalogos.comisiones.gestionar': 'Permite editar el catálogo de comisiones.',
+    'listados.ver': 'Permite ver listados de productos para resurtido.',
+    'listados.crear': 'Permite crear listados de productos.',
+    'listados.editar': 'Permite editar listados de productos.',
+    'listados.eliminar': 'Permite eliminar listados de productos.',
+    'personalizacion.gestionar': 'Permite gestionar temas y personalización visual.',
+};
+
+export function descripcionPermiso(permisoName) {
+    return DESCRIPCIONES_PERMISOS[permisoName] || null;
+}
+
 export function permisoDePlantilla(permisoName, plantillasActivas, roles) {
     return (roles || [])
         .filter((r) => (plantillasActivas || []).includes(r.name))

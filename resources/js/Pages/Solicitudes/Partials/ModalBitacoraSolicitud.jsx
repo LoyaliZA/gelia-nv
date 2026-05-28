@@ -74,7 +74,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             <div>
                                 <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Comentario de la Vendedora</p>
                                 {solicitud?.observaciones_vendedor?.trim() ? (
-                                    <p className="text-sm font-bold theme-text-main italic leading-relaxed p-4 rounded-2xl border theme-border bg-black/5 dark:bg-white/5">
+                                    <p className="text-sm font-bold text-slate-900 dark:text-slate-50 italic leading-relaxed p-4 rounded-2xl border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/90">
                                         {solicitud.observaciones_vendedor}
                                     </p>
                                 ) : (
@@ -98,6 +98,11 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                                         </div>
                                     )}
                                 </div>
+                            )}
+                            {solicitud?.compra_en_tienda && (
+                                <p className="text-[10px] font-bold text-[#b87333] dark:text-[#daa520] uppercase tracking-widest flex items-center gap-1">
+                                    Compra en tienda — lista Bronce asignada al crear la solicitud.
+                                </p>
                             )}
                             {solicitud?.confirmo_informacion_escalonamiento && (
                                 <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
@@ -160,8 +165,13 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
 
                                             {snapshot && !esRespuesta && !snapshot?.antes && (
                                                 <div className="mb-4 p-4 bg-black/5 dark:bg-white/5 rounded-2xl border theme-border flex flex-col gap-3">
-                                                    {(nombreListaHistorial || nombreTipoHistorial) && (
+                                                    {(nombreListaHistorial || nombreTipoHistorial || snapshot?.compra_en_tienda) && (
                                                         <div className="flex flex-wrap gap-2 mb-2">
+                                                            {snapshot?.compra_en_tienda && (
+                                                                <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-[#cd7f32]/15 text-[#b87333] border border-[#cd7f32]/30">
+                                                                    Compra en tienda · {snapshot.lista_descuento_nombre || nombreListaHistorial || 'Bronce'}
+                                                                </span>
+                                                            )}
                                                             {nombreListaHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Aspiraba a: {nombreListaHistorial}</span>}
                                                             {nombreTipoHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">Clasificación: {nombreTipoHistorial}</span>}
                                                         </div>

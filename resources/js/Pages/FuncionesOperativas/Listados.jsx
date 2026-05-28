@@ -186,7 +186,7 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
     }, []);
 
     const baseCardClass = "fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300";
-    const glassCardClass = "bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px] border-[1.5px] border-white/80 dark:border-zinc-700/60 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]";
+    const glassCardClass = "theme-surface theme-border border shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]";
     const solidCardClass = "bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)]";
     const activeCardClass = `${baseCardClass} ${glassEffect ? glassCardClass : solidCardClass}`;
 

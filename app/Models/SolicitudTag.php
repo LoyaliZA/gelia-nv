@@ -38,8 +38,10 @@ class SolicitudTag extends Model
         'motivo_operacion',
         'catalogo_banco_id',
         'solicitar_cotizacion',
+        'compra_en_tienda',
         'cancelacion_solicitada_at',
         'motivo_cancelacion',
+        'catalogo_lista_rebaja_id',
     ];
 
     protected $casts = [
@@ -51,6 +53,7 @@ class SolicitudTag extends Model
         'rollback_confirmado_at' => 'datetime',
         'fecha_operacion' => 'date',
         'solicitar_cotizacion' => 'boolean',
+        'compra_en_tienda' => 'boolean',
         'cancelacion_solicitada_at' => 'datetime',
     ];
 
@@ -62,6 +65,7 @@ class SolicitudTag extends Model
     public function estado(): BelongsTo { return $this->belongsTo(CatalogoEstadoSolicitud::class, 'catalogo_estado_solicitud_id'); }
     public function tipoCliente(): BelongsTo { return $this->belongsTo(CatalogoTipoCliente::class, 'catalogo_tipo_cliente_id'); }
     public function listaDescuento(): BelongsTo { return $this->belongsTo(CatalogoListaDescuento::class, 'catalogo_lista_descuento_id'); }
+    public function listaRebaja(): BelongsTo { return $this->belongsTo(CatalogoListaDescuento::class, 'catalogo_lista_rebaja_id'); }
     /**
      * Relación: Una solicitud tiene un historial de auditorías
      */

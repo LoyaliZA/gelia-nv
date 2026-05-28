@@ -421,11 +421,34 @@ export default function AppLayout({ children }) {
                     .dark .theme-border { border-color: #27272a; }
                     .dark .theme-placeholder::placeholder { color: #52525b; }
 
-                    html.glass-active .theme-surface, html.glass-active .theme-element, html.glass-active .sidebar-glass { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-                    html.glass-active .theme-surface { background-color: rgba(255, 255, 255, 0.75); border-color: rgba(255, 255, 255, 0.8); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); }
-                    html.glass-active .theme-element { background-color: rgba(250, 250, 250, 0.85) !important; border-color: rgba(255, 255, 255, 0.6) !important; }
-                    html.dark.glass-active .theme-surface { background-color: rgba(18, 18, 18, 0.7); border-color: rgba(255, 255, 255, 0.08); box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.5); }
-                    html.dark.glass-active .theme-element { background-color: rgba(30, 30, 30, 0.85) !important; border-color: rgba(255, 255, 255, 0.05) !important; }
+                    .theme-surface, .theme-element, .sidebar-glass {
+                        backdrop-filter: none;
+                        -webkit-backdrop-filter: none;
+                    }
+                    html.glass-active .theme-surface,
+                    html.glass-active .theme-element,
+                    html.glass-active .sidebar-glass {
+                        backdrop-filter: blur(24px) saturate(1.15);
+                        -webkit-backdrop-filter: blur(24px) saturate(1.15);
+                    }
+                    html.glass-active .theme-surface {
+                        background-color: rgba(255, 255, 255, 0.94);
+                        border-color: rgba(228, 228, 231, 0.95);
+                        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+                    }
+                    html.glass-active .theme-element {
+                        background-color: rgba(250, 250, 250, 0.96) !important;
+                        border-color: rgba(228, 228, 231, 0.95) !important;
+                    }
+                    html.dark.glass-active .theme-surface {
+                        background-color: rgba(18, 18, 18, 0.94);
+                        border-color: rgba(39, 39, 42, 0.95);
+                        box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.5);
+                    }
+                    html.dark.glass-active .theme-element {
+                        background-color: rgba(30, 30, 30, 0.96) !important;
+                        border-color: rgba(39, 39, 42, 0.95) !important;
+                    }
 
                     .gelia-switch { width: 3rem; height: 1.5rem; border-radius: 9999px; padding: 0.25rem; background-color: #d4d4d8; transition: background-color 0.3s ease; cursor: pointer; display: flex; align-items: center; border: none; outline: none; }
                     .dark .gelia-switch { background-color: #3f3f46; }

@@ -432,6 +432,7 @@ class SolicitudController extends Controller
                 'Solicitar Cotización' => $solicitud->solicitar_cotizacion ? 'Sí' : 'No',
                 'Cancelación Solicitada' => $solicitud->cancelacion_solicitada_at?->format('Y-m-d H:i') ?? '',
                 'Motivo Cancelación' => $solicitud->motivo_cancelacion ?? '',
+                'Lista Rebaja Cancelación' => $solicitud->listaRebaja?->nombre ?? '',
             ];
         });
     }
@@ -571,11 +572,19 @@ class SolicitudController extends Controller
 
     public function solicitarCancelacion(Request $request, SolicitudTag $solicitud, SolicitarCancelacionSolicitudService $service): RedirectResponse
     {
+        $solicitud->loadMissing('proceso');
+        $esCambioLista = str_contains(strtoupper($solicitud->proceso?->nombre ?? ''), 'LISTA');
+
         $request->validate([
             'motivo_cancelacion' => 'required|string|min:10|max:1000',
+            'catalogo_lista_rebaja_id' => ($esCambioLista ? 'required' : 'nullable') . '|integer|exists:catalogo_listas_descuento,id',
         ]);
 
-        $service->ejecutar($solicitud, $request->motivo_cancelacion);
+        $service->ejecutar(
+            $solicitud,
+            $request->motivo_cancelacion,
+            $request->input('catalogo_lista_rebaja_id') ? (int) $request->catalogo_lista_rebaja_id : null,
+        );
 
         return back()->with('success', 'Solicitud de cancelación enviada al área administrativa.');
     }

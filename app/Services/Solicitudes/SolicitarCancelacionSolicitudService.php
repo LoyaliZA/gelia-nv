@@ -9,14 +9,21 @@ use App\Models\User;
 use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 
 class SolicitarCancelacionSolicitudService
 {
-    public function ejecutar(SolicitudTag $solicitud, string $motivo): void
+    public function __construct(
+        private ValidarListaInferiorService $validarListaInferior,
+    ) {}
+
+    public function ejecutar(SolicitudTag $solicitud, string $motivo, ?int $listaRebajaId = null): void
     {
-        DB::transaction(function () use ($solicitud, $motivo) {
-            $solicitud->loadMissing(['estado', 'vendedor', 'departamento']);
+        Gate::authorize('solicitudes.solicitar_cancelacion');
+
+        DB::transaction(function () use ($solicitud, $motivo, $listaRebajaId) {
+            $solicitud->loadMissing(['estado', 'vendedor', 'departamento', 'proceso', 'cliente.listaDescuento', 'listaDescuento']);
 
             if ($solicitud->vendedor_id !== Auth::id()) {
                 abort(403, 'Solo la vendedora dueña puede solicitar la cancelación.');
@@ -26,7 +33,6 @@ class SolicitarCancelacionSolicitudService
                 abort(422, 'Ya existe una solicitud de cancelación pendiente para este folio.');
             }
 
-            $estadoCancelada = CatalogoEstadoSolicitud::where('nombre', 'Cancelada')->first();
             $estadosPermitidos = ['Pendiente', 'Respondida', 'Verificada'];
 
             if (!in_array($solicitud->estado?->nombre, $estadosPermitidos)) {
@@ -37,17 +43,35 @@ class SolicitarCancelacionSolicitudService
                 abort(422, 'Las solicitudes con pago vencido no pueden solicitar cancelación.');
             }
 
+            $listaRebaja = null;
+            $esCambioLista = $this->validarListaInferior->esProcesoCambioLista($solicitud);
+
+            if ($esCambioLista) {
+                if (!$listaRebajaId) {
+                    abort(422, 'Debe indicar a qué lista inferior debe rebajarse el cliente.');
+                }
+                $listaRebaja = $this->validarListaInferior->validarListaInferior($solicitud, $listaRebajaId);
+            } elseif ($listaRebajaId) {
+                abort(422, 'La lista de rebaja solo aplica a solicitudes de cambio de lista.');
+            }
+
             $solicitud->update([
                 'cancelacion_solicitada_at' => now(),
                 'motivo_cancelacion' => $motivo,
+                'catalogo_lista_rebaja_id' => $listaRebaja?->id,
             ]);
+
+            $motivoAuditoria = 'SOLICITUD DE CANCELACIÓN: ' . $motivo;
+            if ($listaRebaja) {
+                $motivoAuditoria .= ' | Lista rebaja: ' . $listaRebaja->nombre;
+            }
 
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $solicitud->catalogo_estado_solicitud_id,
                 'estado_nuevo_id' => $solicitud->catalogo_estado_solicitud_id,
-                'motivo_reporte' => 'SOLICITUD DE CANCELACIÓN: ' . $motivo,
+                'motivo_reporte' => $motivoAuditoria,
                 'datos_snapshot' => null,
             ]);
 
@@ -58,12 +82,17 @@ class SolicitarCancelacionSolicitudService
                 ->get();
 
             if ($encargados->isNotEmpty()) {
+                $mensaje = Auth::user()->name . ' solicita cancelar la solicitud FOL-' . $solicitud->id . '.';
+                if ($listaRebaja) {
+                    $mensaje .= ' Lista rebaja solicitada: ' . $listaRebaja->nombre . '.';
+                }
+
                 Notification::send(
                     $encargados,
                     new AlertaSolicitud(
                         $solicitud,
                         'cancelacion_solicitada',
-                        Auth::user()->name . ' solicita cancelar la solicitud FOL-' . $solicitud->id . '.'
+                        $mensaje
                     )
                 );
             }

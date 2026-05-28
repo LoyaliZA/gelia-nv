@@ -114,7 +114,7 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
     };
 
     const innerZoneClass = glassEffect
-        ? 'border border-dashed border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner'
+        ? 'border border-dashed border-zinc-300 dark:border-zinc-700 theme-element shadow-inner'
         : 'border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60';
 
     return (
@@ -328,7 +328,7 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
                                     <button type="button" className="gelia-switch shrink-0 scale-110 shadow-sm" data-active={data.efecto_cristal} onClick={() => setData('efecto_cristal', !data.efecto_cristal)}>
                                         <div className="gelia-switch-thumb shadow-md" />
                                     </button>
-                                    <span className="text-[10px] font-black uppercase theme-text-muted">Efecto cristal</span>
+                                    <span className="text-[10px] font-black uppercase theme-text-muted">Desenfoque (blur)</span>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <button type="button" className="gelia-switch shrink-0 scale-110 shadow-sm" data-active={data.sonido} onClick={() => setData('sonido', !data.sonido)}>

@@ -92,9 +92,13 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/solicitudes/{solicitud}/rechazar-pago', [SolicitudController::class, 'rechazarPago'])->name('solicitudes.rechazar_pago');
     // AGREGA ESTA LÍNEA: Ruta específica para la revisión administrativa
     Route::put('/solicitudes/{solicitud}/estado', [SolicitudController::class, 'actualizarEstado'])->name('solicitudes.actualizar_estado');
-    Route::put('/solicitudes/{solicitud}/confirmar-lista', [SolicitudController::class, 'confirmarCambioLista'])->name('solicitudes.confirmar_lista');
+    Route::put('/solicitudes/{solicitud}/confirmar-lista', [SolicitudController::class, 'confirmarCambioLista'])
+        ->middleware('can:solicitudes.confirmar_cambio_lista')
+        ->name('solicitudes.confirmar_lista');
     Route::put('/solicitudes/{solicitud}/confirmar-rollback', [SolicitudController::class, 'confirmarRollback'])->name('solicitudes.confirmar_rollback');
-    Route::post('/solicitudes/{solicitud}/solicitar-cancelacion', [SolicitudController::class, 'solicitarCancelacion'])->name('solicitudes.solicitar_cancelacion');
+    Route::post('/solicitudes/{solicitud}/solicitar-cancelacion', [SolicitudController::class, 'solicitarCancelacion'])
+        ->middleware('can:solicitudes.solicitar_cancelacion')
+        ->name('solicitudes.solicitar_cancelacion');
     Route::put('/solicitudes/{solicitud}/cancelar', [SolicitudController::class, 'cancelar'])->name('solicitudes.cancelar')->middleware('can:solicitudes.cancelar');
     Route::post('/solicitudes/{solicitud}/consultas', [SolicitudController::class, 'storeConsulta'])->middleware('can:solicitudes.consultar')->name('solicitudes.consultas.store');
     Route::put('/solicitudes/{solicitud}/consultas/{consulta}', [SolicitudController::class, 'responderConsulta'])->name('solicitudes.consultas.responder');

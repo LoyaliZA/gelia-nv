@@ -15,10 +15,14 @@ use Illuminate\Support\Facades\Notification;
 
 class CancelarSolicitudService
 {
+    public function __construct(
+        private ValidarListaInferiorService $validarListaInferior,
+    ) {}
+
     public function ejecutar(SolicitudTag $solicitud, ?string $motivo = null): void
     {
         DB::transaction(function () use ($solicitud, $motivo) {
-            $solicitud->loadMissing(['proceso', 'cliente', 'vendedor']);
+            $solicitud->loadMissing(['proceso', 'cliente', 'vendedor', 'listaRebaja']);
 
             if (!$solicitud->cancelacion_solicitada_at) {
                 abort(422, 'Esta solicitud no tiene una solicitud de cancelación pendiente.');
@@ -100,6 +104,11 @@ class CancelarSolicitudService
             if ($solicitud->catalogo_tipo_cliente_id) {
                 $cliente->catalogo_tipo_cliente_id = null;
             }
+        }
+
+        if ($solicitud->catalogo_lista_rebaja_id) {
+            $listaRebaja = $this->validarListaInferior->validarListaInferior($solicitud, $solicitud->catalogo_lista_rebaja_id);
+            $cliente->lista_actual_id = $listaRebaja->id;
         }
 
         $cliente->save();

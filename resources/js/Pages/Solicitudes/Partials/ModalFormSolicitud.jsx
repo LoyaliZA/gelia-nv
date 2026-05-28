@@ -2,11 +2,22 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash } from 'lucide-react';
+import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store } from 'lucide-react';
 
 const obtenerProceso = (procesos, procesoId) => procesos.find(p => String(p.id) === String(procesoId)) || null;
 
 const esProcesoOperativo = (procesos, procesoId) => obtenerProceso(procesos, procesoId)?.categoria_flujo === 'operativo';
+
+const esProcesoClienteNuevo = (procesos, procesoId) => {
+    const nombre = obtenerProceso(procesos, procesoId)?.nombre?.toUpperCase() || '';
+    return nombre.includes('ASIGNAR CLIENTE NUEVO');
+};
+
+const resolverListaBronce = (catalogoListas) => {
+    const bronce = catalogoListas.find(l => l.nombre?.toUpperCase() === 'MAYOREO BRONCE')
+        || catalogoListas.find(l => l.nombre?.toUpperCase().includes('BRONCE'));
+    return bronce || null;
+};
 
 const tipoOperativo = (procesos, procesoId) => {
     const nombre = obtenerProceso(procesos, procesoId)?.nombre?.toUpperCase() || '';
@@ -172,10 +183,14 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         motivo_operacion: solicitudAEditar?.motivo_operacion || '',
         catalogo_banco_id: solicitudAEditar?.catalogo_banco_id || '',
         solicitar_cotizacion: solicitudAEditar?.solicitar_cotizacion || false,
+        compra_en_tienda: false,
     });
 
     const esOperativo = esProcesoOperativo(procesos, data.catalogo_proceso_id);
+    const esClienteNuevo = esProcesoClienteNuevo(procesos, data.catalogo_proceso_id);
+    const listaBronce = resolverListaBronce(listas);
     const subtipoOperativo = tipoOperativo(procesos, data.catalogo_proceso_id);
+    const cotizacionOpcional = esClienteNuevo && data.compra_en_tienda;
 
     const opcionesTipoCliente = infoCliente?.es_heredado
         ? tiposCliente.filter(t => t.nombre.toUpperCase().includes('HEREDADO'))
@@ -191,8 +206,25 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     };
 
     useEffect(() => {
-        if (esOperativo || !infoCliente || !data.monto_cotizado || isNaN(data.monto_cotizado)) {
-            if (!esOperativo) {
+        if (!esClienteNuevo && data.compra_en_tienda) {
+            setData('compra_en_tienda', false);
+        }
+    }, [data.catalogo_proceso_id, esClienteNuevo]);
+
+    useEffect(() => {
+        if (!data.compra_en_tienda || !listaBronce) return;
+        setData('catalogo_lista_descuento_id', String(listaBronce.id));
+        setData('monto_cotizado', '');
+        setData('confirmo_informacion_escalonamiento', false);
+        setData('monto_final_tentativo', '');
+        setData('total_proyectado_neto', '');
+        setAnalisisFinanciero(null);
+        setAlertaLista({ mensaje: `Lista ${listaBronce.nombre} asignada (compra en tienda)` });
+    }, [data.compra_en_tienda, listaBronce?.id]);
+
+    useEffect(() => {
+        if (cotizacionOpcional || esOperativo || !infoCliente || !data.monto_cotizado || isNaN(data.monto_cotizado)) {
+            if (!esOperativo && !cotizacionOpcional) {
                 setAnalisisFinanciero(null);
                 setAlertaLista(null);
                 if (!modoEdicion) {
@@ -201,6 +233,9 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                 setData('confirmo_informacion_escalonamiento', false);
                 setData('monto_final_tentativo', '');
                 setData('total_proyectado_neto', '');
+            }
+            if (cotizacionOpcional) {
+                setAnalisisFinanciero(null);
             }
             return;
         }
@@ -288,7 +323,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
             return;
         }
 
-        if (!esOperativo && requiereConfirmacionEscalonamiento && !data.confirmo_informacion_escalonamiento) {
+        if (!esOperativo && !cotizacionOpcional && requiereConfirmacionEscalonamiento && !data.confirmo_informacion_escalonamiento) {
             return;
         }
 
@@ -376,13 +411,45 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             )}
                         </div>
 
+                        {!esOperativo && esClienteNuevo && !modoEdicion && (
+                            <label className="flex items-start gap-3 p-4 rounded-2xl border-2 border-[#cd7f32]/40 bg-[#cd7f32]/10 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={!!data.compra_en_tienda}
+                                    onChange={e => setData('compra_en_tienda', e.target.checked)}
+                                    className="mt-1 w-4 h-4 accent-[#cd7f32]"
+                                />
+                                <div>
+                                    <span className="text-sm font-black theme-text-main flex items-center gap-2">
+                                        <Store className="w-4 h-4 text-[#cd7f32]" />
+                                        El cliente realizará su compra en tienda
+                                    </span>
+                                    <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
+                                        Se asignará lista {listaBronce?.nombre || 'Bronce'} automáticamente y la cotización no será obligatoria. Quedará registrado en la bitácora.
+                                    </p>
+                                </div>
+                            </label>
+                        )}
+
                         {!esOperativo && (
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cotización Autorizada_</label>
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
+                                Cotización Autorizada_{cotizacionOpcional ? ' (opcional)' : ''}
+                            </label>
                             <div className="relative">
                                 <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                <input type="number" step="0.01" required value={data.monto_cotizado} onChange={e => setData('monto_cotizado', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-black outline-none focus:ring-2 transition-all shadow-sm" />
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    required={!cotizacionOpcional}
+                                    disabled={cotizacionOpcional}
+                                    value={data.monto_cotizado}
+                                    onChange={e => setData('monto_cotizado', e.target.value)}
+                                    placeholder={cotizacionOpcional ? 'No requerida — compra en tienda' : ''}
+                                    className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-black outline-none focus:ring-2 transition-all shadow-sm disabled:opacity-60"
+                                />
                             </div>
+                            {errors.monto_cotizado && <p className="text-xs text-red-500">{errors.monto_cotizado}</p>}
                         </div>
                         )}
 
@@ -645,7 +712,12 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                         <div className="relative">
                             <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                            <select value={data.catalogo_lista_descuento_id || ''} onChange={e => setData('catalogo_lista_descuento_id', e.target.value)} className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none focus:ring-2 transition-all shadow-sm cursor-pointer">
+                            <select
+                                value={data.catalogo_lista_descuento_id || ''}
+                                onChange={e => setData('catalogo_lista_descuento_id', e.target.value)}
+                                disabled={cotizacionOpcional}
+                                className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none focus:ring-2 transition-all shadow-sm cursor-pointer disabled:opacity-60"
+                            >
                                 <option value="">-- Mantener nivel actual --</option>
                                 {listas.filter(l => !l.nombre.toUpperCase().includes('COLABORADOR') && !l.nombre.toUpperCase().includes('PLATAFORMAS')).map(lista => {
                                     const baseClienteObj = obtenerListaActual();

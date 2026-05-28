@@ -120,6 +120,11 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
             )}
             </>
             )}
+            {solicitud.compra_en_tienda && (
+                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-[#cd7f32]/15 text-[#b87333] dark:text-[#daa520] border border-[#cd7f32]/30 flex items-center gap-1">
+                    Compra en tienda · Bronce
+                </span>
+            )}
             {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
                 <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-red-500/10 text-red-600 border border-red-500/20 flex items-center gap-1">
                     <Ban className="w-3 h-3" /> Cancelación solicitada
@@ -236,11 +241,11 @@ const FeedbackYComentarios = ({ solicitud }) => {
     return (
         <div className="mt-3 flex flex-col gap-2">
             {tieneObservacion && !esAlertaPago && (
-                <div className="p-3 rounded-2xl border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 flex items-start gap-2 shadow-sm">
-                    <MessageSquare className="w-4 h-4 text-slate-500 mt-0.5 shrink-0" />
+                <div className="p-3 rounded-2xl border bg-slate-100 dark:bg-slate-800/90 border-slate-200 dark:border-slate-600 flex items-start gap-2 shadow-sm">
+                    <MessageSquare className="w-4 h-4 text-slate-600 dark:text-slate-300 mt-0.5 shrink-0" />
                     <div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-0.5">Nota de Vendedora</p>
-                        <p className="text-xs font-bold theme-text-main italic leading-tight">{solicitud.observaciones_vendedor}</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 mb-0.5">Nota de Vendedora</p>
+                        <p className="text-xs font-bold text-slate-900 dark:text-slate-50 italic leading-snug">{solicitud.observaciones_vendedor}</p>
                     </div>
                 </div>
             )}
@@ -267,6 +272,29 @@ const FeedbackYComentarios = ({ solicitud }) => {
     );
 };
 
+const esProcesoCambioLista = (solicitud) =>
+    (solicitud?.proceso?.nombre || '').toUpperCase().includes('LISTA');
+
+const obtenerListaRebajaNombre = (solicitud) =>
+    solicitud?.lista_rebaja?.nombre || solicitud?.listaRebaja?.nombre || null;
+
+const listasInferioresParaCancelacion = (listas, solicitud) => {
+    const listaCliente = solicitud?.cliente?.lista_descuento || solicitud?.cliente?.listaDescuento;
+    const listaSolicitud = solicitud?.lista_descuento || solicitud?.listaDescuento;
+    const ref = Math.max(
+        parseFloat(listaCliente?.monto_requerido ?? 0),
+        parseFloat(listaSolicitud?.monto_requerido ?? 0),
+    );
+    if (ref <= 0) return [];
+
+    return (listas || []).filter(l =>
+        l.activo !== false &&
+        !l.nombre?.toUpperCase().includes('COLABORADOR') &&
+        !l.nombre?.toUpperCase().includes('PLATAFORMAS') &&
+        parseFloat(l.monto_requerido) < ref
+    ).sort((a, b) => parseFloat(b.monto_requerido) - parseFloat(a.monto_requerido));
+};
+
 const tieneMotivoCancelacionVisible = (solicitud) => {
     const motivo = solicitud?.motivo_cancelacion?.trim();
     if (!motivo) return false;
@@ -281,6 +309,7 @@ const MotivoCancelacionBloque = ({ solicitud, compacto = false }) => {
     const fechaSolicitud = solicitud.cancelacion_solicitada_at
         ? formatearTiempoRelativo(solicitud.cancelacion_solicitada_at)
         : null;
+    const listaRebajaNombre = obtenerListaRebajaNombre(solicitud);
 
     return (
         <div
@@ -298,6 +327,11 @@ const MotivoCancelacionBloque = ({ solicitud, compacto = false }) => {
                     </p>
                     {fechaSolicitud && pendiente && (
                         <p className="text-[9px] font-bold theme-text-muted mb-1">Solicitada {fechaSolicitud}</p>
+                    )}
+                    {listaRebajaNombre && (
+                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${pendiente ? 'text-red-700 dark:text-red-300' : 'theme-text-muted'}`}>
+                            Lista rebaja: {listaRebajaNombre}
+                        </p>
                     )}
                     <p className={`text-xs font-bold leading-snug whitespace-pre-wrap break-words ${pendiente ? 'text-red-800 dark:text-red-200' : 'theme-text-main italic'}`}>
                         {solicitud.motivo_cancelacion}
@@ -382,8 +416,13 @@ const ModalConfirmarPago = ({ onClose, solicitud, onConfirmar }) => {
     );
 };
 
-const ModalSolicitarCancelacion = ({ onClose, solicitud, onConfirmar }) => {
-    const { data, setData, post, processing } = useForm({ motivo_cancelacion: '' });
+const ModalSolicitarCancelacion = ({ onClose, solicitud, listas = [], onConfirmar }) => {
+    const esCambioLista = esProcesoCambioLista(solicitud);
+    const listasInferiores = listasInferioresParaCancelacion(listas, solicitud);
+    const { data, setData, post, processing } = useForm({
+        motivo_cancelacion: '',
+        catalogo_lista_rebaja_id: '',
+    });
 
     const submit = (e) => {
         e.preventDefault();
@@ -402,6 +441,31 @@ const ModalSolicitarCancelacion = ({ onClose, solicitud, onConfirmar }) => {
                 </div>
                 <p className="text-sm theme-text-muted mb-4">FOL-{solicitud.id} — La encargada o administrador deberá confirmar la cancelación.</p>
                 <form onSubmit={submit} className="space-y-4">
+                    {esCambioLista && (
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">
+                                Lista a la que debe rebajarse el cliente
+                            </label>
+                            {listasInferiores.length > 0 ? (
+                                <select
+                                    required
+                                    value={data.catalogo_lista_rebaja_id}
+                                    onChange={e => setData('catalogo_lista_rebaja_id', e.target.value)}
+                                    className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2"
+                                >
+                                    <option value="">Selecciona una lista inferior...</option>
+                                    {listasInferiores.map(l => (
+                                        <option key={l.id} value={l.id}>{l.nombre}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <p className="text-xs font-bold text-red-600 dark:text-red-400 italic">
+                                    No hay listas inferiores disponibles para este folio.
+                                </p>
+                            )}
+                            <p className="text-[10px] theme-text-muted italic">Solo se permiten listas con nivel inferior al actual o al solicitado.</p>
+                        </div>
+                    )}
                     <textarea
                         required
                         minLength={10}
@@ -411,7 +475,11 @@ const ModalSolicitarCancelacion = ({ onClose, solicitud, onConfirmar }) => {
                         rows={4}
                         className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 resize-none"
                     />
-                    <button type="submit" disabled={processing} className="w-full py-4 text-white rounded-xl font-black uppercase text-[11px] tracking-widest bg-red-600 hover:bg-red-700 transition-all shadow-lg outline-none disabled:opacity-50">
+                    <button
+                        type="submit"
+                        disabled={processing || (esCambioLista && listasInferiores.length === 0)}
+                        className="w-full py-4 text-white rounded-xl font-black uppercase text-[11px] tracking-widest bg-red-600 hover:bg-red-700 transition-all shadow-lg outline-none disabled:opacity-50"
+                    >
                         Enviar Solicitud
                     </button>
                 </form>
@@ -449,7 +517,8 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
         && !consultaPendiente
         && !esAlertaPago;
 
-    const puedeSolicitarCancelacion = solicitud.vendedor_id === auth.user.id
+    const puedeSolicitarCancelacion = can('solicitudes.solicitar_cancelacion')
+        && solicitud.vendedor_id === auth.user.id
         && estadosActivos.includes(solicitud.estado?.nombre)
         && !solicitud.cancelacion_solicitada_at
         && !esVencimiento
@@ -518,6 +587,11 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                 {puedeConfirmarCancelacion && solicitud.motivo_cancelacion && (
                     <div className="px-3 py-2 mb-1 border-b theme-border">
                         <p className="text-[8px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 mb-1">Motivo del vendedor</p>
+                        {obtenerListaRebajaNombre(solicitud) && (
+                            <p className="text-[9px] font-black uppercase tracking-widest text-red-700 dark:text-red-300 mb-1">
+                                Lista rebaja: {obtenerListaRebajaNombre(solicitud)}
+                            </p>
+                        )}
                         <p className="text-[10px] font-bold theme-text-main leading-snug line-clamp-4 italic">
                             {solicitud.motivo_cancelacion}
                         </p>
@@ -704,7 +778,7 @@ export default function Index({
         aplicarFiltros({ vendedor_id: '', motivo_incorrecta: '', tab: nuevaTab });
     };
 
-    const can = (permiso) => { const roles = auth?.user?.roles || []; const isAdmin = roles.includes('Admin') || roles.includes('Super admin (admin)'); return auth?.user?.permissions?.includes(permiso) || isAdmin; };
+    const can = (permiso) => auth?.user?.permissions?.includes(permiso) ?? false;
 
     const eliminarSolicitud = (id) => {
         const motivo = window.prompt("ATENCIÓN: Se eliminará este registro y se creará un respaldo en la auditoría.\n\nIngresa el motivo de la eliminación (Mínimo 10 caracteres):");
@@ -834,7 +908,13 @@ export default function Index({
                 auth={auth}
             />
             {modalPago.abierto && <ModalConfirmarPago onClose={() => setModalPago({ abierto: false, solicitud: null })} solicitud={modalPago.solicitud} onConfirmar={confirmarPagoConMonto} />}
-            {modalCancelacion.abierto && <ModalSolicitarCancelacion onClose={() => setModalCancelacion({ abierto: false, solicitud: null })} solicitud={modalCancelacion.solicitud} />}
+            {modalCancelacion.abierto && (
+                <ModalSolicitarCancelacion
+                    onClose={() => setModalCancelacion({ abierto: false, solicitud: null })}
+                    solicitud={modalCancelacion.solicitud}
+                    listas={listas}
+                />
+            )}
             {modalConfirmarCancelacion.abierto && (
                 <ModalConfirmarCancelacion
                     onClose={() => setModalConfirmarCancelacion({ abierto: false, solicitud: null })}

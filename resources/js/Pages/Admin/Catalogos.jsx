@@ -21,7 +21,7 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
     const [tabActiva, setTabActiva] = useState('departamentos');
     const [glassEffect] = useState(() => localStorage.getItem('theme_glass') !== 'false');
 
-    const activeCardClass = `fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300 ${glassEffect ? 'bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px] border-[1.5px] border-white/80 dark:border-zinc-700/60 shadow-lg' : 'bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-sm'}`;
+    const activeCardClass = `fade-up rounded-[2.5rem] relative z-10 transition-all duration-300 ${glassEffect ? 'theme-surface theme-border border shadow-lg' : 'bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-sm'}`;
 
     const tabs = [
         { id: 'tipos_cliente', label: 'Tipos Cliente', icon: UserCheck }, // <-- Añadido

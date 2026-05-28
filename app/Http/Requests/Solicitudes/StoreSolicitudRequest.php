@@ -21,12 +21,14 @@ class StoreSolicitudRequest extends FormRequest
     {
         $proceso = $this->resolverProceso();
         $esOperativo = $proceso?->esOperativo() ?? false;
+        $compraEnTienda = $this->aplicaFlujoCompraEnTienda();
 
         $reglas = [
             'numero_cliente' => [$esOperativo ? 'required' : 'nullable', 'string', 'max:255'],
             'nombre_cliente' => ['nullable', 'string', 'max:255'],
             'catalogo_proceso_id' => ['required', 'exists:catalogo_procesos,id'],
             'observaciones_vendedor' => ['nullable', 'string'],
+            'compra_en_tienda' => ['nullable', 'boolean'],
         ];
 
         if ($esOperativo) {
@@ -35,7 +37,7 @@ class StoreSolicitudRequest extends FormRequest
             $reglas = array_merge($reglas, [
                 'catalogo_tipo_cliente_id' => ['nullable', 'exists:catalogo_tipo_clientes,id'],
                 'catalogo_lista_descuento_id' => ['nullable', 'exists:catalogo_listas_descuento,id'],
-                'monto_cotizado' => ['required', 'numeric', 'min:0'],
+                'monto_cotizado' => [$compraEnTienda ? 'nullable' : 'required', 'numeric', 'min:0'],
                 'confirmo_informacion_escalonamiento' => ['nullable', 'boolean'],
                 'monto_final_tentativo' => ['nullable', 'numeric', 'min:0'],
                 'total_proyectado_neto' => ['nullable', 'numeric', 'min:0'],
@@ -83,12 +85,31 @@ class StoreSolicitudRequest extends FormRequest
         return CatalogoProceso::find($procesoId);
     }
 
+    private function aplicaFlujoCompraEnTienda(): bool
+    {
+        $proceso = $this->resolverProceso();
+        if (!$proceso || $proceso->esOperativo()) {
+            return false;
+        }
+
+        return str_contains(strtoupper($proceso->nombre), 'ASIGNAR CLIENTE NUEVO')
+            && filter_var($this->input('compra_en_tienda'), FILTER_VALIDATE_BOOLEAN);
+    }
+
     public function after(): array
     {
         return [
             function (Validator $validator) {
                 $proceso = $this->resolverProceso();
                 if ($proceso?->esOperativo()) {
+                    return;
+                }
+
+                if ($this->aplicaFlujoCompraEnTienda()) {
+                    if (!str_contains(strtoupper($proceso->nombre), 'ASIGNAR CLIENTE NUEVO')) {
+                        $validator->errors()->add('compra_en_tienda', 'La compra en tienda solo aplica a solicitudes de asignar cliente nuevo.');
+                    }
+
                     return;
                 }
 
