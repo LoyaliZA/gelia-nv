@@ -33,6 +33,7 @@ use App\Services\Activos\SubirFotosActivoService;
 use App\Services\Activos\TransferirActivoService;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\QrCode;
+use Endroid\QrCode\Writer\PngWriter;
 use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -100,6 +101,52 @@ class ActivoController extends Controller
         $this->autorizarAccesoActivo($activo);
 
         return $this->respuestaQrConsultaPublica($activo);
+    }
+
+    public function qrPng(Activo $activo)
+    {
+        $this->autorizarAccesoActivo($activo);
+
+        return $this->respuestaQrConsultaPublica($activo, 'png', 320);
+    }
+
+    public function resolverCodigo(Request $request)
+    {
+        $codigo = trim((string) $request->input('codigo', ''));
+        if ($codigo === '') {
+            return response()->json(['error' => 'Código vacío.'], 422);
+        }
+
+        if (preg_match('/\/activos\/consulta\/([a-f0-9-]{36})/i', $codigo, $coincidencias)) {
+            $codigo = $coincidencias[1];
+        }
+
+        if (preg_match('/^[a-f0-9-]{36}$/i', $codigo)) {
+            $activo = Activo::where('consulta_token', $codigo)->first();
+            if ($activo && $activo->estado !== 'baja') {
+                $this->autorizarAccesoActivo($activo);
+
+                return response()->json([
+                    'id' => $activo->id,
+                    'folio' => $activo->folio,
+                    'nombre' => $activo->nombre,
+                ]);
+            }
+        }
+
+        $activo = $this->buscarActivoPorCodigoEscaneado($codigo);
+
+        if (!$activo) {
+            return response()->json(['error' => 'No se encontró un activo con ese código.'], 404);
+        }
+
+        $this->autorizarAccesoActivo($activo);
+
+        return response()->json([
+            'id' => $activo->id,
+            'folio' => $activo->folio,
+            'nombre' => $activo->nombre,
+        ]);
     }
 
     public function consultaPublica(string $token, PresentarConsultaPublicaActivoService $service): Response
@@ -301,15 +348,25 @@ class ActivoController extends Controller
         return $activo;
     }
 
-    private function respuestaQrConsultaPublica(Activo $activo)
+    private function respuestaQrConsultaPublica(Activo $activo, string $formato = 'svg', int $size = 120)
     {
         $url = route('activos.consulta.publica', $activo->consulta_token, absolute: true);
         $qrCode = new QrCode(
             data: $url,
             errorCorrectionLevel: ErrorCorrectionLevel::Medium,
-            size: 120,
+            size: $size,
             margin: 4,
         );
+
+        if ($formato === 'png') {
+            $result = (new PngWriter())->write($qrCode);
+
+            return response($result->getString(), 200, [
+                'Content-Type' => 'image/png',
+                'Cache-Control' => 'public, max-age=86400',
+                'Content-Disposition' => 'inline; filename="qr-' . $activo->folio . '.png"',
+            ]);
+        }
 
         $result = (new SvgWriter())->write($qrCode);
 
@@ -317,6 +374,34 @@ class ActivoController extends Controller
             'Content-Type' => $result->getMimeType(),
             'Cache-Control' => 'public, max-age=86400',
         ]);
+    }
+
+    private function buscarActivoPorCodigoEscaneado(string $codigo): ?Activo
+    {
+        $query = Activo::query()->where('estado', '!=', 'baja');
+        $usuario = Auth::user();
+
+        if ($usuario && !$usuario->hasRole(['Super Admin', 'Administrador']) && !$usuario->can('activos.ver_todos')) {
+            $departamentos = $usuario->departamentos->pluck('id')->toArray();
+            if (empty($departamentos)) {
+                return null;
+            }
+            $query->whereIn('departamento_id', $departamentos);
+        }
+
+        $codigoLike = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $codigo) . '%';
+
+        return $query->where(function ($q) use ($codigo, $codigoLike) {
+            $q->where('folio', $codigo)
+                ->orWhere('nombre', 'like', $codigoLike)
+                ->orWhere('atributos->serial', $codigo)
+                ->orWhere('atributos->mac', $codigo)
+                ->orWhere('atributos->mac', 'like', $codigoLike)
+                ->orWhere('atributos->ip', $codigo)
+                ->orWhere('atributos->numero_serie', $codigo)
+                ->orWhere('atributos->no_serie', $codigo)
+                ->orWhere('atributos->imei', $codigo);
+        })->first();
     }
 
     private function autorizarAccesoActivo(Activo $activo): void

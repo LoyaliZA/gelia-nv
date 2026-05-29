@@ -51,7 +51,15 @@ class ListarActivosService
             $query->where(function (Builder $q) use ($busqueda) {
                 $q->where('folio', 'like', "%{$busqueda}%")
                     ->orWhere('nombre', 'like', "%{$busqueda}%")
-                    ->orWhere('descripcion', 'like', "%{$busqueda}%");
+                    ->orWhere('descripcion', 'like', "%{$busqueda}%")
+                    ->orWhere('atributos->serial', 'like', "%{$busqueda}%")
+                    ->orWhere('atributos->mac', 'like', "%{$busqueda}%")
+                    ->orWhere('atributos->ip', 'like', "%{$busqueda}%")
+                    ->orWhere('atributos->numero_serie', 'like', "%{$busqueda}%")
+                    ->orWhere('atributos->no_serie', 'like', "%{$busqueda}%")
+                    ->orWhere('atributos->imei', 'like', "%{$busqueda}%")
+                    ->orWhere('atributos->marca', 'like', "%{$busqueda}%")
+                    ->orWhere('atributos->modelo', 'like', "%{$busqueda}%");
             });
         }
 

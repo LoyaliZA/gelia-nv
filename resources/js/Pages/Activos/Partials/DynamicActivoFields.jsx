@@ -1,6 +1,14 @@
 import React from 'react';
 import { INPUT_CLASS, SELECT_CLASS, TEXTAREA_CLASS, LABEL_CLASS } from './activosFormStyles';
 import CatalogCombobox from './CatalogCombobox';
+import InputConEscanner from './InputConEscanner';
+
+function esCampoEscaneable(field, readOnly) {
+    if (readOnly) return false;
+    if (field.scannable === false) return false;
+    if (field.scannable === true) return true;
+    return ['text', 'textarea', 'number'].includes(field.type);
+}
 
 function FieldLabel({ field }) {
     return (
@@ -138,30 +146,54 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
                     return (
                         <div key={key} className="md:col-span-2">
                             <FieldLabel field={field} />
-                            <textarea
-                                value={values[key] ?? ''}
-                                onChange={(e) => handleChange(key, e.target.value)}
-                                readOnly={readOnly}
-                                rows={3}
-                                className={TEXTAREA_CLASS}
-                                {...extraProps}
-                            />
+                            {esCampoEscaneable(field, readOnly) ? (
+                                <InputConEscanner
+                                    multiline
+                                    value={values[key] ?? ''}
+                                    onChange={(e) => handleChange(key, e.target.value)}
+                                    label={field.label}
+                                    className={TEXTAREA_CLASS}
+                                    inputProps={{ rows: 3, ...extraProps }}
+                                />
+                            ) : (
+                                <textarea
+                                    value={values[key] ?? ''}
+                                    onChange={(e) => handleChange(key, e.target.value)}
+                                    readOnly={readOnly}
+                                    rows={3}
+                                    className={TEXTAREA_CLASS}
+                                    {...extraProps}
+                                />
+                            )}
                             {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
                         </div>
                     );
                 }
 
+                const inputType = field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text';
+
                 return (
                     <div key={key}>
                         <FieldLabel field={field} />
-                        <input
-                            type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-                            value={values[key] ?? ''}
-                            onChange={(e) => handleChange(key, e.target.value)}
-                            readOnly={readOnly}
-                            className={`${INPUT_CLASS} ${readOnly ? 'opacity-80 cursor-default' : ''}`}
-                            {...extraProps}
-                        />
+                        {esCampoEscaneable(field, readOnly) ? (
+                            <InputConEscanner
+                                value={values[key] ?? ''}
+                                onChange={(e) => handleChange(key, e.target.value)}
+                                label={field.label}
+                                readOnly={readOnly}
+                                className={`${INPUT_CLASS} ${readOnly ? 'opacity-80 cursor-default' : ''}`}
+                                inputProps={{ type: inputType, ...extraProps }}
+                            />
+                        ) : (
+                            <input
+                                type={inputType}
+                                value={values[key] ?? ''}
+                                onChange={(e) => handleChange(key, e.target.value)}
+                                readOnly={readOnly}
+                                className={`${INPUT_CLASS} ${readOnly ? 'opacity-80 cursor-default' : ''}`}
+                                {...extraProps}
+                            />
+                        )}
                         {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
                     </div>
                 );

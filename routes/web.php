@@ -216,9 +216,11 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     Route::middleware(['can:activos.ver'])->prefix('activos')->name('activos.')->group(function () {
         Route::get('/', [ActivoController::class, 'index'])->name('index');
+        Route::get('/resolver-codigo', [ActivoController::class, 'resolverCodigo'])->name('resolver_codigo');
         Route::get('/exportar', [ActivoController::class, 'exportar'])->middleware('can:activos.exportar')->name('exportar');
         Route::get('/alertas', [ActivoController::class, 'alertas'])->name('alertas');
         Route::get('/{activo}/qr.svg', [ActivoController::class, 'qr'])->name('qr');
+        Route::get('/{activo}/qr.png', [ActivoController::class, 'qrPng'])->name('qr_png');
         Route::get('/{activo}', [ActivoController::class, 'show'])->name('show');
 
         Route::post('/', [ActivoController::class, 'store'])->middleware('can:activos.crear')->name('store');

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
-import { Filter, Search, User, UserX, Wrench, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Filter, Search, User, UserX, Wrench, RotateCcw, ChevronDown, ChevronUp, ScanLine } from 'lucide-react';
 import { INPUT_CLASS, SELECT_CLASS, LABEL_CLASS, getActivosCardClass } from './activosFormStyles';
+import ModalEscanearCodigo from './ModalEscanearCodigo';
+import { resolverCodigoEscaneado } from './resolverCodigoEscaneado';
 
 const STORAGE_FILTROS_EXPANDIDOS = 'activos_filtros_expandidos';
 
@@ -64,6 +66,7 @@ function contarFiltrosActivos(filtros) {
 
 export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos = [], usuarios = [], onAplicar }) {
     const [expandido, setExpandido] = useState(estadoInicialExpandido);
+    const [modalEscaner, setModalEscaner] = useState(false);
 
     const toggleExpandido = () => {
         setExpandido((prev) => {
@@ -121,10 +124,21 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
 
     const limpiar = () => router.get(route('activos.index'));
 
+    const manejarCodigoEscaneado = async (codigo) => {
+        setModalEscaner(false);
+
+        try {
+            await resolverCodigoEscaneado(codigo);
+        } catch {
+            aplicar({ busqueda: codigo });
+        }
+    };
+
     const numActivos = contarFiltrosActivos(filtros);
     const hayFiltrosActivos = numActivos > 0;
 
     return (
+        <>
         <section className={getActivosCardClass('overflow-hidden')} aria-label="Filtros del listado">
             <div className="flex items-stretch border-b theme-border">
                 <button
@@ -207,16 +221,27 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
             >
                 <div className="theme-form-zone p-5 md:p-8 space-y-6 md:space-y-8">
                     <CampoFiltro label="Buscar" htmlFor="activos-filtro-busqueda" className="w-full">
-                        <div className="theme-field-with-icon">
-                            <Search className="theme-field-icon" aria-hidden />
-                            <input
-                                id="activos-filtro-busqueda"
-                                type="search"
-                                placeholder="Folio o nombre del activo..."
-                                defaultValue={filtros.busqueda || ''}
-                                onKeyDown={(e) => e.key === 'Enter' && aplicar({ busqueda: e.target.value })}
-                                className={`${INPUT_CLASS} w-full pr-4`}
-                            />
+                        <div className="flex gap-2 items-stretch">
+                            <div className="theme-field-with-icon flex-1 min-w-0">
+                                <Search className="theme-field-icon" aria-hidden />
+                                <input
+                                    id="activos-filtro-busqueda"
+                                    type="search"
+                                    placeholder="Folio, nombre, serie, MAC..."
+                                    defaultValue={filtros.busqueda || ''}
+                                    onKeyDown={(e) => e.key === 'Enter' && aplicar({ busqueda: e.target.value })}
+                                    className={`${INPUT_CLASS} w-full pr-4`}
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setModalEscaner(true)}
+                                className="inline-flex items-center justify-center gap-2 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest border theme-border theme-element theme-text-main hover:border-[var(--color-primario)] shrink-0 min-h-[44px]"
+                                title="Escanear QR o código de barras"
+                            >
+                                <ScanLine className="w-4 h-4 shrink-0" aria-hidden />
+                                <span className="hidden sm:inline">Escanear</span>
+                            </button>
                         </div>
                     </CampoFiltro>
 
@@ -308,5 +333,15 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
                 </div>
             </div>
         </section>
+        {modalEscaner && (
+            <ModalEscanearCodigo
+                abierto={modalEscaner}
+                onCerrar={() => setModalEscaner(false)}
+                titulo="Escanear activo"
+                descripcion="Escanea el QR de la etiqueta, o un código de barras de serie/MAC para localizar el equipo."
+                onEscaneado={manejarCodigoEscaneado}
+            />
+        )}
+        </>
     );
 }
