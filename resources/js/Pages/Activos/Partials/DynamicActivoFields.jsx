@@ -10,6 +10,20 @@ function FieldLabel({ field }) {
     );
 }
 
+function inputPropsFromField(field) {
+    const props = {};
+    if (field.type === 'number') {
+        if (field.min !== undefined) props.min = field.min;
+        if (field.max !== undefined) props.max = field.max;
+    }
+    if (['text', 'textarea'].includes(field.type)) {
+        if (field.min_length !== undefined) props.minLength = field.min_length;
+        if (field.max_length !== undefined) props.maxLength = field.max_length;
+        if (field.pattern) props.pattern = field.pattern;
+    }
+    return props;
+}
+
 export default function DynamicActivoFields({ fields = [], values = {}, onChange, errors = {}, readOnly = false, tipoActivoId = null }) {
     if (!fields.length) {
         return (
@@ -30,6 +44,7 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
             {fields.map((field) => {
                 const key = field.key;
                 const error = errors[`atributos.${key}`];
+                const extraProps = inputPropsFromField(field);
 
                 if (field.type === 'catalog_marca' || field.type === 'catalog_modelo') {
                     return (
@@ -38,16 +53,38 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
                             <CatalogCombobox
                                 field={field}
                                 value={values[key] ?? ''}
-                                onChange={(v) => handleChange(key, v)}
+                                onChange={(v) => {
+                                    if (field.type === 'catalog_marca') {
+                                        const cambio = v !== (values.marca ?? '');
+                                        onChange({
+                                            ...values,
+                                            marca: v,
+                                            marca_id: null,
+                                            ...(cambio ? { modelo: '', modelo_id: null } : {}),
+                                        });
+                                        return;
+                                    }
+                                    onChange({
+                                        ...values,
+                                        [key]: v,
+                                        modelo_id: null,
+                                    });
+                                }}
                                 onItemSelect={(item) => {
                                     if (field.type === 'catalog_marca') {
                                         onChange({
                                             ...values,
                                             marca: item?.nombre ?? values.marca,
                                             marca_id: item?.id ?? null,
-                                            ...(item ? { modelo: '' } : {}),
+                                            ...(item ? { modelo: '', modelo_id: null } : {}),
                                         });
+                                        return;
                                     }
+                                    onChange({
+                                        ...values,
+                                        modelo: item?.nombre ?? values.modelo,
+                                        modelo_id: item?.id ?? null,
+                                    });
                                 }}
                                 tipoActivoId={tipoActivoId}
                                 marcaId={marcaId}
@@ -90,7 +127,7 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
                                 checked={!!values[key]}
                                 onChange={(e) => handleChange(key, e.target.checked)}
                                 disabled={readOnly}
-                                className="rounded"
+                                className="rounded w-5 h-5"
                             />
                             <label className="text-sm theme-text-main">{field.label}</label>
                         </div>
@@ -107,6 +144,7 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
                                 readOnly={readOnly}
                                 rows={3}
                                 className={TEXTAREA_CLASS}
+                                {...extraProps}
                             />
                             {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
                         </div>
@@ -122,6 +160,7 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
                             onChange={(e) => handleChange(key, e.target.value)}
                             readOnly={readOnly}
                             className={`${INPUT_CLASS} ${readOnly ? 'opacity-80 cursor-default' : ''}`}
+                            {...extraProps}
                         />
                         {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
                     </div>

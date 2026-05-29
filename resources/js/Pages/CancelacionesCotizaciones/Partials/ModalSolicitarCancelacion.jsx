@@ -1,7 +1,14 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
-import { X, Ban } from 'lucide-react';
+import { X, Ban, Send } from 'lucide-react';
+import {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_TEXTAREA,
+    THEME_LABEL,
+    THEME_BTN_PRIMARY,
+} from '../../../utils/geliaTheme';
 
 export default function ModalSolicitarCancelacion({ onClose, solicitud }) {
     const { data, setData, post, processing } = useForm({
@@ -16,27 +23,55 @@ export default function ModalSolicitarCancelacion({ onClose, solicitud }) {
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
-            <div className="w-full max-w-md theme-surface border theme-border rounded-[2rem] p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none"><X className="w-5 h-5" /></button>
-                <div className="flex items-center gap-3 mb-6">
-                    <Ban className="w-6 h-6 text-red-500" />
-                    <h3 className="text-xl font-black italic theme-text-main uppercase m-0">Solicitar Cancelación</h3>
-                </div>
-                <p className="text-sm theme-text-muted mb-4">FOL-{solicitud.id} — La encargada deberá confirmar la cancelación.</p>
-                <form onSubmit={submit} className="space-y-4">
-                    <textarea
-                        required
-                        minLength={10}
-                        value={data.motivo_cancelacion}
-                        onChange={e => setData('motivo_cancelacion', e.target.value)}
-                        placeholder="Describe el motivo (mín. 10 caracteres)..."
-                        rows={4}
-                        className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none resize-none"
-                    />
-                    <button type="submit" disabled={processing} className="w-full py-4 text-white rounded-xl font-black uppercase text-[11px] tracking-widest bg-red-600 hover:bg-red-700 outline-none disabled:opacity-50">
-                        Enviar solicitud
+        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+            <div
+                className={`${THEME_MODAL_SHELL} max-w-md w-full flex flex-col text-left`}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <Ban className="w-6 h-6 text-red-500 shrink-0" />
+                        <h3 className="text-lg font-black italic uppercase theme-text-main m-0 leading-tight">
+                            Solicitar cancelación
+                        </h3>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="p-2 rounded-full theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"
+                        aria-label="Cerrar"
+                    >
+                        <X className="w-5 h-5" />
                     </button>
+                </div>
+                <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
+                    <div className="gelia-modal-body p-5 md:p-6 space-y-4">
+                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest m-0">
+                            FOL-{solicitud.id} — La encargada deberá confirmar la cancelación
+                        </p>
+                        <div className="space-y-1.5">
+                            <label className={THEME_LABEL}>Motivo</label>
+                            <textarea
+                                required
+                                minLength={10}
+                                value={data.motivo_cancelacion}
+                                onChange={(e) => setData('motivo_cancelacion', e.target.value)}
+                                placeholder="Describe el motivo (mín. 10 caracteres)…"
+                                rows={4}
+                                className={THEME_TEXTAREA}
+                            />
+                        </div>
+                    </div>
+                    <div className="gelia-modal-footer p-5 md:p-6">
+                        <button
+                            type="submit"
+                            disabled={processing}
+                            className={`${THEME_BTN_PRIMARY} w-full !bg-red-600 hover:!opacity-90`}
+                        >
+                            <Send className="w-4 h-4 shrink-0" />
+                            {processing ? 'Enviando…' : 'Enviar solicitud'}
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>,

@@ -8,7 +8,8 @@ import ModalFormActivo from './Partials/ModalFormActivo';
 import PanelAlertas from './Partials/PanelAlertas';
 import GuiaVisualActivos from './Partials/GuiaVisualActivos';
 import TarjetaActivoMobile from './Partials/TarjetaActivoMobile';
-import { ESTADO_BADGE, ESTADO_LABELS, getActivosCardClass, BTN_PRIMARY_CLASS, BTN_SECONDARY_CLASS } from './Partials/activosFormStyles';
+import ResumenAlertasActivos from './Partials/ResumenAlertasActivos';
+import { ESTADO_BADGE, ESTADO_LABELS, getActivosCardClass, BTN_PRIMARY_CLASS, BTN_SECONDARY_CLASS, FAB_CLASS } from './Partials/activosFormStyles';
 
 function fotoPrincipal(activo) {
     const fotos = activo.fotos || [];
@@ -155,6 +156,7 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
 
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
                     <div className="xl:col-span-2 min-w-0 space-y-6 md:space-y-8">
+                        <ResumenAlertasActivos alertasResumen={alertasResumen} alertas={alertas} />
                         <FiltrosActivos filtros={filtros} tipos={tipos} departamentos={departamentos} usuarios={usuarios} />
 
                         <div className={`lg:hidden ${cardListado}`}>
@@ -228,6 +230,18 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
             </div>
 
             <ModalFormActivo abierto={modalAbierto} onCerrar={() => setModalAbierto(false)} tipos={tipos} departamentos={departamentos} />
+
+            {can('activos.crear') && (
+                <button
+                    type="button"
+                    onClick={() => setModalAbierto(true)}
+                    className={FAB_CLASS}
+                    style={{ backgroundColor: 'var(--color-primario)' }}
+                    aria-label="Registrar activo"
+                >
+                    <Plus className="w-5 h-5" /> Registrar
+                </button>
+            )}
         </AppLayout>
     );
 }

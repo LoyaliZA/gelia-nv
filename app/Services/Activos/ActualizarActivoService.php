@@ -13,6 +13,7 @@ class ActualizarActivoService
         private ValidarAtributosActivoService $validarAtributos,
         private RegistrarMovimientoActivoService $registrarMovimiento,
         private SincronizarMarcaModeloActivoService $sincronizarMarcaModelo,
+        private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
     public function ejecutar(Activo $activo, User $usuario, array $datos): Activo
@@ -28,6 +29,9 @@ class ActualizarActivoService
             ?? $activo->fecha_vencimiento;
 
         return DB::transaction(function () use ($activo, $usuario, $datos, $atributos, $fechaVencimiento) {
+            $activo->load(['tipo', 'departamento']);
+            $snapshot = $this->construirSnapshot->ejecutar($activo);
+
             $activo->update([
                 'catalogo_tipo_activo_id' => $datos['catalogo_tipo_activo_id'] ?? $activo->catalogo_tipo_activo_id,
                 'departamento_id' => $datos['departamento_id'] ?? $activo->departamento_id,
@@ -40,7 +44,9 @@ class ActualizarActivoService
                 'valor' => $datos['valor'] ?? $activo->valor,
             ]);
 
-            $this->registrarMovimiento->ejecutar($activo, $usuario, 'edicion');
+            $this->registrarMovimiento->ejecutar($activo, $usuario, 'edicion', [
+                'datos_snapshot' => $snapshot,
+            ]);
 
             return $activo->fresh(['tipo', 'departamento', 'area', 'responsable']);
         });

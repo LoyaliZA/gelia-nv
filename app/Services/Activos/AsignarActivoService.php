@@ -13,6 +13,7 @@ class AsignarActivoService
     public function __construct(
         private RegistrarMovimientoActivoService $registrarMovimiento,
         private NotificarActivoService $notificarActivo,
+        private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
     public function ejecutar(Activo $activo, User $actor, int $userId, ?string $notas = null): Activo
@@ -32,7 +33,8 @@ class AsignarActivoService
         }
 
         return DB::transaction(function () use ($activo, $actor, $destinatario, $notas) {
-            $activo->loadMissing('responsable');
+            $activo->loadMissing(['responsable', 'tipo', 'departamento']);
+            $snapshot = $this->construirSnapshot->ejecutar($activo);
             $tipoMovimiento = $activo->responsable_user_id ? 'reasignacion' : 'asignacion';
             $responsableAnterior = $activo->responsable;
 
@@ -65,6 +67,7 @@ class AsignarActivoService
                 'estado_anterior' => $estadoAnterior,
                 'estado_nuevo' => 'asignado',
                 'notas' => $notas,
+                'datos_snapshot' => $snapshot,
             ]);
 
             $activoActualizado = $activo->fresh(['tipo', 'departamento', 'area', 'responsable', 'asignaciones.usuario']);

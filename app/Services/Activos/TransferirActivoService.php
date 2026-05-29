@@ -13,6 +13,7 @@ class TransferirActivoService
     public function __construct(
         private RegistrarMovimientoActivoService $registrarMovimiento,
         private NotificarActivoService $notificarActivo,
+        private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
     public function ejecutar(Activo $activo, User $actor, int $departamentoDestinoId, ?string $motivo = null, ?string $notas = null): Activo
@@ -30,7 +31,8 @@ class TransferirActivoService
         }
 
         return DB::transaction(function () use ($activo, $actor, $departamentoDestinoId, $motivo, $notas) {
-            $activo->loadMissing('responsable');
+            $activo->loadMissing(['responsable', 'tipo', 'departamento']);
+            $snapshot = $this->construirSnapshot->ejecutar($activo);
             $departamentoOrigenId = $activo->departamento_id;
             $estadoAnterior = $activo->estado;
             $responsableAnterior = $activo->responsable;
@@ -58,6 +60,7 @@ class TransferirActivoService
                 'estado_nuevo' => 'disponible',
                 'motivo' => $motivo,
                 'notas' => $notas,
+                'datos_snapshot' => $snapshot,
             ]);
 
             $activoActualizado = $activo->fresh(['tipo', 'departamento', 'area', 'responsable']);

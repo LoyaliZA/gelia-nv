@@ -28,7 +28,7 @@ class SincronizarMarcaModeloActivoService
     {
         $slug = Str::slug($nombre);
 
-        return CatalogoMarcaActivo::firstOrCreate(
+        return CatalogoMarcaActivo::updateOrCreate(
             ['catalogo_tipo_activo_id' => $tipo->id, 'slug' => $slug],
             ['nombre' => trim($nombre), 'activo' => true]
         );
@@ -38,7 +38,7 @@ class SincronizarMarcaModeloActivoService
     {
         $slug = Str::slug($nombre);
 
-        return CatalogoModeloActivo::firstOrCreate(
+        return CatalogoModeloActivo::updateOrCreate(
             ['catalogo_marca_activo_id' => $marca->id, 'slug' => $slug],
             ['nombre' => trim($nombre), 'activo' => true]
         );

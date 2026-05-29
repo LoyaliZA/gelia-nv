@@ -29,6 +29,11 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/activos/consulta/{token}', [ActivoController::class, 'consultaPublica'])->name('activos.consulta.publica');
+    Route::get('/activos/consulta/{token}/qr.svg', [ActivoController::class, 'consultaQr'])->name('activos.consulta.qr');
+});
+
 // ══════════════════════════════════════════════════════════════════════
 // 2. RUTAS PÚBLICAS (GUEST)
 // ══════════════════════════════════════════════════════════════════════
@@ -213,6 +218,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [ActivoController::class, 'index'])->name('index');
         Route::get('/exportar', [ActivoController::class, 'exportar'])->middleware('can:activos.exportar')->name('exportar');
         Route::get('/alertas', [ActivoController::class, 'alertas'])->name('alertas');
+        Route::get('/{activo}/qr.svg', [ActivoController::class, 'qr'])->name('qr');
         Route::get('/{activo}', [ActivoController::class, 'show'])->name('show');
 
         Route::post('/', [ActivoController::class, 'store'])->middleware('can:activos.crear')->name('store');

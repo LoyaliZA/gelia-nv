@@ -1,117 +1,166 @@
-import React, { useState } from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { Database, ArrowLeft, Save, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
+import { Database, ArrowLeft, Search, Edit2 } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
-import { BTN_SECONDARY, FACTURA_ACCENT } from '../Partials/facturasStyles';
+import ModalEditarDatosFiscales from '../Partials/ModalEditarDatosFiscales';
+import { BTN_SECONDARY } from '../Partials/facturasStyles';
+import { geliaCardClass } from '../../../utils/geliaTheme';
 
-function ModalEditarFiscal({ cliente, onClose }) {
-    const { data, setData, put, processing, errors } = useForm({
-        rfc: cliente.rfc || '',
-        codigo_postal: cliente.codigo_postal || '',
-        regimen_fiscal: cliente.regimen_fiscal || '',
-        correo_electronico: cliente.correo_electronico || '',
-        uso_factura: cliente.uso_factura || '',
-        nombre_razon_social: cliente.nombre_razon_social || '',
-    });
+export default function DatosFiscalesIndex({ clientes, filtros = {} }) {
+    const [editando, setEditando] = useState(null);
+    const [busqueda, setBusqueda] = useState(filtros.q || '');
+    const [cargando, setCargando] = useState(false);
 
-    const guardar = (e) => {
-        e.preventDefault();
-        put(route('facturas.datos_fiscales.update', cliente.id), {
+    useEffect(() => {
+        setBusqueda(filtros.q || '');
+    }, [filtros.q]);
+
+    const recargar = useCallback((params) => {
+        router.get(route('facturas.datos_fiscales.index'), params, {
+            only: ['clientes', 'filtros'],
+            preserveState: true,
             preserveScroll: true,
-            onSuccess: () => onClose(),
+            replace: true,
+            showProgress: false,
+            onStart: () => setCargando(true),
+            onFinish: () => setCargando(false),
         });
+    }, []);
+
+    useEffect(() => {
+        const t = setTimeout(() => {
+            if (busqueda !== (filtros.q || '')) {
+                recargar({ q: busqueda.trim() || undefined, page: 1 });
+            }
+        }, 400);
+        return () => clearTimeout(t);
+    }, [busqueda, filtros.q, recargar]);
+
+    const irAPagina = (pagina) => {
+        if (pagina < 1 || pagina > (clientes?.last_page || 1)) return;
+        recargar({ q: filtros.q || undefined, page: pagina });
     };
 
-    const campos = [
-        ['rfc', 'RFC'],
-        ['codigo_postal', 'Código Postal'],
-        ['regimen_fiscal', 'Régimen Fiscal'],
-        ['correo_electronico', 'Correo Electrónico'],
-        ['uso_factura', 'Uso de Factura'],
-        ['nombre_razon_social', 'Nombre / Razón Social'],
-    ];
-
-    return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
-            <div className="w-full max-w-lg theme-surface border theme-border rounded-2xl p-8 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted rounded-xl outline-none"><X className="w-5 h-5" /></button>
-                <h3 className="text-lg font-black theme-text-main uppercase mb-1">Datos Fiscales</h3>
-                <p className="text-xs font-bold theme-text-muted mb-6">{cliente.numero_cliente} — {cliente.nombre}</p>
-                <form onSubmit={guardar} className="space-y-4">
-                    {campos.map(([key, label]) => (
-                        <div key={key} className="space-y-1">
-                            <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest">{label}</label>
-                            <input
-                                value={data[key]}
-                                onChange={e => setData(key, e.target.value)}
-                                className="w-full px-3 py-2.5 theme-surface border theme-border rounded-xl text-sm font-bold theme-text-main outline-none"
-                            />
-                            {errors[key] && <p className="text-xs text-red-500">{errors[key]}</p>}
-                        </div>
-                    ))}
-                    <button type="submit" disabled={processing} className="w-full py-3 rounded-xl text-white font-black uppercase text-xs outline-none flex items-center justify-center gap-2" style={{ backgroundColor: FACTURA_ACCENT }}>
-                        <Save className="w-4 h-4" /> {processing ? 'Guardando…' : 'Guardar'}
-                    </button>
-                </form>
-            </div>
-        </div>
-    );
-}
-
-export default function DatosFiscalesIndex({ clientes, filtros }) {
-    const [editando, setEditando] = useState(null);
+    const lista = clientes?.data || [];
+    const cardHeader = geliaCardClass('p-6 md:p-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4');
+    const cardTabla = geliaCardClass('overflow-hidden');
 
     return (
         <AppLayout>
-            <Head title="Datos Fiscales de Clientes" />
-            <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-                <div className="flex items-center gap-4">
-                    <Link href={route('facturas.index')} className={BTN_SECONDARY}>
-                        <ArrowLeft className="w-4 h-4" /> Facturas
-                    </Link>
-                    <div className="flex items-center gap-2">
-                        <Database className="w-6 h-6" style={{ color: FACTURA_ACCENT }} />
-                        <h1 className="text-2xl font-black italic theme-text-main uppercase m-0">Datos Fiscales_</h1>
+            <Head title="Datos fiscales de clientes" />
+
+            <div className="gelia-page-shell space-y-6 md:space-y-8">
+                <header className={cardHeader}>
+                    <div className="min-w-0 flex items-start gap-4">
+                        <Link
+                            href={route('facturas.index')}
+                            className={`${BTN_SECONDARY} shrink-0`}
+                        >
+                            <ArrowLeft className="w-4 h-4 shrink-0" /> Facturas
+                        </Link>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-3 mb-2">
+                                <span className="h-1.5 w-12 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primario)' }} />
+                                <p className="text-[10px] font-black uppercase tracking-[0.3em] m-0" style={{ color: 'var(--color-primario)' }}>
+                                    Catálogo fiscal
+                                </p>
+                            </div>
+                            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black italic uppercase tracking-tighter theme-text-main m-0 leading-none flex items-center gap-3 flex-wrap">
+                                <Database className="w-7 h-7 md:w-8 md:h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                                Datos fiscales
+                            </h1>
+                            <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
+                                RFC, régimen y razón social por cliente
+                            </p>
+                        </div>
                     </div>
-                </div>
+                </header>
 
-                <div className="theme-surface border theme-border rounded-2xl overflow-hidden">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="theme-element border-b theme-border">
-                                <th className="px-4 py-3 text-[9px] font-black uppercase theme-text-muted">Cliente</th>
-                                <th className="px-4 py-3 text-[9px] font-black uppercase theme-text-muted">RFC</th>
-                                <th className="px-4 py-3 text-[9px] font-black uppercase theme-text-muted hidden md:table-cell">Razón Social</th>
-                                <th className="px-4 py-3 text-[9px] font-black uppercase theme-text-muted hidden lg:table-cell">Correo</th>
-                                <th className="px-4 py-3 w-24" />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {(clientes.data || []).map(c => (
-                                <tr key={c.id} className="border-b theme-border last:border-b-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
-                                    <td className="px-4 py-3">
-                                        <p className="text-xs font-black theme-text-main m-0">{c.numero_cliente}</p>
-                                        <p className="text-[10px] theme-text-muted m-0 truncate max-w-[140px]">{c.nombre}</p>
-                                    </td>
-                                    <td className="px-4 py-3 text-xs font-mono font-bold theme-text-main">{c.rfc || '—'}</td>
-                                    <td className="px-4 py-3 text-xs font-bold theme-text-main hidden md:table-cell truncate max-w-[180px]">{c.nombre_razon_social || '—'}</td>
-                                    <td className="px-4 py-3 text-xs theme-text-muted hidden lg:table-cell truncate max-w-[160px]">{c.correo_electronico || '—'}</td>
-                                    <td className="px-4 py-3">
-                                        <button type="button" onClick={() => setEditando(c)} className="text-[10px] font-black uppercase outline-none hover:underline" style={{ color: FACTURA_ACCENT }}>
-                                            Editar
-                                        </button>
-                                    </td>
+                <section className={`${geliaCardClass('overflow-hidden')} ${cargando ? 'opacity-90' : ''}`}>
+                    <div className="p-4 md:p-5 border-b theme-border">
+                        <label htmlFor="df-busqueda" className="theme-label ml-1">
+                            Buscar cliente
+                        </label>
+                        <div className="theme-field-with-icon mt-1.5 max-w-xl">
+                            <Search className="theme-field-icon" aria-hidden />
+                            <input
+                                id="df-busqueda"
+                                type="search"
+                                value={busqueda}
+                                onChange={(e) => setBusqueda(e.target.value)}
+                                placeholder="Número, nombre, RFC o razón social…"
+                                className="theme-input w-full pr-4 py-3 normal-case tracking-normal font-bold text-sm"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse min-w-[640px]">
+                            <thead>
+                                <tr className="border-b theme-border text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                                    <th className="px-4 md:px-6 py-4 text-left">Cliente</th>
+                                    <th className="px-4 md:px-6 py-4 text-left">RFC</th>
+                                    <th className="px-4 md:px-6 py-4 text-left hidden md:table-cell">Razón social</th>
+                                    <th className="px-4 md:px-6 py-4 text-left hidden lg:table-cell">Correo</th>
+                                    <th className="px-4 md:px-6 py-4 text-right">Acciones</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {lista.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-16 text-center">
+                                            <Database className="w-10 h-10 mx-auto mb-3 theme-text-muted opacity-40" />
+                                            <p className="text-sm font-black italic uppercase theme-text-main m-0">Sin clientes</p>
+                                            <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
+                                                Ajusta la búsqueda para ver resultados
+                                            </p>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    lista.map((c) => (
+                                        <tr
+                                            key={c.id}
+                                            className="border-b theme-border last:border-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
+                                        >
+                                            <td className="px-4 md:px-6 py-4 min-w-[140px]">
+                                                <p className="text-xs font-black theme-text-main m-0">{c.numero_cliente}</p>
+                                                <p className="text-[10px] theme-text-muted m-0 truncate max-w-[200px]">{c.nombre}</p>
+                                            </td>
+                                            <td className="px-4 md:px-6 py-4 text-xs font-mono font-bold theme-text-main whitespace-nowrap">
+                                                {c.rfc || '—'}
+                                            </td>
+                                            <td className="px-4 md:px-6 py-4 text-xs font-bold theme-text-main hidden md:table-cell max-w-[220px] truncate">
+                                                {c.nombre_razon_social || '—'}
+                                            </td>
+                                            <td className="px-4 md:px-6 py-4 text-xs theme-text-muted hidden lg:table-cell max-w-[200px] truncate">
+                                                {c.correo_electronico || '—'}
+                                            </td>
+                                            <td className="px-4 md:px-6 py-4 text-right">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEditando(c)}
+                                                    className={`${BTN_SECONDARY} !py-2 !px-3`}
+                                                >
+                                                    <Edit2 className="w-3.5 h-3.5 shrink-0" /> Editar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
 
-                {clientes?.links && <GeliaPaginacion paginacion={clientes} />}
+                    {(clientes?.last_page || 1) > 1 && (
+                        <GeliaPaginacion paginator={clientes} onIrAPagina={irAPagina} embedded />
+                    )}
+                </section>
             </div>
 
-            {editando && <ModalEditarFiscal cliente={editando} onClose={() => setEditando(null)} />}
+            {editando && (
+                <ModalEditarDatosFiscales cliente={editando} onClose={() => setEditando(null)} />
+            )}
         </AppLayout>
     );
 }

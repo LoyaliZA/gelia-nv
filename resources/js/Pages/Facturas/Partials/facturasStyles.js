@@ -16,11 +16,10 @@ export const ESTADO_LABELS = {
     Cancelada: 'Cancelada',
 };
 
-export const BTN_PRIMARY =
-    'inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white shadow-md transition-transform hover:scale-[1.02] outline-none disabled:opacity-50';
+import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../utils/geliaTheme';
 
-export const BTN_SECONDARY =
-    'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border theme-text-main outline-none hover:border-[var(--color-primario)] transition-colors';
+export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
+export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-primary--compact`;
 
 /** @deprecated Usar ACCENT */
 export const FACTURA_ACCENT = ACCENT;

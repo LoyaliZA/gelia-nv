@@ -8,12 +8,18 @@ use App\Models\User;
 
 class RegistrarMovimientoActivoService
 {
+    public function __construct(
+        private ConstruirSnapshotActivoService $construirSnapshot,
+    ) {}
+
     public function ejecutar(
         Activo $activo,
         User $usuario,
         string $tipo,
         array $opciones = []
     ): ActivoMovimiento {
+        $activo->loadMissing(['tipo', 'departamento']);
+
         return ActivoMovimiento::create([
             'activo_id' => $activo->id,
             'usuario_id' => $usuario->id,
@@ -25,7 +31,7 @@ class RegistrarMovimientoActivoService
             'estado_nuevo' => $opciones['estado_nuevo'] ?? null,
             'motivo' => $opciones['motivo'] ?? null,
             'notas' => $opciones['notas'] ?? null,
-            'datos_snapshot' => $opciones['datos_snapshot'] ?? $activo->fresh(['tipo', 'departamento', 'area', 'responsable'])?->toArray(),
+            'datos_snapshot' => $opciones['datos_snapshot'] ?? $this->construirSnapshot->ejecutar($activo),
         ]);
     }
 }

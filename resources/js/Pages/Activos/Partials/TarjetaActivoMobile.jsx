@@ -1,11 +1,14 @@
-import React from 'react';
-import { Link } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { Link, router } from '@inertiajs/react';
 import { Eye, Wrench, ImageIcon } from 'lucide-react';
-import { ESTADO_BADGE, ESTADO_LABELS, getActivosCardClass, BTN_PRIMARY_CLASS } from './activosFormStyles';
+import { ESTADO_BADGE, ESTADO_LABELS, getActivosCardClass } from './activosFormStyles';
 
 export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimiento }) {
     return (
-        <article className={`${getActivosCardClass('p-4 md:p-5 flex flex-col gap-3')}`}>
+        <Link
+            href={route('activos.show', activo.id)}
+            className={`${getActivosCardClass('p-4 md:p-5 flex flex-col gap-3 block hover:opacity-95 transition-opacity active:scale-[0.99]')}`}
+        >
             <div className="flex items-start gap-3">
                 <div className="w-14 h-14 rounded-xl overflow-hidden border theme-border bg-black/5 shrink-0 flex items-center justify-center">
                     {fotoUrl ? (
@@ -16,7 +19,7 @@ export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimient
                 </div>
                 <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-mono font-bold theme-text-muted">{activo.folio}</p>
-                    <h3 className="text-sm font-black uppercase italic theme-text-main leading-tight truncate">{activo.nombre}</h3>
+                    <h3 className="text-sm font-black uppercase italic theme-text-main leading-tight">{activo.nombre}</h3>
                     <p className="text-[10px] theme-text-muted mt-0.5">{activo.tipo?.nombre}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
@@ -36,18 +39,25 @@ export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimient
                 <div className="theme-element rounded-xl p-2 border theme-border">
                     <span className="font-black uppercase theme-text-muted block mb-0.5">Pertenece a</span>
                     {activo.responsable ? (
-                        <Link href={route('activos.index', { responsable_user_id: activo.responsable.id })} className="font-bold hover:underline truncate block" style={{ color: 'var(--color-primario)' }}>
+                        <span
+                            role="link"
+                            tabIndex={0}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.get(route('activos.index', { responsable_user_id: activo.responsable.id })); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); router.get(route('activos.index', { responsable_user_id: activo.responsable.id })); } }}
+                            className="font-bold truncate block cursor-pointer hover:underline"
+                            style={{ color: 'var(--color-primario)' }}
+                        >
                             {activo.responsable.name}
-                        </Link>
+                        </span>
                     ) : (
                         <span className="italic theme-text-muted">Sin asignar</span>
                     )}
                 </div>
             </div>
 
-            <Link href={route('activos.show', activo.id)} className={`${BTN_PRIMARY_CLASS} w-full justify-center`}>
-                <Eye className="w-3.5 h-3.5 shrink-0" /> Ver detalle
-            </Link>
-        </article>
+            <span className="inline-flex items-center justify-center gap-1 text-[10px] font-black uppercase w-full py-2 rounded-xl border theme-border theme-text-main">
+                <Eye className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primario)' }} /> Ver detalle
+            </span>
+        </Link>
     );
 }

@@ -15,6 +15,7 @@ class Activo extends Model
 
     protected $fillable = [
         'folio',
+        'consulta_token',
         'catalogo_tipo_activo_id',
         'departamento_id',
         'area_id',

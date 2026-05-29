@@ -27,9 +27,13 @@ use App\Services\Activos\DevolverActivoService;
 use App\Services\Activos\EliminarFotoActivoService;
 use App\Services\Activos\ExportarActivosService;
 use App\Services\Activos\ListarActivosService;
+use App\Services\Activos\PresentarConsultaPublicaActivoService;
 use App\Services\Activos\ProgramarMantenimientoActivoService;
 use App\Services\Activos\SubirFotosActivoService;
 use App\Services\Activos\TransferirActivoService;
+use Endroid\QrCode\ErrorCorrectionLevel;
+use Endroid\QrCode\QrCode;
+use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -91,12 +95,49 @@ class ActivoController extends Controller
         ]);
     }
 
+    public function qr(Activo $activo)
+    {
+        $this->autorizarAccesoActivo($activo);
+
+        return $this->respuestaQrConsultaPublica($activo);
+    }
+
+    public function consultaPublica(string $token, PresentarConsultaPublicaActivoService $service): Response
+    {
+        $activo = $this->resolverActivoConsultaPublica($token);
+
+        return Inertia::render('Activos/ConsultaPublica', [
+            'activo' => $service->ejecutar($activo),
+            'puedeEditar' => Auth::check() && Auth::user()->can('activos.editar'),
+            'urlEditar' => Auth::check() && Auth::user()->can('activos.editar')
+                ? route('activos.show', $activo->id)
+                : null,
+        ]);
+    }
+
+    public function consultaQr(string $token)
+    {
+        $activo = $this->resolverActivoConsultaPublica($token);
+
+        return $this->respuestaQrConsultaPublica($activo);
+    }
+
     public function store(StoreActivoRequest $request, CrearActivoService $crearService, SubirFotosActivoService $fotosService)
     {
         $activo = $crearService->ejecutar(Auth::user(), $request->validated());
 
         if ($request->hasFile('fotos')) {
             $fotosService->ejecutar($activo, $request->file('fotos'));
+        }
+
+        if ($request->boolean('registro_continuo')) {
+            return back()->with([
+                'success' => 'Activo registrado correctamente.',
+                'activo_registrado' => [
+                    'id' => $activo->id,
+                    'folio' => $activo->folio,
+                ],
+            ]);
         }
 
         return redirect()->route('activos.show', $activo)->with('success', 'Activo registrado correctamente.');
@@ -243,8 +284,39 @@ class ActivoController extends Controller
             $service->modelos(
                 $request->integer('marca_id') ?: null,
                 $request->input('q'),
+                $request->integer('tipo_id') ?: null,
+                $request->input('marca_nombre'),
             )
         );
+    }
+
+    private function resolverActivoConsultaPublica(string $token): Activo
+    {
+        $activo = Activo::where('consulta_token', $token)->first();
+
+        if (!$activo || $activo->estado === 'baja') {
+            abort(404);
+        }
+
+        return $activo;
+    }
+
+    private function respuestaQrConsultaPublica(Activo $activo)
+    {
+        $url = route('activos.consulta.publica', $activo->consulta_token, absolute: true);
+        $qrCode = new QrCode(
+            data: $url,
+            errorCorrectionLevel: ErrorCorrectionLevel::Medium,
+            size: 120,
+            margin: 4,
+        );
+
+        $result = (new SvgWriter())->write($qrCode);
+
+        return response($result->getString(), 200, [
+            'Content-Type' => $result->getMimeType(),
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
     }
 
     private function autorizarAccesoActivo(Activo $activo): void

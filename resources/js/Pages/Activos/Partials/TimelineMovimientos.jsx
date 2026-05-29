@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from '@inertiajs/react';
-import { Wrench } from 'lucide-react';
+import { Wrench, ChevronDown, ChevronUp } from 'lucide-react';
 
 const TIPO_LABELS = {
     creacion: 'Registro',
@@ -14,6 +14,54 @@ const TIPO_LABELS = {
 };
 
 const MANT_TIPO = { preventivo: 'Preventivo', correctivo: 'Correctivo', garantia: 'Garantía' };
+
+function SnapshotDetalle({ snapshot }) {
+    const [abierto, setAbierto] = useState(false);
+
+    if (!snapshot || typeof snapshot !== 'object') return null;
+
+    const atributos = snapshot.atributos || {};
+    const atributosLista = Object.entries(atributos).filter(([k]) => !['marca_id', 'modelo_id'].includes(k));
+
+    return (
+        <div className="mt-2">
+            <button
+                type="button"
+                onClick={() => setAbierto((v) => !v)}
+                className="inline-flex items-center gap-1 text-[10px] font-black uppercase theme-text-muted hover:theme-text-main"
+            >
+                {abierto ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                Ver datos al momento
+            </button>
+            {abierto && (
+                <div className="mt-2 p-3 rounded-xl theme-element border theme-border text-xs space-y-2">
+                    {snapshot.nombre && (
+                        <p className="m-0"><span className="font-black uppercase theme-text-muted">Nombre: </span>{snapshot.nombre}</p>
+                    )}
+                    {snapshot.valor != null && snapshot.valor !== '' && (
+                        <p className="m-0"><span className="font-black uppercase theme-text-muted">Valor: </span>${Number(snapshot.valor).toLocaleString('es-MX')}</p>
+                    )}
+                    {snapshot.folio && (
+                        <p className="m-0"><span className="font-black uppercase theme-text-muted">Folio: </span>{snapshot.folio}</p>
+                    )}
+                    {atributosLista.length > 0 && (
+                        <div>
+                            <p className="font-black uppercase theme-text-muted mb-1 m-0">Atributos</p>
+                            <ul className="space-y-1 m-0 pl-0 list-none">
+                                {atributosLista.map(([key, value]) => (
+                                    <li key={key} className="flex gap-2">
+                                        <span className="theme-text-muted shrink-0">{key}:</span>
+                                        <span className="theme-text-main break-all">{String(value)}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function TimelineMovimientos({ movimientos = [], mantenimientos = [] }) {
     const eventos = [
@@ -48,6 +96,7 @@ export default function TimelineMovimientos({ movimientos = [], mantenimientos =
                                     <p className="text-xs theme-text-muted">{ev.estado_anterior} → {ev.estado_nuevo}</p>
                                 )}
                                 {ev.motivo && <p className="text-xs theme-text-muted">Motivo: {ev.motivo}</p>}
+                                <SnapshotDetalle snapshot={ev.datos_snapshot} />
                             </>
                         ) : (
                             <>
@@ -81,7 +130,7 @@ export function HistorialAsignaciones({ asignaciones = [] }) {
                         </span>
                     </div>
                     <p className="text-[10px] theme-text-muted mt-1">
-                        {String(a.fecha_inicio).substring(0, 10)} {a.fecha_fin ? `→ ${String(a.fecha_fin).substring(0, 10)}` : '→ presente'}
+                        {a.fecha_inicio}{a.fecha_fin ? ` → ${a.fecha_fin}` : ' → presente'}
                     </p>
                 </div>
             ))}

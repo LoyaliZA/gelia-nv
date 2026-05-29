@@ -37,6 +37,11 @@ export const ESTADO_LABELS = {
     baja: 'Baja',
 };
 
+/** Etiquetas de tipo, departamento, chips, etc. — contraste explícito en modo oscuro */
+export const METADATA_BADGE = 'px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-zinc-100 text-zinc-800 dark:bg-zinc-800/90 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-600';
+
+export const CHIP_BADGE = 'px-3 py-1 rounded-xl text-[10px] font-black uppercase bg-zinc-100 text-zinc-800 dark:bg-zinc-800/90 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-600';
+
 export { isGlassEffectEnabled, geliaCardClass };
 
 /** Acepta string o legacy `{ extra: '...' }` — delega en geliaCardClass del tema global. */
@@ -52,3 +57,6 @@ export function renderActivosModal(content) {
     if (typeof document === 'undefined') return null;
     return createPortal(content, document.body);
 }
+
+export const BTN_TOUCH_CLASS = `${THEME_BTN_PRIMARY} min-h-[44px] text-base sm:text-sm`;
+export const FAB_CLASS = 'fixed bottom-6 right-6 z-40 flex items-center justify-center gap-2 min-h-[52px] px-5 rounded-2xl text-white font-black uppercase text-xs shadow-lg lg:hidden';

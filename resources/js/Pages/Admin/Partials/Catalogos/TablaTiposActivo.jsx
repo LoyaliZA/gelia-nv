@@ -170,6 +170,20 @@ export default function TablaTiposActivo({ datos = [] }) {
                                             <input type="checkbox" checked={!!field.required} onChange={(e) => actualizarCampo(index, 'required', e.target.checked)} />
                                             Requerido
                                         </label>
+                                        {(field.type === 'text' || field.type === 'textarea') && (
+                                            <>
+                                                <input type="number" min="0" value={field.min_length ?? ''} onChange={(e) => actualizarCampo(index, 'min_length', e.target.value ? Number(e.target.value) : undefined)} placeholder="Long. mín." className="rounded-lg px-2 py-1 text-sm border theme-border" />
+                                                <input type="number" min="1" value={field.max_length ?? ''} onChange={(e) => actualizarCampo(index, 'max_length', e.target.value ? Number(e.target.value) : undefined)} placeholder="Long. máx." className="rounded-lg px-2 py-1 text-sm border theme-border" />
+                                                <input value={field.pattern || ''} onChange={(e) => actualizarCampo(index, 'pattern', e.target.value)} placeholder="Regex (ej. ^[A-Z0-9-]+$)" className="rounded-lg px-2 py-1 text-sm border theme-border col-span-2" />
+                                                <input value={field.pattern_message || ''} onChange={(e) => actualizarCampo(index, 'pattern_message', e.target.value)} placeholder="Mensaje si no cumple formato" className="rounded-lg px-2 py-1 text-sm border theme-border col-span-2" />
+                                            </>
+                                        )}
+                                        {field.type === 'number' && (
+                                            <>
+                                                <input type="number" value={field.min ?? ''} onChange={(e) => actualizarCampo(index, 'min', e.target.value !== '' ? Number(e.target.value) : undefined)} placeholder="Mín." className="rounded-lg px-2 py-1 text-sm border theme-border" />
+                                                <input type="number" value={field.max ?? ''} onChange={(e) => actualizarCampo(index, 'max', e.target.value !== '' ? Number(e.target.value) : undefined)} placeholder="Máx." className="rounded-lg px-2 py-1 text-sm border theme-border" />
+                                            </>
+                                        )}
                                         <button type="button" onClick={() => eliminarCampo(index)} className="text-red-500 text-xs">Eliminar</button>
                                     </div>
                                 ))}

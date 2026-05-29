@@ -13,6 +13,7 @@ class DevolverActivoService
     public function __construct(
         private RegistrarMovimientoActivoService $registrarMovimiento,
         private NotificarActivoService $notificarActivo,
+        private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
     public function ejecutar(Activo $activo, User $actor, ?string $notas = null): Activo
@@ -24,7 +25,8 @@ class DevolverActivoService
         }
 
         return DB::transaction(function () use ($activo, $actor, $notas) {
-            $activo->loadMissing('responsable');
+            $activo->loadMissing(['responsable', 'tipo', 'departamento']);
+            $snapshot = $this->construirSnapshot->ejecutar($activo);
             $responsableAnterior = $activo->responsable;
 
             ActivoAsignacion::where('activo_id', $activo->id)
@@ -44,6 +46,7 @@ class DevolverActivoService
                 'estado_anterior' => $estadoAnterior,
                 'estado_nuevo' => 'disponible',
                 'notas' => $notas,
+                'datos_snapshot' => $snapshot,
             ]);
 
             $activoActualizado = $activo->fresh(['tipo', 'departamento', 'area', 'responsable', 'asignaciones.usuario']);

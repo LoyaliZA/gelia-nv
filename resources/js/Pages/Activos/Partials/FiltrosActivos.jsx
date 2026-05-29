@@ -5,6 +5,13 @@ import { INPUT_CLASS, SELECT_CLASS, LABEL_CLASS, getActivosCardClass } from './a
 
 const STORAGE_FILTROS_EXPANDIDOS = 'activos_filtros_expandidos';
 
+function estadoInicialExpandido() {
+    if (typeof window === 'undefined') return true;
+    const guardado = localStorage.getItem(STORAGE_FILTROS_EXPANDIDOS);
+    if (guardado !== null) return guardado === 'true';
+    return window.matchMedia('(min-width: 1024px)').matches;
+}
+
 const ESTADOS = [
     { value: '', label: 'Todos los estados' },
     { value: 'disponible', label: 'Disponible' },
@@ -56,11 +63,7 @@ function contarFiltrosActivos(filtros) {
 }
 
 export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos = [], usuarios = [], onAplicar }) {
-    const [expandido, setExpandido] = useState(() => {
-        if (typeof window === 'undefined') return true;
-        const guardado = localStorage.getItem(STORAGE_FILTROS_EXPANDIDOS);
-        return guardado === null ? true : guardado === 'true';
-    });
+    const [expandido, setExpandido] = useState(estadoInicialExpandido);
 
     const toggleExpandido = () => {
         setExpandido((prev) => {

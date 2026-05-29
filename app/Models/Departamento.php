@@ -13,7 +13,8 @@ class Departamento extends Model
     // --- SECCIÓN: CONFIGURACIÓN ---
     protected $fillable = [
         'nombre',
-        'activo'
+        'codigo',
+        'activo',
     ];
 
     protected $casts = [

@@ -1,4 +1,5 @@
-export const ACCENT = '#f97316';
+/** Acento del módulo: hereda el tema global de AppLayout (--color-primario). */
+export const ACCENT = 'var(--color-primario)';
 
 export const ESTADO_BADGE = {
     1: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
@@ -7,11 +8,10 @@ export const ESTADO_BADGE = {
     4: 'bg-red-500/15 text-red-600 border-red-500/30',
 };
 
-export const BTN_PRIMARY =
-    'inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white shadow-md transition-transform hover:scale-[1.02] outline-none disabled:opacity-50';
+import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../utils/geliaTheme';
 
-export const BTN_SECONDARY =
-    'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border theme-text-main outline-none hover:border-orange-500 transition-colors';
+export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
+export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-primary--compact`;
 
 export const TIPOS_OPERATIVO = [
     { id: '', label: 'Todos' },

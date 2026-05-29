@@ -32,6 +32,7 @@ class StoreActivoRequest extends FormRequest
             'valor' => 'nullable|numeric|min:0',
             'fotos' => 'nullable|array|max:5',
             'fotos.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
+            'registro_continuo' => 'nullable|boolean',
         ];
     }
 }

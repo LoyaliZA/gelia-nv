@@ -1,8 +1,11 @@
 import React, { useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
-import { Camera, Trash2, Upload, X } from 'lucide-react';
+import { Camera, ChevronDown, ChevronUp, Trash2, Upload, X } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
-import { BTN_SECONDARY_CLASS, LABEL_CLASS } from './activosFormStyles';
+import { compressImageToWebp, validateImageSource } from '../../../utils/compressImage';
+import useDispositivoCampo from './useDispositivoCampo';
+import LightboxFotos from './LightboxFotos';
+import { BTN_SECONDARY_CLASS, BTN_TOUCH_CLASS, LABEL_CLASS } from './activosFormStyles';
 
 const TIPOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
 
@@ -15,25 +18,71 @@ export default function GaleriaFotosActivo({
     activoId = null,
     modo = 'formulario',
     variant = 'default',
+    modoCapturaCampo = true,
+    colapsada = false,
 }) {
     const inputRef = useRef(null);
     const [previewUrls, setPreviewUrls] = useState([]);
-    const [lightbox, setLightbox] = useState(null);
+    const [lightboxIndex, setLightboxIndex] = useState(null);
+    const [expandida, setExpandida] = useState(!colapsada);
     const [subiendo, setSubiendo] = useState(false);
+    const [comprimiendo, setComprimiendo] = useState(false);
     const [error, setError] = useState(null);
+    const { esCampo } = useDispositivoCampo();
 
     const esDirecto = modo === 'directo';
+    const capturaMovil = modoCapturaCampo && esCampo && !esDirecto;
     const total = fotosExistentes.length + (esDirecto ? 0 : nuevasFotos.length);
     const espacio = maxFotos - total;
+    const ocupado = subiendo || comprimiendo;
+    const mostrarColapsada = colapsada && !expandida;
 
-    const validarArchivos = (files) => {
-        const lista = Array.from(files || []);
+    const urlFoto = (foto) => foto.url || `/storage/${foto.ruta}`;
+
+    const urlsExistentes = fotosExistentes.map(urlFoto);
+    const urlsNuevas = esDirecto ? [] : previewUrls;
+    const todasLasUrls = [...urlsExistentes, ...urlsNuevas];
+
+    const indicePrincipal = (() => {
+        const idx = fotosExistentes.findIndex((f) => f.es_principal);
+        return idx >= 0 ? idx : 0;
+    })();
+
+    const miniaturaUrl = urlsExistentes[indicePrincipal] || urlsExistentes[0] || urlsNuevas[0] || null;
+
+    const comprimirLista = async (files) => {
+        setComprimiendo(true);
+        const comprimidos = [];
+
+        try {
+            for (const file of files) {
+                const msg = validateImageSource(file, 'Fotografía');
+                if (msg) {
+                    setError(msg);
+                    continue;
+                }
+                const comprimido = await compressImageToWebp(file, {
+                    maxDimension: 1600,
+                    maxBytes: 800 * 1024,
+                    quality: 0.82,
+                });
+                comprimidos.push(comprimido);
+            }
+        } catch {
+            setError('No se pudo comprimir una o más fotografías.');
+        } finally {
+            setComprimiendo(false);
+        }
+
+        return comprimidos;
+    };
+
+    const validarCantidad = (lista) => {
         if (!lista.length) return [];
 
-        const invalidos = lista.filter((f) => !TIPOS_PERMITIDOS.includes(f.type));
-        if (invalidos.length) {
-            setError('Solo se permiten imágenes JPEG, PNG o WebP.');
-            return [];
+        if (capturaMovil && lista.length > 1) {
+            setError('Toma una fotografía a la vez en dispositivos móviles.');
+            return lista.slice(0, 1);
         }
 
         if (lista.length > espacio) {
@@ -45,14 +94,17 @@ export default function GaleriaFotosActivo({
         return lista;
     };
 
-    const subirDirecto = (files) => {
-        const lista = validarArchivos(files);
+    const subirDirecto = async (files) => {
+        const lista = validarCantidad(Array.from(files || []));
         if (!lista.length || !activoId) return;
+
+        const comprimidos = await comprimirLista(lista);
+        if (!comprimidos.length) return;
 
         setSubiendo(true);
         router.post(
             route('activos.fotos.store', activoId),
-            { fotos: lista },
+            { fotos: comprimidos },
             {
                 forceFormData: true,
                 preserveScroll: true,
@@ -65,19 +117,22 @@ export default function GaleriaFotosActivo({
         );
     };
 
-    const handleFiles = (files) => {
+    const handleFiles = async (files) => {
+        const lista = validarCantidad(Array.from(files || []));
+        if (!lista.length) return;
+
         if (esDirecto) {
-            subirDirecto(files);
+            await subirDirecto(lista);
             return;
         }
 
-        const lista = validarArchivos(files);
-        if (!lista.length) return;
+        const comprimidos = await comprimirLista(lista);
+        if (!comprimidos.length) return;
 
-        const merged = [...nuevasFotos, ...lista];
+        const merged = [...nuevasFotos, ...comprimidos];
         onChangeNuevas?.(merged);
 
-        lista.forEach((file) => {
+        comprimidos.forEach((file) => {
             const url = URL.createObjectURL(file);
             setPreviewUrls((prev) => [...prev, url]);
         });
@@ -94,7 +149,12 @@ export default function GaleriaFotosActivo({
         router.delete(route('activos.fotos.destroy', [activoId, fotoId]), { preserveScroll: true });
     };
 
-    const urlFoto = (foto) => foto.url || `/storage/${foto.ruta}`;
+    const abrirLightbox = (index = 0) => {
+        if (!todasLasUrls.length) return;
+        setLightboxIndex(index);
+    };
+
+    const labelSubir = capturaMovil ? 'Tomar foto' : 'Subir fotos';
 
     const wrapperClass = variant === 'hero'
         ? 'space-y-3'
@@ -106,91 +166,170 @@ export default function GaleriaFotosActivo({
 
     return (
         <div className={`relative ${wrapperClass}`}>
-            <GeliaLoader isVisible={subiendo} message="Subiendo fotos_" />
+            <GeliaLoader isVisible={ocupado} message={comprimiendo ? 'Comprimiendo_' : 'Subiendo fotos_'} />
 
-            <div className="flex items-center justify-between">
-                <p className={LABEL_CLASS}>Fotografías ({total}/{maxFotos})</p>
-                {editable && espacio > 0 && (
+            {mostrarColapsada ? (
+                <div className="flex items-center gap-3">
+                    {miniaturaUrl ? (
+                        <button
+                            type="button"
+                            onClick={() => abrirLightbox(indicePrincipal >= 0 && indicePrincipal < urlsExistentes.length ? indicePrincipal : 0)}
+                            className="relative shrink-0 w-16 h-16 rounded-xl overflow-hidden border theme-border bg-black/5"
+                        >
+                            <img src={miniaturaUrl} alt="" className="w-full h-full object-cover" />
+                            {total > 1 && (
+                                <span className="absolute bottom-0 inset-x-0 text-[8px] font-black uppercase text-center bg-black/60 text-white py-0.5">
+                                    +{total - 1}
+                                </span>
+                            )}
+                        </button>
+                    ) : (
+                        <div className="shrink-0 w-16 h-16 rounded-xl border-2 border-dashed theme-border flex items-center justify-center">
+                            <Camera className="w-5 h-5 theme-text-muted opacity-40" />
+                        </div>
+                    )}
+
+                    <div className="flex-1 min-w-0">
+                        <p className={`${LABEL_CLASS} m-0 truncate`}>Fotografías ({total}/{maxFotos})</p>
+                        {total > 1 && (
+                            <span className="inline-block mt-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 theme-text-muted">
+                                {total} fotos
+                            </span>
+                        )}
+                    </div>
+
                     <button
                         type="button"
-                        onClick={() => inputRef.current?.click()}
-                        disabled={subiendo}
-                        className={`${BTN_SECONDARY_CLASS} flex items-center gap-1 text-[10px] disabled:opacity-50`}
+                        onClick={() => setExpandida(true)}
+                        className={`${BTN_SECONDARY_CLASS} flex items-center gap-1 text-[10px] shrink-0`}
                     >
-                        <Upload className="w-3 h-3" /> {esDirecto ? 'Subir' : 'Agregar'}
+                        Ver fotos
+                        <ChevronDown className="w-3 h-3" />
                     </button>
-                )}
-            </div>
+                </div>
+            ) : (
+                <>
+                    <div className="flex items-center justify-between">
+                        <p className={LABEL_CLASS}>Fotografías ({total}/{maxFotos})</p>
+                        <div className="flex items-center gap-2">
+                            {colapsada && (
+                                <button
+                                    type="button"
+                                    onClick={() => setExpandida(false)}
+                                    className={`${BTN_SECONDARY_CLASS} flex items-center gap-1 text-[10px]`}
+                                >
+                                    Contraer
+                                    <ChevronUp className="w-3 h-3" />
+                                </button>
+                            )}
+                            {editable && espacio > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => inputRef.current?.click()}
+                                    disabled={ocupado}
+                                    className={`${capturaMovil ? BTN_TOUCH_CLASS : BTN_SECONDARY_CLASS} flex items-center gap-1 text-[10px] disabled:opacity-50`}
+                                >
+                                    {capturaMovil ? <Camera className="w-4 h-4" /> : <Upload className="w-3 h-3" />}
+                                    {capturaMovil ? labelSubir : (esDirecto ? 'Subir' : 'Agregar')}
+                                </button>
+                            )}
+                        </div>
+                    </div>
 
-            {error && (
-                <p className="text-[10px] font-bold text-red-600 dark:text-red-400">{error}</p>
-            )}
+                    {error && (
+                        <p className="text-[10px] font-bold text-red-600 dark:text-red-400">{error}</p>
+                    )}
 
-            <input
-                ref={inputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/jpg"
-                multiple
-                className="hidden"
-                disabled={subiendo}
-                onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
-            />
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/jpg"
+                        multiple={!capturaMovil}
+                        capture={capturaMovil ? 'environment' : undefined}
+                        className="hidden"
+                        disabled={ocupado}
+                        onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
+                    />
 
-            <div className={gridClass}>
-                {fotosExistentes.map((foto) => (
-                    <div key={foto.id} className="relative group rounded-xl overflow-hidden border theme-border aspect-square bg-black/5">
-                        <button type="button" onClick={() => setLightbox(urlFoto(foto))} className="w-full h-full">
-                            <img src={urlFoto(foto)} alt={foto.nombre_original || 'Foto'} className="w-full h-full object-cover" />
-                        </button>
-                        {foto.es_principal && (
-                            <span className="absolute top-1 left-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-black/60 text-white">Principal</span>
+                    <div className={gridClass}>
+                        {fotosExistentes.map((foto, index) => (
+                            <div key={foto.id} className="relative group rounded-xl overflow-hidden border theme-border aspect-square bg-black/5">
+                                <button type="button" onClick={() => abrirLightbox(index)} className="w-full h-full">
+                                    <img src={urlFoto(foto)} alt={foto.nombre_original || 'Foto'} className="w-full h-full object-cover" />
+                                </button>
+                                {foto.es_principal && (
+                                    <span className="absolute top-1 left-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-black/60 text-white">Principal</span>
+                                )}
+                                {editable && activoId && !ocupado && (
+                                    <button type="button" onClick={() => eliminarExistente(foto.id)} className="absolute top-1 right-1 p-1 rounded-full bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Trash2 className="w-3 h-3" />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+
+                        {!esDirecto && nuevasFotos.map((file, index) => (
+                            <div key={`new-${index}`} className="relative rounded-xl overflow-hidden border theme-border aspect-square">
+                                <button type="button" onClick={() => abrirLightbox(urlsExistentes.length + index)} className="w-full h-full">
+                                    <img src={previewUrls[index] || URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
+                                </button>
+                                <button type="button" onClick={() => quitarNueva(index)} className="absolute top-1 right-1 p-1 rounded-full bg-red-600 text-white">
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </div>
+                        ))}
+
+                        {total === 0 && editable && (
+                            <button
+                                type="button"
+                                onClick={() => !ocupado && inputRef.current?.click()}
+                                disabled={ocupado}
+                                className={`aspect-square rounded-xl border-2 border-dashed theme-border flex flex-col items-center justify-center gap-2 theme-text-muted hover:theme-text-main transition-colors disabled:opacity-50 col-span-2 ${capturaMovil ? 'min-h-[120px]' : ''}`}
+                            >
+                                <Camera className="w-8 h-8 opacity-40" />
+                                <span className="text-[10px] font-black uppercase">{labelSubir}</span>
+                            </button>
                         )}
-                        {editable && activoId && !subiendo && (
-                            <button type="button" onClick={() => eliminarExistente(foto.id)} className="absolute top-1 right-1 p-1 rounded-full bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Trash2 className="w-3 h-3" />
+
+                        {total > 0 && editable && espacio > 0 && variant === 'hero' && (
+                            <button
+                                type="button"
+                                onClick={() => !ocupado && inputRef.current?.click()}
+                                disabled={ocupado}
+                                className="aspect-square rounded-xl border-2 border-dashed theme-border flex flex-col items-center justify-center gap-1 theme-text-muted hover:theme-text-main transition-colors disabled:opacity-50"
+                            >
+                                {capturaMovil ? <Camera className="w-6 h-6 opacity-40" /> : <Upload className="w-6 h-6 opacity-40" />}
+                                <span className="text-[9px] font-black uppercase">{capturaMovil ? '+ Foto' : `+${espacio}`}</span>
                             </button>
                         )}
                     </div>
-                ))}
+                </>
+            )}
 
-                {!esDirecto && nuevasFotos.map((file, index) => (
-                    <div key={`new-${index}`} className="relative rounded-xl overflow-hidden border theme-border aspect-square">
-                        <img src={previewUrls[index] || URL.createObjectURL(file)} alt="" className="w-full h-full object-cover" />
-                        <button type="button" onClick={() => quitarNueva(index)} className="absolute top-1 right-1 p-1 rounded-full bg-red-600 text-white">
-                            <X className="w-3 h-3" />
-                        </button>
-                    </div>
-                ))}
+            {mostrarColapsada && editable && espacio > 0 && (
+                <>
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/jpg"
+                        multiple={!capturaMovil}
+                        capture={capturaMovil ? 'environment' : undefined}
+                        className="hidden"
+                        disabled={ocupado}
+                        onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}
+                    />
+                    {error && (
+                        <p className="text-[10px] font-bold text-red-600 dark:text-red-400 mt-2">{error}</p>
+                    )}
+                </>
+            )}
 
-                {total === 0 && editable && (
-                    <button
-                        type="button"
-                        onClick={() => !subiendo && inputRef.current?.click()}
-                        disabled={subiendo}
-                        className="aspect-square rounded-xl border-2 border-dashed theme-border flex flex-col items-center justify-center gap-2 theme-text-muted hover:theme-text-main transition-colors disabled:opacity-50 col-span-2"
-                    >
-                        <Camera className="w-8 h-8 opacity-40" />
-                        <span className="text-[10px] font-black uppercase">Subir fotos</span>
-                    </button>
-                )}
-
-                {total > 0 && editable && espacio > 0 && variant === 'hero' && (
-                    <button
-                        type="button"
-                        onClick={() => !subiendo && inputRef.current?.click()}
-                        disabled={subiendo}
-                        className="aspect-square rounded-xl border-2 border-dashed theme-border flex flex-col items-center justify-center gap-1 theme-text-muted hover:theme-text-main transition-colors disabled:opacity-50"
-                    >
-                        <Upload className="w-6 h-6 opacity-40" />
-                        <span className="text-[9px] font-black uppercase">+{espacio}</span>
-                    </button>
-                )}
-            </div>
-
-            {lightbox && (
-                <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
-                    <img src={lightbox} alt="" className="max-w-full max-h-[90vh] object-contain rounded-xl" />
-                </div>
+            {lightboxIndex !== null && todasLasUrls.length > 0 && (
+                <LightboxFotos
+                    fotos={todasLasUrls}
+                    indiceInicial={lightboxIndex}
+                    onCerrar={() => setLightboxIndex(null)}
+                />
             )}
         </div>
     );

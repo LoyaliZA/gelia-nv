@@ -14,6 +14,7 @@ class ProgramarMantenimientoActivoService
     public function __construct(
         private RegistrarMovimientoActivoService $registrarMovimiento,
         private NotificarActivoService $notificarActivo,
+        private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
     public function ejecutar(Activo $activo, User $actor, array $datos): ActivoMantenimiento
@@ -23,7 +24,8 @@ class ProgramarMantenimientoActivoService
         }
 
         return DB::transaction(function () use ($activo, $actor, $datos) {
-            $activo->loadMissing('responsable');
+            $activo->loadMissing(['responsable', 'tipo', 'departamento']);
+            $snapshot = $this->construirSnapshot->ejecutar($activo);
             $responsableAnterior = $activo->responsable;
 
             if ($activo->responsable_user_id) {
@@ -54,7 +56,7 @@ class ProgramarMantenimientoActivoService
                 'estado_nuevo' => 'mantenimiento',
                 'motivo' => 'Mantenimiento programado',
                 'notas' => $datos['notas'] ?? null,
-                'datos_snapshot' => array_merge($activo->fresh()->toArray(), ['mantenimiento' => $mantenimiento->toArray()]),
+                'datos_snapshot' => array_merge($snapshot, ['mantenimiento' => $mantenimiento->toArray()]),
             ]);
 
             $activoActualizado = $activo->fresh(['tipo', 'departamento', 'area', 'responsable']);

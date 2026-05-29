@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, router } from '@inertiajs/react';
 import {
     Ban, CheckCircle2, AlertOctagon, CheckSquare, History, Trash2, XCircle,
-    FileSpreadsheet, Download, Plus, X,
+    FileSpreadsheet, Download, Plus, Loader2,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
@@ -14,8 +14,17 @@ import ModalRespuestaOperativa from './Partials/ModalRespuestaOperativa';
 import ModalSolicitarCancelacion from './Partials/ModalSolicitarCancelacion';
 import ModalConfirmarCancelacion from './Partials/ModalConfirmarCancelacion';
 import ModalBitacoraSolicitud from '../Solicitudes/Partials/ModalBitacoraSolicitud';
-import { ACCENT, BTN_PRIMARY, BTN_SECONDARY } from './Partials/operativasStyles';
+import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/operativasStyles';
+import { filtrarSolicitudesPorTab } from './Partials/operativasFiltros';
 import { geliaCardClass } from '../../utils/geliaTheme';
+
+const OPCIONES_LISTADO = {
+    preserveState: true,
+    preserveScroll: true,
+    replace: true,
+    showProgress: false,
+    only: ['solicitudes', 'filtros'],
+};
 
 const MenuAcciones = ({
     menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalRespuesta, setModalBitacora,
@@ -26,7 +35,7 @@ const MenuAcciones = ({
     const esCancelada = solicitud.estado?.nombre === 'Cancelada';
     const estadosActivos = ['Pendiente', 'Respondida', 'Verificada'];
     const roles = auth?.user?.roles || [];
-    const esGerente = roles.some(r => String(r).toLowerCase().includes('gerente'));
+    const esGerente = roles.some((r) => String(r).toLowerCase().includes('gerente'));
     const puedeReportarError = (can('cancelaciones_cotizaciones.reportar') || can('cancelaciones_cotizaciones.verificar') || esGerente)
         && solicitud.estado?.nombre !== 'Incorrecta'
         && !esCancelada;
@@ -56,7 +65,7 @@ const MenuAcciones = ({
                     </button>
                 )}
                 {can('cancelaciones_cotizaciones.reportar') && !esCancelada && solicitud.estado?.nombre === 'Pendiente' && (
-                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 2 }); }} className="flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none" style={{ color: ACCENT }}>
+                    <button type="button" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 2 }); }} className="flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none" style={{ color: 'var(--color-primario)' }}>
                         <CheckCircle2 className="w-4 h-4" /> Aprobar
                     </button>
                 )}
@@ -94,6 +103,7 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
 
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
     const [tipoOperativo, setTipoOperativo] = useState(filtros.tipo_operativo || '');
+    const [listaCargando, setListaCargando] = useState(false);
     const [modalForm, setModalForm] = useState({ abierto: false, procesoId: '' });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, solicitud: null, estadoId: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, solicitud: null });
@@ -103,34 +113,79 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
     const [menuSolicitud, setMenuSolicitud] = useState(null);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
 
+    useEffect(() => {
+        setTabActiva(filtros.tab || 'TODAS');
+    }, [filtros.tab]);
+
+    useEffect(() => {
+        setTipoOperativo(filtros.tipo_operativo || '');
+    }, [filtros.tipo_operativo]);
+
+    const paramsListado = useCallback(
+        (extra = {}) => {
+            const p = {
+                q: filtros.q || undefined,
+                vendedor_id: filtros.vendedor_id || undefined,
+                fecha_inicio: filtros.fecha_inicio || undefined,
+                fecha_fin: filtros.fecha_fin || undefined,
+                tab: tabActiva,
+                tipo_operativo: tipoOperativo || undefined,
+                page: 1,
+                ...extra,
+            };
+            return Object.fromEntries(
+                Object.entries(p).filter(([, v]) => v !== '' && v !== null && v !== undefined)
+            );
+        },
+        [filtros.q, filtros.vendedor_id, filtros.fecha_inicio, filtros.fecha_fin, tabActiva, tipoOperativo]
+    );
+
+    const recargarListado = useCallback(
+        (extra = {}) => {
+            router.get(route('cancelaciones_cotizaciones.index'), paramsListado(extra), {
+                ...OPCIONES_LISTADO,
+                onStart: () => setListaCargando(true),
+                onFinish: () => setListaCargando(false),
+            });
+        },
+        [paramsListado]
+    );
+
+    const cambiarTab = useCallback(
+        (tab) => {
+            setTabActiva(tab);
+            recargarListado({ tab, page: 1 });
+        },
+        [recargarListado]
+    );
+
+    const cambiarTipo = useCallback(
+        (tipo) => {
+            setTipoOperativo(tipo);
+            recargarListado({ tipo_operativo: tipo || undefined, page: 1 });
+        },
+        [recargarListado]
+    );
+
+    const irAPagina = useCallback(
+        (pagina) => {
+            if (pagina < 1 || pagina > (solicitudes?.last_page || 1)) return;
+            router.get(route('cancelaciones_cotizaciones.index'), paramsListado({ page: pagina }), {
+                ...OPCIONES_LISTADO,
+                preserveScroll: true,
+                onStart: () => setListaCargando(true),
+                onFinish: () => setListaCargando(false),
+            });
+        },
+        [paramsListado, solicitudes?.last_page]
+    );
+
     const abrirMenu = (e, solicitud) => {
         e.stopPropagation();
         const rect = e.currentTarget.getBoundingClientRect();
         setMenuPos({ top: rect.bottom + 8, left: Math.max(8, rect.left - 180) });
         setMenuSolicitud(solicitud);
         setMenuAbierto(solicitud.id);
-    };
-
-    const navegar = (params = {}) => {
-        router.get(route('cancelaciones_cotizaciones.index'), {
-            tab: tabActiva,
-            tipo_operativo: tipoOperativo,
-            q: filtros.q || '',
-            vendedor_id: filtros.vendedor_id || '',
-            fecha_inicio: filtros.fecha_inicio || '',
-            fecha_fin: filtros.fecha_fin || '',
-            ...params,
-        }, { preserveState: true, replace: true });
-    };
-
-    const cambiarTab = (tab) => {
-        setTabActiva(tab);
-        navegar({ tab });
-    };
-
-    const cambiarTipo = (tipo) => {
-        setTipoOperativo(tipo);
-        navegar({ tipo_operativo: tipo });
     };
 
     const filtrosActivos = [filtros.vendedor_id, filtros.fecha_inicio, filtros.fecha_fin].filter(Boolean).length;
@@ -145,31 +200,65 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
         setModalForm({ abierto: true, procesoId });
     };
 
-    const lista = solicitudes?.data || [];
+    const listaServidor = solicitudes?.data || [];
+
+    const filtrosSincronizados = (filtros.tab || 'TODAS') === tabActiva
+        && (filtros.tipo_operativo || '') === tipoOperativo;
+
+    const listaVisible = useMemo(() => {
+        if (!listaCargando || filtrosSincronizados) {
+            return listaServidor;
+        }
+        return filtrarSolicitudesPorTab(listaServidor, tabActiva);
+    }, [listaServidor, tabActiva, listaCargando, filtrosSincronizados]);
+
+    const exportParams = useMemo(
+        () => ({
+            ...filtros,
+            tab: tabActiva,
+            tipo_operativo: tipoOperativo || undefined,
+        }),
+        [filtros, tabActiva, tipoOperativo]
+    );
+
     const procesoPorSubtipo = (subtipo) => {
         const map = {
-            remision: procesos.find(p => /REMISIÓN|REMISION/i.test(p.nombre)),
-            pedido: procesos.find(p => /CANCELACIÓN DE PEDIDO|CANCELACION DE PEDIDO/i.test(p.nombre)),
-            cotizacion: procesos.find(p => /COTIZACIÓN SOBRE PEDIDO|COTIZACION SOBRE PEDIDO/i.test(p.nombre)),
+            remision: procesos.find((p) => /REMISIÓN|REMISION/i.test(p.nombre)),
+            pedido: procesos.find((p) => /CANCELACIÓN DE PEDIDO|CANCELACION DE PEDIDO/i.test(p.nombre)),
+            cotizacion: procesos.find((p) => /COTIZACIÓN SOBRE PEDIDO|COTIZACION SOBRE PEDIDO/i.test(p.nombre)),
         };
         return map[subtipo]?.id || '';
     };
+
+    const tituloListado = listaCargando && !filtrosSincronizados
+        ? 'Actualizando listado…'
+        : solicitudes?.total != null
+            ? `${solicitudes.total.toLocaleString('es-MX')} solicitudes`
+            : `${listaVisible.length} en esta página`;
 
     return (
         <AppLayout>
             <Head title="Cancelaciones y Cotizaciones" />
 
-            <div className="space-y-8">
-                <header className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-black italic theme-text-main uppercase tracking-tighter m-0">
-                            Cancelaciones y <span style={{ color: ACCENT }}>Cotizaciones</span>_
+            <div className="gelia-page-shell space-y-6 md:space-y-8">
+                <header className={geliaCardClass('p-6 md:p-10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6')}>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-3 mb-2">
+                            <span className="h-1.5 w-12 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primario)' }} />
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] m-0" style={{ color: 'var(--color-primario)' }}>
+                                Operaciones
+                            </p>
+                        </div>
+                        <h1 className="text-2xl sm:text-3xl md:text-5xl font-black italic uppercase tracking-tighter theme-text-main m-0 leading-none">
+                            Cancelaciones y <span style={{ color: 'var(--color-primario)' }}>Cotizaciones</span>
                         </h1>
-                        <p className="text-xs font-bold theme-text-muted mt-1">Cancelación de remisión/pedido y cotización sobre pedido</p>
+                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
+                            Remisión, pedido y cotización sobre pedido
+                        </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 w-full lg:w-auto shrink-0">
                         {puedeExportar && (
-                            <a href={route('cancelaciones_cotizaciones.exportar', filtros)} className={BTN_SECONDARY}>
+                            <a href={route('cancelaciones_cotizaciones.exportar', exportParams)} className={BTN_SECONDARY}>
                                 <Download className="w-4 h-4" /> Exportar
                             </a>
                         )}
@@ -181,7 +270,7 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                                 <button type="button" onClick={() => abrirFormulario(procesoPorSubtipo('pedido'))} className={BTN_SECONDARY}>
                                     <Plus className="w-4 h-4" /> Pedido
                                 </button>
-                                <button type="button" onClick={() => abrirFormulario(procesoPorSubtipo('cotizacion'))} className={BTN_PRIMARY} style={{ backgroundColor: ACCENT }}>
+                                <button type="button" onClick={() => abrirFormulario(procesoPorSubtipo('cotizacion'))} className={BTN_PRIMARY}>
                                     <Plus className="w-4 h-4" /> Cotización
                                 </button>
                             </>
@@ -189,19 +278,19 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                     </div>
                 </header>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 min-w-0">
                     {[
                         { label: 'Pendientes', value: metricas?.pendientes ?? 0, color: '#f59e0b' },
                         { label: 'Respondidas hoy', value: metricas?.respondidas_hoy ?? 0, accent: true },
                         { label: 'Incorrectas', value: metricas?.incorrectas ?? 0, color: '#ef4444' },
                     ].map(({ label, value, color, accent }) => (
-                        <div key={label} className={geliaCardClass('rounded-2xl p-5 flex items-center gap-4')}>
-                            <div className="p-3 rounded-xl theme-element border theme-border">
-                                <FileSpreadsheet className="w-6 h-6" style={{ color: accent ? ACCENT : color }} />
+                        <div key={label} className={geliaCardClass('p-5 md:p-6 flex items-center gap-4 min-w-0')}>
+                            <div className="p-3 rounded-2xl theme-element border theme-border shrink-0">
+                                <FileSpreadsheet className="w-6 h-6" style={{ color: accent ? 'var(--color-primario)' : color }} />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                                 <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">{label}</p>
-                                <p className="text-2xl font-black theme-text-main m-0">{value}</p>
+                                <p className="text-2xl font-black theme-text-main m-0 tabular-nums leading-tight mt-1">{value}</p>
                             </div>
                         </div>
                     ))}
@@ -216,38 +305,57 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                     filtroVendedor={filtros.vendedor_id || ''}
                     vendedores={vendedores}
                     filtrosActivos={filtrosActivos}
+                    listaCargando={listaCargando}
                     onCambiarTab={cambiarTab}
-                    onCambiarBusqueda={() => {}}
                     onCambiarTipo={cambiarTipo}
-                    onAplicarFiltros={navegar}
-                    onLimpiarAdicionales={() => navegar({ vendedor_id: '', fecha_inicio: '', fecha_fin: '' })}
+                    onAplicarFiltros={recargarListado}
+                    onLimpiarAdicionales={() => recargarListado({ vendedor_id: undefined, fecha_inicio: undefined, fecha_fin: undefined, page: 1 })}
                 />
 
-                {lista.length === 0 ? (
-                    <div className={`${geliaCardClass('rounded-2xl p-12 text-center')}`}>
-                        <p className="text-sm font-bold theme-text-muted m-0">No hay solicitudes operativas en esta vista.</p>
+                {listaVisible.length === 0 && !listaCargando ? (
+                    <div className={`${geliaCardClass()} text-center py-14 md:py-16 px-6`}>
+                        <FileSpreadsheet className="w-10 h-10 mx-auto mb-3 theme-text-muted opacity-50" />
+                        <p className="text-sm font-black italic uppercase theme-text-main m-0">Sin solicitudes</p>
+                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
+                            No hay solicitudes operativas en esta vista
+                        </p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {lista.map(sol => (
-                            <TarjetaOperativa
-                                key={sol.id}
-                                solicitud={sol}
-                                auth={auth}
-                                onMenu={abrirMenu}
-                                onAprobar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 2 })}
-                                onReportar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 4 })}
-                                onVerificar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 3 })}
+                    <div className={`${geliaCardClass('overflow-hidden')} relative transition-opacity duration-200 ${listaCargando ? 'opacity-60' : ''}`}>
+                        {listaCargando && (
+                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--theme-surface-bg)]/50 backdrop-blur-[2px] pointer-events-none rounded-[inherit]">
+                                <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                                <span className="sr-only">Actualizando listado</span>
+                            </div>
+                        )}
+                        <div className="p-4 md:p-6 border-b theme-border">
+                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                {tituloListado}
+                            </p>
+                        </div>
+                        <div className="p-4 md:p-6">
+                            <div className="gelia-listado-grid">
+                                {listaVisible.map((sol) => (
+                                    <TarjetaOperativa
+                                        key={sol.id}
+                                        solicitud={sol}
+                                        auth={auth}
+                                        onMenu={abrirMenu}
+                                        onAprobar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 2 })}
+                                        onReportar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 4 })}
+                                        onVerificar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 3 })}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                        {!listaCargando && (solicitudes?.last_page || 1) > 1 && (
+                            <GeliaPaginacion
+                                paginator={solicitudes}
+                                onIrAPagina={irAPagina}
+                                embedded
                             />
-                        ))}
+                        )}
                     </div>
-                )}
-
-                {solicitudes?.last_page > 1 && (
-                    <GeliaPaginacion
-                        paginator={solicitudes}
-                        onIrAPagina={(page) => navegar({ page })}
-                    />
                 )}
             </div>
 

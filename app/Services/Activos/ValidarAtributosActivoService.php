@@ -28,6 +28,12 @@ class ValidarAtributosActivoService
             switch ($field['type'] ?? 'text') {
                 case 'number':
                     $fieldRules[] = 'numeric';
+                    if (isset($field['min'])) {
+                        $fieldRules[] = 'min:' . $field['min'];
+                    }
+                    if (isset($field['max'])) {
+                        $fieldRules[] = 'max:' . $field['max'];
+                    }
                     break;
                 case 'date':
                     $fieldRules[] = 'date';
@@ -42,15 +48,24 @@ class ValidarAtributosActivoService
                         $fieldRules[] = 'in:' . implode(',', $field['options']);
                     } else {
                         $fieldRules[] = 'string';
+                        $this->aplicarReglasTexto($fieldRules, $field);
                     }
+                    break;
+                case 'textarea':
+                    $fieldRules[] = 'string';
+                    $this->aplicarReglasTexto($fieldRules, $field);
                     break;
                 default:
                     $fieldRules[] = 'string';
+                    $this->aplicarReglasTexto($fieldRules, $field);
                     break;
             }
 
             $rules["atributos.{$key}"] = $fieldRules;
             $messages["atributos.{$key}.required"] = "El campo {$field['label']} es obligatorio.";
+            if (!empty($field['pattern_message'])) {
+                $messages["atributos.{$key}.regex"] = $field['pattern_message'];
+            }
         }
 
         $validator = Validator::make(['atributos' => $atributos], $rules, $messages);
@@ -60,6 +75,19 @@ class ValidarAtributosActivoService
         }
 
         return $validator->validated()['atributos'] ?? [];
+    }
+
+    private function aplicarReglasTexto(array &$fieldRules, array $field): void
+    {
+        if (isset($field['min_length'])) {
+            $fieldRules[] = 'min:' . (int) $field['min_length'];
+        }
+        if (isset($field['max_length'])) {
+            $fieldRules[] = 'max:' . (int) $field['max_length'];
+        }
+        if (!empty($field['pattern'])) {
+            $fieldRules[] = 'regex:' . $field['pattern'];
+        }
     }
 
     public function sincronizarFechaVencimiento(CatalogoTipoActivo $tipo, array $atributos): ?string

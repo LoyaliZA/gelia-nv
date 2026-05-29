@@ -4,8 +4,10 @@ namespace App\Services\Activos;
 
 use App\Models\Activo;
 use App\Models\CatalogoTipoActivo;
+use App\Models\Departamento;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class CrearActivoService
 {
@@ -13,19 +15,23 @@ class CrearActivoService
         private ValidarAtributosActivoService $validarAtributos,
         private RegistrarMovimientoActivoService $registrarMovimiento,
         private SincronizarMarcaModeloActivoService $sincronizarMarcaModelo,
+        private GenerarFolioActivoService $generarFolio,
+        private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
     public function ejecutar(User $usuario, array $datos): Activo
     {
         $tipo = CatalogoTipoActivo::findOrFail($datos['catalogo_tipo_activo_id']);
+        $departamento = Departamento::findOrFail($datos['departamento_id']);
         $atributos = $this->validarAtributos->ejecutar($tipo, $datos['atributos'] ?? []);
         $this->sincronizarMarcaModelo->ejecutar($tipo, $atributos);
         $fechaVencimiento = $datos['fecha_vencimiento']
             ?? $this->validarAtributos->sincronizarFechaVencimiento($tipo, $atributos);
 
-        return DB::transaction(function () use ($usuario, $datos, $tipo, $atributos, $fechaVencimiento) {
+        return DB::transaction(function () use ($usuario, $datos, $tipo, $departamento, $atributos, $fechaVencimiento) {
             $activo = Activo::create([
-                'folio' => $this->generarFolio(),
+                'folio' => $this->generarFolio->ejecutar($tipo, $departamento),
+                'consulta_token' => (string) Str::uuid(),
                 'catalogo_tipo_activo_id' => $tipo->id,
                 'departamento_id' => $datos['departamento_id'],
                 'area_id' => $datos['area_id'] ?? null,
@@ -39,25 +45,13 @@ class CrearActivoService
                 'registrado_por_id' => $usuario->id,
             ]);
 
-            $this->registrarMovimiento->ejecutar($activo, $usuario, 'creacion');
+            $activo->load(['tipo', 'departamento']);
+
+            $this->registrarMovimiento->ejecutar($activo, $usuario, 'creacion', [
+                'datos_snapshot' => $this->construirSnapshot->ejecutar($activo),
+            ]);
 
             return $activo->load(['tipo', 'departamento', 'area', 'responsable']);
         });
-    }
-
-    private function generarFolio(): string
-    {
-        $year = now()->format('Y');
-        $ultimo = Activo::withTrashed()
-            ->where('folio', 'like', "ACT-{$year}-%")
-            ->orderByDesc('id')
-            ->value('folio');
-
-        $numero = 1;
-        if ($ultimo && preg_match('/ACT-\d{4}-(\d+)/', $ultimo, $matches)) {
-            $numero = (int) $matches[1] + 1;
-        }
-
-        return sprintf('ACT-%s-%04d', $year, $numero);
     }
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { router } from '@inertiajs/react';
 import { CheckCircle, Wrench } from 'lucide-react';
-import { BTN_PRIMARY_CLASS, LABEL_CLASS, getActivosCardClass } from './activosFormStyles';
+import { BTN_PRIMARY_CLASS, LABEL_CLASS, METADATA_BADGE, getActivosCardClass } from './activosFormStyles';
 
 const TIPO_LABELS = { preventivo: 'Preventivo', correctivo: 'Correctivo', garantia: 'Garantía' };
 const ESTADO_LABELS = { programado: 'Programado', en_proceso: 'En proceso', completado: 'Completado', cancelado: 'Cancelado' };
@@ -35,7 +35,7 @@ export default function PanelMantenimiento({ activo, canCambiarEstado, onProgram
                         <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                             {ESTADO_LABELS[activoMantenimiento.estado] || activoMantenimiento.estado}
                         </span>
-                        <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase theme-element border theme-border">
+                        <span className={METADATA_BADGE}>
                             {TIPO_LABELS[activoMantenimiento.tipo] || activoMantenimiento.tipo}
                         </span>
                     </div>

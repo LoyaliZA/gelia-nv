@@ -13,6 +13,7 @@ class CambiarEstadoActivoService
     public function __construct(
         private RegistrarMovimientoActivoService $registrarMovimiento,
         private NotificarActivoService $notificarActivo,
+        private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
     public function ejecutar(Activo $activo, User $actor, string $nuevoEstado, ?string $motivo = null, ?string $notas = null): Activo
@@ -32,7 +33,8 @@ class CambiarEstadoActivoService
         $this->validarTransicion($activo, $nuevoEstado);
 
         return DB::transaction(function () use ($activo, $actor, $nuevoEstado, $motivo, $notas) {
-            $activo->loadMissing('responsable');
+            $activo->loadMissing(['responsable', 'tipo', 'departamento']);
+            $snapshot = $this->construirSnapshot->ejecutar($activo);
             $estadoAnterior = $activo->estado;
             $responsableAnterior = $activo->responsable;
             $updates = ['estado' => $nuevoEstado];
@@ -56,6 +58,7 @@ class CambiarEstadoActivoService
                 'estado_nuevo' => $nuevoEstado,
                 'motivo' => $motivo,
                 'notas' => $notas,
+                'datos_snapshot' => $snapshot,
             ]);
 
             $activoActualizado = $activo->fresh(['tipo', 'departamento', 'area', 'responsable']);

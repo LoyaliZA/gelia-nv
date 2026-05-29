@@ -67,6 +67,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'activo_registrado' => fn () => $request->session()->get('activo_registrado'),
                 // Permite el paso del reporte hacia React
                 'reporte_importacion' => fn () => $request->session()->get('reporte_importacion'),
             ],
