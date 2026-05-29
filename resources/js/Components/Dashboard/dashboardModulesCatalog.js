@@ -1,5 +1,5 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List,
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban,
 } from 'lucide-react';
 
 export const DASHBOARD_MODULE_CARDS = [
@@ -53,13 +53,24 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_solicitudes',
         titulo: 'Panel Solicitudes',
-        subtitulo: 'Gestión operativa.',
+        subtitulo: 'Procesos financieros TAG.',
         permiso: 'solicitudes.ver_listado',
         href: () => route('solicitudes.index'),
         icon: FileSignature,
         borderClass: 'border-amber-500/20',
         iconWrapClass: 'bg-amber-500/10 border-amber-500/20',
         iconClass: 'text-amber-500',
+    },
+    {
+        id: 'card_cancelaciones_cotizaciones',
+        titulo: 'Cancel. y Cotizaciones',
+        subtitulo: 'Remisión, pedido y cotización.',
+        permiso: 'cancelaciones_cotizaciones.ver_listado',
+        href: () => route('cancelaciones_cotizaciones.index'),
+        icon: Ban,
+        borderClass: 'border-orange-500/20',
+        iconWrapClass: 'bg-orange-500/10 border-orange-500/20',
+        iconClass: 'text-orange-500',
     },
     {
         id: 'card_activos',

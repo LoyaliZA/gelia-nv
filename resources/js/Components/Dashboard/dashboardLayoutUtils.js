@@ -6,20 +6,23 @@ export const PANEL_IDS = {
     MODULOS: 'panel_modulos',
     FUNCIONES: 'panel_funciones',
     SOLICITUDES: 'panel_solicitudes',
+    CANCELACIONES: 'panel_cancelaciones_cotizaciones',
     ACTIVOS: 'panel_activos',
 };
 
 /**
  * Disposición inicial que replica el layout anterior (módulos + widgets en fila, funciones abajo).
  */
-export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitudes, hasWidgetActivos }) {
+export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitudes, hasWidgetCancelaciones, hasWidgetActivos }) {
     const layout = [];
     let nextRow = 0;
-    const hasAnyWidget = hasWidgetSolicitudes || hasWidgetActivos;
+    const widgetCount = [hasWidgetSolicitudes, hasWidgetCancelaciones, hasWidgetActivos].filter(Boolean).length;
+    const hasAnyWidget = widgetCount > 0;
     const modulosWidth = hasAnyWidget ? 7 : 12;
     const widgetWidth = hasModulos ? 5 : 12;
     const widgetX = hasModulos ? 7 : 0;
-    const widgetHeight = hasWidgetSolicitudes && hasWidgetActivos ? 6 : 12;
+    const widgetHeight = widgetCount > 1 ? Math.max(4, Math.floor(12 / widgetCount)) : 12;
+    const widgetMinH = widgetCount > 1 ? 4 : 3;
 
     if (hasModulos) {
         layout.push({
@@ -34,33 +37,24 @@ export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitu
         nextRow = 12;
     }
 
-    const widgetMinH = hasWidgetSolicitudes && hasWidgetActivos ? 5 : 3;
-
-    if (hasWidgetSolicitudes) {
+    let widgetY = 0;
+    const pushWidget = (id) => {
         layout.push({
-            i: PANEL_IDS.SOLICITUDES,
+            i: id,
             x: widgetX,
-            y: 0,
+            y: widgetY,
             w: widgetWidth,
             h: widgetHeight,
             minW: 2,
             minH: widgetMinH,
         });
-        if (!hasModulos) nextRow = Math.max(nextRow, widgetHeight);
-    }
+        widgetY += widgetHeight;
+        if (!hasModulos) nextRow = Math.max(nextRow, widgetY);
+    };
 
-    if (hasWidgetActivos) {
-        layout.push({
-            i: PANEL_IDS.ACTIVOS,
-            x: widgetX,
-            y: hasWidgetSolicitudes ? widgetHeight : 0,
-            w: widgetWidth,
-            h: widgetHeight,
-            minW: 2,
-            minH: widgetMinH,
-        });
-        if (!hasModulos && !hasWidgetSolicitudes) nextRow = Math.max(nextRow, widgetHeight);
-    }
+    if (hasWidgetSolicitudes) pushWidget(PANEL_IDS.SOLICITUDES);
+    if (hasWidgetCancelaciones) pushWidget(PANEL_IDS.CANCELACIONES);
+    if (hasWidgetActivos) pushWidget(PANEL_IDS.ACTIVOS);
 
     if (hasFunciones) {
         layout.push({

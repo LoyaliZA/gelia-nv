@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\SolicitudTag;
+use App\Models\CatalogoProceso;
 use App\Models\User;
 use App\Services\Activos\AlertasActivosService;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class DashboardController extends Controller
         $user = $request->user();
         $estadisticas = [];
         $ultimasSolicitudes = [];
+        $ultimasOperativas = [];
         $alertasActivosResumen = [];
         $alertasActivosDestacadas = [];
 
@@ -49,7 +51,20 @@ class DashboardController extends Controller
         // --- NUEVA LÓGICA: LIVE SOLICITUDES ---
         // Extraemos las 4 más recientes con sus relaciones (cliente y estado) si el usuario tiene permiso
         if ($user->can('configuracion.ver_auditoria') || $user->can('solicitudes.gestionar')) {
-            $ultimasSolicitudes = SolicitudTag::with(['cliente', 'estado'])
+            $ultimasSolicitudes = SolicitudTag::with(['cliente', 'estado', 'proceso'])
+                ->whereHas('proceso', function ($q) {
+                    $q->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);
+                })
+                ->latest()
+                ->take(4)
+                ->get();
+        }
+
+        if ($user->can('cancelaciones_cotizaciones.ver_listado')) {
+            $ultimasOperativas = SolicitudTag::with(['cliente', 'estado', 'proceso'])
+                ->whereHas('proceso', function ($q) {
+                    $q->where('categoria_flujo', CatalogoProceso::CATEGORIA_OPERATIVO);
+                })
                 ->latest()
                 ->take(4)
                 ->get();
@@ -73,6 +88,7 @@ class DashboardController extends Controller
         return Inertia::render('Dashboards/Index', [
             'estadisticas' => $estadisticas,
             'ultimas_solicitudes' => $ultimasSolicitudes,
+            'ultimas_operativas' => $ultimasOperativas,
             'alertas_activos_resumen' => $alertasActivosResumen,
             'alertas_activos_destacadas' => $alertasActivosDestacadas,
         ]);

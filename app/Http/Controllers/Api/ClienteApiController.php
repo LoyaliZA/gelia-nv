@@ -26,6 +26,8 @@ class ClienteApiController extends Controller
                     'id' => $cliente->id,
                     'numero_cliente' => $cliente->numero_cliente,
                     'nombre' => $cliente->nombre,
+                    'nombre_razon_social' => $cliente->nombre_razon_social,
+                    'rfc' => $cliente->rfc,
                     'es_heredado' => (bool) $cliente->es_heredado,
                     'lista_actual_id' => $cliente->lista_actual_id, // Añadido para comparación exacta
                     'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',

@@ -18,11 +18,13 @@ class SolicitarCancelacionSolicitudService
         private ValidarListaInferiorService $validarListaInferior,
     ) {}
 
-    public function ejecutar(SolicitudTag $solicitud, string $motivo, ?int $listaRebajaId = null): void
+    public function ejecutar(SolicitudTag $solicitud, string $motivo, ?int $listaRebajaId = null, ?string $permisoAuth = null, ?array $permisosNotificacion = null): void
     {
-        Gate::authorize('solicitudes.solicitar_cancelacion');
+        Gate::authorize($permisoAuth ?? 'solicitudes.solicitar_cancelacion');
 
-        DB::transaction(function () use ($solicitud, $motivo, $listaRebajaId) {
+        $permisosEncargados = $permisosNotificacion ?? ['solicitudes.verificar', 'solicitudes.reportar', 'solicitudes.cancelar'];
+
+        DB::transaction(function () use ($solicitud, $motivo, $listaRebajaId, $permisosEncargados) {
             $solicitud->loadMissing(['estado', 'vendedor', 'departamento', 'proceso', 'cliente.listaDescuento', 'listaDescuento']);
 
             if ($solicitud->vendedor_id !== Auth::id()) {
@@ -75,7 +77,7 @@ class SolicitarCancelacionSolicitudService
                 'datos_snapshot' => null,
             ]);
 
-            $encargados = User::permission(['solicitudes.verificar', 'solicitudes.reportar', 'solicitudes.cancelar'])
+            $encargados = User::permission($permisosEncargados)
                 ->whereHas('departamentos', function ($query) use ($solicitud) {
                     $query->where('departamentos.id', $solicitud->departamento_id);
                 })

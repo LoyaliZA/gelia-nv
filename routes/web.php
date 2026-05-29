@@ -17,6 +17,10 @@ use App\Http\Controllers\Admin\PersonalizacionController;
 use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\ActivoController;
 use App\Http\Controllers\Activos\TipoActivoController;
+use App\Http\Controllers\Facturas\SolicitudFacturaController;
+use App\Http\Controllers\Facturas\DatosFiscalesController;
+use App\Http\Controllers\Facturas\ArchivoFacturaController;
+use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
 
 // ══════════════════════════════════════════════════════════════════════
 // 1. REDIRECCIÓN INICIAL
@@ -77,11 +81,9 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:solicitudes.ver_listado'])->group(function () {
         Route::get('/solicitudes', [SolicitudController::class, 'index'])->name('solicitudes.index');
         Route::get('/solicitudes/exportar', [SolicitudController::class, 'exportar'])->name('solicitudes.exportar');
-        Route::get('/solicitudes/{solicitud}/datos-fiscales', [SolicitudController::class, 'datosFiscales'])->name('solicitudes.datos_fiscales');
     });
 
     Route::middleware(['can:solicitudes.crear'])->group(function () {
-        Route::get('/solicitudes/plantilla-facturas', [SolicitudController::class, 'descargarPlantillaFacturas'])->name('solicitudes.plantilla_facturas');
         Route::post('/solicitudes', [SolicitudController::class, 'store'])->name('solicitudes.store');
     });
 
@@ -108,6 +110,66 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/solicitudes/{solicitud}/consultas/{consulta}', [SolicitudController::class, 'responderConsulta'])->name('solicitudes.consultas.responder');
     Route::put('/solicitudes/{solicitud}/consultas/{consulta}/leer', [SolicitudController::class, 'marcarConsultaLeida'])->name('solicitudes.consultas.leer');
     Route::delete('/solicitudes/{solicitud}', [SolicitudController::class, 'destroy'])->name('solicitudes.destroy');
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: SOLICITUDES DE FACTURAS
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:facturas.gestionar_datos_fiscales'])->prefix('facturas/datos-fiscales')->name('facturas.datos_fiscales.')->group(function () {
+        Route::get('/', [DatosFiscalesController::class, 'index'])->name('index');
+        Route::put('/{cliente}', [DatosFiscalesController::class, 'update'])->name('update');
+    });
+
+    Route::middleware(['can:facturas.crear'])->prefix('facturas')->name('facturas.')->group(function () {
+        Route::get('/plantilla-fiscales/descargar', [SolicitudFacturaController::class, 'descargarPlantilla'])->name('plantilla_fiscales');
+        Route::post('/', [SolicitudFacturaController::class, 'store'])->name('store');
+    });
+
+    Route::middleware(['can:facturas.ver_listado'])->prefix('facturas')->name('facturas.')->group(function () {
+        Route::get('/', [SolicitudFacturaController::class, 'index'])->name('index');
+        Route::get('/exportar', [SolicitudFacturaController::class, 'exportar'])->middleware('can:facturas.exportar')->name('exportar');
+        Route::get('/{factura}/datos-fiscales', [SolicitudFacturaController::class, 'datosFiscales'])->name('datos_fiscales');
+        Route::get('/{factura}/archivo/{tipo}', [ArchivoFacturaController::class, 'show'])->name('archivo');
+        Route::get('/{factura}', [SolicitudFacturaController::class, 'show'])->name('show');
+    });
+
+    Route::middleware(['can:facturas.responder'])->prefix('facturas')->name('facturas.')->group(function () {
+        Route::put('/{factura}/estado', [SolicitudFacturaController::class, 'actualizarEstado'])->name('actualizar_estado');
+    });
+
+    Route::middleware(['can:facturas.verificar'])->prefix('facturas')->name('facturas.')->group(function () {
+        Route::put('/{factura}/verificar', [SolicitudFacturaController::class, 'verificar'])->name('verificar');
+    });
+
+    Route::middleware(['can:facturas.eliminar'])->prefix('facturas')->name('facturas.')->group(function () {
+        Route::delete('/{factura}', [SolicitudFacturaController::class, 'destroy'])->name('destroy');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: CANCELACIONES Y COTIZACIONES
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:cancelaciones_cotizaciones.ver_listado'])->prefix('cancelaciones-cotizaciones')->name('cancelaciones_cotizaciones.')->group(function () {
+        Route::get('/', [SolicitudOperativaController::class, 'index'])->name('index');
+        Route::get('/exportar', [SolicitudOperativaController::class, 'exportar'])->middleware('can:cancelaciones_cotizaciones.exportar')->name('exportar');
+    });
+
+    Route::middleware(['can:cancelaciones_cotizaciones.crear'])->prefix('cancelaciones-cotizaciones')->name('cancelaciones_cotizaciones.')->group(function () {
+        Route::post('/', [SolicitudOperativaController::class, 'store'])->name('store');
+    });
+
+    Route::put('/cancelaciones-cotizaciones/{solicitud}/estado', [SolicitudOperativaController::class, 'actualizarEstado'])
+        ->name('cancelaciones_cotizaciones.actualizar_estado');
+
+    Route::middleware(['can:cancelaciones_cotizaciones.solicitar_cancelacion'])->prefix('cancelaciones-cotizaciones')->name('cancelaciones_cotizaciones.')->group(function () {
+        Route::post('/{solicitud}/solicitar-cancelacion', [SolicitudOperativaController::class, 'solicitarCancelacion'])->name('solicitar_cancelacion');
+    });
+
+    Route::middleware(['can:cancelaciones_cotizaciones.cancelar'])->prefix('cancelaciones-cotizaciones')->name('cancelaciones_cotizaciones.')->group(function () {
+        Route::put('/{solicitud}/cancelar', [SolicitudOperativaController::class, 'cancelar'])->name('cancelar');
+    });
+
+    Route::middleware(['can:cancelaciones_cotizaciones.eliminar'])->prefix('cancelaciones-cotizaciones')->name('cancelaciones_cotizaciones.')->group(function () {
+        Route::delete('/{solicitud}', [SolicitudOperativaController::class, 'destroy'])->name('destroy');
+    });
 
     // --- Nuevo Módulo: Interfaz de Entregas ---
     Route::middleware(['can:entregas.cotizar'])->group(function () {

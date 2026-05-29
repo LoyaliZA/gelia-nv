@@ -19,6 +19,7 @@ import DashboardModuleCard from '../../Components/Dashboard/DashboardModuleCard'
 import { DASHBOARD_MODULE_CARDS, DASHBOARD_FUNCTION_CARDS } from '../../Components/Dashboard/dashboardModulesCatalog';
 
 import WidgetSolicitudes from './Widgets/WidgetSolicitudes';
+import WidgetCancelacionesCotizaciones from './Widgets/WidgetCancelacionesCotizaciones';
 import WidgetActivos from './Widgets/WidgetActivos';
 
 const ESTILOS_ANIMACION_NATIVA = `
@@ -92,7 +93,7 @@ function buildFuncionesPanel({ variant, funcionesVisibles }) {
     );
 }
 
-export default function AdminDashboard({ auth, ultimas_solicitudes = [], alertas_activos_resumen = {}, alertas_activos_destacadas = [] }) {
+export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas_operativas = [], alertas_activos_resumen = {}, alertas_activos_destacadas = [] }) {
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
 
     const [showConfig, setShowConfig] = useState(false);
@@ -117,6 +118,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], alertas
     const funcionesVisibles = funcionesHabilitadas.filter((func) => !dashboardOcultosBD.includes(func.id));
 
     const mostrarWidgetSolicitudes = can('configuracion.ver_auditoria') || can('solicitudes.ver_listado');
+    const mostrarWidgetCancelaciones = can('cancelaciones_cotizaciones.ver_listado');
     const mostrarWidgetActivos = can('activos.ver');
 
     const visiblePanelIds = useMemo(() => {
@@ -124,9 +126,10 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], alertas
         if (tarjetasVisibles.length > 0) ids.push(PANEL_IDS.MODULOS);
         if (funcionesVisibles.length > 0) ids.push(PANEL_IDS.FUNCIONES);
         if (mostrarWidgetSolicitudes) ids.push(PANEL_IDS.SOLICITUDES);
+        if (mostrarWidgetCancelaciones) ids.push(PANEL_IDS.CANCELACIONES);
         if (mostrarWidgetActivos) ids.push(PANEL_IDS.ACTIVOS);
         return ids;
-    }, [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetActivos]);
+    }, [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos]);
 
     const defaultLayout = useMemo(
         () =>
@@ -134,9 +137,10 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], alertas
                 hasModulos: tarjetasVisibles.length > 0,
                 hasFunciones: funcionesVisibles.length > 0,
                 hasWidgetSolicitudes: mostrarWidgetSolicitudes,
+                hasWidgetCancelaciones: mostrarWidgetCancelaciones,
                 hasWidgetActivos: mostrarWidgetActivos,
             }),
-        [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetActivos]
+        [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos]
     );
 
     const activeLayout = useMemo(
@@ -151,6 +155,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], alertas
             [PANEL_IDS.MODULOS]: buildModulosPanel({ variant: 'desktop', ...panelArgs }),
             [PANEL_IDS.FUNCIONES]: buildFuncionesPanel({ variant: 'desktop', ...panelArgs }),
             [PANEL_IDS.SOLICITUDES]: <WidgetSolicitudes ultimas_solicitudes={ultimas_solicitudes} variant="desktop" />,
+            [PANEL_IDS.CANCELACIONES]: <WidgetCancelacionesCotizaciones ultimas_operativas={ultimas_operativas} variant="desktop" />,
             [PANEL_IDS.ACTIVOS]: (
                 <WidgetActivos
                     alertas_resumen={alertas_activos_resumen}
@@ -159,7 +164,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], alertas
                 />
             ),
         }),
-        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, alertas_activos_resumen, alertas_activos_destacadas]
+        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas, alertas_activos_resumen, alertas_activos_destacadas]
     );
 
     const mobilePanels = useMemo(
@@ -167,6 +172,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], alertas
             [PANEL_IDS.MODULOS]: buildModulosPanel({ variant: 'mobile', ...panelArgs }),
             [PANEL_IDS.FUNCIONES]: buildFuncionesPanel({ variant: 'mobile', ...panelArgs }),
             [PANEL_IDS.SOLICITUDES]: <WidgetSolicitudes ultimas_solicitudes={ultimas_solicitudes} variant="mobile" />,
+            [PANEL_IDS.CANCELACIONES]: <WidgetCancelacionesCotizaciones ultimas_operativas={ultimas_operativas} variant="mobile" />,
             [PANEL_IDS.ACTIVOS]: (
                 <WidgetActivos
                     alertas_resumen={alertas_activos_resumen}
@@ -175,7 +181,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], alertas
                 />
             ),
         }),
-        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, alertas_activos_resumen, alertas_activos_destacadas]
+        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas, alertas_activos_resumen, alertas_activos_destacadas]
     );
 
     useEffect(() => {

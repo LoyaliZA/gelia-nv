@@ -7,7 +7,6 @@ use App\Models\CatalogoProceso;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoTipoCliente;
 use App\Services\Solicitudes\EscalonamientoService;
-use App\Services\Solicitudes\ImportarFacturasSolicitudService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -22,11 +21,10 @@ class StoreSolicitudRequest extends FormRequest
     {
         $proceso = $this->resolverProceso();
         $esOperativo = $proceso?->esOperativo() ?? false;
-        $esFactura = $this->esProcesoFactura($proceso);
         $compraEnTienda = $this->aplicaFlujoCompraEnTienda();
 
         $reglas = [
-            'numero_cliente' => [($esOperativo && !$esFactura) ? 'required' : 'nullable', 'string', 'max:255'],
+            'numero_cliente' => [$esOperativo ? 'required' : 'nullable', 'string', 'max:255'],
             'nombre_cliente' => ['nullable', 'string', 'max:255'],
             'catalogo_proceso_id' => ['required', 'exists:catalogo_procesos,id'],
             'observaciones_vendedor' => ['nullable', 'string'],
@@ -75,22 +73,9 @@ class StoreSolicitudRequest extends FormRequest
             }
         } elseif (str_contains($nombre, 'COTIZACIÓN') || str_contains($nombre, 'COTIZACION')) {
             $reglas['numero_pedido'] = ['required', 'string', 'max:255'];
-        } elseif (str_contains($nombre, 'FACTURA')) {
-            $reglas['factura_razon_social'] = ['required', 'string', 'min:3', 'max:255'];
-            $reglas['archivo_facturas'] = ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:10240'];
-            $reglas['remisiones_pdf'] = ['nullable', 'array', 'max:10'];
-            $reglas['remisiones_pdf.*'] = ['file', 'mimes:pdf', 'max:5120'];
-            $reglas['numero_cliente'] = ['nullable', 'string', 'max:255'];
         }
 
         return $reglas;
-    }
-
-    private function esProcesoFactura(?CatalogoProceso $proceso): bool
-    {
-        $nombre = strtoupper($proceso?->nombre ?? '');
-
-        return str_contains($nombre, 'FACTURA');
     }
 
     private function resolverProceso(): ?CatalogoProceso
@@ -120,24 +105,11 @@ class StoreSolicitudRequest extends FormRequest
             function (Validator $validator) {
                 $proceso = $this->resolverProceso();
 
-                if ($this->esProcesoFactura($proceso) && $this->hasFile('archivo_facturas')) {
-                    try {
-                        app(ImportarFacturasSolicitudService::class)->validar($this->file('archivo_facturas'));
-                    } catch (\Illuminate\Validation\ValidationException $e) {
-                        foreach ($e->errors() as $campo => $mensajes) {
-                            foreach ($mensajes as $mensaje) {
-                                $validator->errors()->add($campo, $mensaje);
-                            }
-                        }
-                    } catch (\Throwable $e) {
-                        $validator->errors()->add(
-                            'archivo_facturas',
-                            'No se pudo procesar el archivo Excel. Descargue la plantilla oficial y verifique el formato.'
-                        );
-                    }
-                }
-
                 if ($proceso?->esOperativo()) {
+                    $validator->errors()->add(
+                        'catalogo_proceso_id',
+                        'Las solicitudes operativas deben crearse desde el módulo Cancelaciones y Cotizaciones.'
+                    );
                     return;
                 }
 

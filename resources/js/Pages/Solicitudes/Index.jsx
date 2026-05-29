@@ -5,7 +5,7 @@ import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
     History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
     ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle,
-    FileSpreadsheet, FileText, FolderOpen, Hash, Calendar, Landmark
+    FileSpreadsheet, FileText, FolderOpen
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -15,7 +15,6 @@ import ModalRespuestaSolicitud from './Partials/ModalRespuestaSolicitud';
 import ModalBitacoraSolicitud from './Partials/ModalBitacoraSolicitud';
 import ModalConsultaSolicitud from './Partials/ModalConsultaSolicitud';
 import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
-import ModalExpedienteFacturas from './Partials/ModalExpedienteFacturas';
 import FiltrosSolicitudes from './Partials/FiltrosSolicitudes';
 import { geliaCardClass } from '../../utils/geliaTheme';
 
@@ -50,76 +49,8 @@ const formatearTiempoRelativo = (fechaString) => {
     return `${fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })} a las ${horaFormateada}`;
 };
 
-const esProcesoFactura = (solicitud) => {
-    const nombre = solicitud?.proceso?.nombre?.toUpperCase() || '';
-    return nombre.includes('FACTURA');
-};
-
-const esProcesoOperativoSolicitud = (solicitud) =>
-    solicitud?.proceso?.categoria_flujo === 'operativo';
-
-const esProcesoCancelacionOperativa = (solicitud) => {
-    const nombre = solicitud?.proceso?.nombre?.toUpperCase() || '';
-    return esProcesoOperativoSolicitud(solicitud) && nombre.includes('CANCEL');
-};
-
-const formatearFechaOperacion = (fecha) => {
-    if (!fecha) return null;
-    const normalizada = String(fecha).includes('T') ? fecha : `${fecha}T12:00:00`;
-    return new Date(normalizada).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-
-const tieneDetalleOperacion = (solicitud) => {
-    if (!esProcesoOperativoSolicitud(solicitud) || esProcesoFactura(solicitud)) return false;
-
-    return !!(
-        solicitud.numero_remision ||
-        solicitud.numero_pedido ||
-        solicitud.motivo_operacion ||
-        solicitud.fecha_operacion ||
-        solicitud.banco?.nombre
-    );
-};
-
-const DetalleOperacionBloque = ({ solicitud, compacto = false }) => {
-    if (!tieneDetalleOperacion(solicitud)) return null;
-
-    const esCancelacion = esProcesoCancelacionOperativa(solicitud);
-    const bancoNombre = solicitud.banco?.nombre;
-
-    const filas = [
-        solicitud.numero_remision ? { icon: Hash, label: 'N° Remisión', value: solicitud.numero_remision } : null,
-        solicitud.numero_pedido ? { icon: Hash, label: 'N° Pedido', value: solicitud.numero_pedido } : null,
-        solicitud.fecha_operacion ? { icon: Calendar, label: 'Fecha', value: formatearFechaOperacion(solicitud.fecha_operacion) } : null,
-        bancoNombre ? { icon: Landmark, label: 'Banco', value: bancoNombre } : null,
-        solicitud.motivo_operacion ? { icon: FileText, label: 'Motivo', value: solicitud.motivo_operacion, multiline: true } : null,
-    ].filter(Boolean);
-
-    return (
-        <div className={`${compacto ? 'mt-2' : 'mt-3'} p-3 rounded-2xl border theme-border theme-element flex flex-col gap-2 shadow-sm`}>
-            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted">
-                {esCancelacion ? 'Detalle de cancelación' : 'Detalle operativo'}
-            </p>
-            <div className="space-y-2">
-                {filas.map(({ icon: Icon, label, value, multiline }) => (
-                    <div key={label} className="flex items-start gap-2">
-                        <Icon className="w-3.5 h-3.5 shrink-0 mt-0.5 theme-text-muted" />
-                        <div className="min-w-0 flex-1">
-                            <p className="text-[8px] font-black uppercase tracking-widest theme-text-muted">{label}</p>
-                            <p className={`text-xs font-bold theme-text-main ${multiline ? 'whitespace-pre-wrap break-words leading-snug' : 'truncate'}`}>
-                                {value}
-                            </p>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
 const EtiquetasOperacion = ({ solicitud, listas }) => {
     const nombreProceso = solicitud.proceso?.nombre || '';
-    const esOperativo = solicitud.proceso?.categoria_flujo === 'operativo';
     const esTag = nombreProceso.toUpperCase().includes('TAG');
     const esCambioLista = nombreProceso.toUpperCase().includes('LISTA');
     const objLista = solicitud.lista_descuento || solicitud.listaDescuento;
@@ -130,28 +61,6 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
 
     return (
         <div className="flex flex-wrap gap-1.5">
-            {esOperativo && solicitud.numero_remision && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-orange-500/10 text-orange-600 border border-orange-500/20">
-                    Remisión: {solicitud.numero_remision}
-                </span>
-            )}
-            {esOperativo && solicitud.numero_pedido && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-600 border border-cyan-500/20">
-                    Pedido: {solicitud.numero_pedido}
-                </span>
-            )}
-            {esOperativo && solicitud.solicitar_cotizacion && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-violet-500/10 text-violet-600 border border-violet-500/20">
-                    + Cotización
-                </span>
-            )}
-            {esOperativo && esProcesoFactura(solicitud) && solicitud.factura_razon_social && (
-                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-blue-500/10 text-blue-600 border border-blue-500/20">
-                    Factura: {solicitud.factura_razon_social.length > 24 ? `${solicitud.factura_razon_social.slice(0, 24)}…` : solicitud.factura_razon_social}
-                </span>
-            )}
-            {!esOperativo && (
-            <>
             <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-slate-500/10 text-slate-500 border border-slate-500/20 flex items-center gap-1">
                 Lista actual: {listaActual}
             </span>
@@ -170,8 +79,6 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
                     <Users className="w-3 h-3" /> {objTipo.nombre}
                 </span>
             )}
-            </>
-            )}
             {solicitud.compra_en_tienda && (
                 <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-[#cd7f32]/15 text-[#b87333] dark:text-[#daa520] border border-[#cd7f32]/30 flex items-center gap-1">
                     Compra en tienda · Bronce
@@ -181,40 +88,6 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
                 <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-red-500/10 text-red-600 border border-red-500/20 flex items-center gap-1">
                     <Ban className="w-3 h-3" /> Cancelación solicitada
                 </span>
-            )}
-        </div>
-    );
-};
-
-const DetalleFacturasBloque = ({ solicitud, onVerExpediente }) => {
-    if (!esProcesoFactura(solicitud)) return null;
-
-    const remisiones = solicitud.remisiones_factura || solicitud.remisionesFactura || [];
-    const tieneExcel = !!solicitud.archivo_facturas_path;
-
-    return (
-        <div className="mt-3 p-3 rounded-2xl border theme-border theme-element flex flex-col gap-2 shadow-sm">
-            <div className="flex items-start gap-2">
-                <FileText className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
-                <div className="flex-1 min-w-0">
-                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-0.5">Solicitud de factura</p>
-                    <p className="text-xs font-bold theme-text-main leading-snug truncate">{solicitud.factura_razon_social || '—'}</p>
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md border ${tieneExcel ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}>
-                            {tieneExcel ? 'Excel adjunto' : 'Sin Excel'}
-                        </span>
-                        {remisiones.length > 0 && (
-                            <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 border border-orange-500/20">
-                                {remisiones.length} PDF{remisiones.length !== 1 ? 's' : ''}
-                            </span>
-                        )}
-                    </div>
-                </div>
-            </div>
-            {(tieneExcel || remisiones.length > 0) && (
-                <button type="button" onClick={() => onVerExpediente?.(solicitud)} className="self-start flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 hover:underline outline-none">
-                    <FolderOpen className="w-3.5 h-3.5" /> Ver expediente
-                </button>
             )}
         </div>
     );
@@ -581,7 +454,6 @@ const ModalSolicitarCancelacion = ({ onClose, solicitud, listas = [], onConfirma
 const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, setModalConsulta, setModalRespuestaConsulta, abrirModalPago, confirmarCambioLista, confirmarRollback, eliminarSolicitud, abrirModalCancelacion, abrirModalConfirmarCancelacion, can, auth }) => {
     if (!menuAbierto || !menuSolicitud) return null;
     const solicitud = menuSolicitud;
-    const esOperativo = solicitud.proceso?.categoria_flujo === 'operativo';
     const esCancelada = solicitud.estado?.nombre === 'Cancelada';
     const estadosActivos = ['Pendiente', 'Respondida', 'Verificada'];
 
@@ -596,7 +468,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
     const esAlertaPago = ultimaAuditoria?.motivo_reporte?.toUpperCase().includes('ALERTA DE PAGO');
     const esVencimiento = solicitud.motivo_incorrecta === 'vencimiento_pago';
     const consultaPendiente = (solicitud.consultas || []).find(c => c.estado === 'pendiente');
-    const puedeConsultar = !esOperativo && can('solicitudes.consultar')
+    const puedeConsultar = can('solicitudes.consultar')
         && solicitud.vendedor_id === auth.user.id
         && solicitud.estado?.nombre === 'Respondida'
         && !solicitud.pago_confirmado
@@ -658,7 +530,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                 )}
 
                 {/* Confirmar Pago - solo procesos financieros */}
-                {!esOperativo && (can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id) && !solicitud.pago_confirmado && solicitud.estado?.nombre === 'Respondida' && !esAlertaPago && (
+                {(can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id) && !solicitud.pago_confirmado && solicitud.estado?.nombre === 'Respondida' && !esAlertaPago && (
                     <button onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
                         <CreditCard className="w-4 h-4" /> Confirmar Pago
                     </button>
@@ -773,7 +645,6 @@ export default function Index({
     const [modalPago, setModalPago] = useState({ abierto: false, solicitud: null });
     const [modalCancelacion, setModalCancelacion] = useState({ abierto: false, solicitud: null });
     const [modalConfirmarCancelacion, setModalConfirmarCancelacion] = useState({ abierto: false, solicitud: null });
-    const [modalExpedienteFacturas, setModalExpedienteFacturas] = useState({ abierto: false, solicitud: null });
     const [menuAbierto, setMenuAbierto] = useState(null);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
     const [menuSolicitud, setMenuSolicitud] = useState(null);
@@ -1008,13 +879,6 @@ export default function Index({
                     onProcesando={setProcesandoAccion}
                 />
             )}
-            {modalExpedienteFacturas.abierto && (
-                <ModalExpedienteFacturas
-                    onClose={() => setModalExpedienteFacturas({ abierto: false, solicitud: null })}
-                    solicitud={modalExpedienteFacturas.solicitud}
-                />
-            )}
-
             <div className="max-w-[1440px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
                 <header className={`${geliaCardClass()} p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6`}>
                     <div className="w-full md:w-auto text-center md:text-left">
@@ -1090,8 +954,6 @@ export default function Index({
                                         <span className="text-[10px] font-black uppercase tracking-widest theme-text-main block">{nombreProceso}</span>
                                         <EtiquetasOperacion solicitud={solicitud} listas={listas} />
                                     </div>
-                                    <DetalleOperacionBloque solicitud={solicitud} />
-                                    <DetalleFacturasBloque solicitud={solicitud} onVerExpediente={(s) => setModalExpedienteFacturas({ abierto: true, solicitud: s })} />
                                     <RespuestaConsultaEncargada
                                         solicitud={solicitud}
                                         auth={auth}
@@ -1161,8 +1023,6 @@ export default function Index({
                                             <td className="p-6 align-top">
                                                 <div className="inline-block px-3 py-1 rounded-lg theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-main mb-2">{nombreProceso}</div>
                                                 <EtiquetasOperacion solicitud={solicitud} listas={listas} />
-                                                <DetalleOperacionBloque solicitud={solicitud} compacto />
-                                                <DetalleFacturasBloque solicitud={solicitud} onVerExpediente={(s) => setModalExpedienteFacturas({ abierto: true, solicitud: s })} />
                                                 {(solicitud.consultas || []).some(c => c.estado === 'pendiente') && (
                                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 mt-1">
                                                         <MessageSquare className="w-3 h-3" /> Consulta pendiente

@@ -5,7 +5,9 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Route;
 use App\Models\SolicitudTag;
+use App\Models\SolicitudFactura;
 use App\Observers\SolicitudTagObserver;
 // Importaciones requeridas para el módulo de auditoría de catálogos
 use App\Models\CatalogoListaDescuento;
@@ -41,5 +43,7 @@ class AppServiceProvider extends ServiceProvider
         
         // CONEXIÓN DEL NUEVO OBSERVADOR PARA CATÁLOGOS
         CatalogoListaDescuento::observe(CatalogoListaDescuentoObserver::class);
+
+        Route::bind('factura', fn (string $value) => SolicitudFactura::where('id', $value)->orWhere('folio', $value)->firstOrFail());
     }
 }

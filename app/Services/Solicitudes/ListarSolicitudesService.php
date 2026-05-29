@@ -3,6 +3,7 @@
 namespace App\Services\Solicitudes;
 
 use App\Models\CatalogoEstadoSolicitud;
+use App\Models\CatalogoProceso;
 use App\Models\SolicitudTag;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,8 +26,9 @@ class ListarSolicitudesService
             'tipoCliente',
             'consultas.encargada',
             'consultas.vendedor',
-            'remisionesFactura',
-        ])->orderBy('created_at', 'desc');
+        ])->whereHas('proceso', function (Builder $proceso) {
+            $proceso->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);
+        })->orderBy('created_at', 'desc');
 
         if ($usuario) {
             $this->aplicarAislamientoDeDatos($query, $usuario);

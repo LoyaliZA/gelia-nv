@@ -4,7 +4,7 @@ import {
     Menu, X, Moon, Sun, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package
+    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package, Receipt, Ban
 } from 'lucide-react';
 
 import GeliaLogo from './GeliaLogo';
@@ -381,6 +381,30 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                 >
                                     <Briefcase className="w-4 h-4 mr-4" />
                                     <span className="text-xs font-black uppercase italic tracking-tighter">Solicitudes_</span>
+                                </Link>
+                            )}
+
+                            {can('facturas.ver_listado') && (
+                                <Link
+                                    href={route('facturas.index')}
+                                    className={linkBaseClass + (isRouteActive('/facturas') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/facturas')) e.currentTarget.style.borderColor = '#0d9488' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/facturas')) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <Receipt className="w-4 h-4 mr-4" style={{ color: isRouteActive('/facturas') ? '#ffffff' : '#0d9488' }} />
+                                    <span className="text-xs font-black uppercase italic tracking-tighter">Facturas_</span>
+                                </Link>
+                            )}
+
+                            {can('cancelaciones_cotizaciones.ver_listado') && (
+                                <Link
+                                    href={route('cancelaciones_cotizaciones.index')}
+                                    className={linkBaseClass + (isRouteActive('/cancelaciones-cotizaciones') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/cancelaciones-cotizaciones')) e.currentTarget.style.borderColor = '#f97316' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/cancelaciones-cotizaciones')) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <Ban className="w-4 h-4 mr-4" style={{ color: isRouteActive('/cancelaciones-cotizaciones') ? '#ffffff' : '#f97316' }} />
+                                    <span className="text-xs font-black uppercase italic tracking-tighter">Cancel. y Cotiz._</span>
                                 </Link>
                             )}
 

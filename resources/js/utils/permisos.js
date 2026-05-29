@@ -38,6 +38,21 @@ export const DESCRIPCIONES_PERMISOS = {
     'activos.configurar_tipos': 'Permite gestionar el catálogo de tipos de activo.',
     'activos.exportar': 'Permite exportar activos a Excel.',
     'personalizacion.gestionar': 'Permite gestionar temas y personalización visual.',
+    'facturas.ver_listado': 'Permite acceder al módulo de solicitudes de facturas.',
+    'facturas.crear': 'Permite crear solicitudes de factura con comprobante de pago.',
+    'facturas.responder': 'Permite emitir factura (PDF/XML) o reportar errores.',
+    'facturas.verificar': 'Permite marcar solicitudes de factura como verificadas.',
+    'facturas.eliminar': 'Permite eliminar solicitudes de factura con auditoría.',
+    'facturas.gestionar_datos_fiscales': 'Permite administrar datos fiscales de clientes desde el módulo de facturas.',
+    'facturas.exportar': 'Permite exportar el listado de solicitudes de factura.',
+    'cancelaciones_cotizaciones.ver_listado': 'Permite acceder al módulo de cancelaciones y cotizaciones.',
+    'cancelaciones_cotizaciones.crear': 'Permite crear solicitudes de cancelación de remisión/pedido o cotización sobre pedido.',
+    'cancelaciones_cotizaciones.reportar': 'Permite aprobar o reportar errores en solicitudes operativas.',
+    'cancelaciones_cotizaciones.verificar': 'Permite marcar solicitudes operativas como verificadas.',
+    'cancelaciones_cotizaciones.solicitar_cancelacion': 'Permite solicitar la cancelación de folios operativos propios.',
+    'cancelaciones_cotizaciones.cancelar': 'Permite confirmar cancelaciones de folios operativos pendientes.',
+    'cancelaciones_cotizaciones.exportar': 'Permite exportar el listado de cancelaciones y cotizaciones.',
+    'cancelaciones_cotizaciones.eliminar': 'Permite eliminar solicitudes operativas con auditoría.',
 };
 
 export function descripcionPermiso(permisoName) {
