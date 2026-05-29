@@ -7,7 +7,7 @@ import {
     Palette, Save, ShieldCheck, Moon, Sun, 
     Image as ImageIcon, Type, Droplet, 
     PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, XCircle,
-    Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, Eye, EyeOff,
+    Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, ChevronUp, Eye, EyeOff,
     Minus, Plus, Volume2, Mic, Monitor, Bell
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -21,6 +21,7 @@ import {
     ALERTAS_TIPOS,
     resolveTonoPath,
 } from '../../utils/alertasPrefs';
+import { geliaCardClass } from '../../utils/geliaTheme';
 import {
     clampFontScale,
     formatFontScaleLabel,
@@ -129,6 +130,92 @@ function applyBackgroundCSS(bgValue) {
 function resolveAccentHex(colorName) {
     if (!colorName) return accentColors.rosa;
     return colorName.startsWith('#') ? colorName : (accentColors[colorName] || accentColors.rosa);
+}
+
+const ACCORDION_STORAGE_PREFIX = 'gelia_perfil_accordion_';
+
+function readAccordionOpen(sectionId, defaultOpen = true) {
+    if (typeof window === 'undefined') return defaultOpen;
+    const saved = localStorage.getItem(`${ACCORDION_STORAGE_PREFIX}${sectionId}`);
+    return saved === null ? defaultOpen : saved === 'true';
+}
+
+/** Panel colapsable de configuración (persiste estado en localStorage). */
+function ConfigAccordionSection({ sectionId, icon: Icon, title, subtitle, children, defaultOpen = true, nested = false }) {
+    const [abierto, setAbierto] = useState(() => readAccordionOpen(sectionId, defaultOpen));
+
+    const toggle = () => {
+        setAbierto((prev) => {
+            const next = !prev;
+            localStorage.setItem(`${ACCORDION_STORAGE_PREFIX}${sectionId}`, String(next));
+            return next;
+        });
+    };
+
+    if (nested) {
+        return (
+            <div className="rounded-2xl theme-element border theme-border overflow-hidden">
+                <button
+                    type="button"
+                    onClick={toggle}
+                    aria-expanded={abierto}
+                    className="w-full flex items-center justify-between gap-3 p-4 md:p-5 text-left hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none"
+                >
+                    <div className="min-w-0">
+                        <p className="text-[11px] font-black uppercase theme-text-main tracking-widest m-0">{title}</p>
+                        {subtitle && (
+                            <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0 leading-relaxed normal-case tracking-normal">
+                                {subtitle}
+                            </p>
+                        )}
+                    </div>
+                    <span className="p-2 rounded-lg theme-element border theme-border shrink-0" aria-hidden>
+                        {abierto ? <ChevronUp className="w-4 h-4 theme-text-muted" /> : <ChevronDown className="w-4 h-4 theme-text-muted" />}
+                    </span>
+                </button>
+                {abierto && (
+                    <div className="px-4 md:px-5 pb-4 md:pb-5 border-t theme-border space-y-3">
+                        {children}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    return (
+        <section className={geliaCardClass('overflow-hidden relative z-10')} id={sectionId} aria-label={title}>
+            <button
+                type="button"
+                onClick={toggle}
+                aria-expanded={abierto}
+                className="w-full flex items-center gap-3 p-6 md:p-8 text-left hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors outline-none"
+            >
+                <div className="p-2.5 rounded-xl theme-element border theme-border shrink-0">
+                    <Icon className="w-5 h-5 md:w-6 md:h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <h2 className="text-lg md:text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 leading-tight drop-shadow-sm">
+                        {title}
+                    </h2>
+                    {subtitle && (
+                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1.5 m-0">
+                            {subtitle}
+                        </p>
+                    )}
+                </div>
+                <span className="p-2 rounded-xl theme-element border theme-border shrink-0" aria-hidden>
+                    {abierto ? <ChevronUp className="w-4 h-4 theme-text-muted" /> : <ChevronDown className="w-4 h-4 theme-text-muted" />}
+                </span>
+            </button>
+            {abierto && (
+                <div className="border-t theme-border px-4 md:px-8 pb-6 md:pb-8">
+                    <div className="flex flex-col gap-2 pt-4 md:pt-6">
+                        {children}
+                    </div>
+                </div>
+            )}
+        </section>
+    );
 }
 
 // --- COMPONENTE AUXILIAR RESPONSIVO ---
@@ -624,10 +711,10 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         window.dispatchEvent(new CustomEvent('theme-fixed-position-preview', { detail: { position: fixedPosition } }));
     };
 
-    const baseCardClass   = "fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300";
-    const glassCardClass  = "bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px] border-[1.5px] border-white/80 dark:border-zinc-700/60 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]";
-    const solidCardClass  = "bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)]";
-    const activeCardClass = `${baseCardClass} ${glassEffect ? glassCardClass : solidCardClass}`;
+    const activeCardClass = geliaCardClass('relative z-10');
+    const formZoneClass = 'theme-form-zone p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors';
+    const formZoneClassWide = 'theme-form-zone mt-3 p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors';
+    const formZoneClassInst = 'theme-form-zone mt-3 p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 transition-colors';
 
     return (
         <AppLayout>
@@ -812,7 +899,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         <p className="text-[10px] font-black uppercase tracking-widest mb-4 ml-1 drop-shadow-sm" style={{ color: 'var(--color-primario)' }}>
                             Datos Personales
                         </p>
-                        <div className={`border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
+                        <div className={formZoneClass}>
 
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre(s)</label>
@@ -884,7 +971,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         </button>
 
                         {showSensitive && (
-                            <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
+                            <div className={formZoneClassWide}>
 
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Fecha de Nacimiento</label>
@@ -964,7 +1051,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         </button>
 
                         {showInstitutional && (
-                            <div className={`mt-3 border border-dashed rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 transition-colors ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60'}`}>
+                            <div className={formZoneClassInst}>
 
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Correo Institucional</label>
@@ -1033,16 +1120,14 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                     </div>
                 </section>
 
-                {/* --- SECCIÓN PERSONALIZACIÓN VISUAL --- */}
-                <section className={`${activeCardClass} p-8 md:p-10 space-y-8`}>
-                    <div className="flex items-center gap-3">
-                        <Palette className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
-                            Interfaz y Colores_
-                        </h2>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
+                {/* --- SECCIÓN INTERFAZ Y COLORES (colapsable) --- */}
+                <ConfigAccordionSection
+                    sectionId="interfaz-colores"
+                    icon={Palette}
+                    title="Interfaz y Colores"
+                    subtitle="Modo, color de énfasis, tipografía y transparencia"
+                    defaultOpen={true}
+                >
                         <SettingsRow icon={isDarkMode ? Moon : Sun} title="Modo de aplicación" subtitle="Esquema claro u oscuro" stackOnMobile={true}>
                             <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
                                 <button type="button" className="gelia-segment-btn" data-active={!isDarkMode} onClick={() => handleModeChange('light')}>
@@ -1129,19 +1214,16 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 </button>
                             </div>
                         </SettingsRow>
-                    </div>
-                </section>
+                </ConfigAccordionSection>
 
-                {/* --- SECCIÓN NAVEGACIÓN --- */}
-                <section className={`${activeCardClass} p-8 md:p-10 space-y-8`}>
-                    <div className="flex items-center gap-3">
-                        <PanelLeft className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
-                            Navegación & Alertas_
-                        </h2>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
+                {/* --- SECCIÓN NAVEGACIÓN (colapsable) --- */}
+                <ConfigAccordionSection
+                    sectionId="navegacion"
+                    icon={PanelLeft}
+                    title="Navegación"
+                    subtitle="Sidebar fijo, flotante y comportamiento al pasar el mouse"
+                    defaultOpen={false}
+                >
                         <SettingsRow icon={PanelLeft} title="Disposición del Sidebar" subtitle="Formato lateral en pantallas grandes" stackOnMobile={true}>
                             <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
                                 <button type="button" onClick={() => handleLayoutChange('fixed')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'fixed'}>
@@ -1185,7 +1267,16 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 </button>
                             </div>
                         </SettingsRow>
+                </ConfigAccordionSection>
 
+                {/* --- SECCIÓN ALERTAS (colapsable) --- */}
+                <ConfigAccordionSection
+                    sectionId="alertas"
+                    icon={BellRing}
+                    title="Alertas"
+                    subtitle="Canales de notificación, tonos y tipos de aviso"
+                    defaultOpen={false}
+                >
                         <SettingsRow icon={Volume2} title="Timbres de alerta" subtitle="Reproducir sonido al recibir alertas" stackOnMobile={false}>
                             <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={alertasPrefs.canales.sonido} onClick={() => toggleCanalAlerta('sonido')}>
                                 <div className="gelia-switch-thumb shadow-md" />
@@ -1231,10 +1322,14 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             </div>
                         </SettingsRow>
 
-                        <div className="pt-4 border-t theme-border space-y-3">
-                            <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipos de alerta a recibir</p>
-                            <p className="text-[10px] font-bold theme-text-muted ml-1 leading-relaxed">Desactivar un tipo silencia sonido, voz, escritorio y toasts. El historial en el Centro de Alertas se conserva.</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <ConfigAccordionSection
+                            sectionId="alertas-tipos"
+                            nested
+                            title="Tipos de alerta a recibir"
+                            subtitle="Desactivar un tipo silencia sonido, voz, escritorio y toasts. El historial en el Centro de Alertas se conserva."
+                            defaultOpen={false}
+                        >
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                                 {Object.entries(ALERTAS_TIPOS).map(([tipo, label]) => (
                                     <div key={tipo} className="flex items-center justify-between gap-3 p-3 rounded-xl theme-element border theme-border">
                                         <span className="text-[10px] font-bold theme-text-main leading-snug">{label}</span>
@@ -1244,9 +1339,8 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                     </div>
                                 ))}
                             </div>
-                        </div>
-                    </div>
-                </section>
+                        </ConfigAccordionSection>
+                </ConfigAccordionSection>
 
                 {/* --- SECCIÓN FONDOS --- */}
                 <section className={`${activeCardClass} p-8 md:p-10 space-y-8`}>

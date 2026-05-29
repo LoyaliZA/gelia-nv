@@ -1,6 +1,14 @@
 import React from 'react';
 import { INPUT_CLASS, SELECT_CLASS, TEXTAREA_CLASS, LABEL_CLASS } from './activosFormStyles';
-import CatalogCombobox, { renderFieldLabel } from './CatalogCombobox';
+import CatalogCombobox from './CatalogCombobox';
+
+function FieldLabel({ field }) {
+    return (
+        <label className={LABEL_CLASS}>
+            {field.label}{field.required ? ' *' : ''}
+        </label>
+    );
+}
 
 export default function DynamicActivoFields({ fields = [], values = {}, onChange, errors = {}, readOnly = false, tipoActivoId = null }) {
     if (!fields.length) {
@@ -26,7 +34,7 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
                 if (field.type === 'catalog_marca' || field.type === 'catalog_modelo') {
                     return (
                         <div key={key}>
-                            {renderFieldLabel(field)}
+                            <FieldLabel field={field} />
                             <CatalogCombobox
                                 field={field}
                                 value={values[key] ?? ''}
@@ -54,7 +62,7 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
                 if (field.type === 'select') {
                     return (
                         <div key={key}>
-                            {renderFieldLabel(field)}
+                            <FieldLabel field={field} />
                             {readOnly ? (
                                 <p className="text-sm theme-text-main py-2">{values[key] || '—'}</p>
                             ) : (
@@ -92,7 +100,7 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
                 if (field.type === 'textarea') {
                     return (
                         <div key={key} className="md:col-span-2">
-                            {renderFieldLabel(field)}
+                            <FieldLabel field={field} />
                             <textarea
                                 value={values[key] ?? ''}
                                 onChange={(e) => handleChange(key, e.target.value)}
@@ -107,7 +115,7 @@ export default function DynamicActivoFields({ fields = [], values = {}, onChange
 
                 return (
                     <div key={key}>
-                        {renderFieldLabel(field)}
+                        <FieldLabel field={field} />
                         <input
                             type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
                             value={values[key] ?? ''}

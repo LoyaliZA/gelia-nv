@@ -12,26 +12,12 @@ import AppLayout from '../../Layouts/AppLayout';
 import ModalFormCliente from './Partials/ModalFormCliente';
 import ModalConfiguracionEspecial from './Partials/ModalConfiguracionEspecial';
 
-// --- ESTILOS COMPARTIDOS ---
-const ESTILOS_ADICIONALES = `
-    @keyframes slideUpFade {
-        0% { opacity: 0; transform: translateY(20px); }
-        100% { opacity: 1; transform: translateY(0); }
-    }
-    .animate-page-reveal {
-        opacity: 0;
-        animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    @keyframes shimmer {
-        0% { transform: translateX(-200%); }
-        50%, 100% { transform: translateX(200%); }
-    }
-`;
+import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
 
 const ModalReporteImportacion = ({ reporte, onClose }) => {
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in" onClick={onClose}>
-            <div className="w-full max-w-3xl theme-surface rounded-[2rem] shadow-2xl p-6 md:p-8 modal-pop border theme-border flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className={`${THEME_MODAL_OVERLAY} z-[100]`} onClick={onClose}>
+            <div className={`${THEME_MODAL_SHELL} max-w-3xl modal-pop p-6 md:p-8 flex flex-col max-h-[90vh]`} onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h3 className="text-xl font-black italic uppercase theme-text-main">
@@ -170,12 +156,11 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
     const clientesPaginados = clientesFiltrados.slice(indicePrimerItem, indiceUltimoItem);
     const totalPaginas = Math.ceil(clientesFiltrados.length / itemsPorPagina);
 
-    const baseCardClass = "animate-page-reveal theme-surface border theme-border rounded-[2.5rem] shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)] transition-all duration-300 relative z-10";
+    const activeCardClass = geliaCardClass('relative z-10');
 
     return (
         <AppLayout auth={auth}>
             <Head title="Gestión de Clientes | GELIANV" />
-            <style>{ESTILOS_ADICIONALES}</style>
 
             {/* Renderizado condicional del modal extraído */}
             {modalConfig.abierto && (
@@ -207,7 +192,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
             <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
 
                 {/* --- HEADER --- */}
-                <header className={`${baseCardClass} p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`} style={{ animationDelay: '0ms' }}>
+                <header className={`${activeCardClass} p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`} style={{ animationDelay: '0ms' }}>
                     <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-start mb-2">
                             <div className="w-8 h-1.5 rounded-full mr-3" style={{ backgroundColor: 'var(--color-primario)' }}></div>
@@ -244,7 +229,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
 
                     {/* --- PANEL LATERAL: CARGA MASIVA --- */}
                     <div className="lg:col-span-1 space-y-8">
-                        <section className={`${baseCardClass} p-8`} style={{ animationDelay: '100ms' }}>
+                        <section className={`${activeCardClass} p-8`} style={{ animationDelay: '100ms' }}>
                             <div className="flex items-center gap-3 mb-6">
                                 <Upload className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
                                 <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
@@ -328,7 +313,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
 
                     {/* --- PANEL PRINCIPAL: LISTADO --- */}
                     <div className="lg:col-span-2 space-y-8">
-                        <section className={`${baseCardClass} p-8 space-y-8`} style={{ animationDelay: '200ms' }}>
+                        <section className={`${activeCardClass} p-8 space-y-8`} style={{ animationDelay: '200ms' }}>
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                                 <div className="md:col-span-6 relative">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />

@@ -1,17 +1,18 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useForm, router } from '@inertiajs/react';
 import {
-    Settings2, ShieldCheck, Check, ChevronRight, Key,
+    Settings2, ShieldCheck, Check, ChevronRight, ChevronDown, Key,
     Layers, Plus, Save, Pencil, X
 } from 'lucide-react';
+import { geliaCardClass } from '../../../utils/geliaTheme';
+
+const STORAGE_PLANTILLAS_ABIERTO = 'gelia_usuarios_plantillas_abierto';
 
 export default function ConfiguracionHerencia({
     rolesConfig = [],
     todosLosPermisos = [],
     esSuperAdmin = false,
 }) {
-    if (!esSuperAdmin) return null;
-
     const rolesJerarquia = useMemo(
         () => (rolesConfig || []).filter((r) => r?.name && !r.name.includes('Grupo:')),
         [rolesConfig]
@@ -25,6 +26,18 @@ export default function ConfiguracionHerencia({
     const [tabActiva, setTabActiva] = useState('jerarquia');
     const [modoGrupo, setModoGrupo] = useState('editar');
     const [rolSeleccionado, setRolSeleccionado] = useState(rolesJerarquia[0]?.id ?? null);
+    const [expandido, setExpandido] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return localStorage.getItem(STORAGE_PLANTILLAS_ABIERTO) === 'true';
+    });
+
+    const toggleExpandido = () => {
+        setExpandido((prev) => {
+            const next = !prev;
+            localStorage.setItem(STORAGE_PLANTILLAS_ABIERTO, String(next));
+            return next;
+        });
+    };
 
     const rolesVisibles = tabActiva === 'jerarquia' ? rolesJerarquia : rolesGrupos;
 
@@ -121,6 +134,8 @@ export default function ConfiguracionHerencia({
         ? formGrupo.data.permisos_heredados || []
         : data.permisos_heredados || [];
 
+    if (!esSuperAdmin) return null;
+
     const renderMatrizPermisos = (formType = 'edit') => (
         <div className="space-y-2 max-h-[420px] overflow-y-auto custom-scrollbar pr-1">
             {Object.entries(permisosAgrupados).map(([modulo, permisosDeModulo]) => (
@@ -158,17 +173,45 @@ export default function ConfiguracionHerencia({
     );
 
     return (
-        <div className="theme-surface border-2 theme-border rounded-[2rem] p-6 md:p-8 shadow-sm space-y-6">
-            <div className="border-b theme-border pb-4">
-                <h2 className="text-lg font-black italic uppercase tracking-tighter theme-text-main flex items-center gap-2">
-                    <Settings2 className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
-                    Configuración de Plantillas
-                </h2>
-                <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted mt-1">
-                    Define permisos sugeridos por rol/grupo. Las plantillas no otorgan acceso automático.
-                </p>
-            </div>
+        <section className={geliaCardClass('overflow-hidden')}>
+            <button
+                type="button"
+                onClick={toggleExpandido}
+                aria-expanded={expandido}
+                aria-controls="config-plantillas-panel"
+                className="w-full p-5 md:p-6 flex items-start sm:items-center justify-between gap-4 text-left outline-none transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02] focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent rounded-t-[inherit]"
+            >
+                <div className="min-w-0 flex-1">
+                    <h2 className="text-base sm:text-lg font-black italic uppercase tracking-tighter theme-text-main flex items-center gap-2 flex-wrap">
+                        <Settings2 className="w-5 h-5 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                        Configuración de Plantillas
+                        {!expandido && (
+                            <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted not-italic px-2 py-0.5 rounded-lg theme-element border theme-border">
+                                {rolesJerarquia.length} roles · {rolesGrupos.length} grupos
+                            </span>
+                        )}
+                    </h2>
+                    <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted mt-1.5 leading-relaxed">
+                        {expandido
+                            ? 'Define permisos sugeridos por rol/grupo. Las plantillas no otorgan acceso automático.'
+                            : 'Toca para editar plantillas de roles y grupos predefinidos'}
+                    </p>
+                </div>
+                <span
+                    className={`shrink-0 p-2 rounded-xl theme-element border theme-border transition-transform duration-300 ${expandido ? 'rotate-180' : ''}`}
+                    aria-hidden
+                >
+                    <ChevronDown className="w-5 h-5 theme-text-muted" />
+                </span>
+            </button>
 
+            <div
+                id="config-plantillas-panel"
+                aria-hidden={!expandido}
+                className={`grid transition-[grid-template-rows] duration-300 ease-out ${expandido ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+            >
+                <div className="overflow-hidden min-h-0">
+                    <div className="px-5 md:px-8 pb-6 md:pb-8 pt-2 space-y-6 border-t theme-border">
             <div className="flex flex-wrap gap-2">
                 <button
                     type="button"
@@ -319,6 +362,9 @@ export default function ConfiguracionHerencia({
                     )}
                 </div>
             )}
-        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     );
 }

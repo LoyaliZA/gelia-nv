@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './gelia-theme.css';
 
 /* Modo oscuro controlado por clase .dark en <html> (AppLayout), no por prefers-color-scheme */
 @custom-variant dark (&:where(.dark, .dark *));

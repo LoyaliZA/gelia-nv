@@ -16,7 +16,7 @@ export default function PanelMantenimiento({ activo, canCambiarEstado, onProgram
     };
 
     return (
-        <div className={getActivosCardClass({ extra: 'p-6 space-y-4' })} style={{ animationDelay: '200ms' }}>
+        <div className={getActivosCardClass('p-6 space-y-4')}>
             <div className="flex items-center justify-between">
                 <h2 className="text-sm font-black uppercase tracking-widest theme-text-muted flex items-center gap-2">
                     <Wrench className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />

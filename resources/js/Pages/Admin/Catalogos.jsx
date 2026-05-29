@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Head } from '@inertiajs/react';
 import { Building2, MapPin, ListTree, Tags, Activity, UserCheck, Map, Clock, Percent, TrendingUp, Landmark, Package } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
+import { geliaCardClass } from '../../utils/geliaTheme';
 
 // Importamos los nuevos sub-componentes (Crea esta carpeta en el siguiente paso)
 import TablaDepartamentos from './Partials/Catalogos/TablaDepartamentos';
@@ -20,9 +21,7 @@ import TablaTiposActivo from './Partials/Catalogos/TablaTiposActivo';
 
 export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [], bancos = [], tipos_activo = [] }) {
     const [tabActiva, setTabActiva] = useState('departamentos');
-    const [glassEffect] = useState(() => localStorage.getItem('theme_glass') !== 'false');
-
-    const activeCardClass = `fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300 ${glassEffect ? 'bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px] border-[1.5px] border-white/80 dark:border-zinc-700/60 shadow-lg' : 'bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-sm'}`;
+    const activeCardClass = geliaCardClass('relative z-10');
 
     const tabs = [
         { id: 'tipos_cliente', label: 'Tipos Cliente', icon: UserCheck }, // <-- Añadido

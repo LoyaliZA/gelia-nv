@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { INPUT_CLASS, LABEL_CLASS } from './activosFormStyles';
+import { INPUT_CLASS } from './activosFormStyles';
 
 export default function CatalogCombobox({ field, value, onChange, onItemSelect, tipoActivoId, marcaId, marcaNombre, readOnly }) {
     const [q, setQ] = useState(value || '');
@@ -77,13 +77,5 @@ export default function CatalogCombobox({ field, value, onChange, onItemSelect, 
                 </div>
             )}
         </div>
-    );
-}
-
-export function renderFieldLabel(field) {
-    return (
-        <label className={LABEL_CLASS}>
-            {field.label}{field.required ? ' *' : ''}
-        </label>
     );
 }

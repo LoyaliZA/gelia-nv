@@ -11,16 +11,7 @@ import MapaGoogle from '@/Components/Entregas/MapaGoogle';
 import BuscadorPlacesGoogle from '@/Components/Entregas/BuscadorPlacesGoogle';
 import ModalConfiguracionLogistica from './Partials/ModalConfiguracionLogistica';
 
-const ESTILOS_ADICIONALES = `
-    @keyframes slideUpFade { 
-        0% { opacity: 0; transform: translateY(20px); } 
-        100% { opacity: 1; transform: translateY(0); } 
-    }
-    .animate-page-reveal { 
-        opacity: 0; 
-        animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
-    }
-`;
+import { geliaCardClass } from '@/utils/geliaTheme';
 
 export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_restringidas, zonas_periferia }) {
     const [coordenadas, setCoordenadas] = useState({ latitud: '', longitud: '' });
@@ -127,10 +118,8 @@ export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_
     return (
         <AppLayout auth={auth}>
             <Head title="Cotización de Entregas" />
-            <style>{ESTILOS_ADICIONALES}</style>
-
             <div className="max-w-[1440px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
-                <header className="animate-page-reveal theme-surface rounded-3xl md:rounded-[2.5rem] p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 border theme-border shadow-xl">
+                <header className={`${geliaCardClass()} p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6`}>
                     <div className="w-full md:w-auto text-center md:text-left">
                         <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">
                             <span className="h-1.5 w-12 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }} />
@@ -215,7 +204,7 @@ export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_
                 </div>
 
                 <div
-                    className="animate-page-reveal theme-surface rounded-[2.5rem] border theme-border shadow-2xl overflow-hidden bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl flex flex-col-reverse lg:flex-row min-h-[500px]"
+                    className={`${geliaCardClass()} overflow-hidden flex flex-col-reverse lg:flex-row min-h-[500px]`}
                     style={{ animationDelay: '200ms' }}
                 >
                     <div className="w-full lg:w-[380px] border-r theme-border p-8 flex flex-col bg-slate-50/50 dark:bg-black/10">

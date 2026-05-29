@@ -18,10 +18,24 @@ class PersonalizacionController extends Controller
 {
     public function index(): Response
     {
+        $seccion = request('seccion', 'tonos');
+        if (! in_array($seccion, ['tonos', 'fondos', 'temas'], true)) {
+            $seccion = 'tonos';
+        }
+
+        $page = max(1, (int) request('page', 1));
+
+        $catalogo = match ($seccion) {
+            'fondos' => PersonalizacionCatalogoService::fondosAdminPaginados($page),
+            'temas'  => PersonalizacionCatalogoService::temasAdminPaginados($page),
+            default  => PersonalizacionCatalogoService::tonosAdminPaginados($page),
+        };
+
         return Inertia::render('Admin/GestorDePersonalizacion', [
-            'tonos'  => PersonalizacionCatalogoService::tonosAdmin(),
-            'fondos' => PersonalizacionCatalogoService::fondosAdmin(),
-            'temas'  => PersonalizacionCatalogoService::temasAdmin(),
+            'seccion'        => $seccion,
+            'catalogo'       => $catalogo,
+            'conteos'        => PersonalizacionCatalogoService::conteosAdmin(),
+            'fondos_opciones' => PersonalizacionCatalogoService::fondosOpcionesSelect(),
         ]);
     }
 

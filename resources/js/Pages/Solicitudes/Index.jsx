@@ -17,6 +17,7 @@ import ModalConsultaSolicitud from './Partials/ModalConsultaSolicitud';
 import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
 import ModalExpedienteFacturas from './Partials/ModalExpedienteFacturas';
 import FiltrosSolicitudes from './Partials/FiltrosSolicitudes';
+import { geliaCardClass } from '../../utils/geliaTheme';
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
 const formatearTiempoRelativo = (fechaString) => {
@@ -48,29 +49,6 @@ const formatearTiempoRelativo = (fechaString) => {
 
     return `${fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })} a las ${horaFormateada}`;
 };
-
-const ESTILOS_ADICIONALES = `
-    .status-aprobado { background-color: #ecfdf5; color: #059669; border-color: #a7f3d0; }
-    .status-incidencia { background-color: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
-    .status-verificado { background-color: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
-    .status-revision { background-color: #fffbeb; color: #d97706; border-color: #fde68a; }
-    .status-cancelada { background-color: #f3f4f6; color: #6b7280; border-color: #d1d5db; }
-    .dark .status-aprobado { background-color: rgba(16, 185, 129, 0.1); color: #34d399; border-color: rgba(52, 211, 153, 0.3); }
-    .dark .status-incidencia { background-color: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3); }
-    .dark .status-verificado { background-color: rgba(59, 130, 246, 0.1); color: #60a5fa; border-color: rgba(96, 165, 250, 0.3); }
-    .dark .status-revision { background-color: rgba(245, 158, 11, 0.1); color: #fbbf24; border-color: rgba(251, 191, 36, 0.3); }
-    .dark .status-cancelada { background-color: rgba(107, 114, 128, 0.15); color: #9ca3af; border-color: rgba(156, 163, 175, 0.3); }
-
-    .sticky-actions { position: sticky; right: 0; z-index: 30; background-color: #ffffff; }
-    .dark .sticky-actions { background-color: #121212; }
-    .sticky-actions::before { content: ''; position: absolute; left: -15px; top: 0; bottom: 0; width: 15px; background: linear-gradient(to right, transparent, rgba(0,0,0,0.05)); pointer-events: none; }
-    .dark .sticky-actions::before { background: linear-gradient(to right, transparent, rgba(0,0,0,0.3)); }
-
-    @keyframes slideUpFade { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
-    .animate-page-reveal { opacity: 0; animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-    .paginacion-btn { display: flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; font-size: 0.75rem; font-weight: 900; border: 1px solid; transition: all 0.15s; cursor: pointer; }
-    .paginacion-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-`;
 
 const esProcesoFactura = (solicitud) => {
     const nombre = solicitud?.proceso?.nombre?.toUpperCase() || '';
@@ -765,7 +743,7 @@ const Paginacion = ({ solicitudes, onIrAPagina }) => {
         return paginas;
     };
     return (
-        <div className="animate-page-reveal theme-surface rounded-[2rem] border theme-border shadow-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4" style={{ animationDelay: '300ms' }}>
+        <div className={`${geliaCardClass('rounded-[2rem]')} p-4 flex flex-col sm:flex-row items-center justify-between gap-4`} style={{ animationDelay: '300ms' }}>
             <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Viendo {desde} al {hasta} de {totalRegistros.toLocaleString('es-MX')}</span>
             <div className="flex items-center gap-2">
                 <button onClick={() => onIrAPagina(paginaActual - 1)} disabled={paginaActual === 1} className="paginacion-btn theme-surface border theme-border theme-text-muted hover:border-[var(--color-primario)] hover:text-[var(--color-primario)]"><ChevronLeft className="w-4 h-4" /></button>
@@ -994,7 +972,6 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Panel de Solicitudes" />
-            <style>{ESTILOS_ADICIONALES}</style>
             <GeliaLoader isVisible={procesandoAccion} message="Sincronizando_" />
 
             <MenuAccionesPortal
@@ -1039,7 +1016,7 @@ export default function Index({
             )}
 
             <div className="max-w-[1440px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
-                <header className="animate-page-reveal theme-surface rounded-3xl md:rounded-[2.5rem] p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 border theme-border shadow-xl">
+                <header className={`${geliaCardClass()} p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6`}>
                     <div className="w-full md:w-auto text-center md:text-left">
                         <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">
                             <span className="h-1.5 w-12 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }}></span>
@@ -1136,7 +1113,7 @@ export default function Index({
                     )}
                 </div>
 
-                <div className="hidden lg:block animate-page-reveal theme-surface rounded-[2.5rem] border theme-border shadow-2xl overflow-hidden backdrop-blur-xl" style={{ animationDelay: '200ms' }}>
+                <div className={`hidden lg:block ${geliaCardClass()} overflow-hidden`} style={{ animationDelay: '200ms' }}>
                     <div className="overflow-x-auto pb-4 custom-scrollbar">
                         <table className="w-full text-left border-collapse min-w-[1000px]">
                             <thead>

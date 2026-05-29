@@ -43,7 +43,7 @@ export default function GuiaVisualActivos({ onOcultar }) {
     };
 
     return (
-        <div className={getActivosCardClass({ extra: 'p-4 md:p-6 space-y-4' })} style={{ animationDelay: '150ms' }}>
+        <div className={getActivosCardClass('p-4 md:p-6 space-y-4')}>
             <div className="flex items-start justify-between gap-2">
                 <div>
                     <div className="flex items-center gap-3 mb-1">

@@ -7,17 +7,7 @@ import {
 
 // Se ajusta la ruta relativa basándonos en tu estructura
 import AppLayout from '../../Layouts/AppLayout';
-
-const ESTILOS_ADICIONALES = `
-    @keyframes slideUpFade {
-        0% { opacity: 0; transform: translateY(20px); }
-        100% { opacity: 1; transform: translateY(0); }
-    }
-    .animate-page-reveal {
-        opacity: 0;
-        animation: slideUpFade 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-`;
+import { geliaCardClass } from '../../utils/geliaTheme';
 
 export default function Auditorias({ auth, auditorias, listas, filtros }) {
     
@@ -50,17 +40,16 @@ export default function Auditorias({ auth, auditorias, listas, filtros }) {
     };
 
     // Clase base compartida que extrajimos de Clientes.jsx
-    const baseCardClass = "animate-page-reveal theme-surface border theme-border rounded-[2.5rem] shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)] transition-all duration-300 relative z-10";
+    const activeCardClass = geliaCardClass('relative z-10');
 
     return (
         <AppLayout auth={auth}>
             <Head title="Auditorías del Sistema | GELIANV" />
-            <style>{ESTILOS_ADICIONALES}</style>
             
             <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
                 
                 {/* --- ENCABEZADO --- */}
-                <header className={`${baseCardClass} p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`} style={{ animationDelay: '0ms' }}>
+                <header className={`${activeCardClass} p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`} style={{ animationDelay: '0ms' }}>
                     <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-start mb-2">
                             <div className="w-8 h-1.5 rounded-full mr-3" style={{ backgroundColor: 'var(--color-primario)' }}></div>
@@ -80,7 +69,7 @@ export default function Auditorias({ auth, auditorias, listas, filtros }) {
                 </header>
                 
                 {/* --- FILTROS Y LISTADO --- */}
-                <section className={`${baseCardClass} p-8 space-y-8`} style={{ animationDelay: '100ms' }}>
+                <section className={`${activeCardClass} p-8 space-y-8`} style={{ animationDelay: '100ms' }}>
                     
                     {/* Barra de Búsqueda / Filtros */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

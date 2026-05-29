@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Head, useForm } from '@inertiajs/react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Head, useForm, router } from '@inertiajs/react';
 import { animate } from 'animejs/animation';
 import { createPortal } from 'react-dom';
-import { 
-    Users, UserPlus, Search, Edit3, Trash2, 
-    ShieldCheck, X, Briefcase, Check, MapPin, 
-    Mail, User, Lock, Smartphone, Save, Network, Layers
+import {
+    Users, UserPlus, Search, Edit3, Trash2,
+    ShieldCheck, X, Briefcase, Check, MapPin,
+    Mail, User, Lock, Smartphone, Save, Network, Layers, AtSign,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
+import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import PermisosAtomicos from './Partials/PermisosAtomicos';
 import ConfiguracionHerencia from './Partials/ConfiguracionHerencia';
 import { deduplicarPermisos, permisosDePlantilla } from '../../utils/permisos';
+import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
 
 function UserAvatar({ usuario }) {
     const [loadFailed, setLoadFailed] = useState(false);
@@ -40,9 +42,162 @@ function UserAvatar({ usuario }) {
     );
 }
 
-export default function Usuarios({ auth, usuarios = [], departamentos = [], posiblesGerentes = [], roles = [], rolesConfig = [], todosLosPermisos = [], sexos = [], esSuperAdmin = false, permisosUsuario = [] }) {
-    // --- ESTADOS LOCALES ---
-    const [busqueda, setBusqueda] = useState('');
+function nombreCompleto(usuario) {
+    return [(usuario.name || '').trim(), (usuario.apellido_paterno || '').trim(), (usuario.apellido_materno || '').trim()]
+        .filter(Boolean)
+        .join(' ');
+}
+
+function RolesChips({ roles = [], maxVisible = 4 }) {
+    const lista = roles || [];
+    const visibles = lista.slice(0, maxVisible);
+    const resto = lista.length - visibles.length;
+
+    return (
+        <div className="flex flex-wrap gap-1.5">
+            {visibles.map((rol) => (
+                <span
+                    key={rol.id}
+                    className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest theme-element px-2 py-1 rounded-lg theme-text-main border theme-border"
+                >
+                    {rol.name}
+                </span>
+            ))}
+            {resto > 0 && (
+                <span className="text-[8px] font-black uppercase tracking-widest theme-text-muted px-2 py-1">
+                    +{resto}
+                </span>
+            )}
+        </div>
+    );
+}
+
+function TarjetaUsuarioMobile({ usuario, onEditar }) {
+    return (
+        <article className="fade-in-user theme-surface border theme-border rounded-[1.75rem] p-4 sm:p-5 space-y-3 transition-shadow hover:shadow-md">
+            <div className="flex items-start gap-3">
+                <UserAvatar usuario={usuario} />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                    <h3 className="theme-text-main font-black text-sm uppercase italic tracking-tighter leading-snug break-words">
+                        {nombreCompleto(usuario)}
+                    </h3>
+                    {usuario.username && (
+                        <p className="text-[10px] font-bold theme-text-muted flex items-start gap-1.5 break-all">
+                            <AtSign className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--color-primario)' }} />
+                            <span>{usuario.username}</span>
+                        </p>
+                    )}
+                    <p className="text-[10px] font-bold theme-text-muted flex items-start gap-1.5 break-all normal-case tracking-normal">
+                        <Mail className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--color-primario)' }} />
+                        <span>{usuario.email}</span>
+                    </p>
+                </div>
+            </div>
+
+            <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted flex items-start gap-2">
+                <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--color-primario)' }} />
+                <span className="line-clamp-2 break-words min-w-0">
+                    {usuario.departamentos?.map((d) => d.nombre).join(', ') || 'Sin departamento'}
+                </span>
+            </p>
+
+            <RolesChips roles={usuario.roles} maxVisible={3} />
+
+            <div className="flex gap-2 pt-3 border-t theme-border">
+                <button
+                    type="button"
+                    onClick={() => onEditar(usuario)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-main text-[10px] font-black uppercase tracking-widest transition-colors hover:text-white"
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-primario)'; e.currentTarget.style.borderColor = 'var(--color-primario)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.borderColor = ''; }}
+                >
+                    <Edit3 className="w-4 h-4 shrink-0" />
+                    Editar
+                </button>
+                <button
+                    type="button"
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-muted text-[10px] font-black uppercase tracking-widest transition-colors hover:bg-red-500 hover:text-white hover:border-transparent"
+                >
+                    <Trash2 className="w-4 h-4 shrink-0" />
+                    Eliminar
+                </button>
+            </div>
+        </article>
+    );
+}
+
+function FilaUsuarioDesktop({ usuario, onEditar }) {
+    return (
+        <tr className="border-b theme-border hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
+            <td className="px-4 py-4">
+                <div className="flex items-center gap-3 min-w-[200px]">
+                    <UserAvatar usuario={usuario} />
+                    <div className="min-w-0">
+                        <p className="theme-text-main font-black text-sm uppercase italic tracking-tighter truncate">
+                            {nombreCompleto(usuario)}
+                        </p>
+                        {usuario.username && (
+                            <p className="text-[9px] font-bold theme-text-muted mt-0.5 truncate">@{usuario.username}</p>
+                        )}
+                    </div>
+                </div>
+            </td>
+            <td className="px-4 py-4">
+                <span className="text-[10px] font-bold theme-text-muted normal-case tracking-normal block truncate max-w-[220px]">
+                    {usuario.email}
+                </span>
+            </td>
+            <td className="px-4 py-4 hidden xl:table-cell">
+                <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted line-clamp-2 max-w-[180px]">
+                    {usuario.departamentos?.map((d) => d.nombre).join(', ') || '—'}
+                </span>
+            </td>
+            <td className="px-4 py-4 min-w-[160px]">
+                <RolesChips roles={usuario.roles} maxVisible={2} />
+            </td>
+            <td className="px-4 py-4 text-right">
+                <div className="flex justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={() => onEditar(usuario)}
+                        className="p-2.5 rounded-xl theme-element border theme-border theme-text-main hover:text-white transition-colors"
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-primario)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ''; }}
+                        aria-label="Editar usuario"
+                    >
+                        <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                        type="button"
+                        className="p-2.5 rounded-xl theme-element border theme-border theme-text-muted hover:bg-red-500 hover:text-white hover:border-transparent transition-colors"
+                        aria-label="Eliminar usuario"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
+            </td>
+        </tr>
+    );
+}
+
+export default function Usuarios({
+    auth,
+    usuarios = { data: [], current_page: 1, last_page: 1, per_page: 12, total: 0, from: 0, to: 0 },
+    filtros = { busqueda: '' },
+    departamentos = [],
+    posiblesGerentes = [],
+    roles = [],
+    rolesConfig = [],
+    todosLosPermisos = [],
+    sexos = [],
+    esSuperAdmin = false,
+    permisosUsuario = [],
+}) {
+    const lista = usuarios?.data ?? [];
+    const busquedaInicial = filtros?.busqueda ?? '';
+    const debounceRef = useRef(null);
+
+    const [busqueda, setBusqueda] = useState(busquedaInicial);
     const [showModal, setShowModal] = useState(false);
     const [usuarioEditando, setUsuarioEditando] = useState(null);
     const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
@@ -78,14 +233,31 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
             easing: 'easeOutExpo',
             duration: 600
         });
-    }, [usuarios]);
+    }, [lista]);
 
-    // --- FILTRADO ---
-    const usuariosFiltrados = (usuarios || []).filter(user => 
-        (user.name || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-        (user.email || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-        (user.username && user.username.toLowerCase().includes(busqueda.toLowerCase()))
-    );
+    useEffect(() => {
+        setBusqueda(busquedaInicial);
+    }, [busquedaInicial]);
+
+    const aplicarBusqueda = useCallback((valor) => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            router.get(
+                route('admin.usuarios'),
+                { busqueda: valor.trim() || undefined, page: 1 },
+                { preserveState: true, replace: true }
+            );
+        }, 350);
+    }, []);
+
+    const irAPagina = (pagina) => {
+        if (pagina < 1 || pagina > (usuarios.last_page || 1)) return;
+        router.get(
+            route('admin.usuarios'),
+            { busqueda: busqueda.trim() || undefined, page: pagina },
+            { preserveState: true, preserveScroll: true }
+        );
+    };
 
     const rolesJerarquia = (roles || []).filter(rol => rol?.name && !rol.name.includes('Grupo:'));
     const rolesGrupos = (roles || []).filter(rol => rol?.name?.includes('Grupo:'));
@@ -246,47 +418,60 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
         }
     };
 
+    const cardHeader = geliaCardClass('p-6 md:p-10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6');
+    const cardListado = geliaCardClass('overflow-hidden');
+
     return (
         <AppLayout auth={auth}>
             <Head title="Directorio de Usuarios" />
 
-            <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
-                {/* --- HEADER --- */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 theme-surface border-2 theme-border p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] shadow-sm fade-in-user">
-                    <div>
-                        <h1 className="text-2xl font-black theme-text-main flex items-center gap-3 italic uppercase tracking-tighter">
-                            <Users className="w-6 h-6 md:w-8 md:h-8" style={{ color: 'var(--color-primario)' }} />
-                            Directorio y Accesos
+            <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
+                <header className={cardHeader}>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-3 mb-2">
+                            <span className="h-1.5 w-12 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primario)' }} />
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>
+                                Administración
+                            </p>
+                        </div>
+                        <h1 className="text-2xl sm:text-3xl md:text-5xl font-black italic uppercase tracking-tighter theme-text-main m-0 flex items-center gap-3 flex-wrap">
+                            <Users className="w-7 h-7 md:w-9 md:h-9 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                            Directorio y <span style={{ color: 'var(--color-primario)' }}>Accesos</span>
                         </h1>
-                        <p className="theme-text-muted text-[10px] font-bold uppercase tracking-widest mt-1 opacity-80">
-                            Gestión centralizada de personal, identidad y permisos operativos
+                        <p className="theme-text-muted text-[10px] font-bold uppercase tracking-widest mt-2 max-w-xl">
+                            Gestión de personal, identidad y permisos operativos
+                            {usuarios.total > 0 && (
+                                <span className="block sm:inline sm:ml-2 mt-1 sm:mt-0 opacity-80">
+                                    · {usuarios.total.toLocaleString('es-MX')} colaboradores
+                                </span>
+                            )}
                         </p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-                        <div className="relative flex-1 md:w-72">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
+                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto lg:max-w-xl shrink-0">
+                        <div className="theme-field-with-icon flex-1 min-w-0">
+                            <Search className="theme-field-icon" aria-hidden />
                             <input
-                                type="text"
-                                placeholder="BUSCAR POR NOMBRE O CORREO..."
-                                className="w-full pl-11 pr-4 py-3 rounded-2xl theme-element border theme-border text-[11px] font-bold uppercase tracking-wider theme-text-main outline-none transition-all focus:ring-1 focus:ring-transparent"
-                                style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                type="search"
+                                placeholder="Buscar por nombre, correo o usuario..."
+                                className="theme-input w-full pr-4 py-3 text-[11px] font-bold normal-case tracking-normal placeholder:uppercase placeholder:tracking-wider placeholder:text-[10px]"
                                 value={busqueda}
-                                onChange={(e) => setBusqueda(e.target.value)}
+                                onChange={(e) => {
+                                    setBusqueda(e.target.value);
+                                    aplicarBusqueda(e.target.value);
+                                }}
                             />
                         </div>
                         <button
                             type="button"
                             onClick={() => abrirModal()}
-                            className="text-white dark:text-black px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 flex justify-center items-center gap-2 shadow-lg"
-                            style={{ backgroundColor: 'var(--color-primario)' }}
+                            className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact shrink-0`}
                         >
-                            <UserPlus className="w-4 h-4" /> Nuevo Ingreso
+                            <UserPlus className="w-4 h-4" /> Nuevo ingreso
                         </button>
                     </div>
-                </div>
+                </header>
 
-                {/* --- CONFIGURACIÓN DE HERENCIA (solo Super Admin) --- */}
                 {esSuperAdmin && (
                     <ConfiguracionHerencia
                         rolesConfig={rolesConfig}
@@ -295,74 +480,71 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
                     />
                 )}
 
-                {/* --- LISTADO --- */}
-                <div className="grid grid-cols-1 gap-4">
-                    {usuariosFiltrados.length === 0 ? (
-                        <div className="text-center py-16 theme-surface border-2 border-dashed theme-border rounded-[2rem]">
+                <div className="lg:hidden space-y-3">
+                    {lista.length === 0 ? (
+                        <div className={`${geliaCardClass()} text-center py-14 px-6 border-dashed`}>
                             <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
-                            <h3 className="text-lg font-black italic uppercase theme-text-main">No hay coincidencias</h3>
+                            <h3 className="text-base font-black italic uppercase theme-text-main">Sin resultados</h3>
+                            <p className="text-[10px] font-bold theme-text-muted mt-2 uppercase tracking-widest">
+                                Ajusta la búsqueda o registra un nuevo colaborador
+                            </p>
                         </div>
                     ) : (
-                        usuariosFiltrados.map((usuario) => (
-                            <div 
-                                key={usuario.id} 
-                                className="fade-in-user theme-surface rounded-[2rem] p-6 border-2 theme-border flex flex-col md:flex-row items-center justify-between gap-6 transition-all group hover:shadow-md"
-                            >
-                                <div className="flex items-center gap-5 w-full md:w-auto">
-                                    <UserAvatar usuario={usuario} />
-                                    <div>
-                                        <h3 className="theme-text-main font-black text-sm uppercase italic tracking-tighter leading-none">
-                                            {(usuario.name || '').trim()} {(usuario.apellido_paterno || '').trim()}
-                                        </h3>
-                                        <div className="flex flex-wrap items-center gap-4 mt-2">
-                                            <span className="flex items-center gap-1 theme-text-muted text-[10px] font-bold uppercase tracking-widest">
-                                                <MapPin className="w-3 h-3" style={{ color: 'var(--color-primario)' }}/> 
-                                                <span className="truncate max-w-[200px]">
-                                                    {usuario.departamentos?.map(d => d.nombre).join(', ') || 'Sin Depto'}
-                                                </span>
-                                            </span>
-                                            <span className="flex items-center gap-1 theme-text-muted text-[10px] font-bold tracking-wider">
-                                                <Mail className="w-3 h-3" style={{ color: 'var(--color-primario)' }}/> {usuario.email}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-wrap gap-2 justify-center md:justify-end w-full md:w-auto flex-1">
-                                    {(usuario.roles || []).map(rol => (
-                                        <span key={rol.id} className="text-[9px] font-black uppercase tracking-widest theme-element px-3 py-1.5 rounded-xl theme-text-main border theme-border">
-                                            {rol.name}
-                                        </span>
-                                    ))}
-                                </div>
-
-                                <div className="flex gap-2 w-full md:w-auto justify-end">
-                                    <button type="button" onClick={() => abrirModal(usuario)} className="p-3 rounded-xl theme-element theme-text-main hover:text-white transition-colors border theme-border hover:border-transparent group/btn" onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primario)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = ''}>
-                                        <Edit3 className="w-5 h-5" />
-                                    </button>
-                                    <button type="button" className="p-3 rounded-xl theme-element theme-text-main hover:text-white transition-colors border theme-border hover:bg-red-500 hover:border-transparent">
-                                        <Trash2 className="w-5 h-5" />
-                                    </button>
-                                </div>
-                            </div>
+                        lista.map((usuario) => (
+                            <TarjetaUsuarioMobile key={usuario.id} usuario={usuario} onEditar={abrirModal} />
                         ))
+                    )}
+                    {lista.length > 0 && (
+                        <GeliaPaginacion paginator={usuarios} onIrAPagina={irAPagina} />
                     )}
                 </div>
 
-                {/* --- MODAL --- */}
+                <div className={`hidden lg:block ${cardListado}`}>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left min-w-[720px]">
+                            <thead>
+                                <tr className="border-b theme-border text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                                    <th className="px-4 py-4">Colaborador</th>
+                                    <th className="px-4 py-4">Correo</th>
+                                    <th className="px-4 py-4 hidden xl:table-cell">Departamentos</th>
+                                    <th className="px-4 py-4">Roles</th>
+                                    <th className="px-4 py-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {lista.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-4 py-16 text-center">
+                                            <Users className="w-10 h-10 theme-text-muted mx-auto mb-3 opacity-50" />
+                                            <p className="font-black italic uppercase theme-text-main text-sm">Sin resultados</p>
+                                            <p className="text-[10px] font-bold theme-text-muted mt-1 uppercase tracking-widest">
+                                                Ajusta la búsqueda o crea un nuevo ingreso
+                                            </p>
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    lista.map((usuario) => (
+                                        <FilaUsuarioDesktop key={usuario.id} usuario={usuario} onEditar={abrirModal} />
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    {lista.length > 0 && (
+                        <GeliaPaginacion paginator={usuarios} onIrAPagina={irAPagina} embedded />
+                    )}
+                </div>
+
                 {showModal && createPortal(
-                    <div className="fixed inset-0 z-[100] overflow-y-auto">
-                        
-                        {/* 1. Fondo oscuro independiente */}
-                        <div className="fixed inset-0 backdrop-blur-md bg-black/40" onClick={cerrarModal}></div>
-                        
-                        {/* 2. CONTENEDOR FLEXIBLE: Este es el que faltaba. Centra el modal y permite scroll seguro */}
-                        <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
-                            
-                            {/* 3. La ventana de tu modal */}
-                            <div className="relative w-full max-w-4xl theme-surface rounded-[2.5rem] border-2 theme-border shadow-2xl overflow-hidden flex flex-col modal-pop text-left" style={{ maxHeight: 'calc(100vh - 4rem)' }}>
-                                
-                                <div className="p-6 md:p-8 border-b theme-border flex justify-between items-center bg-transparent shrink-0">
+                    <div
+                        className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6 overflow-y-auto`}
+                        onClick={cerrarModal}
+                    >
+                        <div
+                            className={`${THEME_MODAL_SHELL} max-w-4xl modal-pop text-left`}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                                <div className="p-6 md:p-8 border-b theme-border flex justify-between items-center shrink-0">
                                     <h2 className="text-xl font-black italic uppercase tracking-tighter theme-text-main flex items-center gap-3 leading-none">
                                         <ShieldCheck className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
                                         {usuarioEditando ? 'Ajustar Perfil Completo' : 'Alta de Nuevo Colaborador'}
@@ -372,7 +554,7 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
                                     </button>
                                 </div>
 
-                                <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1 min-h-0 space-y-10">
+                                <div className="gelia-modal-body p-6 md:p-8 custom-scrollbar space-y-10">
                                     
                                     {/* 1. IDENTIDAD */}
                                     <div>
@@ -581,14 +763,17 @@ export default function Usuarios({ auth, usuarios = [], departamentos = [], posi
                                     
                                 </div>
                                 
-                                <div className="p-6 md:p-8 border-t theme-border bg-transparent shrink-0">
-                                    <button type="button" onClick={handleSubmit} disabled={processing} className="w-full text-white dark:text-black py-4 rounded-[1.5rem] text-[11px] font-black uppercase tracking-[0.2em] italic shadow-xl flex items-center justify-center gap-2 transition-transform hover:scale-[1.01]" style={{ backgroundColor: 'var(--color-primario)' }}>
-                                        <Save className="w-5 h-5" />
-                                        {processing ? 'Procesando Datos...' : 'Confirmar Guardado Completo'}
+                                <div className="gelia-modal-footer p-6 md:p-8">
+                                    <button type="button" onClick={handleSubmit} disabled={processing} className={`${THEME_BTN_PRIMARY} w-full`}>
+                                        <Save className="w-5 h-5 shrink-0" />
+                                        {processing
+                                            ? 'Guardando...'
+                                            : usuarioEditando
+                                                ? 'Guardar cambios'
+                                                : 'Registrar colaborador'}
                                     </button>
                                 </div>
-                            </div>
-                        </div> {/* <-- Aquí cerramos el nuevo contenedor flexible */}
+                        </div>
                     </div>,
                     document.body
                 )}

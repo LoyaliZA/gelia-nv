@@ -17,7 +17,7 @@ export default function PanelAlertas({ alertas = null }) {
     );
 
     return (
-        <div className={getActivosCardClass({ extra: 'p-4 md:p-6 space-y-4' })} style={{ animationDelay: '300ms' }}>
+        <div className={getActivosCardClass('p-4 md:p-6 space-y-4')}>
             <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--color-primario)' }}>
                 Alertas activas
             </p>

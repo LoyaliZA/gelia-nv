@@ -1,41 +1,50 @@
 import React, { useEffect, useState } from 'react';
 import { Head, useForm } from '@inertiajs/react';
-import { User, Lock, LogIn, Sun, Moon, Sparkles } from 'lucide-react';
+import { User, Lock, LogIn, Sun, Moon, Eye, EyeOff, Loader2 } from 'lucide-react';
+import GeliaLogo from '../../Components/GeliaLogo';
+
+const ACCENT_COLORS = {
+    rosa: '#ec4899',
+    azul: '#3b82f6',
+    verde: '#10b981',
+    amarillo: '#f59e0b',
+};
+
+function applyLoginTheme(isDark) {
+    const root = document.documentElement;
+    root.classList.toggle('dark', isDark);
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+
+    const savedColor = localStorage.getItem('theme_color') || 'rosa';
+    root.style.setProperty('--color-primario', ACCENT_COLORS[savedColor] || ACCENT_COLORS.rosa);
+
+    const glass = localStorage.getItem('theme_glass');
+    if (glass === 'true') root.classList.add('glass-active');
+    else root.classList.remove('glass-active');
+}
 
 export default function Login() {
     const { data, setData, post, processing, errors } = useForm({
         login: '',
         password: '',
-        remember: true, 
+        remember: true,
     });
 
-    // Estado Reactivo 
     const [isDarkMode, setIsDarkMode] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     useEffect(() => {
-        // Leemos la memoria del navegador 
         const savedTheme = localStorage.getItem('theme');
-        const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        
+        const systemPrefersDark = window.matchMedia?.('(prefers-color-scheme: dark)')?.matches;
         const isDark = savedTheme === 'dark' || (!savedTheme && systemPrefersDark);
         setIsDarkMode(isDark);
-
-        // Cargamos el color de acento
-        const savedColor = localStorage.getItem('theme_color') || 'rosa';
-        const accentColors = {
-            rosa: '#ec4899',
-            azul: '#3b82f6',
-            verde: '#10b981',
-            amarillo: '#f59e0b'
-        };
-        document.documentElement.style.setProperty('--color-primario', accentColors[savedColor] || accentColors.rosa);
+        applyLoginTheme(isDark);
     }, []);
 
-    // Función de cambio manual
     const toggleTheme = () => {
-        const newMode = !isDarkMode;
-        setIsDarkMode(newMode);
-        localStorage.setItem('theme', newMode ? 'dark' : 'light');
+        const next = !isDarkMode;
+        setIsDarkMode(next);
+        applyLoginTheme(next);
     };
 
     const handleSubmit = (e) => {
@@ -44,115 +53,149 @@ export default function Login() {
     };
 
     return (
-        <div className={`min-h-screen flex flex-col items-center justify-center p-6 transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'bg-[#0a0a0a] text-white' : 'bg-zinc-50 text-zinc-900'}`}>
-            <Head title="Iniciar Sesión - GELIA" />
+        <div className="gelia-login-split">
+            <Head title="Iniciar sesión | GELIA" />
 
-            {/* BOTÓN FLOTANTE DE TEMA */}
-            <button 
-                onClick={toggleTheme}
-                type="button"
-                className={`absolute top-6 right-6 p-4 backdrop-blur-md rounded-2xl shadow-sm border transition-all z-50 hover:scale-105 ${isDarkMode ? 'bg-[#141414]/60 border-zinc-800 text-zinc-400 hover:text-[var(--color-primario)]' : 'bg-white/60 border-zinc-200 text-zinc-500 hover:text-[var(--color-primario)]'}`}
-                title="Cambiar Modo de Visualización"
-            >
-                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+            {/* Panel visual — marca */}
+            <aside className="gelia-login-split__brand" aria-label="GELIA">
+                <div className="gelia-login-split__brand-glow gelia-login-split__brand-glow--1" aria-hidden />
+                <div className="gelia-login-split__brand-glow gelia-login-split__brand-glow--2" aria-hidden />
 
-            {/* DECORACIÓN DE FONDO */}
-            <div 
-                className={`absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-[120px] pointer-events-none translate-x-1/3 -translate-y-1/3 transition-colors duration-700 ${isDarkMode ? 'opacity-20' : 'opacity-10'}`}
-                style={{ backgroundColor: 'var(--color-primario)' }}
-            ></div>
-            <div 
-                className={`absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full blur-[100px] pointer-events-none -translate-x-1/3 translate-y-1/3 transition-colors duration-700 ${isDarkMode ? 'opacity-10' : 'opacity-[0.05]'}`}
-                style={{ backgroundColor: 'var(--color-primario)' }}
-            ></div>
+                <div className="gelia-login-split__brand-inner">
+                    <GeliaLogo variant="sparkle" className="w-20 h-20 md:w-24 md:h-24 drop-shadow-lg" accentColor="#ffffff" />
 
-            <div className="relative z-10 w-full max-w-md">
-                {/* Cabecera institucional */}
-                <div className="flex items-center justify-center gap-8 mb-10">
-                    <img 
-                        src="/Images/Logos/aromas_logo_negro.png" 
-                        alt="Logo Aromas" 
-                        className={`h-20 md:h-24 object-contain transition-all hover:scale-105 duration-300 ${isDarkMode ? 'invert' : ''}`} 
-                    />
-                    <div className={`h-16 w-px ${isDarkMode ? 'bg-zinc-800' : 'bg-zinc-300'}`}></div>
-                    <img 
-                        src="/Images/Logos/bellaroma_logo_negro.png" 
-                        alt="Logo Bellaroma" 
-                        className={`h-20 md:h-24 object-contain transition-all hover:scale-105 duration-300 ${isDarkMode ? 'invert' : ''}`} 
-                    />
-                </div>
-
-                {/* Contenedor del formulario */}
-                <div className={`backdrop-blur-xl p-8 md:p-10 rounded-[2.5rem] border transition-colors duration-300 ${isDarkMode ? 'bg-[#141414]/80 shadow-2xl border-zinc-800/50' : 'bg-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-white/20'}`}>
-                    <div className="mb-10 text-center">
-                        <h1 className="text-3xl font-black italic tracking-tighter mb-2">Bienvenido a GELIA</h1>
-                        <p className={`text-xs font-bold ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>Ingresa con tu correo, usuario o nombre.</p>
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/70 m-0 mb-2">
+                            Nueva Versión
+                        </p>
+                        <h1 className="text-3xl md:text-4xl lg:text-5xl font-black italic uppercase tracking-tighter m-0 leading-none text-white">
+                            G.E.L.I.A.
+                        </h1>
                     </div>
-                    
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Input de Usuario */}
-                        <div className="space-y-2">
-                            <label className={`text-[10px] font-black uppercase tracking-widest italic ml-2 block ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                                Usuario, Correo o Nombre_
+
+                    <div className="flex items-center justify-center gap-6 md:gap-8 w-full pt-2">
+                        <img
+                            src="/Images/Logos/aromas_logo_negro.png"
+                            alt="Aromas del Valle"
+                            className="h-16 sm:h-[4.5rem] md:h-20 lg:h-[5.5rem] max-w-[45%] object-contain invert brightness-110 opacity-90 hover:opacity-100 transition-opacity"
+                        />
+                        <div className="h-12 md:h-16 w-px bg-white/25 shrink-0" aria-hidden />
+                        <img
+                            src="/Images/Logos/bellaroma_logo_negro.png"
+                            alt="Bellaroma"
+                            className="h-16 sm:h-[4.5rem] md:h-20 lg:h-[5.5rem] max-w-[45%] object-contain invert brightness-110 opacity-90 hover:opacity-100 transition-opacity"
+                        />
+                    </div>
+                </div>
+            </aside>
+
+            {/* Panel del formulario */}
+            <main className="gelia-login-split__form">
+                <button
+                    type="button"
+                    onClick={toggleTheme}
+                    className="absolute top-5 right-5 lg:top-6 lg:right-6 z-10 p-3 rounded-2xl theme-element border theme-border theme-text-muted hover:text-[var(--color-primario)] transition-all hover:scale-105 outline-none shadow-sm"
+                    title={isDarkMode ? 'Modo claro' : 'Modo oscuro'}
+                    aria-label={isDarkMode ? 'Activar modo claro' : 'Activar modo oscuro'}
+                >
+                    {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                </button>
+
+                <div className="gelia-login-split__form-inner">
+                    <header className="mb-8 md:mb-10">
+                        <h2 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0 leading-tight">
+                            Iniciar <span style={{ color: 'var(--color-primario)' }}>sesión</span>
+                        </h2>
+                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-3 m-0">
+                            Usa tu correo, usuario o nombre de acceso
+                        </p>
+                    </header>
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div>
+                            <label htmlFor="login" className="theme-label ml-1">
+                                Usuario o correo
                             </label>
-                            <div className="relative group">
-                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400 group-focus-within:text-[var(--color-primario)] transition-colors" />
-                                <input 
-                                    type="text" 
-                                    value={data.login || ''}
-                                    onChange={e => setData('login', e.target.value)}
-                                    className={`w-full pl-12 pr-4 py-4 border-2 border-transparent rounded-2xl text-sm font-bold outline-none transition-all ${isDarkMode ? 'bg-[#1A1A1A] focus:bg-black text-white' : 'bg-zinc-50/50 focus:bg-white text-zinc-900'}`}
-                                    onFocus={(e) => e.target.style.borderColor = 'var(--color-primario)'}
-                                    onBlur={(e) => e.target.style.borderColor = 'transparent'}
+                            <div className="theme-field-with-icon mt-1.5">
+                                <User className="theme-field-icon" aria-hidden />
+                                <input
+                                    id="login"
+                                    type="text"
+                                    autoComplete="username"
+                                    value={data.login}
+                                    onChange={(e) => setData('login', e.target.value)}
+                                    className="theme-input py-3.5"
+                                    placeholder="usuario@empresa.com"
                                     required
                                 />
                             </div>
-                            {errors.login && <p className="text-red-500 text-[10px] font-bold mt-1 ml-2 uppercase">{errors.login}</p>}
+                            {errors.login && (
+                                <p className="text-red-500 text-[10px] font-bold mt-1.5 ml-1 uppercase">{errors.login}</p>
+                            )}
                         </div>
 
-                        {/* Input de Contraseña */}
-                        <div className="space-y-2">
-                            <label className={`text-[10px] font-black uppercase tracking-widest italic ml-2 block ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                                Contraseña_
+                        <div>
+                            <label htmlFor="password" className="theme-label ml-1">
+                                Contraseña
                             </label>
-                            <div className="relative group">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400 group-focus-within:text-[var(--color-primario)] transition-colors" />
-                                <input 
-                                    type="password" 
-                                    value={data.password || ''}
-                                    onChange={e => setData('password', e.target.value)}
-                                    className={`w-full pl-12 pr-4 py-4 border-2 border-transparent rounded-2xl text-sm font-bold outline-none transition-all ${isDarkMode ? 'bg-[#1A1A1A] focus:bg-black text-white' : 'bg-zinc-50/50 focus:bg-white text-zinc-900'}`}
-                                    onFocus={(e) => e.target.style.borderColor = 'var(--color-primario)'}
-                                    onBlur={(e) => e.target.style.borderColor = 'transparent'}
+                            <div className="theme-field-with-icon theme-field-with-icon--password mt-1.5">
+                                <Lock className="theme-field-icon" aria-hidden />
+                                <input
+                                    id="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    autoComplete="current-password"
+                                    value={data.password}
+                                    onChange={(e) => setData('password', e.target.value)}
+                                    className="theme-input py-3.5"
+                                    placeholder="••••••••"
                                     required
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((v) => !v)}
+                                    className="theme-field-with-icon__action theme-btn-icon p-2"
+                                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                                    tabIndex={-1}
+                                >
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
                             </div>
-                            {errors.password && <p className="text-red-500 text-[10px] font-bold mt-1 ml-2 uppercase">{errors.password}</p>}
+                            {errors.password && (
+                                <p className="text-red-500 text-[10px] font-bold mt-1.5 ml-1 uppercase">{errors.password}</p>
+                            )}
                         </div>
 
-                        {/* Botón de Submit */}
-                        <button 
-                            type="submit" 
+                        <label className="flex items-center gap-3 cursor-pointer group py-1">
+                            <input
+                                type="checkbox"
+                                checked={data.remember}
+                                onChange={(e) => setData('remember', e.target.checked)}
+                                className="w-4 h-4 rounded border theme-border accent-[var(--color-primario)] cursor-pointer"
+                            />
+                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted group-hover:theme-text-main transition-colors">
+                                Mantener sesión iniciada
+                            </span>
+                        </label>
+
+                        <button
+                            type="submit"
                             disabled={processing}
-                            className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex justify-center items-center gap-3 mt-8 hover:scale-[1.02] shadow-lg disabled:opacity-50 disabled:hover:scale-100"
-                            style={{ backgroundColor: 'var(--color-primario)' }}
+                            className="theme-btn-primary w-full py-4 mt-2 disabled:hover:scale-100"
                         >
-                            {processing ? <Sparkles className="w-4 h-4 animate-pulse" /> : <LogIn className="w-4 h-4" />}
-                            {processing ? 'Verificando Identidad...' : 'Iniciar Sesión'}
+                            {processing ? (
+                                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                            ) : (
+                                <LogIn className="w-4 h-4 shrink-0" />
+                            )}
+                            {processing ? 'Verificando…' : 'Iniciar sesión'}
                         </button>
                     </form>
-                </div>
 
-                <footer className={`mt-12 text-center transition-colors ${isDarkMode ? 'text-zinc-600' : 'text-zinc-400'}`}>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em]">
-                        &copy; {new Date().getFullYear()} GELIA.
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] theme-text-muted text-center mt-10 m-0">
+                        &copy; {new Date().getFullYear()} GELIA
                     </p>
-                    <p className="mt-1 text-[10px] font-bold italic">
-                        Creado por Gabriel Zárate.
-                    </p>
-                </footer>
-            </div>
+                </div>
+            </main>
         </div>
     );
 }

@@ -1,8 +1,17 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from '@inertiajs/react';
-import { Layers, Trash2, Plus, X, Save, AlertTriangle, Palette, Edit2 } from 'lucide-react';
+import { Layers, Trash2, Palette, Edit2 } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
+import {
+    INPUT_CLASS,
+    THEME_BTN_PRIMARY,
+    BTN_ICON_DANGER,
+    EstadoVacio,
+    ModalPersonalizacion,
+    ModalConfirmarEliminar,
+    CampoFormulario,
+    OpcionBinaria,
+} from './personalizacionShared';
 
 const FUENTES = ['inter', 'montserrat', 'poppins', 'nunito', 'roboto', 'mono'];
 const ACCENT_COLORS = { rosa: '#ec4899', azul: '#3b82f6', verde: '#10b981', amarillo: '#f59e0b' };
@@ -12,16 +21,14 @@ const LAYOUTS = [
     { id: 'fixed', label: 'Barra fija' },
 ];
 
-const inputClass =
-    'w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md';
-
-export default function TablaTemas({ datos = [], fondos = [], glassEffect = true }) {
+export default function TablaTemas({ catalogo = {}, fondos_opciones = [], registrarAbrir }) {
+    const datos = catalogo?.data ?? [];
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalEliminar, setModalEliminar] = useState(false);
     const [itemActual, setItemActual] = useState(null);
 
-    const fondoOpciones = fondos.length > 0
-        ? fondos.filter((f) => f.activo !== false).map((f) => ({ value: f.valor, label: f.nombre }))
+    const fondoOpciones = fondos_opciones.length > 0
+        ? fondos_opciones
         : ['blob', 'stacked', 'polygon', 'wave'].map((v) => ({ value: v, label: v }));
 
     const formDefaults = {
@@ -42,12 +49,22 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
 
     const { data, setData, post, put, processing, reset } = useForm(formDefaults);
 
-    const abrirNuevo = () => {
+    const abrirNuevo = useCallback(() => {
         setItemActual(null);
         reset();
         setData(formDefaults);
         setModalAbierto(true);
-    };
+    }, [reset, setData]);
+
+    useEffect(() => {
+        if (!registrarAbrir) return undefined;
+        registrarAbrir.current = abrirNuevo;
+        return () => {
+            if (registrarAbrir.current === abrirNuevo) {
+                registrarAbrir.current = null;
+            }
+        };
+    }, [registrarAbrir, abrirNuevo]);
 
     const abrirEditar = (item) => {
         const cfg = item.configuracion || {};
@@ -113,42 +130,20 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
         });
     };
 
-    const innerZoneClass = glassEffect
-        ? 'border border-dashed border-zinc-300 dark:border-zinc-700 bg-black/5 dark:bg-black/20 shadow-inner'
-        : 'border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/60';
-
     return (
         <div>
             <GeliaLoader isVisible={processing} message="Guardando tema_" />
 
-            <div className="p-8 md:p-10 border-b theme-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <Layers className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                    <div>
-                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
-                            Temas Predefinidos_
-                        </h2>
-                        <p className="text-[10px] theme-text-muted font-bold uppercase tracking-widest mt-1">
-                            {datos.length} temas disponibles en perfil
-                        </p>
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={abrirNuevo}
-                    className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black uppercase text-[11px] tracking-widest transition-all hover:scale-105 shadow-xl text-white outline-none border border-black/10"
-                    style={{ backgroundColor: 'var(--color-primario)' }}
-                >
-                    <Plus className="w-4 h-4" /> Nuevo tema
-                </button>
-            </div>
-
             {datos.length === 0 ? (
-                <div className="p-12 text-center">
-                    <p className="text-sm font-bold theme-text-muted m-0">No hay temas registrados. Crea el primero con el botón superior.</p>
-                </div>
+                <EstadoVacio
+                    icon={Layers}
+                    titulo="Sin temas en catálogo"
+                    mensaje="Crea plantillas visuales que los colaboradores podrán aplicar desde su perfil."
+                    accionLabel="Nuevo tema"
+                    onAccion={abrirNuevo}
+                />
             ) : (
-                <div className="p-6 md:p-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="p-4 md:p-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
                     {datos.map((item) => {
                         const hex = item.colorHex || '#ec4899';
                         const isDark = item.modo === 'dark';
@@ -157,7 +152,7 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
                         return (
                             <div
                                 key={item.id}
-                                className={`relative p-6 rounded-[2rem] flex flex-col items-start gap-4 shadow-md group overflow-hidden border-2 transition-all hover:scale-[1.03] hover:shadow-2xl ${isInactive ? 'opacity-60' : ''}`}
+                                className={`relative p-5 md:p-6 rounded-[1.75rem] md:rounded-[2rem] flex flex-col items-start gap-4 border-2 transition-all hover:shadow-xl ${isInactive ? 'opacity-60' : 'hover:-translate-y-0.5'}`}
                                 style={{
                                     backgroundColor: isDark ? '#111113' : '#f8f9fa',
                                     borderColor: `${hex}55`,
@@ -202,14 +197,14 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
                                     <button
                                         type="button"
                                         onClick={() => abrirEditar(item)}
-                                        className="flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest theme-element border theme-border theme-text-main hover:border-[var(--color-primario)] transition-colors outline-none shadow-sm flex items-center justify-center gap-1.5"
+                                        className="flex-1 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest theme-btn-secondary border theme-border flex items-center justify-center gap-1.5"
                                     >
                                         <Edit2 className="w-3.5 h-3.5" /> Editar
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => { setItemActual(item); setModalEliminar(true); }}
-                                        className="p-2.5 theme-element border theme-border rounded-xl transition-all outline-none shadow-sm hover:bg-red-500 hover:border-red-500 group/del"
+                                        className={`${BTN_ICON_DANGER} shrink-0`}
                                     >
                                         <Trash2 className="w-4 h-4 theme-text-main group-hover/del:text-white transition-colors" />
                                     </button>
@@ -220,61 +215,34 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
                 </div>
             )}
 
-            {modalAbierto && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl animate-fade-in" onClick={() => setModalAbierto(false)}>
-                    <div className="w-full max-w-2xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] max-h-[90vh] overflow-y-auto modal-pop" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-6 border-b theme-border flex justify-between items-center sticky top-0 theme-surface z-10">
-                            <h2 className="text-xl font-black italic uppercase theme-text-main m-0">{itemActual ? 'Editar' : 'Nuevo'} Tema_</h2>
-                            <button type="button" onClick={() => setModalAbierto(false)} className="p-2 rounded-full theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                            <div className={`rounded-[1.5rem] p-6 sm:p-8 grid grid-cols-1 sm:grid-cols-2 gap-6 ${innerZoneClass}`}>
-                                <div className="sm:col-span-2 space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre del tema</label>
-                                    <input
-                                        value={data.nombre}
-                                        onChange={(e) => setData('nombre', e.target.value)}
-                                        className={inputClass}
-                                        required
-                                        onFocus={(e) => { e.target.style.borderColor = 'var(--color-primario)'; }}
-                                        onBlur={(e) => { e.target.style.borderColor = ''; }}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Modo</label>
-                                    <div className="gelia-segment w-full p-1 h-12 shadow-sm">
-                                        <button
-                                            type="button"
-                                            className="gelia-segment-btn"
-                                            data-active={data.modo === 'light'}
-                                            onClick={() => setData('modo', 'light')}
-                                        >
-                                            Claro
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="gelia-segment-btn"
-                                            data-active={data.modo === 'dark'}
-                                            onClick={() => setData('modo', 'dark')}
-                                        >
-                                            Oscuro
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Layout sidebar</label>
-                                    <select
-                                        value={data.layout_sidebar}
-                                        onChange={(e) => setData('layout_sidebar', e.target.value)}
-                                        className={inputClass}
-                                    >
-                                        {LAYOUTS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-                                    </select>
-                                </div>
-                                <div className="sm:col-span-2 space-y-3">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Color de énfasis</label>
+            <ModalPersonalizacion
+                abierto={modalAbierto}
+                onClose={() => setModalAbierto(false)}
+                titulo={itemActual ? 'Editar tema' : 'Nuevo tema'}
+                tamano="max-w-2xl"
+            >
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+                    <div className="gelia-modal-body p-5 md:p-8 space-y-6">
+                        <div className="theme-form-zone grid grid-cols-1 sm:grid-cols-2 gap-5 md:gap-6 p-5 md:p-6">
+                            <CampoFormulario label="Nombre del tema" className="sm:col-span-2">
+                                <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} className={INPUT_CLASS} required />
+                            </CampoFormulario>
+                            <CampoFormulario label="Modo">
+                                <OpcionBinaria
+                                    value={data.modo}
+                                    onChange={(v) => setData('modo', v)}
+                                    opciones={[
+                                        { value: 'light', label: 'Claro' },
+                                        { value: 'dark', label: 'Oscuro' },
+                                    ]}
+                                />
+                            </CampoFormulario>
+                            <CampoFormulario label="Layout sidebar">
+                                <select value={data.layout_sidebar} onChange={(e) => setData('layout_sidebar', e.target.value)} className={INPUT_CLASS}>
+                                    {LAYOUTS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                                </select>
+                            </CampoFormulario>
+                            <CampoFormulario label="Color de énfasis" className="sm:col-span-2">
                                     <div className="flex flex-wrap gap-4 items-center p-4 rounded-2xl theme-element border theme-border">
                                         {Object.entries(ACCENT_COLORS).map(([name, hex]) => (
                                             <button
@@ -286,8 +254,8 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
                                                 title={name}
                                             />
                                         ))}
-                                        <div className="w-[2px] h-8 bg-zinc-300 dark:bg-zinc-700 mx-2 rounded-full" />
-                                        <label className="relative w-10 h-10 rounded-full border-2 border-dashed border-zinc-400 dark:border-zinc-500 flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-md hover:border-[var(--color-primario)] transition-all overflow-hidden bg-transparent" title="Elegir color personalizado">
+                                        <div className="w-[2px] h-8 theme-border border-l mx-2 rounded-full shrink-0" />
+                                        <label className="relative w-10 h-10 rounded-full border-2 border-dashed theme-border flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-md hover:border-[var(--color-primario)] transition-all overflow-hidden theme-element" title="Elegir color personalizado">
                                             <Palette className="w-4 h-4 theme-text-main z-10 pointer-events-none" />
                                             <input
                                                 type="color"
@@ -300,30 +268,26 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
                                             {accentHexActual()}
                                         </span>
                                     </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Fondo base</label>
-                                    <select value={data.fondo_base} onChange={(e) => setData('fondo_base', e.target.value)} className={inputClass}>
-                                        {fondoOpciones.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipografía</label>
-                                    <select value={data.fuente_principal} onChange={(e) => setData('fuente_principal', e.target.value)} className={inputClass}>
-                                        {FUENTES.map((f) => <option key={f} value={f}>{f}</option>)}
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Escala fuente</label>
-                                    <input type="number" step="0.0625" min="0.875" max="1.5" value={data.escala_fuente} onChange={(e) => setData('escala_fuente', Number(e.target.value))} className={inputClass} />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Orden</label>
-                                    <input type="number" min="0" value={data.orden} onChange={(e) => setData('orden', Number(e.target.value))} className={inputClass} />
-                                </div>
-                            </div>
+                            </CampoFormulario>
+                            <CampoFormulario label="Fondo base">
+                                <select value={data.fondo_base} onChange={(e) => setData('fondo_base', e.target.value)} className={INPUT_CLASS}>
+                                    {fondoOpciones.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                                </select>
+                            </CampoFormulario>
+                            <CampoFormulario label="Tipografía">
+                                <select value={data.fuente_principal} onChange={(e) => setData('fuente_principal', e.target.value)} className={INPUT_CLASS}>
+                                    {FUENTES.map((f) => <option key={f} value={f}>{f}</option>)}
+                                </select>
+                            </CampoFormulario>
+                            <CampoFormulario label="Escala fuente">
+                                <input type="number" step="0.0625" min="0.875" max="1.5" value={data.escala_fuente} onChange={(e) => setData('escala_fuente', Number(e.target.value))} className={INPUT_CLASS} />
+                            </CampoFormulario>
+                            <CampoFormulario label="Orden">
+                                <input type="number" min="0" value={data.orden} onChange={(e) => setData('orden', Number(e.target.value))} className={INPUT_CLASS} />
+                            </CampoFormulario>
+                        </div>
 
-                            <div className="flex flex-col sm:flex-row flex-wrap gap-4 sm:gap-6">
+                        <div className="flex flex-col sm:flex-row flex-wrap gap-4 sm:gap-6 px-1">
                                 <div className="flex items-center gap-3">
                                     <button type="button" className="gelia-switch shrink-0 scale-110 shadow-sm" data-active={data.efecto_cristal} onClick={() => setData('efecto_cristal', !data.efecto_cristal)}>
                                         <div className="gelia-switch-thumb shadow-md" />
@@ -342,45 +306,23 @@ export default function TablaTemas({ datos = [], fondos = [], glassEffect = true
                                     </button>
                                     <span className="text-[10px] font-black uppercase theme-text-muted">Activo en perfil</span>
                                 </div>
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={processing}
-                                className="w-full py-4 rounded-2xl font-black uppercase tracking-widest text-[11px] text-white flex items-center justify-center gap-2 transition-all hover:scale-105 shadow-xl disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100 outline-none border border-black/10"
-                                style={{ backgroundColor: 'var(--color-primario)' }}
-                            >
-                                <Save className="w-4 h-4" /> Guardar tema
-                            </button>
-                        </form>
-                    </div>
-                </div>,
-                document.body
-            )}
-
-            {modalEliminar && createPortal(
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl animate-fade-in" onClick={() => setModalEliminar(false)}>
-                    <div className="w-full max-w-md theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-8 space-y-6 modal-pop" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-4">
-                            <AlertTriangle className="w-8 h-8 text-red-500 shrink-0" />
-                            <p className="text-sm theme-text-muted m-0">¿Eliminar el tema «{itemActual?.name || itemActual?.nombre}»?</p>
-                        </div>
-                        <div className="flex gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setModalEliminar(false)}
-                                className="flex-1 py-3 rounded-xl font-black uppercase text-xs theme-element border theme-border theme-text-main hover:border-[var(--color-primario)] transition-colors outline-none shadow-sm"
-                            >
-                                Cancelar
-                            </button>
-                            <button type="button" onClick={confirmDelete} className="flex-1 py-3 rounded-xl font-black uppercase text-xs text-white bg-red-500 hover:bg-red-600 transition-colors outline-none shadow-sm">
-                                Eliminar
-                            </button>
                         </div>
                     </div>
-                </div>,
-                document.body
-            )}
+                    <div className="gelia-modal-footer p-5 md:p-8">
+                        <button type="submit" disabled={processing} className={`${THEME_BTN_PRIMARY} w-full`}>
+                            {processing ? 'Guardando...' : 'Guardar tema'}
+                        </button>
+                    </div>
+                </form>
+            </ModalPersonalizacion>
+
+            <ModalConfirmarEliminar
+                abierto={modalEliminar}
+                onClose={() => setModalEliminar(false)}
+                onConfirm={confirmDelete}
+                titulo="Eliminar tema"
+                mensaje={`¿Eliminar el tema «${itemActual?.name || itemActual?.nombre}»? Los usuarios que lo tengan aplicado conservarán su configuración local hasta que cambien de tema.`}
+            />
         </div>
     );
 }

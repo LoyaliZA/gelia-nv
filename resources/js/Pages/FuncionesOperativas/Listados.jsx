@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
+import { geliaCardClass } from '../../utils/geliaTheme';
 import GeliaLogo from '../../Components/GeliaLogo';
 import ModalPlantilla from './Partials/ModalPlantilla';
 import ModalAlerta from './Partials/ModalAlerta';
@@ -176,19 +177,7 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
 
     const fileRefs = { existencias: useRef(null), precios: useRef(null), costos: useRef(null) };
 
-    const [glassEffect, setGlassEffect] = useState(true);
-
-    useEffect(() => {
-        const savedGlass = localStorage.getItem('theme_glass');
-        if (savedGlass !== null) {
-            setGlassEffect(savedGlass === 'true');
-        }
-    }, []);
-
-    const baseCardClass = "fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300";
-    const glassCardClass = "bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px] border-[1.5px] border-white/80 dark:border-zinc-700/60 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]";
-    const solidCardClass = "bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)]";
-    const activeCardClass = `${baseCardClass} ${glassEffect ? glassCardClass : solidCardClass}`;
+    const activeCardClass = geliaCardClass('relative z-10');
 
     // Helper para disparar alertas UI
     const dispararAlerta = (type, title, message, details = null) => {
@@ -390,20 +379,20 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         <UploadArea
                             id="existencias" label="1. Existencias" isRequired={true} fileRef={fileRefs.existencias}
-                            onChange={handleFileChange} file={archivos.existencias} glassEffect={glassEffect}
+                            onChange={handleFileChange} file={archivos.existencias}
                             // Pasamos colores de borde neutros para que se adapten a ambos modos cuando no hay archivo
                             colorClass="border-zinc-300 dark:border-zinc-700 hover:border-[var(--color-primario)]"
                             instructions="<span style='color: var(--color-primario)'>Ruta:</span> Almacenes > Inventarios<br><span style='color: var(--color-primario)'>Filtros:</span> Seleccionar almacen (CEDIS, TIENDA o REMATES), Existencia diferente o igual a 0<br><span style='color: var(--color-primario)'>Opciones:</span> EXCEL > Exportar en CSV."
                         />
                         <UploadArea
                             id="precios" label="2. Precios" isRequired={false} fileRef={fileRefs.precios}
-                            onChange={handleFileChange} file={archivos.precios} glassEffect={glassEffect}
+                            onChange={handleFileChange} file={archivos.precios}
                             colorClass="border-zinc-300 dark:border-zinc-700 hover:border-[var(--color-primario)]"
                             instructions="<span style='color: var(--color-primario)'>Ruta:</span> Almacen > Productos<br><span style='color: var(--color-primario)'>Operaciones:</span> Exportar lista de precios<br><span style='color: var(--color-primario)'>Opciones:</span> Guardar en CSV o Excel."
                         />
                         <UploadArea
                             id="costos" label="3. Costos" isRequired={false} fileRef={fileRefs.costos}
-                            onChange={handleFileChange} file={archivos.costos} glassEffect={glassEffect}
+                            onChange={handleFileChange} file={archivos.costos}
                             colorClass="border-zinc-300 dark:border-zinc-700 hover:border-[var(--color-primario)]"
                             instructions="<span style='color: var(--color-primario)'>Ruta:</span> Almacenes > Costos<br><span style='color: var(--color-primario)'>Operaciones:</span> Seleccionar Opcion Excel<br><span style='color: var(--color-primario)'>Opciones:</span> Guardar en CSV."
                         />

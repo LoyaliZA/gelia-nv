@@ -3,6 +3,7 @@ import { Head, useForm, router } from '@inertiajs/react';
 import { Users, Plus, X, Hash, User, Calendar, ShieldAlert } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
+import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
 
 export default function MisClientes({ auth, clientes }) {
     /*
@@ -71,7 +72,7 @@ export default function MisClientes({ auth, clientes }) {
             <div className="max-w-[1440px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
 
                 {/* Cabecera Principal (Estilo GELIA) */}
-                <header className="animate-page-reveal theme-surface rounded-3xl md:rounded-[2.5rem] p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6 border theme-border shadow-xl">
+                <header className={`${geliaCardClass()} p-6 md:p-12 flex flex-col md:flex-row items-center justify-between gap-4 md:gap-6`}>
                     <div className="w-full md:w-auto text-center md:text-left">
                         <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">
                             <span className="h-1.5 w-12 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }}></span>
@@ -89,7 +90,7 @@ export default function MisClientes({ auth, clientes }) {
                 </header>
 
                 {/* Tabla de Datos (Estilo Escritorio) */}
-                <div className="animate-page-reveal theme-surface rounded-[2.5rem] border theme-border shadow-2xl overflow-hidden bg-white/70 dark:bg-[#121212]/70 backdrop-blur-xl" style={{ animationDelay: '100ms' }}>
+                <div className={`${geliaCardClass()} overflow-hidden`} style={{ animationDelay: '100ms' }}>
                     <div className="overflow-x-auto pb-4 custom-scrollbar">
                         <table className="w-full text-left border-collapse min-w-[800px]">
                             {/* Cabeceras actualizadas */}
@@ -167,8 +168,8 @@ export default function MisClientes({ auth, clientes }) {
 
             {/* Modal de Registro Rápido */}
             {modalAbierto && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in" onClick={cerrarModal}>
-                    <div className="w-full max-w-lg theme-surface rounded-[2rem] shadow-2xl p-6 md:p-8 modal-pop border theme-border" onClick={(e) => e.stopPropagation()}>
+                <div className={`${THEME_MODAL_OVERLAY} z-[100]`} onClick={cerrarModal}>
+                    <div className={`${THEME_MODAL_SHELL} max-w-lg modal-pop p-6 md:p-8`} onClick={(e) => e.stopPropagation()}>
 
 
 

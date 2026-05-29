@@ -370,8 +370,8 @@ export default function AppLayout({ children }) {
 
                     {/* MODAL GLOBAL */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md animate-fade-in" onClick={closeModal}>
-                            <div className="w-full max-w-lg bg-white dark:bg-[#121212] rounded-[2rem] shadow-2xl p-6 modal-pop border border-gray-200 dark:border-[#222222] max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="gelia-modal-overlay" onClick={closeModal}>
+                            <div className="gelia-modal-shell max-w-lg p-6 modal-pop" onClick={(e) => e.stopPropagation()}>
                                 {modalContent}
                             </div>
                         </div>
@@ -397,80 +397,6 @@ export default function AppLayout({ children }) {
                     </div>
                 </div>
 
-                <style>{`
-                    :root { --bg-app: #FFFFFF; --bg-actual: var(--bg-image-movil, none); }
-                    .dark { --bg-app: #0a0a0a; }
-                    @media (min-width: 768px) { :root { --bg-actual: var(--bg-image-pc, none); } }
-                    .gelia-ui-scale {
-                        zoom: var(--font-scale, 1);
-                    }
-                    @supports not (zoom: 1) {
-                        .gelia-ui-scale {
-                            font-size: calc(16px * var(--font-scale, 1));
-                        }
-                    }
-                    html, body, input, select, textarea, button { font-family: var(--font-principal) !important; }
-
-                    .theme-surface { background-color: #ffffff; border-color: #f4f4f5; transition: background-color 0.3s, border-color 0.3s, backdrop-filter 0.3s; }
-                    .theme-element { background-color: rgba(250, 250, 250, 1) !important; border-color: #e4e4e7 !important; transition: background-color 0.3s, border-color 0.3s, backdrop-filter 0.3s; }
-                    .theme-text-main { color: #18181b; }
-                    .theme-text-muted { color: #71717a; }
-                    .theme-border { border-color: #e4e4e7; }
-                    .theme-placeholder::placeholder { color: #a1a1aa; }
-
-                    .dark .theme-surface { background-color: #121212; border-color: #222222; }
-                    .dark .theme-element { background-color: rgba(30, 30, 30, 1) !important; border-color: #2A2A2A !important; }
-                    .dark .theme-text-main { color: #ffffff; }
-                    .dark .theme-text-muted { color: #a1a1aa; }
-                    .dark .theme-border { border-color: #27272a; }
-                    .dark .theme-placeholder::placeholder { color: #52525b; }
-
-                    select.theme-element, select.theme-text-main { color: inherit; }
-                    select option { background-color: #ffffff; color: #18181b; }
-                    .dark select option { background-color: #1e1e1e; color: #ffffff; }
-
-                    html.glass-active .theme-surface, html.glass-active .theme-element, html.glass-active .sidebar-glass { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-                    html.glass-active .theme-surface { background-color: rgba(255, 255, 255, 0.75); border-color: rgba(255, 255, 255, 0.8); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); }
-                    html.glass-active .theme-element { background-color: rgba(250, 250, 250, 0.85) !important; border-color: rgba(255, 255, 255, 0.6) !important; }
-                    html.dark.glass-active .theme-surface { background-color: rgba(18, 18, 18, 0.7); border-color: rgba(255, 255, 255, 0.08); box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.5); }
-                    html.dark.glass-active .theme-element { background-color: rgba(30, 30, 30, 0.85) !important; border-color: rgba(255, 255, 255, 0.05) !important; }
-
-                    .gelia-switch { width: 3rem; height: 1.5rem; border-radius: 9999px; padding: 0.25rem; background-color: #d4d4d8; transition: background-color 0.3s ease; cursor: pointer; display: flex; align-items: center; border: none; outline: none; }
-                    .dark .gelia-switch { background-color: #3f3f46; }
-                    .gelia-switch[data-active="true"] { background-color: var(--color-primario); }
-                    .gelia-switch-thumb { width: 1rem; height: 1rem; border-radius: 9999px; background-color: white; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-                    .gelia-switch[data-active="true"] .gelia-switch-thumb { transform: translateX(1.5rem); }
-
-                    .gelia-segment { display: flex; background-color: #f4f4f5; padding: 0.25rem; border-radius: 0.75rem; border: 1px solid #e4e4e7; }
-                    .dark .gelia-segment { background-color: #18181b; border-color: #27272a; }
-                    .gelia-segment-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.5rem 1rem; font-size: 0.75rem; font-weight: 700; border-radius: 0.5rem; transition: all 0.3s ease; color: #71717a; background: transparent; border: none; outline: none; cursor: pointer; }
-                    .gelia-segment-btn[data-active="true"] { background-color: #ffffff; color: var(--color-primario); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-                    .dark .gelia-segment-btn[data-active="true"] { background-color: #27272a; }
-
-                    ::-webkit-scrollbar { width: 8px; }
-                    ::-webkit-scrollbar-track { background: transparent; }
-                    ::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.4); border-radius: 20px; }
-                    ::-webkit-scrollbar-thumb:hover { background-color: var(--color-primario); }
-                    
-                    @keyframes scaleUp { 0% { opacity: 0; transform: scale(0.95); } 100% { opacity: 1; transform: scale(1); } }
-                    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-                    @keyframes progressShrink { from { width: 100%; } to { width: 0%; } }
-                    
-                    /* --- ANIMACIÓN NATIVA DE TRANSICIÓN DE PÁGINA --- */
-                    @keyframes pageReveal {
-                        from { opacity: 0; transform: translateY(15px); }
-                        to { opacity: 1; transform: translateY(0); }
-                    }
-                    .animate-page-reveal { 
-                        animation: pageReveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
-                    }
-                    
-                    .modal-pop { animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-                    .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
-                    .animate-slide-in-right { animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-                    .animate-progress-shrink { animation: progressShrink 5s linear forwards; }
-                `}</style>
             </div>
         </ModalContext.Provider>
     );

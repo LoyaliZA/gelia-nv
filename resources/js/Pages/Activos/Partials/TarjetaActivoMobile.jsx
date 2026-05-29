@@ -1,11 +1,11 @@
 import React from 'react';
 import { Link } from '@inertiajs/react';
 import { Eye, Wrench, ImageIcon } from 'lucide-react';
-import { ESTADO_BADGE, ESTADO_LABELS } from './activosFormStyles';
+import { ESTADO_BADGE, ESTADO_LABELS, getActivosCardClass, BTN_PRIMARY_CLASS } from './activosFormStyles';
 
 export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimiento }) {
     return (
-        <div className="theme-surface rounded-[2rem] border theme-border p-4 shadow-lg flex flex-col gap-3">
+        <article className={`${getActivosCardClass('p-4 md:p-5 flex flex-col gap-3')}`}>
             <div className="flex items-start gap-3">
                 <div className="w-14 h-14 rounded-xl overflow-hidden border theme-border bg-black/5 shrink-0 flex items-center justify-center">
                     {fotoUrl ? (
@@ -45,13 +45,9 @@ export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimient
                 </div>
             </div>
 
-            <Link
-                href={route('activos.show', activo.id)}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase text-white"
-                style={{ backgroundColor: 'var(--color-primario)' }}
-            >
-                <Eye className="w-3.5 h-3.5" /> Ver detalle
+            <Link href={route('activos.show', activo.id)} className={`${BTN_PRIMARY_CLASS} w-full justify-center`}>
+                <Eye className="w-3.5 h-3.5 shrink-0" /> Ver detalle
             </Link>
-        </div>
+        </article>
     );
 }

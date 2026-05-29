@@ -12,7 +12,7 @@ import ModalMantenimiento from './Partials/ModalMantenimiento';
 import PanelMantenimiento from './Partials/PanelMantenimiento';
 import GaleriaFotosActivo from './Partials/GaleriaFotosActivo';
 import GeliaLoader from '../../Components/GeliaLoader';
-import { ESTADO_BADGE, ESTADO_LABELS, ESTILOS_PAGINA, getActivosCardClass } from './Partials/activosFormStyles';
+import { ESTADO_BADGE, ESTADO_LABELS, getActivosCardClass } from './Partials/activosFormStyles';
 
 function IdentificacionChips({ atributos = {} }) {
     const chips = [
@@ -55,12 +55,11 @@ export default function Show({ auth, activo, tipos, departamentos }) {
         router.post(route('activos.devolver', activo.id), {}, { onFinish: () => setProcesando(false) });
     };
 
-    const cardClass = (extra = '') => getActivosCardClass({ extra: `p-6 space-y-4 ${extra}`.trim() });
+    const cardClass = (extra = '') => getActivosCardClass(`p-6 space-y-4 ${extra}`.trim());
 
     return (
         <AppLayout auth={auth}>
             <Head title={`${activo.folio} | Activos`} />
-            <style>{ESTILOS_PAGINA}</style>
             <GeliaLoader isVisible={procesando} message="Procesando_" />
 
             <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6">
@@ -71,7 +70,7 @@ export default function Show({ auth, activo, tipos, departamentos }) {
                     <ArrowLeft className="w-4 h-4" style={{ color: 'var(--color-primario)' }} /> Volver al listado
                 </Link>
 
-                <header className={getActivosCardClass({ extra: 'p-6 md:p-10' })}>
+                <header className={getActivosCardClass('p-6 md:p-10')}>
                     <div className="flex flex-col lg:flex-row gap-6">
                         <div className="lg:w-1/3">
                             <GaleriaFotosActivo
@@ -182,7 +181,7 @@ export default function Show({ auth, activo, tipos, departamentos }) {
                     />
                 </div>
 
-                <div className={getActivosCardClass({ extra: 'p-6' })} style={{ animationDelay: '250ms' }}>
+                <div className={getActivosCardClass('p-6')}>
                     <h2 className="text-sm font-black uppercase tracking-widest theme-text-muted mb-4">Bitácora</h2>
                     <TimelineMovimientos movimientos={activo.movimientos} mantenimientos={activo.mantenimientos} />
                 </div>

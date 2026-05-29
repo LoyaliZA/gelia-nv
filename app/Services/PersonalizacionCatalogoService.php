@@ -142,6 +142,110 @@ class PersonalizacionCatalogoService
             ->all();
     }
 
+    public static function conteosAdmin(): array
+    {
+        return [
+            'tonos'  => self::tablaDisponible('personalizacion_tonos') ? PersonalizacionTono::count() : 0,
+            'fondos' => self::tablaDisponible('personalizacion_fondos') ? PersonalizacionFondo::count() : 0,
+            'temas'  => self::tablaDisponible('personalizacion_temas') ? PersonalizacionTema::count() : 0,
+        ];
+    }
+
+    public static function fondosOpcionesSelect(): array
+    {
+        if (!self::tablaDisponible('personalizacion_fondos')) {
+            return collect(['blob', 'stacked', 'polygon', 'wave'])->map(fn ($v) => ['value' => $v, 'label' => $v])->all();
+        }
+
+        return PersonalizacionFondo::query()
+            ->where('activo', true)
+            ->orderBy('orden')
+            ->orderBy('nombre')
+            ->get()
+            ->map(fn (PersonalizacionFondo $f) => ['value' => $f->valor, 'label' => $f->nombre])
+            ->values()
+            ->all();
+    }
+
+    public static function tonosAdminPaginados(int $page = 1, int $perPage = 12): array
+    {
+        if (!self::tablaDisponible('personalizacion_tonos')) {
+            return self::paginacionVacia($perPage);
+        }
+
+        $paginated = PersonalizacionTono::query()
+            ->orderBy('orden')
+            ->orderBy('nombre')
+            ->paginate($perPage, ['*'], 'page', $page)
+            ->withQueryString();
+
+        return self::serializarPaginacion($paginated, fn (PersonalizacionTono $tono) => [
+            'id'      => $tono->id,
+            'slug'    => $tono->slug,
+            'nombre'  => $tono->nombre,
+            'archivo' => $tono->archivo,
+            'path'    => '/assets/sounds/' . ltrim($tono->archivo, '/'),
+            'activo'  => $tono->activo,
+            'orden'   => $tono->orden,
+        ]);
+    }
+
+    public static function fondosAdminPaginados(int $page = 1, int $perPage = 12): array
+    {
+        if (!self::tablaDisponible('personalizacion_fondos')) {
+            return self::paginacionVacia($perPage);
+        }
+
+        $paginated = PersonalizacionFondo::query()
+            ->orderBy('orden')
+            ->orderBy('nombre')
+            ->paginate($perPage, ['*'], 'page', $page)
+            ->withQueryString();
+
+        return self::serializarPaginacion($paginated, fn (PersonalizacionFondo $fondo) => self::formatearFondo($fondo, true));
+    }
+
+    public static function temasAdminPaginados(int $page = 1, int $perPage = 9): array
+    {
+        if (!self::tablaDisponible('personalizacion_temas')) {
+            return self::paginacionVacia($perPage);
+        }
+
+        $paginated = PersonalizacionTema::query()
+            ->orderBy('orden')
+            ->orderBy('nombre')
+            ->paginate($perPage, ['*'], 'page', $page)
+            ->withQueryString();
+
+        return self::serializarPaginacion($paginated, fn (PersonalizacionTema $tema) => self::formatearTema($tema, true));
+    }
+
+    private static function paginacionVacia(int $perPage): array
+    {
+        return [
+            'data'         => [],
+            'current_page' => 1,
+            'last_page'    => 1,
+            'per_page'     => $perPage,
+            'total'        => 0,
+            'from'         => 0,
+            'to'           => 0,
+        ];
+    }
+
+    private static function serializarPaginacion($paginated, callable $mapper): array
+    {
+        return [
+            'data'         => $paginated->getCollection()->map($mapper)->values()->all(),
+            'current_page' => $paginated->currentPage(),
+            'last_page'    => $paginated->lastPage(),
+            'per_page'     => $paginated->perPage(),
+            'total'        => $paginated->total(),
+            'from'         => $paginated->firstItem() ?? 0,
+            'to'           => $paginated->lastItem() ?? 0,
+        ];
+    }
+
     private static function formatearFondo(PersonalizacionFondo $fondo, bool $admin = false): array
     {
         $preview = $fondo->tipo === 'vector'

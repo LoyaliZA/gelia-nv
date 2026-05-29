@@ -88,16 +88,18 @@ class AdminController extends Controller
         $user = Auth::user();
         $isGlobalAdmin = $user->hasRole(['Super Admin', 'Administrador']);
 
+        $relaciones = [
+            'areas',
+            'departamentos',
+            'gerentes',
+            'roles',
+            'permissions',
+            'permisoProcedencia.permission',
+            'permisoProcedencia.asignadoPor',
+        ];
+
         if ($isGlobalAdmin) {
-            $usuarios = User::with([
-                'areas',
-                'departamentos',
-                'gerentes',
-                'roles',
-                'permissions',
-                'permisoProcedencia.permission',
-                'permisoProcedencia.asignadoPor',
-            ])->get();
+            $queryUsuarios = User::with($relaciones);
             $departamentos = Departamento::with('areas')->where('activo', true)->get();
             $posiblesGerentes = User::role(['Super Admin', 'Administrador', 'Gerente'])
                 ->select('id', 'name', 'apellido_paterno')
@@ -107,17 +109,9 @@ class AdminController extends Controller
             $rolesConfig = Role::with('permissions')->where('name', '!=', 'Super Admin')->get();
             $todosLosPermisos = Permission::all();
         } else {
-            $usuarios = User::whereHas('gerentes', function ($query) use ($user) {
+            $queryUsuarios = User::whereHas('gerentes', function ($query) use ($user) {
                 $query->where('gerente_id', $user->id);
-            })->with([
-                'areas',
-                'departamentos',
-                'gerentes',
-                'roles',
-                'permissions',
-                'permisoProcedencia.permission',
-                'permisoProcedencia.asignadoPor',
-            ])->get();
+            })->with($relaciones);
 
             $misAreasIds = $user->areas()->pluck('areas.id');
             $departamentos = $user->departamentos()->with(['areas' => function ($query) use ($misAreasIds) {
@@ -134,8 +128,13 @@ class AdminController extends Controller
             $todosLosPermisos = $user->getAllPermissions();
         }
 
+        $usuariosPaginados = $this->paginarUsuarios($queryUsuarios);
+
         return Inertia::render('Admin/Usuarios', [
-            'usuarios' => $usuarios->map(fn (User $u) => $this->serializarUsuarioConProcedencia($u)),
+            'usuarios' => $usuariosPaginados,
+            'filtros' => [
+                'busqueda' => trim((string) request('busqueda', '')),
+            ],
             'departamentos' => $departamentos,
             'posiblesGerentes' => $posiblesGerentes,
             'roles' => $roles,
@@ -408,6 +407,40 @@ class AdminController extends Controller
         auth()->user()->notifications()->delete();
 
         return back();
+    }
+
+    private function paginarUsuarios($query): array
+    {
+        $busqueda = trim((string) request('busqueda', ''));
+        if ($busqueda !== '') {
+            $term = '%'.$busqueda.'%';
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', $term)
+                    ->orWhere('email', 'like', $term)
+                    ->orWhere('username', 'like', $term)
+                    ->orWhere('apellido_paterno', 'like', $term)
+                    ->orWhere('apellido_materno', 'like', $term);
+            });
+        }
+
+        $paginated = $query
+            ->orderBy('name')
+            ->orderBy('apellido_paterno')
+            ->paginate(12)
+            ->withQueryString();
+
+        return [
+            'data' => $paginated->getCollection()
+                ->map(fn (User $u) => $this->serializarUsuarioConProcedencia($u))
+                ->values()
+                ->all(),
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'per_page' => $paginated->perPage(),
+            'total' => $paginated->total(),
+            'from' => $paginated->firstItem() ?? 0,
+            'to' => $paginated->lastItem() ?? 0,
+        ];
     }
 
     private function serializarUsuarioConProcedencia(User $usuario): array

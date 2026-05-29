@@ -1,94 +1,151 @@
-import React, { useState, useEffect } from 'react';
-import { Head } from '@inertiajs/react';
-import { animate } from 'animejs/animation';
-import { Palette, Volume2, ImageIcon, Layers } from 'lucide-react';
+import React, { useRef, useCallback } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { Palette, Volume2, ImageIcon, Layers, Plus } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
+import GeliaPaginacion from '../../Components/GeliaPaginacion';
+import { geliaCardClass, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
 import TablaTonos from './Partials/Personalizacion/TablaTonos';
 import TablaFondos from './Partials/Personalizacion/TablaFondos';
 import TablaTemas from './Partials/Personalizacion/TablaTemas';
 
-export default function GestorDePersonalizacion({ tonos = [], fondos = [], temas = [] }) {
-    const [tabActiva, setTabActiva] = useState('tonos');
-    const [glassEffect, setGlassEffect] = useState(() => {
-        if (typeof window === 'undefined') return true;
-        const saved = localStorage.getItem('theme_glass');
-        return saved !== null ? saved === 'true' : true;
-    });
+const TABS = [
+    { id: 'tonos', label: 'Tonos', icon: Volume2 },
+    { id: 'fondos', label: 'Fondos', icon: ImageIcon },
+    { id: 'temas', label: 'Temas', icon: Layers },
+];
 
-    useEffect(() => {
-        const syncGlass = () => {
-            const saved = localStorage.getItem('theme_glass');
-            if (saved !== null) setGlassEffect(saved === 'true');
-        };
-        window.addEventListener('theme-changed', syncGlass);
-        return () => window.removeEventListener('theme-changed', syncGlass);
-    }, []);
+const SECCION_META = {
+    tonos: {
+        titulo: 'Tonos de notificación',
+        subtitulo: 'Archivos de audio para alertas del sistema',
+        cta: 'Subir tono',
+    },
+    fondos: {
+        titulo: 'Fondos predeterminados',
+        subtitulo: 'Vectores del sistema e imágenes para el perfil',
+        cta: 'Nuevo fondo',
+    },
+    temas: {
+        titulo: 'Temas predefinidos',
+        subtitulo: 'Plantillas visuales disponibles en el perfil',
+        cta: 'Nuevo tema',
+    },
+};
 
-    useEffect(() => {
-        animate(
-            '.fade-up',
-            { translateY: [15, 0], opacity: [0, 1] },
-            { easing: 'easeOutExpo', duration: 600, delay: (el, i) => i * 80 }
+export default function GestorDePersonalizacion({
+    seccion = 'tonos',
+    catalogo = {},
+    conteos = { tonos: 0, fondos: 0, temas: 0 },
+    fondos_opciones = [],
+}) {
+    const abrirModalRef = useRef(null);
+    const meta = SECCION_META[seccion] || SECCION_META.tonos;
+    const totalSeccion = conteos[seccion] ?? catalogo?.total ?? 0;
+
+    const cambiarSeccion = (id) => {
+        if (id === seccion) return;
+        router.get(
+            route('admin.personalizacion.index'),
+            { seccion: id, page: 1 },
+            { preserveState: true, replace: true }
         );
-    }, [tabActiva]);
+    };
 
-    const baseCardClass   = 'fade-up theme-surface rounded-[2.5rem] relative z-10 transition-all duration-300';
-    const glassCardClass  = 'bg-white/75 dark:bg-[#121212]/75 backdrop-blur-[24px] border-[1.5px] border-white/80 dark:border-zinc-700/60 shadow-[0_12px_40px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]';
-    const solidCardClass  = 'bg-white dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 shadow-[0_12px_40px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)]';
-    const activeCardClass = `${baseCardClass} ${glassEffect ? glassCardClass : solidCardClass}`;
+    const irAPagina = useCallback(
+        (pagina) => {
+            if (pagina < 1 || pagina > (catalogo?.last_page || 1)) return;
+            router.get(
+                route('admin.personalizacion.index'),
+                { seccion, page: pagina },
+                { preserveState: true, preserveScroll: true }
+            );
+        },
+        [seccion, catalogo?.last_page]
+    );
 
-    const tabs = [
-        { id: 'tonos',  label: 'Tonos de Alerta', icon: Volume2 },
-        { id: 'fondos', label: 'Fondos',          icon: ImageIcon },
-        { id: 'temas',  label: 'Temas',           icon: Layers },
-    ];
+    const cardPrincipal = geliaCardClass('overflow-hidden relative z-10');
 
     return (
         <AppLayout>
             <Head title="Personalización | GELIANV" />
 
-            <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
-                <header className={`${activeCardClass} p-8 md:p-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-8`}>
-                    <div className="space-y-3">
+            <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
+                <header className={`${geliaCardClass()} p-6 md:p-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`}>
+                    <div className="min-w-0 space-y-2">
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-1.5 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }} />
-                            <span className="text-[10px] font-black tracking-[0.2em] uppercase theme-text-muted drop-shadow-sm">
-                                Experiencia de Usuario_
-                            </span>
+                            <span className="h-1.5 w-12 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primario)' }} />
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em] m-0" style={{ color: 'var(--color-primario)' }}>
+                                Experiencia de usuario
+                            </p>
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0">
-                            GESTOR DE <span style={{ color: 'var(--color-primario)' }}>PERSONALIZACIÓN</span>
+                        <h1 className="text-2xl sm:text-3xl md:text-5xl font-black italic uppercase tracking-tighter theme-text-main m-0 leading-none">
+                            Personalización <span style={{ color: 'var(--color-primario)' }}>global</span>
                         </h1>
-                        <p className="text-sm font-bold theme-text-muted max-w-2xl leading-relaxed m-0">
-                            Administra tonos, fondos y temas predefinidos que se muestran en el perfil de cada colaborador.
+                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest max-w-2xl leading-relaxed m-0">
+                            Tonos, fondos y temas que los colaboradores pueden elegir en su perfil.
                         </p>
                     </div>
-                    <div className="p-4 rounded-2xl theme-element border theme-border">
-                        <Palette className="w-8 h-8" style={{ color: 'var(--color-primario)' }} />
+                    <div className="p-4 rounded-2xl theme-element border theme-border shrink-0">
+                        <Palette className="w-8 h-8" style={{ color: 'var(--color-primario)' }} aria-hidden />
                     </div>
                 </header>
 
-                <div className={`${activeCardClass} p-3 md:p-4`}>
-                    <div className="gelia-segment w-full p-1 shadow-sm flex flex-wrap gap-1">
-                        {tabs.map((tab) => (
+                <div className={cardPrincipal}>
+                    <nav className="gelia-nav-tabs" aria-label="Secciones del catálogo">
+                        {TABS.map((tab) => (
                             <button
                                 key={tab.id}
                                 type="button"
-                                onClick={() => setTabActiva(tab.id)}
-                                className="gelia-segment-btn flex-1 py-3.5 md:py-4 rounded-[1.25rem] min-w-[120px] sm:min-w-[140px] text-[10px] font-black uppercase tracking-widest"
-                                data-active={tabActiva === tab.id}
+                                onClick={() => cambiarSeccion(tab.id)}
+                                className="gelia-nav-tab"
+                                data-active={seccion === tab.id}
+                                aria-current={seccion === tab.id ? 'page' : undefined}
                             >
-                                <tab.icon className="w-4 h-4" /> {tab.label}
+                                <tab.icon className="w-4 h-4 shrink-0" aria-hidden />
+                                {tab.label}
+                                <span className="gelia-nav-tab__badge">{conteos[tab.id] ?? 0}</span>
                             </button>
                         ))}
-                    </div>
-                </div>
+                    </nav>
 
-                <section className={`${activeCardClass} overflow-hidden`}>
-                    {tabActiva === 'tonos' && <TablaTonos datos={tonos} />}
-                    {tabActiva === 'fondos' && <TablaFondos datos={fondos} />}
-                    {tabActiva === 'temas' && <TablaTemas datos={temas} fondos={fondos} glassEffect={glassEffect} />}
-                </section>
+                    <div className="p-5 md:p-8 border-b theme-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="min-w-0">
+                            <h2 className="text-lg md:text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 leading-tight">
+                                {meta.titulo}
+                            </h2>
+                            <p className="text-[10px] theme-text-muted font-bold uppercase tracking-widest mt-1.5 m-0">
+                                {meta.subtitulo}
+                                {totalSeccion > 0 && (
+                                    <span className="block sm:inline sm:ml-2 mt-1 sm:mt-0 opacity-80">
+                                        · {totalSeccion.toLocaleString('es-MX')} en catálogo
+                                    </span>
+                                )}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => abrirModalRef.current?.()}
+                            className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact w-full sm:w-auto shrink-0`}
+                        >
+                            <Plus className="w-4 h-4 shrink-0" aria-hidden />
+                            {meta.cta}
+                        </button>
+                    </div>
+
+                    <div key={seccion} className="personalizacion-reveal">
+                        {seccion === 'tonos' && (
+                            <TablaTonos catalogo={catalogo} registrarAbrir={abrirModalRef} />
+                        )}
+                        {seccion === 'fondos' && (
+                            <TablaFondos catalogo={catalogo} registrarAbrir={abrirModalRef} />
+                        )}
+                        {seccion === 'temas' && (
+                            <TablaTemas catalogo={catalogo} fondos_opciones={fondos_opciones} registrarAbrir={abrirModalRef} />
+                        )}
+                    </div>
+
+                    <GeliaPaginacion paginator={catalogo} onIrAPagina={irAPagina} embedded />
+                </div>
             </div>
         </AppLayout>
     );
