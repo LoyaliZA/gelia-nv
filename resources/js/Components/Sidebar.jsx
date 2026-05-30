@@ -4,7 +4,7 @@ import {
     Menu, X, Moon, Sun, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package, Receipt, Ban
+    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package, Receipt, Ban, Globe
 } from 'lucide-react';
 
 import GeliaLogo from './GeliaLogo';
@@ -40,6 +40,7 @@ const ADMIN_MENU_CONFIG = [
     { id: 'comisiones', label: 'Comisiones', path: '/admin/comisiones', routeName: 'admin.comisiones', icon: Calculator, permission: 'comisiones.gestionar' },
     { id: 'usuarios', label: 'Usuarios', path: '/admin/usuarios', routeName: 'admin.usuarios', icon: Users, permission: 'usuarios.gestionar' },
     { id: 'auditorias', label: 'Auditorías de Sistema', path: '/admin/auditorias-sistema', routeName: 'admin.auditorias_sistema.index', icon: History, permission: 'sistema.auditorias.ver' },
+    { id: 'api_externa', label: 'API Externa', path: '/admin/api-externa', routeName: 'admin.api_externa.index', icon: Globe, permissionAny: ['api_externa.gestionar', 'api_externa.ver_auditoria'] },
 ];
 
 export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left', sidebarMode = 'collapsed', fixedPosition = 'left' }) {
@@ -106,7 +107,14 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         return isSuperAdmin || hasPermission;
     };
 
-    const showAdminMenu = ADMIN_MENU_CONFIG.some(item => can(item.permission));
+    const menuItemAllowed = (item) => {
+        if (item.permissionAny?.length) {
+            return item.permissionAny.some((perm) => can(perm));
+        }
+        return can(item.permission);
+    };
+
+    const showAdminMenu = ADMIN_MENU_CONFIG.some(menuItemAllowed);
     const showOperacionesMenu = can('listados.ver');
 
     const openMenu = () => {
@@ -503,7 +511,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
 
                                     <div className={`overflow-hidden px-2 mt-2 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${isConfigExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
                                         <div className="flex flex-col space-y-2">
-                                            {ADMIN_MENU_CONFIG.filter(item => can(item.permission)).map((item) => {
+                                            {ADMIN_MENU_CONFIG.filter(menuItemAllowed).map((item) => {
                                                 const IconComponent = item.icon;
                                                 const isActive = isRouteActive(item.path);
                                                 return (

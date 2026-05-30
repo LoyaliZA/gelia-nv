@@ -21,6 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            'api.app' => \App\Http\Middleware\AuthenticateApiApplication::class,
+            'log.api' => \App\Http\Middleware\LogApiRequest::class,
+            'api.resource' => \App\Http\Middleware\CheckApiResourcePermission::class,
+            'require.json' => \App\Http\Middleware\RequireJsonAccept::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

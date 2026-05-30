@@ -53,6 +53,8 @@ export const DESCRIPCIONES_PERMISOS = {
     'cancelaciones_cotizaciones.cancelar': 'Permite confirmar cancelaciones de folios operativos pendientes.',
     'cancelaciones_cotizaciones.exportar': 'Permite exportar el listado de cancelaciones y cotizaciones.',
     'cancelaciones_cotizaciones.eliminar': 'Permite eliminar solicitudes operativas con auditoría.',
+    'api_externa.gestionar': 'Permite administrar la API externa, aplicaciones, permisos y documentación.',
+    'api_externa.ver_auditoria': 'Permite consultar la bitácora de uso de la API externa.',
 };
 
 export function descripcionPermiso(permisoName) {
@@ -102,6 +104,40 @@ export function filtrarPermisosDirectos(permisosIndividuales) {
 export function usuarioPuedeAsignarPermiso(permisoName, permisosUsuario, esSuperAdmin) {
     if (esSuperAdmin) return true;
     return (permisosUsuario || []).includes(permisoName);
+}
+
+/** Permisos que un gerente no puede otorgar a colaboradores (aunque los tenga en su cuenta). */
+export const PERMISOS_NO_DELEGABLES_POR_GERENTE = new Set([
+    'configuracion.ver_auditoria',
+    'usuarios.gestionar',
+    'usuarios.generar_permisos',
+    'solicitudes.confirmar_pago',
+    'personalizacion.gestionar',
+    'api_externa.gestionar',
+    'api_externa.ver_auditoria',
+]);
+
+export function permisoNoDelegablePorGerente(permisoName, esSuperAdmin) {
+    if (esSuperAdmin) return false;
+    return PERMISOS_NO_DELEGABLES_POR_GERENTE.has(permisoName);
+}
+
+export function permisoProtegidoParaEditor(meta, usuarioActualId, esSuperAdmin) {
+    if (esSuperAdmin || !meta) return false;
+    const asignador = meta.asignado_por;
+    if (!asignador) return false;
+    if (asignador.es_super_admin || asignador.es_administrador) return true;
+    if (asignador.id != null && usuarioActualId != null && Number(asignador.id) !== Number(usuarioActualId)) {
+        return true;
+    }
+    return false;
+}
+
+export function gerentePuedeMostrarPermisoInactivo(permisoName, permisosUsuario, esSuperAdmin) {
+    if (esSuperAdmin) return true;
+    if (!usuarioPuedeAsignarPermiso(permisoName, permisosUsuario, esSuperAdmin)) return false;
+    if (permisoNoDelegablePorGerente(permisoName, esSuperAdmin)) return false;
+    return true;
 }
 
 export function filtrarRolesAsignables(roles, _permisosUsuario, esSuperAdmin) {

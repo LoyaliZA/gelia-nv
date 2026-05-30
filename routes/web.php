@@ -368,6 +368,23 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/auditorias-sistema', [AuditoriaListaDescuentoController::class, 'index'])
                 ->name('auditorias_sistema.index');
         });
+
+        // --- 6. API Externa ---
+        Route::prefix('api-externa')->name('api_externa.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\ApiExternaController::class, 'index'])->name('index');
+            Route::middleware(['can:api_externa.gestionar'])->group(function () {
+                Route::post('/aplicaciones', [\App\Http\Controllers\Admin\ApiExternaController::class, 'storeAplicacion'])->name('aplicaciones.store');
+                Route::put('/aplicaciones/{aplicacion}', [\App\Http\Controllers\Admin\ApiExternaController::class, 'updateAplicacion'])->name('aplicaciones.update');
+                Route::post('/aplicaciones/{aplicacion}/regenerar-secret', [\App\Http\Controllers\Admin\ApiExternaController::class, 'regenerarSecret'])->name('aplicaciones.regenerar_secret');
+                Route::post('/aplicaciones/{aplicacion}/revocar-tokens', [\App\Http\Controllers\Admin\ApiExternaController::class, 'revocarTokens'])->name('aplicaciones.revocar_tokens');
+                Route::delete('/aplicaciones/{aplicacion}', [\App\Http\Controllers\Admin\ApiExternaController::class, 'destroyAplicacion'])->name('aplicaciones.destroy');
+                Route::put('/recursos/{recurso}', [\App\Http\Controllers\Admin\ApiExternaController::class, 'updateRecurso'])->name('recursos.update');
+                Route::put('/campos/{campo}', [\App\Http\Controllers\Admin\ApiExternaController::class, 'updateCampo'])->name('campos.update');
+                Route::put('/permisos/{permiso}', [\App\Http\Controllers\Admin\ApiExternaController::class, 'updatePermiso'])->name('permisos.update');
+                Route::put('/aplicacion-campos/{campo}', [\App\Http\Controllers\Admin\ApiExternaController::class, 'updateCampoAplicacion'])->name('aplicacion_campos.update');
+                Route::get('/documentacion/pdf', [\App\Http\Controllers\Admin\ApiExternaController::class, 'descargarDocumentacion'])->name('documentacion.pdf');
+            });
+        });
     });
 
     // ══════════════════════════════════════════════════════════════════════

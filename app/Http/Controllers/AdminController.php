@@ -108,6 +108,7 @@ class AdminController extends Controller
             $roles = Role::with('permissions')->get();
             $rolesConfig = Role::with('permissions')->where('name', '!=', 'Super Admin')->get();
             $todosLosPermisos = Permission::all();
+            $catalogoPermisos = $todosLosPermisos;
         } else {
             $queryUsuarios = User::whereHas('gerentes', function ($query) use ($user) {
                 $query->where('gerente_id', $user->id);
@@ -124,8 +125,9 @@ class AdminController extends Controller
             // Un gerente no puede crear otros Administradores ni Super Admins
             $roles = Role::with('permissions')->whereNotIn('name', ['Super Admin', 'Administrador'])->get();
             $rolesConfig = Role::with('permissions')->whereNotIn('name', ['Super Admin', 'Administrador'])->get();
-            // Un gerente solo puede asignar los permisos que él mismo tiene en su sesión
-            $todosLosPermisos = $user->getAllPermissions();
+            $permisosAsignador = ValidarAsignacionPermisosService::permisosDelUsuario($user);
+            $todosLosPermisos = Permission::whereIn('name', $permisosAsignador)->orderBy('name')->get();
+            $catalogoPermisos = Permission::orderBy('name')->get(['id', 'name']);
         }
 
         $usuariosPaginados = $this->paginarUsuarios($queryUsuarios);
@@ -140,6 +142,7 @@ class AdminController extends Controller
             'roles' => $roles,
             'rolesConfig' => $rolesConfig,
             'todosLosPermisos' => $todosLosPermisos,
+            'catalogoPermisos' => $catalogoPermisos ?? $todosLosPermisos,
             'sexos' => CatalogoSexo::all() ?? [],
             'esSuperAdmin' => $user->hasRole('Super Admin'),
             'permisosUsuario' => ValidarAsignacionPermisosService::permisosDelUsuario($user),
@@ -265,6 +268,8 @@ class AdminController extends Controller
 
     public function updateUsuario(Request $request, User $user)
     {
+        $asignador = Auth::user();
+
         $data = $request->validate([
             'name' => 'required|string',
             'apellido_paterno' => 'required|string',
@@ -288,11 +293,27 @@ class AdminController extends Controller
             ->values()
             ->all();
 
-        ValidarAsignacionPermisosService::assertPuedeAsignar(
-            Auth::user(),
-            [],
-            $data['permisos_individuales'] ?? []
+        $user->loadMissing('permissions');
+        $permisosSolicitados = $data['permisos_individuales'] ?? [];
+        $permisosFinales = ValidarAsignacionPermisosService::resolverPermisosActualizacion(
+            $asignador,
+            $user,
+            $permisosSolicitados
         );
+        $protegidos = ValidarAsignacionPermisosService::permisosProtegidosParaAsignador($asignador, $user);
+        $permisosGestionables = collect($permisosSolicitados)
+            ->intersect(ValidarAsignacionPermisosService::permisosDelUsuario($asignador))
+            ->diff($protegidos)
+            ->values()
+            ->all();
+
+        ValidarAsignacionPermisosService::assertPuedeAsignar(
+            $asignador,
+            [],
+            $permisosGestionables
+        );
+
+        $data['permisos_individuales'] = $permisosFinales;
 
         $user->update([
             'name' => $data['name'],
@@ -317,10 +338,11 @@ class AdminController extends Controller
 
         AsignarPermisosUsuarioService::asignar(
             $user,
-            $data['permisos_individuales'] ?? [],
-            Auth::user(),
+            $permisosFinales,
+            $asignador,
             $data['plantilla_origen'] ?? null,
-            $data['plantilla_por_permiso'] ?? null
+            $data['plantilla_por_permiso'] ?? null,
+            ValidarAsignacionPermisosService::esSuperAdmin($asignador) ? null : $permisosGestionables
         );
 
         return back()->with('success', 'Perfil actualizado.');
@@ -464,6 +486,8 @@ class AdminController extends Controller
                 'asignado_por' => $asignador ? [
                     'id' => $asignador->id,
                     'nombre' => trim("{$asignador->name} {$asignador->apellido_paterno}"),
+                    'es_super_admin' => $asignador->hasRole('Super Admin'),
+                    'es_administrador' => $asignador->hasRole('Administrador'),
                 ] : null,
             ];
         })->filter(fn ($p) => $p['permiso'])->values()->all();

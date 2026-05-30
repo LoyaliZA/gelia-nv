@@ -14,14 +14,21 @@ class AsignarPermisosUsuarioService
      *
      * @param  array<string>  $permisos  Nombres de permisos
      */
+    /**
+     * @param  array<string>|null  $permisosActualizarProcedencia  Si se define, solo esos permisos actualizan asignado_por/plantilla.
+     */
     public static function asignar(
         User $usuario,
         array $permisos,
         ?User $asignador = null,
         ?string $plantillaOrigen = null,
-        ?array $plantillaPorPermiso = null
+        ?array $plantillaPorPermiso = null,
+        ?array $permisosActualizarProcedencia = null
     ): void {
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
+
+        $usuario->loadMissing('permissions');
+        $existentesAntes = $usuario->permissions->pluck('name')->all();
 
         $permisosUnicos = collect($permisos)->unique()->values()->all();
         $usuario->syncPermissions($permisosUnicos);
@@ -43,16 +50,23 @@ class AsignarPermisosUsuarioService
                 ? ($plantillaPorPermiso[$permisoName] ?? $plantillaOrigen)
                 : $plantillaOrigen;
 
+            $esNuevo = !in_array($permisoName, $existentesAntes, true);
+            $debeActualizarProcedencia = $permisosActualizarProcedencia === null
+                ? $esNuevo
+                : ($esNuevo && in_array($permisoName, $permisosActualizarProcedencia, true));
+
+            $attrs = ['updated_at' => $now];
+            if ($debeActualizarProcedencia) {
+                $attrs['asignado_por_id'] = $asignador?->id;
+                $attrs['plantilla_origen'] = $origenPlantilla;
+            }
+
             UsuarioPermisoProcedencia::updateOrCreate(
                 [
                     'user_id' => $usuario->id,
                     'permission_id' => $permissionId,
                 ],
-                [
-                    'asignado_por_id' => $asignador?->id,
-                    'plantilla_origen' => $origenPlantilla,
-                    'updated_at' => $now,
-                ]
+                $attrs
             );
         }
 

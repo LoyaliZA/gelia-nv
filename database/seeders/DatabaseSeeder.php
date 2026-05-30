@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             RolesSeeder::class,
             CatalogosSeeder::class,
             OrganizacionSeeder::class,
+            ApiExternaSeeder::class,
         ]);
     }
 }

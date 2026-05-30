@@ -3,6 +3,7 @@
 namespace App\Services\Permisos;
 
 use App\Models\User;
+use App\Models\UsuarioPermisoProcedencia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -43,6 +44,62 @@ class ValidarAsignacionPermisosService
             ->whereIn('name', $rolesNames)
             ->get()
             ->flatMap(fn (Role $rol) => $rol->permissions->pluck('name'))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Permisos efectivos al actualizar: conserva los que el colaborador ya tiene
+     * y el asignador no puede delegar (p. ej. asignados por Super Admin).
+     */
+    /**
+     * Permisos del colaborador que otro usuario ya asignó (el gerente no puede quitarlos).
+     *
+     * @return array<string>
+     */
+    public static function permisosProtegidosParaAsignador(User $asignador, User $colaborador): array
+    {
+        if (self::esSuperAdmin($asignador)) {
+            return [];
+        }
+
+        return UsuarioPermisoProcedencia::query()
+            ->where('user_id', $colaborador->id)
+            ->whereNotNull('asignado_por_id')
+            ->where('asignado_por_id', '!=', $asignador->id)
+            ->with('permission')
+            ->get()
+            ->map(fn (UsuarioPermisoProcedencia $proc) => $proc->permission?->name)
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    public static function resolverPermisosActualizacion(
+        User $asignador,
+        User $colaborador,
+        array $permisosSolicitados
+    ): array {
+        if (self::esSuperAdmin($asignador)) {
+            return collect($permisosSolicitados)->unique()->values()->all();
+        }
+
+        $colaborador->loadMissing('permissions');
+
+        $asignable = collect(self::permisosDelUsuario($asignador));
+        $existentes = $colaborador->permissions->pluck('name');
+
+        $sinPermisoDelegar = $existentes->diff($asignable);
+        $protegidos = collect(self::permisosProtegidosParaAsignador($asignador, $colaborador));
+        $gestionados = collect($permisosSolicitados)
+            ->intersect($asignable)
+            ->diff($protegidos)
+            ->values();
+
+        return $sinPermisoDelegar
+            ->merge($protegidos)
+            ->merge($gestionados)
             ->unique()
             ->values()
             ->all();

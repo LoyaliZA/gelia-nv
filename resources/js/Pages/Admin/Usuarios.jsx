@@ -11,7 +11,11 @@ import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import PermisosAtomicos from './Partials/PermisosAtomicos';
 import ConfiguracionHerencia from './Partials/ConfiguracionHerencia';
-import { deduplicarPermisos, permisosDePlantilla } from '../../utils/permisos';
+import {
+    deduplicarPermisos,
+    permisosDePlantilla,
+    permisoProtegidoParaEditor,
+} from '../../utils/permisos';
 import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
 
 function UserAvatar({ usuario }) {
@@ -189,6 +193,7 @@ export default function Usuarios({
     roles = [],
     rolesConfig = [],
     todosLosPermisos = [],
+    catalogoPermisos = [],
     sexos = [],
     esSuperAdmin = false,
     permisosUsuario = [],
@@ -399,7 +404,20 @@ export default function Usuarios({
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        const permisosLimpios = deduplicarPermisos(data.permisos_individuales);
+        let permisosLimpios = deduplicarPermisos(data.permisos_individuales);
+        if (!esSuperAdmin && usuarioEditando) {
+            const usuarioActualId = auth?.user?.id;
+            const intocables = (usuarioEditando.permissions || [])
+                .map((p) => p.name)
+                .filter((p) => !(permisosUsuario || []).includes(p));
+            const protegidos = (usuarioEditando.permisos_procedencia || [])
+                .filter((proc) => proc.permiso && permisoProtegidoParaEditor(proc, usuarioActualId, false))
+                .map((proc) => proc.permiso);
+            const gestionados = permisosLimpios.filter(
+                (p) => (permisosUsuario || []).includes(p) && !protegidos.includes(p)
+            );
+            permisosLimpios = deduplicarPermisos([...intocables, ...protegidos, ...gestionados]);
+        }
         const payload = {
             ...data,
             permisos_individuales: permisosLimpios,
@@ -409,7 +427,8 @@ export default function Usuarios({
 
         if (usuarioEditando) {
             put(route('admin.usuarios.update', usuarioEditando.id), payload, {
-                onSuccess: () => cerrarModal()
+                preserveScroll: true,
+                onSuccess: () => cerrarModal(),
             });
         } else {
             post(route('admin.usuarios.store'), payload, {
@@ -755,8 +774,10 @@ export default function Usuarios({
                                         }}
                                         roles={roles}
                                         todosLosPermisos={todosLosPermisos}
+                                        catalogoPermisos={catalogoPermisos}
                                         permisosUsuario={permisosUsuario}
                                         esSuperAdmin={esSuperAdmin}
+                                        usuarioActualId={auth?.user?.id}
                                         procedencia={procedenciaActual}
                                         onPlantillaPorPermisoChange={setPlantillaPorPermiso}
                                     />
