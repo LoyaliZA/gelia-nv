@@ -169,17 +169,34 @@ class ActivoController extends Controller
         return $this->respuestaQrConsultaPublica($activo);
     }
 
-    public function store(StoreActivoRequest $request, CrearActivoService $crearService, SubirFotosActivoService $fotosService)
-    {
-        $activo = $crearService->ejecutar(Auth::user(), $request->validated());
+    public function store(
+        StoreActivoRequest $request,
+        CrearActivoService $crearService,
+        SubirFotosActivoService $fotosService,
+        AsignarActivoService $asignarService,
+    ) {
+        $datos = $request->validated();
+        $userIdAsignacion = $datos['user_id'] ?? null;
+        $notasAsignacion = $datos['notas'] ?? null;
+        unset($datos['user_id'], $datos['notas']);
+
+        $activo = $crearService->ejecutar(Auth::user(), $datos);
 
         if ($request->hasFile('fotos')) {
             $fotosService->ejecutar($activo, $request->file('fotos'));
         }
 
+        if ($userIdAsignacion) {
+            $activo = $asignarService->ejecutar($activo, Auth::user(), (int) $userIdAsignacion, $notasAsignacion);
+        }
+
+        $mensaje = $userIdAsignacion
+            ? 'Activo registrado y asignado correctamente.'
+            : 'Activo registrado correctamente.';
+
         if ($request->boolean('registro_continuo')) {
             return back()->with([
-                'success' => 'Activo registrado correctamente.',
+                'success' => $mensaje,
                 'activo_registrado' => [
                     'id' => $activo->id,
                     'folio' => $activo->folio,
@@ -187,7 +204,7 @@ class ActivoController extends Controller
             ]);
         }
 
-        return redirect()->route('activos.show', $activo)->with('success', 'Activo registrado correctamente.');
+        return redirect()->route('activos.show', $activo)->with('success', $mensaje);
     }
 
     public function update(UpdateActivoRequest $request, Activo $activo, ActualizarActivoService $service, SubirFotosActivoService $fotosService)

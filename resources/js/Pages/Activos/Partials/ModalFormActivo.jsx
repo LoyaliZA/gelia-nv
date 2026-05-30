@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useForm, usePage } from '@inertiajs/react';
-import { Save, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Save, ChevronLeft, ChevronRight, CheckCircle2, UserPlus } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import DynamicActivoFields from './DynamicActivoFields';
 import GaleriaFotosActivo from './GaleriaFotosActivo';
+import SelectorUsuarioGelia from './SelectorUsuarioGelia';
 import ActivosModalShell from './ActivosModalShell';
 import useDispositivoCampo from './useDispositivoCampo';
 import { validarAtributosActivo } from './validarAtributosActivo';
@@ -23,7 +24,13 @@ const PASOS = [
 export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departamentos = [], activo = null }) {
     const esEdicion = !!activo;
     const { esMovil } = useDispositivoCampo();
-    const { flash } = usePage().props;
+    const { flash, auth } = usePage().props;
+
+    const puedeAsignar = useMemo(() => {
+        const roles = auth?.user?.roles || [];
+        const isAdmin = roles.includes('Admin') || roles.includes('Super admin (admin)') || roles.includes('Super Admin');
+        return auth?.user?.permissions?.includes('activos.asignar') || isAdmin;
+    }, [auth]);
     const [paso, setPaso] = useState(1);
     const [registroContinuo, setRegistroContinuo] = useState(() => {
         if (typeof window === 'undefined') return false;
@@ -44,6 +51,8 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
         valor: '',
         fotos: [],
         registro_continuo: false,
+        user_id: '',
+        notas: '',
     });
 
     const tipoSeleccionado = useMemo(
@@ -68,6 +77,8 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
             valor: '',
             fotos: [],
             registro_continuo: registroContinuo,
+            user_id: '',
+            notas: '',
         });
         setPaso(2);
         clearErrors();
@@ -90,6 +101,8 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
                 valor: activo.valor || '',
                 fotos: [],
                 registro_continuo: false,
+                user_id: '',
+                notas: '',
             });
         } else {
             reset();
@@ -210,6 +223,36 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
                 <label className={LABEL_CLASS}>Descripción</label>
                 <textarea value={data.descripcion} onChange={(e) => setData('descripcion', e.target.value)} rows={2} className={TEXTAREA_CLASS} />
             </div>
+            {!esEdicion && puedeAsignar && renderAsignacionOpcional()}
+        </div>
+    );
+
+    const renderAsignacionOpcional = () => (
+        <div className="border-t theme-border pt-4 space-y-3">
+            <div className="flex items-center gap-2">
+                <UserPlus className="w-4 h-4 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                <p className={`${LABEL_CLASS} m-0`}>Asignar a (opcional)</p>
+            </div>
+            <p className="text-xs theme-text-muted m-0">
+                Puedes asignar el activo al guardar, sin tener que registrarlo primero.
+            </p>
+            <div>
+                <label className={LABEL_CLASS}>Usuario Gelia</label>
+                <SelectorUsuarioGelia
+                    value={data.user_id}
+                    onChange={(id) => setData('user_id', id)}
+                    departamentoId={data.departamento_id}
+                    placeholder="Buscar responsable..."
+                />
+                {erroresCombinados.user_id && <p className="text-red-500 text-xs mt-1">{erroresCombinados.user_id}</p>}
+            </div>
+            {data.user_id && (
+                <div>
+                    <label className={LABEL_CLASS}>Notas de asignación</label>
+                    <textarea value={data.notas} onChange={(e) => setData('notas', e.target.value)} rows={2} className={TEXTAREA_CLASS} />
+                    {erroresCombinados.notas && <p className="text-red-500 text-xs mt-1">{erroresCombinados.notas}</p>}
+                </div>
+            )}
         </div>
     );
 

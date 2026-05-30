@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Activos;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreActivoRequest extends FormRequest
 {
@@ -15,6 +16,10 @@ class StoreActivoRequest extends FormRequest
     {
         if (is_string($this->atributos)) {
             $this->merge(['atributos' => json_decode($this->atributos, true) ?? []]);
+        }
+
+        if ($this->has('user_id') && $this->input('user_id') === '') {
+            $this->merge(['user_id' => null]);
         }
     }
 
@@ -33,6 +38,17 @@ class StoreActivoRequest extends FormRequest
             'fotos' => 'nullable|array|max:5',
             'fotos.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             'registro_continuo' => 'nullable|boolean',
+            'user_id' => 'nullable|exists:users,id',
+            'notas' => 'nullable|string|max:1000',
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            if ($this->filled('user_id') && !$this->user()->can('activos.asignar')) {
+                $validator->errors()->add('user_id', 'No tienes permiso para asignar activos.');
+            }
+        });
     }
 }
