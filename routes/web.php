@@ -21,6 +21,9 @@ use App\Http\Controllers\Facturas\SolicitudFacturaController;
 use App\Http\Controllers\Facturas\DatosFiscalesController;
 use App\Http\Controllers\Facturas\ArchivoFacturaController;
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
+use App\Http\Controllers\Mensajeria\ConversacionController;
+use App\Http\Controllers\Mensajeria\MensajeController;
+use App\Http\Controllers\Mensajeria\AdjuntoMensajeController;
 
 // ══════════════════════════════════════════════════════════════════════
 // 1. REDIRECCIÓN INICIAL
@@ -69,6 +72,21 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/perfil', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/notificaciones/{id}/leer', [AdminController::class, 'marcarNotificacionLeida'])->name('notifications.read');
     Route::post('/notificaciones/limpiar', [AdminController::class, 'limpiarNotificaciones'])->name('notifications.clear');
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: MENSAJERÍA INTERNA
+    // ══════════════════════════════════════════════════════════════════════
+    Route::prefix('mensajeria')->name('mensajeria.')->group(function () {
+        Route::get('/', [ConversacionController::class, 'index'])->name('index');
+        Route::get('/conversaciones', [ConversacionController::class, 'list'])->name('conversaciones.list');
+        Route::post('/conversaciones', [ConversacionController::class, 'store'])->name('conversaciones.store');
+        Route::get('/usuarios', [ConversacionController::class, 'usuarios'])->name('usuarios');
+        Route::get('/conversaciones/{conversacion}/mensajes', [MensajeController::class, 'index'])->name('mensajes.index');
+        Route::post('/conversaciones/{conversacion}/mensajes', [MensajeController::class, 'store'])->name('mensajes.store');
+        Route::put('/conversaciones/{conversacion}/leer', [MensajeController::class, 'marcarLeida'])->name('conversaciones.leer');
+        Route::post('/conversaciones/{conversacion}/adjuntos', [AdjuntoMensajeController::class, 'store'])->name('adjuntos.store');
+        Route::get('/adjuntos/{adjunto}', [AdjuntoMensajeController::class, 'show'])->name('adjuntos.show');
+    });
 
 
     // ══════════════════════════════════════════════════════════════════════

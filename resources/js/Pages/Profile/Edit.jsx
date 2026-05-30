@@ -8,7 +8,7 @@ import {
     Image as ImageIcon, Type, Droplet, 
     PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, XCircle,
     Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, ChevronUp, Eye, EyeOff,
-    Minus, Plus, Volume2, Mic, Monitor, Bell
+    Minus, Plus, Volume2, Mic, Monitor, Bell, MessageCircle
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -20,6 +20,8 @@ import {
     mergeAlertasPrefs,
     ALERTAS_TIPOS,
     resolveTonoPath,
+    MENSAJERIA_VOZ_MODOS,
+    construirMensajeVozMensajeria,
 } from '../../utils/alertasPrefs';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import {
@@ -1287,6 +1289,44 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={alertasPrefs.canales.voz} onClick={() => toggleCanalAlerta('voz')}>
                                 <div className="gelia-switch-thumb shadow-md" />
                             </button>
+                        </SettingsRow>
+
+                        <SettingsRow
+                            icon={MessageCircle}
+                            title="Voz en mensajería interna"
+                            subtitle="Cómo anunciar nuevos mensajes de chat (independiente de alertas operativas)"
+                            stackOnMobile={true}
+                        >
+                            <div className="flex flex-col gap-2 w-full sm:w-auto">
+                                <div className="gelia-segment w-full sm:w-auto p-1 min-h-12 shadow-sm flex flex-col sm:flex-row">
+                                    {Object.entries(MENSAJERIA_VOZ_MODOS).map(([modo, label]) => (
+                                        <button
+                                            key={modo}
+                                            type="button"
+                                            onClick={() => updateAlertasPrefs((prev) => ({ ...prev, mensajeria_voz: modo }))}
+                                            className="gelia-segment-btn px-3 py-2 text-[10px] sm:text-xs whitespace-normal text-center"
+                                            data-active={alertasPrefs.mensajeria_voz === modo}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const demo = construirMensajeVozMensajeria(
+                                            { user: { name: 'María' }, contenido: 'Hola, ¿cómo estás?', tipo: 'texto' },
+                                            alertasPrefs,
+                                            usuario?.name
+                                        );
+                                        if (demo) NotificationBrowserService.speakText(demo, true);
+                                    }}
+                                    disabled={alertasPrefs.mensajeria_voz === 'desactivado'}
+                                    className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border theme-text-main hover:border-[var(--color-primario)] transition-colors whitespace-nowrap disabled:opacity-40"
+                                >
+                                    Probar voz mensajería
+                                </button>
+                            </div>
                         </SettingsRow>
 
                         <SettingsRow icon={Monitor} title="Notificaciones de escritorio" subtitle="Alertas nativas del sistema operativo" stackOnMobile={false}>

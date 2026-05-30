@@ -817,6 +817,73 @@ html.glass-active .theme-element:not(.theme-no-blur) {
 .animate-slide-in-right { animation: gelia-slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-progress-shrink { animation: gelia-progressShrink 5s linear forwards; }
 
+/* Mensajería: portales y módulo heredan tokens de tema */
+.gelia-mensajeria-portal,
+.gelia-mensajeria-module {
+    color: var(--theme-text-main);
+}
+
+.gelia-mensajeria-portal .theme-surface,
+.gelia-mensajeria-module .theme-surface {
+    background-color: var(--theme-surface-bg);
+    border-color: var(--theme-surface-border);
+}
+
+.gelia-mensajeria-portal input,
+.gelia-mensajeria-portal textarea,
+.gelia-mensajeria-module input,
+.gelia-mensajeria-module textarea {
+    color: var(--theme-text-main);
+    background-color: var(--theme-element-bg, var(--theme-surface-solid));
+}
+
+.gelia-mensajeria-portal input::placeholder,
+.gelia-mensajeria-portal textarea::placeholder,
+.gelia-mensajeria-module input::placeholder,
+.gelia-mensajeria-module textarea::placeholder {
+    color: var(--theme-text-muted);
+    opacity: 0.85;
+}
+
+.gelia-mensajeria-module button,
+.gelia-mensajeria-modal button {
+    color: inherit;
+}
+
+.gelia-mensajeria-module .theme-text-main,
+.gelia-mensajeria-modal .theme-text-main {
+    color: var(--theme-text-main);
+}
+
+/* Vista completa en móvil: sin barra flotante del layout */
+@media (max-width: 767px) {
+    .gelia-mensajeria-immersive .gelia-mensajeria-module {
+        height: 100%;
+        min-height: 0;
+    }
+
+    .gelia-mensajeria-immersive-main {
+        height: 100dvh;
+        min-height: 0;
+    }
+
+    .gelia-mensajeria-module .gelia-mensajeria-chat-header {
+        padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    }
+
+    .gelia-mensajeria-module .gelia-mensajeria-input-bar {
+        padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    }
+
+    .gelia-mensajeria-module .gelia-mensajeria-list-header {
+        padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    }
+
+    .gelia-mensajeria-immersive .gelia-mensajeria-modal.gelia-modal-overlay {
+        padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+    }
+}
+
 @keyframes shimmer {
     0% { transform: translateX(-200%); }
     50%, 100% { transform: translateX(200%); }

@@ -23,7 +23,19 @@ export const ALERTAS_TIPOS = {
     activo_vencimiento: 'Vencimiento de activo',
     activo_mantenimiento_proximo: 'Mantenimiento próximo',
     resumen_activos: 'Resumen de activos',
+    mensaje_nuevo: 'Mensaje interno',
 };
+
+export const MENSAJERIA_TIPO_ALERTA = 'mensaje_nuevo';
+
+/** Modos de texto a voz exclusivos para mensajería interna */
+export const MENSAJERIA_VOZ_MODOS = {
+    desactivado: 'Desactivado',
+    solo_aviso: 'Solo avisar nuevo mensaje',
+    leer_mensaje: 'Avisar y leer el mensaje',
+};
+
+export const DEFAULT_MENSAJERIA_VOZ = 'solo_aviso';
 
 export const DEFAULT_ALERTAS_PREFS = {
     canales: {
@@ -33,6 +45,7 @@ export const DEFAULT_ALERTAS_PREFS = {
         app: true,
     },
     tono_id: 'default',
+    mensajeria_voz: DEFAULT_MENSAJERIA_VOZ,
     tipos: Object.fromEntries(Object.keys(ALERTAS_TIPOS).map((k) => [k, true])),
 };
 
@@ -58,6 +71,9 @@ function mergePrefs(stored) {
     return {
         canales,
         tono_id: stored.tono_id || DEFAULT_ALERTAS_PREFS.tono_id,
+        mensajeria_voz: MENSAJERIA_VOZ_MODOS[stored.mensajeria_voz]
+            ? stored.mensajeria_voz
+            : DEFAULT_MENSAJERIA_VOZ,
         tipos,
     };
 }
@@ -119,4 +135,40 @@ export function shouldTriggerChannel(prefs, tipo, canal) {
 export function resolveTonoPath(tonosAlertas = [], tonoId = 'default') {
     const tono = tonosAlertas.find((t) => t.id === tonoId) || tonosAlertas[0];
     return tono?.path || '/assets/sounds/notification.mp3';
+}
+
+export function resolveMensajeriaVozModo(prefs) {
+    const merged = mergePrefs(prefs);
+    return MENSAJERIA_VOZ_MODOS[merged.mensajeria_voz]
+        ? merged.mensajeria_voz
+        : DEFAULT_MENSAJERIA_VOZ;
+}
+
+export function construirMensajeVozMensajeria(mensaje, prefs, nombreDestinatario = '') {
+    const nombre = nombreDestinatario?.trim() || 'Usuario';
+    const modo = resolveMensajeriaVozModo(prefs);
+
+    if (modo === 'desactivado') return null;
+
+    const aviso = `${nombre}, tienes un nuevo mensaje`;
+
+    if (modo === 'solo_aviso') {
+        return aviso;
+    }
+
+    const preview = mensaje?.contenido?.trim()
+        || ({
+            imagen: 'Te envió una imagen',
+            video: 'Te envió un video',
+            audio: 'Te envió un audio',
+            archivo: 'Te envió un archivo',
+        }[mensaje?.tipo] || '');
+
+    if (!preview) return aviso;
+
+    return `${aviso}. ${preview}`.slice(0, 220);
+}
+
+export function debeUsarVozMensajeria(prefs) {
+    return resolveMensajeriaVozModo(prefs) !== 'desactivado';
 }

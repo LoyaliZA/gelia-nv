@@ -4,12 +4,13 @@ import {
     Menu, X, Moon, Sun, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package, Receipt, Ban, Globe
+    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package, Receipt, Ban, Globe, MessageCircle
 } from 'lucide-react';
 
 import GeliaLogo from './GeliaLogo';
 
 import NotificationBell, { NotificationCountBadge } from './NotificationBell';
+import MensajeriaWidget from './Mensajeria/MensajeriaWidget';
 
 const SIDEBAR_MODE_STORAGE_KEY = 'theme_sidebar_mode';
 const SIDEBAR_MODES = { collapsed: 'collapsed', expanded: 'expanded' };
@@ -31,7 +32,7 @@ const prefixGroupClass = (visible, orientation) => {
 };
 
 const suffixGroupClass = (visible) =>
-    `shrink-0 sidebar-widget-reveal ${visible ? 'max-w-[3.75rem] opacity-100 mx-2 sm:mx-3 pointer-events-auto overflow-visible py-0.5 pr-1' : 'max-w-0 opacity-0 mx-0 pointer-events-none overflow-hidden'}`;
+    `shrink-0 sidebar-widget-reveal flex flex-row items-center ${visible ? 'max-w-[7.25rem] sm:max-w-[7.75rem] opacity-100 mx-1.5 sm:mx-2 pointer-events-auto overflow-visible gap-1 sm:gap-1.5 py-0.5' : 'max-w-0 opacity-0 mx-0 pointer-events-none overflow-hidden gap-0'}`;
 const ADMIN_MENU_CONFIG = [
     { id: 'enlaces', label: 'Generar Enlaces', path: '/admin/enlaces', routeName: 'admin.enlaces', icon: LinkIcon, permission: 'usuarios.generar_permisos' },
     { id: 'clientes', label: 'Base de Clientes', path: '/admin/clientes', routeName: 'admin.clientes', icon: Database, permission: 'clientes.ver' },
@@ -355,6 +356,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                 aria-hidden={!showSecondaryControls}
                             >
                                 <NotificationBell notifications={auth?.notificaciones || []} />
+                                <MensajeriaWidget />
                             </div>
 
                             {renderAvatar(showCollapsedWidget)}
@@ -377,6 +379,18 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                 <div className="flex items-center">
                                     <LayoutDashboard className="w-4 h-4 mr-4" style={{ color: isRouteActive('/dashboard') ? '#ffffff' : 'var(--color-primario)' }} />
                                     <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Panel Principal_</span>
+                                </div>
+                            </Link>
+
+                            <Link
+                                href={route('mensajeria.index')}
+                                className={linkBaseClass + (isRouteActive('/mensajeria') ? linkActiveClass : linkInactiveClass)}
+                                onMouseEnter={(e) => { if (!isRouteActive('/mensajeria')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                onMouseLeave={(e) => { if (!isRouteActive('/mensajeria')) e.currentTarget.style.borderColor = 'transparent' }}
+                            >
+                                <div className="flex items-center">
+                                    <MessageCircle className="w-4 h-4 mr-4" style={{ color: isRouteActive('/mensajeria') ? '#ffffff' : 'var(--color-primario)' }} />
+                                    <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mensajería_</span>
                                 </div>
                             </Link>
 

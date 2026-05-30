@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Middleware;
 use App\Models\ConfiguracionUsuario;
 use App\Services\PersonalizacionCatalogoService;
+use App\Services\Mensajeria\ListarConversacionesService;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -63,6 +64,9 @@ class HandleInertiaRequests extends Middleware
                 'notificaciones' => $user
                     ? $user->notifications()->orderByDesc('created_at')->take(50)->get()
                     : [],
+                'mensajeria_resumen' => $user
+                    ? app(ListarConversacionesService::class)->resumen($user, 8)
+                    : null,
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

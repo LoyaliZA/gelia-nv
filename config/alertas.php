@@ -38,6 +38,7 @@ return [
             'app'        => true,
         ],
         'tono_id' => 'default',
+        'mensajeria_voz' => 'solo_aviso',
         'tipos'   => [
             'nueva'                    => true,
             'reparada'                 => true,
@@ -61,6 +62,7 @@ return [
             'activo_vencimiento'       => true,
             'activo_mantenimiento_proximo' => true,
             'resumen_activos'          => true,
+            'mensaje_nuevo'            => true,
         ],
     ],
 

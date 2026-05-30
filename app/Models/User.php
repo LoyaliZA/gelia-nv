@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Spatie\Permission\Traits\HasRoles;
@@ -90,6 +91,18 @@ class User extends Authenticatable
     public function permisoProcedencia(): HasMany
     {
         return $this->hasMany(UsuarioPermisoProcedencia::class);
+    }
+
+    public function conversaciones(): BelongsToMany
+    {
+        return $this->belongsToMany(Conversacion::class, 'conversacion_participantes')
+            ->withPivot(['rol', 'ultimo_leido_at', 'silenciado'])
+            ->withTimestamps();
+    }
+
+    public function mensajes(): HasMany
+    {
+        return $this->hasMany(Mensaje::class);
     }
 
     /**

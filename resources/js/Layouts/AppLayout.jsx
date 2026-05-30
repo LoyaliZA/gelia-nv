@@ -10,7 +10,9 @@ import {
     resolveAlertasPrefs,
     getTipoAlerta,
     shouldTriggerChannel,
+    MENSAJERIA_TIPO_ALERTA,
 } from '../utils/alertasPrefs';
+import { notificarMensajeNuevo } from '../utils/mensajeriaNotificaciones';
 import {
     clampFontScale,
     FONT_SCALE_DEFAULT,
@@ -21,7 +23,7 @@ import {
 const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
 
-export default function AppLayout({ children }) {
+export default function AppLayout({ children, fullScreen = false }) {
     const { props: { auth, tonos_alertas = [] }, url } = usePage();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -127,6 +129,26 @@ export default function AppLayout({ children }) {
                     window.dispatchEvent(new CustomEvent('notification-received', { detail: notification }));
 
                     router.reload({ only: ['auth'], preserveScroll: true, preserveState: true });
+                })
+                .listen('.mensaje.recibido', (event) => {
+                    const mensaje = event?.mensaje;
+                    if (!mensaje) return;
+
+                    const prefs = resolveAlertasPrefs(auth);
+                    if (shouldTriggerChannel(prefs, MENSAJERIA_TIPO_ALERTA, 'app')) {
+                        const nombre = mensaje.user?.name || 'Contacto';
+                        const texto = mensaje.contenido || 'Nuevo mensaje';
+                        addToast({ mensaje: `${nombre} — ${texto}` });
+                    }
+
+                    notificarMensajeNuevo(mensaje, auth);
+
+                    router.reload({
+                        only: ['auth'],
+                        preserveScroll: true,
+                        preserveState: true,
+                        showProgress: false,
+                    });
                 });
         }
 
@@ -167,7 +189,25 @@ export default function AppLayout({ children }) {
         return 'left';
     });
 
+    const isMensajeriaFull = fullScreen || url.startsWith('/mensajeria');
+
+    const [isMobileViewport, setIsMobileViewport] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.innerWidth < 768;
+    });
+
+    useEffect(() => {
+        const onResize = () => setIsMobileViewport(window.innerWidth < 768);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    const mensajeriaImmersivaMovil = isMensajeriaFull && isMobileViewport;
+
     const getMainLayoutClasses = () => {
+        if (isMensajeriaFull) {
+            return 'p-0 h-dvh overflow-hidden max-w-none';
+        }
         if (sidebarLayout !== 'fixed') {
             return 'pt-6 md:pt-24';
         }
@@ -350,20 +390,22 @@ export default function AppLayout({ children }) {
                     message="Procesando_" 
                 />
 
-                <Sidebar
-                    isDarkMode={isDarkMode}
-                    toggleTheme={toggleTheme}
-                    user={auth?.user}
-                    permissions={auth?.user?.permissions || []}
-                    layout={sidebarLayout}
-                    sidebarMode={sidebarMode}
-                    fixedPosition={fixedPosition}
-                />
+                {!mensajeriaImmersivaMovil && (
+                    <Sidebar
+                        isDarkMode={isDarkMode}
+                        toggleTheme={toggleTheme}
+                        user={auth?.user}
+                        permissions={auth?.user?.permissions || []}
+                        layout={sidebarLayout}
+                        sidebarMode={sidebarMode}
+                        fixedPosition={fixedPosition}
+                    />
+                )}
 
                 {/* Zoom solo en contenido: el sidebar fixed queda fuera y funciona igual en /perfil */}
-                <div className="gelia-ui-scale min-h-dvh w-full">
-                    <main className={`transition-all duration-500 bg-transparent max-w-7xl mx-auto min-h-screen px-4 md:px-6 pb-32 md:pb-20 ${getMainLayoutClasses()}`}>
-                        <div key={url} className="animate-page-reveal">
+                <div className={`gelia-ui-scale w-full ${isMensajeriaFull ? 'h-dvh overflow-hidden' : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
+                    <main className={`transition-all duration-500 bg-transparent mx-auto ${isMensajeriaFull ? 'max-w-none w-full h-full' : 'max-w-7xl min-h-screen px-4 md:px-6 pb-32 md:pb-20'} ${getMainLayoutClasses()} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive-main' : ''}`}>
+                        <div key={url} className={isMensajeriaFull ? 'h-full' : 'animate-page-reveal'}>
                             {children}
                         </div>
                     </main>
