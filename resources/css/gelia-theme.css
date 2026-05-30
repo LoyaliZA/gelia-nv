@@ -101,8 +101,21 @@
 .theme-placeholder::placeholder { color: var(--theme-placeholder); }
 
 select.theme-element,
-select.theme-text-main { color: inherit; }
+select.theme-select,
+select.theme-text-main,
+select.theme-surface.theme-text-main {
+    color: var(--theme-text-main);
+}
+
+/* Placeholder visual cuando la opción vacía está seleccionada */
+select.theme-select:has(option[value=""]:checked),
+select.theme-text-main:has(option[value=""]:checked),
+select.theme-surface.theme-text-main:has(option[value=""]:checked) {
+    color: var(--theme-placeholder);
+}
+
 select option { background-color: var(--theme-surface-solid); color: var(--theme-text-main); }
+select option[value=""] { color: var(--theme-placeholder); }
 .dark select option { background-color: var(--theme-element-bg); }
 
 /* Card estándar (hereda glass vía .theme-surface cuando html.glass-active) */

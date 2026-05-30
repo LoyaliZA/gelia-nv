@@ -2,7 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, FileSpreadsheet, Upload, Trash2, Download } from 'lucide-react';
+import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, FileSpreadsheet, Upload, Trash2, Download, ChevronDown } from 'lucide-react';
+import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 
 const obtenerProceso = (procesos, procesoId) => procesos.find(p => String(p.id) === String(procesoId)) || null;
 
@@ -342,18 +343,19 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                     <div className="lg:col-span-2 space-y-2">
                         <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Tipo de Solicitud_</label>
-                        <div className="relative">
-                            <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
+                        <div className="theme-field-with-icon theme-field-with-icon--has-trailing relative">
+                            <FileSignature className="theme-field-icon w-4 h-4" aria-hidden />
                             <select
                                 value={data.catalogo_proceso_id}
                                 required
                                 onChange={e => setData('catalogo_proceso_id', e.target.value)}
                                 disabled={modoEdicion}
-                                className="w-full pl-9 pr-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-xs font-bold outline-none appearance-none focus:ring-2 shadow-sm cursor-pointer"
+                                className={`${THEME_SELECT} w-full py-4 text-xs`}
                             >
                                 <option value="">Selecciona el tipo de solicitud...</option>
                                 {procesos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                             </select>
+                            <ChevronDown className="theme-field-with-icon__trailing" aria-hidden />
                         </div>
                         {errors.catalogo_proceso_id && <p className="text-xs text-red-500">{errors.catalogo_proceso_id}</p>}
                     </div>
@@ -362,9 +364,9 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                         <div className="space-y-2 relative">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cliente (Buscador)_</label>
-                            <div className="relative">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                <input type="text" value={data.numero_cliente} onChange={e => manejarBusquedaCliente(e.target.value)} onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }} placeholder="Ingresa nombre o folio..." className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md" disabled={modoEdicion} />
+                            <div className="theme-field-with-icon relative">
+                                <Search className="theme-field-icon w-5 h-5" aria-hidden />
+                                <input type="text" value={data.numero_cliente} onChange={e => manejarBusquedaCliente(e.target.value)} onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }} placeholder="Ingresa nombre o folio..." className={`${THEME_INPUT} w-full py-4 text-sm`} disabled={modoEdicion} />
                             </div>
                             {infoCliente && (
                                 <div className={`mt-4 p-4 theme-element border ${infoCliente.es_heredado ? 'border-purple-500/50 bg-purple-500/5' : 'theme-border'} rounded-2xl shadow-sm animate-fade-in`}>
@@ -415,8 +417,8 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
                                 Cotización Autorizada_{cotizacionOpcional ? ' (opcional)' : ''}
                             </label>
-                            <div className="relative">
-                                <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                            <div className="theme-field-with-icon relative">
+                                <CreditCard className="theme-field-icon w-5 h-5" aria-hidden />
                                 <input
                                     type="number"
                                     step="0.01"
@@ -425,7 +427,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     value={data.monto_cotizado}
                                     onChange={e => setData('monto_cotizado', e.target.value)}
                                     placeholder={cotizacionOpcional ? 'No requerida — compra en tienda' : ''}
-                                    className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-black outline-none focus:ring-2 transition-all shadow-sm disabled:opacity-60"
+                                    className={`${THEME_INPUT} w-full py-4 text-sm disabled:opacity-60`}
                                 />
                             </div>
                             {errors.monto_cotizado && <p className="text-xs text-red-500">{errors.monto_cotizado}</p>}
@@ -433,12 +435,13 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Clasificación_</label>
-                            <div className="relative">
-                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted z-10 pointer-events-none" />
-                                <select value={data.catalogo_tipo_cliente_id} onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)} className="w-full pl-9 pr-4 py-4 theme-surface border theme-border rounded-xl theme-text-main text-xs font-bold outline-none appearance-none focus:ring-2 shadow-sm cursor-pointer">
+                            <div className="theme-field-with-icon theme-field-with-icon--has-trailing relative">
+                                <Users className="theme-field-icon w-4 h-4" aria-hidden />
+                                <select value={data.catalogo_tipo_cliente_id} onChange={e => setData('catalogo_tipo_cliente_id', e.target.value)} className={`${THEME_SELECT} w-full py-4 text-xs`}>
                                     <option value="">Asignar Tipo</option>
                                     {opcionesTipoCliente.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                                 </select>
+                                <ChevronDown className="theme-field-with-icon__trailing" aria-hidden />
                             </div>
                         </div>
                     </div>
@@ -446,14 +449,14 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                     <div className="space-y-8 flex flex-col">
                         <div className="space-y-2 flex flex-col flex-1">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Comentario de la Vendedora_</label>
-                            <div className="relative flex-1">
-                                <MessageSquare className="absolute left-4 top-4 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                            <div className="theme-field-with-icon theme-field-with-icon--textarea relative flex-1">
+                                <MessageSquare className="theme-field-icon w-5 h-5" aria-hidden />
                                 <textarea
                                     value={data.observaciones_vendedor}
                                     onChange={e => setData('observaciones_vendedor', e.target.value)}
                                     placeholder="Observaciones, contexto de la venta, acuerdos con el cliente..."
                                     rows={8}
-                                    className="w-full min-h-[220px] lg:min-h-[280px] px-12 py-4 theme-surface border theme-border rounded-2xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm resize-none"
+                                    className={`${THEME_TEXTAREA} w-full min-h-[220px] lg:min-h-[280px] py-4 text-sm resize-none`}
                                 />
                             </div>
                             {errors.observaciones_vendedor && (
@@ -626,13 +629,13 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             </div>
                         )}
 
-                        <div className="relative">
-                            <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
+                        <div className="theme-field-with-icon theme-field-with-icon--has-trailing relative">
+                            <TrendingUp className="theme-field-icon w-5 h-5" aria-hidden />
                             <select
                                 value={data.catalogo_lista_descuento_id || ''}
                                 onChange={e => setData('catalogo_lista_descuento_id', e.target.value)}
                                 disabled={cotizacionOpcional}
-                                className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none appearance-none focus:ring-2 transition-all shadow-sm cursor-pointer disabled:opacity-60"
+                                className={`${THEME_SELECT} w-full py-4 text-sm disabled:opacity-60`}
                             >
                                 <option value="">-- Mantener nivel actual --</option>
                                 {listas.filter(l => !l.nombre.toUpperCase().includes('COLABORADOR') && !l.nombre.toUpperCase().includes('PLATAFORMAS')).map(lista => {
@@ -654,6 +657,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     return <option key={lista.id} value={lista.id} disabled={estaDeshabilitada}>{lista.nombre} {estaDeshabilitada ? textoEstado : ''}</option>;
                                 })}
                             </select>
+                            <ChevronDown className="theme-field-with-icon__trailing" aria-hidden />
                         </div>
 
                         {requiereConfirmacionEscalonamiento && (
@@ -676,7 +680,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                     </div>
 
                     <div className="lg:col-span-2">
-                        <button type="submit" disabled={processing || (requiereConfirmacionEscalonamiento && !data.confirmo_informacion_escalonamiento)} className="w-full py-5 text-white rounded-2xl font-black uppercase tracking-widest text-[12px] shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 outline-none flex justify-center items-center gap-3" style={{ backgroundColor: 'var(--color-primario)' }}>
+                        <button type="submit" disabled={processing || (requiereConfirmacionEscalonamiento && !data.confirmo_informacion_escalonamiento)} className={`${THEME_BTN_PRIMARY} w-full py-5 text-[12px]`}>
                             <Send className="w-5 h-5" /> {processing ? 'Procesando...' : (modoEdicion ? 'Reenviar Corrección' : 'Transmitir Solicitud')}
                         </button>
                     </div>
