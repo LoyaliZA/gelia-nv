@@ -21,7 +21,8 @@ export default function SelectorUsuarioGelia({ value, onChange, departamentoId =
         if (!abierto) return undefined;
         const timer = setTimeout(() => {
             axios.get(route('api.activos.usuarios'), { params: { q: q || undefined, departamento_id: departamentoId || undefined } })
-                .then(({ data }) => setResultados(data)).catch(() => setResultados([]));
+                .then(({ data }) => setResultados(data))
+                .catch(() => setResultados([]));
         }, 250);
         return () => clearTimeout(timer);
     }, [q, abierto, departamentoId]);

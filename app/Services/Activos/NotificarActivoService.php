@@ -6,6 +6,8 @@ use App\Models\Activo;
 use App\Models\User;
 use App\Notifications\AlertaActivo;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 
 class NotificarActivoService
@@ -24,22 +26,47 @@ class NotificarActivoService
         array $extras = [],
         bool $usarDedupe = false,
     ): void {
-        if ($usarDedupe) {
-            $cacheKey = "activo_notif:{$activo->id}:{$tipoAlerta}:" . now()->toDateString();
-            if (Cache::has($cacheKey)) {
-                return;
+        $enviar = function () use (
+            $activo,
+            $tipoAlerta,
+            $mensaje,
+            $usuarioDestino,
+            $responsableAnterior,
+            $extras,
+            $usarDedupe,
+        ) {
+            try {
+                if ($usarDedupe) {
+                    $cacheKey = "activo_notif:{$activo->id}:{$tipoAlerta}:" . now()->toDateString();
+                    if (Cache::has($cacheKey)) {
+                        return;
+                    }
+                    Cache::put($cacheKey, true, now()->endOfDay());
+                }
+
+                $activo->loadMissing(['tipo', 'departamento', 'responsable']);
+
+                $usuarios = $this->destinatarios->ejecutar($activo, $usuarioDestino, $responsableAnterior);
+
+                if ($usuarios->isEmpty()) {
+                    return;
+                }
+
+                Notification::send($usuarios, new AlertaActivo($activo, $tipoAlerta, $mensaje, $extras));
+            } catch (\Throwable $e) {
+                Log::error('No se pudo enviar notificación de activo', [
+                    'activo_id' => $activo->id,
+                    'tipo_alerta' => $tipoAlerta,
+                    'error' => $e->getMessage(),
+                ]);
+                report($e);
             }
-            Cache::put($cacheKey, true, now()->endOfDay());
+        };
+
+        if (DB::transactionLevel() > 0) {
+            DB::afterCommit($enviar);
+        } else {
+            $enviar();
         }
-
-        $activo->loadMissing(['tipo', 'departamento', 'responsable']);
-
-        $usuarios = $this->destinatarios->ejecutar($activo, $usuarioDestino, $responsableAnterior);
-
-        if ($usuarios->isEmpty()) {
-            return;
-        }
-
-        Notification::send($usuarios, new AlertaActivo($activo, $tipoAlerta, $mensaje, $extras));
     }
 }

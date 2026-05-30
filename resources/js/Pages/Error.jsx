@@ -1,9 +1,21 @@
 import React from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import GeliaLogoBroken from '@/Components/GeliaLogoBroken'; // Importamos el logo roto
 import { Home, RefreshCcw } from 'lucide-react'; // Iconos para los botones
 
-export default function Error({ status }) {
+export default function Error({ status, returnUrl = null }) {
+    const reintentar = () => {
+        const destino = returnUrl || (typeof document !== 'undefined' ? document.referrer : '') || '/dashboard';
+        if (destino && destino !== window.location.href) {
+            router.visit(destino);
+            return;
+        }
+        if (window.history.length > 1) {
+            window.history.back();
+            return;
+        }
+        router.visit('/dashboard');
+    };
     // 1. Mapeo de Títulos y Mensajes solicitados
     const titleMap = {
         503: '503: Servicio No Disponible',
@@ -69,7 +81,8 @@ export default function Error({ status }) {
 
                             {/* Botón Reintentar / Recargar (útil para 500/503) */}
                             <button
-                                onClick={() => window.location.reload()}
+                                type="button"
+                                onClick={reintentar}
                                 className="flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl font-semibold transition-all duration-200"
                                 style={{
                                     backgroundColor: 'var(--primary-color)',

@@ -28,24 +28,40 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        
-        // CORRECCIÓN: Usamos render() para interceptar el error crudo antes de la vista HTML
-        $exceptions->render(function (\Throwable $e, \Illuminate\Http\Request $request) {
-            
-            if ($request->header('X-Inertia')) {
-                // Determinamos si es un error HTTP válido (como 403 o 404)
-                $status = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface 
-                            ? $e->getStatusCode() 
-                            : 500;
 
-                if (in_array($status, [403, 404, 500, 503])) {
-                    return \Inertia\Inertia::render('Error', ['status' => $status])
-                        ->toResponse($request)
-                        ->setStatusCode($status);
-                }
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException $e, \Illuminate\Http\Request $request) {
+            if (! $request->isMethod('GET') && ! $request->isMethod('HEAD')) {
+                return null;
             }
-            
-            return null; // Deja que Laravel siga su curso si no es Inertia
+
+            $destino = $request->headers->get('referer') ?: route('dashboard', absolute: false);
+
+            if ($request->header('X-Inertia')) {
+                return redirect($destino);
+            }
+
+            return redirect($destino);
+        });
+
+        $exceptions->render(function (\Throwable $e, \Illuminate\Http\Request $request) {
+            if (! $request->header('X-Inertia')) {
+                return null;
+            }
+
+            $status = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
+                ? $e->getStatusCode()
+                : 500;
+
+            if (! in_array($status, [403, 404, 500, 503], true)) {
+                return null;
+            }
+
+            return \Inertia\Inertia::render('Error', [
+                'status' => $status,
+                'returnUrl' => $request->headers->get('referer'),
+            ])
+                ->toResponse($request)
+                ->setStatusCode($status);
         });
 
     })->create();
