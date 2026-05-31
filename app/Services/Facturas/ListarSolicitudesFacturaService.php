@@ -117,10 +117,25 @@ class ListarSolicitudesFacturaService
 
         if (!empty($filtros['q'])) {
             $termino = trim($filtros['q']);
-            $query->where(function (Builder $q) use ($termino) {
-                $q->where('folio', 'like', "%{$termino}%")
-                    ->orWhere('razon_social', 'like', "%{$termino}%")
-                    ->orWhereJsonContains('datos_fiscales->rfc', $termino);
+            $terminoRfc = strtoupper(preg_replace('/\s+/', '', $termino));
+            $like = '%' . addcslashes($termino, '%_\\') . '%';
+            $likeRfc = '%' . addcslashes($terminoRfc, '%_\\') . '%';
+
+            $query->where(function (Builder $q) use ($termino, $terminoRfc, $like, $likeRfc) {
+                $q->where('folio', 'like', $like)
+                    ->orWhere('razon_social', 'like', $like)
+                    ->orWhere('datos_fiscales->rfc', 'like', $likeRfc);
+
+                if ($terminoRfc !== $termino) {
+                    $q->orWhere('datos_fiscales->rfc', 'like', $like);
+                }
+
+                $q->orWhereHas('cliente', function (Builder $cliente) use ($like, $likeRfc, $termino, $terminoRfc) {
+                    $cliente->where('rfc', 'like', $likeRfc);
+                    if ($terminoRfc !== $termino) {
+                        $cliente->orWhere('rfc', 'like', $like);
+                    }
+                });
             });
         }
     }

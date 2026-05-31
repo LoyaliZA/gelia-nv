@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Search, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { FACTURAS_TABS } from './facturasFiltros';
+import { BTN_PRIMARY, ESTILOS_FACTURAS_TABS } from './facturasStyles';
 
 export default function FiltrosFacturas({
     filtros = {},
@@ -21,24 +22,22 @@ export default function FiltrosFacturas({
 
     const enviarBusqueda = useCallback(
         (valor) => {
-            onAplicarFiltros?.({ q: valor.trim() || undefined, vendedor_id: vendedorId || undefined, page: 1 });
+            const termino = valor.trim();
+            onAplicarFiltros?.({ q: termino || undefined, vendedor_id: vendedorId || undefined, page: 1 });
         },
         [onAplicarFiltros, vendedorId]
     );
 
-    useEffect(() => {
-        const t = setTimeout(() => {
-            if (busqueda !== (filtros.q || '')) {
-                enviarBusqueda(busqueda);
-            }
-        }, 400);
-        return () => clearTimeout(t);
-    }, [busqueda, filtros.q, enviarBusqueda]);
+    const handleBusquedaKeyDown = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        enviarBusqueda(busqueda);
+    };
 
     const handleVendedor = (valor) => {
         setVendedorId(valor);
         onAplicarFiltros?.({
-            q: busqueda.trim() || undefined,
+            q: filtros.q || undefined,
             vendedor_id: valor || undefined,
             page: 1,
         });
@@ -50,6 +49,7 @@ export default function FiltrosFacturas({
             aria-label="Filtros de facturas"
             aria-busy={listaCargando}
         >
+            <style>{ESTILOS_FACTURAS_TABS}</style>
             <div className="p-4 md:p-5 border-b theme-border flex items-center gap-3">
                 <div className="p-2 rounded-xl theme-element border theme-border shrink-0">
                     <SlidersHorizontal className="w-4 h-4 theme-text-muted" aria-hidden />
@@ -57,14 +57,16 @@ export default function FiltrosFacturas({
                 <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 min-w-0 flex-1">Filtros</p>
             </div>
 
-            <div className="p-3 md:p-4 border-b theme-border overflow-x-auto">
-                <div className="gelia-segment inline-flex flex-nowrap min-w-full sm:min-w-0 w-full sm:w-auto p-1 gap-0.5 shadow-sm">
+            <div className="facturas-tabs-scroll p-3 md:p-4 border-b theme-border">
+                <div className="gelia-segment facturas-tabs-track p-1 shadow-sm" role="tablist" aria-label="Estado de solicitudes">
                     {FACTURAS_TABS.map((tab) => (
                         <button
                             key={tab.id}
                             type="button"
+                            role="tab"
+                            aria-selected={tabActiva === tab.id}
                             onClick={() => onTabChange(tab.id)}
-                            className="gelia-segment-btn flex-1 sm:flex-none min-w-[4.5rem] px-3 sm:px-4 py-2.5 text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
+                            className="gelia-segment-btn whitespace-nowrap"
                             data-active={tabActiva === tab.id}
                         >
                             {tab.label}
@@ -78,19 +80,31 @@ export default function FiltrosFacturas({
                     <label htmlFor="facturas-busqueda" className="theme-label ml-1">
                         Buscar
                     </label>
-                    <div className="theme-field-with-icon mt-1.5">
-                        <Search className="theme-field-icon" aria-hidden />
-                        <input
-                            id="facturas-busqueda"
-                            type="search"
-                            value={busqueda}
-                            onChange={(e) => setBusqueda(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') enviarBusqueda(e.target.value);
-                            }}
-                            placeholder="Folio, razón social, RFC…"
-                            className="theme-input w-full pr-4 py-3 normal-case tracking-normal font-bold text-sm"
-                        />
+                    <div className="flex flex-col sm:flex-row gap-2 mt-1.5">
+                        <div className="theme-field-with-icon min-w-0 flex-1">
+                            <Search className="theme-field-icon" aria-hidden />
+                            <input
+                                id="facturas-busqueda"
+                                type="text"
+                                value={busqueda}
+                                onChange={(e) => setBusqueda(e.target.value)}
+                                onKeyDown={handleBusquedaKeyDown}
+                                placeholder="Folio, razón social o RFC"
+                                autoComplete="off"
+                                enterKeyHint="search"
+                                className="theme-input w-full pr-4 py-3 normal-case tracking-normal font-bold text-sm"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => enviarBusqueda(busqueda)}
+                            disabled={listaCargando}
+                            className={`${BTN_PRIMARY} w-full sm:w-auto shrink-0 px-6`}
+                            aria-label="Buscar solicitudes de factura"
+                        >
+                            <Search className="w-4 h-4 shrink-0" aria-hidden />
+                            Buscar
+                        </button>
                     </div>
                 </div>
                 <div className="w-full md:w-56 shrink-0">

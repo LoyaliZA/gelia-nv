@@ -17,7 +17,14 @@ class StoreMensajeRequest extends FormRequest
     {
         return [
             'contenido' => ['required', 'string', 'max:5000'],
-            'reply_to_id' => ['nullable', 'integer', 'exists:mensajes,id'],
+            'reply_to_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('mensajes', 'id')->where(
+                    'conversacion_id',
+                    $this->route('conversacion')?->id
+                ),
+            ],
         ];
     }
 }

@@ -26,7 +26,7 @@ export function NotificationCountBadge({ count, className = '-top-1.5 -right-1.5
     );
 }
 
-export default function NotificationBell({ notifications: propNotifications = [] }) {
+export default function NotificationBell({ notifications: propNotifications = [], iconButtonClassName = '' }) {
     const { auth } = usePage().props;
     const [isOpen, setIsOpen] = useState(false);
 
@@ -127,8 +127,9 @@ export default function NotificationBell({ notifications: propNotifications = []
     return (
         <>
             <button
+                type="button"
                 onClick={handleOpenDrawer}
-                className="relative overflow-visible p-3 theme-element border theme-border rounded-2xl hover:border-[var(--color-primario)] transition-all group outline-none shrink-0"
+                className={`relative overflow-visible theme-element border theme-border rounded-2xl hover:border-[var(--color-primario)] transition-all group outline-none shrink-0 ${iconButtonClassName || 'p-3'}`}
             >
                 {unreadCount > 0 ? (
                     <BellRing className="w-5 h-5 animate-pulse" style={{ color: 'var(--color-primario)' }} />

@@ -2,6 +2,10 @@ export const GRID_COLS = 12;
 export const ROW_HEIGHT_PX = 48;
 export const GRID_GAP_PX = 16;
 
+/** Mínimo absoluto de todos los paneles personalizables del dashboard (ancho × alto en celdas). */
+export const PANEL_GRID_MIN_W = 4;
+export const PANEL_GRID_MIN_H = 4;
+
 export const PANEL_IDS = {
     MODULOS: 'panel_modulos',
     FUNCIONES: 'panel_funciones',
@@ -21,18 +25,17 @@ export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitu
     const modulosWidth = hasAnyWidget ? 7 : 12;
     const widgetWidth = hasModulos ? 5 : 12;
     const widgetX = hasModulos ? 7 : 0;
-    const widgetHeight = widgetCount > 1 ? Math.max(4, Math.floor(12 / widgetCount)) : 12;
-    const widgetMinH = widgetCount > 1 ? 4 : 3;
+    const widgetHeight = widgetCount > 1 ? Math.max(PANEL_GRID_MIN_H, Math.floor(12 / widgetCount)) : 12;
 
     if (hasModulos) {
         layout.push({
             i: PANEL_IDS.MODULOS,
             x: 0,
             y: 0,
-            w: modulosWidth,
+            w: Math.max(PANEL_GRID_MIN_W, modulosWidth),
             h: 12,
-            minW: 3,
-            minH: 4,
+            minW: PANEL_GRID_MIN_W,
+            minH: PANEL_GRID_MIN_H,
         });
         nextRow = 12;
     }
@@ -43,10 +46,10 @@ export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitu
             i: id,
             x: widgetX,
             y: widgetY,
-            w: widgetWidth,
-            h: widgetHeight,
-            minW: 2,
-            minH: widgetMinH,
+            w: Math.max(PANEL_GRID_MIN_W, widgetWidth),
+            h: Math.max(PANEL_GRID_MIN_H, widgetHeight),
+            minW: PANEL_GRID_MIN_W,
+            minH: PANEL_GRID_MIN_H,
         });
         widgetY += widgetHeight;
         if (!hasModulos) nextRow = Math.max(nextRow, widgetY);
@@ -62,9 +65,9 @@ export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitu
             x: 0,
             y: nextRow,
             w: 12,
-            h: 7,
-            minW: 3,
-            minH: 4,
+            h: Math.max(PANEL_GRID_MIN_H, 7),
+            minW: PANEL_GRID_MIN_W,
+            minH: PANEL_GRID_MIN_H,
         });
     }
 
@@ -72,14 +75,14 @@ export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitu
 }
 
 function clampItem(item) {
-    const minW = item.minW ?? 2;
-    const minH = item.minH ?? 2;
+    const minW = Math.max(item.minW ?? 2, PANEL_GRID_MIN_W);
+    const minH = Math.max(item.minH ?? 2, PANEL_GRID_MIN_H);
     const w = Math.max(minW, Math.min(GRID_COLS, item.w));
     const x = Math.max(0, Math.min(GRID_COLS - w, item.x));
     const h = Math.max(minH, item.h);
     const y = Math.max(0, item.y);
 
-    return { ...item, x, y, w, h };
+    return { ...item, x, y, w, h, minW, minH };
 }
 
 export function rectsOverlap(a, b) {

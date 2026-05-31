@@ -33,32 +33,38 @@ const ESTILOS_ANIMACION_NATIVA = `
     }
 `;
 
-function buildModulosPanel({ variant, tarjetasVisibles }) {
+function buildCardGridPanel({
+    variant,
+    title,
+    icon,
+    iconStyle,
+    iconClassName = '',
+    emptyMessage,
+    items,
+}) {
     return (
         <DashboardPanel
             variant={variant}
-            title="Módulos de Sistema_"
-            icon={LayoutDashboard}
-            iconStyle={{ color: 'var(--color-primario)' }}
+            title={title}
+            icon={icon}
+            iconStyle={iconStyle}
+            iconClassName={iconClassName}
         >
-            <DashboardPanelCards
-                variant={variant}
-                emptyMessage='No hay módulos visibles. Haz clic en "Configurar" para añadir accesos a tu panel.'
-            >
-                {tarjetasVisibles.map((tarjeta) => (
-                    <DashboardCardSlot key={tarjeta.id} variant={variant}>
+            <DashboardPanelCards variant={variant} emptyMessage={emptyMessage}>
+                {items.map((item) => (
+                    <DashboardCardSlot key={item.id} variant={variant}>
                         <DashboardModuleCard
                             variant={variant}
-                            href={tarjeta.href()}
-                            title={tarjeta.titulo}
-                            subtitle={tarjeta.subtitulo}
-                            icon={tarjeta.icon}
-                            borderClass={tarjeta.borderClass || 'theme-border'}
-                            iconWrapClass={tarjeta.iconWrapClass || 'theme-element theme-border'}
-                            iconClass={tarjeta.iconClass || 'theme-text-main'}
-                            iconWrapStyle={tarjeta.iconWrapStyle}
-                            iconStyle={tarjeta.iconStyle}
-                            borderStyle={tarjeta.borderStyle}
+                            href={item.href()}
+                            title={item.titulo}
+                            subtitle={item.subtitulo}
+                            icon={item.icon}
+                            borderClass={item.borderClass || 'theme-border'}
+                            iconWrapClass={item.iconWrapClass || 'theme-element theme-border'}
+                            iconClass={item.iconClass || 'theme-text-main'}
+                            iconWrapStyle={item.iconWrapStyle}
+                            iconStyle={item.iconStyle}
+                            borderStyle={item.borderStyle}
                         />
                     </DashboardCardSlot>
                 ))}
@@ -67,30 +73,25 @@ function buildModulosPanel({ variant, tarjetasVisibles }) {
     );
 }
 
+function buildModulosPanel({ variant, tarjetasVisibles }) {
+    return buildCardGridPanel({
+        variant,
+        title: 'Módulos de Sistema_',
+        icon: LayoutDashboard,
+        iconStyle: { color: 'var(--color-primario)' },
+        emptyMessage: 'No hay módulos visibles. Haz clic en "Configurar" para añadir accesos a tu panel.',
+        items: tarjetasVisibles,
+    });
+}
+
 function buildFuncionesPanel({ variant, funcionesVisibles }) {
-    return (
-        <DashboardPanel variant={variant} title="Funciones Operativas_" icon={Layers} iconClassName="text-indigo-500">
-            <DashboardPanelCards variant={variant}>
-                {funcionesVisibles.map((func) => (
-                    <DashboardCardSlot key={func.id} variant={variant}>
-                        <DashboardModuleCard
-                            variant={variant}
-                            href={func.href()}
-                            title={func.titulo}
-                            subtitle={func.subtitulo}
-                            icon={func.icon}
-                            borderClass={func.borderClass || 'theme-border'}
-                            iconWrapClass={func.iconWrapClass || 'theme-element theme-border'}
-                            iconClass={func.iconClass || 'theme-text-main'}
-                            iconWrapStyle={func.iconWrapStyle}
-                            iconStyle={func.iconStyle}
-                            borderStyle={func.borderStyle}
-                        />
-                    </DashboardCardSlot>
-                ))}
-            </DashboardPanelCards>
-        </DashboardPanel>
-    );
+    return buildCardGridPanel({
+        variant,
+        title: 'Funciones Operativas_',
+        icon: Layers,
+        iconClassName: 'text-indigo-500',
+        items: funcionesVisibles,
+    });
 }
 
 export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas_operativas = [], alertas_activos_resumen = {}, alertas_activos_destacadas = [] }) {

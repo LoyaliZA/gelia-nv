@@ -27,10 +27,17 @@ class SubirAdjuntoMensajeService
         private OptimizarImagenMensajeService $optimizarImagen,
         private FormatearMensajeService $formatearMensaje,
         private NotificarMensajeEnviadoService $notificarMensaje,
+        private IndexarTextoAdjuntoService $indexarTexto,
     ) {}
 
-    public function ejecutar(Conversacion $conversacion, User $user, UploadedFile $file, string $tipo, ?string $contenido = null): array
-    {
+    public function ejecutar(
+        Conversacion $conversacion,
+        User $user,
+        UploadedFile $file,
+        string $tipo,
+        ?string $contenido = null,
+        ?int $replyToId = null,
+    ): array {
         if (!isset(self::LIMITES[$tipo])) {
             throw ValidationException::withMessages(['archivo' => 'Tipo de adjunto no válido.']);
         }
@@ -51,9 +58,10 @@ class SubirAdjuntoMensajeService
             $mensajeData = $this->enviarMensaje->ejecutar($conversacion, $user, [
                 'tipo' => $tipo,
                 'contenido' => $contenido,
+                'reply_to_id' => $replyToId,
             ], broadcast: false);
 
-            MensajeAdjunto::create([
+            $adjunto = MensajeAdjunto::create([
                 'mensaje_id' => $mensajeData['id'],
                 'ruta' => $adjuntoData['ruta'],
                 'thumbnail_ruta' => $adjuntoData['thumbnail_ruta'] ?? null,
@@ -66,14 +74,15 @@ class SubirAdjuntoMensajeService
             $mensaje = Mensaje::with(['user:id,name,foto_perfil', 'adjuntos', 'lecturas'])
                 ->find($mensajeData['id']);
 
+            $adjunto->setRelation('mensaje', $mensaje);
+            $this->indexarTexto->ejecutar($adjunto);
+
             return $this->formatearMensaje->ejecutar($mensaje, $user, $conversacion);
         });
 
-        if ($tipo === Mensaje::TIPO_VIDEO) {
-            $adjunto = MensajeAdjunto::where('mensaje_id', $formateado['id'])->first();
-            if ($adjunto) {
-                ProcesarAdjuntoMensajeJob::dispatch($adjunto->id);
-            }
+        $adjunto = MensajeAdjunto::where('mensaje_id', $formateado['id'])->first();
+        if ($adjunto) {
+            ProcesarAdjuntoMensajeJob::dispatch($adjunto->id);
         }
 
         $mensaje = Mensaje::with(['user:id,name,foto_perfil', 'adjuntos', 'lecturas'])

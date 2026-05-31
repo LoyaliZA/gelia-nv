@@ -66,20 +66,28 @@ export const ESTILOS_DASHBOARD_MOBILE = `
         }
     }
 
-    /* --- Tarjeta móvil --- */
+    /* --- Tarjeta móvil: solo icono (nombres en aria-label / title nativo) --- */
     .dashboard-module-card-mobile {
         display: flex;
         flex-direction: column;
-        align-items: flex-start;
-        justify-content: flex-start;
-        min-height: 5.75rem;
-        padding: 0.75rem;
+        align-items: center;
+        justify-content: center;
+        aspect-ratio: 1;
+        width: 100%;
+        min-height: 0;
+        padding: 0.5rem;
         border-radius: 0.875rem;
         border-width: 2px;
         border-style: solid;
         text-decoration: none;
         outline: none;
         transition: border-color 0.2s ease, transform 0.2s ease;
+        box-sizing: border-box;
+    }
+
+    .dashboard-module-card-mobile:hover,
+    .dashboard-module-card-mobile:focus-visible {
+        border-color: var(--color-primario);
     }
 
     .dashboard-module-card-mobile:active {
@@ -93,7 +101,6 @@ export const ESTILOS_DASHBOARD_MOBILE = `
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-bottom: 0.5rem;
         flex-shrink: 0;
         border-width: 1px;
         border-style: solid;
@@ -104,30 +111,19 @@ export const ESTILOS_DASHBOARD_MOBILE = `
         height: 1.125rem;
     }
 
-    .dashboard-module-card-mobile__title {
-        font-size: clamp(0.6875rem, 2.2vw + 0.35rem, 0.8125rem);
-        font-weight: 900;
-        font-style: italic;
-        text-transform: uppercase;
-        letter-spacing: -0.02em;
-        line-height: 1.2;
-        margin: 0;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        width: 100%;
-        text-align: left;
-    }
-
     @media (min-width: 480px) {
         .dashboard-module-card-mobile {
-            min-height: 6.5rem;
-            padding: 0.875rem;
+            padding: 0.625rem;
         }
 
-        .dashboard-module-card-mobile__title {
-            font-size: clamp(0.75rem, 1.5vw + 0.4rem, 0.875rem);
+        .dashboard-module-card-mobile__icon-wrap {
+            width: 2.5rem;
+            height: 2.5rem;
+        }
+
+        .dashboard-module-card-mobile__icon {
+            width: 1.25rem;
+            height: 1.25rem;
         }
     }
 

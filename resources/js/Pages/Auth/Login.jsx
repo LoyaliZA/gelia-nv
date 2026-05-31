@@ -56,7 +56,7 @@ export default function Login() {
         <div className="gelia-login-split">
             <Head title="Iniciar sesión | GELIA" />
 
-            {/* Panel visual — marca */}
+            {/* Panel visual — marca (solo escritorio) */}
             <aside className="gelia-login-split__brand" aria-label="GELIA">
                 <div className="gelia-login-split__brand-glow gelia-login-split__brand-glow--1" aria-hidden />
                 <div className="gelia-login-split__brand-glow gelia-login-split__brand-glow--2" aria-hidden />
@@ -91,10 +91,18 @@ export default function Login() {
 
             {/* Panel del formulario */}
             <main className="gelia-login-split__form">
+                <div className="gelia-login-split__mobile-brand lg:hidden">
+                    <GeliaLogo variant="sparkle" className="w-11 h-11 shrink-0" accentColor="var(--color-primario)" />
+                    <div className="gelia-login-split__mobile-brand-text">
+                        <span className="gelia-login-split__mobile-brand-kicker">GELIA</span>
+                        <span className="gelia-login-split__mobile-brand-title">Iniciar sesión</span>
+                    </div>
+                </div>
+
                 <button
                     type="button"
                     onClick={toggleTheme}
-                    className="absolute top-5 right-5 lg:top-6 lg:right-6 z-10 p-3 rounded-2xl theme-element border theme-border theme-text-muted hover:text-[var(--color-primario)] transition-all hover:scale-105 outline-none shadow-sm"
+                    className="gelia-login-split__theme-toggle absolute top-4 right-4 lg:top-6 lg:right-6 z-10 p-2.5 lg:p-3 rounded-2xl theme-element border theme-border theme-text-muted hover:text-[var(--color-primario)] transition-all hover:scale-105 outline-none shadow-sm"
                     title={isDarkMode ? 'Modo claro' : 'Modo oscuro'}
                     aria-label={isDarkMode ? 'Activar modo claro' : 'Activar modo oscuro'}
                 >
@@ -102,16 +110,16 @@ export default function Login() {
                 </button>
 
                 <div className="gelia-login-split__form-inner">
-                    <header className="mb-8 md:mb-10">
-                        <h2 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0 leading-tight">
+                    <header className="gelia-login-split__form-header">
+                        <h2 className="gelia-login-split__form-title theme-text-main m-0 leading-tight">
                             Iniciar <span style={{ color: 'var(--color-primario)' }}>sesión</span>
                         </h2>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-3 m-0">
+                        <p className="gelia-login-split__form-subtitle theme-text-muted m-0">
                             Usa tu correo, usuario o nombre de acceso
                         </p>
                     </header>
 
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    <form onSubmit={handleSubmit} className="gelia-login-split__form-fields space-y-4 lg:space-y-5">
                         <div>
                             <label htmlFor="login" className="theme-label ml-1">
                                 Usuario o correo
@@ -180,7 +188,7 @@ export default function Login() {
                         <button
                             type="submit"
                             disabled={processing}
-                            className="theme-btn-primary w-full py-4 mt-2 disabled:hover:scale-100"
+                            className="theme-btn-primary w-full py-3.5 lg:py-4 mt-1 lg:mt-2 disabled:hover:scale-100"
                         >
                             {processing ? (
                                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
@@ -191,7 +199,7 @@ export default function Login() {
                         </button>
                     </form>
 
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] theme-text-muted text-center mt-10 m-0">
+                    <p className="gelia-login-split__footer theme-text-muted text-center m-0">
                         &copy; {new Date().getFullYear()} GELIA
                     </p>
                 </div>

@@ -29,25 +29,22 @@ export default function GeliaPaginacion({ paginator, onIrAPagina, embedded = fal
     const hasta = paginator?.to ?? 0;
     const total = paginator?.total ?? 0;
 
-    if (totalPaginas <= 1 && total <= (paginator?.per_page || 12)) {
-        if (total === 0) return null;
-        if (!embedded) {
-            return (
-                <div className={`text-center py-2 ${className}`}>
-                    <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">
-                        {total === 1 ? '1 registro' : `${total.toLocaleString('es-MX')} registros`}
-                    </span>
-                </div>
-            );
-        }
-        return null;
-    }
+    if (total === 0) return null;
 
-    const contenido = (
-        <>
-            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted text-center sm:text-left">
-                Viendo {desde} al {hasta} de {total.toLocaleString('es-MX')}
-            </span>
+    const resumen = (
+        <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted text-center sm:text-left">
+            {desde > 0 && hasta > 0
+                ? `Viendo ${desde} al ${hasta} de ${total.toLocaleString('es-MX')}`
+                : `${total.toLocaleString('es-MX')} registros`}
+            {totalPaginas > 1 && (
+                <span className="block sm:inline sm:ml-2 mt-1 sm:mt-0 opacity-80">
+                    · Página {paginaActual} de {totalPaginas}
+                </span>
+            )}
+        </span>
+    );
+
+    const controles = totalPaginas > 1 && (
             <div className="flex items-center justify-center sm:justify-end gap-1.5 sm:gap-2 flex-wrap">
                 <button
                     type="button"
@@ -88,20 +85,21 @@ export default function GeliaPaginacion({ paginator, onIrAPagina, embedded = fal
                     <ChevronRight className="w-4 h-4" />
                 </button>
             </div>
-        </>
     );
 
     if (embedded) {
         return (
             <div className={`border-t theme-border p-4 flex flex-col sm:flex-row items-center justify-between gap-4 ${className}`}>
-                {contenido}
+                {resumen}
+                {controles}
             </div>
         );
     }
 
     return (
         <div className={`${geliaCardClass('rounded-[2rem]')} p-4 flex flex-col sm:flex-row items-center justify-between gap-4 ${className}`}>
-            {contenido}
+            {resumen}
+            {controles}
         </div>
     );
 }

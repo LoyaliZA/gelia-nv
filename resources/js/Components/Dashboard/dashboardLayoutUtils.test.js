@@ -1,11 +1,16 @@
 import {
     applyLayoutChange,
+    buildDefaultLayout,
     compactLayout,
     getCollisions,
     layoutHasCollisions,
     optimizeLayout,
+    PANEL_GRID_MIN_H,
+    PANEL_GRID_MIN_W,
+    PANEL_IDS,
     rectsOverlap,
     resolveCollisions,
+    resolveLayout,
 } from './dashboardLayoutUtils.js';
 
 describe('rectsOverlap', () => {
@@ -109,6 +114,41 @@ describe('optimizeLayout', () => {
         const a = optimized.find((item) => item.i === 'a');
         expect(a.w).toBe(7);
         expect(a.h).toBe(12);
+    });
+});
+
+describe('resolveLayout — mínimo 4×4 en todos los paneles', () => {
+    it('eleva w/h guardados por debajo del mínimo al cargar', () => {
+        const defaultLayout = buildDefaultLayout({
+            hasModulos: true,
+            hasFunciones: false,
+            hasWidgetSolicitudes: true,
+            hasWidgetCancelaciones: false,
+            hasWidgetActivos: false,
+        });
+        const saved = [{ i: PANEL_IDS.SOLICITUDES, x: 7, y: 0, w: 2, h: 3, minW: 2, minH: 2 }];
+        const layout = resolveLayout(saved, [PANEL_IDS.MODULOS, PANEL_IDS.SOLICITUDES], defaultLayout);
+        const solicitudes = layout.find((item) => item.i === PANEL_IDS.SOLICITUDES);
+        expect(solicitudes.w).toBeGreaterThanOrEqual(PANEL_GRID_MIN_W);
+        expect(solicitudes.h).toBeGreaterThanOrEqual(PANEL_GRID_MIN_H);
+        expect(solicitudes.minW).toBe(PANEL_GRID_MIN_W);
+        expect(solicitudes.minH).toBe(PANEL_GRID_MIN_H);
+    });
+
+    it('define minW/minH 4 en el layout por defecto', () => {
+        const layout = buildDefaultLayout({
+            hasModulos: true,
+            hasFunciones: true,
+            hasWidgetSolicitudes: true,
+            hasWidgetCancelaciones: true,
+            hasWidgetActivos: true,
+        });
+        layout.forEach((item) => {
+            expect(item.minW).toBe(PANEL_GRID_MIN_W);
+            expect(item.minH).toBe(PANEL_GRID_MIN_H);
+            expect(item.w).toBeGreaterThanOrEqual(PANEL_GRID_MIN_W);
+            expect(item.h).toBeGreaterThanOrEqual(PANEL_GRID_MIN_H);
+        });
     });
 });
 

@@ -1,7 +1,15 @@
 import { useEffect, useRef } from 'react';
 
 export default function useMensajeriaEcho(conversacionId, { onMensajeEnviado, onMensajeLeido, onAdjuntoProcesado }) {
-    const channelRef = useRef(null);
+    const onMensajeEnviadoRef = useRef(onMensajeEnviado);
+    const onMensajeLeidoRef = useRef(onMensajeLeido);
+    const onAdjuntoProcesadoRef = useRef(onAdjuntoProcesado);
+
+    useEffect(() => {
+        onMensajeEnviadoRef.current = onMensajeEnviado;
+        onMensajeLeidoRef.current = onMensajeLeido;
+        onAdjuntoProcesadoRef.current = onAdjuntoProcesado;
+    });
 
     useEffect(() => {
         if (!conversacionId || typeof window === 'undefined' || !window.Echo) return;
@@ -10,30 +18,33 @@ export default function useMensajeriaEcho(conversacionId, { onMensajeEnviado, on
         const channel = window.Echo.private(channelName);
 
         channel.listen('.mensaje.enviado', (e) => {
-            onMensajeEnviado?.(e.mensaje);
+            onMensajeEnviadoRef.current?.(e.mensaje);
         });
 
         channel.listen('.mensaje.leido', (e) => {
-            onMensajeLeido?.(e.mensaje);
+            onMensajeLeidoRef.current?.(e.mensaje);
         });
 
         channel.listen('.adjunto.procesado', (e) => {
-            onAdjuntoProcesado?.(e.mensaje_id, e.adjunto);
+            onAdjuntoProcesadoRef.current?.(e.mensaje_id, e.adjunto);
         });
-
-        channelRef.current = channel;
 
         return () => {
             window.Echo.leave(channelName);
-            channelRef.current = null;
         };
-    }, [conversacionId, onMensajeEnviado, onMensajeLeido, onAdjuntoProcesado]);
+    }, [conversacionId]);
 }
 
 export function useMensajeriaEchoGlobal(onMensajeEnviado) {
+    const onMensajeEnviadoRef = useRef(onMensajeEnviado);
+
     useEffect(() => {
-        const handler = (e) => onMensajeEnviado?.(e.detail);
+        onMensajeEnviadoRef.current = onMensajeEnviado;
+    });
+
+    useEffect(() => {
+        const handler = (e) => onMensajeEnviadoRef.current?.(e.detail);
         window.addEventListener('mensajeria-mensaje-recibido', handler);
         return () => window.removeEventListener('mensajeria-mensaje-recibido', handler);
-    }, [onMensajeEnviado]);
+    }, []);
 }

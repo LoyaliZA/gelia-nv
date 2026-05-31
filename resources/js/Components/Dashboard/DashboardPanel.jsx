@@ -12,11 +12,12 @@ export default function DashboardPanel({
     iconClassName = '',
     headerActions,
     variant = 'desktop',
+    panelClassName = '',
     children,
 }) {
     if (variant === 'mobile') {
         return (
-            <div className="dashboard-panel-mobile theme-surface theme-border shadow-sm">
+            <div className={`dashboard-panel-mobile theme-surface theme-border shadow-sm ${panelClassName}`.trim()}>
                 <div className="dashboard-panel-mobile__header theme-border">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                         {Icon && (
@@ -38,8 +39,17 @@ export default function DashboardPanel({
         );
     }
 
+    const shellClass = [
+        'dashboard-panel-shell',
+        'dashboard-panel-shell--card-grid',
+        'h-full w-full min-h-0 flex flex-col overflow-hidden',
+        'theme-surface border-2 theme-border',
+        'p-3 sm:p-4 md:p-6 lg:p-8 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[2.5rem] shadow-sm',
+        panelClassName,
+    ].filter(Boolean).join(' ');
+
     return (
-        <div className="dashboard-panel-shell h-full w-full min-h-0 flex flex-col overflow-hidden theme-surface border-2 theme-border p-3 sm:p-4 md:p-6 lg:p-8 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[2.5rem] shadow-sm">
+        <div className={shellClass}>
             <div className="dashboard-panel-shell__header flex items-center justify-between border-b theme-border pb-4 shrink-0 gap-3 min-w-0">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                     {Icon && (
@@ -88,5 +98,5 @@ export function DashboardCardSlot({ children, variant = 'desktop' }) {
         return <>{children}</>;
     }
 
-    return <div className="dashboard-card-slot w-full min-w-0">{children}</div>;
+    return <div className="dashboard-card-slot w-full min-w-0 h-full min-h-[var(--card-min,3.75rem)]">{children}</div>;
 }

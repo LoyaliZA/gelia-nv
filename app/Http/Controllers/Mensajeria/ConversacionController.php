@@ -8,6 +8,7 @@ use App\Models\Conversacion;
 use App\Services\Mensajeria\BuscarUsuariosMensajeriaService;
 use App\Services\Mensajeria\CrearConversacionService;
 use App\Services\Mensajeria\ListarConversacionesService;
+use App\Services\Mensajeria\ListarMediosConversacionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -56,5 +57,22 @@ class ConversacionController extends Controller
         );
 
         return response()->json(['usuarios' => $usuarios]);
+    }
+
+    public function medios(
+        Request $request,
+        Conversacion $conversacion,
+        ListarMediosConversacionService $service
+    ): JsonResponse {
+        $this->authorize('view', $conversacion);
+
+        $resultado = $service->ejecutar($conversacion, $request->only([
+            'categoria',
+            'user_id',
+            'desde',
+            'hasta',
+        ]));
+
+        return response()->json($resultado);
     }
 }

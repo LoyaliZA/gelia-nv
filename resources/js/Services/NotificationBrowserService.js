@@ -186,10 +186,17 @@ class NotificationBrowserService {
         }
     }
 
-    showDesktopNotification(title, options, force = false) {
+    showDesktopNotification(title, options, force = false, onClick = null) {
         if (!force && this.preferences?.canales?.escritorio === false) return;
         if (this.permissionsGranted && Notification.permission === 'granted') {
-            new Notification(title, options);
+            const notification = new Notification(title, options);
+            if (onClick) {
+                notification.onclick = () => {
+                    window.focus();
+                    onClick();
+                    notification.close();
+                };
+            }
         }
     }
 
@@ -198,6 +205,7 @@ class NotificationBrowserService {
             sonido = this.preferences?.canales?.sonido !== false,
             voz = this.preferences?.canales?.voz !== false,
             escritorio = this.preferences?.canales?.escritorio !== false,
+            onClick = null,
         } = options;
 
         if (sonido) this.playAudio(true);
@@ -205,7 +213,7 @@ class NotificationBrowserService {
             setTimeout(() => this.speakText(voiceMessage, true), 1000);
         }
         if (escritorio) {
-            this.showDesktopNotification(title, { body: message }, true);
+            this.showDesktopNotification(title, { body: message }, true, onClick);
         }
     }
 

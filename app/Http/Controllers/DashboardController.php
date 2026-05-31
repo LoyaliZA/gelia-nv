@@ -107,8 +107,8 @@ class DashboardController extends Controller
             'dashboard_layout.*.i' => 'required_with:dashboard_layout|string|max:64',
             'dashboard_layout.*.x' => 'required_with:dashboard_layout|integer|min:0|max:11',
             'dashboard_layout.*.y' => 'required_with:dashboard_layout|integer|min:0|max:200',
-            'dashboard_layout.*.w' => 'required_with:dashboard_layout|integer|min:1|max:12',
-            'dashboard_layout.*.h' => 'required_with:dashboard_layout|integer|min:1|max:100',
+            'dashboard_layout.*.w' => 'required_with:dashboard_layout|integer|min:4|max:12',
+            'dashboard_layout.*.h' => 'required_with:dashboard_layout|integer|min:4|max:100',
         ]);
 
         $user = $request->user();

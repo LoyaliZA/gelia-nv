@@ -15,10 +15,13 @@ export default function DashboardModuleCard({
     variant = 'desktop',
 }) {
     if (variant === 'mobile') {
+        const ariaLabel = subtitle ? `${title}. ${subtitle}` : title;
+
         return (
             <Link
                 href={href}
-                aria-label={title}
+                aria-label={ariaLabel}
+                title={ariaLabel}
                 className={`dashboard-module-card-mobile theme-element shadow-sm ${borderClass}`}
                 style={borderStyle}
             >
@@ -28,7 +31,6 @@ export default function DashboardModuleCard({
                 >
                     <Icon className={`dashboard-module-card-mobile__icon ${iconClass}`} style={iconStyle} />
                 </div>
-                <h3 className="dashboard-module-card-mobile__title theme-text-main">{title}</h3>
             </Link>
         );
     }
@@ -42,7 +44,7 @@ export default function DashboardModuleCard({
             style={borderStyle}
         >
             <span className="dashboard-module-card__tooltip" role="tooltip">
-                {title}
+                {subtitle ? `${title} — ${subtitle}` : title}
             </span>
             <div
                 className={`dashboard-module-card__icon-wrap ${iconWrapClass}`}

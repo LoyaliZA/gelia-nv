@@ -179,13 +179,22 @@ class ListarSolicitudesOperativasService
 
         if (!empty($filtros['q'])) {
             $termino = trim($filtros['q']);
-            $query->where(function (Builder $q) use ($termino) {
-                $q->where('id', 'like', '%' . $termino . '%')
-                    ->orWhere('numero_remision', 'like', '%' . $termino . '%')
-                    ->orWhere('numero_pedido', 'like', '%' . $termino . '%')
-                    ->orWhereHas('cliente', function (Builder $cq) use ($termino) {
-                        $cq->where('nombre', 'like', '%' . $termino . '%')
-                            ->orWhere('numero_cliente', 'like', '%' . $termino . '%');
+            $terminoSinFolio = preg_replace('/^fol-?\s*/i', '', $termino);
+            $like = '%' . addcslashes($termino, '%_\\') . '%';
+
+            $query->where(function (Builder $q) use ($termino, $terminoSinFolio, $like) {
+                if ($terminoSinFolio !== '' && ctype_digit($terminoSinFolio)) {
+                    $q->where('id', (int) $terminoSinFolio);
+                } elseif (ctype_digit($termino)) {
+                    $q->where('id', (int) $termino);
+                }
+
+                $q->orWhere('numero_remision', 'like', $like)
+                    ->orWhere('numero_pedido', 'like', $like)
+                    ->orWhereHas('cliente', function (Builder $cq) use ($like) {
+                        $cq->where('nombre', 'like', $like)
+                            ->orWhere('numero_cliente', 'like', $like)
+                            ->orWhere('nombre_razon_social', 'like', $like);
                     });
             });
         }

@@ -321,41 +321,39 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                         </p>
                     </div>
                 ) : (
-                    <div className={`${geliaCardClass('overflow-hidden')} relative transition-opacity duration-200 ${listaCargando ? 'opacity-60' : ''}`}>
-                        {listaCargando && (
-                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--theme-surface-bg)]/50 backdrop-blur-[2px] pointer-events-none rounded-[inherit]">
-                                <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-hidden />
-                                <span className="sr-only">Actualizando listado</span>
+                    <>
+                        <div className={`${geliaCardClass('overflow-hidden')} relative transition-opacity duration-200 ${listaCargando ? 'opacity-60' : ''}`}>
+                            {listaCargando && (
+                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--theme-surface-bg)]/50 backdrop-blur-[2px] pointer-events-none rounded-[inherit]">
+                                    <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                                    <span className="sr-only">Actualizando listado</span>
+                                </div>
+                            )}
+                            <div className="p-4 md:p-6 border-b theme-border">
+                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                    {tituloListado}
+                                </p>
                             </div>
-                        )}
-                        <div className="p-4 md:p-6 border-b theme-border">
-                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
-                                {tituloListado}
-                            </p>
-                        </div>
-                        <div className="p-4 md:p-6">
-                            <div className="gelia-listado-grid">
-                                {listaVisible.map((sol) => (
-                                    <TarjetaOperativa
-                                        key={sol.id}
-                                        solicitud={sol}
-                                        auth={auth}
-                                        onMenu={abrirMenu}
-                                        onAprobar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 2 })}
-                                        onReportar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 4 })}
-                                        onVerificar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 3 })}
-                                    />
-                                ))}
+                            <div className="p-4 md:p-6">
+                                <div className="gelia-listado-grid">
+                                    {listaVisible.map((sol) => (
+                                        <TarjetaOperativa
+                                            key={sol.id}
+                                            solicitud={sol}
+                                            auth={auth}
+                                            onMenu={abrirMenu}
+                                            onAprobar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 2 })}
+                                            onReportar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 4 })}
+                                            onVerificar={(s) => setModalRespuesta({ abierto: true, solicitud: s, estadoId: 3 })}
+                                        />
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                        {!listaCargando && (solicitudes?.last_page || 1) > 1 && (
-                            <GeliaPaginacion
-                                paginator={solicitudes}
-                                onIrAPagina={irAPagina}
-                                embedded
-                            />
+                        {!listaCargando && listaVisible.length > 0 && (
+                            <GeliaPaginacion paginator={solicitudes} onIrAPagina={irAPagina} />
                         )}
-                    </div>
+                    </>
                 )}
             </div>
 

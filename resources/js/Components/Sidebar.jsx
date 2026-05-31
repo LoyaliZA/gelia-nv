@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useForm, usePage } from '@inertiajs/react';
 import {
     Menu, X, Moon, Sun, ArrowLeft,
     LayoutDashboard, Briefcase, ChevronRight,
-    Settings, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package, Receipt, Ban, Globe, MessageCircle
+    Settings, Settings2, Database, Users, LogOut, Link as LinkIcon,
+    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package, Receipt, Ban, Globe, MessageCircle,
+    User, Sparkles,
 } from 'lucide-react';
 
 import GeliaLogo from './GeliaLogo';
@@ -22,6 +23,24 @@ const EASE_SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 const FIXED_POSITIONS = { left: 'left', right: 'right', top: 'top', bottom: 'bottom' };
 
+/** Clases de posición/animación compartidas entre menú principal y menú de perfil */
+function buildSidebarMenuLayoutClasses({ isFixedVertical, isFixedHorizontal, isMobileMode, fixedPos, isOpen }) {
+    if (isFixedVertical) {
+        const menuFixedClass = fixedPos === FIXED_POSITIONS.right ? 'sidebar-menu-fixed-right' : 'sidebar-menu-fixed';
+        const menuRounding = fixedPos === FIXED_POSITIONS.right
+            ? 'rounded-l-[2.5rem] rounded-r-none border-r-0'
+            : 'rounded-r-[2.5rem] rounded-l-none border-l-0';
+        return ` h-screen ml-0 ${menuRounding} ${menuFixedClass} ${isOpen ? `${menuFixedClass}--open` : ''}`;
+    }
+    if (isFixedHorizontal) {
+        return ` rounded-[2rem] w-[300px] max-w-[90vw] sidebar-menu-float ${fixedPos === FIXED_POSITIONS.bottom ? 'mb-3' : 'mt-0'} ${isOpen ? 'sidebar-menu-float--open' : ''}`;
+    }
+    if (isMobileMode) {
+        return ` rounded-[2rem] w-[90vw] max-w-[320px] mb-4 sidebar-menu-float ${isOpen ? 'sidebar-menu-float--open' : ''}`;
+    }
+    return ` rounded-[2.5rem] w-[300px] mt-4 sidebar-menu-float ${isOpen ? 'sidebar-menu-float--open' : ''}`;
+}
+
 const prefixGroupClass = (visible, orientation) => {
     const base = 'flex overflow-hidden shrink-0 sidebar-widget-reveal';
     const pointer = visible ? 'pointer-events-auto' : 'pointer-events-none';
@@ -31,8 +50,33 @@ const prefixGroupClass = (visible, orientation) => {
     return `${base} ${pointer} flex-row items-center ${visible ? 'max-w-[11.5rem] opacity-100 gap-4 pl-3 ml-2 border-l theme-border' : 'max-w-0 opacity-0 gap-0 pl-0 ml-0 border-l-0'}`;
 };
 
-const suffixGroupClass = (visible) =>
-    `shrink-0 sidebar-widget-reveal flex flex-row items-center ${visible ? 'max-w-[7.25rem] sm:max-w-[7.75rem] opacity-100 mx-1.5 sm:mx-2 pointer-events-auto overflow-visible gap-1 sm:gap-1.5 py-0.5' : 'max-w-0 opacity-0 mx-0 pointer-events-none overflow-hidden gap-0'}`;
+/** Alertas + mensajería: columna centrada en barra fija vertical; fila en horizontal/flotante */
+const suffixGroupClass = (visible, orientation) => {
+    const base = 'shrink-0 sidebar-widget-reveal sidebar-widget-icons';
+    if (orientation === 'vertical') {
+        return `${base} flex flex-col items-center justify-center w-full ${visible ? 'max-h-[9.5rem] opacity-100 gap-3 py-3 border-t theme-border pointer-events-auto overflow-visible' : 'max-h-0 opacity-0 gap-0 py-0 border-t-0 pointer-events-none overflow-hidden'}`;
+    }
+    return `${base} flex flex-row items-center justify-center ${visible ? 'max-w-[7.5rem] sm:max-w-[8rem] opacity-100 ms-1.5 sm:ms-2 pointer-events-auto overflow-visible gap-1.5 sm:gap-2 py-0.5 border-s theme-border' : 'max-w-0 opacity-0 ms-0 pointer-events-none overflow-hidden gap-0 border-s-0'}`;
+};
+
+const SIDEBAR_WIDGET_ICON_BTN_CLASS = 'sidebar-widget-icon-btn';
+const PROFILE_MENU_ITEMS = [
+    { id: 'perfil', label: 'Mi Perfil', routeName: 'profile.index', path: '/perfil', icon: User },
+    { id: 'preferencias', label: 'Preferencias', routeName: 'profile.preferencias', path: '/perfil/preferencias', icon: Settings2 },
+    { id: 'novedades', label: 'Novedades', routeName: 'profile.novedades', path: '/perfil/novedades', icon: Sparkles },
+];
+
+function profileMenuHref(item) {
+    if (typeof route === 'function') {
+        try {
+            return route(item.routeName);
+        } catch {
+            // Ziggy desactualizado: usar path literal
+        }
+    }
+    return item.path;
+}
+
 const ADMIN_MENU_CONFIG = [
     { id: 'enlaces', label: 'Generar Enlaces', path: '/admin/enlaces', routeName: 'admin.enlaces', icon: LinkIcon, permission: 'usuarios.generar_permisos' },
     { id: 'clientes', label: 'Base de Clientes', path: '/admin/clientes', routeName: 'admin.clientes', icon: Database, permission: 'clientes.ver' },
@@ -52,10 +96,15 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const [isMenuClosing, setIsMenuClosing] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [isConfigExpanded, setIsConfigExpanded] = useState(isAdminActive);
+    const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+    const [isProfileMenuClosing, setIsProfileMenuClosing] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
     const closeTimerRef = useRef(null);
     const menuCloseTimerRef = useRef(null);
+    const profileMenuCloseTimerRef = useRef(null);
+    const profileMenuRef = useRef(null);
+    const profileAvatarButtonRef = useRef(null);
     const { post } = useForm();
 
     const unreadCount = (auth?.notificaciones || []).filter(n => !n.read_at).length;
@@ -64,16 +113,22 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         if (isAdminActive) setIsConfigExpanded(true);
     }, [url, isAdminActive]);
 
+    const isProfileMenuVisible = isProfileMenuOpen || isProfileMenuClosing;
+
     useEffect(() => () => {
         clearTimeout(closeTimerRef.current);
         clearTimeout(menuCloseTimerRef.current);
+        clearTimeout(profileMenuCloseTimerRef.current);
     }, []);
 
     const isRouteActive = (path) => {
         if (path === '/dashboard' && url === '/dashboard') return true;
+        if (path === '/perfil') return url === '/perfil' || url === '/perfil/';
         if (path !== '/dashboard' && url.startsWith(path)) return true;
         return false;
     };
+
+    const isProfileSectionActive = url.startsWith('/perfil');
 
     const linkBaseClass = "flex items-center w-full px-6 py-4 rounded-[1.5rem] transition-all outline-none ";
     const linkActiveClass = "bg-[var(--color-primario)] text-white shadow-lg border border-transparent";
@@ -97,7 +152,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const pinExpanded = !isMobileMode && sidebarMode === SIDEBAR_MODES.expanded;
 
     const isMenuVisible = isMenuOpen || isMenuClosing;
-    const isWidgetExpanded = isMobileMode || pinExpanded || isHovered || isMenuVisible;
+    const isWidgetExpanded = isMobileMode || pinExpanded || isHovered || isMenuVisible || isProfileMenuVisible;
     const showCollapsedWidget = !isMobileMode && !isWidgetExpanded;
     const showSecondaryControls = isWidgetExpanded;
 
@@ -157,6 +212,17 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         if (isMenuOpen) closeMenu();
     };
 
+    useEffect(() => {
+        const onToggleFromMensajeria = () => handleMenuToggle();
+        const onOpenFromMensajeria = () => openMenu();
+        window.addEventListener('gelia-sidebar-toggle-menu', onToggleFromMensajeria);
+        window.addEventListener('gelia-sidebar-open-menu', onOpenFromMensajeria);
+        return () => {
+            window.removeEventListener('gelia-sidebar-toggle-menu', onToggleFromMensajeria);
+            window.removeEventListener('gelia-sidebar-open-menu', onOpenFromMensajeria);
+        };
+    }, [isMenuOpen, isMobileMode]);
+
     const handleHamburgerHover = () => {
         if (isMobileMode) return;
         clearTimeout(closeTimerRef.current);
@@ -187,31 +253,100 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         setIsConfigExpanded(prev => !prev);
     };
 
-    const renderAvatar = (compact = false) => (
-        <Link
-            href={route('profile.edit')}
-            className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border outline-none group shrink-0 ${
-                compact
-                    ? 'w-6 h-6 border-2'
-                    : isFixedVertical
-                        ? 'w-11 h-11 border'
-                        : 'w-9 h-9 sm:w-10 sm:h-10 border ml-1 sm:ml-2'
-            } ${isRouteActive('/perfil') ? 'border-[var(--color-primario)] shadow-md' : 'theme-element theme-border'}`}
-        >
-            {user?.foto_perfil ? (
-                <img src={`/storage/${user.foto_perfil}`} alt="Perfil" className="w-full h-full object-cover rounded-full transition-transform group-hover:scale-110" />
-            ) : (
-                <div className="flex items-center justify-center w-full h-full bg-transparent">
-                    <span
-                        className={`font-black leading-none select-none ${compact ? 'text-[10px]' : 'text-lg'}`}
-                        style={{ color: 'var(--color-primario)' }}
-                    >
-                        {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                    </span>
-                </div>
-            )}
-        </Link>
-    );
+    const closeProfileMenu = useCallback(() => {
+        if (!isProfileMenuOpen && !isProfileMenuClosing) return;
+
+        setIsProfileMenuClosing(true);
+        setIsProfileMenuOpen(false);
+
+        clearTimeout(profileMenuCloseTimerRef.current);
+        profileMenuCloseTimerRef.current = setTimeout(() => {
+            setIsProfileMenuClosing(false);
+        }, MENU_CLOSE_MS);
+    }, [isProfileMenuOpen, isProfileMenuClosing]);
+
+    const openProfileMenu = useCallback(() => {
+        clearTimeout(profileMenuCloseTimerRef.current);
+        setIsProfileMenuClosing(false);
+        setIsProfileMenuOpen(true);
+    }, []);
+
+    const toggleProfileMenu = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (isProfileMenuOpen) {
+            closeProfileMenu();
+            return;
+        }
+        openProfileMenu();
+    };
+
+    // Cerrar al navegar
+    useEffect(() => {
+        setIsProfileMenuOpen(false);
+        setIsProfileMenuClosing(false);
+        clearTimeout(profileMenuCloseTimerRef.current);
+    }, [url]);
+
+    // Clic fuera: registrar después del clic que abrió el menú
+    useEffect(() => {
+        if (!isProfileMenuOpen) return undefined;
+
+        const handlePointerDown = (event) => {
+            if (
+                profileMenuRef.current?.contains(event.target) ||
+                profileAvatarButtonRef.current?.contains(event.target)
+            ) {
+                return;
+            }
+            closeProfileMenu();
+        };
+
+        const timerId = setTimeout(() => {
+            document.addEventListener('mousedown', handlePointerDown);
+        }, 0);
+
+        return () => {
+            clearTimeout(timerId);
+            document.removeEventListener('mousedown', handlePointerDown);
+        };
+    }, [isProfileMenuOpen, closeProfileMenu]);
+
+    const renderProfileAvatarMenu = (compact = false) => {
+        const avatarSizeClass = compact
+            ? 'w-6 h-6 border-2'
+            : isFixedVertical
+                ? 'w-11 h-11 border'
+                : 'w-9 h-9 sm:w-10 sm:h-10 border ml-1 sm:ml-2';
+
+        return (
+            <div className="relative shrink-0 pointer-events-auto">
+                <button
+                    ref={profileAvatarButtonRef}
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={toggleProfileMenu}
+                    aria-expanded={isProfileMenuOpen}
+                    aria-haspopup="menu"
+                    aria-label="Menú de perfil"
+                    className={`rounded-full flex items-center justify-center cursor-pointer overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border outline-none group ${avatarSizeClass} ${isProfileSectionActive ? 'border-[var(--color-primario)] shadow-md' : 'theme-element theme-border'}`}
+                >
+                    {user?.foto_perfil ? (
+                        <img src={`/storage/${user.foto_perfil}`} alt="Perfil" className="w-full h-full object-cover rounded-full transition-transform group-hover:scale-110" />
+                    ) : (
+                        <div className="flex items-center justify-center w-full h-full bg-transparent">
+                            <span
+                                className={`font-black leading-none select-none ${compact ? 'text-[10px]' : 'text-lg'}`}
+                                style={{ color: 'var(--color-primario)' }}
+                            >
+                                {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                            </span>
+                        </div>
+                    )}
+                </button>
+            </div>
+        );
+    };
 
     // 1. Contenedor Base: Ocupa todo el ancho pero NO bloquea los clics
     let navClasses = "fixed z-[200] flex pointer-events-none sidebar-mount ";
@@ -268,22 +403,21 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         transitionTimingFunction: EASE_SMOOTH,
     };
 
-    // 3. Menú: grid 0fr/1fr para altura fluida + transform GPU
-    let menuClasses = `floating-menu border shadow-2xl theme-surface theme-border sidebar-glass relative z-10 flex-shrink-0 sidebar-menu-shell sidebar-hamburger-menu ${isMenuVisible ? 'pointer-events-auto' : 'pointer-events-none'} ${isMenuOpen ? 'sidebar-hamburger-menu--open' : ''} `;
+    const sidebarMenuLayoutFlags = { isFixedVertical, isFixedHorizontal, isMobileMode, fixedPos };
 
-    if (isFixedVertical) {
-        const menuFixedClass = fixedPos === FIXED_POSITIONS.right ? 'sidebar-menu-fixed-right' : 'sidebar-menu-fixed';
-        const menuRounding = fixedPos === FIXED_POSITIONS.right
-            ? 'rounded-l-[2.5rem] rounded-r-none border-r-0'
-            : 'rounded-r-[2.5rem] rounded-l-none border-l-0';
-        menuClasses += ` h-screen ml-0 ${menuRounding} ${menuFixedClass} ${isMenuOpen ? `${menuFixedClass}--open` : ''}`;
-    } else if (isFixedHorizontal) {
-        menuClasses += ` rounded-[2rem] w-[300px] max-w-[90vw] sidebar-menu-float ${fixedPos === FIXED_POSITIONS.bottom ? 'mb-3' : 'mt-0'} ${isMenuOpen ? 'sidebar-menu-float--open' : ''}`;
-    } else if (isMobileMode) {
-        menuClasses += ` rounded-[2rem] w-[90vw] max-w-[320px] mb-4 sidebar-menu-float ${isMenuOpen ? 'sidebar-menu-float--open' : ''}`;
-    } else {
-        menuClasses += ` rounded-[2.5rem] w-[300px] mt-4 sidebar-menu-float ${isMenuOpen ? 'sidebar-menu-float--open' : ''}`;
-    }
+    const menuShellBase = (isVisible, isOpen) =>
+        `floating-menu border shadow-2xl theme-surface theme-border sidebar-glass relative z-10 flex-shrink-0 sidebar-menu-shell sidebar-hamburger-menu ${isVisible ? 'pointer-events-auto' : 'pointer-events-none'} ${isOpen ? 'sidebar-hamburger-menu--open' : ''} `;
+
+    const menuClasses = menuShellBase(isMenuVisible, isMenuOpen)
+        + buildSidebarMenuLayoutClasses({ ...sidebarMenuLayoutFlags, isOpen: isMenuOpen });
+
+    const profileMenuClasses = menuShellBase(isProfileMenuVisible, isProfileMenuOpen)
+        + buildSidebarMenuLayoutClasses({ ...sidebarMenuLayoutFlags, isOpen: isProfileMenuOpen });
+
+    const profileMenuTransitionStyle = {
+        transitionDuration: `${isProfileMenuOpen ? MENU_OPEN_MS : MENU_CLOSE_MS}ms`,
+        transitionTimingFunction: EASE_SMOOTH,
+    };
 
     const logoGlowClass = "drop-shadow-[0_0_12px_color-mix(in_srgb,var(--color-primario)_60%,transparent)]";
     const logoSizeClass = showCollapsedWidget
@@ -307,7 +441,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     onMouseLeave={handleHoverLeave}
                 >
                     <div className={widgetClasses} style={widgetShellStyle}>
-                        <div className={`flex items-center ${innerFlexClass} ${innerGapClass} ${isFixedHorizontal ? 'w-full justify-start' : ''}`}>
+                        <div className={`flex items-center ${innerFlexClass} ${innerGapClass} w-full ${isFixedVertical ? 'justify-center' : ''} ${isFixedHorizontal ? 'justify-start' : ''}`}>
                             <div
                                 className={prefixGroupClass(showSecondaryControls, widgetOrientation)}
                                 aria-hidden={!showSecondaryControls}
@@ -352,14 +486,54 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                             </Link>
 
                             <div
-                                className={suffixGroupClass(showSecondaryControls)}
+                                className={suffixGroupClass(showSecondaryControls, widgetOrientation)}
                                 aria-hidden={!showSecondaryControls}
                             >
-                                <NotificationBell notifications={auth?.notificaciones || []} />
-                                <MensajeriaWidget />
+                                <NotificationBell
+                                    notifications={auth?.notificaciones || []}
+                                    iconButtonClassName={SIDEBAR_WIDGET_ICON_BTN_CLASS}
+                                />
+                                <MensajeriaWidget iconButtonClassName={SIDEBAR_WIDGET_ICON_BTN_CLASS} />
                             </div>
 
-                            {renderAvatar(showCollapsedWidget)}
+                            {renderProfileAvatarMenu(showCollapsedWidget)}
+                        </div>
+                    </div>
+
+                    <div
+                        ref={profileMenuRef}
+                        role="menu"
+                        aria-hidden={!isProfileMenuVisible}
+                        className={profileMenuClasses}
+                        style={profileMenuTransitionStyle}
+                    >
+                        <div className="sidebar-menu-grid-inner overflow-hidden min-h-0">
+                            <div className={`sidebar-menu-content p-5 flex flex-col space-y-3 overflow-y-auto custom-scrollbar ${isFixedVertical ? 'w-[300px] h-full pt-10' : 'max-h-[85vh]'}`}>
+                                <span
+                                    className="text-[11px] font-black tracking-[0.3em] px-5 mb-1 opacity-60 uppercase italic"
+                                    style={{ color: 'var(--color-primario)' }}
+                                >
+                                    PERFIL_
+                                </span>
+                                <div className="flex flex-col space-y-2 px-2">
+                                    {PROFILE_MENU_ITEMS.map((item) => {
+                                        const IconComponent = item.icon;
+                                        const isActive = isRouteActive(item.path);
+                                        return (
+                                            <Link
+                                                key={item.id}
+                                                href={profileMenuHref(item)}
+                                                role="menuitem"
+                                                onClick={closeProfileMenu}
+                                                className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all outline-none ${isActive ? 'bg-[var(--color-primario)] text-white shadow-md' : 'theme-element theme-text-muted hover:theme-text-main hover:shadow-sm border border-transparent hover:border-[var(--color-primario)]'}`}
+                                            >
+                                                <IconComponent className="w-3.5 h-3.5 mr-4 shrink-0" />
+                                                {item.label}
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -577,6 +751,25 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     transition-duration: ${WIDGET_MS}ms;
                     transition-timing-function: ${EASE_SMOOTH};
                     pointer-events: auto;
+                }
+                .sidebar-widget-icons {
+                    box-sizing: border-box;
+                }
+                .sidebar-widget-icon-btn {
+                    width: 2.75rem;
+                    height: 2.75rem;
+                    min-width: 2.75rem;
+                    min-height: 2.75rem;
+                    padding: 0;
+                    margin: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                }
+                .sidebar-widget-icon-btn svg {
+                    display: block;
+                    flex-shrink: 0;
                 }
                 .sidebar-logo-link {
                     transition: transform ${WIDGET_MS}ms ${EASE_SMOOTH};

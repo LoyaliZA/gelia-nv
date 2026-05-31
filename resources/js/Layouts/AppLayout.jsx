@@ -12,7 +12,11 @@ import {
     shouldTriggerChannel,
     MENSAJERIA_TIPO_ALERTA,
 } from '../utils/alertasPrefs';
-import { notificarMensajeNuevo } from '../utils/mensajeriaNotificaciones';
+import {
+    notificarMensajeNuevo,
+    notificarMensajeLeido,
+    abrirConversacionDesdeNotificacion,
+} from '../utils/mensajeriaNotificaciones';
 import {
     clampFontScale,
     FONT_SCALE_DEFAULT,
@@ -130,6 +134,21 @@ export default function AppLayout({ children, fullScreen = false }) {
 
                     router.reload({ only: ['auth'], preserveScroll: true, preserveState: true });
                 })
+                .listen('.mensaje.leido', (event) => {
+                    const mensaje = event?.mensaje;
+                    if (!mensaje) return;
+                    notificarMensajeLeido(mensaje, auth);
+                })
+                .listen('.presencia.contacto', (event) => {
+                    const presencia = event?.presencia;
+                    if (!presencia) return;
+                    window.dispatchEvent(new CustomEvent('gelia-presencia-contacto', { detail: presencia }));
+                })
+                .listen('.presencia.actualizada', (event) => {
+                    const presencia = event?.presencia;
+                    if (!presencia) return;
+                    window.dispatchEvent(new CustomEvent('gelia-presencia-propia', { detail: presencia }));
+                })
                 .listen('.mensaje.recibido', (event) => {
                     const mensaje = event?.mensaje;
                     if (!mensaje) return;
@@ -138,7 +157,10 @@ export default function AppLayout({ children, fullScreen = false }) {
                     if (shouldTriggerChannel(prefs, MENSAJERIA_TIPO_ALERTA, 'app')) {
                         const nombre = mensaje.user?.name || 'Contacto';
                         const texto = mensaje.contenido || 'Nuevo mensaje';
-                        addToast({ mensaje: `${nombre} — ${texto}` });
+                        addToast({
+                            mensaje: `${nombre} — ${texto}`,
+                            conversacionId: mensaje.conversacion_id,
+                        });
                     }
 
                     notificarMensajeNuevo(mensaje, auth);
@@ -204,9 +226,27 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     const mensajeriaImmersivaMovil = isMensajeriaFull && isMobileViewport;
 
+    const getMensajeriaLayoutClasses = () => {
+        const base = 'gelia-mensajeria-main box-border w-full max-w-none p-0 overflow-hidden h-dvh max-h-dvh';
+
+        if (mensajeriaImmersivaMovil) {
+            return `${base} gelia-mensajeria-main--immersive`;
+        }
+
+        if (sidebarLayout !== 'fixed') {
+            if (sidebarLayout === 'floating_right') {
+                return `${base} gelia-mensajeria-main--float gelia-mensajeria-main--float-right`;
+            }
+            return `${base} gelia-mensajeria-main--float gelia-mensajeria-main--float-left`;
+        }
+
+        const edge = ['left', 'right', 'top', 'bottom'].includes(fixedPosition) ? fixedPosition : 'left';
+        return `${base} gelia-mensajeria-main--fixed gelia-mensajeria-main--fixed-${edge}`;
+    };
+
     const getMainLayoutClasses = () => {
         if (isMensajeriaFull) {
-            return 'p-0 h-dvh overflow-hidden max-w-none';
+            return getMensajeriaLayoutClasses();
         }
         if (sidebarLayout !== 'fixed') {
             return 'pt-6 md:pt-24';
@@ -390,17 +430,15 @@ export default function AppLayout({ children, fullScreen = false }) {
                     message="Procesando_" 
                 />
 
-                {!mensajeriaImmersivaMovil && (
-                    <Sidebar
-                        isDarkMode={isDarkMode}
-                        toggleTheme={toggleTheme}
-                        user={auth?.user}
-                        permissions={auth?.user?.permissions || []}
-                        layout={sidebarLayout}
-                        sidebarMode={sidebarMode}
-                        fixedPosition={fixedPosition}
-                    />
-                )}
+                <Sidebar
+                    isDarkMode={isDarkMode}
+                    toggleTheme={toggleTheme}
+                    user={auth?.user}
+                    permissions={auth?.user?.permissions || []}
+                    layout={sidebarLayout}
+                    sidebarMode={sidebarMode}
+                    fixedPosition={fixedPosition}
+                />
 
                 {/* Zoom solo en contenido: el sidebar fixed queda fuera y funciona igual en /perfil */}
                 <div className={`gelia-ui-scale w-full ${isMensajeriaFull ? 'h-dvh overflow-hidden' : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
@@ -422,7 +460,15 @@ export default function AppLayout({ children, fullScreen = false }) {
                     {/* TOASTS FLOTANTES */}
                     <div className="fixed top-6 right-6 z-[10000] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
                     {toasts.map((toast) => (
-                        <div key={toast.id} className="pointer-events-auto theme-surface theme-no-blur border theme-border shadow-2xl rounded-2xl p-4 flex items-start gap-4 animate-slide-in-right overflow-hidden relative group">
+                        <div
+                            key={toast.id}
+                            className={`pointer-events-auto theme-surface theme-no-blur border theme-border shadow-2xl rounded-2xl p-4 flex items-start gap-4 animate-slide-in-right overflow-hidden relative group ${toast.conversacionId ? 'cursor-pointer hover:border-[var(--color-primario)] transition-colors' : ''}`}
+                            onClick={toast.conversacionId ? () => {
+                                abrirConversacionDesdeNotificacion(toast.conversacionId);
+                                setToasts(prev => prev.filter(t => t.id !== toast.id));
+                            } : undefined}
+                            role={toast.conversacionId ? 'button' : undefined}
+                        >
                             <div className="absolute bottom-0 left-0 h-1 bg-[var(--color-primario)] animate-progress-shrink" />
                             <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
                                 <Bell className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
@@ -431,7 +477,13 @@ export default function AppLayout({ children, fullScreen = false }) {
                                 <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)] mb-0.5">Nueva Alerta_</p>
                                 <p className="text-xs font-bold theme-text-main leading-snug">{toast.mensaje}</p>
                             </div>
-                            <button onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))} className="theme-text-muted hover:theme-text-main transition-colors outline-none">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setToasts(prev => prev.filter(t => t.id !== toast.id));
+                                }}
+                                className="theme-text-muted hover:theme-text-main transition-colors outline-none"
+                            >
                                 <X className="w-4 h-4" />
                             </button>
                         </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Calendar, SlidersHorizontal, X, ChevronDown } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
-import { TIPOS_OPERATIVO, BTN_SECONDARY } from './operativasStyles';
+import { TIPOS_OPERATIVO, BTN_PRIMARY, BTN_SECONDARY, ESTILOS_OPERATIVAS_TABS } from './operativasStyles';
 
 const TABS = ['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'VERIFICADAS', 'INCORRECTAS', 'CANCELADAS'];
 
@@ -47,14 +47,11 @@ export default function FiltrosOperativas({
         [onAplicarFiltros]
     );
 
-    useEffect(() => {
-        const t = setTimeout(() => {
-            if (busquedaLocal !== (busqueda || '')) {
-                enviarBusqueda(busquedaLocal);
-            }
-        }, 400);
-        return () => clearTimeout(t);
-    }, [busquedaLocal, busqueda, enviarBusqueda]);
+    const handleBusquedaKeyDown = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        enviarBusqueda(busquedaLocal);
+    };
 
     return (
         <section
@@ -62,6 +59,7 @@ export default function FiltrosOperativas({
             aria-label="Filtros operativas"
             aria-busy={listaCargando}
         >
+            <style>{ESTILOS_OPERATIVAS_TABS}</style>
             <div className="p-4 md:p-5 border-b theme-border flex items-center gap-3">
                 <div className="p-2 rounded-xl theme-element border theme-border shrink-0">
                     <SlidersHorizontal className="w-4 h-4 theme-text-muted" aria-hidden />
@@ -76,14 +74,16 @@ export default function FiltrosOperativas({
                 )}
             </div>
 
-            <div className="p-3 md:p-4 border-b theme-border overflow-x-auto">
-                <div className="gelia-segment inline-flex flex-nowrap min-w-full sm:min-w-0 w-full sm:w-auto p-1 gap-0.5 shadow-sm">
+            <div className="operativas-tabs-scroll p-3 md:p-4 border-b theme-border">
+                <div className="gelia-segment operativas-tabs-track p-1 shadow-sm" role="tablist" aria-label="Estado de solicitudes">
                     {TABS.map((tab) => (
                         <button
                             key={tab}
                             type="button"
+                            role="tab"
+                            aria-selected={tabActiva === tab}
                             onClick={() => onCambiarTab(tab)}
-                            className="gelia-segment-btn flex-1 sm:flex-none min-w-[4.5rem] px-3 sm:px-4 py-2.5 text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
+                            className="gelia-segment-btn whitespace-nowrap"
                             data-active={tabActiva === tab}
                         >
                             {TAB_LABELS[tab] || tab}
@@ -92,15 +92,19 @@ export default function FiltrosOperativas({
                 </div>
             </div>
 
-            <div className="p-3 md:p-4 border-b theme-border overflow-x-auto">
-                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-1 mb-2 m-0">Tipo de operación</p>
-                <div className="gelia-segment inline-flex flex-nowrap sm:flex-wrap min-w-full sm:min-w-0 p-1 gap-0.5 shadow-sm">
+            <div className="operativas-tabs-scroll p-3 md:p-4 border-b theme-border">
+                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-1 mb-2 m-0">
+                    Tipo de operación
+                </p>
+                <div className="gelia-segment operativas-tabs-track operativas-tabs-track--tipo p-1 shadow-sm" role="tablist" aria-label="Tipo de operación">
                     {TIPOS_OPERATIVO.map(({ id, label }) => (
                         <button
                             key={id || 'all'}
                             type="button"
+                            role="tab"
+                            aria-selected={tipoOperativo === id}
                             onClick={() => onCambiarTipo(id)}
-                            className="gelia-segment-btn flex-1 sm:flex-none px-3 sm:px-4 py-2 text-[9px] font-black uppercase tracking-widest whitespace-nowrap"
+                            className="gelia-segment-btn whitespace-nowrap"
                             data-active={tipoOperativo === id}
                         >
                             {label}
@@ -114,17 +118,31 @@ export default function FiltrosOperativas({
                     <label htmlFor="operativas-busqueda" className="theme-label ml-1">
                         Buscar
                     </label>
-                    <div className="theme-field-with-icon mt-1.5">
-                        <Search className="theme-field-icon" aria-hidden />
-                        <input
-                            id="operativas-busqueda"
-                            type="search"
-                            value={busquedaLocal}
-                            onChange={(e) => setBusquedaLocal(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && enviarBusqueda(busquedaLocal)}
-                            placeholder="Folio, remisión, pedido o cliente…"
-                            className="theme-input w-full pr-4 py-3 normal-case tracking-normal font-bold text-sm"
-                        />
+                    <div className="flex flex-col sm:flex-row gap-2 mt-1.5">
+                        <div className="theme-field-with-icon min-w-0 flex-1">
+                            <Search className="theme-field-icon" aria-hidden />
+                            <input
+                                id="operativas-busqueda"
+                                type="text"
+                                value={busquedaLocal}
+                                onChange={(e) => setBusquedaLocal(e.target.value)}
+                                onKeyDown={handleBusquedaKeyDown}
+                                placeholder="Folio, remisión, pedido o cliente"
+                                autoComplete="off"
+                                enterKeyHint="search"
+                                className="theme-input w-full pr-4 py-3 normal-case tracking-normal font-bold text-sm"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => enviarBusqueda(busquedaLocal)}
+                            disabled={listaCargando}
+                            className={`${BTN_PRIMARY} w-full sm:w-auto shrink-0 px-6`}
+                            aria-label="Buscar solicitudes operativas"
+                        >
+                            <Search className="w-4 h-4 shrink-0" aria-hidden />
+                            Buscar
+                        </button>
                     </div>
                 </div>
                 <button

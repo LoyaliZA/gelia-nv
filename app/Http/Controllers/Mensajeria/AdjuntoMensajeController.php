@@ -8,6 +8,7 @@ use App\Models\Conversacion;
 use App\Models\MensajeAdjunto;
 use App\Services\Mensajeria\SubirAdjuntoMensajeService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -26,13 +27,14 @@ class AdjuntoMensajeController extends Controller
             Auth::user(),
             $request->file('archivo'),
             $request->validated('tipo'),
-            $request->validated('contenido')
+            $request->validated('contenido'),
+            $request->validated('reply_to_id')
         );
 
         return response()->json(['mensaje' => $mensaje], 201);
     }
 
-    public function show(MensajeAdjunto $adjunto): StreamedResponse
+    public function show(Request $request, MensajeAdjunto $adjunto): StreamedResponse
     {
         $adjunto->load('mensaje.conversacion.participantes');
 
@@ -46,12 +48,25 @@ class AdjuntoMensajeController extends Controller
         }
 
         $downloadName = $adjunto->nombre_original ?? basename($adjunto->ruta);
+        $inline = $request->boolean('inline')
+            || $request->query('inline') === '1'
+            || $request->query('disposition') === 'inline';
+        $disposition = $inline ? 'inline' : 'attachment';
+
+        $headers = [
+            'Content-Type' => $adjunto->mime ?: $disk->mimeType($adjunto->ruta),
+            'Content-Disposition' => sprintf(
+                '%s; filename="%s"',
+                $disposition,
+                str_replace('"', '\\"', $downloadName)
+            ),
+        ];
 
         return $disk->response(
             $adjunto->ruta,
             $downloadName,
-            [],
-            'attachment'
+            $headers,
+            $disposition
         );
     }
 }

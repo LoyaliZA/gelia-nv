@@ -24,6 +24,14 @@ class StoreAdjuntoRequest extends FormRequest
                 Mensaje::TIPO_ARCHIVO,
             ])],
             'contenido' => ['nullable', 'string', 'max:500'],
+            'reply_to_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('mensajes', 'id')->where(
+                    'conversacion_id',
+                    $this->route('conversacion')?->id
+                ),
+            ],
         ];
     }
 }

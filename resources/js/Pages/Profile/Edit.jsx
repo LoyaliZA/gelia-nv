@@ -3,11 +3,11 @@ import { createPortal } from 'react-dom';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { animate } from 'animejs/animation';
 import { 
-    User, Mail, Smartphone, Camera, 
-    Palette, Save, ShieldCheck, Moon, Sun, 
+    User, Camera, 
+    Palette, Save, Moon, Sun, 
     Image as ImageIcon, Type, Droplet, 
-    PanelLeft, BellRing, Settings2, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, XCircle,
-    Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, ChevronUp, Eye, EyeOff,
+    PanelLeft, BellRing, PaintBucket, Layers, Upload, X, Trash2, AlertTriangle, Check, XCircle,
+    ChevronDown, ChevronUp,
     Minus, Plus, Volume2, Mic, Monitor, Bell, MessageCircle
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -132,6 +132,71 @@ function applyBackgroundCSS(bgValue) {
 function resolveAccentHex(colorName) {
     if (!colorName) return accentColors.rosa;
     return colorName.startsWith('#') ? colorName : (accentColors[colorName] || accentColors.rosa);
+}
+
+const PREFERENCIAS_TAB_IDS = ['apariencia', 'alertas', 'navegacion'];
+
+const PREFERENCIAS_TABS = [
+    { id: 'apariencia', label: 'Apariencia', icon: Palette },
+    { id: 'alertas', label: 'Alertas', icon: BellRing },
+    { id: 'navegacion', label: 'Navegación', icon: PanelLeft },
+];
+
+function readPreferenciasTabFromHash() {
+    if (typeof window === 'undefined') return 'apariencia';
+    const hash = window.location.hash.replace('#', '');
+    return PREFERENCIAS_TAB_IDS.includes(hash) ? hash : 'apariencia';
+}
+
+/** Selector de sección: rejilla en móvil, segmentos horizontales en escritorio */
+function PreferenciasTabsNav({ activeTab, onChange }) {
+    return (
+        <nav className="gelia-preferencias-tabs" aria-label="Secciones de preferencias">
+            <div className="gelia-preferencias-tabs__track" role="tablist">
+                {PREFERENCIAS_TABS.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            role="tab"
+                            id={`preferencias-tab-${tab.id}`}
+                            aria-selected={isActive}
+                            aria-controls={`preferencias-${tab.id}`}
+                            onClick={() => onChange(tab.id)}
+                            className="gelia-preferencias-tabs__btn"
+                            data-active={isActive}
+                        >
+                            <Icon className="gelia-preferencias-tabs__icon" aria-hidden />
+                            <span>{tab.label}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </nav>
+    );
+}
+
+/** Subtítulo de bloque dentro de una pestaña de preferencias */
+function PreferenciasSubheading({ icon: Icon, title, subtitle }) {
+    return (
+        <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl theme-element border theme-border shrink-0">
+                <Icon className="w-5 h-5" style={{ color: 'var(--color-primario)' }} aria-hidden />
+            </div>
+            <div className="min-w-0">
+                <h3 className="text-lg font-black italic theme-text-main uppercase tracking-tighter m-0 leading-tight">
+                    {title}
+                </h3>
+                {subtitle && (
+                    <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1.5 m-0">
+                        {subtitle}
+                    </p>
+                )}
+            </div>
+        </div>
+    );
 }
 
 const ACCORDION_STORAGE_PREFIX = 'gelia_perfil_accordion_';
@@ -265,12 +330,6 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [fileAlert, setFileAlert] = useState(null);   // null | { title, message }
     const [isCompressing, setIsCompressing] = useState(false);
 
-    // --- Estados para secciones colapsables ---
-    const [showSensitive,     setShowSensitive]     = useState(false);
-    const [showInstitutional, setShowInstitutional] = useState(false);
-    const [showPassword,      setShowPassword]      = useState(false);
-    const [showConfirm,       setShowConfirm]       = useState(false);
-
     const { data, setData, post, processing, recentlySuccessful, errors, transform } = useForm({
         name:                  usuario?.name                 ? usuario.name.trim()                 : '',
         email:                 usuario?.email                ? usuario.email.trim()                : '',
@@ -320,6 +379,22 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [sidebarMode, setSidebarMode] = useState(initialTheme.sidebarMode);
     const [fixedPosition, setFixedPosition] = useState(initialTheme.fixedPosition);
     const [alertasPrefs, setAlertasPrefs] = useState(() => readStoredAlertasPrefs(tema_visual));
+    const [activeTab, setActiveTab] = useState(readPreferenciasTabFromHash);
+
+    const setPreferenciasTab = useCallback((tabId) => {
+        if (!PREFERENCIAS_TAB_IDS.includes(tabId)) return;
+        setActiveTab(tabId);
+        if (typeof window !== 'undefined') {
+            const url = `${window.location.pathname}${window.location.search}#${tabId}`;
+            window.history.replaceState(null, '', url);
+        }
+    }, []);
+
+    useEffect(() => {
+        const onHashChange = () => setActiveTab(readPreferenciasTabFromHash());
+        window.addEventListener('hashchange', onHashChange);
+        return () => window.removeEventListener('hashchange', onHashChange);
+    }, []);
 
     const updateAlertasPrefs = useCallback((updater) => {
         setAlertasPrefs((prev) => {
@@ -714,13 +789,11 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     };
 
     const activeCardClass = geliaCardClass('relative z-10');
-    const formZoneClass = 'theme-form-zone p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors';
-    const formZoneClassWide = 'theme-form-zone mt-3 p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors';
-    const formZoneClassInst = 'theme-form-zone mt-3 p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 transition-colors';
+    const settingsPanelClass = 'rounded-2xl theme-element border theme-border overflow-hidden';
 
     return (
         <AppLayout>
-            <Head title="Mi Perfil | GELIANV" />
+            <Head title="Preferencias | GELIANV" />
             <GeliaLoader isVisible={processing || isCompressing} message={isCompressing ? 'Optimizando imagen_' : 'Guardando cambios_'} />
 
             {/* ---- FEEDBACK CENTRADO (MODAL PREMIUM CON LOGO FLUIDO) ---- */}
@@ -855,16 +928,18 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 <div className="flex items-center justify-center md:justify-start mb-4">
                                     <div className="w-8 h-1.5 rounded-full mr-3" style={{ backgroundColor: 'var(--color-primario)' }}></div>
                                     <span className="text-[10px] font-black tracking-[0.2em] uppercase theme-text-muted drop-shadow-sm">
-                                        PROTOCOLO DE IDENTIDAD_
+                                        CENTRO DE PREFERENCIAS_
                                     </span>
                                 </div>
                                 <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0 p-0">
-                                    HOLA, <span style={{ color: 'var(--color-primario)' }}>{usuario?.name ? `${usuario.name} ${usuario.apellido_paterno || ''}`.trim() : 'USUARIO'}</span>
+                                    PERSONALIZA TU <span style={{ color: 'var(--color-primario)' }}>EXPERIENCIA_</span>
                                 </h1>
                             </div>
                             <div className="flex items-center justify-center md:justify-start gap-2 theme-text-muted mt-2">
-                                <ShieldCheck className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
-                                <p className="text-xs font-bold tracking-wide m-0">Miembro desde: {usuario?.created_at ? new Date(usuario.created_at).toLocaleDateString() : '2026'}</p>
+                                <Palette className="w-4 h-4 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                                <p className="text-xs font-bold tracking-wide m-0">
+                                    Apariencia, alertas, navegación y fondo de pantalla
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -889,216 +964,23 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                     </div>
                 </header>
 
-                {/* --- SECCIÓN DATOS --- */}
-                <section className={`${activeCardClass} p-8 md:p-10 space-y-8`}>
-                    <div className="flex items-center gap-3">
-                        <Settings2 className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">Ajustes de Cuenta_</h2>
-                    </div>
+                {/* --- PESTAÑAS DE PREFERENCIAS --- */}
+                <section className={`${activeCardClass} overflow-hidden`}>
+                    <PreferenciasTabsNav activeTab={activeTab} onChange={setPreferenciasTab} />
 
-                    {/* ZONA 1: Datos personales */}
-                    <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest mb-4 ml-1 drop-shadow-sm" style={{ color: 'var(--color-primario)' }}>
-                            Datos Personales
-                        </p>
-                        <div className={formZoneClass}>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre(s)</label>
-                                <div className="relative">
-                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                    <input type="text" value={data.name} onChange={e => setData('name', e.target.value)}
-                                        className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                </div>
-                                {errors.name && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.name}</p>}
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Apellido Paterno</label>
-                                <div className="relative">
-                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                    <input type="text" value={data.apellido_paterno} onChange={e => setData('apellido_paterno', e.target.value)}
-                                        className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                </div>
-                                {errors.apellido_paterno && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.apellido_paterno}</p>}
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Apellido Materno</label>
-                                <div className="relative">
-                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                    <input type="text" value={data.apellido_materno} onChange={e => setData('apellido_materno', e.target.value)}
-                                        className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                </div>
-                                {errors.apellido_materno && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.apellido_materno}</p>}
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Teléfono</label>
-                                <div className="relative">
-                                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                    <input type="text" value={data.telefono} onChange={e => setData('telefono', e.target.value)}
-                                        className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                </div>
-                                {errors.telefono && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.telefono}</p>}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ZONA 2: Datos sensibles */}
-                    <div>
-                        <button
-                            type="button"
-                            onClick={() => setShowSensitive(v => !v)}
-                            className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-200 outline-none group
-                                ${showSensitive
-                                    ? 'border-[var(--color-primario)]/40 bg-[var(--color-primario)]/5'
-                                    : 'theme-border theme-surface hover:border-[var(--color-primario)]/30'
-                                }`}
+                    {activeTab === 'apariencia' && (
+                        <div
+                            className="p-5 sm:p-6 md:p-8 space-y-10 animate-fade-in"
+                            role="tabpanel"
+                            id="preferencias-apariencia"
+                            aria-labelledby="preferencias-tab-apariencia"
                         >
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
-                                    <Lock className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
-                                </div>
-                                <div className="text-left">
-                                    <span className="text-sm font-black theme-text-main uppercase tracking-widest block leading-tight">Datos Sensibles</span>
-                                    <span className="text-[10px] font-bold theme-text-muted uppercase tracking-widest">Contraseña · Fecha de nacimiento</span>
-                                </div>
-                            </div>
-                            <ChevronDown className={`w-5 h-5 theme-text-muted transition-transform duration-300 ${showSensitive ? 'rotate-180' : ''}`} />
-                        </button>
-
-                        {showSensitive && (
-                            <div className={formZoneClassWide}>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Fecha de Nacimiento</label>
-                                    <div className="relative">
-                                        <CalendarDays className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input type="date" value={data.fecha_nacimiento} onChange={e => setData('fecha_nacimiento', e.target.value)}
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                    </div>
-                                    {errors.fecha_nacimiento && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.fecha_nacimiento}</p>}
-                                </div>
-
-                                <div className="hidden md:block" />
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Nueva Contraseña</label>
-                                    <div className="relative">
-                                        <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input
-                                            type={showPassword ? 'text' : 'password'}
-                                            value={data.password}
-                                            onChange={e => setData('password', e.target.value)}
-                                            placeholder="Dejar vacío para no cambiar"
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                        <button type="button" onClick={() => setShowPassword(v => !v)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 theme-text-muted hover:theme-text-main transition-colors outline-none">
-                                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                        </button>
-                                    </div>
-                                    {errors.password && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.password}</p>}
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Confirmar Contraseña</label>
-                                    <div className="relative">
-                                        <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input
-                                            type={showConfirm ? 'text' : 'password'}
-                                            value={data.password_confirmation}
-                                            onChange={e => setData('password_confirmation', e.target.value)}
-                                            placeholder="Repite la nueva contraseña"
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm hover:shadow-md"
-                                            onFocus={e => e.target.style.borderColor = 'var(--color-primario)'} onBlur={e => e.target.style.borderColor = ''} />
-                                        <button type="button" onClick={() => setShowConfirm(v => !v)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 theme-text-muted hover:theme-text-main transition-colors outline-none">
-                                            {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                        </button>
-                                    </div>
-                                    {errors.password_confirmation && <p className="text-xs text-red-500 m-0 mt-1 px-2">{errors.password_confirmation}</p>}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* ZONA 3: Info institucional */}
-                    <div>
-                        <button
-                            type="button"
-                            onClick={() => setShowInstitutional(v => !v)}
-                            className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-200 outline-none group
-                                ${showInstitutional
-                                    ? 'border-[var(--color-primario)]/40 bg-[var(--color-primario)]/5'
-                                    : 'theme-border theme-surface hover:border-[var(--color-primario)]/30'
-                                }`}
-                        >
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
-                                    <Building2 className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
-                                </div>
-                                <div className="text-left">
-                                    <span className="text-sm font-black theme-text-main uppercase tracking-widest block leading-tight">Información Institucional</span>
-                                    <span className="text-[10px] font-bold theme-text-muted uppercase tracking-widest">Solo lectura · Asignada por administración</span>
-                                </div>
-                            </div>
-                            <ChevronDown className={`w-5 h-5 theme-text-muted transition-transform duration-300 ${showInstitutional ? 'rotate-180' : ''}`} />
-                        </button>
-
-                        {showInstitutional && (
-                            <div className={formZoneClassInst}>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Correo Institucional</label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input type="email" value={data.email} readOnly
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-muted text-sm font-bold cursor-not-allowed opacity-60 shadow-sm" />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Área</label>
-                                    <div className="relative">
-                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input type="text"
-                                            value={usuario?.area?.nombre || 'Sin área asignada'}
-                                            readOnly
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-muted text-sm font-bold cursor-not-allowed opacity-60 shadow-sm" />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Departamento</label>
-                                    <div className="relative">
-                                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
-                                        <input type="text"
-                                            value={usuario?.area?.departamento?.nombre || 'Sin departamento'}
-                                            readOnly
-                                            className="w-full px-12 py-4 theme-surface border theme-border rounded-xl theme-text-muted text-sm font-bold cursor-not-allowed opacity-60 shadow-sm" />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </section>
-
-                {/* --- SECCIÓN PRESETS --- */}
-                <section className={`${activeCardClass} p-8 md:p-10 space-y-8`}>
-                    <div className="flex items-center gap-3">
-                        <Layers className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
-                            Temas Predefinidos_
-                        </h2>
-                    </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                            <PreferenciasSubheading
+                                icon={Layers}
+                                title="Temas predefinidos_"
+                                subtitle="Aplica color, modo, fuente y fondo de un solo clic"
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                         {presets.map((preset, idx) => {
                             const isPresetDark = preset.modo === 'dark';
                             return (
@@ -1119,17 +1001,14 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 </button>
                             );
                         })}
-                    </div>
-                </section>
+                            </div>
 
-                {/* --- SECCIÓN INTERFAZ Y COLORES (colapsable) --- */}
-                <ConfigAccordionSection
-                    sectionId="interfaz-colores"
-                    icon={Palette}
-                    title="Interfaz y Colores"
-                    subtitle="Modo, color de énfasis, tipografía y transparencia"
-                    defaultOpen={true}
-                >
+                            <PreferenciasSubheading
+                                icon={Palette}
+                                title="Interfaz y colores_"
+                                subtitle="Modo, color de énfasis, tipografía y transparencia"
+                            />
+                            <div className={settingsPanelClass}>
                         <SettingsRow icon={isDarkMode ? Moon : Sun} title="Modo de aplicación" subtitle="Esquema claro u oscuro" stackOnMobile={true}>
                             <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
                                 <button type="button" className="gelia-segment-btn" data-active={!isDarkMode} onClick={() => handleModeChange('light')}>
@@ -1216,69 +1095,91 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 </button>
                             </div>
                         </SettingsRow>
-                </ConfigAccordionSection>
-
-                {/* --- SECCIÓN NAVEGACIÓN (colapsable) --- */}
-                <ConfigAccordionSection
-                    sectionId="navegacion"
-                    icon={PanelLeft}
-                    title="Navegación"
-                    subtitle="Sidebar fijo, flotante y comportamiento al pasar el mouse"
-                    defaultOpen={false}
-                >
-                        <SettingsRow icon={PanelLeft} title="Disposición del Sidebar" subtitle="Formato lateral en pantallas grandes" stackOnMobile={true}>
-                            <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
-                                <button type="button" onClick={() => handleLayoutChange('fixed')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'fixed'}>
-                                    Fijo
-                                </button>
-                                <button type="button" onClick={() => handleLayoutChange('floating_left')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'floating_left'}>
-                                    Flot. Izq
-                                </button>
-                                <button type="button" onClick={() => handleLayoutChange('floating_right')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'floating_right'}>
-                                    Flot. Der
-                                </button>
                             </div>
-                        </SettingsRow>
 
-                        {sidebarLayout === 'fixed' && (
-                            <SettingsRow icon={PanelLeft} title="Posición barra fija" subtitle="Como la barra de tareas: borde de pantalla" stackOnMobile={true}>
-                                <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm flex-wrap sm:flex-nowrap">
-                                    <button type="button" onClick={() => handleFixedPositionChange('left')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'left'}>
-                                        Izquierda
-                                    </button>
-                                    <button type="button" onClick={() => handleFixedPositionChange('right')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'right'}>
-                                        Derecha
-                                    </button>
-                                    <button type="button" onClick={() => handleFixedPositionChange('top')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'top'}>
-                                        Arriba
-                                    </button>
-                                    <button type="button" onClick={() => handleFixedPositionChange('bottom')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'bottom'}>
-                                        Abajo
+                            <PreferenciasSubheading
+                                icon={ImageIcon}
+                                title="Fondo de pantalla_"
+                                subtitle="Catálogo, colores sólidos o imagen personalizada"
+                            />
+
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm m-0">Fondos del catálogo</p>
+                                    <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border theme-border theme-text-main opacity-80">
+                                        Actual: {getBackgroundType(selectedBg)}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {fondosDisponibles.map((fondo) => {
+                                        const bgValue = fondo.valor;
+                                        const previewSrc = fondo.preview || (fondo.tipo === 'vector'
+                                            ? `/assets/backgrounds/${fondo.valor}_movil.svg`
+                                            : fondo.valor);
+                                        return (
+                                            <button
+                                                key={fondo.id || fondo.slug}
+                                                type="button"
+                                                onClick={() => handleBgChange(bgValue)}
+                                                className={`relative h-24 rounded-2xl overflow-hidden border-[3px] transition-all duration-300 group ${selectedBg === bgValue ? 'shadow-2xl scale-105 ring-2 ring-offset-2 dark:ring-offset-[#141414]' : 'border-transparent opacity-60 hover:opacity-100 hover:shadow-lg hover:-translate-y-1'}`}
+                                                style={{ '--tw-ring-color': 'var(--color-primario)', borderColor: selectedBg === bgValue ? 'var(--color-primario)' : '' }}
+                                                title={fondo.nombre}
+                                            >
+                                                <img src={previewSrc} alt={fondo.nombre} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                <div className="space-y-4">
+                                    <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm m-0">Colores sólidos</p>
+                                    <div className="flex flex-wrap gap-4">
+                                        {solidBackgrounds.map((solid) => (
+                                            <button
+                                                key={solid.name}
+                                                type="button"
+                                                onClick={() => handleBgChange(solid.hex)}
+                                                className={`w-14 h-14 rounded-2xl border-[3px] transition-all duration-300 ${selectedBg === solid.hex ? 'scale-110 shadow-2xl ring-2 ring-offset-2 dark:ring-offset-[#141414]' : 'border-transparent opacity-60 hover:opacity-100 hover:shadow-lg hover:-translate-y-1'}`}
+                                                style={{ backgroundColor: solid.hex, '--tw-ring-color': 'var(--color-primario)', borderColor: selectedBg === solid.hex ? 'var(--color-primario)' : '' }}
+                                                title={solid.name}
+                                            />
+                                        ))}
+                                        <label className={`relative w-14 h-14 rounded-2xl border-[3px] border-dashed flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-lg transition-all overflow-hidden theme-element ${glassEffect ? 'border-zinc-400 dark:border-zinc-500 bg-white/50 dark:bg-black/30' : 'border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900'}`} title="Elegir color de fondo personalizado">
+                                            <Palette className="w-6 h-6 theme-text-main z-10 pointer-events-none" />
+                                            <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-20" onChange={(e) => handleBgChange(e.target.value)} />
+                                        </label>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm m-0">Imagen personalizada</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsBgModalOpen(true)}
+                                        className={`flex items-center justify-center gap-3 w-full h-14 rounded-2xl border-[3px] border-dashed cursor-pointer hover:border-zinc-500 dark:hover:border-zinc-400 transition-all hover:shadow-md hover:-translate-y-0.5 outline-none ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-white/40 dark:bg-black/20' : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900'}`}
+                                    >
+                                        <Upload className="w-5 h-5 theme-text-main drop-shadow-sm" />
+                                        <span className="text-sm font-bold theme-text-main uppercase tracking-widest drop-shadow-sm">Subir (.jpg, .png)</span>
                                     </button>
                                 </div>
-                            </SettingsRow>
-                        )}
-
-                        <SettingsRow icon={PanelLeft} title="Estado del Sidebar" subtitle="Contraído al pasar el mouse o siempre desplegado" stackOnMobile={true}>
-                            <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
-                                <button type="button" onClick={() => handleSidebarModeChange('collapsed')} className="gelia-segment-btn px-5 sm:px-6" data-active={sidebarMode === 'collapsed'}>
-                                    Contraída
-                                </button>
-                                <button type="button" onClick={() => handleSidebarModeChange('expanded')} className="gelia-segment-btn px-5 sm:px-6" data-active={sidebarMode === 'expanded'}>
-                                    Desplegada
-                                </button>
                             </div>
-                        </SettingsRow>
-                </ConfigAccordionSection>
+                        </div>
+                    )}
 
-                {/* --- SECCIÓN ALERTAS (colapsable) --- */}
-                <ConfigAccordionSection
-                    sectionId="alertas"
-                    icon={BellRing}
-                    title="Alertas"
-                    subtitle="Canales de notificación, tonos y tipos de aviso"
-                    defaultOpen={false}
-                >
+                    {activeTab === 'alertas' && (
+                        <div
+                            className="p-5 sm:p-6 md:p-8 space-y-6 animate-fade-in"
+                            role="tabpanel"
+                            id="preferencias-alertas"
+                            aria-labelledby="preferencias-tab-alertas"
+                        >
+                            <PreferenciasSubheading
+                                icon={BellRing}
+                                title="Alertas_"
+                                subtitle="Canales de notificación, tonos y tipos de aviso"
+                            />
+                            <div className={settingsPanelClass}>
                         <SettingsRow icon={Volume2} title="Timbres de alerta" subtitle="Reproducir sonido al recibir alertas" stackOnMobile={false}>
                             <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={alertasPrefs.canales.sonido} onClick={() => toggleCanalAlerta('sonido')}>
                                 <div className="gelia-switch-thumb shadow-md" />
@@ -1361,92 +1262,88 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 </button>
                             </div>
                         </SettingsRow>
-
-                        <ConfigAccordionSection
-                            sectionId="alertas-tipos"
-                            nested
-                            title="Tipos de alerta a recibir"
-                            subtitle="Desactivar un tipo silencia sonido, voz, escritorio y toasts. El historial en el Centro de Alertas se conserva."
-                            defaultOpen={false}
-                        >
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                                {Object.entries(ALERTAS_TIPOS).map(([tipo, label]) => (
-                                    <div key={tipo} className="flex items-center justify-between gap-3 p-3 rounded-xl theme-element border theme-border">
-                                        <span className="text-[10px] font-bold theme-text-main leading-snug">{label}</span>
-                                        <button type="button" className="gelia-switch shrink-0 scale-110 origin-right" data-active={alertasPrefs.tipos[tipo] !== false} onClick={() => toggleTipoAlerta(tipo)}>
-                                            <div className="gelia-switch-thumb shadow-md" />
-                                        </button>
-                                    </div>
-                                ))}
                             </div>
-                        </ConfigAccordionSection>
-                </ConfigAccordionSection>
 
-                {/* --- SECCIÓN FONDOS --- */}
-                <section className={`${activeCardClass} p-8 md:p-10 space-y-8`}>
-                    <div className="flex items-center gap-3">
-                        <ImageIcon className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
-                            Fondo de Pantalla_
-                        </h2>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Fondos del catálogo</p>
-                            <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full border theme-border theme-text-main opacity-80">
-                                Actual: {getBackgroundType(selectedBg)}
-                            </span>
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                            {fondosDisponibles.map((fondo) => {
-                                const bgValue = fondo.valor;
-                                const previewSrc = fondo.preview || (fondo.tipo === 'vector'
-                                    ? `/assets/backgrounds/${fondo.valor}_movil.svg`
-                                    : fondo.valor);
-                                return (
-                                <button
-                                    key={fondo.id || fondo.slug} type="button" onClick={() => handleBgChange(bgValue)}
-                                    className={`relative h-24 rounded-2xl overflow-hidden border-[3px] transition-all duration-300 group ${selectedBg === bgValue ? 'shadow-2xl scale-105 ring-2 ring-offset-2 dark:ring-offset-[#141414]' : 'border-transparent opacity-60 hover:opacity-100 hover:shadow-lg hover:-translate-y-1'}`}
-                                    style={{ '--tw-ring-color': 'var(--color-primario)', borderColor: selectedBg === bgValue ? 'var(--color-primario)' : '' }} title={fondo.nombre}
-                                >
-                                    <img src={previewSrc} alt={fondo.nombre} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                                </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pt-4">
-                        <div className="space-y-4">
-                            <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Colores Sólidos</p>
-                            <div className="flex flex-wrap gap-4">
-                                {solidBackgrounds.map((solid) => (
-                                    <button
-                                        key={solid.name} type="button" onClick={() => handleBgChange(solid.hex)}
-                                        className={`w-14 h-14 rounded-2xl border-[3px] transition-all duration-300 ${selectedBg === solid.hex ? 'scale-110 shadow-2xl ring-2 ring-offset-2 dark:ring-offset-[#141414]' : 'border-transparent opacity-60 hover:opacity-100 hover:shadow-lg hover:-translate-y-1'}`}
-                                        style={{ backgroundColor: solid.hex, '--tw-ring-color': 'var(--color-primario)', borderColor: selectedBg === solid.hex ? 'var(--color-primario)' : '' }} title={solid.name}
-                                    />
-                                ))}
-                                <label className={`relative w-14 h-14 rounded-2xl border-[3px] border-dashed flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-lg transition-all overflow-hidden theme-element ${glassEffect ? 'border-zinc-400 dark:border-zinc-500 bg-white/50 dark:bg-black/30' : 'border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900'}`} title="Elegir color de fondo personalizado">
-                                    <Palette className="w-6 h-6 theme-text-main z-10 pointer-events-none" />
-                                    <input type="color" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-20" onChange={(e) => handleBgChange(e.target.value)} />
-                                </label>
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            <p className="text-[11px] font-black uppercase theme-text-muted tracking-widest ml-1 drop-shadow-sm">Imagen Personalizada</p>
-                            <button
-                                type="button"
-                                onClick={() => setIsBgModalOpen(true)}
-                                className={`flex items-center justify-center gap-3 w-full h-14 rounded-2xl border-[3px] border-dashed cursor-pointer hover:border-zinc-500 dark:hover:border-zinc-400 transition-all hover:shadow-md hover:-translate-y-0.5 outline-none ${glassEffect ? 'border-zinc-300 dark:border-zinc-700 bg-white/40 dark:bg-black/20' : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900'}`}
+                            <ConfigAccordionSection
+                                sectionId="alertas-tipos"
+                                nested
+                                title="Tipos de alerta a recibir"
+                                subtitle="Desactivar un tipo silencia sonido, voz, escritorio y toasts. El historial en el Centro de Alertas se conserva."
+                                defaultOpen={false}
                             >
-                                <Upload className="w-5 h-5 theme-text-main drop-shadow-sm" />
-                                <span className="text-sm font-bold theme-text-main uppercase tracking-widest drop-shadow-sm">Subir (.jpg, .png)</span>
-                            </button>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                    {Object.entries(ALERTAS_TIPOS).map(([tipo, label]) => (
+                                        <div key={tipo} className="flex items-center justify-between gap-3 p-3 rounded-xl theme-element border theme-border">
+                                            <span className="text-[10px] font-bold theme-text-main leading-snug">{label}</span>
+                                            <button type="button" className="gelia-switch shrink-0 scale-110 origin-right" data-active={alertasPrefs.tipos[tipo] !== false} onClick={() => toggleTipoAlerta(tipo)}>
+                                                <div className="gelia-switch-thumb shadow-md" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ConfigAccordionSection>
                         </div>
-                    </div>
+                    )}
+
+                    {activeTab === 'navegacion' && (
+                        <div
+                            className="p-5 sm:p-6 md:p-8 space-y-6 animate-fade-in"
+                            role="tabpanel"
+                            id="preferencias-navegacion"
+                            aria-labelledby="preferencias-tab-navegacion"
+                        >
+                            <PreferenciasSubheading
+                                icon={PanelLeft}
+                                title="Navegación_"
+                                subtitle="Sidebar fijo, flotante y comportamiento al pasar el mouse"
+                            />
+                            <div className={settingsPanelClass}>
+                        <SettingsRow icon={PanelLeft} title="Disposición del Sidebar" subtitle="Formato lateral en pantallas grandes" stackOnMobile={true}>
+                            <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
+                                <button type="button" onClick={() => handleLayoutChange('fixed')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'fixed'}>
+                                    Fijo
+                                </button>
+                                <button type="button" onClick={() => handleLayoutChange('floating_left')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'floating_left'}>
+                                    Flot. Izq
+                                </button>
+                                <button type="button" onClick={() => handleLayoutChange('floating_right')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'floating_right'}>
+                                    Flot. Der
+                                </button>
+                            </div>
+                        </SettingsRow>
+
+                        {sidebarLayout === 'fixed' && (
+                            <SettingsRow icon={PanelLeft} title="Posición barra fija" subtitle="Como la barra de tareas: borde de pantalla" stackOnMobile={true}>
+                                <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm flex-wrap sm:flex-nowrap">
+                                    <button type="button" onClick={() => handleFixedPositionChange('left')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'left'}>
+                                        Izquierda
+                                    </button>
+                                    <button type="button" onClick={() => handleFixedPositionChange('right')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'right'}>
+                                        Derecha
+                                    </button>
+                                    <button type="button" onClick={() => handleFixedPositionChange('top')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'top'}>
+                                        Arriba
+                                    </button>
+                                    <button type="button" onClick={() => handleFixedPositionChange('bottom')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'bottom'}>
+                                        Abajo
+                                    </button>
+                                </div>
+                            </SettingsRow>
+                        )}
+
+                        <SettingsRow icon={PanelLeft} title="Estado del Sidebar" subtitle="Contraído al pasar el mouse o siempre desplegado" stackOnMobile={true}>
+                            <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
+                                <button type="button" onClick={() => handleSidebarModeChange('collapsed')} className="gelia-segment-btn px-5 sm:px-6" data-active={sidebarMode === 'collapsed'}>
+                                    Contraída
+                                </button>
+                                <button type="button" onClick={() => handleSidebarModeChange('expanded')} className="gelia-segment-btn px-5 sm:px-6" data-active={sidebarMode === 'expanded'}>
+                                    Desplegada
+                                </button>
+                            </div>
+                        </SettingsRow>
+                            </div>
+                        </div>
+                    )}
                 </section>
 
                 {/* --- BANNER FOOTER --- */}

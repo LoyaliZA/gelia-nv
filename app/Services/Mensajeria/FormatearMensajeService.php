@@ -18,10 +18,10 @@ class FormatearMensajeService
             ->count();
 
         $estadoLectura = 'enviado';
-        if ($mensaje->user_id === $viewer->id) {
-            if ($otrosParticipantes > 0 && $lecturasOtros >= $otrosParticipantes) {
+        if ($mensaje->user_id === $viewer->id && $otrosParticipantes > 0) {
+            if ($lecturasOtros >= $otrosParticipantes) {
                 $estadoLectura = 'leido';
-            } elseif ($otrosParticipantes > 0) {
+            } elseif ($lecturasOtros > 0) {
                 $estadoLectura = 'entregado';
             }
         }
@@ -37,14 +37,10 @@ class FormatearMensajeService
             'user' => [
                 'id' => $mensaje->user?->id,
                 'name' => $mensaje->user?->name,
+                'username' => $mensaje->user?->username,
                 'foto_perfil' => $mensaje->user?->foto_perfil,
             ],
-            'reply_to' => $mensaje->replyTo ? [
-                'id' => $mensaje->replyTo->id,
-                'contenido' => $mensaje->replyTo->contenido,
-                'tipo' => $mensaje->replyTo->tipo,
-                'user' => ['name' => $mensaje->replyTo->user?->name],
-            ] : null,
+            'reply_to' => $mensaje->replyTo ? $this->formatearReplyTo($mensaje->replyTo) : null,
             'adjuntos' => $mensaje->adjuntos->map(fn ($a) => [
                 'id' => $a->id,
                 'ruta' => $a->ruta,
@@ -58,6 +54,50 @@ class FormatearMensajeService
             ])->values()->all(),
             'lecturas_count' => $lecturasOtros,
         ];
+    }
+
+    private function formatearReplyTo(Mensaje $replyTo): array
+    {
+        $adjunto = $replyTo->adjuntos->first();
+
+        return [
+            'id' => $replyTo->id,
+            'contenido' => $replyTo->contenido,
+            'tipo' => $replyTo->tipo,
+            'preview' => $this->previewMensaje($replyTo, $adjunto),
+            'nombre_adjunto' => $adjunto?->nombre_original,
+            'user' => [
+                'id' => $replyTo->user?->id,
+                'name' => $replyTo->user?->name,
+            ],
+        ];
+    }
+
+    private function previewMensaje(Mensaje $mensaje, $adjunto = null): string
+    {
+        if ($mensaje->tipo === Mensaje::TIPO_TEXTO && $mensaje->contenido) {
+            $texto = trim($mensaje->contenido);
+
+            return mb_strlen($texto) > 120 ? mb_substr($texto, 0, 120) . '…' : $texto;
+        }
+
+        if ($adjunto?->nombre_original) {
+            return $adjunto->nombre_original;
+        }
+
+        if ($mensaje->contenido) {
+            $texto = trim($mensaje->contenido);
+
+            return mb_strlen($texto) > 100 ? mb_substr($texto, 0, 100) . '…' : $texto;
+        }
+
+        return match ($mensaje->tipo) {
+            Mensaje::TIPO_IMAGEN => '📷 Imagen',
+            Mensaje::TIPO_VIDEO => '🎬 Video',
+            Mensaje::TIPO_AUDIO => '🎤 Audio',
+            Mensaje::TIPO_ARCHIVO => '📎 Archivo',
+            default => '[mensaje]',
+        };
     }
 
     /** Payload para broadcast: sin campos que dependen del usuario que ve el chat. */

@@ -1,13 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageCircle, MessageSquare, X, ExternalLink } from 'lucide-react';
+import { MessageCircle, MessageSquare, X, ExternalLink, Users, Loader2 } from 'lucide-react';
 import { Link, usePage } from '@inertiajs/react';
 import MensajeriaService from '@/Services/MensajeriaService';
 import MensajeInput from '@/Components/Mensajeria/MensajeInput';
 import MensajeBurbuja from '@/Components/Mensajeria/MensajeBurbuja';
 import AvatarUsuario from '@/Components/Mensajeria/AvatarUsuario';
+import useChatScroll from '@/hooks/useChatScroll';
+import useMensajeriaEcho from '@/hooks/useMensajeriaEcho';
 import { setConversacionActivaMensajeria, setMensajeriaWidgetAbierto } from '@/utils/mensajeriaNotificaciones';
-import { normalizarMensajeParaViewer } from '@/utils/mensajeriaMensaje';
+import { normalizarMensajeParaViewer, aplicarActualizacionLectura } from '@/utils/mensajeriaMensaje';
+import { prepararMensajesGrupo } from '@/utils/mensajeriaGrupo';
+import ParticipantesGrupoPanel from '@/Components/Mensajeria/ParticipantesGrupoPanel';
+import ZonaDropAdjuntoChat from '@/Components/Mensajeria/ZonaDropAdjuntoChat';
+import SelectorEstadoPresencia from '@/Components/Mensajeria/SelectorEstadoPresencia';
+import EstadoPresenciaTexto from '@/Components/Mensajeria/EstadoPresenciaTexto';
+import usePresenciaHeartbeat from '@/hooks/usePresenciaHeartbeat';
+import usePresenciaContactos from '@/hooks/usePresenciaContactos';
 
 export function MensajeriaCountBadge({ count, className = '-top-1.5 -right-1.5' }) {
     if (!count || count <= 0) return null;
@@ -25,7 +34,7 @@ export function MensajeriaCountBadge({ count, className = '-top-1.5 -right-1.5' 
 
 const formatearPreview = (c) => c.ultimo_mensaje_preview || 'Sin mensajes';
 
-export default function MensajeriaWidget() {
+export default function MensajeriaWidget({ iconButtonClassName = '' }) {
     const { auth } = usePage().props;
     const resumenInicial = auth?.mensajeria_resumen;
 
@@ -34,7 +43,25 @@ export default function MensajeriaWidget() {
     const [totalUnread, setTotalUnread] = useState(resumenInicial?.total_unread || 0);
     const [activa, setActiva] = useState(null);
     const [mensajes, setMensajes] = useState([]);
+    const [cursor, setCursor] = useState(null);
+    const [hasMore, setHasMore] = useState(false);
+    const [cargandoMensajes, setCargandoMensajes] = useState(false);
     const [enviando, setEnviando] = useState(false);
+    const topSentinelRef = useRef(null);
+    const prevScrollHeightRef = useRef(0);
+    const [participantesAbierto, setParticipantesAbierto] = useState(false);
+    const [respondiendoA, setRespondiendoA] = useState(null);
+
+    const { scrollRef } = useChatScroll(mensajes, activa?.id);
+
+    const esGrupoActivo = activa?.tipo === 'grupo';
+    const mensajesRender = useMemo(
+        () => prepararMensajesGrupo(mensajes, esGrupoActivo),
+        [mensajes, esGrupoActivo]
+    );
+
+    usePresenciaHeartbeat(isOpen);
+    usePresenciaContactos(setConversaciones, setActiva);
 
     useEffect(() => {
         if (!resumenInicial) return;
@@ -97,24 +124,127 @@ export default function MensajeriaWidget() {
         return () => window.removeEventListener('mensajeria-mensaje-recibido', handleMensajeRecibido);
     }, [handleMensajeRecibido]);
 
+    const handleMensajeLeido = useCallback((mensaje) => {
+        if (!mensaje || Number(mensaje.user?.id) !== Number(auth?.user?.id)) return;
+
+        setMensajes((prev) =>
+            prev.map((m) =>
+                m.id === mensaje.id
+                    ? aplicarActualizacionLectura(m, mensaje, auth?.user?.id)
+                    : m
+            )
+        );
+    }, [auth?.user?.id]);
+
+    useMensajeriaEcho(isOpen && activa?.id ? activa.id : null, {
+        onMensajeLeido: handleMensajeLeido,
+    });
+
+    useEffect(() => {
+        const handler = (event) => handleMensajeLeido(event.detail);
+        window.addEventListener('mensajeria-mensaje-leido', handler);
+        return () => window.removeEventListener('mensajeria-mensaje-leido', handler);
+    }, [handleMensajeLeido]);
+
+    useEffect(() => {
+        if (!isOpen || !activa?.id) return undefined;
+
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') {
+                MensajeriaService.marcarLeida(activa.id);
+            }
+        };
+
+        document.addEventListener('visibilitychange', onVisible);
+
+        return () => document.removeEventListener('visibilitychange', onVisible);
+    }, [isOpen, activa?.id]);
+
+    const scrollAMensaje = useCallback((mensajeId) => {
+        requestAnimationFrame(() => {
+            const el = document.getElementById(`mensaje-${mensajeId}`);
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el?.classList.add('gelia-mensaje--destacado');
+            setTimeout(() => el?.classList.remove('gelia-mensaje--destacado'), 2400);
+        });
+    }, []);
+
     const abrirConversacion = async (conversacion) => {
         setActiva(conversacion);
+        setRespondiendoA(null);
         setMensajes([]);
-        const data = await MensajeriaService.listarMensajes(conversacion.id);
-        setMensajes(data.mensajes);
-        await MensajeriaService.marcarLeida(conversacion.id);
-        setConversaciones((prev) =>
-            prev.map((c) => c.id === conversacion.id ? { ...c, unread_count: 0 } : c)
-        );
-        setTotalUnread((prev) => Math.max(0, prev - (conversacion.unread_count || 0)));
+        setCursor(null);
+        setHasMore(false);
+        setCargandoMensajes(true);
+
+        try {
+            const data = await MensajeriaService.listarMensajes(conversacion.id);
+            setMensajes(data.mensajes);
+            setCursor(data.next_cursor);
+            setHasMore(data.has_more);
+            await MensajeriaService.marcarLeida(conversacion.id);
+            setConversaciones((prev) =>
+                prev.map((c) => c.id === conversacion.id ? { ...c, unread_count: 0 } : c)
+            );
+            setTotalUnread((prev) => Math.max(0, prev - (conversacion.unread_count || 0)));
+        } finally {
+            setCargandoMensajes(false);
+        }
     };
+
+    const cargarMasMensajes = useCallback(async () => {
+        if (!activa || !hasMore || !cursor || cargandoMensajes) return;
+
+        setCargandoMensajes(true);
+        try {
+            const data = await MensajeriaService.listarMensajes(activa.id, cursor);
+            setMensajes((prev) => [...data.mensajes, ...prev]);
+            setCursor(data.next_cursor);
+            setHasMore(data.has_more);
+        } finally {
+            setCargandoMensajes(false);
+        }
+    }, [activa, hasMore, cursor, cargandoMensajes]);
+
+    useEffect(() => {
+        const sentinel = topSentinelRef.current;
+        const root = scrollRef.current;
+        if (!sentinel || !root || !activa) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !cargandoMensajes) {
+                    prevScrollHeightRef.current = root.scrollHeight;
+                    cargarMasMensajes();
+                }
+            },
+            { root, threshold: 0.1 }
+        );
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [activa?.id, hasMore, cargandoMensajes, cargarMasMensajes, scrollRef]);
+
+    useEffect(() => {
+        const root = scrollRef.current;
+        if (!prevScrollHeightRef.current || !root) return;
+
+        const diff = root.scrollHeight - prevScrollHeightRef.current;
+        root.scrollTop = diff;
+        prevScrollHeightRef.current = 0;
+    }, [mensajes.length, scrollRef]);
 
     const enviarTexto = async (texto) => {
         if (!activa) return;
         setEnviando(true);
         try {
-            const mensaje = await MensajeriaService.enviarMensaje(activa.id, texto);
+            const mensaje = await MensajeriaService.enviarMensaje(
+                activa.id,
+                texto,
+                respondiendoA?.id ?? null
+            );
             setMensajes((prev) => [...prev, mensaje]);
+            setRespondiendoA(null);
         } finally {
             setEnviando(false);
         }
@@ -124,8 +254,15 @@ export default function MensajeriaWidget() {
         if (!activa) return;
         setEnviando(true);
         try {
-            const mensaje = await MensajeriaService.enviarAdjunto(activa.id, file, tipo, contenido);
+            const mensaje = await MensajeriaService.enviarAdjunto(
+                activa.id,
+                file,
+                tipo,
+                contenido,
+                respondiendoA?.id ?? null
+            );
             setMensajes((prev) => [...prev, mensaje]);
+            setRespondiendoA(null);
         } finally {
             setEnviando(false);
         }
@@ -135,6 +272,10 @@ export default function MensajeriaWidget() {
         setIsOpen(false);
         setActiva(null);
         setMensajes([]);
+        setCursor(null);
+        setHasMore(false);
+        setParticipantesAbierto(false);
+        setRespondiendoA(null);
     };
 
     return (
@@ -142,7 +283,7 @@ export default function MensajeriaWidget() {
             <button
                 type="button"
                 onClick={() => setIsOpen(true)}
-                className="relative overflow-visible p-3 theme-element border theme-border rounded-2xl hover:border-[var(--color-primario)] transition-all group outline-none shrink-0"
+                className={`relative overflow-visible theme-element border theme-border rounded-2xl hover:border-[var(--color-primario)] transition-all group outline-none shrink-0 ${iconButtonClassName || 'p-3'}`}
                 aria-label="Mensajería"
             >
                 {totalUnread > 0 ? (
@@ -226,35 +367,110 @@ export default function MensajeriaWidget() {
                                 ))}
                             </div>
                         ) : (
+                            <ZonaDropAdjuntoChat
+                                onEnviarAdjunto={enviarAdjunto}
+                                enviando={enviando}
+                                className="gelia-mensajeria-chat-column flex flex-1 flex-col min-h-0 min-w-0"
+                            >
+                            {({ prepararAdjunto }) => (
                             <>
                                 <div className="flex items-center gap-2 px-4 py-3 border-b theme-border shrink-0 bg-black/[0.03] dark:bg-white/[0.03]">
                                     <button
                                         type="button"
-                                        onClick={() => { setActiva(null); setMensajes([]); }}
-                                        className="text-xs font-bold theme-text-muted hover:theme-text-main transition-colors"
+                                        onClick={() => {
+                                            setActiva(null);
+                                            setMensajes([]);
+                                            setCursor(null);
+                                            setHasMore(false);
+                                            setParticipantesAbierto(false);
+                                        }}
+                                        className="text-xs font-bold theme-text-muted hover:theme-text-main transition-colors shrink-0"
                                     >
                                         ← Volver
                                     </button>
-                                    <p className="text-sm font-bold theme-text-main truncate flex-1">{activa.nombre}</p>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-bold theme-text-main truncate m-0">{activa.nombre}</p>
+                                        {!esGrupoActivo && activa.presencia_otro && (
+                                            <EstadoPresenciaTexto presencia={activa.presencia_otro} compact className="mt-0.5" />
+                                        )}
+                                        {esGrupoActivo && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setParticipantesAbierto(true)}
+                                                className="text-[10px] font-bold theme-text-muted hover:theme-text-main transition-colors text-left truncate max-w-full m-0 mt-0.5 p-0 border-0 bg-transparent outline-none"
+                                                title="Ver participantes del grupo"
+                                            >
+                                                {activa.participantes?.length || 0} participantes · Ver lista
+                                            </button>
+                                        )}
+                                    </div>
+                                    <SelectorEstadoPresencia compact />
+                                    {esGrupoActivo && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setParticipantesAbierto(true)}
+                                            className="p-2 rounded-full theme-element border theme-border theme-text-muted hover:border-[var(--color-primario)] hover:theme-text-main transition-all outline-none shrink-0"
+                                            title="Ver participantes"
+                                            aria-label="Ver participantes del grupo"
+                                        >
+                                            <Users className="w-4 h-4" />
+                                        </button>
+                                    )}
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto custom-scrollbar py-3 bg-black/[0.02] dark:bg-white/[0.02]">
-                                    {mensajes.map((m) => (
-                                        <MensajeBurbuja
-                                            key={m.id}
-                                            mensaje={m}
-                                            esGrupo={activa?.tipo === 'grupo'}
-                                        />
-                                    ))}
+                                <ParticipantesGrupoPanel
+                                    isOpen={participantesAbierto && esGrupoActivo}
+                                    onClose={() => setParticipantesAbierto(false)}
+                                    nombreGrupo={activa.nombre}
+                                    participantes={activa.participantes || []}
+                                    usuarioActualId={auth?.user?.id}
+                                />
+
+                                <div className="relative flex-1 min-h-0 min-w-0 overflow-hidden">
+                                    <div
+                                        ref={scrollRef}
+                                        className="gelia-mensajeria-mensajes-scroll absolute inset-0 custom-scrollbar py-3 bg-black/[0.02] dark:bg-white/[0.02]"
+                                    >
+                                        <div ref={topSentinelRef} className="h-1" aria-hidden />
+
+                                        {cargandoMensajes && hasMore && (
+                                            <div className="flex justify-center py-2">
+                                                <Loader2 className="w-5 h-5 animate-spin opacity-50" />
+                                            </div>
+                                        )}
+
+                                        {cargandoMensajes && mensajes.length === 0 && (
+                                            <div className="flex justify-center py-12">
+                                                <Loader2 className="w-6 h-6 animate-spin opacity-50" />
+                                            </div>
+                                        )}
+
+                                        {mensajesRender.map(({ mensaje, mostrarRemitente }) => (
+                                            <MensajeBurbuja
+                                                key={mensaje.id}
+                                                mensaje={mensaje}
+                                                esGrupo={esGrupoActivo}
+                                                mostrarRemitente={mostrarRemitente}
+                                                participantesGrupo={esGrupoActivo ? activa.participantes || [] : []}
+                                                onResponder={setRespondiendoA}
+                                                onIrAMensaje={scrollAMensaje}
+                                            />
+                                        ))}
+                                    </div>
                                 </div>
 
                                 <MensajeInput
                                     onEnviarTexto={enviarTexto}
                                     onEnviarAdjunto={enviarAdjunto}
+                                    onPrepararAdjunto={prepararAdjunto}
+                                    respondiendoA={respondiendoA}
+                                    onCancelarRespuesta={() => setRespondiendoA(null)}
                                     enviando={enviando}
                                     compact
                                 />
                             </>
+                            )}
+                            </ZonaDropAdjuntoChat>
                         )}
                     </div>
                 </div>,

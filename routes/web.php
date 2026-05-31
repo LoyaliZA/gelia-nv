@@ -68,7 +68,10 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/dashboard/preferencias', [DashboardController::class, 'actualizarPreferencias'])->name('dashboard.preferencias');
 
     // --- PERFIL DE USUARIO Y NOTIFICACIONES ---
-    Route::get('/perfil', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::get('/perfil', [ProfileController::class, 'index'])->name('profile.index');
+    Route::delete('/perfil/sesiones/otras', [ProfileController::class, 'destroyOtherSessions'])->name('profile.sessions.destroy-others');
+    Route::get('/perfil/preferencias', [ProfileController::class, 'edit'])->name('profile.preferencias');
+    Route::get('/perfil/novedades', [ProfileController::class, 'novedades'])->name('profile.novedades');
     Route::post('/perfil', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/notificaciones/{id}/leer', [AdminController::class, 'marcarNotificacionLeida'])->name('notifications.read');
     Route::post('/notificaciones/limpiar', [AdminController::class, 'limpiarNotificaciones'])->name('notifications.clear');
@@ -84,6 +87,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/conversaciones/{conversacion}/mensajes', [MensajeController::class, 'index'])->name('mensajes.index');
         Route::post('/conversaciones/{conversacion}/mensajes', [MensajeController::class, 'store'])->name('mensajes.store');
         Route::put('/conversaciones/{conversacion}/leer', [MensajeController::class, 'marcarLeida'])->name('conversaciones.leer');
+        Route::get('/conversaciones/{conversacion}/medios', [ConversacionController::class, 'medios'])->name('conversaciones.medios');
+        Route::get('/presencia/catalogo', [\App\Http\Controllers\Mensajeria\PresenciaController::class, 'catalogo'])->name('presencia.catalogo');
+        Route::get('/presencia', [\App\Http\Controllers\Mensajeria\PresenciaController::class, 'show'])->name('presencia.show');
+        Route::put('/presencia', [\App\Http\Controllers\Mensajeria\PresenciaController::class, 'update'])->name('presencia.update');
+        Route::post('/presencia/heartbeat', [\App\Http\Controllers\Mensajeria\PresenciaController::class, 'heartbeat'])->name('presencia.heartbeat');
+        Route::get('/buscar', [\App\Http\Controllers\Mensajeria\BuscarMensajeriaController::class, 'buscar'])->name('buscar');
+        Route::get('/conversaciones/{conversacion}/contexto', [\App\Http\Controllers\Mensajeria\BuscarMensajeriaController::class, 'contexto'])->name('conversaciones.contexto');
         Route::post('/conversaciones/{conversacion}/adjuntos', [AdjuntoMensajeController::class, 'store'])->name('adjuntos.store');
         Route::get('/adjuntos/{adjunto}', [AdjuntoMensajeController::class, 'show'])->name('adjuntos.show');
     });

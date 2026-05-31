@@ -1,16 +1,32 @@
 import React from 'react';
 import { Check, CheckCheck } from 'lucide-react';
 
-export default function EstadoLectura({ estado, esPropio }) {
+const ETIQUETAS = {
+    enviado: 'Enviado',
+    entregado: 'Entregado',
+    leido: 'Visto',
+};
+
+const CLASES_ESTADO = {
+    enviado: 'gelia-estado-lectura--enviado',
+    entregado: 'gelia-estado-lectura--entregado',
+    leido: 'gelia-estado-lectura--visto',
+};
+
+export default function EstadoLectura({ estado = 'enviado', esPropio }) {
     if (!esPropio) return null;
 
-    if (estado === 'leido') {
-        return <CheckCheck className="w-3.5 h-3.5 inline ml-1" style={{ color: 'var(--color-primario)' }} />;
-    }
+    const etiqueta = ETIQUETAS[estado] || ETIQUETAS.enviado;
+    const clase = CLASES_ESTADO[estado] || CLASES_ESTADO.enviado;
+    const Icono = estado === 'enviado' ? Check : CheckCheck;
 
-    if (estado === 'entregado') {
-        return <CheckCheck className="w-3.5 h-3.5 inline ml-1 opacity-50" />;
-    }
-
-    return <Check className="w-3.5 h-3.5 inline ml-1 opacity-50" />;
+    return (
+        <span
+            className={`gelia-estado-lectura ${clase}`}
+            aria-label={etiqueta}
+            title={etiqueta}
+        >
+            <Icono aria-hidden />
+        </span>
+    );
 }

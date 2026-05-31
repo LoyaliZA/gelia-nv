@@ -1,4 +1,5 @@
 import NotificationService from '@/Services/NotificationBrowserService';
+import { router } from '@inertiajs/react';
 import {
     resolveAlertasPrefs,
     shouldTriggerChannel,
@@ -25,6 +26,27 @@ export function setMensajeriaWidgetAbierto(abierto) {
     window.__mensajeriaWidgetAbierto = abierto;
 }
 
+export function abrirConversacionDesdeNotificacion(conversacionId) {
+    if (!conversacionId || typeof window === 'undefined') return;
+
+    const enMensajeria = window.location.pathname.startsWith('/mensajeria');
+
+    if (enMensajeria) {
+        window.dispatchEvent(new CustomEvent('mensajeria-abrir-conversacion', {
+            detail: { conversacionId: Number(conversacionId), scrollToBottom: true },
+        }));
+    } else {
+        router.visit(`/mensajeria?conversacion=${conversacionId}`);
+    }
+}
+
+export function notificarMensajeLeido(mensaje, auth) {
+    if (!mensaje || !auth?.user?.id) return;
+    if (Number(mensaje.user?.id) !== Number(auth.user.id)) return;
+
+    window.dispatchEvent(new CustomEvent('mensajeria-mensaje-leido', { detail: mensaje }));
+}
+
 export function notificarMensajeNuevo(mensaje, auth) {
     if (!mensaje || mensaje.user?.id === auth?.user?.id) return;
 
@@ -49,7 +71,13 @@ export function notificarMensajeNuevo(mensaje, auth) {
             `Mensaje de ${nombre}`,
             cuerpo,
             voz ? mensajeVoz : null,
-            { sonido, voz, escritorio }
+            {
+                sonido,
+                voz,
+                escritorio,
+                conversacionId: mensaje.conversacion_id,
+                onClick: () => abrirConversacionDesdeNotificacion(mensaje.conversacion_id),
+            }
         );
     }
 }

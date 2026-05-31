@@ -190,41 +190,43 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
                         </p>
                     </div>
                 ) : (
-                    <div className={`${geliaCardClass('overflow-hidden')} relative transition-opacity duration-200 ${listaCargando ? 'opacity-60' : ''}`}>
-                        {listaCargando && (
-                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--theme-surface-bg)]/50 backdrop-blur-[2px] pointer-events-none rounded-[inherit]">
-                                <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-hidden />
-                                <span className="sr-only">Actualizando listado</span>
+                    <>
+                        <div className={`${geliaCardClass('overflow-hidden')} relative transition-opacity duration-200 ${listaCargando ? 'opacity-60' : ''}`}>
+                            {listaCargando && (
+                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--theme-surface-bg)]/50 backdrop-blur-[2px] pointer-events-none rounded-[inherit]">
+                                    <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                                    <span className="sr-only">Actualizando listado</span>
+                                </div>
+                            )}
+                            <div className="p-4 md:p-6 border-b theme-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                    {listaCargando && (filtros.tab || 'TODAS') !== tabActiva
+                                        ? `Mostrando coincidencias en esta página · cargando «${tabActiva.toLowerCase()}»…`
+                                        : facturas?.total != null
+                                          ? `${facturas.total.toLocaleString('es-MX')} solicitudes`
+                                          : `${listaVisible.length} en esta página`}
+                                </p>
                             </div>
-                        )}
-                        <div className="p-4 md:p-6 border-b theme-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
-                                {listaCargando && (filtros.tab || 'TODAS') !== tabActiva
-                                    ? `Mostrando coincidencias en esta página · cargando «${tabActiva.toLowerCase()}»…`
-                                    : facturas?.total != null
-                                      ? `${facturas.total.toLocaleString('es-MX')} solicitudes`
-                                      : `${listaVisible.length} en esta página`}
-                            </p>
-                        </div>
-                        <div className="p-4 md:p-6">
-                            <div className="gelia-listado-grid">
-                                {listaVisible.map((f) => (
-                                    <TarjetaFactura
-                                        key={f.id}
-                                        factura={f}
-                                        auth={auth}
-                                        onVerExpediente={(factura) => setModalExpediente({ abierto: true, factura })}
-                                        onAprobar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: 2 })}
-                                        onReportar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: 4 })}
-                                        onVerificar={verificar}
-                                    />
-                                ))}
+                            <div className="p-4 md:p-6">
+                                <div className="gelia-listado-grid">
+                                    {listaVisible.map((f) => (
+                                        <TarjetaFactura
+                                            key={f.id}
+                                            factura={f}
+                                            auth={auth}
+                                            onVerExpediente={(factura) => setModalExpediente({ abierto: true, factura })}
+                                            onAprobar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: 2 })}
+                                            onReportar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: 4 })}
+                                            onVerificar={verificar}
+                                        />
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                        {!listaCargando && (facturas?.last_page || 1) > 1 && (
-                            <GeliaPaginacion paginator={facturas} onIrAPagina={irAPagina} embedded />
+                        {!listaCargando && listaVisible.length > 0 && (
+                            <GeliaPaginacion paginator={facturas} onIrAPagina={irAPagina} />
                         )}
-                    </div>
+                    </>
                 )}
             </div>
 

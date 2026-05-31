@@ -5,11 +5,16 @@ namespace App\Services\Mensajeria;
 use App\Models\Conversacion;
 use App\Models\ConversacionParticipante;
 use App\Models\User;
+use App\Services\Presencia\PresenciaUsuarioService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class ListarConversacionesService
 {
+    public function __construct(
+        private PresenciaUsuarioService $presenciaUsuario,
+    ) {}
+
     public function ejecutar(User $user): Collection
     {
         return $this->baseQuery($user)->get()->map(fn ($row) => $this->formatear($row, $user));
@@ -33,7 +38,7 @@ class ListarConversacionesService
             ->select('conversaciones.*')
             ->join('conversacion_participantes as cp', 'cp.conversacion_id', '=', 'conversaciones.id')
             ->where('cp.user_id', $user->id)
-            ->with(['participantes.user:id,name,foto_perfil,username'])
+            ->with(['participantes.user:id,name,username,foto_perfil'])
             ->orderByDesc('conversaciones.ultimo_mensaje_at')
             ->orderByDesc('conversaciones.id');
     }
@@ -60,6 +65,9 @@ class ListarConversacionesService
             ? $conversacion->foto
             : ($otrosParticipantes->first()?->user?->foto_perfil);
 
+        $otroUserId = $conversacion->esGrupo() ? null : $otrosParticipantes->first()?->user_id;
+        $presenciaOtros = $this->presenciasPorConversacion($conversacion, $user);
+
         return [
             'id' => $conversacion->id,
             'tipo' => $conversacion->tipo,
@@ -71,10 +79,29 @@ class ListarConversacionesService
             'participantes' => $conversacion->participantes->map(fn ($p) => [
                 'id' => $p->user_id,
                 'name' => $p->user?->name,
+                'username' => $p->user?->username,
                 'foto_perfil' => $p->user?->foto_perfil,
                 'rol' => $p->rol,
+                'presencia' => $presenciaOtros[$p->user_id] ?? null,
             ])->values()->all(),
+            'presencia_otro' => $otroUserId ? ($presenciaOtros[$otroUserId] ?? null) : null,
         ];
+    }
+
+    /** @return array<int, array> */
+    private function presenciasPorConversacion(Conversacion $conversacion, User $viewer): array
+    {
+        try {
+            $ids = $conversacion->participantes
+                ->pluck('user_id')
+                ->filter(fn ($id) => (int) $id !== (int) $viewer->id)
+                ->values()
+                ->all();
+
+            return $this->presenciaUsuario->formatearVarios($ids);
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function nombreDirecto(Collection $participantes): string

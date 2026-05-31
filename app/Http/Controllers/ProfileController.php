@@ -11,28 +11,78 @@ use Inertia\Response;
 use Illuminate\Http\RedirectResponse;
 use Carbon\Carbon;
 use App\Services\PersonalizacionCatalogoService;
+use App\Services\UserSessionService;
 
 class ProfileController extends Controller
 {
     /**
-     * Muestra la vista de edición del perfil (Estándar GELIA).
+     * Mi Perfil: datos generales del usuario (contenido por migrar desde preferencias).
+     */
+    public function index(Request $request, UserSessionService $userSessionService): Response
+    {
+        $user = $request->user()->load('areas.departamento');
+        $primeraArea = $user->areas->first();
+
+        return Inertia::render('Profile/MiPerfil', [
+            'perfilUsuario' => [
+                'fecha_nacimiento' => $user->fecha_nacimiento
+                    ? Carbon::parse($user->fecha_nacimiento)->format('Y-m-d')
+                    : null,
+                'area' => $primeraArea ? [
+                    'nombre'       => $primeraArea->nombre,
+                    'departamento' => $primeraArea->departamento ? [
+                        'nombre' => $primeraArea->departamento->nombre,
+                    ] : null,
+                ] : null,
+            ],
+            'sesiones' => $userSessionService->listarParaUsuario(
+                $user->id,
+                $request->session()->getId()
+            ),
+            'sesiones_soportadas' => UserSessionService::driverSoportaListado(),
+        ]);
+    }
+
+    /**
+     * Cierra todas las sesiones del usuario excepto la actual.
+     */
+    public function destroyOtherSessions(Request $request, UserSessionService $userSessionService): RedirectResponse
+    {
+        $eliminadas = $userSessionService->cerrarOtrasSesiones(
+            $request->user()->id,
+            $request->session()->getId()
+        );
+
+        $mensaje = $eliminadas > 0
+            ? "Se cerraron {$eliminadas} sesión(es) en otros dispositivos."
+            : 'No había otras sesiones activas.';
+
+        return back()->with('success', $mensaje);
+    }
+
+    /**
+     * Novedades: registro de actualizaciones de la plataforma.
+     */
+    public function novedades(Request $request): Response
+    {
+        return Inertia::render('Profile/Novedades');
+    }
+
+    /**
+     * Preferencias: personalización del sistema (vista Profile/Edit).
      */
     public function edit(Request $request): Response
     {
-        // Cargamos el usuario con su área y departamento para la info institucional
         $user = $request->user()->load('areas.departamento');
 
-        // Recuperamos la configuración visual de la tabla dedicada
         $configuracion = DB::table('configuraciones_usuarios')
             ->where('user_id', $user->id)
             ->first();
 
         $temaVisual = $configuracion ? json_decode($configuracion->tema_visual, true) : [];
 
-        // Tomamos la primera área asignada
         $primeraArea = $user->areas->first();
 
-        // No sobrescribir auth compartido (permisos, roles, tema_visual): rompe el sidebar en /perfil.
         return Inertia::render('Profile/Edit', [
             'tema_visual' => $temaVisual,
             'perfilUsuario' => [

@@ -21,6 +21,46 @@ import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../utils/geliaThem
 export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
 export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-primary--compact`;
 
+/** Tabs de estado: scroll horizontal en móvil, fila completa en sm+ */
+export const ESTILOS_FACTURAS_TABS = `
+    .facturas-tabs-scroll {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+    }
+
+    .facturas-tabs-track {
+        display: inline-flex;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        width: max-content;
+        min-width: 100%;
+        gap: 0.125rem;
+    }
+
+    .facturas-tabs-track .gelia-segment-btn {
+        flex: 0 0 auto;
+        min-width: max-content;
+        padding: 0.625rem 0.875rem;
+        font-size: 0.625rem;
+        letter-spacing: 0.08em;
+    }
+
+    @media (min-width: 640px) {
+        .facturas-tabs-track {
+            display: flex;
+            width: 100%;
+        }
+
+        .facturas-tabs-track .gelia-segment-btn {
+            flex: 1 1 0;
+            min-width: 4.5rem;
+            font-size: 0.625rem;
+        }
+    }
+`;
+
 /** @deprecated Usar ACCENT */
 export const FACTURA_ACCENT = ACCENT;
 

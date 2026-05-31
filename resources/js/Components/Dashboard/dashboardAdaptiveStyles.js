@@ -39,9 +39,15 @@ export const ESTILOS_DASHBOARD_ADAPTIVE = `
         width: 100%;
         height: 100%;
         gap: 0.375rem;
-        align-content: stretch;
+        align-content: start;
         align-items: stretch;
         grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--card-min)), 1fr));
+        grid-auto-rows: minmax(var(--card-min), auto);
+    }
+
+    /* Módulos + Funciones: filas crecen con el panel para activar tarjeta mediana/grande */
+    .dashboard-panel-shell--card-grid .dashboard-panel-cards__grid {
+        align-content: stretch;
         grid-auto-rows: minmax(var(--card-min), 1fr);
     }
 
@@ -71,16 +77,30 @@ export const ESTILOS_DASHBOARD_ADAPTIVE = `
         .dashboard-panel-cards__grid {
             gap: 1rem;
             grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
-            grid-auto-rows: minmax(9rem, 1fr);
+        }
+        .dashboard-panel-shell--card-grid .dashboard-panel-cards__grid {
+            grid-auto-rows: minmax(5.5rem, 1fr);
         }
     }
 
-    /* Panel bajo: forzar cubos aunque las celdas sean anchas */
-    @container panel-shell (max-height: 20rem) {
-        .dashboard-panel-cards {
+    @container panel-shell (min-height: 16rem) {
+        .dashboard-panel-shell--card-grid .dashboard-panel-cards__grid {
+            grid-auto-rows: minmax(5.5rem, 1fr);
+        }
+    }
+
+    @container panel-shell (min-height: 26rem) {
+        .dashboard-panel-shell--card-grid .dashboard-panel-cards__grid {
+            grid-auto-rows: minmax(8.5rem, 1fr);
+        }
+    }
+
+    /* Panel bajo: versión compacta (solo icono + tooltip) */
+    @container panel-shell (max-height: 13rem) {
+        .dashboard-panel-shell--card-grid .dashboard-panel-cards {
             --card-min: 4.25rem;
         }
-        .dashboard-panel-cards__grid {
+        .dashboard-panel-shell--card-grid .dashboard-panel-cards__grid {
             grid-template-columns: repeat(auto-fill, minmax(min(100%, 4.25rem), 1fr));
             grid-auto-rows: minmax(4.25rem, 4.25rem);
             gap: 0.375rem;
@@ -88,11 +108,11 @@ export const ESTILOS_DASHBOARD_ADAPTIVE = `
         }
     }
 
-    @container panel-cards (max-height: 14rem) {
-        .dashboard-panel-cards {
+    @container panel-cards (max-height: 11rem) {
+        .dashboard-panel-shell--card-grid .dashboard-panel-cards {
             --card-min: 4.25rem;
         }
-        .dashboard-panel-cards__grid {
+        .dashboard-panel-shell--card-grid .dashboard-panel-cards__grid {
             grid-template-columns: repeat(auto-fill, minmax(min(100%, 4.25rem), 1fr));
             grid-auto-rows: minmax(4.25rem, 4.25rem);
             gap: 0.375rem;
@@ -162,7 +182,7 @@ export const ESTILOS_DASHBOARD_ADAPTIVE = `
         color: white;
     }
 
-    @container module-card (max-width: 6.99rem), module-card (max-height: 5.49rem) {
+    @container module-card (max-width: 5.49rem), module-card (max-height: 4.74rem) {
         .dashboard-module-card:hover .dashboard-module-card__tooltip,
         .dashboard-module-card:focus-visible .dashboard-module-card__tooltip {
             opacity: 1;
@@ -170,7 +190,7 @@ export const ESTILOS_DASHBOARD_ADAPTIVE = `
         }
     }
 
-    @container module-card (min-width: 7rem) and (min-height: 5.5rem) {
+    @container module-card (min-width: 5.5rem) and (min-height: 4.75rem) {
         .dashboard-module-card__tooltip {
             display: none;
         }
@@ -219,8 +239,8 @@ export const ESTILOS_DASHBOARD_ADAPTIVE = `
         overflow: hidden;
     }
 
-    /* Mini card: celda mediana */
-    @container module-card (min-width: 7rem) and (min-height: 5.5rem) {
+    /* Mini card: celda mediana (título visible) */
+    @container module-card (min-width: 5.5rem) and (min-height: 4.75rem) {
         .dashboard-module-card {
             aspect-ratio: auto;
             align-items: flex-start;
@@ -245,8 +265,8 @@ export const ESTILOS_DASHBOARD_ADAPTIVE = `
         }
     }
 
-    /* Card completa: celda grande */
-    @container module-card (min-width: 10rem) and (min-height: 8.5rem) {
+    /* Card completa: celda grande (título + subtítulo) */
+    @container module-card (min-width: 8rem) and (min-height: 7rem) {
         .dashboard-module-card {
             padding: 1rem;
             border-radius: 1.25rem;
@@ -276,21 +296,21 @@ export const ESTILOS_DASHBOARD_ADAPTIVE = `
         }
     }
 
-    /* Panel bajo: forzar cubos desde el contenedor padre */
-    @container panel-shell (max-height: 20rem) {
-        .dashboard-module-card {
+    /* Panel bajo: forzar cubos (solo cuando el shell es realmente pequeño) */
+    @container panel-shell (max-height: 13rem) {
+        .dashboard-panel-shell--card-grid .dashboard-module-card {
             aspect-ratio: 1;
             align-items: center;
             justify-content: center;
             padding: 0.375rem;
         }
-        .dashboard-module-card__icon-wrap {
+        .dashboard-panel-shell--card-grid .dashboard-module-card__icon-wrap {
             width: 2rem;
             height: 2rem;
             margin-bottom: 0;
         }
-        .dashboard-module-card__title,
-        .dashboard-module-card__subtitle {
+        .dashboard-panel-shell--card-grid .dashboard-module-card__title,
+        .dashboard-panel-shell--card-grid .dashboard-module-card__subtitle {
             display: none !important;
         }
     }

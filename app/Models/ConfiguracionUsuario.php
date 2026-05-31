@@ -12,13 +12,14 @@ class ConfiguracionUsuario extends Model
     protected $fillable = [
         'user_id',
         'tema_visual',
-        'dashboard_prefs'
+        'dashboard_prefs',
+        'presencia',
     ];
 
-    // Magia de Laravel: Convierte el JSON a Array automáticamente al consultar
     protected $casts = [
-        'tema_visual' => 'array', 
+        'tema_visual' => 'array',
         'dashboard_prefs' => 'array',
+        'presencia' => 'array',
     ];
 
     public function usuario(): BelongsTo

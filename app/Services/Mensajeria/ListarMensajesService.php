@@ -19,7 +19,7 @@ class ListarMensajesService
     {
         $query = Mensaje::query()
             ->where('conversacion_id', $conversacion->id)
-            ->with(['user:id,name,foto_perfil', 'adjuntos', 'replyTo.user:id,name', 'lecturas'])
+            ->with(['user:id,name,username,foto_perfil', 'adjuntos', 'replyTo.user:id,name', 'replyTo.adjuntos', 'lecturas'])
             ->orderByDesc('created_at')
             ->orderByDesc('id');
 

@@ -7,6 +7,8 @@ use Inertia\Middleware;
 use App\Models\ConfiguracionUsuario;
 use App\Services\PersonalizacionCatalogoService;
 use App\Services\Mensajeria\ListarConversacionesService;
+use App\Services\Presencia\PresenciaUsuarioService;
+use App\Support\PresenciaCatalogo;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -37,8 +39,20 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
-        
+
         $configuracion = $user ? \App\Models\ConfiguracionUsuario::where('user_id', $user->id)->first() : null;
+
+        $presenciaAuth = null;
+        if ($user) {
+            try {
+                $presenciaAuth = array_merge(
+                    app(PresenciaUsuarioService::class)->formatear($user),
+                    ['user_id' => $user->id]
+                );
+            } catch (\Throwable) {
+                $presenciaAuth = null;
+            }
+        }
 
         $temaVisual = [];
         if ($configuracion && !empty($configuracion->tema_visual)) {
@@ -67,6 +81,8 @@ class HandleInertiaRequests extends Middleware
                 'mensajeria_resumen' => $user
                     ? app(ListarConversacionesService::class)->resumen($user, 8)
                     : null,
+                'presencia' => $presenciaAuth,
+                'presencia_catalogo' => PresenciaCatalogo::estados(),
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

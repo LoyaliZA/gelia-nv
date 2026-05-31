@@ -55,11 +55,6 @@ export default function WidgetActivos({ alertas_resumen = {}, alertas_destacadas
                             {alertas_resumen.proximos_7} · 7 días
                         </span>
                     )}
-                    {alertas_resumen.mantenimiento > 0 && (
-                        <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-blue-500/10 text-blue-600 border border-blue-500/20">
-                            {alertas_resumen.mantenimiento} mant.
-                        </span>
-                    )}
                 </>
             ) : null}
         >

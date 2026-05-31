@@ -19,6 +19,7 @@ class MensajeAdjunto extends Model
         'tamano',
         'duracion_seg',
         'metadata',
+        'contenido_indexado',
     ];
 
     protected function casts(): array

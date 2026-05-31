@@ -6,6 +6,7 @@ use App\Models\Conversacion;
 use App\Models\Mensaje;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class EnviarMensajeService
 {
@@ -16,13 +17,15 @@ class EnviarMensajeService
 
     public function ejecutar(Conversacion $conversacion, User $user, array $data, bool $broadcast = true): array
     {
-        $mensaje = DB::transaction(function () use ($conversacion, $user, $data) {
+        $replyToId = $this->validarReplyToId($conversacion, $data['reply_to_id'] ?? null);
+
+        $mensaje = DB::transaction(function () use ($conversacion, $user, $data, $replyToId) {
             $mensaje = Mensaje::create([
                 'conversacion_id' => $conversacion->id,
                 'user_id' => $user->id,
                 'tipo' => $data['tipo'] ?? Mensaje::TIPO_TEXTO,
                 'contenido' => $data['contenido'] ?? null,
-                'reply_to_id' => $data['reply_to_id'] ?? null,
+                'reply_to_id' => $replyToId,
             ]);
 
             $preview = $this->construirPreview($mensaje);
@@ -34,7 +37,13 @@ class EnviarMensajeService
             return $mensaje;
         });
 
-        $mensaje->load(['user:id,name,foto_perfil', 'adjuntos', 'replyTo.user:id,name', 'lecturas']);
+        $mensaje->load([
+            'user:id,name,foto_perfil',
+            'adjuntos',
+            'replyTo.user:id,name',
+            'replyTo.adjuntos',
+            'lecturas',
+        ]);
 
         $formateado = $this->formatearMensaje->ejecutar($mensaje, $user, $conversacion);
 
@@ -47,6 +56,26 @@ class EnviarMensajeService
         }
 
         return $formateado;
+    }
+
+    private function validarReplyToId(Conversacion $conversacion, ?int $replyToId): ?int
+    {
+        if (!$replyToId) {
+            return null;
+        }
+
+        $existe = Mensaje::query()
+            ->where('id', $replyToId)
+            ->where('conversacion_id', $conversacion->id)
+            ->exists();
+
+        if (!$existe) {
+            throw ValidationException::withMessages([
+                'reply_to_id' => 'El mensaje al que respondes no pertenece a esta conversación.',
+            ]);
+        }
+
+        return $replyToId;
     }
 
     private function construirPreview(Mensaje $mensaje): string

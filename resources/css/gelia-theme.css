@@ -502,6 +502,107 @@ html.glass-active .theme-element:not(.theme-no-blur) {
     color: var(--color-primario);
 }
 
+/* Selector de sección en Preferencias (segmentado, no barra lateral) */
+.gelia-preferencias-tabs {
+    padding: 1rem 1rem 1.25rem;
+    border-bottom: 1px solid var(--theme-border);
+}
+
+@media (min-width: 768px) {
+    .gelia-preferencias-tabs {
+        padding: 1.25rem 1.5rem 1.5rem;
+    }
+}
+
+.gelia-preferencias-tabs__track {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.375rem;
+    padding: 0.375rem;
+    border-radius: 1rem;
+    border: 1px solid var(--theme-border);
+    background-color: var(--gelia-segment-bg);
+}
+
+@media (min-width: 768px) {
+    .gelia-preferencias-tabs__track {
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border-radius: 1.25rem;
+    }
+}
+
+.gelia-preferencias-tabs__btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-height: 4.25rem;
+    padding: 0.625rem 0.5rem;
+    border-radius: 0.75rem;
+    font-size: 0.625rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    text-align: center;
+    color: var(--theme-text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    outline: none;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+@media (min-width: 768px) {
+    .gelia-preferencias-tabs__btn {
+        flex-direction: row;
+        min-height: 3rem;
+        padding: 0.75rem 1rem;
+        font-size: 0.6875rem;
+        letter-spacing: 0.08em;
+        border-radius: 0.875rem;
+    }
+}
+
+.gelia-preferencias-tabs__btn:hover {
+    color: var(--theme-text-main);
+}
+
+.gelia-preferencias-tabs__btn[data-active='true'] {
+    color: var(--color-primario);
+    background-color: var(--gelia-segment-active-bg);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primario) 18%, transparent);
+}
+
+@media (min-width: 768px) {
+    .gelia-preferencias-tabs__btn[data-active='true'] {
+        box-shadow: 0 4px 14px color-mix(in srgb, var(--color-primario) 22%, transparent);
+    }
+}
+
+.gelia-preferencias-tabs__btn:active {
+    transform: scale(0.98);
+}
+
+.gelia-preferencias-tabs__icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+    .gelia-preferencias-tabs__icon {
+        width: 1.125rem;
+        height: 1.125rem;
+    }
+}
+
+.gelia-preferencias-tabs__btn[data-active='true'] .gelia-preferencias-tabs__icon {
+    color: var(--color-primario);
+}
+
 /* Opción binaria en formularios (no confundir con pestañas de página) */
 .gelia-opcion-binaria {
     display: inline-flex;
@@ -817,6 +918,597 @@ html.glass-active .theme-element:not(.theme-no-blur) {
 .animate-slide-in-right { animation: gelia-slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .animate-progress-shrink { animation: gelia-progressShrink 5s linear forwards; }
 
+/* Mensajería: reservar espacio para sidebar / navbar flotante */
+.gelia-mensajeria-main {
+    box-sizing: border-box;
+}
+
+.gelia-mensajeria-main--immersive {
+    padding: 0;
+}
+
+@media (min-width: 768px) {
+    .gelia-mensajeria-main--fixed-left {
+        padding-inline-start: 5.5rem;
+    }
+
+    .gelia-mensajeria-main--fixed-right {
+        padding-inline-end: 5.5rem;
+    }
+
+    .gelia-mensajeria-main--fixed-top {
+        padding-top: 4.75rem;
+    }
+
+    .gelia-mensajeria-main--fixed-bottom {
+        padding-bottom: 5.25rem;
+    }
+
+    .gelia-mensajeria-main--float-left {
+        padding: 6rem 1rem 1rem 7rem;
+    }
+
+    .gelia-mensajeria-main--float-right {
+        padding: 6rem 7rem 1rem 1rem;
+    }
+}
+
+.gelia-mensajeria-page {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 1800px;
+    height: 100%;
+    min-height: 0;
+    margin-inline: auto;
+    box-sizing: border-box;
+}
+
+.gelia-mensajeria-main--immersive .gelia-mensajeria-page {
+    max-width: none;
+    padding: 0;
+}
+
+@media (min-width: 768px) {
+    .gelia-mensajeria-main:not(.gelia-mensajeria-main--immersive) .gelia-mensajeria-page {
+        padding: 0.75rem;
+    }
+}
+
+.gelia-mensajeria-module {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+    color: var(--theme-text-main);
+    background-color: var(--theme-surface-bg);
+}
+
+@media (min-width: 768px) {
+    .gelia-mensajeria-main:not(.gelia-mensajeria-main--immersive) .gelia-mensajeria-module {
+        border-radius: var(--theme-radius-panel);
+        border: 1px solid var(--theme-border);
+        box-shadow: var(--theme-shadow-card);
+    }
+}
+
+.gelia-mensajeria-list-pane {
+    background-color: color-mix(in srgb, var(--theme-element-bg) 55%, var(--theme-surface-bg));
+}
+
+.gelia-mensajeria-chat-pane {
+    background-color: var(--theme-surface-bg);
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+/* Columna de chat: se encoge cuando el panel de archivos está abierto (flex padre) */
+.gelia-mensajeria-chat-column {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    --gelia-burbuja-max-pct: 78%;
+}
+
+@media (max-width: 639px) {
+    .gelia-mensajeria-chat-column {
+        --gelia-burbuja-max-pct: 90%;
+    }
+}
+
+.gelia-mensajeria-mensajes-scroll {
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* Filas de mensaje: nunca más anchas que el contenedor del chat */
+.gelia-mensaje-fila,
+.gelia-mensaje-grupo-fila {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.gelia-mensaje-fila--propio {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.gelia-mensaje-grupo-cuerpo {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    overflow: hidden;
+}
+
+.gelia-mensaje-burbuja-wrap {
+    display: inline-block;
+    max-width: var(--gelia-burbuja-max-pct);
+    min-width: 0;
+    vertical-align: top;
+    box-sizing: border-box;
+}
+
+.gelia-mensaje-fila--propio .gelia-mensaje-burbuja-wrap,
+.gelia-mensaje-burbuja-wrap.gelia-mensaje-burbuja-wrap--propio {
+    display: block;
+    margin-left: auto;
+    margin-right: 0;
+}
+
+.gelia-mensaje-burbuja {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: auto;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.gelia-mensaje-burbuja--propio {
+    align-items: flex-end;
+}
+
+.gelia-mensaje-burbuja--con-cita,
+.gelia-mensaje-burbuja:has(.gelia-mensaje-cita) {
+    align-items: stretch;
+    width: 100%;
+}
+
+.gelia-mensaje-burbuja__texto {
+    margin: 0;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+    line-height: 1.45;
+}
+
+/* Adjuntos e imágenes dentro de la burbuja */
+.gelia-mensaje-burbuja img,
+.gelia-mensaje-burbuja video,
+.gelia-mensaje-burbuja audio {
+    max-width: 100%;
+}
+
+.gelia-mensaje-burbuja .max-w-sm,
+.gelia-mensaje-burbuja .max-w-xs {
+    max-width: 100% !important;
+}
+
+/* Hora + palomitas en burbuja propia (franja oscura suave, estilo WhatsApp) */
+.gelia-mensaje-meta {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    margin-top: 0.125rem;
+    margin-left: auto;
+    line-height: 1;
+    align-self: flex-end;
+}
+
+.gelia-mensaje-meta--propio {
+    padding: 0.2rem 0.45rem;
+    border-radius: 0.5rem;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.gelia-mensaje-meta--propio .gelia-mensaje-meta__hora {
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 0.625rem;
+}
+
+.gelia-estado-lectura {
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+    flex-shrink: 0;
+}
+
+.gelia-estado-lectura svg {
+    width: 0.9375rem;
+    height: 0.9375rem;
+    stroke-width: 2.25;
+}
+
+.gelia-mensaje-meta--propio .gelia-estado-lectura--enviado {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.gelia-mensaje-meta--propio .gelia-estado-lectura--entregado {
+    color: rgba(255, 255, 255, 0.82);
+}
+
+/* Cian legible sobre la franja oscura y cualquier color primario */
+.gelia-mensaje-meta--propio .gelia-estado-lectura--visto {
+    color: #53bdeb;
+}
+
+.gelia-mensaje-meta--propio .gelia-estado-lectura--visto svg {
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0.5px 0.5px rgba(0, 0, 0, 0.35));
+}
+
+.gelia-mensajeria-drive-panel {
+    background-color: var(--theme-surface-bg);
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: 100%;
+}
+
+@media (min-width: 640px) {
+    .gelia-mensajeria-chat-layout {
+        min-width: 0;
+        overflow: hidden;
+    }
+}
+
+/* Vista previa de documentos en mensajería */
+.gelia-visor-documento-contenido .gelia-visor-documento-html table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+}
+
+.gelia-visor-documento-contenido .gelia-visor-documento-html table td,
+.gelia-visor-documento-contenido .gelia-visor-documento-html table th {
+    border: 1px solid var(--theme-border);
+    padding: 0.35rem 0.5rem;
+    vertical-align: top;
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gelia-visor-documento-contenido .gelia-visor-documento-html table tr:nth-child(even) {
+    background-color: color-mix(in srgb, var(--theme-element-bg) 40%, transparent);
+}
+
+.gelia-visor-documento-contenido .gelia-visor-documento-html p {
+    margin: 0 0 0.75rem;
+    line-height: 1.5;
+}
+
+.gelia-visor-documento-contenido .gelia-visor-documento-html h1,
+.gelia-visor-documento-contenido .gelia-visor-documento-html h2,
+.gelia-visor-documento-contenido .gelia-visor-documento-html h3 {
+    margin: 1rem 0 0.5rem;
+    font-weight: 800;
+}
+
+@media (max-width: 639px) {
+    .gelia-mensajeria-drive-panel {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        width: 100%;
+        max-width: none;
+    }
+}
+
+/* Drag & drop y preparación de adjuntos (mensajería) */
+.gelia-drop-adjunto-zona {
+    isolation: isolate;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.gelia-drop-adjunto-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--color-primario) 18%, transparent);
+    border: 2px dashed var(--color-primario);
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+.gelia-drop-adjunto-overlay__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    color: var(--color-primario);
+}
+
+.gelia-preparar-adjunto-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+}
+
+.gelia-preparar-adjunto-modal {
+    display: flex;
+    flex-direction: column;
+    width: min(960px, 100%);
+    max-height: min(90vh, 720px);
+    border-radius: 1.25rem;
+    overflow: hidden;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+}
+
+.gelia-preparar-adjunto-body {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.gelia-preparar-adjunto-preview {
+    flex: 1;
+    min-height: 12rem;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--theme-element-bg) 50%, transparent);
+    padding: 1rem;
+}
+
+.gelia-preparar-adjunto-preview--documento {
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
+.gelia-preparar-adjunto-preview--documento table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.7rem;
+}
+
+.gelia-preparar-adjunto-preview--documento td,
+.gelia-preparar-adjunto-preview--documento th {
+    border: 1px solid var(--theme-border);
+    padding: 0.25rem 0.4rem;
+}
+
+.gelia-preparar-adjunto-preview--aviso {
+    flex-direction: column;
+    text-align: center;
+}
+
+.gelia-preparar-adjunto-form {
+    background-color: color-mix(in srgb, var(--theme-surface-bg) 95%, transparent);
+}
+
+@media (max-width: 1023px) {
+    .gelia-preparar-adjunto-modal {
+        max-height: 95vh;
+    }
+
+    .gelia-preparar-adjunto-preview {
+        min-height: 10rem;
+        max-height: 40vh;
+    }
+}
+
+/* Buscador inteligente mensajería */
+.gelia-buscador-mensajeria--activo {
+    position: relative;
+    z-index: 100;
+}
+
+.gelia-buscador-mensajeria-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    margin-top: 0.25rem;
+    z-index: 200;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    border: 1px solid var(--theme-element-border);
+    background-color: var(--theme-surface-solid) !important;
+    color: var(--theme-text-main);
+    isolation: isolate;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow:
+        0 4px 8px -2px rgba(0, 0, 0, 0.14),
+        0 12px 28px -6px rgba(0, 0, 0, 0.22),
+        0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+html.glass-active .gelia-buscador-mensajeria-panel,
+html.glass-active .gelia-buscador-mensajeria-panel.theme-no-blur {
+    background-color: var(--theme-surface-solid) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+.gelia-buscador-mensajeria-panel__scroll {
+    max-height: min(70vh, 420px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    background-color: var(--theme-surface-solid);
+}
+
+.gelia-buscador-seccion__titulo {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: var(--theme-surface-solid);
+    border-bottom: 1px solid var(--theme-element-border);
+}
+
+.gelia-buscador-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 0;
+    background-color: var(--theme-surface-solid);
+    color: inherit;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.gelia-buscador-item:hover,
+.gelia-buscador-item:focus-visible {
+    background-color: var(--theme-element-bg) !important;
+    outline: none;
+}
+
+.gelia-buscador-item--static {
+    cursor: default;
+}
+
+.gelia-buscador-item--static:hover {
+    background-color: var(--theme-surface-solid) !important;
+}
+
+.gelia-busqueda-mark {
+    background-color: color-mix(in srgb, var(--color-primario) 35%, transparent);
+    color: inherit;
+    padding: 0 0.1em;
+    border-radius: 2px;
+}
+
+/* Responder mensajes (estilo WhatsApp) */
+.gelia-barra-respuesta {
+    background-color: var(--theme-surface-solid) !important;
+}
+
+.gelia-mensaje-cita {
+    cursor: pointer;
+    border: 0;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    align-self: stretch;
+    text-align: left;
+}
+
+.gelia-mensaje-cita:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 1px;
+}
+
+.gelia-mensaje-cita__nombre {
+    display: block;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gelia-mensaje-cita__fragmento {
+    display: block;
+    margin-top: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.gelia-mensaje-menu {
+    background-color: var(--theme-surface-solid) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.gelia-mensaje-menu__item {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+}
+
+.gelia-mensaje-menu__item:hover,
+.gelia-mensaje-menu__item:focus-visible {
+    background-color: var(--theme-element-bg);
+    outline: none;
+}
+
+.gelia-mensaje-responder-btn {
+    cursor: pointer;
+}
+
+.gelia-mensaje-burbuja-wrap {
+    transition: transform 0.12s ease-out;
+}
+
+.gelia-mensaje-burbuja-wrap:not(.gelia-mensaje-burbuja-wrap--propio) {
+    align-items: flex-start;
+}
+
+.gelia-mensaje--destacado .gelia-mensaje-burbuja,
+.gelia-mensaje--destacado.gelia-mensaje-grupo-fila .gelia-mensaje-burbuja {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primario) 55%, transparent);
+    animation: gelia-mensaje-pulso 0.6s ease 2;
+}
+
+@keyframes gelia-mensaje-pulso {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+.gelia-mensajeria-list-header,
+.gelia-mensajeria-chat-header {
+    position: relative;
+    z-index: 40;
+    overflow: visible;
+    background-color: color-mix(in srgb, var(--theme-surface-bg) 88%, var(--theme-element-bg));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.gelia-mensajeria-list-pane > .flex-1.overflow-y-auto {
+    position: relative;
+    z-index: 1;
+}
+
 /* Mensajería: portales y módulo heredan tokens de tema */
 .gelia-mensajeria-portal,
 .gelia-mensajeria-module {
@@ -827,6 +1519,10 @@ html.glass-active .theme-element:not(.theme-no-blur) {
 .gelia-mensajeria-module .theme-surface {
     background-color: var(--theme-surface-bg);
     border-color: var(--theme-surface-border);
+}
+
+.theme-surface-solid {
+    background-color: var(--theme-surface-solid);
 }
 
 .gelia-mensajeria-portal input,
@@ -855,11 +1551,46 @@ html.glass-active .theme-element:not(.theme-no-blur) {
     color: var(--theme-text-main);
 }
 
-/* Vista completa en móvil: sin barra flotante del layout */
+.gelia-mensajeria-nuevos-pill {
+    position: absolute;
+    bottom: 0.75rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: #fff;
+    background-color: var(--color-primario);
+    border: none;
+    border-radius: 9999px;
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--color-primario) 40%, transparent);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    white-space: nowrap;
+}
+
+.gelia-mensajeria-nuevos-pill:hover {
+    transform: translateX(-50%) scale(1.03);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--color-primario) 50%, transparent);
+}
+
+.gelia-mensajeria-nuevos-pill:active {
+    transform: translateX(-50%) scale(0.98);
+}
+
+/* Vista completa en móvil: reservar espacio para la barra de navegación inferior */
 @media (max-width: 767px) {
     .gelia-mensajeria-immersive .gelia-mensajeria-module {
         height: 100%;
         min-height: 0;
+        padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+        box-sizing: border-box;
     }
 
     .gelia-mensajeria-immersive-main {
@@ -872,7 +1603,7 @@ html.glass-active .theme-element:not(.theme-no-blur) {
     }
 
     .gelia-mensajeria-module .gelia-mensajeria-input-bar {
-        padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
     }
 
     .gelia-mensajeria-module .gelia-mensajeria-list-header {
@@ -880,7 +1611,14 @@ html.glass-active .theme-element:not(.theme-no-blur) {
     }
 
     .gelia-mensajeria-immersive .gelia-mensajeria-modal.gelia-modal-overlay {
-        padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+        padding-bottom: max(calc(5rem + env(safe-area-inset-bottom, 0px)), 1rem);
+    }
+
+}
+
+@media (max-width: 767px) {
+    html:has(.gelia-mensajeria-main--immersive) .sidebar-mount {
+        z-index: 250;
     }
 }
 
@@ -917,44 +1655,49 @@ button {
 }
 ::-webkit-scrollbar-thumb:hover { background-color: var(--color-primario); }
 
-/* Página de login — split screen (sin AppLayout) */
+/* Página de login — split screen escritorio; formulario full-viewport móvil */
 .gelia-login-split {
     min-height: 100dvh;
+    height: 100dvh;
+    max-height: 100dvh;
     display: grid;
     grid-template-columns: 1fr;
     background-color: var(--bg-app);
     color: var(--theme-text-main);
+    overflow: hidden;
 }
 
 @media (min-width: 1024px) {
     .gelia-login-split {
         grid-template-columns: 1fr 1fr;
+        height: auto;
+        max-height: none;
+        overflow: visible;
     }
 }
 
 .gelia-login-split__brand {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2rem;
-    padding: 2.5rem 2rem;
-    overflow: hidden;
-    min-height: 22rem;
-    background: linear-gradient(
-        145deg,
-        color-mix(in srgb, var(--color-primario) 88%, #000 12%) 0%,
-        color-mix(in srgb, var(--color-primario) 55%, #0a0a0a 45%) 45%,
-        #0a0a0a 100%
-    );
-    color: #fff;
+    display: none;
 }
 
 @media (min-width: 1024px) {
     .gelia-login-split__brand {
-        min-height: 100dvh;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
         padding: 3rem;
+        overflow: hidden;
+        min-height: 100dvh;
+        background: linear-gradient(
+            145deg,
+            color-mix(in srgb, var(--color-primario) 88%, #000 12%) 0%,
+            color-mix(in srgb, var(--color-primario) 55%, #0a0a0a 45%) 45%,
+            #0a0a0a 100%
+        );
+        color: #fff;
     }
 }
 
@@ -997,23 +1740,146 @@ button {
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
-    padding: 2rem 1.5rem 2.5rem;
-    min-height: min(100dvh, auto);
+    min-height: 0;
+    height: 100%;
+    padding: max(0.75rem, env(safe-area-inset-top, 0px)) 1.25rem max(1rem, env(safe-area-inset-bottom, 0px));
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 @media (min-width: 1024px) {
     .gelia-login-split__form {
+        align-items: center;
         min-height: 100dvh;
+        height: auto;
         padding: 3rem;
+        overflow: visible;
     }
+}
+
+.gelia-login-split__mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+    padding-right: 3rem;
+    margin-bottom: 0.75rem;
+}
+
+.gelia-login-split__mobile-brand-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+}
+
+.gelia-login-split__mobile-brand-kicker {
+    font-size: 0.5625rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    color: var(--theme-text-muted);
+    line-height: 1;
+}
+
+.gelia-login-split__mobile-brand-title {
+    font-size: 1.125rem;
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    color: var(--theme-text-main);
 }
 
 .gelia-login-split__form-inner {
     width: 100%;
     max-width: 26rem;
-    margin: auto;
+    margin: 0 auto;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__form-inner {
+        flex: none;
+        margin: auto;
+    }
+}
+
+.gelia-login-split__form-header {
+    margin-bottom: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__form-header {
+        margin-bottom: 2.5rem;
+    }
+}
+
+.gelia-login-split__form-title {
+    font-size: 1.5rem;
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: -0.03em;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__form-title {
+        font-size: 1.875rem;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .gelia-login-split__form-title {
+        font-size: 1.75rem;
+    }
+}
+
+.gelia-login-split__form-subtitle {
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-top: 0.5rem;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__form-subtitle {
+        margin-top: 0.75rem;
+    }
+}
+
+.gelia-login-split__form-fields {
+    flex-shrink: 0;
+}
+
+.gelia-login-split__footer {
+    font-size: 0.625rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-top: 1.25rem;
+    flex-shrink: 0;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__footer {
+        margin-top: 2.5rem;
+    }
+}
+
+@media (max-width: 1023px) {
+    .gelia-login-split__form-header {
+        display: none;
+    }
 }
 
 .theme-field-with-icon--password > .theme-input {
@@ -1056,4 +1922,36 @@ button {
     max-width: 1400px;
     margin-left: auto;
     margin-right: auto;
+}
+
+/* —— Presencia / estados dinámicos (mensajería) —— */
+.gelia-presencia-texto {
+    font-weight: 700;
+    color: var(--theme-text-muted, #64748b);
+}
+
+.gelia-presencia--disponible { color: #22c55e; }
+.gelia-presencia--en_junta { color: #8b5cf6; }
+.gelia-presencia--comiendo { color: #f59e0b; }
+.gelia-presencia--en_ruta_venta { color: #3b82f6; }
+.gelia-presencia--ocupado { color: #ef4444; }
+.gelia-presencia--ausente { color: #94a3b8; }
+
+.gelia-presencia-selector-btn {
+    max-width: 100%;
+}
+
+.gelia-presencia-menu {
+    animation: gelia-presencia-in 0.15s ease-out;
+}
+
+@keyframes gelia-presencia-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
