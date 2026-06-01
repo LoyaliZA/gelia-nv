@@ -26,6 +26,10 @@ class RhConfiguracion extends Model
         'inc_folio_padding',
         'pre_folio_prefijo',
         'pre_folio_padding',
+        'sal_folio_prefijo',
+        'sal_folio_padding',
+        'bdt_folio_prefijo',
+        'bdt_folio_padding',
     ];
 
     protected function casts(): array
@@ -43,6 +47,8 @@ class RhConfiguracion extends Model
             'he_gracia_minutos_despues_salida' => 'integer',
             'inc_folio_padding' => 'integer',
             'pre_folio_padding' => 'integer',
+            'sal_folio_padding' => 'integer',
+            'bdt_folio_padding' => 'integer',
         ];
     }
 
@@ -72,6 +78,10 @@ class RhConfiguracion extends Model
             'inc_folio_padding' => config('rh.inc_folio_padding', 6),
             'pre_folio_prefijo' => config('rh.pre_folio_prefijo', 'PRE'),
             'pre_folio_padding' => config('rh.pre_folio_padding', 6),
+            'sal_folio_prefijo' => config('rh.sal_folio_prefijo', 'SAL'),
+            'sal_folio_padding' => config('rh.sal_folio_padding', 6),
+            'bdt_folio_prefijo' => config('rh.bdt_folio_prefijo', 'BDT'),
+            'bdt_folio_padding' => config('rh.bdt_folio_padding', 6),
         ]);
     }
 }

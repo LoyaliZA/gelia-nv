@@ -3,7 +3,15 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { ClipboardList, Edit2, Trash2, Plus, X, Save, AlertTriangle, Info } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_INPUT,
+    THEME_LABEL,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    THEME_BTN_ICON,
+} from '../../../../utils/geliaTheme';
 
 const FORM_INICIAL = {
     nombre: '',
@@ -55,8 +63,6 @@ export default function TablaTiposFaltas({ datos = [] }) {
         });
     };
 
-    const inputClass = 'w-full mt-1 px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold';
-
     return (
         <div>
             <GeliaLoader isVisible={processing} message="Guardando tipo de falta_" />
@@ -74,8 +80,7 @@ export default function TablaTiposFaltas({ datos = [] }) {
                 <button
                     type="button"
                     onClick={abrirNuevo}
-                    className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black uppercase text-xs text-white"
-                    style={{ backgroundColor: 'var(--color-primario)' }}
+                    className={THEME_BTN_PRIMARY}
                 >
                     <Plus className="w-4 h-4" /> Nuevo
                 </button>
@@ -122,11 +127,11 @@ export default function TablaTiposFaltas({ datos = [] }) {
                                     </td>
                                     <td className="px-4 py-4 text-right">
                                         <div className="flex justify-end gap-2">
-                                            <button type="button" onClick={() => abrirEditar(item)} className="p-2.5 theme-element border theme-border rounded-xl">
-                                                <Edit2 className="w-4 h-4 theme-text-main" />
+                                            <button type="button" onClick={() => abrirEditar(item)} className={THEME_BTN_ICON}>
+                                                <Edit2 className="w-4 h-4" />
                                             </button>
-                                            <button type="button" onClick={() => { setItemActual(item); setModalEliminar(true); }} className="p-2.5 theme-element border theme-border rounded-xl hover:bg-red-500 hover:border-red-500 group">
-                                                <Trash2 className="w-4 h-4 theme-text-main group-hover:text-white" />
+                                            <button type="button" onClick={() => { setItemActual(item); setModalEliminar(true); }} className={THEME_BTN_ICON}>
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </td>
@@ -144,24 +149,24 @@ export default function TablaTiposFaltas({ datos = [] }) {
                             <h2 className="text-lg font-black uppercase italic theme-text-main m-0">
                                 {itemActual ? 'Editar' : 'Nuevo'} Tipo de Falta
                             </h2>
-                            <button type="button" onClick={() => setModalAbierto(false)}><X className="w-5 h-5 theme-text-muted" /></button>
+                            <button type="button" onClick={() => setModalAbierto(false)} className={THEME_BTN_ICON}><X className="w-5 h-5" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Nombre de la incidencia *</label>
-                                <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} required className={inputClass} placeholder="Ej. Falta Injustificada" />
+                                <label className={THEME_LABEL}>Nombre de la incidencia *</label>
+                                <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} required className={THEME_INPUT} placeholder="Ej. Falta Injustificada" />
                                 {errors.nombre && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.nombre}</p>}
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Factor penalización puntualidad *</label>
-                                    <input type="number" min="0" max="999.99" step="0.01" value={data.factor_penalizacion_puntualidad} onChange={(e) => setData('factor_penalizacion_puntualidad', e.target.value)} required className={inputClass} />
+                                    <label className={THEME_LABEL}>Factor penalización puntualidad *</label>
+                                    <input type="number" min="0" max="999.99" step="0.01" value={data.factor_penalizacion_puntualidad} onChange={(e) => setData('factor_penalizacion_puntualidad', e.target.value)} required className={THEME_INPUT} />
                                     {errors.factor_penalizacion_puntualidad && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.factor_penalizacion_puntualidad}</p>}
                                 </div>
                                 <div>
-                                    <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Factor penalización productividad *</label>
-                                    <input type="number" min="0" max="999.99" step="0.01" value={data.factor_penalizacion_productividad} onChange={(e) => setData('factor_penalizacion_productividad', e.target.value)} required className={inputClass} />
+                                    <label className={THEME_LABEL}>Factor penalización productividad *</label>
+                                    <input type="number" min="0" max="999.99" step="0.01" value={data.factor_penalizacion_productividad} onChange={(e) => setData('factor_penalizacion_productividad', e.target.value)} required className={THEME_INPUT} />
                                     {errors.factor_penalizacion_productividad && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.factor_penalizacion_productividad}</p>}
                                 </div>
                             </div>
@@ -177,15 +182,15 @@ export default function TablaTiposFaltas({ datos = [] }) {
 
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" checked={!!data.aplica_deduccion_salario_base} onChange={(e) => setData('aplica_deduccion_salario_base', e.target.checked)} />
-                                <span className="text-[10px] font-black uppercase">Aplica deducción de salario base</span>
+                                <span className="text-[10px] font-black uppercase theme-text-main">Aplica deducción de salario base</span>
                             </label>
 
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" checked={!!data.activo} onChange={(e) => setData('activo', e.target.checked)} />
-                                <span className="text-[10px] font-black uppercase">Activo</span>
+                                <span className="text-[10px] font-black uppercase theme-text-main">Activo</span>
                             </label>
 
-                            <button type="submit" className="w-full py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                            <button type="submit" className={`${THEME_BTN_PRIMARY} w-full`}>
                                 <Save className="w-4 h-4" /> Guardar
                             </button>
                         </form>
@@ -203,8 +208,8 @@ export default function TablaTiposFaltas({ datos = [] }) {
                         </div>
                         <p className="text-sm theme-text-muted">¿Eliminar <strong>{itemActual?.nombre}</strong>?</p>
                         <div className="flex gap-3 mt-6">
-                            <button type="button" onClick={() => setModalEliminar(false)} className="flex-1 py-3 rounded-2xl theme-element theme-border border text-[10px] font-black uppercase">Cancelar</button>
-                            <button type="button" onClick={confirmDelete} className="flex-1 py-3 rounded-2xl bg-red-500 text-white text-[10px] font-black uppercase">Eliminar</button>
+                            <button type="button" onClick={() => setModalEliminar(false)} className={`${THEME_BTN_SECONDARY} flex-1`}>Cancelar</button>
+                            <button type="button" onClick={confirmDelete} className="theme-btn-danger flex-1">Eliminar</button>
                         </div>
                     </div>
                 </div>,

@@ -8,6 +8,7 @@ use App\Models\RhConfiguracion;
 use App\Models\RhDeduccion;
 use App\Models\RhHorasExtra;
 use App\Models\RhPrestamoPagoFijo;
+use App\Models\RhSalidaPersonal;
 use Carbon\Carbon;
 
 class CalcularPeriodoPagoService
@@ -34,6 +35,16 @@ class CalcularPeriodoPagoService
             $dedQuery = RhDeduccion::query()
                 ->where('rh_colaborador_id', $colaborador->id)
                 ->whereBetween('fecha_ocurrencia', [$fechaInicio->toDateString(), $fechaFin->toDateString()]);
+
+            $salidasQuery = RhSalidaPersonal::query()
+                ->where('rh_colaborador_id', $colaborador->id)
+                ->where(function ($q) use ($fechaInicio, $fechaFin) {
+                    $q->where(function ($sq) use ($fechaInicio, $fechaFin) {
+                        $sq->whereNull('fecha_deduccion_nomina')
+                            ->whereBetween('fecha_evento', [$fechaInicio->toDateString(), $fechaFin->toDateString()]);
+                    })
+                    ->orWhereBetween('fecha_deduccion_nomina', [$fechaInicio->toDateString(), $fechaFin->toDateString()]);
+                });
 
             $diasEnRango = $fechaInicio->diffInDays($fechaFin) + 1;
             $salarioDiario = (float) $colaborador->salario_diario;
@@ -64,11 +75,14 @@ class CalcularPeriodoPagoService
                     RhDeduccion::ESTADO_PENDIENTE_NOMINA,
                     RhDeduccion::ESTADO_PENDIENTE_COMISION,
                 ])->sum('monto_total_final'), 2),
+                'salidas_deduccion_total' => round((clone $salidasQuery)->sum('monto_a_deducir'), 2),
+                'salidas_deduccion_pendiente' => round((clone $salidasQuery)->whereNull('fecha_deduccion_nomina')->sum('monto_a_deducir'), 2),
                 'prestamos_activos_cuota' => round((float) $prestamosActivos, 2),
                 'neto_estimado' => round(
                     ($salarioDiario + $bonoPuntDiario + $bonoProdDiario) * $diasEnRango
                     + (clone $heQuery)->sum('monto_horas_extra')
-                    - (clone $dedQuery)->sum('monto_total_final'),
+                    - (clone $dedQuery)->sum('monto_total_final')
+                    - (clone $salidasQuery)->sum('monto_a_deducir'),
                     2,
                 ),
             ];

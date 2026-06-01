@@ -4,7 +4,17 @@ import { useForm } from '@inertiajs/react';
 import { AlertTriangle, User, FileText, DollarSign, X, Save, Calculator, Package } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
 import FirmaCanvas from '../../../../Components/Rh/FirmaCanvas';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_INPUT,
+    THEME_SELECT,
+    THEME_TEXTAREA,
+    THEME_LABEL,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    THEME_BTN_ICON,
+} from '../../../../utils/geliaTheme';
 import {
     calcularDeduccionPreview, formatoDeduccionEntera, formatoMoneda, nombreCompletoColaborador,
 } from '../../../../utils/formatoMoneda';
@@ -158,7 +168,6 @@ export default function ModalFormDeduccion({
 
     if (!abierto) return null;
 
-    const inputClass = 'w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none';
     const muestraProducto = reglaSel && REQUIERE_PRODUCTO.includes(reglaSel.tipo_comportamiento);
 
     return createPortal(
@@ -170,7 +179,7 @@ export default function ModalFormDeduccion({
                         <AlertTriangle className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
                         {registro ? 'Editar Deducción' : 'Nueva Deducción'}
                     </h2>
-                    <button type="button" onClick={onCerrar} className="theme-text-muted p-2 rounded-full"><X className="w-6 h-6" /></button>
+                    <button type="button" onClick={onCerrar} className={THEME_BTN_ICON}><X className="w-6 h-6" /></button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="gelia-modal-body p-6 md:p-8 custom-scrollbar space-y-8">
@@ -193,8 +202,8 @@ export default function ModalFormDeduccion({
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Colaborador sancionado *</label>
-                                <select value={data.rh_colaborador_id} onChange={(e) => setData({ ...data, rh_colaborador_id: e.target.value, catalogo_regla_incidencia_id: '' })} className={inputClass} required disabled={!!registro && registro.estado_deduccion === 'aplicado'}>
+                                <label className={THEME_LABEL}>Colaborador sancionado *</label>
+                                <select value={data.rh_colaborador_id} onChange={(e) => setData({ ...data, rh_colaborador_id: e.target.value, catalogo_regla_incidencia_id: '' })} className={THEME_SELECT} required disabled={!!registro && registro.estado_deduccion === 'aplicado'}>
                                     <option value="">Seleccionar...</option>
                                     {colaboradores.map((c) => (
                                         <option key={c.id} value={c.id}>{nombreCompletoColaborador(c)} — {c.departamento?.nombre || 'Sin depto'}</option>
@@ -203,18 +212,18 @@ export default function ModalFormDeduccion({
                                 {errors.rh_colaborador_id && <p className="text-red-500 text-[10px] font-bold ml-2">{errors.rh_colaborador_id}</p>}
                             </div>
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Fecha del evento *</label>
-                                <input type="date" value={data.fecha_ocurrencia} onChange={(e) => setData('fecha_ocurrencia', e.target.value)} className={inputClass} required />
+                                <label className={THEME_LABEL}>Fecha del evento *</label>
+                                <input type="date" value={data.fecha_ocurrencia} onChange={(e) => setData('fecha_ocurrencia', e.target.value)} className={THEME_INPUT} required />
                             </div>
                             {colaboradorSel && (
                                 <>
                                     <div className="p-3 rounded-2xl theme-element border theme-border">
                                         <p className="text-[9px] font-black uppercase theme-text-muted m-0">Departamento</p>
-                                        <p className="text-sm font-bold m-0">{colaboradorSel.departamento?.nombre || '—'}</p>
+                                        <p className="text-sm font-bold m-0 theme-text-main">{colaboradorSel.departamento?.nombre || '—'}</p>
                                     </div>
                                     <div className="p-3 rounded-2xl theme-element border theme-border">
                                         <p className="text-[9px] font-black uppercase theme-text-muted m-0">Área</p>
-                                        <p className="text-sm font-bold m-0">{colaboradorSel.area?.nombre || '—'}</p>
+                                        <p className="text-sm font-bold m-0 theme-text-main">{colaboradorSel.area?.nombre || '—'}</p>
                                     </div>
                                 </>
                             )}
@@ -227,8 +236,8 @@ export default function ModalFormDeduccion({
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="md:col-span-2">
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Concepto seleccionado *</label>
-                                <select value={data.catalogo_regla_incidencia_id} onChange={(e) => setData({ ...data, catalogo_regla_incidencia_id: e.target.value, producto_id: '', producto_sku: '' })} className={inputClass} required disabled={!data.rh_colaborador_id}>
+                                <label className={THEME_LABEL}>Concepto seleccionado *</label>
+                                <select value={data.catalogo_regla_incidencia_id} onChange={(e) => setData({ ...data, catalogo_regla_incidencia_id: e.target.value, producto_id: '', producto_sku: '' })} className={THEME_SELECT} required disabled={!data.rh_colaborador_id}>
                                     <option value="">{data.rh_colaborador_id ? 'Seleccionar concepto...' : 'Primero seleccione colaborador'}</option>
                                     {reglasFiltradas.map((r) => (
                                         <option key={r.id} value={r.id}>[{r.categoria}] {r.nombre}</option>
@@ -239,10 +248,10 @@ export default function ModalFormDeduccion({
 
                             {muestraProducto && (
                                 <div className="md:col-span-2 relative">
-                                    <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2 flex items-center gap-1">
-                                        <Package className="w-3 h-3" /> Código producto / SKU
+                                    <label className={`${THEME_LABEL} flex items-center gap-1`}>
+                                        <Package className="w-3 h-3" /> Código producto / SKU *
                                     </label>
-                                    <input type="text" value={data.producto_sku} onChange={(e) => setData({ ...data, producto_sku: e.target.value, producto_id: '' })} className={inputClass} placeholder="Buscar o escanear SKU..." />
+                                    <input type="text" value={data.producto_sku} onChange={(e) => setData({ ...data, producto_sku: e.target.value, producto_id: '' })} className={THEME_INPUT} placeholder="Buscar o escanear SKU..." />
                                     {productosSku.length > 0 && (
                                         <div className="absolute z-10 w-full mt-1 theme-surface border theme-border rounded-2xl shadow-xl max-h-40 overflow-y-auto">
                                             {productosSku.map((p) => (
@@ -257,12 +266,12 @@ export default function ModalFormDeduccion({
                             )}
 
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Factor multiplicador</label>
-                                <input type="number" min="0.01" step="0.01" value={data.factor_multiplicador} onChange={(e) => setData('factor_multiplicador', e.target.value)} className={inputClass} />
+                                <label className={THEME_LABEL}>Factor multiplicador</label>
+                                <input type="number" min="0.01" step="0.01" value={data.factor_multiplicador} onChange={(e) => setData('factor_multiplicador', e.target.value)} className={THEME_INPUT} />
                             </div>
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Origen de la deducción *</label>
-                                <select value={data.origen_deduccion} onChange={(e) => setData('origen_deduccion', e.target.value)} className={inputClass}>
+                                <label className={THEME_LABEL}>Origen de la deducción *</label>
+                                <select value={data.origen_deduccion} onChange={(e) => setData('origen_deduccion', e.target.value)} className={THEME_SELECT}>
                                     {Object.entries(ORIGEN_DEDUCCION_LABELS).map(([k, v]) => (
                                         <option key={k} value={k}>{v}</option>
                                     ))}
@@ -279,18 +288,18 @@ export default function ModalFormDeduccion({
                     </section>
 
                     <section>
-                        <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Descripción detallada de la incidencia</label>
-                        <textarea value={data.descripcion_detallada} onChange={(e) => setData('descripcion_detallada', e.target.value)} rows={4} className={inputClass} placeholder="Relato descriptivo para el expediente..." />
+                        <label className={THEME_LABEL}>Descripción detallada de la incidencia</label>
+                        <textarea value={data.descripcion_detallada} onChange={(e) => setData('descripcion_detallada', e.target.value)} rows={4} className={THEME_TEXTAREA} placeholder="Relato descriptivo para el expediente..." />
                     </section>
 
                     <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-4 rounded-2xl theme-element border theme-border">
                             <p className="text-[9px] font-black uppercase theme-text-muted m-0">Reportado por / Auditor</p>
-                            <p className="text-sm font-bold m-0 mt-1">{usuarioActual?.name || registro?.registrado_por?.name || '—'}</p>
+                            <p className="text-sm font-bold m-0 mt-1 theme-text-main">{usuarioActual?.name || registro?.registrado_por?.name || '—'}</p>
                         </div>
                         <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">Fecha deducción nómina (opcional)</label>
-                            <input type="date" value={data.fecha_deduccion_nomina} onChange={(e) => setData('fecha_deduccion_nomina', e.target.value)} className={inputClass} />
+                            <label className={THEME_LABEL}>Fecha deducción nómina (opcional)</label>
+                            <input type="date" value={data.fecha_deduccion_nomina} onChange={(e) => setData('fecha_deduccion_nomina', e.target.value)} className={THEME_INPUT} />
                         </div>
                     </section>
 
@@ -302,8 +311,8 @@ export default function ModalFormDeduccion({
                     )}
 
                     <div className="flex justify-end gap-3 pt-4 border-t theme-border">
-                        <button type="button" onClick={onCerrar} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border">Cancelar</button>
-                        <button type="submit" disabled={processing} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                        <button type="button" onClick={onCerrar} className={THEME_BTN_SECONDARY}>Cancelar</button>
+                        <button type="submit" disabled={processing} className={THEME_BTN_PRIMARY}>
                             <Save className="w-4 h-4" /> {registro ? 'Actualizar' : 'Registrar deducción'}
                         </button>
                     </div>

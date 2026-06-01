@@ -35,6 +35,22 @@ use App\Services\Permisos\ValidarAsignacionPermisosService;
 
 class AdminController extends Controller
 {
+    public function panel(): Response
+    {
+        $user = Auth::user();
+
+        if (! ValidarAsignacionPermisosService::esSuperAdmin($user)) {
+            $permisosPanel = config('admin_modules', []);
+            $tieneAcceso = collect($permisosPanel)->contains(
+                fn (string $permiso) => $user->can($permiso)
+            );
+
+            abort_unless($tieneAcceso, 403);
+        }
+
+        return Inertia::render('Admin/Index');
+    }
+
     // --- VISTAS DE ENLACES Y CATÁLOGOS ---
     public function enlaces(): Response
     {

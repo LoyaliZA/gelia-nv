@@ -3,7 +3,17 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { Clock, User, FileText, Shield, DollarSign, X, Save, Calculator } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_INPUT,
+    THEME_SELECT,
+    THEME_TEXTAREA,
+    THEME_LABEL,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    THEME_BTN_ICON,
+} from '../../../../utils/geliaTheme';
 import {
     calcularHorasExtraPreview, formatoMoneda, formatearHora, nombreCompletoColaborador,
 } from '../../../../utils/formatoMoneda';
@@ -85,8 +95,6 @@ export default function ModalFormHorasExtra({
 
     if (!abierto) return null;
 
-    const inputClass = 'w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none';
-
     return createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6 overflow-y-auto`} onClick={onCerrar}>
             <GeliaLoader isVisible={processing} message="Guardando registro_" />
@@ -96,7 +104,7 @@ export default function ModalFormHorasExtra({
                         <Clock className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
                         {registro ? 'Editar Horas Extra' : 'Nuevo Registro de Horas Extra'}
                     </h2>
-                    <button type="button" onClick={onCerrar} className="theme-text-muted p-2 rounded-full"><X className="w-6 h-6" /></button>
+                    <button type="button" onClick={onCerrar} className={THEME_BTN_ICON}><X className="w-6 h-6" /></button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="gelia-modal-body p-6 md:p-8 custom-scrollbar space-y-8">
@@ -121,7 +129,7 @@ export default function ModalFormHorasExtra({
                             value={data.rh_colaborador_id}
                             onChange={(e) => setData('rh_colaborador_id', e.target.value)}
                             required
-                            className={inputClass}
+                            className={THEME_SELECT}
                         >
                             <option value="">Selecciona colaborador...</option>
                             {colaboradores.map((c) => (
@@ -132,7 +140,7 @@ export default function ModalFormHorasExtra({
                         </select>
                         {errors.rh_colaborador_id && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.rh_colaborador_id}</p>}
                         {colaboradorSel && (
-                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] text-[10px]">
+                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] text-[10px] theme-text-main">
                                 <div><span className="theme-text-muted uppercase font-black">Área:</span> {colaboradorSel.area?.nombre || '—'}</div>
                                 <div><span className="theme-text-muted uppercase font-black">Horas normales:</span> {colaboradorSel.horas_laboradas_oficiales} h</div>
                                 <div><span className="theme-text-muted uppercase font-black">Salario/hr:</span> {formatoMoneda(colaboradorSel.salario_por_hora)}</div>
@@ -146,13 +154,13 @@ export default function ModalFormHorasExtra({
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <Campo label="Fecha turno *" error={errors.fecha_turno}>
-                                <input type="date" value={data.fecha_turno} onChange={(e) => setData('fecha_turno', e.target.value)} required className={inputClass} />
+                                <input type="date" value={data.fecha_turno} onChange={(e) => setData('fecha_turno', e.target.value)} required className={THEME_INPUT} />
                             </Campo>
                             <Campo label="Hora entrada *" error={errors.hora_entrada}>
-                                <input type="time" value={data.hora_entrada} onChange={(e) => setData('hora_entrada', e.target.value)} required className={inputClass} />
+                                <input type="time" value={data.hora_entrada} onChange={(e) => setData('hora_entrada', e.target.value)} required className={THEME_INPUT} />
                             </Campo>
                             <Campo label="Hora salida *" error={errors.hora_salida}>
-                                <input type="time" value={data.hora_salida} onChange={(e) => setData('hora_salida', e.target.value)} required className={inputClass} />
+                                <input type="time" value={data.hora_salida} onChange={(e) => setData('hora_salida', e.target.value)} required className={THEME_INPUT} />
                             </Campo>
                             <div className="flex items-end pb-1">
                                 <label className="flex items-center gap-2 cursor-pointer">
@@ -161,7 +169,7 @@ export default function ModalFormHorasExtra({
                                         checked={!!data.salida_dia_siguiente}
                                         onChange={(e) => setData('salida_dia_siguiente', e.target.checked)}
                                     />
-                                    <span className="text-[10px] font-black uppercase">Salida día siguiente</span>
+                                    <span className="text-[10px] font-black uppercase theme-text-main">Salida día siguiente</span>
                                 </label>
                             </div>
                         </div>
@@ -191,7 +199,7 @@ export default function ModalFormHorasExtra({
                             onChange={(e) => setData('motivo', e.target.value)}
                             required
                             rows={3}
-                            className={inputClass}
+                            className={THEME_TEXTAREA}
                             placeholder="Motivo operativo de la jornada extendida..."
                         />
                         {errors.motivo && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.motivo}</p>}
@@ -202,7 +210,7 @@ export default function ModalFormHorasExtra({
                             <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-3 flex items-center gap-2">
                                 <Shield className="w-4 h-4 text-purple-500" /> Supervisor *
                             </h3>
-                            <select value={data.supervisor_user_id} onChange={(e) => setData('supervisor_user_id', e.target.value)} required className={inputClass}>
+                            <select value={data.supervisor_user_id} onChange={(e) => setData('supervisor_user_id', e.target.value)} required className={THEME_SELECT}>
                                 <option value="">Selecciona supervisor...</option>
                                 {supervisores.map((u) => (
                                     <option key={u.id} value={u.id}>{u.name} {u.apellido_paterno || ''} — {u.email}</option>
@@ -214,7 +222,7 @@ export default function ModalFormHorasExtra({
                             <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-3 flex items-center gap-2">
                                 <DollarSign className="w-4 h-4 text-emerald-500" /> Fecha programada de pago
                             </h3>
-                            <input type="date" value={data.fecha_programada_pago} onChange={(e) => setData('fecha_programada_pago', e.target.value)} className={inputClass} />
+                            <input type="date" value={data.fecha_programada_pago} onChange={(e) => setData('fecha_programada_pago', e.target.value)} className={THEME_INPUT} />
                             {!data.fecha_programada_pago && (
                                 <span className="inline-block mt-2 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-amber-500/10 text-amber-600">Pendiente de pago</span>
                             )}
@@ -222,8 +230,8 @@ export default function ModalFormHorasExtra({
                     </section>
 
                     <div className="flex justify-end gap-3 pt-4 border-t theme-border">
-                        <button type="button" onClick={onCerrar} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border">Cancelar</button>
-                        <button type="submit" disabled={processing} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                        <button type="button" onClick={onCerrar} className={THEME_BTN_SECONDARY}>Cancelar</button>
+                        <button type="submit" disabled={processing} className={THEME_BTN_PRIMARY}>
                             <Save className="w-4 h-4" /> {registro ? 'Guardar cambios' : 'Registrar horas extra'}
                         </button>
                     </div>
@@ -237,7 +245,7 @@ export default function ModalFormHorasExtra({
 function Campo({ label, error, children }) {
     return (
         <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">{label}</label>
+            <label className={THEME_LABEL}>{label}</label>
             {children}
             {error && <p className="text-red-500 text-[10px] font-bold ml-2">{error}</p>}
         </div>

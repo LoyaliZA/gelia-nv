@@ -3,7 +3,17 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { Wallet, User, FileText, Calendar, X, Save } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_INPUT,
+    THEME_SELECT,
+    THEME_TEXTAREA,
+    THEME_LABEL,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    THEME_BTN_ICON,
+} from '../../../../utils/geliaTheme';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../../utils/formatoMoneda';
 import { MODALIDAD_LABELS } from './prestamosStyles';
 
@@ -89,8 +99,6 @@ export default function ModalFormPrestamo({
 
     if (!abierto) return null;
 
-    const inputClass = 'w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none';
-
     return createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6 overflow-y-auto`} onClick={onCerrar}>
             <GeliaLoader isVisible={processing} message="Guardando convenio_" />
@@ -100,7 +108,7 @@ export default function ModalFormPrestamo({
                         <Wallet className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
                         {registro ? 'Editar convenio' : 'Nuevo préstamo / pago fijo'}
                     </h2>
-                    <button type="button" onClick={onCerrar} className="theme-text-muted p-2 rounded-full"><X className="w-6 h-6" /></button>
+                    <button type="button" onClick={onCerrar} className={THEME_BTN_ICON}><X className="w-6 h-6" /></button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6">
@@ -109,8 +117,8 @@ export default function ModalFormPrestamo({
                             <User className="w-3.5 h-3.5" /> Colaborador y concepto
                         </p>
                         <div>
-                            <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Colaborador solicitante</label>
-                            <select value={data.rh_colaborador_id} onChange={(e) => setData('rh_colaborador_id', e.target.value)} className={inputClass} required>
+                            <label className={THEME_LABEL}>Colaborador solicitante</label>
+                            <select value={data.rh_colaborador_id} onChange={(e) => setData('rh_colaborador_id', e.target.value)} className={THEME_SELECT} required>
                                 <option value="">Seleccionar colaborador</option>
                                 {colaboradores.map((c) => (
                                     <option key={c.id} value={c.id}>{nombreCompletoColaborador(c)}</option>
@@ -119,8 +127,8 @@ export default function ModalFormPrestamo({
                             {errors.rh_colaborador_id && <p className="text-red-500 text-xs mt-1">{errors.rh_colaborador_id}</p>}
                         </div>
                         <div>
-                            <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Concepto de la deuda</label>
-                            <textarea value={data.concepto} onChange={(e) => setData('concepto', e.target.value)} rows={3} className={inputClass} required />
+                            <label className={THEME_LABEL}>Concepto de la deuda</label>
+                            <textarea value={data.concepto} onChange={(e) => setData('concepto', e.target.value)} rows={3} className={THEME_TEXTAREA} required />
                             {errors.concepto && <p className="text-red-500 text-xs mt-1">{errors.concepto}</p>}
                         </div>
                     </section>
@@ -131,34 +139,34 @@ export default function ModalFormPrestamo({
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Modalidad</label>
-                                <select value={data.modalidad} onChange={(e) => setData('modalidad', e.target.value)} className={inputClass}>
+                                <label className={THEME_LABEL}>Modalidad</label>
+                                <select value={data.modalidad} onChange={(e) => setData('modalidad', e.target.value)} className={THEME_SELECT}>
                                     {Object.entries(MODALIDAD_LABELS).map(([value, label]) => (
                                         <option key={value} value={value}>{label}</option>
                                     ))}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Monto por periodo</label>
-                                <input type="number" min="0.01" step="0.01" value={data.monto_cuota} onChange={(e) => setData('monto_cuota', e.target.value)} className={inputClass} required />
+                                <label className={THEME_LABEL}>Monto por periodo</label>
+                                <input type="number" min="0.01" step="0.01" value={data.monto_cuota} onChange={(e) => setData('monto_cuota', e.target.value)} className={THEME_INPUT} required />
                                 {errors.monto_cuota && <p className="text-red-500 text-xs mt-1">{errors.monto_cuota}</p>}
                             </div>
                             {esRecurrente && (
                                 <>
                                     <div>
-                                        <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Total de pagos (vacío = indefinido)</label>
-                                        <input type="number" min="1" value={data.num_pagos_total} onChange={(e) => setData('num_pagos_total', e.target.value)} className={inputClass} />
+                                        <label className={THEME_LABEL}>Total de pagos (vacío = indefinido)</label>
+                                        <input type="number" min="1" value={data.num_pagos_total} onChange={(e) => setData('num_pagos_total', e.target.value)} className={THEME_INPUT} />
                                     </div>
                                     <div>
-                                        <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Fecha de inicio</label>
-                                        <input type="date" value={data.fecha_inicio} onChange={(e) => setData('fecha_inicio', e.target.value)} className={inputClass} />
+                                        <label className={THEME_LABEL}>Fecha de inicio</label>
+                                        <input type="date" value={data.fecha_inicio} onChange={(e) => setData('fecha_inicio', e.target.value)} className={THEME_INPUT} />
                                     </div>
                                 </>
                             )}
                             {esUnicaVez && (
                                 <div className="md:col-span-2">
-                                    <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Fecha de ejecución programada (vacío = corte actual)</label>
-                                    <input type="date" value={data.fecha_ejecucion_programada} onChange={(e) => setData('fecha_ejecucion_programada', e.target.value)} className={inputClass} />
+                                    <label className={THEME_LABEL}>Fecha de ejecución programada (vacío = corte actual)</label>
+                                    <input type="date" value={data.fecha_ejecucion_programada} onChange={(e) => setData('fecha_ejecucion_programada', e.target.value)} className={THEME_INPUT} />
                                 </div>
                             )}
                         </div>
@@ -172,12 +180,12 @@ export default function ModalFormPrestamo({
                         <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted flex items-center gap-2 m-0 mb-3">
                             <FileText className="w-3.5 h-3.5" /> Observaciones y acuerdos
                         </p>
-                        <textarea value={data.observaciones} onChange={(e) => setData('observaciones', e.target.value)} rows={4} className={inputClass} placeholder="Notas para contabilidad..." />
+                        <textarea value={data.observaciones} onChange={(e) => setData('observaciones', e.target.value)} rows={4} className={THEME_TEXTAREA} placeholder="Notas para contabilidad..." />
                     </section>
 
                     <div className="flex justify-end gap-3 pt-4 border-t theme-border">
-                        <button type="button" onClick={onCerrar} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border">Cancelar</button>
-                        <button type="submit" disabled={processing} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                        <button type="button" onClick={onCerrar} className={THEME_BTN_SECONDARY}>Cancelar</button>
+                        <button type="submit" disabled={processing} className={THEME_BTN_PRIMARY}>
                             <Save className="w-4 h-4" /> Guardar
                         </button>
                     </div>

@@ -16,12 +16,16 @@ return new class extends Migration
                 $table->uuid('uuid')->unique();
                 $table->string('folio')->unique();
                 $table->string('nombre');
-                $table->enum('tipo_comportamiento', [
-                    'cobro_fijo',
-                    'cobro_costo_producto',
-                    'cobro_precio_venta_producto',
-                    'cancelacion_bono_especifico',
-                ]);
+                if (DB::getDriverName() === 'sqlite') {
+                    $table->string('tipo_comportamiento');
+                } else {
+                    $table->enum('tipo_comportamiento', [
+                        'cobro_fijo',
+                        'cobro_costo_producto',
+                        'cobro_precio_venta_producto',
+                        'cancelacion_bono_especifico',
+                    ]);
+                }
                 $table->decimal('monto_fijo', 12, 2)->nullable();
                 $table->foreignId('catalogo_bono_id')->nullable()->constrained('catalogo_bonos')->nullOnDelete();
                 $table->boolean('activo')->default(true);

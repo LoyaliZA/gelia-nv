@@ -3,7 +3,15 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { Briefcase, Edit2, Trash2, Plus, X, Save, AlertTriangle } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_INPUT,
+    THEME_LABEL,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    THEME_BTN_ICON,
+} from '../../../../utils/geliaTheme';
 
 export default function TablaPuestos({ datos = [], bonosCatalogo = [] }) {
     const [modalAbierto, setModalAbierto] = useState(false);
@@ -78,8 +86,7 @@ export default function TablaPuestos({ datos = [], bonosCatalogo = [] }) {
                 <button
                     type="button"
                     onClick={abrirNuevo}
-                    className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black uppercase text-xs text-white"
-                    style={{ backgroundColor: 'var(--color-primario)' }}
+                    className={THEME_BTN_PRIMARY}
                 >
                     <Plus className="w-4 h-4" /> Nuevo
                 </button>
@@ -134,24 +141,24 @@ export default function TablaPuestos({ datos = [], bonosCatalogo = [] }) {
                     <div className={`${THEME_MODAL_SHELL} max-w-lg modal-pop`} onClick={(e) => e.stopPropagation()}>
                         <div className="p-6 border-b theme-border flex justify-between items-center">
                             <h2 className="text-lg font-black uppercase italic theme-text-main m-0">{itemActual ? 'Editar' : 'Nuevo'} Puesto</h2>
-                            <button type="button" onClick={() => setModalAbierto(false)}><X className="w-5 h-5 theme-text-muted" /></button>
+                            <button type="button" onClick={() => setModalAbierto(false)} className={THEME_BTN_ICON}><X className="w-5 h-5" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
                             <div>
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Nombre *</label>
-                                <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} required className="w-full mt-1 px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold" />
+                                <label className={THEME_LABEL}>Nombre *</label>
+                                <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} required className={THEME_INPUT} />
                                 {errors.nombre && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.nombre}</p>}
                             </div>
-                            <label className="flex items-center gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" checked={!!data.activo} onChange={(e) => setData('activo', e.target.checked)} />
-                                <span className="text-[10px] font-black uppercase">Activo</span>
+                                <span className="text-[10px] font-black uppercase theme-text-main">Activo</span>
                             </label>
                             {bonosCatalogo.length > 0 && (
                                 <div>
                                     <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-2">Bonos elegibles para este puesto</p>
                                     <div className="space-y-2 max-h-40 overflow-y-auto p-3 rounded-2xl border theme-border">
                                         {bonosCatalogo.filter((b) => b.activo).map((b) => (
-                                            <label key={b.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                                            <label key={b.id} className="flex items-center gap-2 text-xs cursor-pointer theme-text-main">
                                                 <input type="checkbox" checked={data.bono_ids.includes(String(b.id))} onChange={() => toggleBono(b.id)} />
                                                 {b.nombre}
                                             </label>
@@ -159,7 +166,7 @@ export default function TablaPuestos({ datos = [], bonosCatalogo = [] }) {
                                     </div>
                                 </div>
                             )}
-                            <button type="submit" className="w-full py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                            <button type="submit" className={`${THEME_BTN_PRIMARY} w-full`}>
                                 <Save className="w-4 h-4" /> Guardar
                             </button>
                         </form>
@@ -177,8 +184,8 @@ export default function TablaPuestos({ datos = [], bonosCatalogo = [] }) {
                         </div>
                         <p className="text-sm theme-text-muted">¿Eliminar <strong>{itemActual?.nombre}</strong>?</p>
                         <div className="flex gap-3 mt-6">
-                            <button type="button" onClick={() => setModalEliminar(false)} className="flex-1 py-3 rounded-2xl theme-element theme-border border text-[10px] font-black uppercase">Cancelar</button>
-                            <button type="button" onClick={confirmDelete} className="flex-1 py-3 rounded-2xl bg-red-500 text-white text-[10px] font-black uppercase">Eliminar</button>
+                            <button type="button" onClick={() => setModalEliminar(false)} className={`${THEME_BTN_SECONDARY} flex-1`}>Cancelar</button>
+                            <button type="button" onClick={confirmDelete} className="theme-btn-danger flex-1">Eliminar</button>
                         </div>
                     </div>
                 </div>,

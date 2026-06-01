@@ -106,6 +106,11 @@ class RhColaborador extends Model
         return $this->hasMany(RhPrestamoPagoFijo::class, 'rh_colaborador_id');
     }
 
+    public function bancoTiempo(): HasMany
+    {
+        return $this->hasMany(RhBancoTiempo::class, 'rh_colaborador_id');
+    }
+
     /** @deprecated Use deducciones() */
     public function incidencias(): HasMany
     {

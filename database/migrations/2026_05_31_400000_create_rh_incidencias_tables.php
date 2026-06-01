@@ -27,7 +27,11 @@ return new class extends Migration
             $table->unsignedInteger('total_deduccion')->default(0);
             $table->text('observaciones')->nullable();
             $table->date('fecha_deduccion_nomina')->nullable();
-            $table->enum('estado_deduccion', ['pendiente', 'programado'])->default('pendiente');
+            if (DB::getDriverName() === 'sqlite') {
+                $table->string('estado_deduccion')->default('pendiente');
+            } else {
+                $table->enum('estado_deduccion', ['pendiente', 'programado'])->default('pendiente');
+            }
             $table->decimal('salario_diario_snapshot', 12, 2)->default(0);
             $table->decimal('bono_puntualidad_diario_snapshot', 12, 2)->default(0);
             $table->decimal('bono_productividad_diario_snapshot', 12, 2)->default(0);

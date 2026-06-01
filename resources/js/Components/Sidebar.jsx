@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useForm, usePage } from '@inertiajs/react';
 import {
     Menu, X, Moon, Sun, ArrowLeft,
-    LayoutDashboard, Briefcase, ChevronRight,
-    Settings, Settings2, Database, Users, LogOut, Link as LinkIcon,
-    FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package, Receipt, Ban, Globe, MessageCircle,
+    LayoutDashboard, Briefcase,
+    Settings, Settings2, Users, LogOut,
+    Map, FileText, Package, Receipt, Ban, MessageCircle,
     User, Sparkles, BarChart3,
 } from 'lucide-react';
+import { hasAnyAdminModuleAccess } from '../config/adminModules';
 
 import GeliaLogo from './GeliaLogo';
 
@@ -24,7 +25,10 @@ const EASE_SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const FIXED_POSITIONS = { left: 'left', right: 'right', top: 'top', bottom: 'bottom' };
 
 /** Clases de posición/animación compartidas entre menú principal y menú de perfil */
-function buildSidebarMenuLayoutClasses({ isFixedVertical, isFixedHorizontal, isMobileMode, fixedPos, isOpen }) {
+function buildSidebarMenuLayoutClasses({ isFixedVertical, isFixedHorizontal, isMobileMode, fixedPos, isOpen, isDrawer = false }) {
+    if (isMobileMode && isDrawer) {
+        return ` gelia-sidebar-drawer h-full ml-0 rounded-none border-r theme-border ${isOpen ? '' : ''}`;
+    }
     if (isFixedVertical) {
         const menuFixedClass = fixedPos === FIXED_POSITIONS.right ? 'sidebar-menu-fixed-right' : 'sidebar-menu-fixed';
         const menuRounding = fixedPos === FIXED_POSITIONS.right
@@ -77,25 +81,24 @@ function profileMenuHref(item) {
     return item.path;
 }
 
-const ADMIN_MENU_CONFIG = [
-    { id: 'enlaces', label: 'Generar Enlaces', path: '/admin/enlaces', routeName: 'admin.enlaces', icon: LinkIcon, permission: 'usuarios.generar_permisos' },
-    { id: 'clientes', label: 'Base de Clientes', path: '/admin/clientes', routeName: 'admin.clientes', icon: Database, permission: 'clientes.ver' },
-    { id: 'catalogos', label: 'Catálogos Globales', path: '/admin/catalogos', routeName: 'admin.catalogos', icon: FolderTree, permission: 'catalogos.gestionar' },
-    { id: 'personalizacion', label: 'Personalización', path: '/admin/personalizacion', routeName: 'admin.personalizacion.index', icon: Palette, permission: 'personalizacion.gestionar' },
-    { id: 'comisiones', label: 'Comisiones', path: '/admin/comisiones', routeName: 'admin.comisiones', icon: Calculator, permission: 'comisiones.gestionar' },
-    { id: 'usuarios', label: 'Usuarios', path: '/admin/usuarios', routeName: 'admin.usuarios', icon: Users, permission: 'usuarios.gestionar' },
-    { id: 'auditorias', label: 'Auditorías de Sistema', path: '/admin/auditorias-sistema', routeName: 'admin.auditorias_sistema.index', icon: History, permission: 'sistema.auditorias.ver' },
-    { id: 'api_externa', label: 'API Externa', path: '/admin/api-externa', routeName: 'admin.api_externa.index', icon: Globe, permissionAny: ['api_externa.gestionar', 'api_externa.ver_auditoria'] },
-];
+function adminPanelHref() {
+    if (typeof route === 'function') {
+        try {
+            return route('admin.index');
+        } catch {
+            // Ziggy desactualizado
+        }
+    }
+    return '/admin';
+}
 
-export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left', sidebarMode = 'collapsed', fixedPosition = 'left' }) {
+export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left', sidebarMode = 'collapsed', fixedPosition = 'left', useMobileTopBar = false }) {
     const { url, props: { auth } } = usePage();
     const isAdminActive = url.startsWith('/admin');
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMenuClosing, setIsMenuClosing] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
-    const [isConfigExpanded, setIsConfigExpanded] = useState(isAdminActive);
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
     const [isProfileMenuClosing, setIsProfileMenuClosing] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
@@ -108,10 +111,6 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const { post } = useForm();
 
     const unreadCount = (auth?.notificaciones || []).filter(n => !n.read_at).length;
-
-    useEffect(() => {
-        if (isAdminActive) setIsConfigExpanded(true);
-    }, [url, isAdminActive]);
 
     const isProfileMenuVisible = isProfileMenuOpen || isProfileMenuClosing;
 
@@ -163,14 +162,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         return isSuperAdmin || hasPermission;
     };
 
-    const menuItemAllowed = (item) => {
-        if (item.permissionAny?.length) {
-            return item.permissionAny.some((perm) => can(perm));
-        }
-        return can(item.permission);
-    };
-
-    const showAdminMenu = ADMIN_MENU_CONFIG.some(menuItemAllowed);
+    const showAdminMenu = hasAnyAdminModuleAccess(can);
     const showOperacionesMenu = can('listados.ver');
 
     const openMenu = () => {
@@ -249,10 +241,6 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         }, HOVER_LEAVE_DELAY_MS);
     };
 
-    const toggleConfigMenu = () => {
-        setIsConfigExpanded(prev => !prev);
-    };
-
     const closeProfileMenu = useCallback(() => {
         if (!isProfileMenuOpen && !isProfileMenuClosing) return;
 
@@ -281,11 +269,14 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         openProfileMenu();
     };
 
-    // Cerrar al navegar
+    // Cerrar menús al navegar
     useEffect(() => {
         setIsProfileMenuOpen(false);
         setIsProfileMenuClosing(false);
         clearTimeout(profileMenuCloseTimerRef.current);
+        setIsMenuOpen(false);
+        setIsMenuClosing(false);
+        clearTimeout(menuCloseTimerRef.current);
     }, [url]);
 
     // Clic fuera: registrar después del clic que abrió el menú
@@ -348,9 +339,13 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         );
     };
 
+    const mobileDrawerMode = isMobileMode && useMobileTopBar;
+
     // 1. Contenedor Base: Ocupa todo el ancho pero NO bloquea los clics
     let navClasses = "fixed z-[200] flex pointer-events-none sidebar-mount ";
-    if (isMobileMode) {
+    if (mobileDrawerMode) {
+        navClasses += "gelia-sidebar-mount--mobile ";
+    } else if (isMobileMode) {
         navClasses += "bottom-6 left-0 right-0 w-full flex-col-reverse items-center";
     } else if (isFixed) {
         if (fixedPos === FIXED_POSITIONS.right) navClasses += "top-0 right-0 h-screen flex-row-reverse";
@@ -409,10 +404,10 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         `floating-menu border shadow-2xl theme-surface theme-border sidebar-glass relative z-10 flex-shrink-0 sidebar-menu-shell sidebar-hamburger-menu ${isVisible ? 'pointer-events-auto' : 'pointer-events-none'} ${isOpen ? 'sidebar-hamburger-menu--open' : ''} `;
 
     const menuClasses = menuShellBase(isMenuVisible, isMenuOpen)
-        + buildSidebarMenuLayoutClasses({ ...sidebarMenuLayoutFlags, isOpen: isMenuOpen });
+        + buildSidebarMenuLayoutClasses({ ...sidebarMenuLayoutFlags, isOpen: isMenuOpen, isDrawer: mobileDrawerMode });
 
     const profileMenuClasses = menuShellBase(isProfileMenuVisible, isProfileMenuOpen)
-        + buildSidebarMenuLayoutClasses({ ...sidebarMenuLayoutFlags, isOpen: isProfileMenuOpen });
+        + buildSidebarMenuLayoutClasses({ ...sidebarMenuLayoutFlags, isOpen: isProfileMenuOpen, isDrawer: mobileDrawerMode });
 
     const profileMenuTransitionStyle = {
         transitionDuration: `${isProfileMenuOpen ? MENU_OPEN_MS : MENU_CLOSE_MS}ms`,
@@ -432,15 +427,32 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
         ? (widgetOrientation === 'vertical' ? 'gap-3' : 'gap-1.5')
         : (widgetOrientation === 'vertical' ? 'gap-5 py-2' : 'gap-1 sm:gap-2');
 
+    const closeMobileMenu = () => {
+        if (isMobileMode) closeMenu();
+    };
+
     return (
         <>
+            {mobileDrawerMode && (
+                <button
+                    type="button"
+                    aria-label="Cerrar menú"
+                    className={`gelia-sidebar-backdrop ${isMenuVisible ? 'gelia-sidebar-backdrop--visible' : ''}`}
+                    onClick={closeMobileMenu}
+                    tabIndex={isMenuVisible ? 0 : -1}
+                />
+            )}
             <nav className={navClasses}>
                 <div
                     className={hoverContainerClasses}
                     onMouseEnter={handleHoverEnter}
                     onMouseLeave={handleHoverLeave}
                 >
-                    <div className={widgetClasses} style={widgetShellStyle}>
+                    <div
+                        className={`${widgetClasses} ${mobileDrawerMode ? 'gelia-sidebar-widget--mobile-hidden' : ''}`}
+                        style={widgetShellStyle}
+                        aria-hidden={mobileDrawerMode}
+                    >
                         <div className={`flex items-center ${innerFlexClass} ${innerGapClass} w-full ${isFixedVertical ? 'justify-center' : ''} ${isFixedHorizontal ? 'justify-start' : ''}`}>
                             <div
                                 className={prefixGroupClass(showSecondaryControls, widgetOrientation)}
@@ -672,20 +684,6 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                 </Link>
                             )}
 
-                            {can('entregas.configurar_zonas') && (
-                                <Link
-                                    href={route('admin.mapa_logistico.index')}
-                                    className={linkBaseClass + (isRouteActive('/admin/mapa-logistico') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/admin/mapa-logistico')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/admin/mapa-logistico')) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <div className="flex items-center">
-                                        <Layers className="w-4 h-4 mr-4" style={{ color: isRouteActive('/admin/mapa-logistico') ? '#ffffff' : 'var(--color-primario)' }} />
-                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mapa Logístico</span>
-                                    </div>
-                                </Link>
-                            )}
-
                             {showOperacionesMenu && (
                                 <div className="flex flex-col">
                                     <div className="pt-3 pb-1">
@@ -711,36 +709,17 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                             )}
 
                             {showAdminMenu && (
-                                <div className="mt-2 pt-3 border-t theme-border flex flex-col">
-                                    <button
-                                        onClick={toggleConfigMenu}
-                                        className={`flex items-center justify-between w-full px-6 py-4 rounded-3xl transition-all outline-none z-10 ${isAdminActive ? 'theme-element border-[var(--color-primario)] text-[var(--color-primario)] shadow-sm' : 'theme-element theme-text-muted hover:theme-text-main border border-transparent'}`}
-                                    >
-                                        <div className="flex items-center">
-                                            <Settings className="w-4 h-4 mr-4" />
-                                            <span className="text-xs font-black uppercase italic tracking-tighter">Administración_</span>
-                                        </div>
-                                        <ChevronRight className={`w-3 h-3 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${isConfigExpanded ? 'rotate-90' : ''}`} />
-                                    </button>
-
-                                    <div className={`overflow-hidden px-2 mt-2 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${isConfigExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
-                                        <div className="flex flex-col space-y-2">
-                                            {ADMIN_MENU_CONFIG.filter(menuItemAllowed).map((item) => {
-                                                const IconComponent = item.icon;
-                                                const isActive = isRouteActive(item.path);
-                                                return (
-                                                    <Link
-                                                        key={item.id}
-                                                        href={route(item.routeName)}
-                                                        className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all outline-none ${isActive ? 'bg-[var(--color-primario)] text-white shadow-md' : 'theme-element theme-text-muted hover:theme-text-main hover:shadow-sm border border-transparent hover:border-[var(--color-primario)]'}`}
-                                                    >
-                                                        <IconComponent className="w-3.5 h-3.5 mr-4" /> {item.label}
-                                                    </Link>
-                                                );
-                                            })}
-                                        </div>
+                                <Link
+                                    href={adminPanelHref()}
+                                    className={linkBaseClass + (isAdminActive ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isAdminActive) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                    onMouseLeave={(e) => { if (!isAdminActive) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <div className="flex items-center">
+                                        <Settings className="w-4 h-4 mr-4" style={{ color: isAdminActive ? '#ffffff' : 'var(--color-primario)' }} />
+                                        <span className="text-xs font-black uppercase italic tracking-tighter">Administración_</span>
                                     </div>
-                                </div>
+                                </Link>
                             )}
 
                             <div className="mt-auto pt-6 pb-2">

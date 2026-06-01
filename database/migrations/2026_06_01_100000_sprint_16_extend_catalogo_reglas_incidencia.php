@@ -20,13 +20,15 @@ return new class extends Migration
             $table->unsignedBigInteger('catalogo_tipo_falta_legacy_id')->nullable()->after('monto_recompensa_auditor');
         });
 
-        DB::statement("ALTER TABLE catalogo_reglas_incidencia MODIFY tipo_comportamiento ENUM(
-            'cobro_fijo',
-            'cobro_costo_producto',
-            'cobro_precio_venta_producto',
-            'cancelacion_bono_especifico',
-            'deduccion_nomina'
-        ) NOT NULL DEFAULT 'cobro_fijo'");
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE catalogo_reglas_incidencia MODIFY tipo_comportamiento ENUM(
+                'cobro_fijo',
+                'cobro_costo_producto',
+                'cobro_precio_venta_producto',
+                'cancelacion_bono_especifico',
+                'deduccion_nomina'
+            ) NOT NULL DEFAULT 'cobro_fijo'");
+        }
 
         $this->migrarTiposFaltas();
     }
@@ -48,7 +50,16 @@ return new class extends Migration
 
         $tipos = DB::table('catalogo_tipos_faltas')->get();
         $now = now();
-        $folioNum = (int) DB::table('catalogo_reglas_incidencia')->max(DB::raw("CAST(SUBSTRING_INDEX(folio, '-', -1) AS UNSIGNED)"));
+        if (DB::getDriverName() !== 'sqlite') {
+            $folioNum = (int) DB::table('catalogo_reglas_incidencia')->max(DB::raw("CAST(SUBSTRING_INDEX(folio, '-', -1) AS UNSIGNED)"));
+        } else {
+            $maxFolio = DB::table('catalogo_reglas_incidencia')->max('folio');
+            $folioNum = 0;
+            if ($maxFolio) {
+                $parts = explode('-', $maxFolio);
+                $folioNum = (int) end($parts);
+            }
+        }
 
         foreach ($tipos as $tipo) {
             $existente = DB::table('catalogo_reglas_incidencia')
@@ -99,11 +110,13 @@ return new class extends Migration
             ]);
         });
 
-        DB::statement("ALTER TABLE catalogo_reglas_incidencia MODIFY tipo_comportamiento ENUM(
-            'cobro_fijo',
-            'cobro_costo_producto',
-            'cobro_precio_venta_producto',
-            'cancelacion_bono_especifico'
-        ) NOT NULL");
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE catalogo_reglas_incidencia MODIFY tipo_comportamiento ENUM(
+                'cobro_fijo',
+                'cobro_costo_producto',
+                'cobro_precio_venta_producto',
+                'cancelacion_bono_especifico'
+            ) NOT NULL");
+        }
     }
 };

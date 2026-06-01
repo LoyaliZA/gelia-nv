@@ -47,13 +47,15 @@ return new class extends Migration
             }
         }
 
-        User::role('Super Admin')->each(function (User $usuario) {
-            foreach (self::PERMISOS as $permiso) {
-                if (!$usuario->hasPermissionTo($permiso)) {
-                    $usuario->givePermissionTo($permiso);
+        if (\Spatie\Permission\Models\Role::where('name', 'Super Admin')->where('guard_name', 'web')->exists()) {
+            User::role('Super Admin')->each(function (User $usuario) {
+                foreach (self::PERMISOS as $permiso) {
+                    if (!$usuario->hasPermissionTo($permiso)) {
+                        $usuario->givePermissionTo($permiso);
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 
     public function down(): void

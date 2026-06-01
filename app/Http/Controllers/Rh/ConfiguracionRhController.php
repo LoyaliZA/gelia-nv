@@ -20,6 +20,8 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
+use App\Services\Rh\GenerarFolioSalidaService;
+
 class ConfiguracionRhController extends Controller
 {
     public function index(): Response
@@ -32,6 +34,7 @@ class ConfiguracionRhController extends Controller
             'heFolioPreview' => app(GenerarFolioHorasExtraService::class)->ejecutar($config),
             'incFolioPreview' => app(GenerarFolioDeduccionService::class)->ejecutar($config),
             'preFolioPreview' => app(GenerarFolioPrestamoService::class)->ejecutar($config),
+            'salFolioPreview' => app(GenerarFolioSalidaService::class)->ejecutar($config),
             'puestos' => CatalogoPuesto::with('bonos')->orderBy('nombre')->get(),
             'bonos' => CatalogoBono::withCount('colaboradores')->orderBy('nombre')->get(),
             'reglasIncidencia' => CatalogoReglaIncidencia::with([
@@ -70,6 +73,8 @@ class ConfiguracionRhController extends Controller
             'inc_folio_padding' => $request->inc_folio_padding,
             'pre_folio_prefijo' => strtoupper(trim($request->pre_folio_prefijo)),
             'pre_folio_padding' => $request->pre_folio_padding,
+            'sal_folio_prefijo' => strtoupper(trim($request->sal_folio_prefijo)),
+            'sal_folio_padding' => $request->sal_folio_padding,
         ]);
 
         $mensaje = 'Configuración de RH actualizada correctamente.';

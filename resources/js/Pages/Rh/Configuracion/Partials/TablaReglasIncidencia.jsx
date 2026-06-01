@@ -3,7 +3,16 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { Scale, Edit2, Trash2, Plus, X, Save, AlertTriangle, Info } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_INPUT,
+    THEME_SELECT,
+    THEME_LABEL,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    THEME_BTN_ICON,
+} from '../../../../utils/geliaTheme';
 import { formatoMoneda } from '../../../../utils/formatoMoneda';
 
 const COMPORTAMIENTOS = {
@@ -58,7 +67,7 @@ function MultiSelectDeptArea({ label, help, departamentos, selectedDepts, select
                     <p className="text-[9px] font-black uppercase theme-text-muted mb-1">Departamentos</p>
                     <div className="max-h-28 overflow-y-auto space-y-1">
                         {departamentos.map((d) => (
-                            <label key={d.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                            <label key={d.id} className="flex items-center gap-2 text-xs cursor-pointer theme-text-main">
                                 <input type="checkbox" checked={selectedDepts.includes(String(d.id))} onChange={() => toggle(selectedDepts, d.id, onChangeDepts)} />
                                 {d.nombre}
                             </label>
@@ -69,7 +78,7 @@ function MultiSelectDeptArea({ label, help, departamentos, selectedDepts, select
                     <p className="text-[9px] font-black uppercase theme-text-muted mb-1">Áreas</p>
                     <div className="max-h-28 overflow-y-auto space-y-1">
                         {areasFiltradas.map((a) => (
-                            <label key={a.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                            <label key={a.id} className="flex items-center gap-2 text-xs cursor-pointer theme-text-main">
                                 <input type="checkbox" checked={selectedAreas.includes(String(a.id))} onChange={() => toggle(selectedAreas, a.id, onChangeAreas)} />
                                 {a.nombre}
                             </label>
@@ -142,8 +151,6 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
         });
     };
 
-    const inputClass = 'w-full mt-1 px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold';
-
     const detalleRegla = (item) => {
         if (item.tipo_comportamiento === 'cobro_fijo') return formatoMoneda(item.monto_fijo);
         if (item.tipo_comportamiento === 'cancelacion_bono_especifico') return item.bono?.nombre || '—';
@@ -164,7 +171,7 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                         <p className="text-[10px] theme-text-muted font-bold uppercase tracking-widest mt-0.5">{datos.length} conceptos (faltas, retardos, operativas)</p>
                     </div>
                 </div>
-                <button type="button" onClick={abrirNuevo} className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black uppercase text-xs text-white" style={{ backgroundColor: 'var(--color-primario)' }}>
+                <button type="button" onClick={abrirNuevo} className={THEME_BTN_PRIMARY}>
                     <Plus className="w-4 h-4" /> Nueva regla
                 </button>
             </div>
@@ -221,25 +228,25 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                     <div className={`${THEME_MODAL_SHELL} max-w-2xl w-full modal-pop my-4`} onClick={(e) => e.stopPropagation()}>
                         <div className="p-6 border-b theme-border flex justify-between items-center">
                             <h2 className="text-lg font-black uppercase italic theme-text-main m-0">{itemActual ? 'Editar regla' : 'Nueva regla'}</h2>
-                            <button type="button" onClick={() => setModalAbierto(false)}><X className="w-5 h-5 theme-text-muted" /></button>
+                            <button type="button" onClick={() => setModalAbierto(false)} className={THEME_BTN_ICON}><X className="w-5 h-5" /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                             <div>
-                                <label className="text-[9px] font-black uppercase theme-text-muted">Concepto / Nombre *</label>
-                                <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} required className={inputClass} />
+                                <label className={THEME_LABEL}>Concepto / Nombre *</label>
+                                <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} required className={THEME_INPUT} />
                                 {errors.nombre && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.nombre}</p>}
                             </div>
                             <div>
-                                <label className="text-[9px] font-black uppercase theme-text-muted">Categoría *</label>
-                                <select value={data.categoria} onChange={(e) => setData('categoria', e.target.value)} className={inputClass}>
+                                <label className={THEME_LABEL}>Categoría *</label>
+                                <select value={data.categoria} onChange={(e) => setData('categoria', e.target.value)} className={THEME_SELECT}>
                                     {Object.entries(CATEGORIAS).map(([k, v]) => (
                                         <option key={k} value={k}>{v}</option>
                                     ))}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-[9px] font-black uppercase theme-text-muted">Tipo de comportamiento *</label>
-                                <select value={data.tipo_comportamiento} onChange={(e) => setData('tipo_comportamiento', e.target.value)} className={inputClass}>
+                                <label className={THEME_LABEL}>Tipo de comportamiento *</label>
+                                <select value={data.tipo_comportamiento} onChange={(e) => setData('tipo_comportamiento', e.target.value)} className={THEME_SELECT}>
                                     {Object.entries(COMPORTAMIENTOS).map(([k, v]) => (
                                         <option key={k} value={k}>{v}</option>
                                     ))}
@@ -247,15 +254,15 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                             </div>
                             {data.tipo_comportamiento === 'cobro_fijo' && (
                                 <div>
-                                    <label className="text-[9px] font-black uppercase theme-text-muted">Monto fijo *</label>
-                                    <input type="number" min="0" step="0.01" value={data.monto_fijo} onChange={(e) => setData('monto_fijo', e.target.value)} required className={inputClass} />
+                                    <label className={THEME_LABEL}>Monto fijo *</label>
+                                    <input type="number" min="0" step="0.01" value={data.monto_fijo} onChange={(e) => setData('monto_fijo', e.target.value)} required className={THEME_INPUT} />
                                     {errors.monto_fijo && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.monto_fijo}</p>}
                                 </div>
                             )}
                             {data.tipo_comportamiento === 'cancelacion_bono_especifico' && (
                                 <div>
-                                    <label className="text-[9px] font-black uppercase theme-text-muted">Bono a cancelar *</label>
-                                    <select value={data.catalogo_bono_id} onChange={(e) => setData('catalogo_bono_id', e.target.value)} required className={inputClass}>
+                                    <label className={THEME_LABEL}>Bono a cancelar *</label>
+                                    <select value={data.catalogo_bono_id} onChange={(e) => setData('catalogo_bono_id', e.target.value)} required className={THEME_SELECT}>
                                         <option value="">Selecciona...</option>
                                         {bonos.filter((b) => b.activo).map((b) => (
                                             <option key={b.id} value={b.id}>{b.nombre}</option>
@@ -267,28 +274,28 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                             {(data.tipo_comportamiento === 'deduccion_nomina' || data.categoria === 'falta' || data.categoria === 'retardo') && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl border theme-border">
                                     <div>
-                                        <label className="text-[9px] font-black uppercase theme-text-muted">Factor bono puntualidad (0.5=mitad, 1=completo)</label>
-                                        <input type="number" min="0" step="0.01" value={data.factor_penalizacion_puntualidad} onChange={(e) => setData('factor_penalizacion_puntualidad', e.target.value)} className={inputClass} />
+                                        <label className={THEME_LABEL}>Factor bono puntualidad (0.5=mitad, 1=completo)</label>
+                                        <input type="number" min="0" step="0.01" value={data.factor_penalizacion_puntualidad} onChange={(e) => setData('factor_penalizacion_puntualidad', e.target.value)} className={THEME_INPUT} />
                                     </div>
                                     <div>
-                                        <label className="text-[9px] font-black uppercase theme-text-muted">Factor bono productividad</label>
-                                        <input type="number" min="0" step="0.01" value={data.factor_penalizacion_productividad} onChange={(e) => setData('factor_penalizacion_productividad', e.target.value)} className={inputClass} />
+                                        <label className={THEME_LABEL}>Factor bono productividad</label>
+                                        <input type="number" min="0" step="0.01" value={data.factor_penalizacion_productividad} onChange={(e) => setData('factor_penalizacion_productividad', e.target.value)} className={THEME_INPUT} />
                                     </div>
-                                    <label className="flex items-center gap-2 md:col-span-2">
+                                    <label className="flex items-center gap-2 md:col-span-2 cursor-pointer">
                                         <input type="checkbox" checked={!!data.aplica_deduccion_salario_base} onChange={(e) => setData('aplica_deduccion_salario_base', e.target.checked)} />
-                                        <span className="text-[10px] font-black uppercase">Aplica deducción salario base diario</span>
+                                        <span className="text-[10px] font-black uppercase theme-text-main">Aplica deducción salario base diario</span>
                                     </label>
                                 </div>
                             )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl border theme-border">
-                                <label className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" checked={!!data.recompensa_auditor_activa} onChange={(e) => setData('recompensa_auditor_activa', e.target.checked)} />
-                                    <span className="text-[10px] font-black uppercase">Recompensa auditora activa</span>
+                                    <span className="text-[10px] font-black uppercase theme-text-main">Recompensa auditora activa</span>
                                 </label>
                                 {data.recompensa_auditor_activa && (
                                     <div>
-                                        <label className="text-[9px] font-black uppercase theme-text-muted">Monto recompensa auditor</label>
-                                        <input type="number" min="0" step="0.01" value={data.monto_recompensa_auditor} onChange={(e) => setData('monto_recompensa_auditor', e.target.value)} className={inputClass} />
+                                        <label className={THEME_LABEL}>Monto recompensa auditor</label>
+                                        <input type="number" min="0" step="0.01" value={data.monto_recompensa_auditor} onChange={(e) => setData('monto_recompensa_auditor', e.target.value)} className={THEME_INPUT} />
                                     </div>
                                 )}
                             </div>
@@ -310,11 +317,11 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                                 onChangeDepts={(v) => setData('departamentos_visibilidad', v)}
                                 onChangeAreas={(v) => setData('areas_visibilidad', v)}
                             />
-                            <label className="flex items-center gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" checked={!!data.activo} onChange={(e) => setData('activo', e.target.checked)} />
-                                <span className="text-[10px] font-black uppercase">Activa</span>
+                                <span className="text-[10px] font-black uppercase theme-text-main">Activa</span>
                             </label>
-                            <button type="submit" className="w-full py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                            <button type="submit" className={`${THEME_BTN_PRIMARY} w-full`}>
                                 <Save className="w-4 h-4" /> Guardar regla
                             </button>
                         </form>
@@ -329,8 +336,8 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                         <AlertTriangle className="w-8 h-8 text-red-500 mb-3" />
                         <p className="text-sm theme-text-muted mb-4">¿Eliminar regla «{itemActual?.nombre}»?</p>
                         <div className="flex gap-3">
-                            <button type="button" onClick={() => setModalEliminar(false)} className="flex-1 py-3 rounded-2xl theme-element border theme-border text-[10px] font-black uppercase">Cancelar</button>
-                            <button type="button" onClick={confirmDelete} className="flex-1 py-3 rounded-2xl bg-red-500 text-white text-[10px] font-black uppercase">Eliminar</button>
+                            <button type="button" onClick={() => setModalEliminar(false)} className={`${THEME_BTN_SECONDARY} flex-1`}>Cancelar</button>
+                            <button type="button" onClick={confirmDelete} className="theme-btn-danger flex-1">Eliminar</button>
                         </div>
                     </div>
                 </div>,

@@ -1,8 +1,10 @@
-import React, { useEffect, useState, createContext, useContext } from 'react';
-import { usePage, router } from '@inertiajs/react';
+import React, { useEffect, useState, createContext, useContext, useCallback } from 'react';
+import { Link, usePage, router } from '@inertiajs/react';
 import Sidebar from '../Components/Sidebar';
-// ELIMINADO: import { animate } from 'animejs/animation';
-import { Bell, X } from 'lucide-react';
+import GeliaLogo from '../Components/GeliaLogo';
+import NotificationBell from '../Components/NotificationBell';
+import MensajeriaWidget from '../Components/Mensajeria/MensajeriaWidget';
+import { Bell, X, Menu } from 'lucide-react';
 
 import NotificationService from '../Services/NotificationBrowserService';
 import GeliaLoader from '../Components/GeliaLoader';
@@ -229,41 +231,28 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     const mensajeriaImmersivaMovil = isMensajeriaFull && isMobileViewport;
 
-    const getMensajeriaLayoutClasses = () => {
-        const base = 'gelia-mensajeria-main box-border w-full max-w-none p-0 overflow-hidden h-dvh max-h-dvh';
+    const shellSidebarLayout = isMobileViewport
+        ? 'mobile'
+        : sidebarLayout === 'fixed'
+            ? 'fixed'
+            : sidebarLayout === 'floating_right'
+                ? 'float-right'
+                : 'float-left';
 
+    const shellSidebarEdge = ['left', 'right', 'top', 'bottom'].includes(fixedPosition)
+        ? fixedPosition
+        : 'left';
+
+    const openMobileSidebar = useCallback(() => {
+        window.dispatchEvent(new CustomEvent('gelia-sidebar-open-menu'));
+    }, []);
+
+    const getMensajeriaMainClass = () => {
+        const base = 'gelia-mensajeria-main box-border w-full max-w-none min-w-0 p-0 overflow-hidden h-dvh max-h-dvh';
         if (mensajeriaImmersivaMovil) {
             return `${base} gelia-mensajeria-main--immersive`;
         }
-
-        if (sidebarLayout !== 'fixed') {
-            if (sidebarLayout === 'floating_right') {
-                return `${base} gelia-mensajeria-main--float gelia-mensajeria-main--float-right`;
-            }
-            return `${base} gelia-mensajeria-main--float gelia-mensajeria-main--float-left`;
-        }
-
-        const edge = ['left', 'right', 'top', 'bottom'].includes(fixedPosition) ? fixedPosition : 'left';
-        return `${base} gelia-mensajeria-main--fixed gelia-mensajeria-main--fixed-${edge}`;
-    };
-
-    const getMainLayoutClasses = () => {
-        if (isMensajeriaFull) {
-            return getMensajeriaLayoutClasses();
-        }
-        if (sidebarLayout !== 'fixed') {
-            return 'pt-6 md:pt-24';
-        }
-        switch (fixedPosition) {
-            case 'right':
-                return 'md:mr-[5.5rem] pt-6 md:pt-12';
-            case 'top':
-                return 'pt-[4.75rem] md:pt-20 pb-32 md:pb-20';
-            case 'bottom':
-                return 'pt-6 md:pt-12 pb-28 md:pb-24';
-            default:
-                return 'md:ml-[5.5rem] pt-6 md:pt-12';
-        }
+        return base;
     };
 
     const openModal = (content) => {
@@ -413,10 +402,20 @@ export default function AppLayout({ children, fullScreen = false }) {
         window.dispatchEvent(new Event('theme-changed'));
     };
 
+    const mainClassName = [
+        'gelia-app-main transition-all duration-500 bg-transparent',
+        isMensajeriaFull ? `gelia-app-main--fullscreen ${getMensajeriaMainClass()}` : 'gelia-app-main--default',
+        mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive-main' : '',
+    ].filter(Boolean).join(' ');
+
     return (
         <ModalContext.Provider value={{ openModal, closeModal }}>
             <div
-                className="min-h-dvh text-gray-950 dark:text-gray-100 transition-colors duration-500 w-full overflow-x-hidden"
+                className="gelia-app-shell min-h-dvh text-gray-950 dark:text-gray-100 transition-colors duration-500"
+                data-sidebar-layout={shellSidebarLayout}
+                data-sidebar-edge={shellSidebarEdge}
+                data-page-fullscreen={isMensajeriaFull ? 'true' : 'false'}
+                data-immersive-mobile={mensajeriaImmersivaMovil ? 'true' : 'false'}
                 style={{
                     backgroundColor: 'var(--bg-app)',
                     backgroundImage: 'var(--bg-actual)',
@@ -426,12 +425,35 @@ export default function AppLayout({ children, fullScreen = false }) {
                     backgroundRepeat: 'no-repeat',
                 }}
             >
-                {/* --- 4. INSTANCIA ÚNICA DEL LOADER --- */}
-                <GeliaLoader 
-                    isVisible={isGlobalLoading} 
-                    progress={globalProgress} 
-                    message="Procesando_" 
+                <GeliaLoader
+                    isVisible={isGlobalLoading}
+                    progress={globalProgress}
+                    message="Procesando_"
                 />
+
+                {isMobileViewport && (
+                    <header className="gelia-mobile-topbar md:hidden" role="banner">
+                        <button
+                            type="button"
+                            className="gelia-mobile-topbar__menu-btn"
+                            onClick={openMobileSidebar}
+                            aria-label="Abrir menú de navegación"
+                        >
+                            <Menu className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
+                        </button>
+                        <Link
+                            href={route('dashboard')}
+                            className="gelia-mobile-topbar__brand"
+                            aria-label="Panel principal"
+                        >
+                            <GeliaLogo variant="sparkle" className="w-9 h-9 drop-shadow-sm" />
+                        </Link>
+                        <div className="gelia-mobile-topbar__actions">
+                            <NotificationBell iconButtonClassName="gelia-mobile-topbar__icon-btn" />
+                            <MensajeriaWidget iconButtonClassName="gelia-mobile-topbar__icon-btn" />
+                        </div>
+                    </header>
+                )}
 
                 <Sidebar
                     isDarkMode={isDarkMode}
@@ -441,13 +463,22 @@ export default function AppLayout({ children, fullScreen = false }) {
                     layout={sidebarLayout}
                     sidebarMode={sidebarMode}
                     fixedPosition={fixedPosition}
+                    useMobileTopBar={isMobileViewport}
                 />
 
-                {/* Zoom solo en contenido: el sidebar fixed queda fuera y funciona igual en /perfil */}
-                <div className={`gelia-ui-scale w-full ${isMensajeriaFull ? 'h-dvh overflow-hidden' : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
-                    <main className={`transition-all duration-500 bg-transparent mx-auto ${isMensajeriaFull ? 'max-w-none w-full h-full' : 'max-w-7xl min-h-screen px-4 md:px-6 pb-32 md:pb-20'} ${getMainLayoutClasses()} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive-main' : ''}`}>
-                        <div key={url} className={isMensajeriaFull ? 'h-full' : 'animate-page-reveal'}>
-                            {children}
+                <div className={`gelia-app-body gelia-ui-scale gelia-prevent-overflow-x ${isMensajeriaFull ? 'h-dvh overflow-hidden' : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
+                    <main className={mainClassName}>
+                        <div
+                            key={url}
+                            className={`gelia-app-content gelia-prevent-overflow-x ${isMensajeriaFull ? 'h-full' : ''}`}
+                        >
+                            <div
+                                className={`gelia-app-content-inner gelia-prevent-overflow-x ${isMensajeriaFull ? 'h-full max-w-none' : ''}`}
+                            >
+                                <div className={isMensajeriaFull ? 'h-full' : 'gelia-animate-page-reveal'}>
+                                    {children}
+                                </div>
+                            </div>
                         </div>
                     </main>
 

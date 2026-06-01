@@ -79,7 +79,13 @@ return new class extends Migration
         $this->actualizarEstadoDeduccion();
 
         if (Schema::hasColumn('rh_deducciones', 'observaciones') && !Schema::hasColumn('rh_deducciones', 'descripcion_detallada')) {
-            DB::statement('ALTER TABLE rh_deducciones CHANGE observaciones descripcion_detallada TEXT NULL');
+            if (DB::getDriverName() === 'sqlite') {
+                Schema::table('rh_deducciones', function (Blueprint $table) {
+                    $table->renameColumn('observaciones', 'descripcion_detallada');
+                });
+            } else {
+                DB::statement('ALTER TABLE rh_deducciones CHANGE observaciones descripcion_detallada TEXT NULL');
+            }
         }
 
         $this->seedPermisos();
@@ -87,6 +93,10 @@ return new class extends Migration
 
     private function eliminarColumnaTipoFalta(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
+
         $this->eliminarForeignKeyPorColumna('rh_deducciones', 'catalogo_tipo_falta_id');
 
         Schema::table('rh_deducciones', function (Blueprint $table) {
@@ -101,6 +111,9 @@ return new class extends Migration
 
     private function eliminarForeignKeyPorColumna(string $tabla, string $columna): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
         $constraint = DB::selectOne(
             'SELECT CONSTRAINT_NAME AS nombre
              FROM information_schema.KEY_COLUMN_USAGE
@@ -125,6 +138,22 @@ return new class extends Migration
 
     private function actualizarEstadoDeduccion(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            DB::table('rh_deducciones')->whereIn('estado_deduccion', ['pendiente', 'programado'])->update(['estado_deduccion' => 'pendiente_nomina']);
+
+            if (Schema::hasColumn('rh_deducciones', 'monto_total_final')) {
+                DB::table('rh_deducciones')
+                    ->where(function ($q) {
+                        $q->whereNull('monto_total_final')->orWhere('monto_total_final', 0);
+                    })
+                    ->update([
+                        'monto_total_final' => DB::raw('total_deduccion'),
+                        'monto_deduccion_base' => DB::raw('total_deduccion'),
+                    ]);
+            }
+            return;
+        }
+
         $tipo = strtolower($this->tipoColumnaEstadoDeduccion() ?? '');
 
         if ($tipo === '') {
@@ -230,7 +259,13 @@ return new class extends Migration
         }
 
         if (Schema::hasColumn('rh_deducciones', 'descripcion_detallada') && !Schema::hasColumn('rh_deducciones', 'observaciones')) {
-            DB::statement('ALTER TABLE rh_deducciones CHANGE descripcion_detallada observaciones TEXT NULL');
+            if (DB::getDriverName() === 'sqlite') {
+                Schema::table('rh_deducciones', function (Blueprint $table) {
+                    $table->renameColumn('descripcion_detallada', 'observaciones');
+                });
+            } else {
+                DB::statement('ALTER TABLE rh_deducciones CHANGE descripcion_detallada observaciones TEXT NULL');
+            }
         }
 
         Schema::table('rh_deducciones', function (Blueprint $table) {

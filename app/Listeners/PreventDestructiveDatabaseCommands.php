@@ -28,6 +28,13 @@ class PreventDestructiveDatabaseCommands
             );
         }
 
+        $dbConnection = config('database.default');
+        $dbName = config("database.connections.{$dbConnection}.database");
+
+        if ($dbName === ':memory:' || str_contains(strtolower($dbName), 'test')) {
+            return;
+        }
+
         if (filter_var(env('ALLOW_DESTRUCTIVE_DB', false), FILTER_VALIDATE_BOOL)) {
             return;
         }

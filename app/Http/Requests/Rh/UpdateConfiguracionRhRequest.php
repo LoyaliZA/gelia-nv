@@ -32,6 +32,8 @@ class UpdateConfiguracionRhRequest extends FormRequest
             'inc_folio_padding' => 'required|integer|min:1|max:12',
             'pre_folio_prefijo' => 'required|string|max:20',
             'pre_folio_padding' => 'required|integer|min:1|max:12',
+            'sal_folio_prefijo' => 'required|string|max:20',
+            'sal_folio_padding' => 'required|integer|min:1|max:12',
         ];
     }
 }

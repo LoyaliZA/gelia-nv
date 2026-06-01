@@ -3,7 +3,17 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { AlertTriangle, User, FileText, DollarSign, X, Save, Calculator } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_INPUT,
+    THEME_SELECT,
+    THEME_TEXTAREA,
+    THEME_LABEL,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    THEME_BTN_ICON,
+} from '../../../../utils/geliaTheme';
 import {
     calcularIncidenciaPreview, formatoDeduccionEntera, formatoMoneda, nombreCompletoColaborador,
 } from '../../../../utils/formatoMoneda';
@@ -85,8 +95,6 @@ export default function ModalFormIncidencia({
 
     if (!abierto) return null;
 
-    const inputClass = 'w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none';
-
     return createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6 overflow-y-auto`} onClick={onCerrar}>
             <GeliaLoader isVisible={processing} message="Guardando incidencia_" />
@@ -96,7 +104,7 @@ export default function ModalFormIncidencia({
                         <AlertTriangle className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
                         {registro ? 'Editar Incidencia' : 'Nueva Incidencia'}
                     </h2>
-                    <button type="button" onClick={onCerrar} className="theme-text-muted p-2 rounded-full"><X className="w-6 h-6" /></button>
+                    <button type="button" onClick={onCerrar} className={THEME_BTN_ICON}><X className="w-6 h-6" /></button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="gelia-modal-body p-6 md:p-8 custom-scrollbar space-y-8">
@@ -119,10 +127,10 @@ export default function ModalFormIncidencia({
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Campo label="Fecha de ocurrencia *" error={errors.fecha_ocurrencia}>
-                                <input type="date" value={data.fecha_ocurrencia} onChange={(e) => setData('fecha_ocurrencia', e.target.value)} required className={inputClass} />
+                                <input type="date" value={data.fecha_ocurrencia} onChange={(e) => setData('fecha_ocurrencia', e.target.value)} required className={THEME_INPUT} />
                             </Campo>
                             <Campo label="Colaborador *" error={errors.rh_colaborador_id}>
-                                <select value={data.rh_colaborador_id} onChange={(e) => setData('rh_colaborador_id', e.target.value)} required className={inputClass}>
+                                <select value={data.rh_colaborador_id} onChange={(e) => setData('rh_colaborador_id', e.target.value)} required className={THEME_SELECT}>
                                     <option value="">Selecciona colaborador...</option>
                                     {colaboradores.map((c) => (
                                         <option key={c.id} value={c.id}>
@@ -133,7 +141,7 @@ export default function ModalFormIncidencia({
                             </Campo>
                         </div>
                         {colaboradorSel && (
-                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] text-[10px]">
+                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] text-[10px] theme-text-main">
                                 <div><span className="theme-text-muted uppercase font-black">Salario diario:</span> {formatoMoneda(colaboradorSel.salario_diario)}</div>
                                 <div><span className="theme-text-muted uppercase font-black">Bono punt. diario:</span> {formatoMoneda(colaboradorSel.bono_puntualidad_diario)}</div>
                                 <div><span className="theme-text-muted uppercase font-black">Bono prod. diario:</span> {formatoMoneda(colaboradorSel.bono_productividad_diario)}</div>
@@ -145,7 +153,7 @@ export default function ModalFormIncidencia({
                         <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-4 flex items-center gap-2 border-b theme-border pb-2">
                             <AlertTriangle className="w-4 h-4 text-amber-500" /> Tipo de incidencia
                         </h3>
-                        <select value={data.catalogo_tipo_falta_id} onChange={(e) => setData('catalogo_tipo_falta_id', e.target.value)} required className={inputClass}>
+                        <select value={data.catalogo_tipo_falta_id} onChange={(e) => setData('catalogo_tipo_falta_id', e.target.value)} required className={THEME_SELECT}>
                             <option value="">Selecciona tipo de falta o retardo...</option>
                             {tiposDisponibles.map((t) => (
                                 <option key={t.id} value={t.id}>{t.nombre}</option>
@@ -153,7 +161,7 @@ export default function ModalFormIncidencia({
                         </select>
                         {errors.catalogo_tipo_falta_id && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.catalogo_tipo_falta_id}</p>}
                         {tipoSel && (
-                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] text-[10px]">
+                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] text-[10px] theme-text-main">
                                 <div><span className="theme-text-muted uppercase font-black">Factor punt.:</span> ×{Number(tipoSel.factor_penalizacion_puntualidad).toFixed(2)}</div>
                                 <div><span className="theme-text-muted uppercase font-black">Factor prod.:</span> ×{Number(tipoSel.factor_penalizacion_productividad).toFixed(2)}</div>
                                 <div><span className="theme-text-muted uppercase font-black">Deduce salario:</span> {tipoSel.aplica_deduccion_salario_base ? 'Sí' : 'No'}</div>
@@ -184,7 +192,7 @@ export default function ModalFormIncidencia({
                             value={data.observaciones}
                             onChange={(e) => setData('observaciones', e.target.value)}
                             rows={3}
-                            className={inputClass}
+                            className={THEME_TEXTAREA}
                             placeholder="Justificación o comentarios sobre la incidencia..."
                         />
                         {errors.observaciones && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.observaciones}</p>}
@@ -194,7 +202,7 @@ export default function ModalFormIncidencia({
                         <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-3 flex items-center gap-2">
                             <DollarSign className="w-4 h-4 text-emerald-500" /> Fecha de deducción en nómina
                         </h3>
-                        <input type="date" value={data.fecha_deduccion_nomina} onChange={(e) => setData('fecha_deduccion_nomina', e.target.value)} className={inputClass} />
+                        <input type="date" value={data.fecha_deduccion_nomina} onChange={(e) => setData('fecha_deduccion_nomina', e.target.value)} className={THEME_INPUT} />
                         {errors.fecha_deduccion_nomina && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.fecha_deduccion_nomina}</p>}
                         {!data.fecha_deduccion_nomina && (
                             <span className="inline-block mt-2 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-amber-500/10 text-amber-600">Pendiente de aplicar en nómina</span>
@@ -202,8 +210,8 @@ export default function ModalFormIncidencia({
                     </section>
 
                     <div className="flex justify-end gap-3 pt-4 border-t theme-border">
-                        <button type="button" onClick={onCerrar} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border">Cancelar</button>
-                        <button type="submit" disabled={processing} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                        <button type="button" onClick={onCerrar} className={THEME_BTN_SECONDARY}>Cancelar</button>
+                        <button type="submit" disabled={processing} className={THEME_BTN_PRIMARY}>
                             <Save className="w-4 h-4" /> {registro ? 'Guardar cambios' : 'Registrar incidencia'}
                         </button>
                     </div>
@@ -217,7 +225,7 @@ export default function ModalFormIncidencia({
 function Campo({ label, error, children }) {
     return (
         <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">{label}</label>
+            <label className={THEME_LABEL}>{label}</label>
             {children}
             {error && <p className="text-red-500 text-[10px] font-bold ml-2">{error}</p>}
         </div>

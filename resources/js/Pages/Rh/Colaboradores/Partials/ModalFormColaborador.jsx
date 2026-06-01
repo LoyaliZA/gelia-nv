@@ -5,7 +5,16 @@ import {
     User, Building2, Briefcase, DollarSign, Link2, X, Save, Calculator, RefreshCw,
 } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import {
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+    THEME_INPUT,
+    THEME_SELECT,
+    THEME_LABEL,
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    THEME_BTN_ICON,
+} from '../../../../utils/geliaTheme';
 import { calcularSalariosPreview, formatoMoneda, formatoDecimal } from '../../../../utils/formatoMoneda';
 
 const FORM_INICIAL = {
@@ -137,7 +146,7 @@ export default function ModalFormColaborador({
                         <User className="w-6 h-6" style={{ color: 'var(--color-primario)' }} />
                         {colaborador ? 'Editar Perfil Laboral' : 'Alta de Colaborador RH'}
                     </h2>
-                    <button type="button" onClick={onCerrar} className="theme-text-muted hover:theme-text-main p-2 rounded-full">
+                    <button type="button" onClick={onCerrar} className={THEME_BTN_ICON}>
                         <X className="w-6 h-6" />
                     </button>
                 </div>
@@ -162,13 +171,13 @@ export default function ModalFormColaborador({
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Campo label="Nombre(s) *" error={errors.nombre}>
-                                <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} required className={inputClass} />
+                                <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} required className={THEME_INPUT} />
                             </Campo>
                             <Campo label="Ap. Paterno" error={errors.apellido_paterno}>
-                                <input value={data.apellido_paterno} onChange={(e) => setData('apellido_paterno', e.target.value)} className={inputClass} />
+                                <input value={data.apellido_paterno} onChange={(e) => setData('apellido_paterno', e.target.value)} className={THEME_INPUT} />
                             </Campo>
                             <Campo label="Ap. Materno" error={errors.apellido_materno}>
-                                <input value={data.apellido_materno} onChange={(e) => setData('apellido_materno', e.target.value)} className={inputClass} />
+                                <input value={data.apellido_materno} onChange={(e) => setData('apellido_materno', e.target.value)} className={THEME_INPUT} />
                             </Campo>
                         </div>
                     </section>
@@ -183,7 +192,7 @@ export default function ModalFormColaborador({
                                     value={data.departamento_id}
                                     onChange={(e) => setData({ ...data, departamento_id: e.target.value, area_id: '' })}
                                     required
-                                    className={inputClass}
+                                    className={THEME_SELECT}
                                 >
                                     <option value="">Selecciona...</option>
                                     {departamentos.map((d) => (
@@ -195,7 +204,7 @@ export default function ModalFormColaborador({
                                 <select
                                     value={data.area_id}
                                     onChange={(e) => setData('area_id', e.target.value)}
-                                    className={inputClass}
+                                    className={THEME_SELECT}
                                     disabled={!data.departamento_id}
                                 >
                                     <option value="">Sin área específica</option>
@@ -209,7 +218,7 @@ export default function ModalFormColaborador({
                                     value={data.catalogo_puesto_id}
                                     onChange={(e) => setData({ ...data, catalogo_puesto_id: e.target.value, bonos: [] })}
                                     required
-                                    className={inputClass}
+                                    className={THEME_SELECT}
                                 >
                                     <option value="">Selecciona...</option>
                                     {puestos.map((p) => (
@@ -226,16 +235,16 @@ export default function ModalFormColaborador({
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <Campo label="Salario Base *" error={errors.salario_base}>
-                                <input type="number" min="0" step="0.01" value={data.salario_base} onChange={(e) => setData('salario_base', e.target.value)} required className={inputClass} />
+                                <input type="number" min="0" step="0.01" value={data.salario_base} onChange={(e) => setData('salario_base', e.target.value)} required className={THEME_INPUT} />
                             </Campo>
                             <Campo label="Bono Productividad" error={errors.bono_productividad}>
-                                <input type="number" min="0" step="0.01" value={data.bono_productividad} onChange={(e) => setData('bono_productividad', e.target.value)} className={inputClass} />
+                                <input type="number" min="0" step="0.01" value={data.bono_productividad} onChange={(e) => setData('bono_productividad', e.target.value)} className={THEME_INPUT} />
                             </Campo>
                             <Campo label="Bono Puntualidad" error={errors.bono_puntualidad}>
-                                <input type="number" min="0" step="0.01" value={data.bono_puntualidad} onChange={(e) => setData('bono_puntualidad', e.target.value)} className={inputClass} />
+                                <input type="number" min="0" step="0.01" value={data.bono_puntualidad} onChange={(e) => setData('bono_puntualidad', e.target.value)} className={THEME_INPUT} />
                             </Campo>
                             <Campo label="Horas Laboradas Oficiales *" error={errors.horas_laboradas_oficiales}>
-                                <input type="number" min="0.5" max="24" step="0.25" value={data.horas_laboradas_oficiales} onChange={(e) => setData('horas_laboradas_oficiales', e.target.value)} required className={inputClass} />
+                                <input type="number" min="0.5" max="24" step="0.25" value={data.horas_laboradas_oficiales} onChange={(e) => setData('horas_laboradas_oficiales', e.target.value)} required className={THEME_INPUT} />
                             </Campo>
                         </div>
 
@@ -252,7 +261,7 @@ export default function ModalFormColaborador({
                                                 value={montoBono(bono.id)}
                                                 onChange={(e) => actualizarMontoBono(bono.id, e.target.value)}
                                                 placeholder="0.00"
-                                                className={inputClass}
+                                                className={THEME_INPUT}
                                             />
                                         </Campo>
                                     ))}
@@ -280,7 +289,7 @@ export default function ModalFormColaborador({
                                 <Link2 className="w-4 h-4 text-blue-500" /> Vínculo de Cuenta (opcional)
                             </h3>
                             <div className="flex flex-col sm:flex-row gap-3">
-                                <select value={data.user_id} onChange={(e) => setData('user_id', e.target.value)} className={`${inputClass} flex-1`}>
+                                <select value={data.user_id} onChange={(e) => setData('user_id', e.target.value)} className={`${THEME_SELECT} flex-1`}>
                                     <option value="">Sin cuenta vinculada</option>
                                     {usuarios.map((u) => (
                                         <option key={u.id} value={u.id}>
@@ -292,7 +301,7 @@ export default function ModalFormColaborador({
                                     type="button"
                                     onClick={sincronizarUsuario}
                                     disabled={!data.user_id}
-                                    className="px-4 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border flex items-center gap-2 disabled:opacity-40"
+                                    className={`${THEME_BTN_SECONDARY} border theme-border flex items-center gap-2 disabled:opacity-40`}
                                 >
                                     <RefreshCw className="w-4 h-4" /> Sincronizar datos
                                 </button>
@@ -307,10 +316,10 @@ export default function ModalFormColaborador({
                     </label>
 
                     <div className="flex justify-end gap-3 pt-4 border-t theme-border">
-                        <button type="button" onClick={onCerrar} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border">
+                        <button type="button" onClick={onCerrar} className={THEME_BTN_SECONDARY}>
                             Cancelar
                         </button>
-                        <button type="submit" disabled={processing} className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                        <button type="submit" disabled={processing} className={THEME_BTN_PRIMARY}>
                             <Save className="w-4 h-4" /> {colaborador ? 'Guardar cambios' : 'Registrar colaborador'}
                         </button>
                     </div>
@@ -321,12 +330,10 @@ export default function ModalFormColaborador({
     );
 }
 
-const inputClass = 'w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none';
-
 function Campo({ label, error, children }) {
     return (
         <div className="space-y-1.5">
-            <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">{label}</label>
+            <label className={THEME_LABEL}>{label}</label>
             {children}
             {error && <p className="text-red-500 text-[10px] font-bold ml-2">{error}</p>}
         </div>

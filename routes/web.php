@@ -12,6 +12,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Api\CotizacionEntregaController;
 use App\Http\Controllers\Api\ClienteApiController;
 use App\Http\Controllers\EntregasController;
+use App\Http\Controllers\MapaLogisticoController;
 use App\Http\Controllers\Admin\AuditoriaListaDescuentoController;
 use App\Http\Controllers\Admin\PersonalizacionController;
 use App\Http\Controllers\AromasListasController;
@@ -28,6 +29,10 @@ use App\Http\Controllers\Rh\HorasExtraController;
 use App\Http\Controllers\Rh\DeduccionController;
 use App\Http\Controllers\Rh\PeriodoPagoController;
 use App\Http\Controllers\Rh\PrestamoPagoFijoController;
+use App\Http\Controllers\Rh\SalidaPersonalController;
+use App\Http\Controllers\Rh\ConsolidadoDeduccionesController;
+use App\Http\Controllers\Rh\ConsolidadoHorasExtraController;
+use App\Http\Controllers\Rh\BancoTiempoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Facturas\SolicitudFacturaController;
 use App\Http\Controllers\Reportes\ReporteSolicitudesController;
@@ -233,17 +238,6 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/entregas/zonas', [EntregasController::class, 'storeZona'])->name('entregas.zonas.store')->middleware('can:entregas.configurar_zonas');
     });
 
-    Route::middleware(['can:entregas.configurar_zonas'])->prefix('admin/mapa-logistico')->name('admin.mapa_logistico.')->group(function () {
-        Route::get('/', [\App\Http\Controllers\MapaLogisticoController::class, 'index'])->name('index');
-        Route::get('/exportar/{tipo}', [\App\Http\Controllers\MapaLogisticoController::class, 'exportar'])->name('exportar');
-        Route::post('/importar/{tipo}', [\App\Http\Controllers\MapaLogisticoController::class, 'importar'])->name('importar');
-        Route::post('/{tipo}', [\App\Http\Controllers\MapaLogisticoController::class, 'store'])->name('store');
-        Route::put('/{tipo}/{id}/poligono', [\App\Http\Controllers\MapaLogisticoController::class, 'actualizarPoligono'])->name('poligono.update');
-        Route::put('/periferia/{id}', [\App\Http\Controllers\MapaLogisticoController::class, 'actualizarPeriferia'])->name('periferia.update');
-        Route::put('/{tipo}/{id}/activo', [\App\Http\Controllers\MapaLogisticoController::class, 'toggleActivo'])->name('toggle');
-        Route::delete('/{tipo}/{id}', [\App\Http\Controllers\MapaLogisticoController::class, 'eliminar'])->name('eliminar');
-    });
-
     // ══════════════════════════════════════════════════════════════════════
     // FUNCIONES OPERATIVAS: CRUCE DE INVENTARIOS (LISTADOS)
     // ══════════════════════════════════════════════════════════════════════
@@ -317,6 +311,22 @@ Route::middleware(['auth'])->group(function () {
                 ->name('horas_extra.update');
         });
 
+        Route::middleware(['can:rh.salidas_personales.ver'])->group(function () {
+            Route::get('/salidas-personales', [SalidaPersonalController::class, 'index'])->name('salidas_personales.index');
+            Route::post('/salidas-personales/preview-calculos', [SalidaPersonalController::class, 'previewCalculos'])->name('salidas_personales.preview_calculos');
+            Route::post('/salidas-personales/sellar-periodo', [SalidaPersonalController::class, 'sellarPeriodo'])->name('salidas_personales.sellar_periodo');
+            Route::get('/salidas-personales/{salidaPersonal}', [SalidaPersonalController::class, 'show'])->name('salidas_personales.show');
+            Route::post('/salidas-personales', [SalidaPersonalController::class, 'store'])
+                ->middleware('can:rh.salidas_personales.crear')
+                ->name('salidas_personales.store');
+            Route::put('/salidas-personales/{salidaPersonal}', [SalidaPersonalController::class, 'update'])
+                ->middleware('can:rh.salidas_personales.editar')
+                ->name('salidas_personales.update');
+            Route::delete('/salidas-personales/{salidaPersonal}', [SalidaPersonalController::class, 'destroy'])
+                ->middleware('can:rh.salidas_personales.eliminar')
+                ->name('salidas_personales.destroy');
+        });
+
         Route::middleware(['can:rh.incidencias.ver'])->group(function () {
             Route::get('/deducciones', [DeduccionController::class, 'index'])->name('deducciones.index');
             Route::get('/deducciones/reglas-disponibles', [DeduccionController::class, 'reglasDisponibles'])->name('deducciones.reglas_disponibles');
@@ -360,8 +370,27 @@ Route::middleware(['auth'])->group(function () {
                 ->name('prestamos.cancelar');
         });
 
+        Route::middleware(['can:rh.banco_tiempo.ver'])->group(function () {
+            Route::get('/banco-tiempo', [BancoTiempoController::class, 'index'])->name('banco_tiempo.index');
+            Route::post('/banco-tiempo', [BancoTiempoController::class, 'store'])
+                ->middleware('can:rh.banco_tiempo.crear')
+                ->name('banco_tiempo.store');
+            Route::put('/banco-tiempo/{bancoTiempo}', [BancoTiempoController::class, 'update'])
+                ->middleware('can:rh.banco_tiempo.editar')
+                ->name('banco_tiempo.update');
+            Route::post('/banco-tiempo/{bancoTiempo}/saldar', [BancoTiempoController::class, 'saldar'])
+                ->middleware('can:rh.banco_tiempo.saldar')
+                ->name('banco_tiempo.saldar');
+            Route::delete('/banco-tiempo/{bancoTiempo}', [BancoTiempoController::class, 'destroy'])
+                ->middleware('can:rh.banco_tiempo.eliminar')
+                ->name('banco_tiempo.destroy');
+        });
+
         Route::middleware(['can:rh.ver'])->group(function () {
             Route::get('/periodo-pago', [PeriodoPagoController::class, 'index'])->name('periodo_pago.index');
+            Route::get('/consolidado-deducciones', [ConsolidadoDeduccionesController::class, 'index'])->name('consolidado_deducciones.index');
+            Route::get('/consolidado-horas-extra', [ConsolidadoHorasExtraController::class, 'index'])->name('consolidado_horas_extra.index');
+            Route::post('/consolidado-horas-extra/liquidar', [ConsolidadoHorasExtraController::class, 'liquidar'])->name('consolidado_horas_extra.liquidar');
         });
 
         Route::middleware(['can:rh.configurar'])->group(function () {
@@ -400,6 +429,8 @@ Route::middleware(['auth'])->group(function () {
     // MÓDULO DE ADMINISTRACIÓN (GELIANV CORE)
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('admin')->name('admin.')->group(function () {
+
+        Route::get('/', [AdminController::class, 'panel'])->name('index');
 
         // --- 1. Gestión de Usuarios ---
         Route::middleware(['can:usuarios.gestionar'])->group(function () {
@@ -535,7 +566,19 @@ Route::middleware(['auth'])->group(function () {
                 ->name('auditorias_sistema.index');
         });
 
-        // --- 6. API Externa ---
+        // --- 6. Mapa logístico (zonas de entrega) ---
+        Route::middleware(['can:entregas.configurar_zonas'])->prefix('mapa-logistico')->name('mapa_logistico.')->group(function () {
+            Route::get('/', [MapaLogisticoController::class, 'index'])->name('index');
+            Route::get('/exportar/{tipo}', [MapaLogisticoController::class, 'exportar'])->name('exportar');
+            Route::post('/importar/{tipo}', [MapaLogisticoController::class, 'importar'])->name('importar');
+            Route::post('/{tipo}', [MapaLogisticoController::class, 'store'])->name('store');
+            Route::put('/{tipo}/{id}/poligono', [MapaLogisticoController::class, 'actualizarPoligono'])->name('poligono.update');
+            Route::put('/periferia/{id}', [MapaLogisticoController::class, 'actualizarPeriferia'])->name('periferia.update');
+            Route::put('/{tipo}/{id}/activo', [MapaLogisticoController::class, 'toggleActivo'])->name('toggle');
+            Route::delete('/{tipo}/{id}', [MapaLogisticoController::class, 'eliminar'])->name('eliminar');
+        });
+
+        // --- 7. API Externa ---
         Route::prefix('api-externa')->name('api_externa.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\ApiExternaController::class, 'index'])->name('index');
             Route::middleware(['can:api_externa.gestionar'])->group(function () {

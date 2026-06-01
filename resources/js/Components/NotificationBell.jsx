@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Bell, BellRing, CheckCircle2, AlertCircle, X, MailOpen } from 'lucide-react';
 import { usePage, router } from '@inertiajs/react';
@@ -45,6 +45,13 @@ export default function NotificationBell({ notifications: propNotifications = []
         return () => { document.body.style.overflow = 'unset'; };
     }, [isOpen]);
 
+    // Serializar propNotifications a string para comparar por valor, no por referencia.
+    // Esto evita el loop infinito causado por una nueva referencia de array en cada render.
+    const propNotificationsKey = useMemo(
+        () => JSON.stringify((propNotifications || []).map(n => n?.id)),
+        [propNotifications]
+    );
+
     useEffect(() => {
         const base = auth?.notificaciones?.length > 0 ? auth.notificaciones : propNotifications;
 
@@ -54,7 +61,9 @@ export default function NotificationBell({ notifications: propNotifications = []
             prev.forEach(n => { if (n?.id && !registroMap.has(n.id)) registroMap.set(n.id, n); });
             return ordenarPorFecha(Array.from(registroMap.values()));
         });
-    }, [auth?.notificaciones, propNotifications]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [auth?.notificaciones, propNotificationsKey]);
+
 
     useEffect(() => {
         const handleNotificationReceived = (event) => {

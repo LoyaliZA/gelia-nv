@@ -42,6 +42,7 @@ class PeriodoPagoController extends Controller
                 'rh_colaborador_id' => $colaboradorId,
             ],
             'puedeGenerarCuotas' => Auth::user()->can('rh.prestamos.generar'),
+            'puedeSellarSalidas' => Auth::user()->can('rh.salidas_personales.sellar'),
         ]);
     }
 }

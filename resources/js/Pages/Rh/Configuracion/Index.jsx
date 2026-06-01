@@ -9,11 +9,12 @@ import TablaPuestos from './Partials/TablaPuestos';
 import TablaBonos from './Partials/TablaBonos';
 import TablaReglasIncidencia from './Partials/TablaReglasIncidencia';
 
-export default function Index({ auth, configuracion, folioPreview: folioPreviewInicial, heFolioPreview: heFolioPreviewInicial, incFolioPreview: incFolioPreviewInicial, preFolioPreview: preFolioPreviewInicial, puestos, bonos = [], reglasIncidencia = [], departamentos = [] }) {
+export default function Index({ auth, configuracion, folioPreview: folioPreviewInicial, heFolioPreview: heFolioPreviewInicial, incFolioPreview: incFolioPreviewInicial, preFolioPreview: preFolioPreviewInicial, salFolioPreview: salFolioPreviewInicial, puestos, bonos = [], reglasIncidencia = [], departamentos = [] }) {
     const [folioPreview, setFolioPreview] = useState(folioPreviewInicial || '');
     const [heFolioPreview, setHeFolioPreview] = useState(heFolioPreviewInicial || '');
     const [incFolioPreview, setIncFolioPreview] = useState(incFolioPreviewInicial || '');
     const [preFolioPreview, setPreFolioPreview] = useState(preFolioPreviewInicial || '');
+    const [salFolioPreview, setSalFolioPreview] = useState(salFolioPreviewInicial || '');
 
     const { data, setData, put, processing, errors } = useForm({
         folio_prefijo: configuracion.folio_prefijo || 'COL',
@@ -34,6 +35,8 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
         inc_folio_padding: configuracion.inc_folio_padding || 6,
         pre_folio_prefijo: configuracion.pre_folio_prefijo || 'PRE',
         pre_folio_padding: configuracion.pre_folio_padding || 6,
+        sal_folio_prefijo: configuracion.sal_folio_prefijo || 'SAL',
+        sal_folio_padding: configuracion.sal_folio_padding || 6,
     });
 
     useEffect(() => {
@@ -87,6 +90,13 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
         setPreFolioPreview(`${pref}${sep}${'0'.repeat(pad - 1)}1`);
     }, [data.pre_folio_prefijo, data.pre_folio_padding, data.folio_separador]);
 
+    useEffect(() => {
+        const sep = data.folio_separador || '-';
+        const pad = Math.max(1, Number(data.sal_folio_padding) || 6);
+        const pref = String(data.sal_folio_prefijo || 'SAL').toUpperCase();
+        setSalFolioPreview(`${pref}${sep}${'0'.repeat(pad - 1)}1`);
+    }, [data.sal_folio_prefijo, data.sal_folio_padding, data.folio_separador]);
+
     const handleSubmit = (e) => {
         e.preventDefault();
         put(route('rh.configuracion.update'), { preserveScroll: true });
@@ -139,7 +149,7 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
                         <div className="flex items-end">
                             <label className="flex items-center gap-3 cursor-pointer pb-3">
                                 <input type="checkbox" checked={!!data.folio_incluir_anio} onChange={(e) => setData('folio_incluir_anio', e.target.checked)} />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Incluir año en folio</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest theme-text-main">Incluir año en folio</span>
                             </label>
                         </div>
                     </div>
@@ -191,7 +201,7 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
                         <div className="flex items-end">
                             <label className="flex items-center gap-3 cursor-pointer pb-3">
                                 <input type="checkbox" checked={!!data.he_usar_tarifa_fija} onChange={(e) => setData('he_usar_tarifa_fija', e.target.checked)} />
-                                <span className="text-[10px] font-black uppercase tracking-widest">Usar tarifa fija (no calculada por salario)</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest theme-text-main">Usar tarifa fija (no calculada por salario)</span>
                             </label>
                         </div>
                     </div>
@@ -235,6 +245,24 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
                     <div className="p-4 rounded-2xl border theme-border bg-black/[0.02] dark:bg-white/[0.02]">
                         <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Vista previa folio préstamos</p>
                         <p className="text-lg font-mono font-bold theme-text-main m-0">{preFolioPreview || '—'}</p>
+                    </div>
+
+                    <h2 className="text-sm font-black uppercase tracking-widest theme-text-main flex items-center gap-2 m-0 pt-4 border-t theme-border">
+                        <ArrowLeft className="w-4 h-4 rotate-180 text-purple-500" /> Salidas personales
+                    </h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Campo label="Prefijo folio salidas" error={errors.sal_folio_prefijo}>
+                            <input value={data.sal_folio_prefijo} onChange={(e) => setData('sal_folio_prefijo', e.target.value.toUpperCase())} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
+                        </Campo>
+                        <Campo label="Padding folio salidas" error={errors.sal_folio_padding}>
+                            <input type="number" min="1" max="12" value={data.sal_folio_padding} onChange={(e) => setData('sal_folio_padding', e.target.value)} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
+                        </Campo>
+                    </div>
+
+                    <div className="p-4 rounded-2xl border theme-border bg-black/[0.02] dark:bg-white/[0.02]">
+                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Vista previa folio salidas</p>
+                        <p className="text-lg font-mono font-bold theme-text-main m-0">{salFolioPreview || '—'}</p>
                     </div>
 
                     <div className="flex justify-end">

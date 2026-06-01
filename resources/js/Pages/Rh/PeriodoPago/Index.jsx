@@ -6,7 +6,7 @@ import { geliaCardClass, THEME_INPUT, THEME_SELECT } from '../../../utils/geliaT
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
 
-export default function Index({ auth, resumen, comisionesAuditor, colaboradores, configuracion, filtros, puedeGenerarCuotas }) {
+export default function Index({ auth, resumen, comisionesAuditor, colaboradores, configuracion, filtros, puedeGenerarCuotas, puedeSellarSalidas }) {
     const aplicar = (cambios) => {
         router.get(route('rh.periodo_pago.index'), { ...filtros, ...cambios }, { preserveState: true });
     };
@@ -16,6 +16,16 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
         router.post(route('rh.prestamos.generar_cuotas'), {
             fecha_inicio: filtros.fecha_inicio,
             fecha_fin: filtros.fecha_fin,
+        }, { preserveScroll: true });
+    };
+
+    const sellarSalidas = () => {
+        const fechaPago = window.prompt('Confirme la fecha de pago para el sellado de las salidas (YYYY-MM-DD):', filtros.fecha_fin || new Date().toISOString().split('T')[0]);
+        if (!fechaPago) return;
+        router.post(route('rh.salidas_personales.sellar_periodo'), {
+            fecha_inicio: filtros.fecha_inicio,
+            fecha_fin: filtros.fecha_fin,
+            fecha_pago: fechaPago,
         }, { preserveScroll: true });
     };
 
@@ -35,11 +45,18 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                             Periodo configurado: {configuracion.dias_periodo_pago} días · {resumen.fecha_inicio} al {resumen.fecha_fin}
                         </p>
                     </div>
-                    {puedeGenerarCuotas && (
-                        <button type="button" onClick={generarCuotas} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border flex items-center gap-2">
-                            <Zap className="w-4 h-4" /> Generar cuotas del periodo
-                        </button>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                        {puedeGenerarCuotas && (
+                            <button type="button" onClick={generarCuotas} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border flex items-center gap-2">
+                                <Zap className="w-4 h-4" /> Generar cuotas del periodo
+                            </button>
+                        )}
+                        {puedeSellarSalidas && (
+                            <button type="button" onClick={sellarSalidas} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border flex items-center gap-2" style={{ borderColor: 'var(--color-primario)', color: 'var(--color-primario)' }}>
+                                <Calendar className="w-4 h-4" /> Sellar salidas de periodo
+                            </button>
+                        )}
+                    </div>
                 </header>
 
                 <RhSubNav />
@@ -74,7 +91,7 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                         <table className="w-full border-collapse">
                             <thead>
                                 <tr className="border-b theme-border">
-                                    {['Colaborador', 'Salario mensual', 'Salario diario', 'Estimado rango', 'HE', 'Deducciones', 'Préstamos activos', 'Neto estimado'].map((h) => (
+                                    {['Colaborador', 'Salario mensual', 'Salario diario', 'Estimado rango', 'HE', 'Deducciones', 'Salidas Pers.', 'Préstamos activos', 'Neto estimado'].map((h) => (
                                         <th key={h} className="px-4 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">{h}</th>
                                     ))}
                                 </tr>
@@ -88,6 +105,14 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                                         <td className="px-4 py-4 text-xs">{formatoMoneda(fila.salario_rango_estimado)} + {formatoMoneda(fila.bonos_rango_estimado)} bonos</td>
                                         <td className="px-4 py-4 text-xs">{formatoMoneda(fila.horas_extra_total)}</td>
                                         <td className="px-4 py-4 text-xs text-red-500">-{formatoMoneda(fila.deducciones_total)}</td>
+                                        <td className="px-4 py-4 text-xs text-red-500 font-medium">
+                                            -{formatoMoneda(fila.salidas_deduccion_total || 0)}
+                                            {fila.salidas_deduccion_pendiente > 0 && (
+                                                <span className="block text-[9px] text-amber-500 font-bold">
+                                                    ({formatoMoneda(fila.salidas_deduccion_pendiente)} pend.)
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="px-4 py-4 text-xs text-amber-600">{formatoMoneda(fila.prestamos_activos_cuota || 0)}</td>
                                         <td className="px-4 py-4 text-sm font-bold">{formatoMoneda(fila.neto_estimado)}</td>
                                     </tr>
