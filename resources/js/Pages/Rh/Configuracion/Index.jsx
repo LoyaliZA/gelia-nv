@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { Settings, ArrowLeft, Save, Hash, Clock, AlertTriangle } from 'lucide-react';
+import { Settings, ArrowLeft, Save, Hash, Clock, AlertTriangle, Wallet } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { geliaCardClass, THEME_INPUT } from '../../../utils/geliaTheme';
 import RhSubNav from '../Partials/RhSubNav';
 import TablaPuestos from './Partials/TablaPuestos';
-import TablaTiposFaltas from './Partials/TablaTiposFaltas';
 import TablaBonos from './Partials/TablaBonos';
 import TablaReglasIncidencia from './Partials/TablaReglasIncidencia';
 
-export default function Index({ auth, configuracion, folioPreview: folioPreviewInicial, heFolioPreview: heFolioPreviewInicial, incFolioPreview: incFolioPreviewInicial, puestos, tiposFaltas = [], bonos = [], reglasIncidencia = [], departamentos = [] }) {
+export default function Index({ auth, configuracion, folioPreview: folioPreviewInicial, heFolioPreview: heFolioPreviewInicial, incFolioPreview: incFolioPreviewInicial, preFolioPreview: preFolioPreviewInicial, puestos, bonos = [], reglasIncidencia = [], departamentos = [] }) {
     const [folioPreview, setFolioPreview] = useState(folioPreviewInicial || '');
     const [heFolioPreview, setHeFolioPreview] = useState(heFolioPreviewInicial || '');
     const [incFolioPreview, setIncFolioPreview] = useState(incFolioPreviewInicial || '');
+    const [preFolioPreview, setPreFolioPreview] = useState(preFolioPreviewInicial || '');
 
     const { data, setData, put, processing, errors } = useForm({
         folio_prefijo: configuracion.folio_prefijo || 'COL',
@@ -27,8 +27,13 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
         he_folio_padding: configuracion.he_folio_padding || 6,
         he_multiplicador_pago: configuracion.he_multiplicador_pago || 2,
         he_minutos_minimos: configuracion.he_minutos_minimos || 30,
-        inc_folio_prefijo: configuracion.inc_folio_prefijo || 'INC',
+        he_tarifa_hora_fija: configuracion.he_tarifa_hora_fija || 39,
+        he_usar_tarifa_fija: configuracion.he_usar_tarifa_fija !== false,
+        he_gracia_minutos_despues_salida: configuracion.he_gracia_minutos_despues_salida || 30,
+        inc_folio_prefijo: configuracion.inc_folio_prefijo || 'DED',
         inc_folio_padding: configuracion.inc_folio_padding || 6,
+        pre_folio_prefijo: configuracion.pre_folio_prefijo || 'PRE',
+        pre_folio_padding: configuracion.pre_folio_padding || 6,
     });
 
     useEffect(() => {
@@ -75,13 +80,18 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
         setIncFolioPreview(`${pref}${sep}${'0'.repeat(pad - 1)}1`);
     }, [data.inc_folio_prefijo, data.inc_folio_padding, data.folio_separador]);
 
+    useEffect(() => {
+        const sep = data.folio_separador || '-';
+        const pad = Math.max(1, Number(data.pre_folio_padding) || 6);
+        const pref = String(data.pre_folio_prefijo || 'PRE').toUpperCase();
+        setPreFolioPreview(`${pref}${sep}${'0'.repeat(pad - 1)}1`);
+    }, [data.pre_folio_prefijo, data.pre_folio_padding, data.folio_separador]);
+
     const handleSubmit = (e) => {
         e.preventDefault();
         put(route('rh.configuracion.update'), { preserveScroll: true });
     };
 
-    const canTiposFaltas = auth.user?.permissions?.includes('rh.catalogos.tipos_faltas')
-        || auth.user?.roles?.includes('Super Admin');
     const canBonos = auth.user?.permissions?.includes('rh.catalogos.bonos')
         || auth.user?.roles?.includes('Super Admin');
     const canReglasIncidencia = auth.user?.permissions?.includes('rh.catalogos.incidencias_generales')
@@ -169,9 +179,21 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
                         <Campo label="Multiplicador de pago (ej. 2 = 200%)" error={errors.he_multiplicador_pago}>
                             <input type="number" min="1" max="10" step="0.01" value={data.he_multiplicador_pago} onChange={(e) => setData('he_multiplicador_pago', e.target.value)} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
                         </Campo>
-                        <Campo label="Minutos mínimos para pagar HE" error={errors.he_minutos_minimos}>
+                        <Campo label="Minutos mínimos bloque HE" error={errors.he_minutos_minimos}>
                             <input type="number" min="1" max="120" value={data.he_minutos_minimos} onChange={(e) => setData('he_minutos_minimos', e.target.value)} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
                         </Campo>
+                        <Campo label="Tarifa hora fija ($)" error={errors.he_tarifa_hora_fija}>
+                            <input type="number" min="0" step="0.01" value={data.he_tarifa_hora_fija} onChange={(e) => setData('he_tarifa_hora_fija', e.target.value)} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
+                        </Campo>
+                        <Campo label="Gracia minutos después de salida" error={errors.he_gracia_minutos_despues_salida}>
+                            <input type="number" min="0" max="120" value={data.he_gracia_minutos_despues_salida} onChange={(e) => setData('he_gracia_minutos_despues_salida', e.target.value)} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
+                        </Campo>
+                        <div className="flex items-end">
+                            <label className="flex items-center gap-3 cursor-pointer pb-3">
+                                <input type="checkbox" checked={!!data.he_usar_tarifa_fija} onChange={(e) => setData('he_usar_tarifa_fija', e.target.checked)} />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Usar tarifa fija (no calculada por salario)</span>
+                            </label>
+                        </div>
                     </div>
 
                     <div className="p-4 rounded-2xl border theme-border bg-black/[0.02] dark:bg-white/[0.02]">
@@ -180,21 +202,39 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
                     </div>
 
                     <h2 className="text-sm font-black uppercase tracking-widest theme-text-main flex items-center gap-2 m-0 pt-4 border-t theme-border">
-                        <AlertTriangle className="w-4 h-4" /> Incidencias (faltas y retardos)
+                        <AlertTriangle className="w-4 h-4" /> Deducciones (faltas, retardos, reglas operativas)
                     </h2>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Campo label="Prefijo folio incidencias" error={errors.inc_folio_prefijo}>
+                        <Campo label="Prefijo folio deducciones" error={errors.inc_folio_prefijo}>
                             <input value={data.inc_folio_prefijo} onChange={(e) => setData('inc_folio_prefijo', e.target.value.toUpperCase())} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
                         </Campo>
-                        <Campo label="Padding folio incidencias" error={errors.inc_folio_padding}>
+                        <Campo label="Padding folio deducciones" error={errors.inc_folio_padding}>
                             <input type="number" min="1" max="12" value={data.inc_folio_padding} onChange={(e) => setData('inc_folio_padding', e.target.value)} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
                         </Campo>
                     </div>
 
                     <div className="p-4 rounded-2xl border theme-border bg-black/[0.02] dark:bg-white/[0.02]">
-                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Vista previa folio incidencias</p>
+                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Vista previa folio deducciones</p>
                         <p className="text-lg font-mono font-bold theme-text-main m-0">{incFolioPreview || '—'}</p>
+                    </div>
+
+                    <h2 className="text-sm font-black uppercase tracking-widest theme-text-main flex items-center gap-2 m-0 pt-4 border-t theme-border">
+                        <Wallet className="w-4 h-4" /> Préstamos y pagos fijos
+                    </h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Campo label="Prefijo folio préstamos" error={errors.pre_folio_prefijo}>
+                            <input value={data.pre_folio_prefijo} onChange={(e) => setData('pre_folio_prefijo', e.target.value.toUpperCase())} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
+                        </Campo>
+                        <Campo label="Padding folio préstamos" error={errors.pre_folio_padding}>
+                            <input type="number" min="1" max="12" value={data.pre_folio_padding} onChange={(e) => setData('pre_folio_padding', e.target.value)} className={THEME_INPUT + ' w-full px-4 py-3 rounded-2xl text-[11px] font-bold'} />
+                        </Campo>
+                    </div>
+
+                    <div className="p-4 rounded-2xl border theme-border bg-black/[0.02] dark:bg-white/[0.02]">
+                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Vista previa folio préstamos</p>
+                        <p className="text-lg font-mono font-bold theme-text-main m-0">{preFolioPreview || '—'}</p>
                     </div>
 
                     <div className="flex justify-end">
@@ -213,12 +253,6 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
                 {canBonos && (
                     <div className={geliaCardClass('overflow-hidden')}>
                         <TablaBonos datos={bonos} />
-                    </div>
-                )}
-
-                {canTiposFaltas && (
-                    <div className={geliaCardClass('overflow-hidden')}>
-                        <TablaTiposFaltas datos={tiposFaltas} />
                     </div>
                 )}
 

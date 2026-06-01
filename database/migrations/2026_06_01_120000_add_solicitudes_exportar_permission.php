@@ -19,6 +19,10 @@ return new class extends Migration
         ];
 
         foreach ($mapa as $permisoOrigen => $permisosNuevos) {
+            if (!Permission::where('name', $permisoOrigen)->where('guard_name', 'web')->exists()) {
+                continue;
+            }
+
             $usuarios = User::permission($permisoOrigen)->get();
             foreach ($usuarios as $usuario) {
                 foreach ($permisosNuevos as $permisoNuevo) {

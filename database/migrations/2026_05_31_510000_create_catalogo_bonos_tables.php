@@ -10,33 +10,41 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('catalogo_bonos', function (Blueprint $table) {
-            $table->id();
-            $table->string('nombre')->unique();
-            $table->string('codigo')->unique()->nullable();
-            $table->boolean('activo')->default(true);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('catalogo_bonos')) {
+            Schema::create('catalogo_bonos', function (Blueprint $table) {
+                $table->id();
+                $table->string('nombre')->unique();
+                $table->string('codigo')->unique()->nullable();
+                $table->boolean('activo')->default(true);
+                $table->timestamps();
+            });
+        }
 
-        Schema::create('catalogo_puesto_bonos', function (Blueprint $table) {
-            $table->foreignId('catalogo_puesto_id')->constrained('catalogo_puestos')->cascadeOnDelete();
-            $table->foreignId('catalogo_bono_id')->constrained('catalogo_bonos')->cascadeOnDelete();
-            $table->primary(['catalogo_puesto_id', 'catalogo_bono_id']);
-        });
+        if (!Schema::hasTable('catalogo_puesto_bonos')) {
+            Schema::create('catalogo_puesto_bonos', function (Blueprint $table) {
+                $table->foreignId('catalogo_puesto_id')->constrained('catalogo_puestos')->cascadeOnDelete();
+                $table->foreignId('catalogo_bono_id')->constrained('catalogo_bonos')->cascadeOnDelete();
+                $table->primary(['catalogo_puesto_id', 'catalogo_bono_id']);
+            });
+        }
 
-        Schema::create('rh_colaborador_bonos', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('rh_colaborador_id')->constrained('rh_colaboradores')->cascadeOnDelete();
-            $table->foreignId('catalogo_bono_id')->constrained('catalogo_bonos')->cascadeOnDelete();
-            $table->decimal('monto', 12, 2)->default(0);
-            $table->timestamps();
+        if (!Schema::hasTable('rh_colaborador_bonos')) {
+            Schema::create('rh_colaborador_bonos', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('rh_colaborador_id')->constrained('rh_colaboradores')->cascadeOnDelete();
+                $table->foreignId('catalogo_bono_id')->constrained('catalogo_bonos')->cascadeOnDelete();
+                $table->decimal('monto', 12, 2)->default(0);
+                $table->timestamps();
 
-            $table->unique(['rh_colaborador_id', 'catalogo_bono_id']);
-        });
+                $table->unique(['rh_colaborador_id', 'catalogo_bono_id']);
+            });
+        }
 
         Permission::findOrCreate('rh.catalogos.bonos', 'web');
 
-        $this->seedBonos();
+        if (DB::table('catalogo_bonos')->count() === 0) {
+            $this->seedBonos();
+        }
     }
 
     private function seedBonos(): void

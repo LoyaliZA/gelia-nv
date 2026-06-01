@@ -2,6 +2,12 @@
 # Script de Despliegue Automatizado para Producción - GeliaNV
 #./deploy.sh
 
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/backup-db.sh
+source "${SCRIPT_DIR}/scripts/backup-db.sh"
+
 echo "--- Iniciando Despliegue de GeliaNV ---"
 
 # 1. Compilar imagen base y levantar contenedores
@@ -44,6 +50,7 @@ docker exec -it gelianv_app chmod -R 775 /var/www/html/storage
 
 # 6. Ejecutar migraciones y poblado inicial de base de datos
 echo "Construyendo estructura de base de datos..."
+backup_db_antes_de_migrar
 docker exec -it gelianv_app php artisan migrate --force
 docker exec -it gelianv_app php artisan db:seed --force
 

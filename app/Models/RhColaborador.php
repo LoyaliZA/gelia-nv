@@ -33,6 +33,9 @@ class RhColaborador extends Model
         'bono_puntualidad_diario',
         'salario_por_hora',
         'salario_por_minuto',
+        'saldo_comisiones',
+        'hora_entrada_oficial',
+        'hora_salida_oficial',
         'activo',
         'registrado_por_id',
     ];
@@ -49,6 +52,7 @@ class RhColaborador extends Model
             'bono_puntualidad_diario' => 'decimal:2',
             'salario_por_hora' => 'decimal:4',
             'salario_por_minuto' => 'decimal:8',
+            'saldo_comisiones' => 'decimal:2',
             'activo' => 'boolean',
         ];
     }
@@ -92,9 +96,20 @@ class RhColaborador extends Model
         return $this->hasMany(RhHorasExtra::class, 'rh_colaborador_id');
     }
 
+    public function deducciones(): HasMany
+    {
+        return $this->hasMany(RhDeduccion::class, 'rh_colaborador_id');
+    }
+
+    public function prestamosPagosFijos(): HasMany
+    {
+        return $this->hasMany(RhPrestamoPagoFijo::class, 'rh_colaborador_id');
+    }
+
+    /** @deprecated Use deducciones() */
     public function incidencias(): HasMany
     {
-        return $this->hasMany(RhIncidencia::class, 'rh_colaborador_id');
+        return $this->deducciones();
     }
 
     public function bonos(): BelongsToMany

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import {
-    ArrowLeft, User, Building2, Briefcase, DollarSign, Link2, Pencil, Copy, Check, AlertTriangle,
+    ArrowLeft, User, Building2, Briefcase, DollarSign, Link2, Pencil, Copy, Check, AlertTriangle, Wallet,
 } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import { geliaCardClass } from '../../../utils/geliaTheme';
@@ -13,7 +13,9 @@ export default function Show({
     auth,
     colaborador,
     incidencias = [],
+    prestamosActivos = [],
     puedeVerIncidencias,
+    puedeVerPrestamos,
     departamentos,
     puestos,
     usuarios,
@@ -122,7 +124,7 @@ export default function Show({
                                 <AlertTriangle className="w-4 h-4 text-amber-500" /> Incidencias recientes
                             </h2>
                             <Link
-                                href={route('rh.incidencias.index', { rh_colaborador_id: colaborador.id })}
+                                href={route('rh.deducciones.index', { rh_colaborador_id: colaborador.id })}
                                 className="text-[10px] font-black uppercase"
                                 style={{ color: 'var(--color-primario)' }}
                             >
@@ -136,15 +138,48 @@ export default function Show({
                                 {incidencias.map((inc) => (
                                     <Link
                                         key={inc.id}
-                                        href={route('rh.incidencias.show', inc.id)}
+                                        href={route('rh.deducciones.show', inc.id)}
                                         className="flex flex-wrap justify-between gap-3 p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
                                     >
                                         <div>
                                             <p className="text-xs font-mono font-bold theme-text-main m-0">{inc.folio}</p>
-                                            <p className="text-[10px] theme-text-muted m-0 mt-0.5">{inc.tipo_falta_nombre_snapshot || inc.tipo_falta?.nombre}</p>
+                                            <p className="text-[10px] theme-text-muted m-0 mt-0.5">{inc.regla_nombre_snapshot || inc.regla_incidencia?.nombre}</p>
                                             <p className="text-[10px] theme-text-muted m-0">{inc.fecha_ocurrencia?.slice?.(0, 10)}</p>
                                         </div>
                                         <p className="text-sm font-bold theme-text-main m-0">{formatoDeduccionEntera(inc.total_deduccion)}</p>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                )}
+
+                {puedeVerPrestamos && (
+                    <section className={geliaCardClass('overflow-hidden')}>
+                        <div className="p-6 border-b theme-border flex justify-between items-center">
+                            <h2 className="text-sm font-black uppercase tracking-widest theme-text-main flex items-center gap-2 m-0">
+                                <Wallet className="w-4 h-4" style={{ color: 'var(--color-primario)' }} /> Convenios activos
+                            </h2>
+                            <Link href={route('rh.prestamos.index', { rh_colaborador_id: colaborador.id })} className="text-[10px] font-black uppercase" style={{ color: 'var(--color-primario)' }}>
+                                Ver todos
+                            </Link>
+                        </div>
+                        {prestamosActivos.length === 0 ? (
+                            <p className="p-6 text-sm theme-text-muted italic m-0">Sin convenios activos o pausados.</p>
+                        ) : (
+                            <div className="divide-y theme-border">
+                                {prestamosActivos.map((pre) => (
+                                    <Link
+                                        key={pre.id}
+                                        href={route('rh.prestamos.show', pre.id)}
+                                        className="flex flex-wrap justify-between gap-3 p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+                                    >
+                                        <div>
+                                            <p className="text-xs font-mono font-bold theme-text-main m-0">{pre.folio}</p>
+                                            <p className="text-[10px] theme-text-muted m-0 mt-0.5">{pre.concepto}</p>
+                                            <p className="text-[10px] theme-text-muted m-0 capitalize">{pre.estado} · {pre.modalidad?.replace('_', ' ')}</p>
+                                        </div>
+                                        <p className="text-sm font-bold theme-text-main m-0">{formatoMoneda(pre.monto_cuota)} / periodo</p>
                                     </Link>
                                 ))}
                             </div>

@@ -1,12 +1,14 @@
 import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
-import { LayoutDashboard, Users, Clock, Settings, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, Users, Clock, Settings, AlertTriangle, CalendarDays, Wallet } from 'lucide-react';
 
 const TABS = [
     { id: 'dashboard', label: 'Dashboard', route: 'rh.index', icon: LayoutDashboard, permiso: 'rh.ver' },
     { id: 'colaboradores', label: 'Colaboradores', route: 'rh.colaboradores.index', icon: Users, permiso: 'rh.ver' },
     { id: 'horas_extra', label: 'Horas Extra', route: 'rh.horas_extra.index', icon: Clock, permiso: 'rh.horas_extra.ver' },
-    { id: 'incidencias', label: 'Incidencias', route: 'rh.incidencias.index', icon: AlertTriangle, permiso: 'rh.incidencias.ver' },
+    { id: 'deducciones', label: 'Deducciones', route: 'rh.deducciones.index', icon: AlertTriangle, permiso: 'rh.incidencias.ver' },
+    { id: 'prestamos', label: 'Préstamos', route: 'rh.prestamos.index', icon: Wallet, permiso: 'rh.prestamos.ver' },
+    { id: 'periodo_pago', label: 'Periodo Pago', route: 'rh.periodo_pago.index', icon: CalendarDays, permiso: 'rh.ver' },
     { id: 'configuracion', label: 'Configuración', route: 'rh.configuracion', icon: Settings, permiso: 'rh.configurar' },
 ];
 
@@ -20,8 +22,14 @@ function tabActiva(currentUrl, tab) {
     if (tab.id === 'horas_extra') {
         return currentUrl.startsWith('/rh/horas-extra');
     }
-    if (tab.id === 'incidencias') {
-        return currentUrl.startsWith('/rh/incidencias');
+    if (tab.id === 'deducciones') {
+        return currentUrl.startsWith('/rh/deducciones') || currentUrl.startsWith('/rh/incidencias');
+    }
+    if (tab.id === 'prestamos') {
+        return currentUrl.startsWith('/rh/prestamos-pagos-fijos');
+    }
+    if (tab.id === 'periodo_pago') {
+        return currentUrl.startsWith('/rh/periodo-pago');
     }
     if (tab.id === 'configuracion') {
         return currentUrl.startsWith('/rh/configuracion');

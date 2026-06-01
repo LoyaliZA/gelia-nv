@@ -22,8 +22,18 @@ return [
 
     'he_minutos_minimos' => (int) env('RH_HE_MINUTOS_MINIMOS', 30),
 
-    'inc_folio_prefijo' => env('RH_INC_FOLIO_PREFIJO', 'INC'),
+    'he_tarifa_hora_fija' => (float) env('RH_HE_TARIFA_HORA_FIJA', 39.00),
+
+    'he_usar_tarifa_fija' => filter_var(env('RH_HE_USAR_TARIFA_FIJA', true), FILTER_VALIDATE_BOOL),
+
+    'he_gracia_minutos_despues_salida' => (int) env('RH_HE_GRACIA_MINUTOS_DESPUES_SALIDA', 30),
+
+    'inc_folio_prefijo' => env('RH_INC_FOLIO_PREFIJO', 'DED'),
 
     'inc_folio_padding' => (int) env('RH_INC_FOLIO_PADDING', 6),
+
+    'pre_folio_prefijo' => env('RH_PRE_FOLIO_PREFIJO', 'PRE'),
+
+    'pre_folio_padding' => (int) env('RH_PRE_FOLIO_PADDING', 6),
 
 ];

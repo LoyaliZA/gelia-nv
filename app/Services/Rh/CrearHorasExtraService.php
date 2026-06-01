@@ -36,7 +36,7 @@ class CrearHorasExtraService
             'area_snapshot' => $colaborador->area?->nombre,
         ]);
 
-        $calculado = $this->calcularHorasExtra->ejecutar($datosCalculo, $config);
+        $calculado = $this->calcularHorasExtra->ejecutar($datosCalculo, $config, $colaborador);
 
         if ($calculado['total_horas_laboradas'] <= 0) {
             throw ValidationException::withMessages([

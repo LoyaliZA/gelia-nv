@@ -11,13 +11,26 @@ const COMPORTAMIENTOS = {
     cobro_costo_producto: 'Cobro por Costo de Producto',
     cobro_precio_venta_producto: 'Cobro por Precio de Venta',
     cancelacion_bono_especifico: 'Cancelación de Bono Específico',
+    deduccion_nomina: 'Deducción Nómina (Faltas/Retardos)',
+};
+
+const CATEGORIAS = {
+    falta: 'Falta',
+    retardo: 'Retardo',
+    operativa: 'Operativa',
 };
 
 const FORM_INICIAL = {
     nombre: '',
+    categoria: 'operativa',
     tipo_comportamiento: 'cobro_fijo',
     monto_fijo: '',
     catalogo_bono_id: '',
+    factor_penalizacion_puntualidad: '0',
+    factor_penalizacion_productividad: '0',
+    aplica_deduccion_salario_base: false,
+    recompensa_auditor_activa: false,
+    monto_recompensa_auditor: '',
     activo: true,
     departamentos_aplicables: [],
     areas_aplicables: [],
@@ -95,9 +108,15 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
         setItemActual(item);
         setData({
             nombre: item.nombre,
+            categoria: item.categoria || 'operativa',
             tipo_comportamiento: item.tipo_comportamiento,
             monto_fijo: item.monto_fijo != null ? String(item.monto_fijo) : '',
             catalogo_bono_id: item.catalogo_bono_id ? String(item.catalogo_bono_id) : '',
+            factor_penalizacion_puntualidad: String(item.factor_penalizacion_puntualidad ?? 0),
+            factor_penalizacion_productividad: String(item.factor_penalizacion_productividad ?? 0),
+            aplica_deduccion_salario_base: !!item.aplica_deduccion_salario_base,
+            recompensa_auditor_activa: !!item.recompensa_auditor_activa,
+            monto_recompensa_auditor: item.monto_recompensa_auditor != null ? String(item.monto_recompensa_auditor) : '',
             activo: !!item.activo,
             departamentos_aplicables: (item.departamentos_aplicables || []).map((d) => String(d.id)),
             areas_aplicables: (item.areas_aplicables || []).map((a) => String(a.id)),
@@ -141,8 +160,8 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                         <Scale className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0">Tabulador Incidencias Generales</h2>
-                        <p className="text-[10px] theme-text-muted font-bold uppercase tracking-widest mt-0.5">{datos.length} reglas configuradas</p>
+                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0">Catálogo de Deducciones</h2>
+                        <p className="text-[10px] theme-text-muted font-bold uppercase tracking-widest mt-0.5">{datos.length} conceptos (faltas, retardos, operativas)</p>
                     </div>
                 </div>
                 <button type="button" onClick={abrirNuevo} className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black uppercase text-xs text-white" style={{ backgroundColor: 'var(--color-primario)' }}>
@@ -152,7 +171,7 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
 
             <div className="p-4 mx-6 mt-4 rounded-2xl border theme-border flex gap-2 items-start">
                 <Info className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--color-primario)' }} />
-                <p className="text-[10px] theme-text-muted m-0">Departamentos/áreas vacíos = regla universal. El registro operativo y cálculo automático se habilitará en Sprint 1.6.</p>
+                <p className="text-[10px] theme-text-muted m-0">Departamentos/áreas vacíos en aplicabilidad = universal. Visibilidad filtra qué auditoras ven el concepto según su perfil.</p>
             </div>
 
             <div className="overflow-x-auto">
@@ -160,6 +179,7 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                     <thead>
                         <tr className="border-b-2 border-[var(--color-primario)]/30">
                             <th className="px-4 py-4 text-left text-[9px] font-black theme-text-muted uppercase">Folio</th>
+                            <th className="px-4 py-4 text-left text-[9px] font-black theme-text-muted uppercase">Categoría</th>
                             <th className="px-4 py-4 text-left text-[9px] font-black theme-text-muted uppercase">Concepto</th>
                             <th className="px-4 py-4 text-left text-[9px] font-black theme-text-muted uppercase">Comportamiento</th>
                             <th className="px-4 py-4 text-left text-[9px] font-black theme-text-muted uppercase">Valor / Bono</th>
@@ -171,6 +191,7 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                         {datos.map((item) => (
                             <tr key={item.id} className="border-b theme-border last:border-0">
                                 <td className="px-4 py-4 text-xs font-mono font-bold">{item.folio}</td>
+                                <td className="px-4 py-4 text-[10px] font-black uppercase">{CATEGORIAS[item.categoria] || item.categoria}</td>
                                 <td className="px-4 py-4 text-sm font-black">{item.nombre}</td>
                                 <td className="px-4 py-4">
                                     <span className="inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-[var(--color-primario)]/10" style={{ color: 'var(--color-primario)' }}>
@@ -209,6 +230,14 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                                 {errors.nombre && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.nombre}</p>}
                             </div>
                             <div>
+                                <label className="text-[9px] font-black uppercase theme-text-muted">Categoría *</label>
+                                <select value={data.categoria} onChange={(e) => setData('categoria', e.target.value)} className={inputClass}>
+                                    {Object.entries(CATEGORIAS).map(([k, v]) => (
+                                        <option key={k} value={k}>{v}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
                                 <label className="text-[9px] font-black uppercase theme-text-muted">Tipo de comportamiento *</label>
                                 <select value={data.tipo_comportamiento} onChange={(e) => setData('tipo_comportamiento', e.target.value)} className={inputClass}>
                                     {Object.entries(COMPORTAMIENTOS).map(([k, v]) => (
@@ -235,9 +264,37 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                                     {errors.catalogo_bono_id && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.catalogo_bono_id}</p>}
                                 </div>
                             )}
+                            {(data.tipo_comportamiento === 'deduccion_nomina' || data.categoria === 'falta' || data.categoria === 'retardo') && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl border theme-border">
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase theme-text-muted">Factor bono puntualidad (0.5=mitad, 1=completo)</label>
+                                        <input type="number" min="0" step="0.01" value={data.factor_penalizacion_puntualidad} onChange={(e) => setData('factor_penalizacion_puntualidad', e.target.value)} className={inputClass} />
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase theme-text-muted">Factor bono productividad</label>
+                                        <input type="number" min="0" step="0.01" value={data.factor_penalizacion_productividad} onChange={(e) => setData('factor_penalizacion_productividad', e.target.value)} className={inputClass} />
+                                    </div>
+                                    <label className="flex items-center gap-2 md:col-span-2">
+                                        <input type="checkbox" checked={!!data.aplica_deduccion_salario_base} onChange={(e) => setData('aplica_deduccion_salario_base', e.target.checked)} />
+                                        <span className="text-[10px] font-black uppercase">Aplica deducción salario base diario</span>
+                                    </label>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl border theme-border">
+                                <label className="flex items-center gap-2">
+                                    <input type="checkbox" checked={!!data.recompensa_auditor_activa} onChange={(e) => setData('recompensa_auditor_activa', e.target.checked)} />
+                                    <span className="text-[10px] font-black uppercase">Recompensa auditora activa</span>
+                                </label>
+                                {data.recompensa_auditor_activa && (
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase theme-text-muted">Monto recompensa auditor</label>
+                                        <input type="number" min="0" step="0.01" value={data.monto_recompensa_auditor} onChange={(e) => setData('monto_recompensa_auditor', e.target.value)} className={inputClass} />
+                                    </div>
+                                )}
+                            </div>
                             <MultiSelectDeptArea
-                                label="Departamentos / Áreas autorizados"
-                                help="A quién aplica esta incidencia. Vacío = todos."
+                                label="Aplicabilidad (colaborador sancionado)"
+                                help="A quién aplica esta deducción. Vacío = todos."
                                 departamentos={departamentos}
                                 selectedDepts={data.departamentos_aplicables}
                                 selectedAreas={data.areas_aplicables}
@@ -245,8 +302,8 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                                 onChangeAreas={(v) => setData('areas_aplicables', v)}
                             />
                             <MultiSelectDeptArea
-                                label="Regla de visibilidad"
-                                help="Si se deja vacío, la regla es universal. Si se seleccionan dept/área, solo será visible para esos colaboradores."
+                                label="Visibilidad (auditora)"
+                                help="Filtra qué usuarios ven este concepto según su departamento/área."
                                 departamentos={departamentos}
                                 selectedDepts={data.departamentos_visibilidad}
                                 selectedAreas={data.areas_visibilidad}

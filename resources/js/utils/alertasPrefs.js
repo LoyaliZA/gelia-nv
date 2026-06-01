@@ -169,6 +169,18 @@ export function construirMensajeVozMensajeria(mensaje, prefs, nombreDestinatario
     return `${aviso}. ${preview}`.slice(0, 220);
 }
 
+/** Canal maestro de texto a voz (switch «Texto a voz» en preferencias). */
+export function isCanalVozHabilitado(prefs) {
+    const merged = mergePrefs(prefs);
+    return merged.canales.voz !== false;
+}
+
 export function debeUsarVozMensajeria(prefs) {
+    if (!isCanalVozHabilitado(prefs)) return false;
     return resolveMensajeriaVozModo(prefs) !== 'desactivado';
+}
+
+/** Voz para mensajes internos: tipo habilitado + canal voz + modo mensajería. */
+export function shouldTriggerMensajeriaVoz(prefs) {
+    return shouldTriggerChannel(prefs, MENSAJERIA_TIPO_ALERTA, 'voz') && debeUsarVozMensajeria(prefs);
 }

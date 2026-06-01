@@ -19,8 +19,13 @@ class RhConfiguracion extends Model
         'he_folio_padding',
         'he_multiplicador_pago',
         'he_minutos_minimos',
+        'he_tarifa_hora_fija',
+        'he_usar_tarifa_fija',
+        'he_gracia_minutos_despues_salida',
         'inc_folio_prefijo',
         'inc_folio_padding',
+        'pre_folio_prefijo',
+        'pre_folio_padding',
     ];
 
     protected function casts(): array
@@ -33,7 +38,11 @@ class RhConfiguracion extends Model
             'he_folio_padding' => 'integer',
             'he_multiplicador_pago' => 'decimal:2',
             'he_minutos_minimos' => 'integer',
+            'he_tarifa_hora_fija' => 'decimal:2',
+            'he_usar_tarifa_fija' => 'boolean',
+            'he_gracia_minutos_despues_salida' => 'integer',
             'inc_folio_padding' => 'integer',
+            'pre_folio_padding' => 'integer',
         ];
     }
 
@@ -56,8 +65,13 @@ class RhConfiguracion extends Model
             'he_folio_padding' => config('rh.he_folio_padding', 6),
             'he_multiplicador_pago' => config('rh.he_multiplicador_pago', 2.00),
             'he_minutos_minimos' => config('rh.he_minutos_minimos', 30),
-            'inc_folio_prefijo' => config('rh.inc_folio_prefijo', 'INC'),
+            'he_tarifa_hora_fija' => config('rh.he_tarifa_hora_fija', 39.00),
+            'he_usar_tarifa_fija' => config('rh.he_usar_tarifa_fija', true),
+            'he_gracia_minutos_despues_salida' => config('rh.he_gracia_minutos_despues_salida', 30),
+            'inc_folio_prefijo' => config('rh.inc_folio_prefijo', 'DED'),
             'inc_folio_padding' => config('rh.inc_folio_padding', 6),
+            'pre_folio_prefijo' => config('rh.pre_folio_prefijo', 'PRE'),
+            'pre_folio_padding' => config('rh.pre_folio_padding', 6),
         ]);
     }
 }

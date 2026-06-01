@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
@@ -15,7 +15,8 @@ import ModalRespuestaSolicitud from './Partials/ModalRespuestaSolicitud';
 import ModalBitacoraSolicitud from './Partials/ModalBitacoraSolicitud';
 import ModalConsultaSolicitud from './Partials/ModalConsultaSolicitud';
 import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
-import FiltrosSolicitudes from './Partials/FiltrosSolicitudes';
+import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
+import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { geliaCardClass } from '../../utils/geliaTheme';
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
@@ -648,111 +649,31 @@ export default function Index({
     const [menuAbierto, setMenuAbierto] = useState(null);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
     const [menuSolicitud, setMenuSolicitud] = useState(null);
-    const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
-    const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [copiadoId, setCopiadoId] = useState(null);
     const [procesandoAccion, setProcesandoAccion] = useState(false);
-    const [filtroVendedor, setFiltroVendedor] = useState(filtros.vendedor_id || '');
-    const [filtroMotivo, setFiltroMotivo] = useState(filtros.motivo_incorrecta || '');
-    const [tipoFecha, setTipoFecha] = useState(filtros.tipo_fecha || 'TODAS');
-    const [fechaInicio, setFechaInicio] = useState(filtros.fecha_inicio || '');
-    const [fechaFin, setFechaFin] = useState(filtros.fecha_fin || '');
 
-    const filtrosAdicionalesActivos = [filtroVendedor, filtroMotivo].filter(Boolean).length;
-
-    const calcularRangoFechas = (tipo, fInicio, fFin) => {
-        let inicioCalculado = fInicio;
-        let finCalculado = fFin;
-
-        if (tipo !== 'PERSONALIZADO' && tipo !== 'TODAS') {
-            const hoy = new Date();
-            const formatDate = (d) => d.toISOString().split('T')[0];
-
-            if (tipo === 'HOY') {
-                inicioCalculado = finCalculado = formatDate(hoy);
-            } else if (tipo === 'AYER') {
-                const ayer = new Date(hoy);
-                ayer.setDate(ayer.getDate() - 1);
-                inicioCalculado = finCalculado = formatDate(ayer);
-            } else if (tipo === 'SEMANA') {
-                const primerDia = new Date(hoy);
-                primerDia.setDate(primerDia.getDate() - primerDia.getDay() + 1);
-                inicioCalculado = formatDate(primerDia);
-                finCalculado = formatDate(hoy);
-            } else if (tipo === 'MES') {
-                const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-                inicioCalculado = formatDate(primerDiaMes);
-                finCalculado = formatDate(hoy);
-            }
-        } else if (tipo === 'TODAS') {
-            inicioCalculado = '';
-            finCalculado = '';
-        }
-
-        return { inicioCalculado, finCalculado };
-    };
-
-    const aplicarFiltros = (overrides = {}) => {
-        const tab = overrides.tab ?? tabActiva;
-        const vendedorId = overrides.vendedor_id ?? filtroVendedor;
-        const motivo = overrides.motivo_incorrecta ?? filtroMotivo;
-        const tipo = overrides.tipo_fecha ?? tipoFecha;
-        const q = overrides.q !== undefined ? overrides.q : busqueda;
-        const fInicio = overrides.fecha_inicio ?? fechaInicio;
-        const fFin = overrides.fecha_fin ?? fechaFin;
-
-        if (overrides.tab !== undefined) setTabActiva(tab);
-        if (overrides.vendedor_id !== undefined) setFiltroVendedor(vendedorId);
-        if (overrides.motivo_incorrecta !== undefined) {
-            setFiltroMotivo(motivo);
-            if (motivo) setTabActiva('INCORRECTAS');
-        }
-        if (overrides.tipo_fecha !== undefined) setTipoFecha(tipo);
-        if (overrides.q !== undefined) setBusqueda(q);
-        if (overrides.fecha_inicio !== undefined) setFechaInicio(fInicio);
-        if (overrides.fecha_fin !== undefined) setFechaFin(fFin);
-
-        const { inicioCalculado, finCalculado } = calcularRangoFechas(tipo, fInicio, fFin);
-        const tabFinal = motivo ? 'INCORRECTAS' : tab;
-
-        setProcesandoAccion(true);
-        router.get(route('solicitudes.index'), {
-            tab: tabFinal !== 'TODAS' ? tabFinal : undefined,
-            vendedor_id: vendedorId || undefined,
-            tipo_fecha: tipo !== 'TODAS' ? tipo : undefined,
-            fecha_inicio: inicioCalculado || undefined,
-            fecha_fin: finCalculado || undefined,
-            motivo_incorrecta: motivo || undefined,
-            q: q?.trim() || undefined,
-        }, {
-            preserveState: true,
-            preserveScroll: true,
-            onFinish: () => setProcesandoAccion(false),
-        });
-    };
-
-    const limpiarFiltrosAdicionales = () => {
-        const nuevaTab = filtroMotivo ? 'TODAS' : tabActiva;
-        aplicarFiltros({ vendedor_id: '', motivo_incorrecta: '', tab: nuevaTab });
-    };
+    const {
+        tabActiva,
+        busqueda,
+        tipoFecha,
+        fechaInicio,
+        fechaFin,
+        filtroVendedor,
+        filtroMotivo,
+        filtrosAdicionalesActivos,
+        construirParams,
+        exportParams,
+        aplicarFiltros,
+        limpiarFiltrosAdicionales,
+    } = useFiltrosSolicitudesPage({
+        filtros,
+        rutaIndex: route('solicitudes.index'),
+        onInicioConsulta: () => setProcesandoAccion(true),
+        onFinConsulta: () => setProcesandoAccion(false),
+    });
 
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) ?? false;
     const puedeExportar = can('solicitudes.exportar');
-
-    const exportParams = useMemo(() => {
-        const { inicioCalculado, finCalculado } = calcularRangoFechas(tipoFecha, fechaInicio, fechaFin);
-        return Object.fromEntries(
-            Object.entries({
-                tab: tabActiva !== 'TODAS' ? tabActiva : undefined,
-                vendedor_id: filtroVendedor || undefined,
-                tipo_fecha: tipoFecha !== 'TODAS' ? tipoFecha : undefined,
-                fecha_inicio: inicioCalculado || undefined,
-                fecha_fin: finCalculado || undefined,
-                motivo_incorrecta: filtroMotivo || undefined,
-                q: busqueda?.trim() || undefined,
-            }).filter(([, v]) => v !== '' && v !== null && v !== undefined)
-        );
-    }, [tabActiva, filtroVendedor, tipoFecha, fechaInicio, fechaFin, filtroMotivo, busqueda]);
 
     const eliminarSolicitud = (id) => {
         const motivo = window.prompt("ATENCIÓN: Se eliminará este registro y se creará un respaldo en la auditoría.\n\nIngresa el motivo de la eliminación (Mínimo 10 caracteres):");
@@ -844,16 +765,11 @@ export default function Index({
         const totalPaginas = solicitudes.last_page || 1;
         if (pagina < 1 || pagina > totalPaginas) return;
         setProcesandoAccion(true);
-        router.get(route('solicitudes.index'), {
-            page: pagina,
-            tab: tabActiva !== 'TODAS' ? tabActiva : undefined,
-            vendedor_id: filtroVendedor || undefined,
-            tipo_fecha: tipoFecha !== 'TODAS' ? tipoFecha : undefined,
-            fecha_inicio: fechaInicio || undefined,
-            fecha_fin: fechaFin || undefined,
-            motivo_incorrecta: filtroMotivo || undefined,
-            q: busqueda?.trim() || undefined,
-        }, { preserveState: true, preserveScroll: false, onFinish: () => setProcesandoAccion(false) });
+        router.get(route('solicitudes.index'), construirParams({ page: pagina }), {
+            preserveState: true,
+            preserveScroll: false,
+            onFinish: () => setProcesandoAccion(false),
+        });
     };
 
     return (
@@ -949,8 +865,8 @@ export default function Index({
                     filtroMotivo={filtroMotivo}
                     vendedores={vendedores}
                     filtrosActivos={filtrosAdicionalesActivos}
+                    idPrefixFechas="solicitud-fecha"
                     onCambiarTab={(tab) => aplicarFiltros({ tab })}
-                    onCambiarBusqueda={setBusqueda}
                     onAplicarFiltros={aplicarFiltros}
                     onLimpiarAdicionales={limpiarFiltrosAdicionales}
                 />

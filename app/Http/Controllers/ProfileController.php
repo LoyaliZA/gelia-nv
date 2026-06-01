@@ -247,10 +247,21 @@ class ProfileController extends Controller
             $tipos[$tipo] = filter_var($valor, FILTER_VALIDATE_BOOLEAN);
         }
 
+        $modosMensajeria = ['desactivado', 'solo_aviso', 'leer_mensaje'];
+        $mensajeriaVoz = $prefs['mensajeria_voz'] ?? ($defaults['mensajeria_voz'] ?? 'solo_aviso');
+        if (! in_array($mensajeriaVoz, $modosMensajeria, true)) {
+            $mensajeriaVoz = $defaults['mensajeria_voz'] ?? 'solo_aviso';
+        }
+
+        if ($canales['voz'] === false) {
+            $mensajeriaVoz = 'desactivado';
+        }
+
         return [
-            'canales' => $canales,
-            'tono_id' => $tonoId,
-            'tipos'   => $tipos,
+            'canales'         => $canales,
+            'tono_id'         => $tonoId,
+            'mensajeria_voz'  => $mensajeriaVoz,
+            'tipos'           => $tipos,
         ];
     }
 }

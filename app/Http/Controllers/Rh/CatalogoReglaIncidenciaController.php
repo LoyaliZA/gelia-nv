@@ -20,37 +20,49 @@ class CatalogoReglaIncidenciaController extends Controller
             'uuid' => (string) Str::uuid(),
             'folio' => $generarFolio->ejecutar(),
             'nombre' => trim($request->nombre),
+            'categoria' => $request->categoria,
             'tipo_comportamiento' => $request->tipo_comportamiento,
             'monto_fijo' => $request->input('monto_fijo'),
             'catalogo_bono_id' => $request->input('catalogo_bono_id'),
+            'factor_penalizacion_puntualidad' => $request->input('factor_penalizacion_puntualidad', 0),
+            'factor_penalizacion_productividad' => $request->input('factor_penalizacion_productividad', 0),
+            'aplica_deduccion_salario_base' => $request->boolean('aplica_deduccion_salario_base'),
+            'recompensa_auditor_activa' => $request->boolean('recompensa_auditor_activa'),
+            'monto_recompensa_auditor' => $request->input('monto_recompensa_auditor', 0),
             'activo' => $request->boolean('activo', true),
         ]);
 
         $this->syncRelaciones($regla, $request->validated());
 
-        return back()->with('success', 'Regla de incidencia creada correctamente.');
+        return back()->with('success', 'Regla de deducción creada correctamente.');
     }
 
     public function update(UpdateReglaIncidenciaRequest $request, CatalogoReglaIncidencia $reglaIncidencia): RedirectResponse
     {
         $reglaIncidencia->update([
             'nombre' => trim($request->nombre),
+            'categoria' => $request->categoria,
             'tipo_comportamiento' => $request->tipo_comportamiento,
             'monto_fijo' => $request->input('monto_fijo'),
             'catalogo_bono_id' => $request->input('catalogo_bono_id'),
+            'factor_penalizacion_puntualidad' => $request->input('factor_penalizacion_puntualidad', 0),
+            'factor_penalizacion_productividad' => $request->input('factor_penalizacion_productividad', 0),
+            'aplica_deduccion_salario_base' => $request->boolean('aplica_deduccion_salario_base'),
+            'recompensa_auditor_activa' => $request->boolean('recompensa_auditor_activa'),
+            'monto_recompensa_auditor' => $request->input('monto_recompensa_auditor', 0),
             'activo' => $request->boolean('activo', true),
         ]);
 
         $this->syncRelaciones($reglaIncidencia, $request->validated());
 
-        return back()->with('success', 'Regla de incidencia actualizada correctamente.');
+        return back()->with('success', 'Regla de deducción actualizada correctamente.');
     }
 
     public function destroy(CatalogoReglaIncidencia $reglaIncidencia): RedirectResponse
     {
         $reglaIncidencia->delete();
 
-        return back()->with('success', 'Regla de incidencia eliminada correctamente.');
+        return back()->with('success', 'Regla de deducción eliminada correctamente.');
     }
 
     private function syncRelaciones(CatalogoReglaIncidencia $regla, array $datos): void

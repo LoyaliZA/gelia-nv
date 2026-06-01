@@ -25,8 +25,13 @@ class UpdateConfiguracionRhRequest extends FormRequest
             'he_folio_padding' => 'required|integer|min:1|max:12',
             'he_multiplicador_pago' => 'required|numeric|min:1|max:10',
             'he_minutos_minimos' => 'required|integer|min:1|max:120',
+            'he_tarifa_hora_fija' => 'required|numeric|min:0',
+            'he_usar_tarifa_fija' => 'nullable|boolean',
+            'he_gracia_minutos_despues_salida' => 'required|integer|min:0|max:120',
             'inc_folio_prefijo' => 'required|string|max:20',
             'inc_folio_padding' => 'required|integer|min:1|max:12',
+            'pre_folio_prefijo' => 'required|string|max:20',
+            'pre_folio_padding' => 'required|integer|min:1|max:12',
         ];
     }
 }

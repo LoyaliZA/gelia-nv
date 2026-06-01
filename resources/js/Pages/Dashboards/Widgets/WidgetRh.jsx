@@ -78,7 +78,7 @@ export default function WidgetRh({ rh_widget = {}, variant = 'desktop' }) {
                     {destacadosInc.map((reg) => (
                         <li key={`inc-${reg.id}`}>
                             <Link
-                                href={route('rh.incidencias.show', reg.id)}
+                                href={route('rh.deducciones.show', reg.id)}
                                 className="flex items-center justify-between gap-2 p-2 rounded-xl hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-colors"
                             >
                                 <div className="min-w-0">

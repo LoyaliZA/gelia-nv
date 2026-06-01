@@ -22,9 +22,12 @@ use App\Models\CatalogoBono;
 use App\Models\CatalogoReglaIncidencia;
 use App\Models\Producto;
 use App\Models\RhHorasExtra;
-use App\Models\RhIncidencia;
+use App\Models\RhDeduccion;
+use App\Models\RhPrestamoPagoFijo;
 use App\Observers\CatalogoListaDescuentoObserver;
 use App\Listeners\EnviarWebPushTrasNotificacion;
+use App\Listeners\PreventDestructiveDatabaseCommands;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Support\Facades\Event;
 
@@ -60,13 +63,16 @@ class AppServiceProvider extends ServiceProvider
         CatalogoListaDescuento::observe(CatalogoListaDescuentoObserver::class);
 
         Event::listen(NotificationSent::class, EnviarWebPushTrasNotificacion::class);
+        Event::listen(CommandStarting::class, PreventDestructiveDatabaseCommands::class);
 
         Route::bind('factura', fn (string $value) => SolicitudFactura::where('id', $value)->orWhere('folio', $value)->firstOrFail());
         Route::bind('colaborador', fn (string $value) => RhColaborador::findOrFail($value));
         Route::bind('puesto', fn (string $value) => CatalogoPuesto::findOrFail($value));
         Route::bind('horasExtra', fn (string $value) => RhHorasExtra::findOrFail($value));
         Route::bind('tipoFalta', fn (string $value) => CatalogoTipoFalta::findOrFail($value));
-        Route::bind('incidencia', fn (string $value) => RhIncidencia::findOrFail($value));
+        Route::bind('deduccion', fn (string $value) => RhDeduccion::findOrFail($value));
+        Route::bind('incidencia', fn (string $value) => RhDeduccion::findOrFail($value));
+        Route::bind('prestamo', fn (string $value) => RhPrestamoPagoFijo::findOrFail($value));
         Route::bind('bono', fn (string $value) => CatalogoBono::findOrFail($value));
         Route::bind('reglaIncidencia', fn (string $value) => CatalogoReglaIncidencia::findOrFail($value));
         Route::bind('producto', fn (string $value) => Producto::findOrFail($value));

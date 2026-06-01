@@ -6,7 +6,7 @@ import { geliaCardClass } from '../../../utils/geliaTheme';
 import { formatoDeduccionEntera, formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
 import { ESTADO_PAGO_BADGE, ESTADO_PAGO_LABELS } from '../HorasExtra/Partials/horasExtraStyles';
-import { ESTADO_DEDUCCION_BADGE, ESTADO_DEDUCCION_LABELS } from '../Incidencias/Partials/incidenciasStyles';
+import { ESTADO_DEDUCCION_BADGE, ESTADO_DEDUCCION_LABELS } from '../Deducciones/Partials/deduccionesStyles';
 
 export default function Index({
     auth,
@@ -24,14 +24,14 @@ export default function Index({
     const kpis = [
         { label: 'Colaboradores activos', value: metricas.colaboradores_activos, accent: true },
         { label: 'Registros HE hoy', value: metricas.registros_hoy, color: '#3b82f6' },
-        { label: 'Incidencias hoy', value: metricas.incidencias_hoy, color: '#8b5cf6' },
+        { label: 'Deducciones hoy', value: metricas.deducciones_hoy ?? metricas.incidencias_hoy, color: '#8b5cf6' },
         { label: 'Deducciones pendientes', value: formatoDeduccionEntera(metricas.monto_deduccion_pendiente), color: '#ef4444' },
     ];
 
     const accesos = [
         puedeColaboradores && { titulo: 'Colaboradores', desc: 'Perfiles laborales y nómina base', href: route('rh.colaboradores.index'), icon: Users },
         puedeHorasExtra && { titulo: 'Horas Extra', desc: 'Captura y cálculo de tiempo adicional', href: route('rh.horas_extra.index'), icon: Clock },
-        puedeIncidencias && { titulo: 'Incidencias', desc: 'Faltas, permisos y retardos operativos', href: route('rh.incidencias.index'), icon: AlertTriangle },
+        puedeIncidencias && { titulo: 'Deducciones', desc: 'Reporte integral y expediente digital', href: route('rh.deducciones.index'), icon: AlertTriangle },
         puedeConfigurar && { titulo: 'Configuración', desc: 'Folios, periodo de pago y catálogos', href: route('rh.configuracion'), icon: Settings },
     ].filter(Boolean);
 
@@ -102,7 +102,7 @@ export default function Index({
                         )}
                         {puedeCrearIncidencia && (
                             <Link
-                                href={route('rh.incidencias.index')}
+                                href={route('rh.deducciones.index')}
                                 className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border"
                             >
                                 <Plus className="w-4 h-4" /> Nueva incidencia
@@ -172,7 +172,7 @@ export default function Index({
                                 {ultimasIncidencias.map((reg) => (
                                     <Link
                                         key={reg.id}
-                                        href={route('rh.incidencias.show', reg.id)}
+                                        href={route('rh.deducciones.show', reg.id)}
                                         className="flex flex-wrap items-center justify-between gap-3 p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
                                     >
                                         <div className="min-w-0">
@@ -180,7 +180,7 @@ export default function Index({
                                             <p className="text-sm font-bold theme-text-main m-0 mt-0.5">
                                                 {nombreCompletoColaborador(reg.colaborador)}
                                             </p>
-                                            <p className="text-[10px] theme-text-muted m-0">{reg.tipo_falta_nombre_snapshot || reg.tipo_falta?.nombre}</p>
+                                            <p className="text-[10px] theme-text-muted m-0">{reg.regla_nombre_snapshot || reg.regla_incidencia?.nombre}</p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-sm font-bold theme-text-main m-0">{formatoDeduccionEntera(reg.total_deduccion)}</p>

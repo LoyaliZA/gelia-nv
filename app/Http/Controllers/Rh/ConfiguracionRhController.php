@@ -5,14 +5,14 @@ namespace App\Http\Controllers\Rh;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Rh\UpdateConfiguracionRhRequest;
 use App\Models\CatalogoPuesto;
-use App\Models\CatalogoTipoFalta;
 use App\Models\CatalogoBono;
 use App\Models\CatalogoReglaIncidencia;
 use App\Models\Departamento;
 use App\Models\RhConfiguracion;
 use App\Services\Rh\GenerarFolioColaboradorService;
 use App\Services\Rh\GenerarFolioHorasExtraService;
-use App\Services\Rh\GenerarFolioIncidenciaService;
+use App\Services\Rh\GenerarFolioDeduccionService;
+use App\Services\Rh\GenerarFolioPrestamoService;
 use App\Services\Rh\RecalcularSalariosRhService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -30,9 +30,9 @@ class ConfiguracionRhController extends Controller
             'configuracion' => $config,
             'folioPreview' => app(GenerarFolioColaboradorService::class)->preview($config),
             'heFolioPreview' => app(GenerarFolioHorasExtraService::class)->ejecutar($config),
-            'incFolioPreview' => app(GenerarFolioIncidenciaService::class)->ejecutar($config),
+            'incFolioPreview' => app(GenerarFolioDeduccionService::class)->ejecutar($config),
+            'preFolioPreview' => app(GenerarFolioPrestamoService::class)->ejecutar($config),
             'puestos' => CatalogoPuesto::with('bonos')->orderBy('nombre')->get(),
-            'tiposFaltas' => CatalogoTipoFalta::withCount('incidencias')->orderBy('nombre')->get(),
             'bonos' => CatalogoBono::withCount('colaboradores')->orderBy('nombre')->get(),
             'reglasIncidencia' => CatalogoReglaIncidencia::with([
                 'bono',
@@ -63,8 +63,13 @@ class ConfiguracionRhController extends Controller
             'he_folio_padding' => $request->he_folio_padding,
             'he_multiplicador_pago' => $request->he_multiplicador_pago,
             'he_minutos_minimos' => $request->he_minutos_minimos,
+            'he_tarifa_hora_fija' => $request->he_tarifa_hora_fija,
+            'he_usar_tarifa_fija' => $request->boolean('he_usar_tarifa_fija'),
+            'he_gracia_minutos_despues_salida' => $request->he_gracia_minutos_despues_salida,
             'inc_folio_prefijo' => strtoupper(trim($request->inc_folio_prefijo)),
             'inc_folio_padding' => $request->inc_folio_padding,
+            'pre_folio_prefijo' => strtoupper(trim($request->pre_folio_prefijo)),
+            'pre_folio_padding' => $request->pre_folio_padding,
         ]);
 
         $mensaje = 'Configuración de RH actualizada correctamente.';

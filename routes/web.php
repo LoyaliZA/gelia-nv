@@ -25,7 +25,9 @@ use App\Http\Controllers\Rh\CatalogoBonoController;
 use App\Http\Controllers\Rh\CatalogoReglaIncidenciaController;
 use App\Http\Controllers\Rh\DashboardRhController;
 use App\Http\Controllers\Rh\HorasExtraController;
-use App\Http\Controllers\Rh\IncidenciaController;
+use App\Http\Controllers\Rh\DeduccionController;
+use App\Http\Controllers\Rh\PeriodoPagoController;
+use App\Http\Controllers\Rh\PrestamoPagoFijoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Facturas\SolicitudFacturaController;
 use App\Http\Controllers\Reportes\ReporteSolicitudesController;
@@ -316,18 +318,50 @@ Route::middleware(['auth'])->group(function () {
         });
 
         Route::middleware(['can:rh.incidencias.ver'])->group(function () {
-            Route::get('/incidencias', [IncidenciaController::class, 'index'])->name('incidencias.index');
-            Route::post('/incidencias/preview-calculos', [IncidenciaController::class, 'previewCalculos'])->name('incidencias.preview_calculos');
-            Route::get('/incidencias/{incidencia}', [IncidenciaController::class, 'show'])->name('incidencias.show');
-            Route::post('/incidencias', [IncidenciaController::class, 'store'])
+            Route::get('/deducciones', [DeduccionController::class, 'index'])->name('deducciones.index');
+            Route::get('/deducciones/reglas-disponibles', [DeduccionController::class, 'reglasDisponibles'])->name('deducciones.reglas_disponibles');
+            Route::get('/deducciones/buscar-sku', [DeduccionController::class, 'buscarSku'])->name('deducciones.buscar_sku');
+            Route::post('/deducciones/preview-calculos', [DeduccionController::class, 'previewCalculos'])->name('deducciones.preview_calculos');
+            Route::get('/deducciones/{deduccion}', [DeduccionController::class, 'show'])->name('deducciones.show');
+            Route::post('/deducciones', [DeduccionController::class, 'store'])
                 ->middleware('can:rh.incidencias.crear')
-                ->name('incidencias.store');
-            Route::put('/incidencias/{incidencia}', [IncidenciaController::class, 'update'])
+                ->name('deducciones.store');
+            Route::put('/deducciones/{deduccion}', [DeduccionController::class, 'update'])
                 ->middleware('can:rh.incidencias.editar')
-                ->name('incidencias.update');
-            Route::post('/incidencias/{incidencia}/aplicar', [IncidenciaController::class, 'aplicar'])
+                ->name('deducciones.update');
+            Route::post('/deducciones/{deduccion}/aplicar', [DeduccionController::class, 'aplicar'])
                 ->middleware('can:rh.incidencias.aplicar')
-                ->name('incidencias.aplicar');
+                ->name('deducciones.aplicar');
+        });
+
+        Route::redirect('/incidencias', '/rh/deducciones')->name('incidencias.index');
+        Route::get('/incidencias/{deduccion}', fn ($deduccion) => redirect()->route('rh.deducciones.show', $deduccion))->name('incidencias.show');
+
+        Route::middleware(['can:rh.prestamos.ver'])->group(function () {
+            Route::get('/prestamos-pagos-fijos', [PrestamoPagoFijoController::class, 'index'])->name('prestamos.index');
+            Route::post('/prestamos-pagos-fijos/generar-cuotas', [PrestamoPagoFijoController::class, 'generarCuotas'])
+                ->middleware('can:rh.prestamos.generar')
+                ->name('prestamos.generar_cuotas');
+            Route::get('/prestamos-pagos-fijos/{prestamo}', [PrestamoPagoFijoController::class, 'show'])->name('prestamos.show');
+            Route::post('/prestamos-pagos-fijos', [PrestamoPagoFijoController::class, 'store'])
+                ->middleware('can:rh.prestamos.crear')
+                ->name('prestamos.store');
+            Route::put('/prestamos-pagos-fijos/{prestamo}', [PrestamoPagoFijoController::class, 'update'])
+                ->middleware('can:rh.prestamos.editar')
+                ->name('prestamos.update');
+            Route::post('/prestamos-pagos-fijos/{prestamo}/pausar', [PrestamoPagoFijoController::class, 'pausar'])
+                ->middleware('can:rh.prestamos.detener')
+                ->name('prestamos.pausar');
+            Route::post('/prestamos-pagos-fijos/{prestamo}/reanudar', [PrestamoPagoFijoController::class, 'reanudar'])
+                ->middleware('can:rh.prestamos.detener')
+                ->name('prestamos.reanudar');
+            Route::post('/prestamos-pagos-fijos/{prestamo}/cancelar', [PrestamoPagoFijoController::class, 'cancelar'])
+                ->middleware('can:rh.prestamos.detener')
+                ->name('prestamos.cancelar');
+        });
+
+        Route::middleware(['can:rh.ver'])->group(function () {
+            Route::get('/periodo-pago', [PeriodoPagoController::class, 'index'])->name('periodo_pago.index');
         });
 
         Route::middleware(['can:rh.configurar'])->group(function () {

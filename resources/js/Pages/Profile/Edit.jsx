@@ -408,10 +408,12 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const toggleCanalAlerta = (canal) => {
         updateAlertasPrefs((prev) => {
             const activo = prev.canales?.[canal] !== false;
-            return {
-                ...prev,
-                canales: { ...prev.canales, [canal]: !activo },
-            };
+            const canales = { ...prev.canales, [canal]: !activo };
+            const next = { ...prev, canales };
+            if (canal === 'voz' && canales.voz === false) {
+                next.mensajeria_voz = 'desactivado';
+            }
+            return next;
         });
     };
 
@@ -1186,7 +1188,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             </button>
                         </SettingsRow>
 
-                        <SettingsRow icon={Mic} title="Texto a voz" subtitle="Leer alertas en voz alta" stackOnMobile={false}>
+                        <SettingsRow icon={Mic} title="Texto a voz" subtitle="Control maestro: silencia la lectura en voz alta (operativas y mensajería)" stackOnMobile={false}>
                             <button type="button" className="gelia-switch shrink-0 scale-125 origin-right shadow-sm" data-active={alertasPrefs.canales.voz} onClick={() => toggleCanalAlerta('voz')}>
                                 <div className="gelia-switch-thumb shadow-md" />
                             </button>
@@ -1195,7 +1197,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                         <SettingsRow
                             icon={MessageCircle}
                             title="Voz en mensajería interna"
-                            subtitle="Cómo anunciar nuevos mensajes de chat (independiente de alertas operativas)"
+                            subtitle="Modo de anuncio en chat; requiere «Texto a voz» activado"
                             stackOnMobile={true}
                         >
                             <div className="flex flex-col gap-2 w-full sm:w-auto">
@@ -1204,8 +1206,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                         <button
                                             key={modo}
                                             type="button"
+                                            disabled={alertasPrefs.canales.voz === false}
                                             onClick={() => updateAlertasPrefs((prev) => ({ ...prev, mensajeria_voz: modo }))}
-                                            className="gelia-segment-btn px-3 py-2 text-[10px] sm:text-xs whitespace-normal text-center"
+                                            className="gelia-segment-btn px-3 py-2 text-[10px] sm:text-xs whitespace-normal text-center disabled:opacity-40"
                                             data-active={alertasPrefs.mensajeria_voz === modo}
                                         >
                                             {label}
@@ -1222,7 +1225,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                         );
                                         if (demo) NotificationBrowserService.speakText(demo, true);
                                     }}
-                                    disabled={alertasPrefs.mensajeria_voz === 'desactivado'}
+                                    disabled={alertasPrefs.mensajeria_voz === 'desactivado' || alertasPrefs.canales.voz === false}
                                     className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border theme-text-main hover:border-[var(--color-primario)] transition-colors whitespace-nowrap disabled:opacity-40"
                                 >
                                     Probar voz mensajería

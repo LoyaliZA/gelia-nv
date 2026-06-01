@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (!Schema::hasTable('mensaje_adjuntos') || Schema::hasColumn('mensaje_adjuntos', 'contenido_indexado')) {
+            return;
+        }
+
         Schema::table('mensaje_adjuntos', function (Blueprint $table) {
             $table->text('contenido_indexado')->nullable()->after('metadata');
         });
@@ -15,6 +19,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasTable('mensaje_adjuntos') || !Schema::hasColumn('mensaje_adjuntos', 'contenido_indexado')) {
+            return;
+        }
+
         Schema::table('mensaje_adjuntos', function (Blueprint $table) {
             $table->dropColumn('contenido_indexado');
         });

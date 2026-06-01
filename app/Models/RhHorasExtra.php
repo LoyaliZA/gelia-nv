@@ -27,7 +27,9 @@ class RhHorasExtra extends Model
         'horas_extra_a_pagar',
         'salario_por_hora_snapshot',
         'multiplicador_snapshot',
+        'tarifa_hora_snapshot',
         'total_economico',
+        'monto_horas_extra',
         'motivo',
         'supervisor_user_id',
         'fecha_programada_pago',
@@ -47,7 +49,9 @@ class RhHorasExtra extends Model
             'tiempo_extra_crudo' => 'decimal:2',
             'salario_por_hora_snapshot' => 'decimal:4',
             'multiplicador_snapshot' => 'decimal:2',
+            'tarifa_hora_snapshot' => 'decimal:4',
             'total_economico' => 'decimal:2',
+            'monto_horas_extra' => 'decimal:2',
         ];
     }
 

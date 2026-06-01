@@ -13,3 +13,5 @@ Schedule::command('pagos:rechazar-vencidos')->dailyAt('09:00');
 
 Schedule::command('activos:alertas-programadas')->dailyAt('08:00');
 
+Schedule::command('rh:generar-cuotas-prestamos')->dailyAt('07:00');
+

@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/backup-db.sh
+source "${SCRIPT_DIR}/scripts/backup-db.sh"
+
 # ==============================================================================
 # Script de Actualización Automática - GeliaNV
 # ==============================================================================
@@ -22,6 +26,7 @@ docker exec -i gelianv_app composer install --no-dev --optimize-autoloader --no-
 
 # 5. Ejecutar migraciones de base de datos
 echo "Sincronizando estructura de base de datos..."
+backup_db_antes_de_migrar
 docker exec -i gelianv_app php artisan migrate --force
 
 # 6. Reconstruir assets del frontend (Vite)

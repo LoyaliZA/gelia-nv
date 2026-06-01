@@ -172,6 +172,7 @@ class NotificationBrowserService {
     }
 
     speakText(text, force = false) {
+        if (!text || typeof text !== 'string') return;
         if (!force && this.preferences?.canales?.voz === false) return;
         if (!('speechSynthesis' in window)) return;
 
@@ -210,7 +211,7 @@ class NotificationBrowserService {
 
         if (sonido) this.playAudio(true);
         if (voz && voiceMessage) {
-            setTimeout(() => this.speakText(voiceMessage, true), 1000);
+            setTimeout(() => this.speakText(voiceMessage, false), 1000);
         }
         if (escritorio) {
             this.showDesktopNotification(title, { body: message }, true, onClick);

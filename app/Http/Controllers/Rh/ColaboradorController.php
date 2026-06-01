@@ -9,7 +9,8 @@ use App\Models\CatalogoPuesto;
 use App\Models\Departamento;
 use App\Models\RhColaborador;
 use App\Models\RhConfiguracion;
-use App\Models\RhIncidencia;
+use App\Models\RhDeduccion;
+use App\Models\RhPrestamoPagoFijo;
 use App\Models\User;
 use App\Services\Rh\ActualizarColaboradorService;
 use App\Services\Rh\CalcularSalariosColaboradorService;
@@ -51,16 +52,25 @@ class ColaboradorController extends Controller
     {
         $colaborador->load(['departamento', 'area', 'puesto.bonos', 'usuario', 'registradoPor', 'bonos']);
 
-        $incidencias = RhIncidencia::with('tipoFalta')
+        $deducciones = RhDeduccion::with('reglaIncidencia')
             ->where('rh_colaborador_id', $colaborador->id)
             ->orderByDesc('fecha_ocurrencia')
             ->limit(8)
             ->get();
 
+        $prestamosActivos = RhPrestamoPagoFijo::query()
+            ->where('rh_colaborador_id', $colaborador->id)
+            ->whereIn('estado', [RhPrestamoPagoFijo::ESTADO_ACTIVO, RhPrestamoPagoFijo::ESTADO_PAUSADO])
+            ->orderByDesc('created_at')
+            ->get();
+
         return Inertia::render('Rh/Colaboradores/Show', [
             'colaborador' => $colaborador,
-            'incidencias' => $incidencias,
-            'puedeVerIncidencias' => Auth::user()->can('rh.incidencias.ver'),
+            'incidencias' => $deducciones,
+            'deducciones' => $deducciones,
+            'prestamosActivos' => $prestamosActivos,
+            'puedeVerIncidencias' => Auth::user()->can('rh.incidencias.ver') || Auth::user()->can('rh.deducciones.ver'),
+            'puedeVerPrestamos' => Auth::user()->can('rh.prestamos.ver'),
             'departamentos' => Departamento::where('activo', true)->with('areas')->orderBy('nombre')->get(),
             'puestos' => CatalogoPuesto::with('bonos')->where('activo', true)->orderBy('nombre')->get(),
             'usuarios' => User::select(['id', 'name', 'email', 'apellido_paterno', 'apellido_materno'])

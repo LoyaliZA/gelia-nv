@@ -6,7 +6,7 @@ import {
     isTipoAlertaEnabled,
     MENSAJERIA_TIPO_ALERTA,
     construirMensajeVozMensajeria,
-    debeUsarVozMensajeria,
+    shouldTriggerMensajeriaVoz,
 } from '@/utils/alertasPrefs';
 
 const previewTipo = (tipo) => ({
@@ -60,7 +60,7 @@ export function notificarMensajeNuevo(mensaje, auth) {
     const tipo = MENSAJERIA_TIPO_ALERTA;
     const sonido = shouldTriggerChannel(prefs, tipo, 'sonido');
     const escritorio = shouldTriggerChannel(prefs, tipo, 'escritorio');
-    const voz = isTipoAlertaEnabled(prefs, tipo) && debeUsarVozMensajeria(prefs);
+    const voz = shouldTriggerMensajeriaVoz(prefs);
 
     const nombre = mensaje.user?.name || 'Un contacto';
     const cuerpo = mensaje.contenido?.trim() || previewTipo(mensaje.tipo);

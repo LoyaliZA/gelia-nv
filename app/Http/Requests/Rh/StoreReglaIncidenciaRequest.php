@@ -17,9 +17,15 @@ class StoreReglaIncidenciaRequest extends FormRequest
     {
         return [
             'nombre' => 'required|string|max:255',
+            'categoria' => ['required', Rule::in(array_keys(CatalogoReglaIncidencia::CATEGORIAS))],
             'tipo_comportamiento' => ['required', Rule::in(array_keys(CatalogoReglaIncidencia::COMPORTAMIENTOS))],
             'monto_fijo' => 'nullable|numeric|min:0|required_if:tipo_comportamiento,cobro_fijo',
             'catalogo_bono_id' => 'nullable|exists:catalogo_bonos,id|required_if:tipo_comportamiento,cancelacion_bono_especifico',
+            'factor_penalizacion_puntualidad' => 'nullable|numeric|min:0',
+            'factor_penalizacion_productividad' => 'nullable|numeric|min:0',
+            'aplica_deduccion_salario_base' => 'nullable|boolean',
+            'recompensa_auditor_activa' => 'nullable|boolean',
+            'monto_recompensa_auditor' => 'nullable|numeric|min:0',
             'activo' => 'nullable|boolean',
             'departamentos_aplicables' => 'nullable|array',
             'departamentos_aplicables.*' => 'exists:departamentos,id',

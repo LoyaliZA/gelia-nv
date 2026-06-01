@@ -57,6 +57,7 @@ return new class extends Migration
             $table->unsignedBigInteger('tamano')->default(0);
             $table->unsignedInteger('duracion_seg')->nullable();
             $table->json('metadata')->nullable();
+            $table->text('contenido_indexado')->nullable();
             $table->timestamps();
 
             $table->index('mensaje_id');
