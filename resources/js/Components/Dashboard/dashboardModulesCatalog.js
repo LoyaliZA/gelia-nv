@@ -1,5 +1,5 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban,
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase,
 } from 'lucide-react';
 
 export const DASHBOARD_MODULE_CARDS = [
@@ -82,6 +82,17 @@ export const DASHBOARD_MODULE_CARDS = [
         borderClass: 'border-emerald-500/20',
         iconWrapClass: 'bg-emerald-500/10 border-emerald-500/20',
         iconClass: 'text-emerald-500',
+    },
+    {
+        id: 'card_rh',
+        titulo: 'Recursos Humanos',
+        subtitulo: 'Dashboard, colaboradores y horas extra.',
+        permiso: 'rh.ver',
+        href: () => route('rh.index'),
+        icon: Briefcase,
+        borderClass: 'border-rose-500/20',
+        iconWrapClass: 'bg-rose-500/10 border-rose-500/20',
+        iconClass: 'text-rose-500',
     },
     {
         id: 'card_clientes',

@@ -5,7 +5,7 @@ import {
     LayoutDashboard, Briefcase, ChevronRight,
     Settings, Settings2, Database, Users, LogOut, Link as LinkIcon,
     FolderTree, Calculator, History, Map, FileText, Layers, Palette, Package, Receipt, Ban, Globe, MessageCircle,
-    User, Sparkles,
+    User, Sparkles, BarChart3,
 } from 'lucide-react';
 
 import GeliaLogo from './GeliaLogo';
@@ -580,6 +580,18 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                 </Link>
                             )}
 
+                            {can('solicitudes.exportar') && (
+                                <Link
+                                    href={route('reportes.solicitudes.index')}
+                                    className={linkBaseClass + (isRouteActive('/reportes/solicitudes') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/reportes/solicitudes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/reportes/solicitudes')) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <BarChart3 className="w-4 h-4 mr-4" />
+                                    <span className="text-xs font-black uppercase italic tracking-tighter">Reportes_</span>
+                                </Link>
+                            )}
+
                             {can('facturas.ver_listado') && (
                                 <Link
                                     href={route('facturas.index')}
@@ -628,6 +640,20 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                     <div className="flex items-center">
                                         <Package className="w-4 h-4 mr-4" style={{ color: isRouteActive('/activos') ? '#ffffff' : 'var(--color-primario)' }} />
                                         <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Control de Activos_</span>
+                                    </div>
+                                </Link>
+                            )}
+
+                            {can('rh.ver') && (
+                                <Link
+                                    href={route('rh.index')}
+                                    className={linkBaseClass + (isRouteActive('/rh') ? linkActiveClass : linkInactiveClass)}
+                                    onMouseEnter={(e) => { if (!isRouteActive('/rh')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
+                                    onMouseLeave={(e) => { if (!isRouteActive('/rh')) e.currentTarget.style.borderColor = 'transparent' }}
+                                >
+                                    <div className="flex items-center">
+                                        <Briefcase className="w-4 h-4 mr-4" style={{ color: isRouteActive('/rh') ? '#ffffff' : 'var(--color-primario)' }} />
+                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Recursos Humanos_</span>
                                     </div>
                                 </Link>
                             )}

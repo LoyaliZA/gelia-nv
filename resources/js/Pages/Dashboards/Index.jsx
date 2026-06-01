@@ -21,6 +21,7 @@ import { DASHBOARD_MODULE_CARDS, DASHBOARD_FUNCTION_CARDS } from '../../Componen
 import WidgetSolicitudes from './Widgets/WidgetSolicitudes';
 import WidgetCancelacionesCotizaciones from './Widgets/WidgetCancelacionesCotizaciones';
 import WidgetActivos from './Widgets/WidgetActivos';
+import WidgetRh from './Widgets/WidgetRh';
 
 const ESTILOS_ANIMACION_NATIVA = `
     @keyframes slideUpFadeDashboard { 
@@ -94,7 +95,7 @@ function buildFuncionesPanel({ variant, funcionesVisibles }) {
     });
 }
 
-export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas_operativas = [], alertas_activos_resumen = {}, alertas_activos_destacadas = [] }) {
+export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas_operativas = [], alertas_activos_resumen = {}, alertas_activos_destacadas = [], rh_widget = {} }) {
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
 
     const [showConfig, setShowConfig] = useState(false);
@@ -121,6 +122,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
     const mostrarWidgetSolicitudes = can('configuracion.ver_auditoria') || can('solicitudes.ver_listado');
     const mostrarWidgetCancelaciones = can('cancelaciones_cotizaciones.ver_listado');
     const mostrarWidgetActivos = can('activos.ver');
+    const mostrarWidgetRh = can('rh.ver');
 
     const visiblePanelIds = useMemo(() => {
         const ids = [];
@@ -129,8 +131,9 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
         if (mostrarWidgetSolicitudes) ids.push(PANEL_IDS.SOLICITUDES);
         if (mostrarWidgetCancelaciones) ids.push(PANEL_IDS.CANCELACIONES);
         if (mostrarWidgetActivos) ids.push(PANEL_IDS.ACTIVOS);
+        if (mostrarWidgetRh) ids.push(PANEL_IDS.RH);
         return ids;
-    }, [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos]);
+    }, [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos, mostrarWidgetRh]);
 
     const defaultLayout = useMemo(
         () =>
@@ -140,8 +143,9 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
                 hasWidgetSolicitudes: mostrarWidgetSolicitudes,
                 hasWidgetCancelaciones: mostrarWidgetCancelaciones,
                 hasWidgetActivos: mostrarWidgetActivos,
+                hasWidgetRh: mostrarWidgetRh,
             }),
-        [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos]
+        [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos, mostrarWidgetRh]
     );
 
     const activeLayout = useMemo(
@@ -164,8 +168,9 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
                     variant="desktop"
                 />
             ),
+            [PANEL_IDS.RH]: <WidgetRh rh_widget={rh_widget} variant="desktop" />,
         }),
-        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas, alertas_activos_resumen, alertas_activos_destacadas]
+        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas, alertas_activos_resumen, alertas_activos_destacadas, rh_widget]
     );
 
     const mobilePanels = useMemo(
@@ -181,8 +186,9 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
                     variant="mobile"
                 />
             ),
+            [PANEL_IDS.RH]: <WidgetRh rh_widget={rh_widget} variant="mobile" />,
         }),
-        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas, alertas_activos_resumen, alertas_activos_destacadas]
+        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas, alertas_activos_resumen, alertas_activos_destacadas, rh_widget]
     );
 
     useEffect(() => {

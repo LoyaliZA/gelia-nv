@@ -83,6 +83,10 @@ class HandleInertiaRequests extends Middleware
                     : null,
                 'presencia' => $presenciaAuth,
                 'presencia_catalogo' => PresenciaCatalogo::estados(),
+                'webpush' => [
+                    'enabled' => (bool) config('webpush.enabled', true) && (bool) config('webpush.vapid.public_key'),
+                    'public_key' => config('webpush.vapid.public_key'),
+                ],
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

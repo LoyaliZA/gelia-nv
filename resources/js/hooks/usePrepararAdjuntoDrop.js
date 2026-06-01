@@ -7,10 +7,12 @@ import {
 
 export default function usePrepararAdjuntoDrop({ onEnviarAdjunto }) {
     const [adjuntoPendiente, setAdjuntoPendiente] = useState(null);
+    const [errorEnvio, setErrorEnvio] = useState(null);
     const [dragActivo, setDragActivo] = useState(false);
     const dragDepth = useRef(0);
 
     const cerrarPendiente = useCallback(() => {
+        setErrorEnvio(null);
         setAdjuntoPendiente((prev) => {
             if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
             return null;
@@ -38,8 +40,17 @@ export default function usePrepararAdjuntoDrop({ onEnviarAdjunto }) {
     }, [onEnviarAdjunto]);
 
     const confirmarEnvio = useCallback(async (fileRenombrado, tipo, comentario) => {
-        await onEnviarAdjunto?.(fileRenombrado, tipo, comentario || null);
-        cerrarPendiente();
+        setErrorEnvio(null);
+        try {
+            await onEnviarAdjunto?.(fileRenombrado, tipo, comentario || null);
+            cerrarPendiente();
+        } catch (err) {
+            const msg = err?.response?.data?.message
+                || err?.response?.data?.errors?.archivo?.[0]
+                || err?.message
+                || 'No se pudo enviar el archivo.';
+            setErrorEnvio(msg);
+        }
     }, [onEnviarAdjunto, cerrarPendiente]);
 
     const onDragEnter = useCallback((e) => {
@@ -85,5 +96,6 @@ export default function usePrepararAdjuntoDrop({ onEnviarAdjunto }) {
         prepararAdjunto,
         cerrarPendiente,
         confirmarEnvio,
+        errorEnvio,
     };
 }

@@ -15,7 +15,18 @@ use App\Models\SolicitudFactura;
 use App\Observers\SolicitudTagObserver;
 // Importaciones requeridas para el módulo de auditoría de catálogos
 use App\Models\CatalogoListaDescuento;
+use App\Models\RhColaborador;
+use App\Models\CatalogoPuesto;
+use App\Models\CatalogoTipoFalta;
+use App\Models\CatalogoBono;
+use App\Models\CatalogoReglaIncidencia;
+use App\Models\Producto;
+use App\Models\RhHorasExtra;
+use App\Models\RhIncidencia;
 use App\Observers\CatalogoListaDescuentoObserver;
+use App\Listeners\EnviarWebPushTrasNotificacion;
+use Illuminate\Notifications\Events\NotificationSent;
+use Illuminate\Support\Facades\Event;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -48,7 +59,17 @@ class AppServiceProvider extends ServiceProvider
         // CONEXIÓN DEL NUEVO OBSERVADOR PARA CATÁLOGOS
         CatalogoListaDescuento::observe(CatalogoListaDescuentoObserver::class);
 
+        Event::listen(NotificationSent::class, EnviarWebPushTrasNotificacion::class);
+
         Route::bind('factura', fn (string $value) => SolicitudFactura::where('id', $value)->orWhere('folio', $value)->firstOrFail());
+        Route::bind('colaborador', fn (string $value) => RhColaborador::findOrFail($value));
+        Route::bind('puesto', fn (string $value) => CatalogoPuesto::findOrFail($value));
+        Route::bind('horasExtra', fn (string $value) => RhHorasExtra::findOrFail($value));
+        Route::bind('tipoFalta', fn (string $value) => CatalogoTipoFalta::findOrFail($value));
+        Route::bind('incidencia', fn (string $value) => RhIncidencia::findOrFail($value));
+        Route::bind('bono', fn (string $value) => CatalogoBono::findOrFail($value));
+        Route::bind('reglaIncidencia', fn (string $value) => CatalogoReglaIncidencia::findOrFail($value));
+        Route::bind('producto', fn (string $value) => Producto::findOrFail($value));
 
         RateLimiter::for('api-externa', function (Request $request) {
             $aplicacion = $request->user();

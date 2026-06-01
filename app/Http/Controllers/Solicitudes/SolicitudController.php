@@ -11,6 +11,7 @@ use App\Services\Solicitudes\EliminarSolicitudService;
 use App\Services\Solicitudes\ResponderConsultaSolicitudService;
 use App\Services\Solicitudes\CancelarSolicitudService;
 use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
+use App\Services\Solicitudes\ExportarReporteSolicitudesService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use App\Models\SolicitudTag;
@@ -31,7 +32,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Inertia;
 use Inertia\Response;
-use Rap2hpoutre\FastExcel\FastExcel;
 
 class SolicitudController extends Controller
 {
@@ -407,36 +407,18 @@ class SolicitudController extends Controller
         return back()->with('success', 'El estado ha sido actualizado correctamente.');
     }
 
-    public function exportar(Request $request, ListarSolicitudesService $listarService)
+    public function exportar(Request $request, ExportarReporteSolicitudesService $exportService)
     {
-        $solicitudes = $listarService->ejecutar(Auth::user(), $request->all(), false);
-        $nombreArchivo = 'reporte_solicitudes_' . date('Y-m-d_H-i-s') . '.xlsx';
+        Gate::authorize('solicitudes.exportar');
 
-        return (new FastExcel($solicitudes))->download($nombreArchivo, function ($solicitud) {
-            return [
-                'Folio' => $solicitud->id,
-                'Fecha Solicitud' => $solicitud->created_at->format('Y-m-d H:i'),
-                'Vendedora' => $solicitud->vendedor->name ?? 'N/A',
-                'No. Cliente' => $solicitud->cliente->numero_cliente ?? 'N/A',
-                'Nombre Cliente' => $solicitud->cliente->nombre ?? 'N/A',
-                'Tipo de Proceso' => $solicitud->proceso->nombre ?? 'N/A',
-                'Tipo Cliente (Clasificación)' => $solicitud->tipoCliente->nombre ?? 'Normal',
-                'Lista Solicitada' => $solicitud->listaDescuento->nombre ?? 'Mantener Actual',
-                'Estado' => $solicitud->estado->nombre ?? 'N/A',
-                'Monto Cotizado ($)' => $solicitud->monto_cotizado,
-                'Pago Confirmado' => $solicitud->pago_confirmado ? 'Sí' : 'No',
-                'Observaciones' => $solicitud->observaciones_vendedor ?? 'Ninguna',
-                'N° Remisión' => $solicitud->numero_remision ?? '',
-                'N° Pedido' => $solicitud->numero_pedido ?? '',
-                'Fecha Operación' => $solicitud->fecha_operacion?->format('Y-m-d') ?? '',
-                'Motivo Operación' => $solicitud->motivo_operacion ?? '',
-                'Banco' => $solicitud->banco?->nombre ?? '',
-                'Solicitar Cotización' => $solicitud->solicitar_cotizacion ? 'Sí' : 'No',
-                'Cancelación Solicitada' => $solicitud->cancelacion_solicitada_at?->format('Y-m-d H:i') ?? '',
-                'Motivo Cancelación' => $solicitud->motivo_cancelacion ?? '',
-                'Lista Rebaja Cancelación' => $solicitud->listaRebaja?->nombre ?? '',
-            ];
-        });
+        $formato = strtolower($request->query('format', 'xlsx'));
+        $filtros = $request->except(['format']);
+
+        return match ($formato) {
+            'pdf' => $exportService->descargarPdf(Auth::user(), $filtros),
+            'csv' => $exportService->descargarCsv(Auth::user(), $filtros),
+            default => $exportService->descargarExcel(Auth::user(), $filtros),
+        };
     }
 
     public function rechazarPago(Request $request, SolicitudTag $solicitud)

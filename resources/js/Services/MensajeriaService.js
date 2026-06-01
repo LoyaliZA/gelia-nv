@@ -1,5 +1,20 @@
 import axios from 'axios';
 
+function tieneRuta(nombre) {
+    try {
+        return typeof route === 'function' && route().has?.(nombre);
+    } catch {
+        return false;
+    }
+}
+
+function urlAdjuntosStore(conversacionId) {
+    if (tieneRuta('mensajeria.adjuntos.store')) {
+        return route('mensajeria.adjuntos.store', conversacionId);
+    }
+    return `/mensajeria/conversaciones/${conversacionId}/adjuntos`;
+}
+
 export default {
     async listarConversaciones() {
         const { data } = await axios.get(route('mensajeria.conversaciones.list'));
@@ -38,14 +53,9 @@ export default {
         if (contenido) form.append('contenido', contenido);
         if (replyToId) form.append('reply_to_id', String(replyToId));
 
-        const { data } = await axios.post(
-            route('mensajeria.adjuntos.store', conversacionId),
-            form,
-            {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                onUploadProgress: onProgress,
-            }
-        );
+        const { data } = await axios.post(urlAdjuntosStore(conversacionId), form, {
+            onUploadProgress: onProgress,
+        });
         return data.mensaje;
     },
 

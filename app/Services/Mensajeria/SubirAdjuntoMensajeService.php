@@ -54,7 +54,7 @@ class SubirAdjuntoMensajeService
             default => $this->guardarArchivo($file, $conversacion->id),
         };
 
-        $formateado = DB::transaction(function () use ($conversacion, $user, $tipo, $contenido, $adjuntoData, $file) {
+        $formateado = DB::transaction(function () use ($conversacion, $user, $tipo, $contenido, $replyToId, $adjuntoData, $file) {
             $mensajeData = $this->enviarMensaje->ejecutar($conversacion, $user, [
                 'tipo' => $tipo,
                 'contenido' => $contenido,

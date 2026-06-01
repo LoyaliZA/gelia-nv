@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Bell, BellRing, CheckCircle2, AlertCircle, X, MailOpen } from 'lucide-react';
 import { usePage, router } from '@inertiajs/react';
 import NotificationBrowserService from '@/Services/NotificationBrowserService';
+import WebPushService from '@/Services/WebPushService';
 import { ALERTAS_TIPOS } from '@/utils/alertasPrefs';
 
 const ordenarPorFecha = (lista) =>
@@ -108,9 +109,12 @@ export default function NotificationBell({ notifications: propNotifications = []
         });
     };
 
-    const handleOpenDrawer = () => {
+    const handleOpenDrawer = async () => {
         setIsOpen(true);
-        NotificationBrowserService.requestDesktopPermissions();
+        await NotificationBrowserService.requestDesktopPermissions();
+        if (WebPushService.isSupported()) {
+            WebPushService.ensureSubscribed();
+        }
     };
 
     const formatearFecha = (fecha) => {

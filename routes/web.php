@@ -17,7 +17,18 @@ use App\Http\Controllers\Admin\PersonalizacionController;
 use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\ActivoController;
 use App\Http\Controllers\Activos\TipoActivoController;
+use App\Http\Controllers\Rh\ColaboradorController;
+use App\Http\Controllers\Rh\ConfiguracionRhController;
+use App\Http\Controllers\Rh\CatalogoPuestoController;
+use App\Http\Controllers\Rh\CatalogoTipoFaltaController;
+use App\Http\Controllers\Rh\CatalogoBonoController;
+use App\Http\Controllers\Rh\CatalogoReglaIncidenciaController;
+use App\Http\Controllers\Rh\DashboardRhController;
+use App\Http\Controllers\Rh\HorasExtraController;
+use App\Http\Controllers\Rh\IncidenciaController;
+use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Facturas\SolicitudFacturaController;
+use App\Http\Controllers\Reportes\ReporteSolicitudesController;
 use App\Http\Controllers\Facturas\DatosFiscalesController;
 use App\Http\Controllers\Facturas\ArchivoFacturaController;
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
@@ -76,6 +87,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/notificaciones/{id}/leer', [AdminController::class, 'marcarNotificacionLeida'])->name('notifications.read');
     Route::post('/notificaciones/limpiar', [AdminController::class, 'limpiarNotificaciones'])->name('notifications.clear');
 
+    Route::get('/push/vapid-public-key', [\App\Http\Controllers\WebPushController::class, 'vapidPublicKey'])->name('push.vapid');
+    Route::post('/push/subscribe', [\App\Http\Controllers\WebPushController::class, 'subscribe'])->name('push.subscribe');
+    Route::delete('/push/unsubscribe', [\App\Http\Controllers\WebPushController::class, 'unsubscribe'])->name('push.unsubscribe');
+
     // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: MENSAJERÍA INTERNA
     // ══════════════════════════════════════════════════════════════════════
@@ -113,7 +128,12 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['can:solicitudes.ver_listado'])->group(function () {
         Route::get('/solicitudes', [SolicitudController::class, 'index'])->name('solicitudes.index');
+    });
+
+    Route::middleware(['can:solicitudes.exportar'])->group(function () {
         Route::get('/solicitudes/exportar', [SolicitudController::class, 'exportar'])->name('solicitudes.exportar');
+        Route::get('/reportes/solicitudes', [ReporteSolicitudesController::class, 'index'])->name('reportes.solicitudes.index');
+        Route::get('/reportes/solicitudes/exportar', [ReporteSolicitudesController::class, 'exportar'])->name('reportes.solicitudes.exportar');
     });
 
     Route::middleware(['can:solicitudes.crear'])->group(function () {
@@ -265,6 +285,84 @@ Route::middleware(['auth'])->group(function () {
 
 
     // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: RECURSOS HUMANOS
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:rh.ver'])->prefix('rh')->name('rh.')->group(function () {
+        Route::get('/', [DashboardRhController::class, 'index'])->name('index');
+
+        Route::get('/colaboradores', [ColaboradorController::class, 'index'])->name('colaboradores.index');
+        Route::post('/colaboradores/preview-calculos', [ColaboradorController::class, 'previewCalculos'])->name('colaboradores.preview_calculos');
+        Route::get('/colaboradores/usuarios/{usuario}/sincronizar', [ColaboradorController::class, 'sincronizarUsuario'])
+            ->middleware('can:rh.colaboradores.vincular_usuario')
+            ->name('colaboradores.sincronizar_usuario');
+        Route::get('/colaboradores/{colaborador}', [ColaboradorController::class, 'show'])->name('colaboradores.show');
+        Route::post('/colaboradores', [ColaboradorController::class, 'store'])
+            ->middleware('can:rh.colaboradores.crear')
+            ->name('colaboradores.store');
+        Route::put('/colaboradores/{colaborador}', [ColaboradorController::class, 'update'])
+            ->middleware('can:rh.colaboradores.editar')
+            ->name('colaboradores.update');
+
+        Route::middleware(['can:rh.horas_extra.ver'])->group(function () {
+            Route::get('/horas-extra', [HorasExtraController::class, 'index'])->name('horas_extra.index');
+            Route::post('/horas-extra/preview-calculos', [HorasExtraController::class, 'previewCalculos'])->name('horas_extra.preview_calculos');
+            Route::get('/horas-extra/{horasExtra}', [HorasExtraController::class, 'show'])->name('horas_extra.show');
+            Route::post('/horas-extra', [HorasExtraController::class, 'store'])
+                ->middleware('can:rh.horas_extra.crear')
+                ->name('horas_extra.store');
+            Route::put('/horas-extra/{horasExtra}', [HorasExtraController::class, 'update'])
+                ->middleware('can:rh.horas_extra.editar')
+                ->name('horas_extra.update');
+        });
+
+        Route::middleware(['can:rh.incidencias.ver'])->group(function () {
+            Route::get('/incidencias', [IncidenciaController::class, 'index'])->name('incidencias.index');
+            Route::post('/incidencias/preview-calculos', [IncidenciaController::class, 'previewCalculos'])->name('incidencias.preview_calculos');
+            Route::get('/incidencias/{incidencia}', [IncidenciaController::class, 'show'])->name('incidencias.show');
+            Route::post('/incidencias', [IncidenciaController::class, 'store'])
+                ->middleware('can:rh.incidencias.crear')
+                ->name('incidencias.store');
+            Route::put('/incidencias/{incidencia}', [IncidenciaController::class, 'update'])
+                ->middleware('can:rh.incidencias.editar')
+                ->name('incidencias.update');
+            Route::post('/incidencias/{incidencia}/aplicar', [IncidenciaController::class, 'aplicar'])
+                ->middleware('can:rh.incidencias.aplicar')
+                ->name('incidencias.aplicar');
+        });
+
+        Route::middleware(['can:rh.configurar'])->group(function () {
+            Route::get('/configuracion', [ConfiguracionRhController::class, 'index'])->name('configuracion');
+            Route::put('/configuracion', [ConfiguracionRhController::class, 'update'])->name('configuracion.update');
+            Route::post('/configuracion/preview-folio', [ConfiguracionRhController::class, 'previewFolio'])->name('configuracion.preview_folio');
+        });
+
+        Route::middleware(['can:rh.catalogos.puestos'])->prefix('catalogos/puestos')->name('catalogos.puestos.')->group(function () {
+            Route::post('/', [CatalogoPuestoController::class, 'store'])->name('store');
+            Route::put('/{puesto}', [CatalogoPuestoController::class, 'update'])->name('update');
+            Route::delete('/{puesto}', [CatalogoPuestoController::class, 'destroy'])->name('destroy');
+        });
+
+        Route::middleware(['can:rh.catalogos.tipos_faltas'])->prefix('catalogos/tipos-faltas')->name('catalogos.tipos_faltas.')->group(function () {
+            Route::post('/', [CatalogoTipoFaltaController::class, 'store'])->name('store');
+            Route::put('/{tipoFalta}', [CatalogoTipoFaltaController::class, 'update'])->name('update');
+            Route::delete('/{tipoFalta}', [CatalogoTipoFaltaController::class, 'destroy'])->name('destroy');
+        });
+
+        Route::middleware(['can:rh.catalogos.bonos'])->prefix('catalogos/bonos')->name('catalogos.bonos.')->group(function () {
+            Route::post('/', [CatalogoBonoController::class, 'store'])->name('store');
+            Route::put('/{bono}', [CatalogoBonoController::class, 'update'])->name('update');
+            Route::delete('/{bono}', [CatalogoBonoController::class, 'destroy'])->name('destroy');
+        });
+
+        Route::middleware(['can:rh.catalogos.incidencias_generales'])->prefix('catalogos/reglas-incidencia')->name('catalogos.reglas_incidencia.')->group(function () {
+            Route::post('/', [CatalogoReglaIncidenciaController::class, 'store'])->name('store');
+            Route::put('/{reglaIncidencia}', [CatalogoReglaIncidenciaController::class, 'update'])->name('update');
+            Route::delete('/{reglaIncidencia}', [CatalogoReglaIncidenciaController::class, 'destroy'])->name('destroy');
+        });
+    });
+
+
+    // ══════════════════════════════════════════════════════════════════════
     // MÓDULO DE ADMINISTRACIÓN (GELIANV CORE)
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('admin')->name('admin.')->group(function () {
@@ -359,6 +457,12 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/bancos', [CatalogoController::class, 'storeBanco'])->name('bancos.store');
                 Route::put('/bancos/{id}', [CatalogoController::class, 'updateBanco'])->name('bancos.update');
                 Route::delete('/bancos/{id}', [CatalogoController::class, 'destroyBanco'])->name('bancos.destroy');
+
+                // Productos / Inventario
+                Route::post('/productos', [ProductoController::class, 'store'])->name('productos.store');
+                Route::put('/productos/{producto}', [ProductoController::class, 'update'])->name('productos.update');
+                Route::delete('/productos/{producto}', [ProductoController::class, 'destroy'])->name('productos.destroy');
+                Route::post('/productos/import', [ProductoController::class, 'importar'])->name('productos.import');
 
                 // Tipos de Activo
                 Route::post('/tipos-activo', [TipoActivoController::class, 'store'])->name('tipos_activo.store')->middleware('can:activos.configurar_tipos');

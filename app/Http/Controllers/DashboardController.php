@@ -8,6 +8,7 @@ use App\Models\SolicitudTag;
 use App\Models\CatalogoProceso;
 use App\Models\User;
 use App\Services\Activos\AlertasActivosService;
+use App\Services\Rh\ResumenDashboardRhService;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -23,6 +24,7 @@ class DashboardController extends Controller
         $ultimasOperativas = [];
         $alertasActivosResumen = [];
         $alertasActivosDestacadas = [];
+        $rhWidget = [];
 
         // Estadísticas operativas (Ejemplo: Vendedores/Asesores)
         if ($user->can('solicitudes.crear') || $user->can('solicitudes.gestionar')) {
@@ -85,12 +87,17 @@ class DashboardController extends Controller
             ));
         }
 
+        if ($user->can('rh.ver')) {
+            $rhWidget = app(ResumenDashboardRhService::class)->widget();
+        }
+
         return Inertia::render('Dashboards/Index', [
             'estadisticas' => $estadisticas,
             'ultimas_solicitudes' => $ultimasSolicitudes,
             'ultimas_operativas' => $ultimasOperativas,
             'alertas_activos_resumen' => $alertasActivosResumen,
             'alertas_activos_destacadas' => $alertasActivosDestacadas,
+            'rh_widget' => $rhWidget,
         ]);
 
     }

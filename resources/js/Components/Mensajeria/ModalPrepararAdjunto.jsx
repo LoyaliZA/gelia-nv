@@ -187,6 +187,7 @@ export default function ModalPrepararAdjunto({
     onCerrar,
     onConfirmar,
     enviando = false,
+    errorEnvio = null,
 }) {
     const [nombre, setNombre] = useState('');
     const [comentario, setComentario] = useState('');
@@ -289,6 +290,12 @@ export default function ModalPrepararAdjunto({
                                 className="w-full mt-1 flex-1 min-h-[5rem] resize-none rounded-xl px-3 py-2 text-sm theme-element theme-text-main border theme-border outline-none focus:border-[var(--color-primario)]"
                             />
                         </div>
+
+                        {errorEnvio && (
+                            <p className="text-xs text-red-600 dark:text-red-400 font-bold m-0" role="alert">
+                                {errorEnvio}
+                            </p>
+                        )}
 
                         <div className="flex gap-2 pt-1">
                             <button

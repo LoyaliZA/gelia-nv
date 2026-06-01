@@ -16,6 +16,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'solicitudes.cancelar': 'Permite confirmar cancelaciones pendientes y revertir cambios al cliente.',
     'solicitudes.confirmar_cambio_lista': 'Permite confirmar el ajuste de lista tras alerta de pago insuficiente.',
     'solicitudes.eliminar': 'Permite eliminar registros de solicitudes con respaldo en auditoría.',
+    'solicitudes.exportar': 'Permite exportar reportes de solicitudes financieras en PDF, Excel y CSV.',
     'clientes.ver': 'Permite consultar el catálogo de clientes.',
     'clientes.crear': 'Permite registrar clientes manualmente.',
     'clientes.carga_masiva': 'Permite importar clientes de forma masiva.',

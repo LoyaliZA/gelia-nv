@@ -23,12 +23,15 @@ import {
     FONT_SCALE_STORAGE_KEY,
     applyFontScaleToRoot,
 } from '../utils/fontScale';
+import useWebPush from '@/hooks/useWebPush';
 
 const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
 
 export default function AppLayout({ children, fullScreen = false }) {
     const { props: { auth, tonos_alertas = [] }, url } = usePage();
+
+    useWebPush(auth, tonos_alertas);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState(null);

@@ -8,6 +8,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -91,6 +92,11 @@ class User extends Authenticatable
     public function permisoProcedencia(): HasMany
     {
         return $this->hasMany(UsuarioPermisoProcedencia::class);
+    }
+
+    public function perfilRh(): HasOne
+    {
+        return $this->hasOne(RhColaborador::class, 'user_id');
     }
 
     public function conversaciones(): BelongsToMany

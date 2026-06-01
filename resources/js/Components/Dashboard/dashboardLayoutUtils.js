@@ -12,15 +12,16 @@ export const PANEL_IDS = {
     SOLICITUDES: 'panel_solicitudes',
     CANCELACIONES: 'panel_cancelaciones_cotizaciones',
     ACTIVOS: 'panel_activos',
+    RH: 'panel_rh',
 };
 
 /**
  * Disposición inicial que replica el layout anterior (módulos + widgets en fila, funciones abajo).
  */
-export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitudes, hasWidgetCancelaciones, hasWidgetActivos }) {
+export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitudes, hasWidgetCancelaciones, hasWidgetActivos, hasWidgetRh }) {
     const layout = [];
     let nextRow = 0;
-    const widgetCount = [hasWidgetSolicitudes, hasWidgetCancelaciones, hasWidgetActivos].filter(Boolean).length;
+    const widgetCount = [hasWidgetSolicitudes, hasWidgetCancelaciones, hasWidgetActivos, hasWidgetRh].filter(Boolean).length;
     const hasAnyWidget = widgetCount > 0;
     const modulosWidth = hasAnyWidget ? 7 : 12;
     const widgetWidth = hasModulos ? 5 : 12;
@@ -58,6 +59,7 @@ export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitu
     if (hasWidgetSolicitudes) pushWidget(PANEL_IDS.SOLICITUDES);
     if (hasWidgetCancelaciones) pushWidget(PANEL_IDS.CANCELACIONES);
     if (hasWidgetActivos) pushWidget(PANEL_IDS.ACTIVOS);
+    if (hasWidgetRh) pushWidget(PANEL_IDS.RH);
 
     if (hasFunciones) {
         layout.push({
@@ -165,7 +167,8 @@ const PANEL_PRIORITY = {
     [PANEL_IDS.MODULOS]: 0,
     [PANEL_IDS.SOLICITUDES]: 1,
     [PANEL_IDS.ACTIVOS]: 2,
-    [PANEL_IDS.FUNCIONES]: 3,
+    [PANEL_IDS.RH]: 3,
+    [PANEL_IDS.FUNCIONES]: 4,
 };
 
 function packItems(items) {

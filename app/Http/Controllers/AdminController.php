@@ -26,6 +26,7 @@ use App\Models\CatalogoZonaEntrega;
 use App\Models\CatalogoHorarioEntrega;
 use App\Models\CatalogoBanco;
 use App\Models\CatalogoTipoActivo;
+use App\Models\Producto;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
@@ -79,6 +80,7 @@ class AdminController extends Controller
             'porcentajes_listado' => CatalogoPorcentajeListadoLista::with('listaDescuento')->get(),
             'bancos' => CatalogoBanco::orderBy('nombre')->get(),
             'tipos_activo' => CatalogoTipoActivo::orderBy('nombre')->get(),
+            'productos' => Producto::orderBy('descripcion')->get(),
         ]);
     }
 

@@ -17,9 +17,10 @@ import TablaPorcentajesEscalonamiento from './Partials/Catalogos/TablaPorcentaje
 import TablaPorcentajesListado from './Partials/Catalogos/TablaPorcentajesListado';
 import TablaBancos from './Partials/Catalogos/TablaBancos';
 import TablaTiposActivo from './Partials/Catalogos/TablaTiposActivo';
+import TablaProductos from './Partials/Catalogos/TablaProductos';
 
 
-export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [], bancos = [], tipos_activo = [] }) {
+export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [], bancos = [], tipos_activo = [], productos = [] }) {
     const [tabActiva, setTabActiva] = useState('departamentos');
     const activeCardClass = geliaCardClass('relative z-10');
 
@@ -34,6 +35,7 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
         { id: 'estados',       label: 'Estados',       icon: Activity },
         { id: 'bancos',        label: 'Bancos',        icon: Landmark },
         { id: 'tipos_activo', label: 'Tipos Activo', icon: Package },
+        { id: 'productos', label: 'Productos', icon: Package },
         { id: 'zonas_entrega', label: 'Zonas Logísticas', icon: Map },
         { id: 'horarios_entrega', label: 'Horarios Entrega', icon: Clock }
     ];
@@ -83,6 +85,7 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
                     {tabActiva === 'estados' && <TablaEstados datos={estados} />}
                     {tabActiva === 'bancos' && <TablaBancos datos={bancos} />}
                     {tabActiva === 'tipos_activo' && <TablaTiposActivo datos={tipos_activo} />}
+                    {tabActiva === 'productos' && <TablaProductos datos={productos} />}
                     {tabActiva === 'tipos_cliente' && <TablaTipoClientes datos={tipos_cliente} />}
                     {tabActiva === 'zonas_entrega' && <TablaZonasEntrega datos={zonas_entrega} auth={auth} />}
                     {tabActiva === 'horarios_entrega' && <TablaHorariosEntrega datos={horarios_entrega} zonas_entrega={zonas_entrega} auth={auth} />}

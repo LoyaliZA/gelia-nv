@@ -16,6 +16,7 @@ export default function ZonaDropAdjuntoChat({
         prepararAdjunto,
         cerrarPendiente,
         confirmarEnvio,
+        errorEnvio,
     } = usePrepararAdjuntoDrop({ onEnviarAdjunto });
 
     return (
@@ -42,6 +43,7 @@ export default function ZonaDropAdjuntoChat({
                 onCerrar={cerrarPendiente}
                 onConfirmar={confirmarEnvio}
                 enviando={enviando}
+                errorEnvio={errorEnvio}
             />
         </div>
     );
