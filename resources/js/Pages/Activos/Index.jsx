@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { Package, Plus, Download, Eye, Wrench, ImageIcon, BookOpen, Settings, PenTool } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -85,6 +85,7 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
         return localStorage.getItem('activos_guia_oculta') === '1';
     });
     const [guiaKey, setGuiaKey] = useState(0);
+    const filtrosRestaurados = useRef(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -92,17 +93,20 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
         const paramsObj = Object.fromEntries(params.entries());
         const hasActiveParams = Object.keys(paramsObj).some(k => k !== 'page' && paramsObj[k] !== '');
 
-        if (!hasActiveParams) {
-            const guardadosRaw = sessionStorage.getItem('activos_filtros_guardados');
-            if (guardadosRaw) {
-                try {
-                    const guardados = JSON.parse(guardadosRaw);
-                    if (Object.keys(guardados).length > 0) {
-                        router.replace(route('activos.index'), { data: guardados, replace: true });
-                        return;
+        if (!filtrosRestaurados.current) {
+            filtrosRestaurados.current = true;
+            if (!hasActiveParams) {
+                const guardadosRaw = sessionStorage.getItem('activos_filtros_guardados');
+                if (guardadosRaw) {
+                    try {
+                        const guardados = JSON.parse(guardadosRaw);
+                        if (Object.keys(guardados).length > 0) {
+                            router.replace(route('activos.index'), { data: guardados, replace: true });
+                            return;
+                        }
+                    } catch (e) {
+                        // ignore
                     }
-                } catch (e) {
-                    // ignore
                 }
             }
         }
@@ -113,9 +117,7 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
                 aGuardar[k] = v;
             }
         }
-        if (Object.keys(aGuardar).length > 0) {
-            sessionStorage.setItem('activos_filtros_guardados', JSON.stringify(aGuardar));
-        }
+        sessionStorage.setItem('activos_filtros_guardados', JSON.stringify(aGuardar));
     }, [filtros]);
 
     const can = (permiso) => {

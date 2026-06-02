@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Head, useForm, router } from '@inertiajs/react';
 import { animate } from 'animejs/animation';
 import { createPortal } from 'react-dom';
+import axios from 'axios';
+
 import {
     Users, UserPlus, Search, Edit3, Trash2,
     ShieldCheck, X, Briefcase, Check, MapPin,
@@ -198,7 +200,14 @@ export default function Usuarios({
     esSuperAdmin = false,
     permisosUsuario = [],
 }) {
-    const lista = usuarios?.data ?? [];
+    const [usuariosState, setUsuariosState] = useState(usuarios);
+    const [buscando, setBuscando] = useState(false);
+
+    useEffect(() => {
+        setUsuariosState(usuarios);
+    }, [usuarios]);
+
+    const lista = usuariosState?.data ?? [];
     const busquedaInicial = filtros?.busqueda ?? '';
     const debounceRef = useRef(null);
 
@@ -247,21 +256,53 @@ export default function Usuarios({
     const aplicarBusqueda = useCallback((valor) => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
-            router.get(
-                route('admin.usuarios'),
-                { busqueda: valor.trim() || undefined, page: 1 },
-                { preserveState: true, replace: true }
-            );
+            setBuscando(true);
+            axios.get(route('admin.usuarios'), {
+                params: { busqueda: valor.trim() || undefined, page: 1 },
+                headers: {
+                    'X-Inertia': 'true',
+                    'X-Inertia-Partial-Component': 'Admin/Usuarios',
+                    'X-Inertia-Partial-Data': 'usuarios,filtros'
+                }
+            }).then(response => {
+                setUsuariosState(response.data.props.usuarios);
+                const url = new URL(window.location.href);
+                if (valor.trim()) {
+                    url.searchParams.set('busqueda', valor.trim());
+                } else {
+                    url.searchParams.delete('busqueda');
+                }
+                url.searchParams.set('page', '1');
+                window.history.replaceState({}, '', url.pathname + url.search);
+            }).catch(error => {
+                console.error("Error al buscar usuarios:", error);
+            }).finally(() => {
+                setBuscando(false);
+            });
         }, 350);
     }, []);
 
     const irAPagina = (pagina) => {
-        if (pagina < 1 || pagina > (usuarios.last_page || 1)) return;
-        router.get(
-            route('admin.usuarios'),
-            { busqueda: busqueda.trim() || undefined, page: pagina },
-            { preserveState: true, preserveScroll: true }
-        );
+        if (pagina < 1 || pagina > (usuariosState.last_page || 1)) return;
+        setBuscando(true);
+        axios.get(route('admin.usuarios'), {
+            params: { busqueda: busqueda.trim() || undefined, page: pagina },
+            headers: {
+                'X-Inertia': 'true',
+                'X-Inertia-Partial-Component': 'Admin/Usuarios',
+                'X-Inertia-Partial-Data': 'usuarios,filtros'
+            }
+        }).then(response => {
+            setUsuariosState(response.data.props.usuarios);
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', pagina);
+            window.history.replaceState({}, '', url.pathname + url.search);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }).catch(error => {
+            console.error("Error al paginar usuarios:", error);
+        }).finally(() => {
+            setBuscando(false);
+        });
     };
 
     const rolesJerarquia = (roles || []).filter(rol => rol?.name && !rol.name.includes('Grupo:'));
@@ -459,9 +500,9 @@ export default function Usuarios({
                         </h1>
                         <p className="theme-text-muted text-[10px] font-bold uppercase tracking-widest mt-2 max-w-xl">
                             Gestión de personal, identidad y permisos operativos
-                            {usuarios.total > 0 && (
+                            {usuariosState.total > 0 && (
                                 <span className="block sm:inline sm:ml-2 mt-1 sm:mt-0 opacity-80">
-                                    · {usuarios.total.toLocaleString('es-MX')} colaboradores
+                                    · {usuariosState.total.toLocaleString('es-MX')} colaboradores
                                 </span>
                             )}
                         </p>
@@ -469,7 +510,13 @@ export default function Usuarios({
 
                     <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto lg:max-w-xl shrink-0">
                         <div className="theme-field-with-icon flex-1 min-w-0">
-                            <Search className="theme-field-icon" aria-hidden />
+                            {buscando ? (
+                                <div className="theme-field-icon flex items-center justify-center">
+                                    <div className="w-3.5 h-3.5 rounded-full border-2 border-[var(--color-primario)] border-t-transparent animate-spin" />
+                                </div>
+                            ) : (
+                                <Search className="theme-field-icon" aria-hidden />
+                            )}
                             <input
                                 type="search"
                                 placeholder="Buscar por nombre, correo o usuario..."
@@ -499,7 +546,7 @@ export default function Usuarios({
                     />
                 )}
 
-                <div className="lg:hidden space-y-3">
+                <div className={`lg:hidden space-y-3 transition-opacity duration-200 ${buscando ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                     {lista.length === 0 ? (
                         <div className={`${geliaCardClass()} text-center py-14 px-6 border-dashed`}>
                             <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
@@ -514,11 +561,11 @@ export default function Usuarios({
                         ))
                     )}
                     {lista.length > 0 && (
-                        <GeliaPaginacion paginator={usuarios} onIrAPagina={irAPagina} />
+                        <GeliaPaginacion paginator={usuariosState} onIrAPagina={irAPagina} />
                     )}
                 </div>
 
-                <div className={`hidden lg:block ${cardListado}`}>
+                <div className={`hidden lg:block ${cardListado} transition-opacity duration-200 ${buscando ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left min-w-[720px]">
                             <thead>
@@ -550,7 +597,7 @@ export default function Usuarios({
                         </table>
                     </div>
                     {lista.length > 0 && (
-                        <GeliaPaginacion paginator={usuarios} onIrAPagina={irAPagina} embedded />
+                        <GeliaPaginacion paginator={usuariosState} onIrAPagina={irAPagina} embedded />
                     )}
                 </div>
 
