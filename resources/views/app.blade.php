@@ -20,6 +20,8 @@
     </script>
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" id="dynamic-favicon">
+    <link rel="apple-touch-icon" href="/favicon-192.png">
+    <link rel="manifest" href="/manifest.json">
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
