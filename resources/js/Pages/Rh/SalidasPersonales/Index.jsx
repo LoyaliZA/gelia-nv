@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Clock, Plus, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Clock, Plus, Eye, Pencil, Trash2, LogOut } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
+import RhPageHeader from '../Partials/RhPageHeader';
 import FiltrosSalidasPersonales from './Partials/FiltrosSalidasPersonales';
 import ModalFormSalidaPersonal from './Partials/ModalFormSalidaPersonal';
 import { getSalidaStatusInfo } from './Partials/salidasStyles';
@@ -65,22 +67,20 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Salidas Personales | RH" />
-            <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
-                <header className={geliaCardClass('p-6 md:p-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6')}>
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl md:text-4xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                            Registro de <span style={{ color: 'var(--color-primario)' }}>Salidas Personales</span>
-                        </h1>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
-                            {registros.total.toLocaleString('es-MX')} registros
-                        </p>
-                    </div>
-                    {puedeCrear && (
-                        <button type="button" onClick={abrirNuevo} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2 animate-pulse-subtle" style={{ backgroundColor: 'var(--color-primario)' }}>
-                            <Plus className="w-4 h-4" /> Registrar Salida
-                        </button>
-                    )}
-                </header>
+            <GeliaPageShell className="space-y-8 relative">
+                <RhPageHeader
+                    title="Registro de"
+                    titleHighlight="Salidas Personales"
+                    description={`${registros.total.toLocaleString('es-MX')} registros`}
+                    icon={LogOut}
+                    aside={
+                        puedeCrear ? (
+                            <button type="button" onClick={abrirNuevo} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2 animate-pulse-subtle" style={{ backgroundColor: 'var(--color-primario)' }}>
+                                <Plus className="w-4 h-4" /> Registrar Salida
+                            </button>
+                        ) : null
+                    }
+                />
 
                 <RhSubNav />
 
@@ -174,7 +174,7 @@ export default function Index({
                         <GeliaPaginacion paginator={registros} onIrAPagina={irAPagina} embedded />
                     )}
                 </div>
-            </div>
+            </GeliaPageShell>
 
             <ModalFormSalidaPersonal
                 abierto={modalAbierto}

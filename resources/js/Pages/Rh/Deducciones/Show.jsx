@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { ArrowLeft, AlertTriangle, Pencil, CheckCircle, FileText } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
@@ -27,7 +28,7 @@ export default function Show({
     return (
         <AppLayout auth={auth}>
             <Head title={`${registro.folio} | Deducciones RH`} />
-            <div className="max-w-[1000px] mx-auto p-4 md:p-8 space-y-6">
+            <GeliaPageShell className="max-w-[1000px] space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <Link href={route('rh.deducciones.index')} className="inline-flex items-center gap-2 text-[10px] font-black uppercase theme-text-muted hover:theme-text-main">
                         <ArrowLeft className="w-4 h-4" /> Volver al listado
@@ -128,7 +129,7 @@ export default function Show({
                         )}
                     </section>
                 )}
-            </div>
+            </GeliaPageShell>
 
             <ModalFormDeduccion
                 abierto={modalAbierto}

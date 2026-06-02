@@ -1,0 +1,250 @@
+import {
+    Home,
+    LayoutDashboard,
+    MessageCircle,
+    Briefcase,
+    User,
+    Users,
+    Ban,
+    Truck,
+    ClipboardList,
+    Map,
+    CreditCard,
+    Receipt,
+    Settings,
+    Package,
+    Wrench,
+    BarChart3,
+    List,
+    Lock,
+    Shield,
+    Tag,
+} from 'lucide-react';
+
+function routeHref(name, fallback) {
+    if (typeof route === 'function') {
+        try {
+            return route(name);
+        } catch {
+            return fallback;
+        }
+    }
+    return fallback;
+}
+
+/** Árbol de navegación del menú lateral (permisos aplicados al renderizar). */
+export function buildSidebarNavigation({ can, showAdminMenu }) {
+    const showReportes = can('solicitudes.exportar');
+    const showListados = can('listados.ver');
+    const showHerramientas = showReportes || showListados;
+
+    const solicitudesChildren = [
+        can('solicitudes.ver_listado') && {
+            type: 'link',
+            id: 'solicitudes',
+            label: 'Cambio de Lista y Tags',
+            icon: Tag,
+            href: () => routeHref('solicitudes.index', '/solicitudes'),
+            active: (url) => url.startsWith('/solicitudes'),
+        },
+        can('cancelaciones_cotizaciones.ver_listado') && {
+            type: 'link',
+            id: 'cancelaciones',
+            label: 'Cancelación y cotización',
+            icon: Ban,
+            href: () => routeHref('cancelaciones_cotizaciones.index', '/cancelaciones-cotizaciones'),
+            active: (url) => url.startsWith('/cancelaciones-cotizaciones'),
+        },
+        can('facturas.ver_listado') && {
+            type: 'link',
+            id: 'facturas',
+            label: 'Facturas',
+            icon: Receipt,
+            href: () => routeHref('facturas.index', '/facturas'),
+            active: (url) => url.startsWith('/facturas'),
+        },
+    ].filter(Boolean);
+
+    const comercialChildren = [
+        can('mis_clientes.gestionar') && {
+            type: 'link',
+            id: 'mis_clientes',
+            label: 'Mis Clientes',
+            icon: Users,
+            href: () => routeHref('mis_clientes.index', '/mis-clientes'),
+            active: (url) => url.startsWith('/mis-clientes'),
+        },
+    ].filter(Boolean);
+
+    const logisticaChildren = [
+        can('entregas.cotizar') && {
+            type: 'link',
+            id: 'entregas',
+            label: 'Cotizar Entregas',
+            icon: Map,
+            href: () => routeHref('entregas.index', '/entregas/cotizador'),
+            active: (url) => url.startsWith('/entregas'),
+        },
+    ].filter(Boolean);
+
+    const operacionesChildren = [
+        solicitudesChildren.length > 0 && {
+            type: 'group',
+            id: 'solicitudes_group',
+            label: 'Solicitudes',
+            icon: ClipboardList,
+            children: solicitudesChildren,
+        },
+        comercialChildren.length > 0 && {
+            type: 'group',
+            id: 'comercial',
+            label: 'Comercial',
+            icon: User,
+            children: comercialChildren,
+        },
+        logisticaChildren.length > 0 && {
+            type: 'group',
+            id: 'logistica',
+            label: 'Logística',
+            icon: Truck,
+            children: logisticaChildren,
+        },
+    ].filter(Boolean);
+
+    const herramientasChildren = [
+        showReportes && {
+            type: 'link',
+            id: 'reportes',
+            label: 'Reportes',
+            icon: BarChart3,
+            href: () => routeHref('reportes.solicitudes.index', '/reportes/solicitudes'),
+            active: (url) => url.startsWith('/reportes/solicitudes'),
+        },
+        showListados && {
+            type: 'link',
+            id: 'listados',
+            label: 'Listados',
+            icon: List,
+            href: () => routeHref('listados.index', '/funciones/listados'),
+            active: (url) => url.startsWith('/funciones/listados') || url.startsWith('/listados'),
+        },
+    ].filter(Boolean);
+
+    const gestionChildren = [
+        can('rh.ver') && {
+            type: 'link',
+            id: 'rh',
+            label: 'Recursos Humanos',
+            icon: Users,
+            href: () => routeHref('rh.index', '/rh'),
+            active: (url) => url.startsWith('/rh'),
+        },
+        can('activos.ver') && {
+            type: 'link',
+            id: 'activos',
+            label: 'Control de Activos',
+            icon: Package,
+            href: () => routeHref('activos.index', '/activos'),
+            active: (url) => url.startsWith('/activos'),
+        },
+        showHerramientas && {
+            type: 'group',
+            id: 'herramientas',
+            label: 'Herramientas',
+            icon: Wrench,
+            children: herramientasChildren,
+        },
+    ].filter(Boolean);
+
+    const sistemaChildren = [
+        showAdminMenu && {
+            type: 'link',
+            id: 'admin',
+            label: 'Administración',
+            icon: Shield,
+            href: () => routeHref('admin.index', '/admin'),
+            active: (url) => url.startsWith('/admin'),
+        },
+    ].filter(Boolean);
+
+    return [
+        { type: 'header', id: 'accesos', label: 'ACCESOS_' },
+        {
+            type: 'group',
+            id: 'inicio',
+            label: 'Inicio',
+            icon: Home,
+            defaultOpen: true,
+            children: [
+                {
+                    type: 'link',
+                    id: 'dashboard',
+                    label: 'Panel Principal',
+                    icon: LayoutDashboard,
+                    href: () => routeHref('dashboard', '/dashboard'),
+                    active: (url) => url === '/dashboard',
+                },
+                {
+                    type: 'link',
+                    id: 'mensajeria',
+                    label: 'Mensajería',
+                    icon: MessageCircle,
+                    href: () => routeHref('mensajeria.index', '/mensajeria'),
+                    active: (url) => url.startsWith('/mensajeria'),
+                },
+            ],
+        },
+        operacionesChildren.length > 0 && {
+            type: 'group',
+            id: 'operaciones',
+            label: 'Operaciones',
+            icon: Briefcase,
+            children: operacionesChildren,
+        },
+        gestionChildren.length > 0 && {
+            type: 'group',
+            id: 'gestion_interna',
+            label: 'Gestión Interna',
+            icon: Settings,
+            children: gestionChildren,
+        },
+        sistemaChildren.length > 0 && {
+            type: 'group',
+            id: 'sistema',
+            label: 'Sistema',
+            icon: Lock,
+            children: sistemaChildren,
+        },
+    ].filter(Boolean);
+}
+
+/** IDs de grupos ancestros de la ruta activa (para expandir al navegar). */
+export function collectOpenGroupIdsForUrl(nodes, url, ancestors = []) {
+    const open = new Set(['inicio']);
+
+    const walk = (items, chain) => {
+        for (const node of items) {
+            if (!node || node.type === 'header') continue;
+
+            if (node.type === 'link') {
+                if (node.active?.(url)) {
+                    chain.forEach((id) => open.add(id));
+                }
+                continue;
+            }
+
+            if (node.type === 'group') {
+                const nextChain = [...chain, node.id];
+                if (node.defaultOpen) {
+                    open.add(node.id);
+                }
+                if (node.children?.length) {
+                    walk(node.children, nextChain);
+                }
+            }
+        }
+    };
+
+    walk(nodes, ancestors);
+    return open;
+}

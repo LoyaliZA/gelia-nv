@@ -2,14 +2,14 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useForm, usePage } from '@inertiajs/react';
 import {
     Menu, X, Moon, Sun, ArrowLeft,
-    LayoutDashboard, Briefcase,
-    Settings, Settings2, Users, LogOut,
-    Map, FileText, Package, Receipt, Ban, MessageCircle,
-    User, Sparkles, BarChart3,
+    Settings2, LogOut,
+    User, Sparkles,
 } from 'lucide-react';
 import { hasAnyAdminModuleAccess } from '../config/adminModules';
 
 import GeliaLogo from './GeliaLogo';
+import SidebarNavMenu from './SidebarNavMenu';
+import SidebarNavLeafLink from './SidebarNavLeafLink';
 
 import NotificationBell, { NotificationCountBadge } from './NotificationBell';
 import MensajeriaWidget from './Mensajeria/MensajeriaWidget';
@@ -24,8 +24,28 @@ const EASE_SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 const FIXED_POSITIONS = { left: 'left', right: 'right', top: 'top', bottom: 'bottom' };
 
+/** Separación exterior widget ↔ panel flotante (mitad del mt-4 / 1rem anterior = 0.5rem) */
+const SIDEBAR_PANEL_EXTERIOR_GAP = 'gap-2';
+
+/** Ancho del shell flotante: 0 en layout cuando está cerrado (el árbol interior no se toca) */
+function floatShellLayoutWidth(shellExpanded, { mobile = false } = {}) {
+    if (shellExpanded) {
+        return mobile ? 'w-[90vw] max-w-[320px] min-w-0' : 'w-[300px] max-w-[300px] min-w-0';
+    }
+    return 'w-0 min-w-0 max-w-0 shrink-0';
+}
+
+/** Ancho del panel perfil: nunca min-w-0 (evita colapso a ~2px en flex-col) */
+function profileShellLayoutWidth(shellExpanded, { mobile = false } = {}) {
+    if (shellExpanded) {
+        return mobile ? 'w-[90vw] max-w-[320px] min-w-[280px] shrink-0' : 'w-[300px] max-w-[300px] min-w-[300px] shrink-0';
+    }
+    return 'w-0 min-w-0 max-w-0 shrink-0';
+}
+
 /** Clases de posición/animación compartidas entre menú principal y menú de perfil */
-function buildSidebarMenuLayoutClasses({ isFixedVertical, isFixedHorizontal, isMobileMode, fixedPos, isOpen, isDrawer = false }) {
+function buildSidebarMenuLayoutClasses({ isFixedVertical, isFixedHorizontal, isMobileMode, fixedPos, isOpen, isShellExpanded, isDrawer = false }) {
+    const shellExpanded = isShellExpanded ?? isOpen;
     if (isMobileMode && isDrawer) {
         return ` gelia-sidebar-drawer h-full ml-0 rounded-none border-r theme-border ${isOpen ? '' : ''}`;
     }
@@ -34,15 +54,27 @@ function buildSidebarMenuLayoutClasses({ isFixedVertical, isFixedHorizontal, isM
         const menuRounding = fixedPos === FIXED_POSITIONS.right
             ? 'rounded-l-[2.5rem] rounded-r-none border-r-0'
             : 'rounded-r-[2.5rem] rounded-l-none border-l-0';
-        return ` h-screen ml-0 ${menuRounding} ${menuFixedClass} ${isOpen ? `${menuFixedClass}--open` : ''}`;
+        return ` h-auto max-h-[100dvh] shrink-0 ml-0 ${menuRounding} ${menuFixedClass} ${isOpen ? `${menuFixedClass}--open` : ''}`;
     }
+    const floatOpenClass = shellExpanded ? 'sidebar-menu-float--open' : '';
+
     if (isFixedHorizontal) {
-        return ` rounded-[2rem] w-[300px] max-w-[90vw] sidebar-menu-float ${fixedPos === FIXED_POSITIONS.bottom ? 'mb-3' : 'mt-0'} ${isOpen ? 'sidebar-menu-float--open' : ''}`;
+        return ` rounded-[2rem] max-w-[90vw] ${floatShellLayoutWidth(shellExpanded)} sidebar-menu-float ${floatOpenClass}`;
     }
     if (isMobileMode) {
-        return ` rounded-[2rem] w-[90vw] max-w-[320px] mb-4 sidebar-menu-float ${isOpen ? 'sidebar-menu-float--open' : ''}`;
+        return ` rounded-[2rem] ${floatShellLayoutWidth(shellExpanded, { mobile: true })} sidebar-menu-float ${floatOpenClass}`;
     }
-    return ` rounded-[2.5rem] w-[300px] mt-4 sidebar-menu-float ${isOpen ? 'sidebar-menu-float--open' : ''}`;
+    return ` rounded-[2.5rem] ${floatShellLayoutWidth(shellExpanded)} sidebar-menu-float ${floatOpenClass}`;
+}
+
+/** Perfil: panel compacto (3 enlaces), nunca h-screen ni altura de viewport */
+function buildProfileMenuLayoutClasses({ isMobileMode, isOpen, isShellExpanded, isDrawer = false }) {
+    const shellExpanded = isShellExpanded ?? isOpen;
+    if (isMobileMode && isDrawer) {
+        return ` gelia-sidebar-drawer h-auto ml-0 rounded-none border-r theme-border`;
+    }
+    const floatOpenClass = shellExpanded ? 'sidebar-menu-float--open' : '';
+    return ` rounded-[2.5rem] ${profileShellLayoutWidth(shellExpanded)} sidebar-menu-float ${floatOpenClass}`;
 }
 
 const prefixGroupClass = (visible, orientation) => {
@@ -65,7 +97,7 @@ const suffixGroupClass = (visible, orientation) => {
 
 const SIDEBAR_WIDGET_ICON_BTN_CLASS = 'sidebar-widget-icon-btn';
 const PROFILE_MENU_ITEMS = [
-    { id: 'perfil', label: 'Mi Perfil', routeName: 'profile.index', path: '/perfil', icon: User },
+    { id: 'perfil', label: 'Mi perfil', routeName: 'profile.index', path: '/perfil', icon: User },
     { id: 'preferencias', label: 'Preferencias', routeName: 'profile.preferencias', path: '/perfil/preferencias', icon: Settings2 },
     { id: 'novedades', label: 'Novedades', routeName: 'profile.novedades', path: '/perfil/novedades', icon: Sparkles },
 ];
@@ -81,20 +113,8 @@ function profileMenuHref(item) {
     return item.path;
 }
 
-function adminPanelHref() {
-    if (typeof route === 'function') {
-        try {
-            return route('admin.index');
-        } catch {
-            // Ziggy desactualizado
-        }
-    }
-    return '/admin';
-}
-
 export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left', sidebarMode = 'collapsed', fixedPosition = 'left', useMobileTopBar = false }) {
     const { url, props: { auth } } = usePage();
-    const isAdminActive = url.startsWith('/admin');
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMenuClosing, setIsMenuClosing] = useState(false);
@@ -102,11 +122,10 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
     const [isProfileMenuClosing, setIsProfileMenuClosing] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-
     const closeTimerRef = useRef(null);
     const menuCloseTimerRef = useRef(null);
     const profileMenuCloseTimerRef = useRef(null);
-    const profileMenuRef = useRef(null);
+    const profileMenuShellRef = useRef(null);
     const profileAvatarButtonRef = useRef(null);
     const { post } = useForm();
 
@@ -128,10 +147,6 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     };
 
     const isProfileSectionActive = url.startsWith('/perfil');
-
-    const linkBaseClass = "flex items-center w-full px-6 py-4 rounded-[1.5rem] transition-all outline-none ";
-    const linkActiveClass = "bg-[var(--color-primario)] text-white shadow-lg border border-transparent";
-    const linkInactiveClass = "theme-element theme-text-muted hover:theme-text-main hover:shadow-md border border-transparent hover:border-[var(--color-primario)]";
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -163,11 +178,13 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     };
 
     const showAdminMenu = hasAnyAdminModuleAccess(can);
-    const showOperacionesMenu = can('listados.ver');
 
     const openMenu = () => {
         clearTimeout(closeTimerRef.current);
         clearTimeout(menuCloseTimerRef.current);
+        clearTimeout(profileMenuCloseTimerRef.current);
+        setIsProfileMenuClosing(false);
+        setIsProfileMenuOpen(false);
         setIsMenuClosing(false);
         setIsMenuOpen(true);
     };
@@ -196,12 +213,8 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     }, [pinExpanded, isMobileMode, sidebarMode]);
 
     const handleMenuToggle = () => {
-        if (isMobileMode) {
-            if (isMenuOpen) closeMenu();
-            else openMenu();
-            return;
-        }
         if (isMenuOpen) closeMenu();
+        else openMenu();
     };
 
     useEffect(() => {
@@ -255,7 +268,10 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
 
     const openProfileMenu = useCallback(() => {
         clearTimeout(profileMenuCloseTimerRef.current);
+        clearTimeout(menuCloseTimerRef.current);
         setIsProfileMenuClosing(false);
+        setIsMenuClosing(false);
+        setIsMenuOpen(false);
         setIsProfileMenuOpen(true);
     }, []);
 
@@ -285,7 +301,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
 
         const handlePointerDown = (event) => {
             if (
-                profileMenuRef.current?.contains(event.target) ||
+                profileMenuShellRef.current?.contains(event.target) ||
                 profileAvatarButtonRef.current?.contains(event.target)
             ) {
                 return;
@@ -327,7 +343,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     ) : (
                         <div className="flex items-center justify-center w-full h-full bg-transparent">
                             <span
-                                className={`font-black leading-none select-none ${compact ? 'text-[10px]' : 'text-lg'}`}
+                                className={`gelia-sidebar-avatar-initial leading-none select-none ${compact ? 'gelia-sidebar-avatar-initial--compact' : 'gelia-sidebar-avatar-initial--expanded'}`}
                                 style={{ color: 'var(--color-primario)' }}
                             >
                                 {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
@@ -340,37 +356,65 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
     };
 
     const mobileDrawerMode = isMobileMode && useMobileTopBar;
+    const isFloatCornerLayout = !isFixed && !isMobileMode;
+    const clusterNeedsPointerCapture = isMenuVisible || isProfileMenuVisible || isHovered || pinExpanded;
 
-    // 1. Contenedor Base: Ocupa todo el ancho pero NO bloquea los clics
-    let navClasses = "fixed z-[200] flex pointer-events-none sidebar-mount ";
+    // 1. Contenedor Base: solo ocupa el espacio del sidebar; nunca bloquear toda la pantalla
+    let navClasses = 'fixed z-[200] flex pointer-events-none sidebar-mount ';
+    if (isFloatCornerLayout) {
+        navClasses += 'h-auto w-auto max-h-none overflow-visible ';
+    } else if (isFixedVertical) {
+        navClasses += 'h-screen w-auto max-h-[100dvh] overflow-visible ';
+    } else if (isFixedHorizontal) {
+        navClasses += 'h-auto w-full max-h-none overflow-visible ';
+    } else {
+        navClasses += 'h-auto w-full max-h-[100dvh] overflow-visible ';
+    }
     if (mobileDrawerMode) {
-        navClasses += "gelia-sidebar-mount--mobile ";
+        navClasses += 'gelia-sidebar-mount--mobile ';
     } else if (isMobileMode) {
-        navClasses += "bottom-6 left-0 right-0 w-full flex-col-reverse items-center";
+        navClasses += 'bottom-6 left-0 right-0 w-full flex-col-reverse items-center';
     } else if (isFixed) {
-        if (fixedPos === FIXED_POSITIONS.right) navClasses += "top-0 right-0 h-screen flex-row-reverse";
-        else if (fixedPos === FIXED_POSITIONS.top) navClasses += "top-0 left-0 right-0 w-full flex-col items-start";
-        else if (fixedPos === FIXED_POSITIONS.bottom) navClasses += "bottom-0 left-0 right-0 w-full flex-col-reverse items-start";
-        else navClasses += "top-0 left-0 h-screen flex-row";
+        if (fixedPos === FIXED_POSITIONS.right) navClasses += 'top-0 right-0 h-screen flex-row-reverse';
+        else if (fixedPos === FIXED_POSITIONS.top) navClasses += 'top-0 left-0 right-0 w-full flex-col items-start';
+        else if (fixedPos === FIXED_POSITIONS.bottom) navClasses += 'bottom-0 left-0 right-0 w-full flex-col-reverse items-start';
+        else navClasses += 'top-0 left-0 h-screen flex-row';
     } else {
         navClasses += `top-6 flex-col ${isRight ? 'right-6 items-end' : 'left-6 items-start'}`;
     }
 
-    let hoverContainerClasses = "pointer-events-auto flex ";
+    const sidebarTimingStyle = {
+        '--gelia-sidebar-widget-ms': `${WIDGET_MS}ms`,
+        '--gelia-sidebar-menu-open-ms': `${MENU_OPEN_MS}ms`,
+        '--gelia-sidebar-menu-close-ms': `${MENU_CLOSE_MS}ms`,
+        '--gelia-sidebar-mount-ms': '420ms',
+        '--gelia-sidebar-ease': EASE_SMOOTH,
+    };
+
+    let hoverContainerClasses = `gelia-sidebar-root gelia-sidebar-hover-cluster flex min-h-0 pointer-events-none ${SIDEBAR_PANEL_EXTERIOR_GAP} `;
+    if (isFloatCornerLayout) {
+        hoverContainerClasses += 'h-auto w-auto max-w-none self-start overflow-visible ';
+    } else if (isFixedVertical) {
+        hoverContainerClasses += 'h-full w-auto max-h-full overflow-visible ';
+    } else if (isFixedHorizontal) {
+        hoverContainerClasses += 'h-auto w-full overflow-visible ';
+    } else {
+        hoverContainerClasses += 'h-auto w-full max-h-full overflow-visible ';
+    }
     if (isFixedVertical) {
-        hoverContainerClasses += fixedPos === FIXED_POSITIONS.right ? "flex-row-reverse h-full" : "flex-row h-full";
+        hoverContainerClasses += fixedPos === FIXED_POSITIONS.right ? 'flex-row-reverse h-full' : 'flex-row h-full';
     } else if (isFixedHorizontal) {
         hoverContainerClasses += fixedPos === FIXED_POSITIONS.bottom
-            ? "flex-col-reverse items-start w-full"
-            : "flex-col items-start w-full";
+            ? 'flex-col-reverse items-start w-full'
+            : 'flex-col items-start w-full';
     } else if (isMobileMode) {
-        hoverContainerClasses += "flex-col-reverse items-center";
+        hoverContainerClasses += 'flex-col-reverse items-center';
     } else {
         hoverContainerClasses += `flex-col ${isRight ? 'items-end' : 'items-start'}`;
     }
 
     // 2. Botón (Widget): compacto en vista contraída (solo logo + avatar)
-    let widgetClasses = "theme-surface theme-border sidebar-glass relative z-20 sidebar-widget-shell overflow-visible ";
+    let widgetClasses = 'theme-surface theme-border sidebar-glass relative z-20 sidebar-widget-shell overflow-visible pointer-events-auto ';
     if (isFixedVertical) {
         const edgeBorder = fixedPos === FIXED_POSITIONS.right ? 'border-l' : 'border-r';
         widgetClasses += showCollapsedWidget
@@ -387,32 +431,30 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
             : "inline-flex items-center py-2 px-3 sm:px-4 rounded-full border shadow-[0_8px_30px_rgba(0,0,0,0.12)]";
     }
 
-    const widgetShellStyle = {
-        transitionProperty: 'padding, gap, width, opacity, transform',
-        transitionDuration: `${WIDGET_MS}ms`,
-        transitionTimingFunction: EASE_SMOOTH,
-    };
-
-    const menuTransitionStyle = {
-        transitionDuration: `${isMenuOpen ? MENU_OPEN_MS : MENU_CLOSE_MS}ms`,
-        transitionTimingFunction: EASE_SMOOTH,
-    };
-
     const sidebarMenuLayoutFlags = { isFixedVertical, isFixedHorizontal, isMobileMode, fixedPos };
 
-    const menuShellBase = (isVisible, isOpen) =>
-        `floating-menu border shadow-2xl theme-surface theme-border sidebar-glass relative z-10 flex-shrink-0 sidebar-menu-shell sidebar-hamburger-menu ${isVisible ? 'pointer-events-auto' : 'pointer-events-none'} ${isOpen ? 'sidebar-hamburger-menu--open' : ''} `;
+    const accessMenuShellBase = (isVisible, isOpen) =>
+        `floating-menu border shadow-2xl theme-surface theme-border sidebar-glass relative z-10 flex-shrink-0 sidebar-menu-shell sidebar-hamburger-menu ${isOpen ? 'pointer-events-auto sidebar-hamburger-menu--open' : 'pointer-events-none'} `;
 
-    const menuClasses = menuShellBase(isMenuVisible, isMenuOpen)
-        + buildSidebarMenuLayoutClasses({ ...sidebarMenuLayoutFlags, isOpen: isMenuOpen, isDrawer: mobileDrawerMode });
+    const profileMenuShellBase = (isVisible, isOpen) =>
+        `floating-menu border shadow-2xl theme-surface theme-border sidebar-glass relative z-10 shrink-0 sidebar-menu-shell sidebar-profile-menu ${isOpen ? 'pointer-events-auto sidebar-profile-menu--open sidebar-menu-float--open' : 'pointer-events-none'} `;
 
-    const profileMenuClasses = menuShellBase(isProfileMenuVisible, isProfileMenuOpen)
-        + buildSidebarMenuLayoutClasses({ ...sidebarMenuLayoutFlags, isOpen: isProfileMenuOpen, isDrawer: mobileDrawerMode });
+    const menuClasses = accessMenuShellBase(isMenuVisible, isMenuOpen)
+        + buildSidebarMenuLayoutClasses({
+            ...sidebarMenuLayoutFlags,
+            isOpen: isMenuOpen,
+            isShellExpanded: isMenuVisible,
+            isDrawer: mobileDrawerMode,
+        })
+        + ' gelia-sidebar-access-shell';
 
-    const profileMenuTransitionStyle = {
-        transitionDuration: `${isProfileMenuOpen ? MENU_OPEN_MS : MENU_CLOSE_MS}ms`,
-        transitionTimingFunction: EASE_SMOOTH,
-    };
+    const profileMenuClasses = profileMenuShellBase(isProfileMenuVisible, isProfileMenuOpen)
+        + buildProfileMenuLayoutClasses({
+            isMobileMode,
+            isOpen: isProfileMenuOpen,
+            isShellExpanded: isProfileMenuVisible,
+            isDrawer: mobileDrawerMode,
+        });
 
     const logoGlowClass = "drop-shadow-[0_0_12px_color-mix(in_srgb,var(--color-primario)_60%,transparent)]";
     const logoSizeClass = showCollapsedWidget
@@ -445,12 +487,12 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
             <nav className={navClasses}>
                 <div
                     className={hoverContainerClasses}
+                    style={sidebarTimingStyle}
                     onMouseEnter={handleHoverEnter}
                     onMouseLeave={handleHoverLeave}
                 >
                     <div
                         className={`${widgetClasses} ${mobileDrawerMode ? 'gelia-sidebar-widget--mobile-hidden' : ''}`}
-                        style={widgetShellStyle}
                         aria-hidden={mobileDrawerMode}
                     >
                         <div className={`flex items-center ${innerFlexClass} ${innerGapClass} w-full ${isFixedVertical ? 'justify-center' : ''} ${isFixedHorizontal ? 'justify-start' : ''}`}>
@@ -513,343 +555,73 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     </div>
 
                     <div
-                        ref={profileMenuRef}
+                        ref={profileMenuShellRef}
                         role="menu"
                         aria-hidden={!isProfileMenuVisible}
                         className={profileMenuClasses}
-                        style={profileMenuTransitionStyle}
                     >
-                        <div className="sidebar-menu-grid-inner overflow-hidden min-h-0">
-                            <div className={`sidebar-menu-content p-5 flex flex-col space-y-3 overflow-y-auto custom-scrollbar ${isFixedVertical ? 'w-[300px] h-full pt-10' : 'max-h-[85vh]'}`}>
-                                <span
-                                    className="text-[11px] font-black tracking-[0.3em] px-5 mb-1 opacity-60 uppercase italic"
-                                    style={{ color: 'var(--color-primario)' }}
-                                >
+                        <div className="sidebar-menu-grid-inner overflow-hidden min-h-0 h-auto shrink-0">
+                            <div
+                                className="sidebar-menu-content gelia-sidebar-profile-panel p-5 flex flex-col min-h-0 h-auto shrink-0 overflow-visible w-[300px]"
+                            >
+                                <span className="gelia-sidebar-nav-header px-4 mb-1">
                                     PERFIL_
                                 </span>
-                                <div className="flex flex-col space-y-2 px-2">
+                                <nav className="gelia-sidebar-profile-links flex flex-col gap-0.5 px-2 min-w-0" aria-label="Perfil">
                                     {PROFILE_MENU_ITEMS.map((item) => {
                                         const IconComponent = item.icon;
                                         const isActive = isRouteActive(item.path);
                                         return (
-                                            <Link
+                                            <SidebarNavLeafLink
                                                 key={item.id}
                                                 href={profileMenuHref(item)}
-                                                role="menuitem"
+                                                active={isActive}
                                                 onClick={closeProfileMenu}
-                                                className={`flex items-center w-full px-5 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all outline-none ${isActive ? 'bg-[var(--color-primario)] text-white shadow-md' : 'theme-element theme-text-muted hover:theme-text-main hover:shadow-sm border border-transparent hover:border-[var(--color-primario)]'}`}
-                                            >
-                                                <IconComponent className="w-3.5 h-3.5 mr-4 shrink-0" />
-                                                {item.label}
-                                            </Link>
+                                                icon={IconComponent}
+                                                label={item.label}
+                                                paddingClass="pl-10"
+                                                role="menuitem"
+                                            />
                                         );
                                     })}
-                                </div>
+                                </nav>
                             </div>
                         </div>
                     </div>
 
-                    <div className={menuClasses} style={menuTransitionStyle}>
-                        <div className="sidebar-menu-grid-inner overflow-hidden min-h-0">
-                            <div className={`sidebar-menu-content p-5 flex flex-col space-y-3 overflow-y-auto custom-scrollbar ${isFixedVertical ? 'w-[300px] h-full pt-10' : 'max-h-[85vh]'}`}>
-                            <span className="text-[11px] font-black tracking-[0.3em] px-5 mb-1 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
-                                ACCESOS_
-                            </span>
-
-                            <Link
-                                href={route('dashboard')}
-                                className={linkBaseClass + (isRouteActive('/dashboard') ? linkActiveClass : linkInactiveClass)}
-                                onMouseEnter={(e) => { if (!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                onMouseLeave={(e) => { if (!isRouteActive('/dashboard')) e.currentTarget.style.borderColor = 'transparent' }}
+                    <div className={menuClasses}>
+                        <div className="sidebar-menu-grid-inner overflow-hidden min-h-0 h-auto">
+                            <div
+                                className={`sidebar-menu-content gelia-sidebar-access-panel p-5 flex flex-col min-h-0 max-h-full overflow-hidden w-[300px] h-auto ${isFixedVertical ? 'pt-10' : ''}`}
                             >
-                                <div className="flex items-center">
-                                    <LayoutDashboard className="w-4 h-4 mr-4" style={{ color: isRouteActive('/dashboard') ? '#ffffff' : 'var(--color-primario)' }} />
-                                    <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Panel Principal_</span>
+                                <div className="gelia-sidebar-access-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar">
+                                    <SidebarNavMenu
+                                        url={url}
+                                        can={can}
+                                        showAdminMenu={showAdminMenu}
+                                        onNavigate={closeMobileMenu}
+                                    />
                                 </div>
-                            </Link>
 
-                            <Link
-                                href={route('mensajeria.index')}
-                                className={linkBaseClass + (isRouteActive('/mensajeria') ? linkActiveClass : linkInactiveClass)}
-                                onMouseEnter={(e) => { if (!isRouteActive('/mensajeria')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                onMouseLeave={(e) => { if (!isRouteActive('/mensajeria')) e.currentTarget.style.borderColor = 'transparent' }}
-                            >
-                                <div className="flex items-center">
-                                    <MessageCircle className="w-4 h-4 mr-4" style={{ color: isRouteActive('/mensajeria') ? '#ffffff' : 'var(--color-primario)' }} />
-                                    <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mensajería_</span>
-                                </div>
-                            </Link>
-
-                            {can('solicitudes.ver_listado') && (
-                                <Link
-                                    href={route('solicitudes.index')}
-                                    className={linkBaseClass + (isRouteActive('/solicitudes') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/solicitudes')) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <Briefcase className="w-4 h-4 mr-4" />
-                                    <span className="text-xs font-black uppercase italic tracking-tighter">Solicitudes_</span>
-                                </Link>
-                            )}
-
-                            {can('solicitudes.exportar') && (
-                                <Link
-                                    href={route('reportes.solicitudes.index')}
-                                    className={linkBaseClass + (isRouteActive('/reportes/solicitudes') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/reportes/solicitudes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/reportes/solicitudes')) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <BarChart3 className="w-4 h-4 mr-4" />
-                                    <span className="text-xs font-black uppercase italic tracking-tighter">Reportes_</span>
-                                </Link>
-                            )}
-
-                            {can('facturas.ver_listado') && (
-                                <Link
-                                    href={route('facturas.index')}
-                                    className={linkBaseClass + (isRouteActive('/facturas') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/facturas')) e.currentTarget.style.borderColor = '#0d9488' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/facturas')) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <Receipt className="w-4 h-4 mr-4" style={{ color: isRouteActive('/facturas') ? '#ffffff' : '#0d9488' }} />
-                                    <span className="text-xs font-black uppercase italic tracking-tighter">Facturas_</span>
-                                </Link>
-                            )}
-
-                            {can('cancelaciones_cotizaciones.ver_listado') && (
-                                <Link
-                                    href={route('cancelaciones_cotizaciones.index')}
-                                    className={linkBaseClass + (isRouteActive('/cancelaciones-cotizaciones') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/cancelaciones-cotizaciones')) e.currentTarget.style.borderColor = '#f97316' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/cancelaciones-cotizaciones')) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <Ban className="w-4 h-4 mr-4" style={{ color: isRouteActive('/cancelaciones-cotizaciones') ? '#ffffff' : '#f97316' }} />
-                                    <span className="text-xs font-black uppercase italic tracking-tighter">Cancel. y Cotiz._</span>
-                                </Link>
-                            )}
-
-                            {can('mis_clientes.gestionar') && (
-                                <Link
-                                    href={route('mis_clientes.index')}
-                                    className={linkBaseClass + (isRouteActive('/mis-clientes') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/mis-clientes')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/mis-clientes')) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <div className="flex items-center">
-                                        <Users className="w-4 h-4 mr-4" style={{ color: isRouteActive('/mis-clientes') ? '#ffffff' : 'var(--color-primario)' }} />
-                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Mis Clientes_</span>
-                                    </div>
-                                </Link>
-                            )}
-
-                            {can('activos.ver') && (
-                                <Link
-                                    href={route('activos.index')}
-                                    className={linkBaseClass + (isRouteActive('/activos') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/activos')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/activos')) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <div className="flex items-center">
-                                        <Package className="w-4 h-4 mr-4" style={{ color: isRouteActive('/activos') ? '#ffffff' : 'var(--color-primario)' }} />
-                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Control de Activos_</span>
-                                    </div>
-                                </Link>
-                            )}
-
-                            {can('rh.ver') && (
-                                <Link
-                                    href={route('rh.index')}
-                                    className={linkBaseClass + (isRouteActive('/rh') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/rh')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/rh')) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <div className="flex items-center">
-                                        <Briefcase className="w-4 h-4 mr-4" style={{ color: isRouteActive('/rh') ? '#ffffff' : 'var(--color-primario)' }} />
-                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Recursos Humanos_</span>
-                                    </div>
-                                </Link>
-                            )}
-
-                            {can('entregas.cotizar') && (
-                                <Link
-                                    href={route('entregas.index')}
-                                    className={linkBaseClass + (isRouteActive('/entregas') ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isRouteActive('/entregas')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                    onMouseLeave={(e) => { if (!isRouteActive('/entregas')) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <div className="flex items-center">
-                                        <Map className="w-4 h-4 mr-4" style={{ color: isRouteActive('/entregas') ? '#ffffff' : 'var(--color-primario)' }} />
-                                        <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Cotizar Entregas</span>
-                                    </div>
-                                </Link>
-                            )}
-
-                            {showOperacionesMenu && (
-                                <div className="flex flex-col">
-                                    <div className="pt-3 pb-1">
-                                        <span className="text-[11px] font-black tracking-[0.3em] px-5 opacity-60 uppercase italic" style={{ color: 'var(--color-primario)' }}>
-                                            FUNCIONES OPERATIVAS_
+                                <div className="gelia-sidebar-access-footer shrink-0 pt-6 pb-2 px-2">
+                                    <button
+                                        onClick={() => {
+                                            localStorage.clear();
+                                            post(route('logout'));
+                                        }}
+                                        className="flex items-center w-full px-6 py-4 rounded-3xl transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group"
+                                    >
+                                        <LogOut className="w-4 h-4 mr-4 text-red-500 group-hover:text-red-600 transition-colors" />
+                                        <span className="gelia-sidebar-access-footer-label text-red-500 group-hover:text-red-600 transition-colors">
+                                            Cerrar Sesión_
                                         </span>
-                                    </div>
-
-                                    {can('listados.ver') && (
-                                        <Link
-                                            href={route('listados.index')}
-                                            className={linkBaseClass + (isRouteActive('/listados') ? linkActiveClass : linkInactiveClass)}
-                                            onMouseEnter={(e) => { if (!isRouteActive('/listados')) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                            onMouseLeave={(e) => { if (!isRouteActive('/listados')) e.currentTarget.style.borderColor = 'transparent' }}
-                                        >
-                                            <div className="flex items-center">
-                                                <FileText className="w-4 h-4 mr-4" style={{ color: isRouteActive('/listados') ? '#ffffff' : 'var(--color-primario)' }} />
-                                                <span className="text-xs font-black uppercase italic tracking-tighter justify-between">Listados_</span>
-                                            </div>
-                                        </Link>
-                                    )}
+                                    </button>
                                 </div>
-                            )}
-
-                            {showAdminMenu && (
-                                <Link
-                                    href={adminPanelHref()}
-                                    className={linkBaseClass + (isAdminActive ? linkActiveClass : linkInactiveClass)}
-                                    onMouseEnter={(e) => { if (!isAdminActive) e.currentTarget.style.borderColor = 'var(--color-primario)' }}
-                                    onMouseLeave={(e) => { if (!isAdminActive) e.currentTarget.style.borderColor = 'transparent' }}
-                                >
-                                    <div className="flex items-center">
-                                        <Settings className="w-4 h-4 mr-4" style={{ color: isAdminActive ? '#ffffff' : 'var(--color-primario)' }} />
-                                        <span className="text-xs font-black uppercase italic tracking-tighter">Administración_</span>
-                                    </div>
-                                </Link>
-                            )}
-
-                            <div className="mt-auto pt-6 pb-2">
-                                <button
-                                    onClick={() => {
-                                        localStorage.clear();
-                                        post(route('logout'));
-                                    }}
-                                    className="flex items-center w-full px-6 py-4 rounded-3xl transition-all theme-element border border-transparent hover:border-red-500 hover:shadow-md outline-none group">
-                                    <LogOut className="w-4 h-4 mr-4 text-red-500 group-hover:text-red-600 transition-colors" />
-                                    <span className="text-xs font-black uppercase italic tracking-widest text-red-500 group-hover:text-red-600 transition-colors">Cerrar Sesión_</span>
-                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
             </nav>
-
-            <style>{`
-                @keyframes sidebarMount {
-                    from { opacity: 0; transform: translate3d(0, 10px, 0); }
-                    to { opacity: 1; transform: translate3d(0, 0, 0); }
-                }
-                .sidebar-mount {
-                    animation: sidebarMount 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-                }
-                .sidebar-widget-shell {
-                    will-change: padding, gap, width, transform;
-                    backface-visibility: hidden;
-                }
-                .sidebar-widget-reveal {
-                    transition-property: max-width, max-height, opacity, gap, padding, margin, border-color;
-                    transition-duration: ${WIDGET_MS}ms;
-                    transition-timing-function: ${EASE_SMOOTH};
-                    pointer-events: auto;
-                }
-                .sidebar-widget-icons {
-                    box-sizing: border-box;
-                }
-                .sidebar-widget-icon-btn {
-                    width: 2.75rem;
-                    height: 2.75rem;
-                    min-width: 2.75rem;
-                    min-height: 2.75rem;
-                    padding: 0;
-                    margin: 0;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    flex-shrink: 0;
-                }
-                .sidebar-widget-icon-btn svg {
-                    display: block;
-                    flex-shrink: 0;
-                }
-                .sidebar-logo-link {
-                    transition: transform ${WIDGET_MS}ms ${EASE_SMOOTH};
-                }
-                .sidebar-logo-mark {
-                    transition: width ${WIDGET_MS}ms ${EASE_SMOOTH}, height ${WIDGET_MS}ms ${EASE_SMOOTH}, filter ${WIDGET_MS}ms ${EASE_SMOOTH};
-                    will-change: width, height, transform;
-                }
-                .sidebar-menu-shell {
-                    overflow: hidden;
-                    will-change: transform, opacity, width, grid-template-rows;
-                    backface-visibility: hidden;
-                }
-                .sidebar-menu-float {
-                    display: grid;
-                    grid-template-rows: 0fr;
-                    opacity: 0;
-                    transform: translate3d(0, -6px, 0) scale(0.985);
-                    transition-property: grid-template-rows, opacity, transform, margin;
-                }
-                .sidebar-menu-float--open {
-                    grid-template-rows: 1fr;
-                    opacity: 1;
-                    transform: translate3d(0, 0, 0) scale(1);
-                }
-                .sidebar-menu-fixed {
-                    width: 0;
-                    opacity: 0;
-                    transform: translate3d(-8px, 0, 0);
-                    transition-property: width, opacity, transform;
-                }
-                .sidebar-menu-fixed--open {
-                    width: 300px;
-                    opacity: 1;
-                    transform: translate3d(0, 0, 0);
-                }
-                .sidebar-menu-fixed-right {
-                    width: 0;
-                    opacity: 0;
-                    transform: translate3d(8px, 0, 0);
-                    transition-property: width, opacity, transform;
-                }
-                .sidebar-menu-fixed-right--open {
-                    width: 300px;
-                    opacity: 1;
-                    transform: translate3d(0, 0, 0);
-                }
-                .sidebar-hamburger-icon {
-                    transition: opacity ${MENU_OPEN_MS}ms ${EASE_SMOOTH}, transform ${MENU_OPEN_MS}ms ${EASE_SMOOTH};
-                    will-change: opacity, transform;
-                }
-                .sidebar-hamburger-icon--visible {
-                    opacity: 1;
-                    transform: rotate(0deg) scale(1);
-                }
-                .sidebar-hamburger-icon--hidden {
-                    opacity: 0;
-                    transform: rotate(-90deg) scale(0.72);
-                    pointer-events: none;
-                }
-                .sidebar-hamburger-menu .sidebar-menu-content {
-                    opacity: 0;
-                    transform: translate3d(0, -12px, 0);
-                    transition: opacity ${MENU_OPEN_MS}ms ${EASE_SMOOTH}, transform ${MENU_OPEN_MS}ms ${EASE_SMOOTH};
-                }
-                .sidebar-hamburger-menu--open .sidebar-menu-content {
-                    opacity: 1;
-                    transform: translate3d(0, 0, 0);
-                    transition-delay: 90ms;
-                }
-                .sidebar-hamburger-menu:not(.sidebar-hamburger-menu--open) .sidebar-menu-content {
-                    transition-delay: 0ms;
-                    transition-duration: ${MENU_CLOSE_MS}ms;
-                }
-            `}</style>
         </>
     );
 }

@@ -1,0 +1,160 @@
+.activos-mobile-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 5.25rem;
+    z-index: 180;
+    display: flex;
+    gap: 0.625rem;
+    padding: 0.75rem 1rem;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--theme-surface-solid) 92%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid color-mix(in srgb, var(--theme-border) 80%, transparent);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.15);
+}
+
+@media (min-width: 1024px) {
+    .activos-mobile-dock {
+        display: none;
+    }
+}
+
+.activos-mobile-dock__primary {
+    flex: 1;
+    min-height: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 1rem;
+    font-size: 0.6875rem;
+    font-weight: 900;
+    font-style: normal;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    color: #fff;
+    background-color: var(--color-primario);
+    border: none;
+    outline: none;
+    cursor: pointer;
+    box-shadow: none;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.activos-mobile-dock__primary:active:not(:disabled) {
+    transform: scale(0.98);
+    opacity: 0.92;
+}
+
+.activos-mobile-dock__more {
+    flex-shrink: 0;
+    min-width: 3rem;
+    min-height: 3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-element);
+    color: var(--theme-text-main);
+    cursor: pointer;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.activos-mobile-dock__more:active {
+    transform: scale(0.96);
+}
+
+.activos-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.activos-sheet-overlay--enter {
+    animation: gelia-fadeIn 0.22s ease-out forwards;
+}
+
+.activos-sheet-overlay--exit {
+    animation: gelia-fadeOut 0.2s ease-in forwards;
+}
+
+.activos-sheet-panel {
+    width: 100%;
+    max-width: 28rem;
+    max-height: min(85dvh, calc(100dvh - 5rem));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--theme-border);
+    border-bottom: none;
+    border-radius: 1.5rem 1.5rem 0 0;
+    background: var(--theme-surface-solid);
+    padding: 1.25rem 1.25rem max(5.5rem, calc(1.25rem + env(safe-area-inset-bottom)));
+    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.35);
+}
+
+@media (min-width: 640px) {
+    .activos-sheet-panel {
+        border-radius: 1.5rem;
+        border-bottom: 1px solid var(--theme-border);
+        margin-bottom: 1.5rem;
+        padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+    }
+
+    .activos-sheet-overlay {
+        align-items: center;
+    }
+}
+
+.activos-sheet-panel--enter {
+    animation: gelia-sheetSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.activos-sheet-panel--exit {
+    animation: gelia-sheetSlideDown 0.26s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.activos-sheet-action {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+    font-size: 0.6875rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-element);
+    color: var(--theme-text-main);
+    cursor: pointer;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.activos-sheet-action:active {
+    transform: scale(0.98);
+}
+
+.activos-sheet-action--primary {
+    color: #fff;
+    background-color: var(--color-primario);
+    border-color: transparent;
+}
+
+.activos-sheet-action--danger {
+    color: #fff;
+    background-color: #dc2626;
+    border-color: #dc2626;
+}

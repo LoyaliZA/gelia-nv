@@ -1,0 +1,36 @@
+/* Página de registro de identidad (Auth) */
+.gelia-registro-page {
+    --color-primario: #ec4899;
+}
+
+.gelia-registro-page .theme-surface { background-color: #fff; border-color: #f4f4f5; }
+.gelia-registro-page .theme-element { background-color: rgba(250, 250, 250, 1); border-color: #e4e4e7; }
+.gelia-registro-page .theme-text-main { color: #18181b; }
+.gelia-registro-page .theme-text-muted { color: #71717a; }
+.gelia-registro-page .theme-border { border-color: #e4e4e7; }
+.gelia-registro-page .theme-placeholder::placeholder { color: #a1a1aa; }
+
+.gelia-registro-page.dark .theme-surface { background-color: #121212; border-color: #222; }
+.gelia-registro-page.dark .theme-element { background-color: rgba(30, 30, 30, 1); border-color: #2a2a2a; }
+.gelia-registro-page.dark .theme-text-main { color: #fff; }
+.gelia-registro-page.dark .theme-text-muted { color: #a1a1aa; }
+.gelia-registro-page.dark .theme-border { border-color: #27272a; }
+.gelia-registro-page.dark .theme-placeholder::placeholder { color: #52525b; }
+
+.gelia-registro-page input[type='date']::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+    transition: 0.2s;
+}
+
+.gelia-registro-page input[type='date']::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+.gelia-registro-page.dark input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
+.gelia-registro-page .animate-page-reveal {
+    opacity: 0;
+}

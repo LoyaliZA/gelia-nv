@@ -1,0 +1,226 @@
+/* Página de login — split screen escritorio; formulario full-viewport móvil */
+.gelia-login-split {
+    min-height: 100dvh;
+    height: 100dvh;
+    max-height: 100dvh;
+    display: grid;
+    grid-template-columns: 1fr;
+    background-color: var(--bg-app);
+    color: var(--theme-text-main);
+    overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split {
+        grid-template-columns: 1fr 1fr;
+        height: auto;
+        max-height: none;
+        overflow: visible;
+    }
+}
+
+.gelia-login-split__brand {
+    display: none;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__brand {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+        padding: 3rem;
+        overflow: hidden;
+        min-height: 100dvh;
+        background: linear-gradient(
+            145deg,
+            color-mix(in srgb, var(--color-primario) 88%, #000 12%) 0%,
+            color-mix(in srgb, var(--color-primario) 55%, #0a0a0a 45%) 45%,
+            #0a0a0a 100%
+        );
+        color: #fff;
+    }
+}
+
+.gelia-login-split__brand-glow {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    filter: blur(80px);
+    background-color: var(--color-primario);
+}
+
+.gelia-login-split__brand-glow--1 {
+    top: -6rem;
+    right: -4rem;
+    width: 20rem;
+    height: 20rem;
+    opacity: 0.45;
+}
+
+.gelia-login-split__brand-glow--2 {
+    bottom: -8rem;
+    left: -6rem;
+    width: 18rem;
+    height: 18rem;
+    opacity: 0.25;
+}
+
+.gelia-login-split__brand-inner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 24rem;
+    width: 100%;
+}
+
+.gelia-login-split__form {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    min-height: 0;
+    height: 100%;
+    padding: max(0.75rem, env(safe-area-inset-top, 0px)) 1.25rem max(1rem, env(safe-area-inset-bottom, 0px));
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__form {
+        align-items: center;
+        min-height: 100dvh;
+        height: auto;
+        padding: 3rem;
+        overflow: visible;
+    }
+}
+
+.gelia-login-split__mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+    padding-right: 3rem;
+    margin-bottom: 0.75rem;
+}
+
+.gelia-login-split__mobile-brand-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+}
+
+.gelia-login-split__mobile-brand-kicker {
+    font-size: 0.5625rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    color: var(--theme-text-muted);
+    line-height: 1;
+}
+
+.gelia-login-split__mobile-brand-title {
+    font-size: 1.125rem;
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    color: var(--theme-text-main);
+}
+
+.gelia-login-split__form-inner {
+    width: 100%;
+    max-width: 26rem;
+    margin: 0 auto;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__form-inner {
+        flex: none;
+        margin: auto;
+    }
+}
+
+.gelia-login-split__form-header {
+    margin-bottom: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__form-header {
+        margin-bottom: 2.5rem;
+    }
+}
+
+.gelia-login-split__form-title {
+    font-size: 1.5rem;
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: -0.03em;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__form-title {
+        font-size: 1.875rem;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .gelia-login-split__form-title {
+        font-size: 1.75rem;
+    }
+}
+
+.gelia-login-split__form-subtitle {
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-top: 0.5rem;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__form-subtitle {
+        margin-top: 0.75rem;
+    }
+}
+
+.gelia-login-split__form-fields {
+    flex-shrink: 0;
+}
+
+.gelia-login-split__footer {
+    font-size: 0.625rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-top: 1.25rem;
+    flex-shrink: 0;
+}
+
+@media (min-width: 1024px) {
+    .gelia-login-split__footer {
+        margin-top: 2.5rem;
+    }
+}
+
+@media (max-width: 1023px) {
+    .gelia-login-split__form-header {
+        display: none;
+    }
+}

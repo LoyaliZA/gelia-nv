@@ -1,0 +1,67 @@
+/* Isotipo Gelia — variantes de animación */
+@keyframes gelia-logo-spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+    animation: gelia-logo-spin-slow 4s linear infinite;
+    transform-origin: center;
+}
+
+@keyframes gelia-logo-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+    animation: gelia-logo-float 3s ease-in-out infinite;
+}
+
+@keyframes gelia-logo-pulse-glow {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.95); filter: drop-shadow(0 0 10px currentColor); }
+}
+
+.animate-pulse-glow {
+    animation: gelia-logo-pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes gelia-logo-shatter {
+    0%, 100%, 25%, 75% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+    50% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.5); opacity: 0; }
+}
+
+.animate-shatter polygon {
+    animation: gelia-logo-shatter 3s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+    transform-origin: center;
+}
+
+@keyframes gelia-logo-sparkle {
+    0%, 100%, 20% { fill: inherit; filter: none; }
+    10% { fill: #fff; filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.9)); opacity: 1; }
+}
+
+.animate-sparkle polygon {
+    animation: gelia-logo-sparkle 2.5s infinite;
+    animation-delay: var(--delay);
+}
+
+@keyframes gelia-logo-fluid-rise {
+    0%, 100% { transform: translateY(100px); }
+    50%, 80% { transform: translateY(0); }
+}
+
+.animate-fluid-rise {
+    animation: gelia-logo-fluid-rise 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes gelia-logo-fluid-sparkle {
+    0%, 45%, 65%, 100% { fill: inherit; filter: none; }
+    50% { fill: #fff; filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.9)); opacity: 1; }
+}
+
+.animate-fluid-sparkle polygon {
+    animation: gelia-logo-fluid-sparkle 3s infinite;
+    animation-delay: var(--delay);
+}

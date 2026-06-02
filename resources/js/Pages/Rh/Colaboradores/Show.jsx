@@ -4,6 +4,7 @@ import {
     ArrowLeft, User, Building2, Briefcase, DollarSign, Link2, Pencil, Copy, Check, AlertTriangle, Wallet,
 } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { formatoDeduccionEntera, formatoMoneda, formatoDecimal, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
@@ -39,7 +40,7 @@ export default function Show({
     return (
         <AppLayout auth={auth}>
             <Head title={`${colaborador.folio} | RH Colaborador`} />
-            <div className="max-w-[1000px] mx-auto p-4 md:p-8 space-y-6">
+            <GeliaPageShell className="max-w-[1000px] space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <Link href={route('rh.colaboradores.index')} className="inline-flex items-center gap-2 text-[10px] font-black uppercase theme-text-muted hover:theme-text-main">
                         <ArrowLeft className="w-4 h-4" /> Volver al listado
@@ -200,7 +201,7 @@ export default function Show({
                         <p className="text-sm theme-text-muted italic m-0">Este colaborador no tiene cuenta vinculada en el sistema.</p>
                     )}
                 </section>
-            </div>
+            </GeliaPageShell>
 
             <ModalFormColaborador
                 abierto={modalAbierto}

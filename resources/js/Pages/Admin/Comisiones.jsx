@@ -89,7 +89,7 @@ export default function Comisiones({ auth, tabulador = [] }) {
                             </h2>
 
                             {editando ? (
-                                <form onSubmit={guardarCambios} className="space-y-8 animate-fade-in">
+                                <form onSubmit={guardarCambios} className="space-y-8 animate-fade-in-soft">
                                     <div className="space-y-6">
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-1">Comisión Vendedora ($)</label>
@@ -166,7 +166,7 @@ export default function Comisiones({ auth, tabulador = [] }) {
                     {/* --- TABLA DE PROCESOS --- */}
                     <div className="page-reveal-comisiones lg:col-span-2">
                         <div className="theme-surface border-2 theme-border rounded-[3rem] overflow-hidden shadow-sm">
-                            <div className="overflow-x-auto custom-scrollbar">
+                            <div className="overflow-x-auto custom-scrollbar custom-scrollbar--muted">
                                 <table className="w-full text-left border-collapse min-w-[600px]">
                                     <thead>
                                         <tr className="border-b-2 theme-border">
@@ -224,15 +224,6 @@ export default function Comisiones({ auth, tabulador = [] }) {
                     </div>
                 </div>
             </div>
-
-            <style>{`
-                .animate-fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-                @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-                
-                .custom-scrollbar::-webkit-scrollbar { height: 6px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
-                .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); }
-            `}</style>
         </AppLayout>
     );
 }

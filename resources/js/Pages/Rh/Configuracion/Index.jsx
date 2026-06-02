@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { Settings, ArrowLeft, Save, Hash, Clock, AlertTriangle, Wallet } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { geliaCardClass, THEME_INPUT } from '../../../utils/geliaTheme';
 import RhSubNav from '../Partials/RhSubNav';
@@ -112,7 +113,7 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
             <Head title="Configuración RH" />
             <GeliaLoader isVisible={processing} message="Guardando configuración_" />
 
-            <div className="max-w-[1200px] mx-auto p-4 md:p-8 space-y-6">
+            <GeliaPageShell className="max-w-[1200px] space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <Link href={route('rh.index')} className="inline-flex items-center gap-2 text-[10px] font-black uppercase theme-text-muted hover:theme-text-main">
                         <ArrowLeft className="w-4 h-4" /> Volver al dashboard
@@ -289,7 +290,7 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
                         <TablaReglasIncidencia datos={reglasIncidencia} bonos={bonos} departamentos={departamentos} />
                     </div>
                 )}
-            </div>
+            </GeliaPageShell>
         </AppLayout>
     );
 }

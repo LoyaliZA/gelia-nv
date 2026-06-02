@@ -78,7 +78,7 @@ export default function Registro({ rol_asignado, plantilla_origen, supervisor_no
         });
     };
     return (
-        <div className={`min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-[#0a0a0a]' : 'bg-[#FAFAFA]'}`}>
+        <div className={`gelia-registro-page min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8 transition-colors duration-500 relative overflow-hidden ${isDarkMode ? 'dark bg-[#0a0a0a]' : 'bg-[#FAFAFA]'}`}>
             <Head title="Registro de Identidad | GELIA" />
 
             <div className="w-full max-w-4xl space-y-6 relative z-10">
@@ -285,47 +285,6 @@ export default function Registro({ rol_asignado, plantilla_origen, supervisor_no
                     <p className="text-[10px] font-black theme-text-muted uppercase tracking-widest">&copy; {new Date().getFullYear()} GELIA ERP.</p>
                 </footer>
             </div>
-
-            {/* --- ESTILOS NATIVOS INYECTADOS --- */}
-            <style>{`
-                :root {
-                    --color-primario: #ec4899; 
-                }
-                .theme-surface { background-color: #ffffff; border-color: #f4f4f5; }
-                .theme-element { background-color: rgba(250, 250, 250, 1); border-color: #e4e4e7; }
-                .theme-text-main { color: #18181b; }
-                .theme-text-muted { color: #71717a; }
-                .theme-border { border-color: #e4e4e7; }
-                .theme-placeholder::placeholder { color: #a1a1aa; }
-                
-                .dark .theme-surface { background-color: #121212; border-color: #222222; }
-                .dark .theme-element { background-color: rgba(30, 30, 30, 1); border-color: #2A2A2A; }
-                .dark .theme-text-main { color: #ffffff; }
-                .dark .theme-text-muted { color: #a1a1aa; }
-                .dark .theme-border { border-color: #27272a; }
-                .dark .theme-placeholder::placeholder { color: #52525b; }
-
-                input[type="date"]::-webkit-calendar-picker-indicator {
-                    cursor: pointer;
-                    opacity: 0.6;
-                    transition: 0.2s;
-                }
-                input[type="date"]::-webkit-calendar-picker-indicator:hover {
-                    opacity: 1;
-                }
-                .dark input[type="date"]::-webkit-calendar-picker-indicator {
-                    filter: invert(1);
-                }
-
-                @keyframes pageReveal {
-                    from { opacity: 0; transform: translateY(15px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                .animate-page-reveal { 
-                    animation: pageReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
-                    opacity: 0;
-                }
-            `}</style>
         </div>
     );
 }

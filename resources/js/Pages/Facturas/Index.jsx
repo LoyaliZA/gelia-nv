@@ -10,7 +10,8 @@ import ModalResponderFactura from './Partials/ModalResponderFactura';
 import ModalExpedienteFactura from './Partials/ModalExpedienteFactura';
 import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/facturasStyles';
 import { filtrarFacturasPorTab } from './Partials/facturasFiltros';
-import { geliaCardClass } from '../../utils/geliaTheme';
+import GeliaPageShell from '../../Components/GeliaPageShell';
+import { geliaCardClass, GELIA_LISTADO_GRID } from '../../utils/geliaTheme';
 
 const OPCIONES_LISTADO = {
     preserveState: true,
@@ -119,7 +120,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
         <AppLayout>
             <Head title="Solicitudes de Facturas" />
 
-            <div className="gelia-page-shell space-y-6 md:space-y-8">
+            <GeliaPageShell className="space-y-6 md:space-y-8">
                 <header className={cardHeader}>
                     <div className="min-w-0">
                         <div className="flex items-center gap-3 mb-2">
@@ -208,7 +209,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
                                 </p>
                             </div>
                             <div className="p-4 md:p-6">
-                                <div className="gelia-listado-grid">
+                                <div className={GELIA_LISTADO_GRID}>
                                     {listaVisible.map((f) => (
                                         <TarjetaFactura
                                             key={f.id}
@@ -228,9 +229,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
                         )}
                     </>
                 )}
-            </div>
-
-            {modalCrear && <ModalFormFactura onClose={() => setModalCrear(false)} />}
+            </GeliaPageShell>
             {modalRespuesta.abierto && (
                 <ModalResponderFactura
                     onClose={() => setModalRespuesta({ abierto: false, factura: null, estadoId: null })}

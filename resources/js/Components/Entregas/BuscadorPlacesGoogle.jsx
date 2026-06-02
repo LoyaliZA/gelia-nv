@@ -1,59 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 
-const ESTILOS_BUSCADOR = `
-    .entregas-buscador-google {
-        width: 100%;
-        min-height: 3.25rem;
-        display: flex;
-        align-items: stretch;
-    }
-    .entregas-buscador-google__slot {
-        width: 100%;
-        min-width: 0;
-    }
-    .entregas-buscador-google__slot gmp-place-autocomplete {
-        width: 100%;
-        display: block;
-        color-scheme: light dark;
-    }
-    .entregas-buscador-google__slot gmp-place-autocomplete::part(input) {
-        width: 100%;
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0.9rem 2.75rem 0.9rem 1rem;
-        border: none;
-        border-radius: 0.75rem;
-        background: transparent;
-        color: inherit;
-        font-family: inherit;
-        font-size: 0.875rem;
-        font-weight: 700;
-        line-height: 1.35;
-        outline: none;
-    }
-    .entregas-buscador-google__slot gmp-place-autocomplete::part(input)::placeholder {
-        color: color-mix(in srgb, currentColor 45%, transparent);
-        font-weight: 600;
-    }
-    .entregas-buscador-google__slot gmp-place-autocomplete::part(input):focus {
-        outline: none;
-    }
-    .entregas-buscador-google__slot gmp-place-autocomplete::part(clear-button) {
-        color: color-mix(in srgb, currentColor 55%, transparent);
-    }
-    .entregas-buscador-google__slot gmp-place-autocomplete::part(prediction-list) {
-        z-index: 200;
-        margin-top: 0.35rem;
-        border-radius: 0.75rem;
-        overflow: hidden;
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
-    }
-    .entregas-buscador-google__slot gmp-place-autocomplete::part(prediction-item) {
-        font-size: 0.8125rem;
-        font-weight: 600;
-    }
-`;
-
 /**
  * Restricción geográfica válida para PlaceAutocompleteElement.
  * No usar google.maps.Circle directo: la API espera LatLngBounds o locationBias plano.
@@ -191,11 +137,8 @@ export default function BuscadorPlacesGoogle({
     }
 
     return (
-        <>
-            <style>{ESTILOS_BUSCADOR}</style>
-            <div className="entregas-buscador-google theme-surface border theme-border rounded-xl shadow-sm overflow-visible">
-                <div ref={containerRef} className="entregas-buscador-google__slot" />
-            </div>
-        </>
+        <div className="entregas-buscador-google theme-surface border theme-border rounded-xl shadow-sm overflow-visible">
+            <div ref={containerRef} className="entregas-buscador-google__slot" />
+        </div>
     );
 }

@@ -12,6 +12,7 @@ import {
     THEME_BTN_SECONDARY,
     THEME_BTN_ICON,
 } from '../../../../utils/geliaTheme';
+import { rhChipClass } from '../../rhModuleStyles';
 
 export default function TablaPuestos({ datos = [], bonosCatalogo = [] }) {
     const [modalAbierto, setModalAbierto] = useState(false);
@@ -116,7 +117,7 @@ export default function TablaPuestos({ datos = [], bonosCatalogo = [] }) {
                                     </p>
                                 </td>
                                 <td className="px-6 py-5">
-                                    <span className={`inline-flex px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${item.activo ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                    <span className={rhChipClass(item.activo ? 'active' : 'inactive')}>
                                         {item.activo ? 'Activo' : 'Inactivo'}
                                     </span>
                                 </td>

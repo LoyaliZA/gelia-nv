@@ -1,14 +1,11 @@
-export const ESTADO_DEDUCCION_BADGE = {
-    pendiente: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-    programado: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-    aplicado: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
-};
+import {
+    RH_ESTADO_FLUJO_BADGE,
+    RH_ESTADO_FLUJO_LABELS,
+} from '../../rhModuleStyles';
 
-export const ESTADO_DEDUCCION_LABELS = {
-    pendiente: 'Pendiente',
-    programado: 'Programado',
-    aplicado: 'Aplicado',
-};
+export const ESTADO_DEDUCCION_BADGE = { ...RH_ESTADO_FLUJO_BADGE };
+
+export const ESTADO_DEDUCCION_LABELS = { ...RH_ESTADO_FLUJO_LABELS };
 
 export const TABS_ESTADO = ['TODAS', 'PENDIENTES', 'PROGRAMADAS', 'APLICADAS'];
 

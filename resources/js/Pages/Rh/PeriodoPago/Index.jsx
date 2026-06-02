@@ -2,7 +2,9 @@ import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { Calendar, ArrowLeft, Zap } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
-import { geliaCardClass, THEME_INPUT, THEME_SELECT } from '../../../utils/geliaTheme';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
+import { geliaCardClass, THEME_INPUT } from '../../../utils/geliaTheme';
+import { RhFieldLabel, RhSelect } from '../Partials/rhFilterFields';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
 
@@ -32,7 +34,7 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
     return (
         <AppLayout auth={auth}>
             <Head title="Periodo de Pago | RH" />
-            <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6">
+            <GeliaPageShell className="space-y-6">
                 <Link href={route('rh.index')} className="inline-flex items-center gap-2 text-[10px] font-black uppercase theme-text-muted hover:theme-text-main">
                     <ArrowLeft className="w-4 h-4" /> Dashboard RH
                 </Link>
@@ -63,21 +65,21 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
 
                 <div className={geliaCardClass('p-6 grid grid-cols-1 md:grid-cols-4 gap-4')}>
                     <div>
-                        <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Fecha inicio</label>
+                        <RhFieldLabel>Fecha inicio</RhFieldLabel>
                         <input type="date" value={filtros.fecha_inicio || ''} onChange={(e) => aplicar({ fecha_inicio: e.target.value })} className={`${THEME_INPUT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`} />
                     </div>
                     <div>
-                        <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Fecha fin</label>
+                        <RhFieldLabel>Fecha fin</RhFieldLabel>
                         <input type="date" value={filtros.fecha_fin || ''} onChange={(e) => aplicar({ fecha_fin: e.target.value })} className={`${THEME_INPUT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`} />
                     </div>
                     <div>
-                        <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Colaborador</label>
-                        <select value={filtros.rh_colaborador_id || ''} onChange={(e) => aplicar({ rh_colaborador_id: e.target.value || undefined })} className={`${THEME_SELECT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`}>
+                        <RhFieldLabel>Colaborador</RhFieldLabel>
+                        <RhSelect value={filtros.rh_colaborador_id || ''} onChange={(e) => aplicar({ rh_colaborador_id: e.target.value || undefined })}>
                             <option value="">Todos</option>
                             {colaboradores.map((c) => (
                                 <option key={c.id} value={c.id}>{nombreCompletoColaborador(c)}</option>
                             ))}
-                        </select>
+                        </RhSelect>
                     </div>
                     <div className="flex items-end">
                         <button type="button" onClick={() => aplicar({})} className="w-full px-4 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
@@ -126,7 +128,7 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                     <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0 mb-3">Comisiones auditoras en periodo</h2>
                     <p className="text-sm m-0">Total: {formatoMoneda(comisionesAuditor.total)} · Pendiente: {formatoMoneda(comisionesAuditor.pendiente)}</p>
                 </div>
-            </div>
+            </GeliaPageShell>
         </AppLayout>
     );
 }

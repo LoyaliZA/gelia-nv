@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { Wallet, Plus, Eye, Pencil, Zap } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
+import RhPageHeader from '../Partials/RhPageHeader';
 import FiltrosPrestamos from './Partials/FiltrosPrestamos';
 import ModalFormPrestamo from './Partials/ModalFormPrestamo';
 import {
@@ -63,29 +65,29 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Préstamos y Pagos Fijos | RH" />
-            <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
-                <header className={geliaCardClass('p-6 md:p-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6')}>
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl md:text-4xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                            Préstamos y <span style={{ color: 'var(--color-primario)' }}>Pagos Fijos</span>
-                        </h1>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
-                            {registros.total.toLocaleString('es-MX')} convenios registrados
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {puedeGenerar && (
-                            <button type="button" onClick={generarCuotas} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border flex items-center gap-2">
-                                <Zap className="w-4 h-4" /> Generar cuotas del periodo
-                            </button>
-                        )}
-                        {puedeCrear && (
-                            <button type="button" onClick={abrirNuevo} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
-                                <Plus className="w-4 h-4" /> Nuevo convenio
-                            </button>
-                        )}
-                    </div>
-                </header>
+            <GeliaPageShell className="space-y-8 relative">
+                <RhPageHeader
+                    title="Préstamos y"
+                    titleHighlight="Pagos Fijos"
+                    description={`${registros.total.toLocaleString('es-MX')} convenios registrados`}
+                    icon={Wallet}
+                    aside={
+                        (puedeGenerar || puedeCrear) ? (
+                            <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+                                {puedeGenerar && (
+                                    <button type="button" onClick={generarCuotas} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border-2 flex items-center justify-center gap-2">
+                                        <Zap className="w-4 h-4" /> Generar cuotas del periodo
+                                    </button>
+                                )}
+                                {puedeCrear && (
+                                    <button type="button" onClick={abrirNuevo} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                                        <Plus className="w-4 h-4" /> Nuevo convenio
+                                    </button>
+                                )}
+                            </div>
+                        ) : null
+                    }
+                />
 
                 <RhSubNav />
 
@@ -169,7 +171,7 @@ export default function Index({
                         </div>
                     )}
                 </div>
-            </div>
+            </GeliaPageShell>
 
             <ModalFormPrestamo
                 abierto={modalAbierto}

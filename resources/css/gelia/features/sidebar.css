@@ -1,0 +1,754 @@
+/* Drawer lateral móvil */
+.gelia-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--gelia-z-sidebar) - 1);
+    background: var(--theme-modal-overlay-bg);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.gelia-sidebar-backdrop--visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+@media (max-width: 767px) {
+    .gelia-sidebar-drawer.sidebar-menu-shell {
+        position: fixed !important;
+        top: var(--gelia-mobile-topbar-height) !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        width: min(20rem, 92vw) !important;
+        max-width: 92vw !important;
+        height: auto !important;
+        margin: 0 !important;
+        border-radius: 0 1.5rem 0 0 !important;
+        transform: translate3d(-105%, 0, 0);
+        opacity: 1;
+        grid-template-rows: 1fr !important;
+        transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .gelia-sidebar-drawer.sidebar-hamburger-menu--open {
+        transform: translate3d(0, 0, 0);
+    }
+
+    .gelia-sidebar-drawer .sidebar-menu-content {
+        opacity: 1;
+        transform: none;
+        max-height: 100%;
+        height: 100%;
+    }
+
+    .gelia-sidebar-drawer.gelia-sidebar-access-shell {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        max-height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .gelia-sidebar-drawer.sidebar-hamburger-menu .sidebar-menu-grid-inner,
+    .gelia-sidebar-drawer.sidebar-hamburger-menu .gelia-sidebar-access-panel {
+        height: 100%;
+        max-height: 100%;
+        min-height: 0;
+        flex: 1 1 0;
+    }
+}
+
+/* Cluster widget + menús flotantes — separación exterior única */
+.gelia-sidebar-hover-cluster {
+    gap: var(--gelia-sidebar-panel-exterior-gap);
+}
+
+/* Menú hamburguesa (accesos): altura al contenido, tope máximo con scroll interno */
+.gelia-sidebar-access-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    height: auto;
+    overflow: hidden;
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-float {
+    display: flex;
+    grid-template-rows: unset;
+}
+
+/* Cerrado: solo el shell (0px en layout). El árbol interior no se modifica. */
+.sidebar-menu-float:not(.sidebar-menu-float--open),
+.gelia-sidebar-access-shell.sidebar-menu-float:not(.sidebar-menu-float--open) {
+    width: 0 !important;
+    max-width: 0 !important;
+    min-width: 0 !important;
+    flex: 0 0 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-width: 0 !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+}
+
+/* Accesos abierto: crece con el contenido hasta el tope del viewport */
+.gelia-sidebar-access-shell.sidebar-menu-float.sidebar-menu-float--open {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-shrink: 0 !important;
+    align-self: flex-start !important;
+    width: var(--gelia-sidebar-menu-width) !important;
+    max-width: var(--gelia-sidebar-menu-width) !important;
+    min-width: var(--gelia-sidebar-menu-width) !important;
+    flex: 0 1 auto !important;
+    height: max-content !important;
+    max-height: var(--gelia-sidebar-menu-max-height) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    pointer-events: auto !important;
+    opacity: 1 !important;
+}
+
+/* Perfil abierto: layout (ancho) mientras isProfileMenuVisible; opacidad vía --profile-menu--open */
+.sidebar-profile-menu.sidebar-menu-float.sidebar-menu-float--open {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 0 0 auto !important;
+    align-self: flex-start !important;
+    width: var(--gelia-sidebar-menu-width) !important;
+    max-width: var(--gelia-sidebar-menu-width) !important;
+    min-width: var(--gelia-sidebar-menu-width) !important;
+    flex-shrink: 0 !important;
+    height: max-content !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+.sidebar-profile-menu.sidebar-profile-menu--open {
+    pointer-events: auto !important;
+    opacity: 1 !important;
+    transform: translate3d(0, 0, 0) scale(1) !important;
+}
+
+.sidebar-profile-menu.sidebar-menu-float {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-rows: unset !important;
+}
+
+.sidebar-profile-menu .sidebar-menu-grid-inner {
+    flex: 0 0 auto !important;
+    height: auto !important;
+    max-height: none !important;
+}
+
+.sidebar-profile-menu .gelia-sidebar-profile-panel,
+.sidebar-profile-menu .sidebar-menu-content {
+    height: auto !important;
+    max-height: none !important;
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-fixed,
+.gelia-sidebar-access-shell.sidebar-menu-fixed-right {
+    height: auto;
+    max-height: 100dvh;
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-fixed.sidebar-menu-fixed--open,
+.gelia-sidebar-access-shell.sidebar-menu-fixed-right.sidebar-menu-fixed-right--open {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-shrink: 0 !important;
+    width: var(--gelia-sidebar-menu-width) !important;
+    min-width: var(--gelia-sidebar-menu-width) !important;
+    height: max-content !important;
+    max-height: var(--gelia-sidebar-menu-max-height) !important;
+    overflow: hidden !important;
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-fixed.sidebar-menu-fixed--open .sidebar-menu-grid-inner,
+.gelia-sidebar-access-shell.sidebar-menu-fixed-right.sidebar-menu-fixed-right--open .sidebar-menu-grid-inner {
+    flex: 0 1 auto;
+    height: auto;
+    max-height: 100%;
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-fixed.sidebar-menu-fixed--open .gelia-sidebar-access-panel,
+.gelia-sidebar-access-shell.sidebar-menu-fixed-right.sidebar-menu-fixed-right--open .gelia-sidebar-access-panel {
+    flex: 0 1 auto;
+    height: auto;
+    max-height: 100%;
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-fixed.sidebar-menu-fixed--open .gelia-sidebar-access-scroll,
+.gelia-sidebar-access-shell.sidebar-menu-fixed-right.sidebar-menu-fixed-right--open .gelia-sidebar-access-scroll {
+    flex: 0 1 auto;
+    height: auto;
+    max-height: var(--gelia-sidebar-menu-max-height);
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-float.sidebar-menu-float--open .sidebar-menu-grid-inner {
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 auto;
+    min-height: 0;
+    height: auto;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-fixed .sidebar-menu-grid-inner,
+.gelia-sidebar-access-shell.sidebar-menu-fixed-right .sidebar-menu-grid-inner {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-float.sidebar-menu-float--open .gelia-sidebar-access-panel {
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: auto;
+    max-height: 100%;
+    box-sizing: border-box;
+}
+
+.gelia-sidebar-access-panel {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+    max-height: 100%;
+    box-sizing: border-box;
+}
+
+.gelia-sidebar-access-shell.sidebar-menu-float.sidebar-menu-float--open .gelia-sidebar-access-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.gelia-sidebar-access-scroll {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.gelia-sidebar-access-footer {
+    flex-shrink: 0;
+}
+
+
+/*
+ * Sidebar — raíz tipográfica + herencia universal.
+ * Familia solo en .gelia-sidebar-root; hijos usan inherit (anula Tailwind font-sans, etc.).
+ * Jerarquía visual: font-size, font-weight, opacity — nunca otra familia.
+ */
+.gelia-sidebar-root {
+    font-family: var(--font-principal);
+    --gelia-sidebar-weight-body: 600;
+    --gelia-sidebar-weight-active: 800;
+    --gelia-sidebar-weight-heading: 900;
+    --gelia-sidebar-size-body: 0.84375rem;
+    --gelia-sidebar-size-heading: 0.6875rem;
+}
+
+.gelia-sidebar-root :is(.font-sans, .font-serif, .font-mono, [class*='font-sans'], [class*='font-serif'], [class*='font-mono']) {
+    font-family: var(--font-principal) !important;
+}
+
+/* Perfil — enlaces hoja: mismos estados que accesos (sin anular fondo/borde activo) */
+.gelia-sidebar-profile-panel .gelia-sidebar-nav-child-link:not(.gelia-sidebar-nav-child-link--active) {
+    background: transparent;
+    box-shadow: none;
+}
+
+.gelia-sidebar-profile-panel .gelia-sidebar-nav-child-link:not(.gelia-sidebar-nav-child-link--active):hover {
+    background-color: color-mix(in srgb, var(--theme-text-main) 6%, transparent);
+}
+
+.gelia-sidebar-profile-panel .gelia-sidebar-nav-child-link--active {
+    background-color: color-mix(in srgb, var(--color-primario) 12%, transparent);
+    border-left-width: 2px;
+    border-left-style: solid;
+    border-left-color: var(--color-primario);
+}
+
+.gelia-sidebar-profile-panel .gelia-sidebar-nav-child-link--active .gelia-sidebar-nav-child-text--active,
+.gelia-sidebar-profile-panel .gelia-sidebar-nav-child-link--active .gelia-sidebar-nav-child-icon--active {
+    color: var(--color-primario);
+    font-weight: var(--gelia-sidebar-weight-active);
+}
+
+.gelia-sidebar-avatar-initial {
+    font-weight: var(--gelia-sidebar-weight-heading);
+}
+
+.gelia-sidebar-avatar-initial--compact {
+    font-size: 0.625rem;
+}
+
+.gelia-sidebar-avatar-initial--expanded {
+    font-size: 1.125rem;
+}
+
+/* Accesos — árbol (familia = --font-principal en cada nivel; sin inherit roto en <a>) */
+.gelia-sidebar-root .gelia-sidebar-nav-tree {
+    width: 100%;
+    min-width: 0;
+    font-family: var(--font-principal);
+    font-style: normal;
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.gelia-sidebar-root .gelia-sidebar-nav-header {
+    display: block;
+    user-select: none;
+    font-family: var(--font-principal);
+    font-size: var(--gelia-sidebar-size-heading);
+    font-weight: var(--gelia-sidebar-weight-heading);
+    font-style: italic;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--color-primario);
+    opacity: 0.85;
+}
+
+/* Contenedor hijos: corta herencia italic/uppercase de botones raíz */
+.gelia-sidebar-root .gelia-sidebar-nav-children {
+    font-family: var(--font-principal);
+    font-style: normal;
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+/* Nivel 2 — subgrupos (Comercial, Logística, Herramientas): oración, texto plano */
+.gelia-sidebar-root button.gelia-sidebar-nav-subgroup-btn,
+.gelia-sidebar-root .gelia-sidebar-nav-subgroup-label {
+    font-family: var(--font-principal) !important;
+    font-size: var(--gelia-sidebar-size-body) !important;
+    font-weight: var(--gelia-sidebar-weight-body) !important;
+    font-style: normal !important;
+    text-transform: none !important;
+    letter-spacing: 0.01em !important;
+    line-height: 1.35;
+}
+
+.gelia-sidebar-root .gelia-sidebar-nav-subgroup-label {
+    opacity: 1;
+    color: color-mix(in srgb, var(--theme-text-muted) 96%, var(--theme-text-main));
+}
+
+/* Nivel 2/3 — enlaces hoja (Panel Principal, RH, ítems bajo Comercial…) */
+.gelia-sidebar-root a.gelia-sidebar-nav-child-link {
+    font-family: var(--font-principal) !important;
+    font-size: var(--gelia-sidebar-size-body) !important;
+    font-weight: var(--gelia-sidebar-weight-body) !important;
+    font-style: normal !important;
+    text-transform: none !important;
+    letter-spacing: 0.01em !important;
+    line-height: 1.35;
+}
+
+
+.gelia-sidebar-root .gelia-sidebar-nav-child-text--muted {
+    color: color-mix(in srgb, var(--theme-text-muted) 96%, var(--theme-text-main));
+    opacity: 1;
+    font-weight: var(--gelia-sidebar-weight-body) !important;
+}
+
+.gelia-sidebar-root .gelia-sidebar-access-footer-label {
+    font-size: 0.75rem;
+    font-weight: var(--gelia-sidebar-weight-heading);
+    font-style: italic;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* Nivel 1 — categoría raíz (caja + chevron) */
+.gelia-sidebar-nav-root-btn--idle {
+    background-color: color-mix(in srgb, var(--theme-element-bg) 88%, transparent);
+    border: 1px solid var(--theme-border);
+    color: var(--theme-text-main);
+}
+
+.gelia-sidebar-nav-root-btn--idle:hover {
+    border-color: var(--color-primario);
+    box-shadow: var(--theme-shadow-card);
+}
+
+.gelia-sidebar-nav-root-btn--hint-active {
+    background-color: color-mix(in srgb, var(--theme-element-bg) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-primario) 45%, var(--theme-border));
+    color: var(--theme-text-main);
+}
+
+.gelia-sidebar-nav-root-btn {
+    min-width: 0;
+}
+
+.gelia-sidebar-root .gelia-sidebar-nav-root-label {
+    flex: 1 1 auto;
+    overflow: visible;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.25;
+    font-family: var(--font-principal);
+    font-size: var(--gelia-sidebar-size-heading);
+    font-weight: var(--gelia-sidebar-weight-heading);
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: inherit;
+}
+
+.gelia-sidebar-root .gelia-sidebar-nav-root-btn {
+    font-family: var(--font-principal);
+}
+
+@media (min-width: 640px) {
+    .gelia-sidebar-root .gelia-sidebar-nav-root-label {
+        font-size: 0.75rem;
+    }
+}
+
+.gelia-sidebar-nav-root-icon {
+    color: var(--color-primario);
+}
+
+.gelia-sidebar-nav-chevron {
+    color: var(--theme-text-muted);
+}
+
+/* Niveles 2–3 — enlaces planos (sin caja) */
+.gelia-sidebar-nav-child-link {
+    position: relative;
+    background: transparent;
+}
+
+.gelia-sidebar-nav-child-link:hover {
+    background-color: color-mix(in srgb, var(--theme-text-main) 6%, transparent);
+}
+
+.gelia-sidebar-nav-child-icon {
+    color: color-mix(in srgb, var(--theme-text-muted) 92%, var(--theme-text-main));
+}
+
+.gelia-sidebar-nav-subgroup-btn:hover .gelia-sidebar-nav-subgroup-label,
+.gelia-sidebar-nav-subgroup-btn:hover .gelia-sidebar-nav-child-icon {
+    color: var(--theme-text-main);
+}
+
+.gelia-sidebar-nav-child-link--active {
+    background-color: color-mix(in srgb, var(--color-primario) 12%, transparent);
+}
+
+.gelia-sidebar-root .gelia-sidebar-nav-child-text--active {
+    color: var(--color-primario);
+    font-weight: var(--gelia-sidebar-weight-active) !important;
+}
+
+.gelia-sidebar-root .gelia-sidebar-nav-tier-leaf.gelia-sidebar-nav-child-link--active {
+    font-weight: var(--gelia-sidebar-weight-active) !important;
+}
+
+.gelia-sidebar-nav-child-icon--active {
+    color: var(--color-primario);
+}
+
+.gelia-sidebar-nav-child-accent-bar {
+    pointer-events: none;
+}
+
+/**
+ * Respaldo CSS — niveles 2/3 en formato oración (sin uppercase).
+ */
+.gelia-sidebar-root .gelia-sidebar-nav-children a.gelia-sidebar-nav-child-link,
+.gelia-sidebar-root .gelia-sidebar-nav-tree a.gelia-sidebar-nav-child-link,
+.gelia-sidebar-root .gelia-sidebar-nav-children button.gelia-sidebar-nav-subgroup-btn,
+.gelia-sidebar-root .gelia-sidebar-nav-tree button.gelia-sidebar-nav-subgroup-btn {
+    font-family: var(--font-principal) !important;
+    font-size: var(--gelia-sidebar-size-body) !important;
+    font-weight: var(--gelia-sidebar-weight-body) !important;
+    font-style: normal !important;
+    text-transform: none !important;
+    letter-spacing: 0.01em !important;
+}
+
+.gelia-sidebar-root .gelia-sidebar-nav-child-link--active {
+    font-weight: var(--gelia-sidebar-weight-active) !important;
+}
+
+.gelia-sidebar-root .gelia-sidebar-nav-child-text--muted,
+.gelia-sidebar-root .gelia-sidebar-nav-subgroup-label {
+    opacity: 1;
+}
+
+.gelia-sidebar-root .gelia-sidebar-profile-panel a.gelia-sidebar-nav-child-link {
+    font-family: var(--font-principal) !important;
+    font-size: var(--gelia-sidebar-size-body) !important;
+    font-weight: var(--gelia-sidebar-weight-body) !important;
+    font-style: normal !important;
+    text-transform: none !important;
+    letter-spacing: 0.01em !important;
+}
+
+.gelia-sidebar-root .gelia-sidebar-profile-panel a.gelia-sidebar-nav-child-link--active {
+    font-weight: var(--gelia-sidebar-weight-active) !important;
+    background-color: color-mix(in srgb, var(--color-primario) 12%, transparent) !important;
+    border-left-color: var(--color-primario) !important;
+}
+
+/* --- Widget y menús flotantes (timing vía CSS vars en .gelia-sidebar-root) --- */
+.gelia-sidebar-root {
+    --gelia-sidebar-widget-ms: 320ms;
+    --gelia-sidebar-menu-open-ms: 360ms;
+    --gelia-sidebar-menu-close-ms: 300ms;
+    --gelia-sidebar-mount-ms: 420ms;
+    --gelia-sidebar-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sidebar-widget-shell {
+    will-change: padding, gap, width, transform;
+    backface-visibility: hidden;
+    transition-property: padding, gap, width, opacity, transform;
+    transition-duration: var(--gelia-sidebar-widget-ms);
+    transition-timing-function: var(--gelia-sidebar-ease);
+}
+
+.sidebar-widget-reveal {
+    transition-property: max-width, max-height, opacity, gap, padding, margin, border-color;
+    transition-duration: var(--gelia-sidebar-widget-ms);
+    transition-timing-function: var(--gelia-sidebar-ease);
+    pointer-events: auto;
+}
+
+.sidebar-widget-icons {
+    box-sizing: border-box;
+}
+
+.sidebar-widget-icon-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sidebar-widget-icon-btn svg {
+    display: block;
+    flex-shrink: 0;
+}
+
+.sidebar-logo-link {
+    transition: transform var(--gelia-sidebar-widget-ms) var(--gelia-sidebar-ease);
+}
+
+.sidebar-logo-mark {
+    transition:
+        width var(--gelia-sidebar-widget-ms) var(--gelia-sidebar-ease),
+        height var(--gelia-sidebar-widget-ms) var(--gelia-sidebar-ease),
+        filter var(--gelia-sidebar-widget-ms) var(--gelia-sidebar-ease);
+    will-change: width, height, transform;
+}
+
+.sidebar-menu-shell {
+    overflow: hidden;
+    will-change: transform, opacity, width, grid-template-rows;
+    backface-visibility: hidden;
+    transition-property: transform, opacity, width, max-width, min-width, grid-template-rows, flex, height, margin, padding, border-width;
+    transition-duration: var(--gelia-sidebar-menu-close-ms);
+    transition-timing-function: var(--gelia-sidebar-ease);
+}
+
+.sidebar-menu-shell.sidebar-hamburger-menu--open,
+.sidebar-menu-shell.sidebar-profile-menu--open,
+.sidebar-menu-shell.sidebar-menu-float--open {
+    transition-duration: var(--gelia-sidebar-menu-open-ms);
+}
+
+.sidebar-menu-float:not(.sidebar-profile-menu) {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scale(0.985);
+    transition-property: grid-template-rows, opacity, transform, margin, width, max-width;
+    max-height: calc(100vh - 3.5rem);
+}
+
+.sidebar-menu-float:not(.sidebar-profile-menu).sidebar-menu-float--open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+}
+
+.sidebar-menu-fixed {
+    width: 0;
+    opacity: 0;
+    transform: translate3d(-8px, 0, 0);
+    transition-property: width, opacity, transform;
+    transition-duration: var(--gelia-sidebar-menu-open-ms);
+    transition-timing-function: var(--gelia-sidebar-ease);
+}
+
+.sidebar-menu-fixed--open {
+    width: 300px;
+    min-width: 300px;
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+}
+
+.sidebar-menu-fixed-right {
+    width: 0;
+    opacity: 0;
+    transform: translate3d(8px, 0, 0);
+    transition-property: width, opacity, transform;
+    transition-duration: var(--gelia-sidebar-menu-open-ms);
+    transition-timing-function: var(--gelia-sidebar-ease);
+}
+
+.sidebar-menu-fixed-right--open {
+    width: 300px;
+    min-width: 300px;
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+}
+
+.sidebar-hamburger-icon {
+    transition:
+        opacity var(--gelia-sidebar-menu-open-ms) var(--gelia-sidebar-ease),
+        transform var(--gelia-sidebar-menu-open-ms) var(--gelia-sidebar-ease);
+    will-change: opacity, transform;
+}
+
+.sidebar-hamburger-icon--visible {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+}
+
+.sidebar-hamburger-icon--hidden {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.72);
+    pointer-events: none;
+}
+
+.sidebar-hamburger-menu .sidebar-menu-content {
+    opacity: 0;
+    transform: translate3d(0, -12px, 0);
+    transition:
+        opacity var(--gelia-sidebar-menu-open-ms) var(--gelia-sidebar-ease),
+        transform var(--gelia-sidebar-menu-open-ms) var(--gelia-sidebar-ease);
+}
+
+.sidebar-hamburger-menu--open .sidebar-menu-content {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition-delay: 90ms;
+}
+
+.sidebar-hamburger-menu:not(.sidebar-hamburger-menu--open) .sidebar-menu-content {
+    transition-delay: 0ms;
+    transition-duration: var(--gelia-sidebar-menu-close-ms);
+}
+
+.sidebar-profile-menu.sidebar-menu-float:not(.sidebar-profile-menu--open) {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0) scale(0.985);
+}
+
+.sidebar-profile-menu .sidebar-menu-content {
+    opacity: 0;
+    transform: translate3d(0, -12px, 0);
+    transition:
+        opacity var(--gelia-sidebar-menu-open-ms) var(--gelia-sidebar-ease),
+        transform var(--gelia-sidebar-menu-open-ms) var(--gelia-sidebar-ease);
+}
+
+.sidebar-profile-menu--open .sidebar-menu-content {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition-delay: 90ms;
+}
+
+.sidebar-profile-menu:not(.sidebar-profile-menu--open) .sidebar-menu-content {
+    transition-delay: 0ms;
+    transition-duration: var(--gelia-sidebar-menu-close-ms);
+}
+
+.sidebar-hamburger-menu.gelia-sidebar-access-shell.sidebar-menu-float--open {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    align-self: flex-start;
+    width: 300px;
+    min-width: 300px;
+    max-width: 300px;
+    height: max-content;
+    max-height: min(85vh, calc(100dvh - 3rem));
+    min-height: 0;
+    overflow: hidden;
+    opacity: 1;
+}
+
+.sidebar-hamburger-menu.gelia-sidebar-access-shell.sidebar-menu-float--open .sidebar-menu-grid-inner {
+    flex: 0 1 auto;
+    min-height: 0;
+    height: auto;
+    max-height: 100%;
+}
+
+.sidebar-collapsible-wrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        grid-template-rows var(--gelia-sidebar-widget-ms) var(--gelia-sidebar-ease),
+        opacity calc(var(--gelia-sidebar-widget-ms) - 40ms) var(--gelia-sidebar-ease),
+        visibility var(--gelia-sidebar-widget-ms);
+    overflow: hidden;
+}
+
+.sidebar-collapsible-wrapper--open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+}
+
+.sidebar-collapsible-inner {
+    min-height: 0;
+}

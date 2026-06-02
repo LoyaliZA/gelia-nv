@@ -14,7 +14,6 @@ import {
     optimizeLayout,
     resolveLayout,
 } from '../../Components/Dashboard/dashboardLayoutUtils';
-import { ESTILOS_DASHBOARD_ADAPTIVE } from '../../Components/Dashboard/dashboardAdaptiveStyles';
 import DashboardModuleCard from '../../Components/Dashboard/DashboardModuleCard';
 import { DASHBOARD_MODULE_CARDS, DASHBOARD_FUNCTION_CARDS } from '../../Components/Dashboard/dashboardModulesCatalog';
 
@@ -22,17 +21,6 @@ import WidgetSolicitudes from './Widgets/WidgetSolicitudes';
 import WidgetCancelacionesCotizaciones from './Widgets/WidgetCancelacionesCotizaciones';
 import WidgetActivos from './Widgets/WidgetActivos';
 import WidgetRh from './Widgets/WidgetRh';
-
-const ESTILOS_ANIMACION_NATIVA = `
-    @keyframes slideUpFadeDashboard { 
-        0% { opacity: 0; transform: translateY(15px); } 
-        100% { opacity: 1; transform: translateY(0); } 
-    }
-    .animate-page-reveal { 
-        opacity: 0; 
-        animation: slideUpFadeDashboard 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
-    }
-`;
 
 function buildCardGridPanel({
     variant,
@@ -253,11 +241,9 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
     return (
         <AppLayout auth={auth}>
             <Head title="Dashboard | GELIANV" />
-            <style>{ESTILOS_ANIMACION_NATIVA}</style>
-            {!isMobile && <style>{ESTILOS_DASHBOARD_ADAPTIVE}</style>}
 
             <div className="w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-12 space-y-8 md:space-y-10 min-h-screen relative">
-                <header className="theme-surface border-2 theme-border rounded-[2rem] md:rounded-[3rem] p-6 md:p-8 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10 animate-page-reveal">
+                <header className="theme-surface border-2 theme-border rounded-[2rem] md:rounded-[3rem] p-6 md:p-8 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10 dashboard-page-reveal">
                     <div className="space-y-4">
                         <div className="flex items-center space-x-3">
                             <span className="h-1.5 w-12 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }}></span>
@@ -311,14 +297,14 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
                 )}
 
                 {isMobile && hayPaneles && (
-                    <p className="text-[9px] font-bold theme-text-muted uppercase tracking-widest text-center px-2 -mt-4 animate-page-reveal">
+                    <p className="text-[9px] font-bold theme-text-muted uppercase tracking-widest text-center px-2 -mt-4 dashboard-page-reveal">
                         Vista optimizada para móvil. Organiza el panel desde escritorio.
                     </p>
                 )}
 
                 {editLayoutMode && !isMobile && (
                     <div
-                        className="theme-surface border-2 rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-page-reveal"
+                        className="theme-surface border-2 rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 dashboard-page-reveal"
                         style={{ borderColor: 'var(--color-primario)' }}
                     >
                         <div>
@@ -384,7 +370,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
                         )}
                     </div>
                 ) : (
-                    <div className="theme-surface border-2 theme-border rounded-[2rem] p-12 text-center animate-page-reveal">
+                    <div className="theme-surface border-2 theme-border rounded-[2rem] p-12 text-center dashboard-page-reveal">
                         <p className="text-xs font-bold theme-text-muted uppercase tracking-widest">
                             No hay secciones visibles en tu panel. Usa Configurar para mostrar módulos.
                         </p>

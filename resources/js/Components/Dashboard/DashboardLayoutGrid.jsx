@@ -14,95 +14,6 @@ import {
     resolveCollisionsOnly,
 } from './dashboardLayoutUtils';
 
-const ESTILOS_GRID = `
-    .dashboard-layout-absolute {
-        position: relative;
-        width: 100%;
-        --dg-cols: ${GRID_COLS};
-        --dg-row: ${ROW_HEIGHT_PX}px;
-        --dg-gap: ${GRID_GAP_PX}px;
-        transition: height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .dashboard-layout-grid--edit {
-        background-image:
-            linear-gradient(to right, color-mix(in srgb, var(--color-primario) 12%, transparent) 1px, transparent 1px),
-            linear-gradient(to bottom, color-mix(in srgb, var(--color-primario) 12%, transparent) 1px, transparent 1px);
-        background-size: calc((100% - (var(--dg-cols) - 1) * var(--dg-gap)) / var(--dg-cols)) calc(var(--dg-row) + var(--dg-gap));
-        background-position: 0 0;
-    }
-
-    .dashboard-grid-item {
-        position: absolute;
-        min-height: 0;
-        min-width: 0;
-        overflow: hidden;
-    }
-
-    .dashboard-grid-item--animate {
-        transition:
-            left 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-            top 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-            width 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-            height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .dashboard-grid-item--interacting {
-        transition: none !important;
-        z-index: 30;
-    }
-
-    .dashboard-grid-item--edit {
-        outline: 2px dashed color-mix(in srgb, var(--color-primario) 45%, transparent);
-        outline-offset: 2px;
-    }
-
-    .dashboard-grid-item--collision {
-        outline-color: color-mix(in srgb, #ef4444 55%, transparent);
-    }
-
-    .dashboard-grid-item__inner {
-        height: 100%;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .dashboard-grid-item__content {
-        flex: 1;
-        min-height: 0;
-        min-width: 0;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
-
-    .dashboard-grid-item__content > * {
-        flex: 1;
-        min-height: 0;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .dashboard-module-card {
-        transition:
-            padding 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-            border-radius 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-            border-color 0.2s ease;
-    }
-
-    .dashboard-module-card__title,
-    .dashboard-module-card__subtitle {
-        transition: font-size 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
-    }
-
-    .dashboard-module-card__icon-wrap {
-        transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1), height 0.35s cubic-bezier(0.16, 1, 0.3, 1), margin 0.35s ease;
-    }
-`;
-
 function DashboardGridItem({
     item,
     editMode,
@@ -327,13 +238,17 @@ export default function DashboardLayoutGrid({
     const gridHeight = gridHeightFromLayout(layout);
 
     return (
-        <>
-            <style>{ESTILOS_GRID}</style>
-            <div
+        <div
                 ref={gridRef}
                 data-dashboard-grid
                 className={`dashboard-layout-absolute ${editMode ? 'dashboard-layout-grid--edit rounded-[2rem] p-2' : ''}`}
-                style={{ height: `${gridHeight}px`, minHeight: `${gridHeight}px` }}
+                style={{
+                    height: `${gridHeight}px`,
+                    minHeight: `${gridHeight}px`,
+                    '--dg-cols': GRID_COLS,
+                    '--dg-row': `${ROW_HEIGHT_PX}px`,
+                    '--dg-gap': `${GRID_GAP_PX}px`,
+                }}
             >
                 {layout.map((item) => (
                     <DashboardGridItem
@@ -353,6 +268,5 @@ export default function DashboardLayoutGrid({
                     </DashboardGridItem>
                 ))}
             </div>
-        </>
     );
 }

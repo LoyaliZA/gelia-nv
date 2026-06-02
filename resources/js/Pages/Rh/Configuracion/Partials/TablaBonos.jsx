@@ -12,6 +12,7 @@ import {
     THEME_BTN_SECONDARY,
     THEME_BTN_ICON,
 } from '../../../../utils/geliaTheme';
+import { rhChipClass } from '../../rhModuleStyles';
 
 const FORM_INICIAL = {
     nombre: '',
@@ -95,7 +96,7 @@ export default function TablaBonos({ datos = [] }) {
                                 <td className="px-4 py-4 text-xs font-mono theme-text-muted">{item.codigo || '—'}</td>
                                 <td className="px-4 py-4 text-sm font-bold">{item.colaboradores_count ?? 0}</td>
                                 <td className="px-4 py-4">
-                                    <span className={`inline-flex px-3 py-1 rounded-full text-[9px] font-black uppercase ${item.activo ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
+                                    <span className={rhChipClass(item.activo ? 'active' : 'inactive', 'md')}>
                                         {item.activo ? 'Activo' : 'Inactivo'}
                                     </span>
                                 </td>

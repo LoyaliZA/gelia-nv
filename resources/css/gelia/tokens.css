@@ -1,0 +1,100 @@
+/**
+ * Tokens GELIA — variables CSS.
+ * El acento (--color-primario), fuente y fondos los establece AppLayout en runtime.
+ */
+
+:root {
+    --color-primario: #ec4899;
+    --color-peligro: #dc2626;
+    --font-principal: 'Inter', sans-serif;
+    --font-scale: 1;
+
+    --bg-app: #ffffff;
+    --bg-image-pc: none;
+    --bg-image-movil: none;
+    --bg-actual: var(--bg-image-movil, none);
+
+    --theme-surface-bg: #ffffff;
+    --theme-surface-border: #f4f4f5;
+    --theme-surface-solid: #ffffff;
+    --theme-element-bg: #fafafa;
+    --theme-element-border: #e4e4e7;
+    --theme-text-main: #18181b;
+    --theme-text-muted: #71717a;
+    --theme-border: #e4e4e7;
+    --theme-placeholder: #a1a1aa;
+
+    --theme-radius-card: 2.5rem;
+    --theme-radius-panel: 2rem;
+    --theme-radius-input: 0.75rem;
+    --theme-radius-modal: 2.5rem;
+
+    --theme-shadow-card: 0 12px 40px rgba(0, 0, 0, 0.08);
+    --theme-shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+    --theme-modal-overlay-bg: rgba(0, 0, 0, 0.6);
+    --theme-modal-blur: 12px;
+
+    --gelia-switch-off: #d4d4d8;
+    --gelia-segment-bg: #f4f4f5;
+    --gelia-segment-border: #e4e4e7;
+    --gelia-segment-active-bg: #ffffff;
+
+    --theme-glass-surface-bg: rgba(255, 255, 255, 0.75);
+    --theme-glass-surface-border: rgba(255, 255, 255, 0.8);
+    --theme-glass-element-bg: rgba(250, 250, 250, 0.85);
+    --theme-glass-element-border: rgba(255, 255, 255, 0.6);
+    --theme-glass-blur: 16px;
+
+    /* Capas de UI (sidebar < modales < toasts) */
+    --gelia-z-sidebar: 200;
+    --gelia-z-modal: 500;
+    --gelia-z-toast: 10000;
+    /* Altura reservada para barra inferior en móvil (< 768px) */
+    --gelia-mobile-nav-offset: 6.5rem;
+}
+
+.dark {
+    --bg-app: #0a0a0a;
+    --theme-surface-bg: #121212;
+    --theme-surface-border: #222222;
+    --theme-surface-solid: #121212;
+    --theme-element-bg: #1e1e1e;
+    --theme-element-border: #2a2a2a;
+    --theme-text-main: #ffffff;
+    --theme-text-muted: #a1a1aa;
+    --theme-border: #27272a;
+    --theme-placeholder: #52525b;
+    --theme-shadow-card: 0 12px 40px rgba(0, 0, 0, 0.5);
+    --gelia-switch-off: #3f3f46;
+    --gelia-segment-bg: #18181b;
+    --gelia-segment-border: #27272a;
+    --gelia-segment-active-bg: #27272a;
+    --theme-glass-surface-bg: rgba(18, 18, 18, 0.7);
+    --theme-glass-surface-border: rgba(255, 255, 255, 0.08);
+    --theme-glass-element-bg: rgba(30, 30, 30, 0.85);
+    --theme-glass-element-border: rgba(255, 255, 255, 0.05);
+}
+
+@media (min-width: 768px) {
+    :root {
+        --bg-actual: var(--bg-image-pc, none);
+    }
+}
+
+:root {
+    --gelia-sidebar-width: 5.25rem;
+    --gelia-sidebar-width-expanded: 5.25rem;
+    /* Espacio exterior barra lateral ↔ panel desplegado (0.5rem = mitad del 1rem previo) */
+    --gelia-sidebar-panel-exterior-gap: 0.5rem;
+    --gelia-sidebar-menu-width: 18.75rem;
+    --gelia-sidebar-menu-max-height: min(85vh, calc(100dvh - 3rem));
+    --gelia-mobile-topbar-height: calc(3.25rem + env(safe-area-inset-top, 0px));
+    --gelia-content-max: 87.5rem;
+    --gelia-content-max-wide: 112.5rem;
+    --gelia-main-padding-x: 1.5rem;
+    --gelia-main-inset-inline-start: 0px;
+    --gelia-main-inset-inline-end: 0px;
+    --gelia-main-inset-block-start: 0px;
+    --gelia-main-inset-block-end: 0px;
+}

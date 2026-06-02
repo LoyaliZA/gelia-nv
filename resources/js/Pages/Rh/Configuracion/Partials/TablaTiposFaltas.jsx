@@ -12,6 +12,7 @@ import {
     THEME_BTN_SECONDARY,
     THEME_BTN_ICON,
 } from '../../../../utils/geliaTheme';
+import { rhChipClass } from '../../rhModuleStyles';
 
 const FORM_INICIAL = {
     nombre: '',
@@ -115,13 +116,13 @@ export default function TablaTiposFaltas({ datos = [] }) {
                                     <td className="px-4 py-4 text-sm font-bold">×{Number(item.factor_penalizacion_puntualidad).toFixed(2)}</td>
                                     <td className="px-4 py-4 text-sm font-bold">×{Number(item.factor_penalizacion_productividad).toFixed(2)}</td>
                                     <td className="px-4 py-4">
-                                        <span className={`inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase ${item.aplica_deduccion_salario_base ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                                        <span className={rhChipClass(item.aplica_deduccion_salario_base ? 'negative' : 'positive', 'sm')}>
                                             {item.aplica_deduccion_salario_base ? 'Sí' : 'No'}
                                         </span>
                                     </td>
                                     <td className="px-4 py-4 text-sm font-bold">{item.incidencias_count ?? 0}</td>
                                     <td className="px-4 py-4">
-                                        <span className={`inline-flex px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${item.activo ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                        <span className={rhChipClass(item.activo ? 'active' : 'inactive')}>
                                             {item.activo ? 'Activo' : 'Inactivo'}
                                         </span>
                                     </td>

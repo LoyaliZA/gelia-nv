@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { TimerReset, Plus, Pencil, Trash2, CheckCircle2 } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
+import RhPageHeader from '../Partials/RhPageHeader';
 import FiltrosBancoTiempo from './Partials/FiltrosBancoTiempo';
 import ModalFormBancoTiempo from './Partials/ModalFormBancoTiempo';
 import { ESTADO_BT_BADGE, ESTADO_BT_LABELS, TAB_ESTADO_MAP } from './Partials/bancoTiempoStyles';
+import { rhBadgeClass } from '../rhModuleStyles';
 
 function tabFromFiltros(filtros) {
     const entry = Object.entries(TAB_ESTADO_MAP).find(([, v]) => v === (filtros.estado || ''));
@@ -77,29 +80,25 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Banco de Tiempo Laboral | RH" />
-            <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
-
-                {/* ── Header */}
-                <header className={geliaCardClass('p-6 md:p-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6')}>
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl md:text-4xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                            Banco de <span style={{ color: 'var(--color-primario)' }}>Tiempo Laboral</span>
-                        </h1>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
-                            {registros.total.toLocaleString('es-MX')} registros · cuenta corriente de horas
-                        </p>
-                    </div>
-                    {puedeCrear && (
-                        <button
-                            type="button"
-                            onClick={abrirNuevo}
-                            className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2 animate-pulse-subtle"
-                            style={{ backgroundColor: 'var(--color-primario)' }}
-                        >
-                            <Plus className="w-4 h-4" /> Registrar deuda de tiempo
-                        </button>
-                    )}
-                </header>
+            <GeliaPageShell className="space-y-8 relative">
+                <RhPageHeader
+                    title="Banco de"
+                    titleHighlight="Tiempo Laboral"
+                    description={`${registros.total.toLocaleString('es-MX')} registros · cuenta corriente de horas`}
+                    icon={TimerReset}
+                    aside={
+                        puedeCrear ? (
+                            <button
+                                type="button"
+                                onClick={abrirNuevo}
+                                className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2 animate-pulse-subtle"
+                                style={{ backgroundColor: 'var(--color-primario)' }}
+                            >
+                                <Plus className="w-4 h-4" /> Registrar deuda de tiempo
+                            </button>
+                        ) : null
+                    }
+                />
 
                 <RhSubNav />
 
@@ -175,7 +174,7 @@ export default function Index({
                                             <td className="px-4 py-4 text-xs font-mono whitespace-nowrap">
                                                 {reg.fecha_devolucion
                                                     ? <span className="text-emerald-600 font-bold">{reg.fecha_devolucion?.slice?.(0, 10) || reg.fecha_devolucion}</span>
-                                                    : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">Pendiente</span>
+                                                    : <span className={rhBadgeClass('amber')}>Pendiente</span>
                                                 }
                                             </td>
                                             <td className="px-4 py-4 text-right whitespace-nowrap space-x-3">
@@ -218,7 +217,7 @@ export default function Index({
                         <GeliaPaginacion paginator={registros} onIrAPagina={irAPagina} embedded />
                     )}
                 </div>
-            </div>
+            </GeliaPageShell>
 
             <ModalFormBancoTiempo
                 abierto={modalAbierto}

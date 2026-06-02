@@ -1,5 +1,19 @@
 @import 'tailwindcss';
-@import './gelia-theme.css';
+@import './gelia/tokens.css';
+@import './gelia/primitives.css';
+@import './gelia/animations.css';
+@import './gelia/utilities.css';
+@import './gelia/layout/app-shell.css';
+@import './gelia/features/sidebar.css';
+@import './gelia/features/mensajeria.css';
+@import './gelia/features/login.css';
+@import './gelia/features/activos-dock.css';
+@import './gelia/features/dashboard.css';
+@import './gelia/features/rh.css';
+@import './gelia/print.css';
+@import './gelia/features/logo.css';
+@import './gelia/features/entregas.css';
+@import './gelia/features/registro.css';
 
 /* Modo oscuro controlado por clase .dark en <html> (AppLayout), no por prefers-color-scheme */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -7,10 +21,19 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
-@source '../**/*.jsx'; 
+@source '../**/*.jsx';
 @source '../**/*.js';
 
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --color-surface: var(--theme-surface-bg);
+    --color-surface-solid: var(--theme-surface-solid);
+    --color-element: var(--theme-element-bg);
+    --color-main: var(--theme-text-main);
+    --color-muted: var(--theme-text-muted);
+    --color-theme-border: var(--theme-border);
+    --color-primario: var(--color-primario);
+    --color-peligro: var(--color-peligro);
 }

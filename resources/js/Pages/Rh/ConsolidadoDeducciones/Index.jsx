@@ -2,7 +2,9 @@ import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { Calendar, ArrowLeft, Printer, AlertTriangle, Wallet, Scale, Eye } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
-import { geliaCardClass, THEME_INPUT, THEME_SELECT } from '../../../utils/geliaTheme';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
+import { geliaCardClass, THEME_INPUT } from '../../../utils/geliaTheme';
+import { RhFieldLabel, RhSelect } from '../Partials/rhFilterFields';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
 
@@ -24,7 +26,7 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
     return (
         <AppLayout auth={auth}>
             <Head title="Consolidado Deducciones | RH" />
-            <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6">
+            <GeliaPageShell className="space-y-6">
                 <div className="flex justify-between items-center no-print">
                     <Link href={route('rh.index')} className="inline-flex items-center gap-2 text-[10px] font-black uppercase theme-text-muted hover:theme-text-main">
                         <ArrowLeft className="w-4 h-4" /> Dashboard RH
@@ -55,7 +57,7 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className={geliaCardClass('p-6 flex items-center justify-between')}>
                         <div>
-                            <p className="text-[9px] font-black uppercase tracking-wider theme-text-muted m-0">Total Deducciones</p>
+                            <p className="gelia-rh-field-label m-0 ml-0">Total Deducciones</p>
                             <h3 className="text-2xl font-black theme-text-main m-0 mt-1">{formatoMoneda(kpiTotalDeducciones)}</h3>
                         </div>
                         <div className="p-3 rounded-2xl theme-element border theme-border">
@@ -64,7 +66,7 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                     </div>
                     <div className={geliaCardClass('p-6 flex items-center justify-between')}>
                         <div>
-                            <p className="text-[9px] font-black uppercase tracking-wider theme-text-muted m-0">Préstamos Pendientes</p>
+                            <p className="gelia-rh-field-label m-0 ml-0">Préstamos Pendientes</p>
                             <h3 className="text-2xl font-black theme-text-main m-0 mt-1">{formatoMoneda(kpiTotalPrestamos)}</h3>
                         </div>
                         <div className="p-3 rounded-2xl theme-element border theme-border">
@@ -73,7 +75,7 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                     </div>
                     <div className={geliaCardClass('p-6 flex items-center justify-between')}>
                         <div>
-                            <p className="text-[9px] font-black uppercase tracking-wider theme-text-muted m-0">Incidencias Operativas</p>
+                            <p className="gelia-rh-field-label m-0 ml-0">Incidencias Operativas</p>
                             <h3 className="text-2xl font-black theme-text-main m-0 mt-1">{formatoMoneda(kpiTotalIncidencias)}</h3>
                         </div>
                         <div className="p-3 rounded-2xl theme-element border theme-border">
@@ -82,7 +84,7 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                     </div>
                     <div className={geliaCardClass('p-6 flex items-center justify-between')}>
                         <div>
-                            <p className="text-[9px] font-black uppercase tracking-wider theme-text-muted m-0">Deducciones Sin Incidencias</p>
+                            <p className="gelia-rh-field-label m-0 ml-0">Deducciones Sin Incidencias</p>
                             <h3 className="text-2xl font-black theme-text-main m-0 mt-1">{formatoMoneda(kpiTotalSinIncidencias)}</h3>
                         </div>
                         <div className="p-3 rounded-2xl theme-element border theme-border">
@@ -94,21 +96,21 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                 {/* Filtros */}
                 <div className={geliaCardClass('p-6 grid grid-cols-1 md:grid-cols-4 gap-4 no-print')}>
                     <div>
-                        <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Fecha inicio</label>
+                        <RhFieldLabel>Fecha inicio</RhFieldLabel>
                         <input type="date" value={filtros.fecha_inicio || ''} onChange={(e) => aplicar({ fecha_inicio: e.target.value })} className={`${THEME_INPUT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`} />
                     </div>
                     <div>
-                        <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Fecha fin</label>
+                        <RhFieldLabel>Fecha fin</RhFieldLabel>
                         <input type="date" value={filtros.fecha_fin || ''} onChange={(e) => aplicar({ fecha_fin: e.target.value })} className={`${THEME_INPUT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`} />
                     </div>
                     <div>
-                        <label className="text-[9px] font-black uppercase theme-text-muted ml-2">Colaborador</label>
-                        <select value={filtros.rh_colaborador_id || ''} onChange={(e) => aplicar({ rh_colaborador_id: e.target.value || undefined })} className={`${THEME_SELECT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`}>
+                        <RhFieldLabel>Colaborador</RhFieldLabel>
+                        <RhSelect value={filtros.rh_colaborador_id || ''} onChange={(e) => aplicar({ rh_colaborador_id: e.target.value || undefined })}>
                             <option value="">Todos</option>
                             {colaboradores.map((c) => (
                                 <option key={c.id} value={c.id}>{nombreCompletoColaborador(c)}</option>
                             ))}
-                        </select>
+                        </RhSelect>
                     </div>
                     <div className="flex items-end">
                         <button type="button" onClick={() => aplicar({})} className="w-full px-4 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
@@ -184,33 +186,7 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                         </table>
                     </div>
                 </div>
-            </div>
-            
-            {/* Estilos para impresión */}
-            <style>{`
-                @media print {
-                    .no-print {
-                        display: none !important;
-                    }
-                    body {
-                        background: white !important;
-                        color: black !important;
-                    }
-                    table {
-                        width: 100% !important;
-                        border-collapse: collapse !important;
-                    }
-                    th, td {
-                        border: 1px solid #ddd !important;
-                        padding: 8px !important;
-                        font-size: 10px !important;
-                    }
-                    th {
-                        background-color: #f2f2f2 !important;
-                        color: black !important;
-                    }
-                }
-            `}</style>
+            </GeliaPageShell>
         </AppLayout>
     );
 }

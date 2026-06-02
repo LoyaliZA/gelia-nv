@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Calendar, SlidersHorizontal, X, ChevronDown } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
-import { TIPOS_OPERATIVO, BTN_PRIMARY, BTN_SECONDARY, ESTILOS_OPERATIVAS_TABS } from './operativasStyles';
+import { TIPOS_OPERATIVO, BTN_PRIMARY, BTN_SECONDARY, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK, GELIA_SEGMENT_TABS_TRACK_COMPACT } from './operativasStyles';
 
 const TABS = ['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'VERIFICADAS', 'INCORRECTAS', 'CANCELADAS'];
 
@@ -59,7 +59,6 @@ export default function FiltrosOperativas({
             aria-label="Filtros operativas"
             aria-busy={listaCargando}
         >
-            <style>{ESTILOS_OPERATIVAS_TABS}</style>
             <div className="p-4 md:p-5 border-b theme-border flex items-center gap-3">
                 <div className="p-2 rounded-xl theme-element border theme-border shrink-0">
                     <SlidersHorizontal className="w-4 h-4 theme-text-muted" aria-hidden />
@@ -74,8 +73,8 @@ export default function FiltrosOperativas({
                 )}
             </div>
 
-            <div className="operativas-tabs-scroll p-3 md:p-4 border-b theme-border">
-                <div className="gelia-segment operativas-tabs-track p-1 shadow-sm" role="tablist" aria-label="Estado de solicitudes">
+            <div className={`${GELIA_SEGMENT_TABS_SCROLL} p-3 md:p-4 border-b theme-border`}>
+                <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`} role="tablist" aria-label="Estado de solicitudes">
                     {TABS.map((tab) => (
                         <button
                             key={tab}
@@ -92,11 +91,11 @@ export default function FiltrosOperativas({
                 </div>
             </div>
 
-            <div className="operativas-tabs-scroll p-3 md:p-4 border-b theme-border">
+            <div className={`${GELIA_SEGMENT_TABS_SCROLL} p-3 md:p-4 border-b theme-border`}>
                 <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted ml-1 mb-2 m-0">
                     Tipo de operación
                 </p>
-                <div className="gelia-segment operativas-tabs-track operativas-tabs-track--tipo p-1 shadow-sm" role="tablist" aria-label="Tipo de operación">
+                <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT} p-1 shadow-sm`} role="tablist" aria-label="Tipo de operación">
                     {TIPOS_OPERATIVO.map(({ id, label }) => (
                         <button
                             key={id || 'all'}

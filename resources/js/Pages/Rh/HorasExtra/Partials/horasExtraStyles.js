@@ -1,11 +1,16 @@
+import {
+    RH_ESTADO_FLUJO_BADGE,
+    RH_ESTADO_FLUJO_LABELS,
+} from '../../rhModuleStyles';
+
 export const ESTADO_PAGO_BADGE = {
-    pendiente: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-    programado: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+    pendiente: RH_ESTADO_FLUJO_BADGE.pendiente,
+    programado: RH_ESTADO_FLUJO_BADGE.programado,
 };
 
 export const ESTADO_PAGO_LABELS = {
-    pendiente: 'Pendiente',
-    programado: 'Programado',
+    pendiente: RH_ESTADO_FLUJO_LABELS.pendiente,
+    programado: RH_ESTADO_FLUJO_LABELS.programado,
 };
 
 export const TABS_ESTADO = ['TODAS', 'PENDIENTES', 'PROGRAMADAS'];

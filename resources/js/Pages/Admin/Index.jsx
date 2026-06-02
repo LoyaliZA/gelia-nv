@@ -8,7 +8,7 @@ import {
     adminModuleHref,
     isAdminModuleAllowed,
 } from '../../config/adminModules';
-import { geliaCardClass } from '../../utils/geliaTheme';
+import { geliaCardClass, GELIA_ADMIN_HUB_GRID } from '../../utils/geliaTheme';
 
 const MODULE_CARD_CLASS =
     'group theme-element border-2 theme-border rounded-[1.5rem] p-6 sm:p-7 shadow-sm transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] flex flex-col min-h-[11rem] outline-none hover:border-[var(--color-primario)] hover:shadow-lg hover:-translate-y-0.5 focus-visible:border-[var(--color-primario)] focus-visible:ring-2 focus-visible:ring-[var(--color-primario)]/30';
@@ -43,7 +43,7 @@ export default function AdminIndex({ auth }) {
                         </p>
                     </div>
                 ) : (
-                    <div className="gelia-admin-hub-grid">
+                    <div className={GELIA_ADMIN_HUB_GRID}>
                         {visibleModules.map((module) => {
                             const Icon = module.icon;
                             return (

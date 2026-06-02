@@ -5,6 +5,7 @@ import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import ModalEditarDatosFiscales from '../Partials/ModalEditarDatosFiscales';
 import { BTN_SECONDARY } from '../Partials/facturasStyles';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 
 export default function DatosFiscalesIndex({ clientes, filtros = {} }) {
@@ -50,7 +51,7 @@ export default function DatosFiscalesIndex({ clientes, filtros = {} }) {
         <AppLayout>
             <Head title="Datos fiscales de clientes" />
 
-            <div className="gelia-page-shell space-y-6 md:space-y-8">
+            <GeliaPageShell className="space-y-6 md:space-y-8">
                 <header className={cardHeader}>
                     <div className="min-w-0 flex items-start gap-4">
                         <Link
@@ -156,7 +157,7 @@ export default function DatosFiscalesIndex({ clientes, filtros = {} }) {
                         <GeliaPaginacion paginator={clientes} onIrAPagina={irAPagina} embedded />
                     )}
                 </section>
-            </div>
+            </GeliaPageShell>
 
             {editando && (
                 <ModalEditarDatosFiscales cliente={editando} onClose={() => setEditando(null)} />

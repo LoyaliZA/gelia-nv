@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Search, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { FACTURAS_TABS } from './facturasFiltros';
-import { BTN_PRIMARY, ESTILOS_FACTURAS_TABS } from './facturasStyles';
+import { BTN_PRIMARY } from './facturasStyles';
+import { GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } from '../../../utils/geliaTheme';
 
 export default function FiltrosFacturas({
     filtros = {},
@@ -49,7 +50,6 @@ export default function FiltrosFacturas({
             aria-label="Filtros de facturas"
             aria-busy={listaCargando}
         >
-            <style>{ESTILOS_FACTURAS_TABS}</style>
             <div className="p-4 md:p-5 border-b theme-border flex items-center gap-3">
                 <div className="p-2 rounded-xl theme-element border theme-border shrink-0">
                     <SlidersHorizontal className="w-4 h-4 theme-text-muted" aria-hidden />
@@ -57,8 +57,8 @@ export default function FiltrosFacturas({
                 <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 min-w-0 flex-1">Filtros</p>
             </div>
 
-            <div className="facturas-tabs-scroll p-3 md:p-4 border-b theme-border">
-                <div className="gelia-segment facturas-tabs-track p-1 shadow-sm" role="tablist" aria-label="Estado de solicitudes">
+            <div className={`${GELIA_SEGMENT_TABS_SCROLL} p-3 md:p-4 border-b theme-border`}>
+                <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`} role="tablist" aria-label="Estado de solicitudes">
                     {FACTURAS_TABS.map((tab) => (
                         <button
                             key={tab.id}

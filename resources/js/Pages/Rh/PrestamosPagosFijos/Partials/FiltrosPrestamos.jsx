@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
-import { Search } from 'lucide-react';
-import { THEME_INPUT, THEME_SELECT } from '../../../../utils/geliaTheme';
+import { Filter } from 'lucide-react';
+import { RhSearchField, RhSelect } from '../../Partials/rhFilterFields';
+import RhFilterTabs from '../../Partials/RhFilterTabs';
 import { nombreCompletoColaborador } from '../../../../utils/formatoMoneda';
 import { TABS_ESTADO, TAB_ESTADO_MAP } from './prestamosStyles';
 
@@ -12,8 +13,18 @@ export default function FiltrosPrestamos({
     tabActiva,
     onCambiarTab,
 }) {
+    const [busqueda, setBusqueda] = useState(filtros.busqueda || '');
+
+    useEffect(() => {
+        setBusqueda(filtros.busqueda || '');
+    }, [filtros.busqueda]);
+
     const aplicar = (cambios) => {
         router.get(route('rh.prestamos.index'), { ...filtros, ...cambios, page: 1 }, { preserveState: true });
+    };
+
+    const ejecutarBusqueda = () => {
+        aplicar({ busqueda: busqueda.trim() || undefined });
     };
 
     const cambiarTab = (tab) => {
@@ -23,62 +34,56 @@ export default function FiltrosPrestamos({
 
     return (
         <div className="p-4 md:p-6 border-b theme-border space-y-4">
-            <div className="flex flex-wrap gap-2">
-                {TABS_ESTADO.map((tab) => (
-                    <button
-                        key={tab}
-                        type="button"
-                        onClick={() => cambiarTab(tab)}
-                        className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
-                            tabActiva === tab ? 'text-white border-transparent' : 'theme-border theme-text-muted hover:theme-text-main'
-                        }`}
-                        style={tabActiva === tab ? { backgroundColor: 'var(--color-primario)' } : {}}
-                    >
-                        {tab.replace('_', ' ')}
-                    </button>
-                ))}
-            </div>
+            <RhFilterTabs
+                tabs={TABS_ESTADO}
+                tabActiva={tabActiva}
+                onTabChange={cambiarTab}
+                formatLabel={(tab) => tab.replace('_', ' ')}
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-                <div className="relative lg:col-span-2">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
-                    <input
-                        type="search"
+                <div className="lg:col-span-2 flex flex-col sm:flex-row gap-3">
+                    <RhSearchField
+                        value={busqueda}
+                        onChange={(e) => setBusqueda(e.target.value)}
+                        onSubmit={ejecutarBusqueda}
                         placeholder="Buscar folio, concepto o colaborador..."
-                        defaultValue={filtros.busqueda || ''}
-                        onKeyDown={(e) => e.key === 'Enter' && aplicar({ busqueda: e.target.value || undefined })}
-                        className={`${THEME_INPUT} w-full pl-10 pr-4 py-3 rounded-2xl text-[11px] font-bold`}
                     />
+                    <button
+                        type="button"
+                        onClick={ejecutarBusqueda}
+                        className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white shrink-0"
+                        style={{ backgroundColor: 'var(--color-primario)' }}
+                    >
+                        <Filter className="w-4 h-4 inline mr-2" /> Buscar
+                    </button>
                 </div>
-                <select
+                <RhSelect
                     value={filtros.rh_colaborador_id || ''}
                     onChange={(e) => aplicar({ rh_colaborador_id: e.target.value || undefined })}
-                    className={`${THEME_SELECT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`}
                 >
                     <option value="">Todos los colaboradores</option>
                     {colaboradores.map((c) => (
                         <option key={c.id} value={c.id}>{nombreCompletoColaborador(c)}</option>
                     ))}
-                </select>
-                <select
+                </RhSelect>
+                <RhSelect
                     value={filtros.modalidad || ''}
                     onChange={(e) => aplicar({ modalidad: e.target.value || undefined })}
-                    className={`${THEME_SELECT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`}
                 >
                     <option value="">Todas las modalidades</option>
                     <option value="recurrente">Recurrente</option>
                     <option value="unica_vez">Única vez</option>
-                </select>
-                <select
+                </RhSelect>
+                <RhSelect
                     value={filtros.departamento_id || ''}
                     onChange={(e) => aplicar({ departamento_id: e.target.value || undefined, area_id: undefined })}
-                    className={`${THEME_SELECT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`}
                 >
                     <option value="">Todos los departamentos</option>
                     {departamentos.map((d) => (
                         <option key={d.id} value={d.id}>{d.nombre}</option>
                     ))}
-                </select>
+                </RhSelect>
             </div>
         </div>
     );

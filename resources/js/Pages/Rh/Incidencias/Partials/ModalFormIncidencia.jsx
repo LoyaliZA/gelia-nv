@@ -18,6 +18,7 @@ import {
     calcularIncidenciaPreview, formatoDeduccionEntera, formatoMoneda, nombreCompletoColaborador,
 } from '../../../../utils/formatoMoneda';
 import { ESTADO_DEDUCCION_LABELS } from './incidenciasStyles';
+import { RH_ESTADO_FLUJO_BADGE, rhBadgeClass } from '../../rhModuleStyles';
 
 const FORM_INICIAL = {
     fecha_ocurrencia: new Date().toISOString().slice(0, 10),
@@ -205,7 +206,7 @@ export default function ModalFormIncidencia({
                         <input type="date" value={data.fecha_deduccion_nomina} onChange={(e) => setData('fecha_deduccion_nomina', e.target.value)} className={THEME_INPUT} />
                         {errors.fecha_deduccion_nomina && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.fecha_deduccion_nomina}</p>}
                         {!data.fecha_deduccion_nomina && (
-                            <span className="inline-block mt-2 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-amber-500/10 text-amber-600">Pendiente de aplicar en nómina</span>
+                            <span className={`inline-block mt-2 ${rhBadgeClass(RH_ESTADO_FLUJO_BADGE, 'pendiente')}`}>Pendiente de aplicar en nómina</span>
                         )}
                     </section>
 

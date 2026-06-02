@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { Users, Plus, Eye, Pencil, Copy, Check } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
+import RhPageHeader from '../Partials/RhPageHeader';
 import FiltrosColaboradores from './Partials/FiltrosColaboradores';
 import ModalFormColaborador from './Partials/ModalFormColaborador';
 
@@ -60,33 +62,25 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Recursos Humanos — Colaboradores" />
-            <div className="max-w-[1400px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
-                <header className={geliaCardClass('p-6 md:p-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6')}>
-                    <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                            <span className="h-1.5 w-12 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primario)' }} />
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] m-0" style={{ color: 'var(--color-primario)' }}>Módulo RH</p>
-                        </div>
-                        <h1 className="text-2xl sm:text-3xl md:text-5xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                            Perfil de <span style={{ color: 'var(--color-primario)' }}>Colaboradores</span>
-                        </h1>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
-                            {colaboradores.total.toLocaleString('es-MX')} registros · Periodo de pago: {configuracion.dias_periodo_pago} días
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {puedeCrear && (
+            <GeliaPageShell className="space-y-8 relative">
+                <RhPageHeader
+                    title="Perfil de"
+                    titleHighlight="Colaboradores"
+                    description={`${colaboradores.total.toLocaleString('es-MX')} registros · Periodo de pago: ${configuracion.dias_periodo_pago} días`}
+                    icon={Users}
+                    aside={
+                        puedeCrear ? (
                             <button
                                 type="button"
                                 onClick={abrirNuevo}
-                                className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2"
+                                className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2"
                                 style={{ backgroundColor: 'var(--color-primario)' }}
                             >
                                 <Plus className="w-4 h-4" /> Nuevo colaborador
                             </button>
-                        )}
-                    </div>
-                </header>
+                        ) : null
+                    }
+                />
 
                 <RhSubNav />
 
@@ -188,7 +182,7 @@ export default function Index({
                         <GeliaPaginacion paginator={colaboradores} onIrAPagina={irAPagina} embedded />
                     )}
                 </div>
-            </div>
+            </GeliaPageShell>
 
             <ModalFormColaborador
                 abierto={modalAbierto}

@@ -1,0 +1,28 @@
+/* Estilos compartidos de impresión (consolidados RH, reportes, etc.) */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+
+    body {
+        background: white !important;
+        color: black !important;
+    }
+
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+
+    th,
+    td {
+        border: 1px solid #ddd !important;
+        padding: 8px !important;
+        font-size: 10px !important;
+    }
+
+    th {
+        background-color: #f2f2f2 !important;
+        color: black !important;
+    }
+}

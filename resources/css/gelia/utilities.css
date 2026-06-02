@@ -1,0 +1,88 @@
+/* Utilidades globales compartidas */
+
+/* Tabs de segmento con scroll horizontal en móvil */
+.gelia-segment-tabs-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+}
+
+.gelia-segment-tabs-track {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: max-content;
+    min-width: 100%;
+    gap: 0.125rem;
+}
+
+.gelia-segment-tabs-track .gelia-segment-btn {
+    flex: 0 0 auto;
+    min-width: max-content;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+}
+
+.gelia-segment-tabs-track--compact .gelia-segment-btn {
+    font-size: 0.5625rem;
+    padding: 0.5rem 0.75rem;
+}
+
+@media (min-width: 640px) {
+    .gelia-segment-tabs-track {
+        display: flex;
+        width: 100%;
+    }
+
+    .gelia-segment-tabs-track .gelia-segment-btn {
+        flex: 1 1 0;
+        min-width: 4.5rem;
+        font-size: 0.625rem;
+    }
+
+    .gelia-segment-tabs-track--compact .gelia-segment-btn {
+        flex: 1 1 0;
+        min-width: 3.5rem;
+    }
+}
+
+/* Scrollbar scoped (notificaciones, tablas horizontales) */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-primario);
+    border-radius: 10px;
+}
+
+.custom-scrollbar--muted::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.dark .custom-scrollbar--muted::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Scrollbar global */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--theme-text-muted) 40%, transparent);
+    border-radius: 20px;
+}
+::-webkit-scrollbar-thumb:hover { background-color: var(--color-primario); }
+
+html,
+body,
+input,
+select,
+textarea,
+button,
+nav,
+a {
+    font-family: var(--font-principal) !important;
+}

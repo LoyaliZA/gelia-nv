@@ -249,12 +249,6 @@ export default function NotificationBell({ notifications: propNotifications = []
                 document.body
             )}
 
-            <style>{`
-                @keyframes slide-in-right { 0% { transform: translateX(100%); } 100% { transform: translateX(0); } }
-                .animate-slide-in-right { animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--color-primario); border-radius: 10px; }
-            `}</style>
         </>
     );
 }

@@ -18,6 +18,7 @@ import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { geliaCardClass } from '../../utils/geliaTheme';
+import { badgeClaseEstadoSolicitud } from './Partials/solicitudesStyles';
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
 const formatearTiempoRelativo = (fechaString) => {
@@ -753,11 +754,11 @@ export default function Index({
 
     const obtenerEstiloEstado = (nombreEstado) => {
         switch (nombreEstado?.toLowerCase()) {
-            case 'respondida': return { clase: 'status-aprobado', icon: CheckCircle2, label: 'Aprobado' };
-            case 'incorrecta': return { clase: 'status-incidencia', icon: AlertOctagon, label: 'Reporte' };
-            case 'verificada': return { clase: 'status-verificado', icon: CheckSquare, label: 'Verificada' };
-            case 'cancelada': return { clase: 'status-cancelada', icon: XCircle, label: 'Cancelada' };
-            default: return { clase: 'status-revision', icon: Clock, label: 'Pendiente' };
+            case 'respondida': return { clase: badgeClaseEstadoSolicitud('respondida'), icon: CheckCircle2, label: 'Aprobado' };
+            case 'incorrecta': return { clase: badgeClaseEstadoSolicitud('incorrecta'), icon: AlertOctagon, label: 'Reporte' };
+            case 'verificada': return { clase: badgeClaseEstadoSolicitud('verificada'), icon: CheckSquare, label: 'Verificada' };
+            case 'cancelada': return { clase: badgeClaseEstadoSolicitud('cancelada'), icon: XCircle, label: 'Cancelada' };
+            default: return { clase: badgeClaseEstadoSolicitud('revision'), icon: Clock, label: 'Pendiente' };
         }
     };
 

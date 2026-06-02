@@ -19,7 +19,7 @@ function generarPaginas(paginaActual, totalPaginas) {
 }
 
 /**
- * Paginación estándar GELIA (clases .paginacion-btn en gelia-theme.css / AppLayout).
+ * Paginación estándar GELIA (clases .paginacion-btn en resources/css/gelia/primitives.css).
  * @param {object} paginator - { current_page, last_page, from, to, total }
  */
 export default function GeliaPaginacion({ paginator, onIrAPagina, embedded = false, className = '' }) {

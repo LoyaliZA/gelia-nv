@@ -45,7 +45,7 @@ export default function Error({ status, returnUrl = null }) {
                 
                 {/* "Modal" o Card de Error - Estilo Gelia */}
                 <div 
-                    className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl transform transition-all animate-fade-in"
+                    className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl transform transition-all animate-fade-in-scale"
                     style={{
                         '--primary-color': 'var(--color-primario, #818cf8)', // Usamos el color primario del tema
                         '--hover-color': 'var(--color-primario-hover, #6366f1)'
@@ -98,17 +98,6 @@ export default function Error({ status, returnUrl = null }) {
                     </div>
                 </div>
             </div>
-
-            {/* Pequeña animación de entrada */}
-            <style>{`
-                @keyframes fade-in {
-                    from { opacity: 0; transform: scale(0.95) translateY(10px); }
-                    to { opacity: 1; transform: scale(1) translateY(0); }
-                }
-                .animate-fade-in {
-                    animation: fade-in 0.4s ease-out forwards;
-                }
-            `}</style>
         </>
     );
 }

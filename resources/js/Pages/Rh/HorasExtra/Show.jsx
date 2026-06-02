@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import { ArrowLeft, Clock, Pencil } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { formatoMoneda, formatearHora, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
@@ -21,7 +22,7 @@ export default function Show({
     return (
         <AppLayout auth={auth}>
             <Head title={`${registro.folio} | Horas Extra`} />
-            <div className="max-w-[1000px] mx-auto p-4 md:p-8 space-y-6">
+            <GeliaPageShell className="max-w-[1000px] space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <Link href={route('rh.horas_extra.index')} className="inline-flex items-center gap-2 text-[10px] font-black uppercase theme-text-muted hover:theme-text-main">
                         <ArrowLeft className="w-4 h-4" /> Volver al listado
@@ -80,7 +81,7 @@ export default function Show({
                     <h2 className="text-sm font-black uppercase tracking-widest theme-text-main mb-3 m-0">Motivo</h2>
                     <p className="text-sm theme-text-main m-0 whitespace-pre-wrap">{registro.motivo}</p>
                 </section>
-            </div>
+            </GeliaPageShell>
 
             <ModalFormHorasExtra
                 abierto={modalAbierto}

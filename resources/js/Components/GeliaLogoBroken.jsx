@@ -27,21 +27,6 @@ export default function GeliaLogoBroken({
     ];
 
     return (
-        <>
-            <style>{`
-                /* * Animación Shatter: El logo se mantiene estable, se dispersa (reduce escala y pierde opacidad) 
-                 * leyendo las variables CSS en línea, y vuelve a su estado original de forma cíclica.
-                 */
-                @keyframes shatter { 
-                    0%, 100%, 25%, 75% { transform: translate(0, 0) rotate(0deg); opacity: 1; } 
-                    50% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.5); opacity: 0; } 
-                }
-                .animate-shatter polygon { 
-                    animation: shatter 3s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; 
-                    transform-origin: center; 
-                }
-            `}</style>
-            
             <svg viewBox="0 0 100 100" className={`${className}`} xmlns="http://www.w3.org/2000/svg">
                 <g fill={accentColor} className="animate-shatter">
                     {polygonData.map((p, i) => (
@@ -60,6 +45,5 @@ export default function GeliaLogoBroken({
                     ))}
                 </g>
             </svg>
-        </>
     );
 }

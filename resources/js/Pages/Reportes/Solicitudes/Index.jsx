@@ -4,6 +4,7 @@ import { FileSpreadsheet, FileText, Download, BarChart3 } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 
 const BTN_SECONDARY = 'inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border theme-border theme-element theme-text-main text-[10px] font-black uppercase tracking-widest hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all';
@@ -37,7 +38,7 @@ export default function Index({ auth, filtros = {}, total = 0, vendedores = [] }
         <AppLayout auth={auth}>
             <Head title="Reporte de Solicitudes Financieras" />
 
-            <div className="gelia-page-shell space-y-6 md:space-y-8">
+            <GeliaPageShell className="space-y-6 md:space-y-8">
                 <header className={cardHeader}>
                     <div className="min-w-0">
                         <div className="flex items-center gap-3 mb-2">
@@ -110,7 +111,7 @@ export default function Index({ auth, filtros = {}, total = 0, vendedores = [] }
                     onAplicarFiltros={aplicarFiltros}
                     onLimpiarAdicionales={limpiarFiltrosAdicionales}
                 />
-            </div>
+            </GeliaPageShell>
         </AppLayout>
     );
 }

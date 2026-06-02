@@ -26,6 +26,7 @@ import {
     applyFontScaleToRoot,
 } from '../utils/fontScale';
 import useWebPush from '@/hooks/useWebPush';
+import { GELIA_PREVENT_OVERFLOW_X } from '../utils/geliaTheme';
 
 const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
@@ -466,16 +467,16 @@ export default function AppLayout({ children, fullScreen = false }) {
                     useMobileTopBar={isMobileViewport}
                 />
 
-                <div className={`gelia-app-body gelia-ui-scale gelia-prevent-overflow-x ${isMensajeriaFull ? 'h-dvh overflow-hidden' : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
+                <div className={`gelia-app-body gelia-ui-scale ${GELIA_PREVENT_OVERFLOW_X} ${isMensajeriaFull ? 'h-dvh overflow-hidden' : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
                     <main className={mainClassName}>
                         <div
                             key={url}
-                            className={`gelia-app-content gelia-prevent-overflow-x ${isMensajeriaFull ? 'h-full' : ''}`}
+                            className={`gelia-app-content ${GELIA_PREVENT_OVERFLOW_X} ${isMensajeriaFull ? 'h-full' : ''}`}
                         >
                             <div
-                                className={`gelia-app-content-inner gelia-prevent-overflow-x ${isMensajeriaFull ? 'h-full max-w-none' : ''}`}
+                                className={`gelia-app-content-inner ${GELIA_PREVENT_OVERFLOW_X} ${isMensajeriaFull ? 'h-full max-w-none' : ''}`}
                             >
-                                <div className={isMensajeriaFull ? 'h-full' : 'gelia-animate-page-reveal'}>
+                                <div className={isMensajeriaFull ? 'h-full' : 'animate-page-reveal'}>
                                     {children}
                                 </div>
                             </div>

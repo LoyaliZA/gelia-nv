@@ -56,43 +56,7 @@ export default function GeliaLogo({
     const fluidY = progress !== null ? 100 - Math.min(100, Math.max(0, progress)) : 0;
 
     return (
-        <>
-            <style>{`
-                @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-                .animate-spin-slow { animation: spin-slow 4s linear infinite; transform-origin: center; }
-                
-                @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
-                .animate-float { animation: float 3s ease-in-out infinite; }
-                
-                @keyframes pulse-glow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(0.95); filter: drop-shadow(0 0 10px currentColor); } }
-                .animate-pulse-glow { animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-                
-                @keyframes shatter { 
-                    0%, 100%, 25%, 75% { transform: translate(0, 0) rotate(0deg); opacity: 1; } 
-                    50% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.5); opacity: 0; } 
-                }
-                .animate-shatter polygon { animation: shatter 3s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; transform-origin: center; }
-                
-                @keyframes sparkle { 
-                    0%, 100%, 20% { fill: inherit; filter: none; } 
-                    10% { fill: #ffffff; filter: drop-shadow(0 0 8px rgba(255,255,255,0.9)); opacity: 1; } 
-                }
-                .animate-sparkle polygon { animation: sparkle 2.5s infinite; animation-delay: var(--delay); }
-                
-                @keyframes fluid-rise { 
-                    0%, 100% { transform: translateY(100px); } 
-                    50%, 80% { transform: translateY(0px); } 
-                }
-                .animate-fluid-rise { animation: fluid-rise 3s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
-                
-                @keyframes fluid-sparkle { 
-                    0%, 45%, 65%, 100% { fill: inherit; filter: none; } 
-                    50% { fill: #ffffff; filter: drop-shadow(0 0 8px rgba(255,255,255,0.9)); opacity: 1; } 
-                }
-                .animate-fluid-sparkle polygon { animation: fluid-sparkle 3s infinite; animation-delay: var(--delay); }
-            `}</style>
-
-            <svg viewBox="0 0 100 100" className={`${className}`} xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 100 100" className={`${className}`} xmlns="http://www.w3.org/2000/svg">
                 {variant === 'fluid-fill' ? (
                     <>
                         <defs>
@@ -134,6 +98,5 @@ export default function GeliaLogo({
                     </g>
                 )}
             </svg>
-        </>
     );
 }

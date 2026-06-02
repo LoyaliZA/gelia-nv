@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { ArrowLeft, Wallet, Pencil, Pause, Play, Ban } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
+import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
@@ -9,7 +10,7 @@ import ModalFormPrestamo from './Partials/ModalFormPrestamo';
 import {
     ESTADO_PRESTAMO_BADGE, ESTADO_PRESTAMO_LABELS, MODALIDAD_BADGE, MODALIDAD_LABELS,
 } from './Partials/prestamosStyles';
-import { ESTADO_DEDUCCION_BADGE, ESTADO_DEDUCCION_LABELS } from '../Deducciones/Partials/deduccionesStyles';
+import { RH_ESTADO_DEDUCCION_BADGE, RH_ESTADO_DEDUCCION_LABELS } from '../rhModuleStyles';
 
 export default function Show({
     auth,
@@ -38,7 +39,7 @@ export default function Show({
     return (
         <AppLayout auth={auth}>
             <Head title={`${registro.folio} | Préstamos RH`} />
-            <div className="max-w-[1000px] mx-auto p-4 md:p-8 space-y-6">
+            <GeliaPageShell className="max-w-[1000px] space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <Link href={route('rh.prestamos.index')} className="inline-flex items-center gap-2 text-[10px] font-black uppercase theme-text-muted hover:theme-text-main">
                         <ArrowLeft className="w-4 h-4" /> Volver al listado
@@ -134,8 +135,8 @@ export default function Show({
                                             <td className="px-4 py-4 text-xs">{ded.fecha_ocurrencia?.slice?.(0, 10)}</td>
                                             <td className="px-4 py-4 text-xs">{formatoMoneda(ded.monto_total_final)}</td>
                                             <td className="px-4 py-4">
-                                                <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase border ${ESTADO_DEDUCCION_BADGE[ded.estado_deduccion]}`}>
-                                                    {ESTADO_DEDUCCION_LABELS[ded.estado_deduccion]}
+                                                <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase border ${RH_ESTADO_DEDUCCION_BADGE[ded.estado_deduccion]}`}>
+                                                    {RH_ESTADO_DEDUCCION_LABELS[ded.estado_deduccion]}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4">
@@ -148,7 +149,7 @@ export default function Show({
                         </table>
                     </div>
                 </section>
-            </div>
+            </GeliaPageShell>
 
             <ModalFormPrestamo
                 abierto={modalAbierto}

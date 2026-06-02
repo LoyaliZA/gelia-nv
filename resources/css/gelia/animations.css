@@ -1,0 +1,107 @@
+/* Keyframes y clases de animación GELIA */
+
+@keyframes gelia-scaleUp {
+    0% { opacity: 0; transform: scale(0.95); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes gelia-fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes gelia-fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@keyframes gelia-slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes gelia-progressShrink {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+
+@keyframes gelia-page-reveal {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gelia-reveal-up {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes gelia-sheetSlideUp {
+    from { transform: translateY(100%); opacity: 0.85; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes gelia-sheetSlideDown {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(100%); opacity: 0.85; }
+}
+
+@keyframes gelia-mensaje-pulso {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-200%); }
+    50%, 100% { transform: translateX(200%); }
+}
+
+@keyframes gelia-presencia-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.personalizacion-reveal {
+    animation: gelia-reveal-up 0.5s ease-out both;
+}
+
+.animate-page-reveal {
+    animation: gelia-page-reveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.modal-pop { animation: gelia-scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-fade-in { animation: gelia-fadeIn 0.2s ease-out forwards; }
+.animate-slide-in-right { animation: gelia-slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-fade-in-scale { animation: gelia-fadeInScale 0.4s ease-out forwards; }
+.animate-fade-in-soft { animation: gelia-fadeInSoft 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.animate-progress-shrink { animation: gelia-progressShrink 5s linear forwards; }
+
+@keyframes gelia-fadeInScale {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes gelia-fadeInSoft {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sidebarMount {
+    from { opacity: 0; transform: translate3d(0, 10px, 0); }
+    to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.sidebar-mount {
+    animation: sidebarMount var(--gelia-sidebar-mount-ms, 420ms) var(--gelia-sidebar-ease, cubic-bezier(0.22, 1, 0.36, 1)) forwards;
+}

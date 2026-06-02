@@ -17,6 +17,7 @@ import {
 import {
     calcularHorasExtraPreview, formatoMoneda, formatearHora, nombreCompletoColaborador,
 } from '../../../../utils/formatoMoneda';
+import { RH_ESTADO_FLUJO_BADGE, rhBadgeClass } from '../../rhModuleStyles';
 
 const FORM_INICIAL = {
     rh_colaborador_id: '',
@@ -224,7 +225,7 @@ export default function ModalFormHorasExtra({
                             </h3>
                             <input type="date" value={data.fecha_programada_pago} onChange={(e) => setData('fecha_programada_pago', e.target.value)} className={THEME_INPUT} />
                             {!data.fecha_programada_pago && (
-                                <span className="inline-block mt-2 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-amber-500/10 text-amber-600">Pendiente de pago</span>
+                                <span className={`inline-block mt-2 ${rhBadgeClass(RH_ESTADO_FLUJO_BADGE, 'pendiente')}`}>Pendiente de pago</span>
                             )}
                         </div>
                     </section>
