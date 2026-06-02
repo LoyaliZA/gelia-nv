@@ -136,7 +136,10 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
         onAplicar?.(merged);
     };
 
-    const limpiar = () => router.get(route('activos.index'));
+    const limpiar = () => {
+        sessionStorage.removeItem('activos_filtros_guardados');
+        router.get(route('activos.index'));
+    };
 
     const manejarCodigoEscaneado = async (codigo) => {
         setModalEscaner(false);

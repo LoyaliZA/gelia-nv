@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Package, Plus, Download, Eye, Wrench, ImageIcon, BookOpen, Settings } from 'lucide-react';
+import { Package, Plus, Download, Eye, Wrench, ImageIcon, BookOpen, Settings, PenTool } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import FiltrosActivos from './Partials/FiltrosActivos';
 import ModalFormActivo from './Partials/ModalFormActivo';
 import ModalConfigActivos from './Partials/ModalConfigActivos';
+import ModalFirmarActivo from './Partials/ModalFirmarActivo';
 import PanelAlertas from './Partials/PanelAlertas';
 import GuiaVisualActivos from './Partials/GuiaVisualActivos';
 import TarjetaActivoMobile from './Partials/TarjetaActivoMobile';
@@ -75,14 +76,47 @@ function FilaActivoDesktop({ activo }) {
     );
 }
 
-export default function Index({ auth, activos, tipos, departamentos, usuarios, filtros, alertasResumen, alertas, terminosCondiciones }) {
+export default function Index({ auth, activos, tipos, departamentos, usuarios, filtros, colaboradorAsignaciones, alertasResumen, alertas, terminosCondiciones }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalConfigAbierto, setModalConfigAbierto] = useState(false);
+    const [modalBulkFirmar, setModalBulkFirmar] = useState(null);
     const [guiaOculta, setGuiaOculta] = useState(() => {
         if (typeof window === 'undefined') return false;
         return localStorage.getItem('activos_guia_oculta') === '1';
     });
     const [guiaKey, setGuiaKey] = useState(0);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const params = new URLSearchParams(window.location.search);
+        const paramsObj = Object.fromEntries(params.entries());
+        const hasActiveParams = Object.keys(paramsObj).some(k => k !== 'page' && paramsObj[k] !== '');
+
+        if (!hasActiveParams) {
+            const guardadosRaw = sessionStorage.getItem('activos_filtros_guardados');
+            if (guardadosRaw) {
+                try {
+                    const guardados = JSON.parse(guardadosRaw);
+                    if (Object.keys(guardados).length > 0) {
+                        router.replace(route('activos.index'), { data: guardados, replace: true });
+                        return;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }
+        }
+
+        const aGuardar = {};
+        for (const [k, v] of Object.entries(filtros || {})) {
+            if (v !== '' && v !== null && v !== undefined) {
+                aGuardar[k] = v;
+            }
+        }
+        if (Object.keys(aGuardar).length > 0) {
+            sessionStorage.setItem('activos_filtros_guardados', JSON.stringify(aGuardar));
+        }
+    }, [filtros]);
 
     const can = (permiso) => {
         const roles = auth?.user?.roles || [];
@@ -164,6 +198,57 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
                     <div className="xl:col-span-2 min-w-0 space-y-6 md:space-y-8">
                         <ResumenAlertasActivos alertasResumen={alertasResumen} alertas={alertas} />
+
+                        {(() => {
+                            const userId = filtros.mis_activos ? auth.user?.id : filtros.responsable_user_id;
+                            const activeAsignaciones = colaboradorAsignaciones || [];
+                            const pendientesFirma = activeAsignaciones.filter(a => !a.firmado);
+
+                            if (!userId || activeAsignaciones.length === 0) return null;
+
+                            return (
+                                <div className={getActivosCardClass('p-5 border border-[var(--color-primario)]/30 bg-[var(--color-primario)]/[0.01] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-page-reveal')}>
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-primario)]" />
+                                            <h3 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)] m-0">
+                                                Entrega en Conjunto / Asignaciones Colectivas
+                                            </h3>
+                                        </div>
+                                        <p className="text-xs font-bold theme-text-main m-0">
+                                            El colaborador tiene {activeAsignaciones.length} equipo{activeAsignaciones.length !== 1 ? 's' : ''} asignado{activeAsignaciones.length !== 1 ? 's' : ''}.
+                                            {pendientesFirma.length > 0 && (
+                                                <span className="text-amber-600 dark:text-amber-400 font-black uppercase text-[9px] ml-1.5 px-2 py-0.5 rounded bg-amber-500/10">
+                                                    Hay {pendientesFirma.length} pendiente{pendientesFirma.length !== 1 ? 's' : ''} de firma
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
+                                        {pendientesFirma.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setModalBulkFirmar(pendientesFirma)}
+                                                className={`${BTN_PRIMARY_CLASS} theme-btn-primary--compact`}
+                                            >
+                                                <PenTool className="w-3.5 h-3.5 shrink-0" />
+                                                Firmar {pendientesFirma.length} Pendiente{pendientesFirma.length !== 1 ? 's' : ''}
+                                            </button>
+                                        )}
+                                        <a
+                                            href={route('activos.usuarios.responsiva_conjunta', userId)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className={`${BTN_SECONDARY_CLASS} theme-btn-primary--compact inline-flex items-center`}
+                                        >
+                                            <Download className="w-3.5 h-3.5 shrink-0" />
+                                            Responsiva Completa
+                                        </a>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         <FiltrosActivos filtros={filtros} tipos={tipos} departamentos={departamentos} usuarios={usuarios} />
 
                         <div className={`lg:hidden ${cardListado}`}>
@@ -238,6 +323,7 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
 
             <ModalFormActivo abierto={modalAbierto} onCerrar={() => setModalAbierto(false)} tipos={tipos} departamentos={departamentos} />
             <ModalConfigActivos abierto={modalConfigAbierto} onCerrar={() => setModalConfigAbierto(false)} terminosCondiciones={terminosCondiciones} />
+            <ModalFirmarActivo abierto={!!modalBulkFirmar} onCerrar={() => setModalBulkFirmar(null)} asignacion={modalBulkFirmar} terminosCondiciones={terminosCondiciones} />
 
             {can('activos.crear') && (
                 <button

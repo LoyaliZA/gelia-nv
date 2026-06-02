@@ -136,6 +136,15 @@ export default function Show({ auth, activo, tipos, departamentos, terminosCondi
                                     >
                                         Responsiva
                                     </a>
+                                    <a
+                                        href={route('activos.usuarios.responsiva_conjunta', activeAsignacion.user_id)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 rounded text-[9px] font-black uppercase tracking-wider hover:opacity-85"
+                                        title="Descargar responsiva de todos los activos asignados a este colaborador"
+                                    >
+                                        Responsiva Completa
+                                    </a>
                                     {!activeAsignacion.firmado && (auth.user?.id === activeAsignacion.user_id || can('activos.asignar')) && (
                                         <button
                                             type="button"

@@ -130,6 +130,8 @@ export default function ModalFirmarActivo({ abierto, onCerrar, asignacion, termi
         setTieneTrazo(false);
     };
 
+    const esConjunto = Array.isArray(asignacion);
+
     const submit = (e) => {
         e.preventDefault();
         if (!tieneTrazo) return;
@@ -138,40 +140,77 @@ export default function ModalFirmarActivo({ abierto, onCerrar, asignacion, termi
         const dataUrl = canvas.toDataURL('image/png');
 
         setProcesando(true);
-        router.post(
-            route('activos.asignaciones.firmar', asignacion.id),
-            { firma: dataUrl },
-            {
-                onSuccess: () => {
-                    setProcesando(false);
-                    onCerrar();
+        if (esConjunto) {
+            router.post(
+                route('activos.asignaciones.firmar_conjunto'),
+                {
+                    asignacion_ids: asignacion.map((a) => a.id),
+                    firma: dataUrl
                 },
-                onError: () => {
-                    setProcesando(false);
-                },
-                onFinish: () => {
-                    setProcesando(false);
+                {
+                    onSuccess: () => {
+                        setProcesando(false);
+                        onCerrar();
+                    },
+                    onError: () => {
+                        setProcesando(false);
+                    },
+                    onFinish: () => {
+                        setProcesando(false);
+                    }
                 }
-            }
-        );
+            );
+        } else {
+            router.post(
+                route('activos.asignaciones.firmar', asignacion.id),
+                { firma: dataUrl },
+                {
+                    onSuccess: () => {
+                        setProcesando(false);
+                        onCerrar();
+                    },
+                    onError: () => {
+                        setProcesando(false);
+                    },
+                    onFinish: () => {
+                        setProcesando(false);
+                    }
+                }
+            );
+        }
     };
 
     return (
         <ActivosModalShell
-            title="Firmar Recibido de Activo"
+            title={esConjunto ? "Firmar Entrega en Conjunto" : "Firmar Recibido de Activo"}
             onClose={onCerrar}
             loader={<GeliaLoader isVisible={procesando} message="Guardando firma_" />}
         >
             <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
                 <div className="gelia-modal-body p-5 md:p-8 space-y-4 overflow-y-auto">
-                    <p className="text-sm theme-text-muted m-0">
-                        Estás firmando de recibido para el activo:{' '}
-                        <strong className="theme-text-main">
-                            {asignacion.activo?.folio} — {asignacion.activo?.nombre}
-                        </strong>
-                    </p>
+                    {esConjunto ? (
+                        <div className="space-y-2">
+                            <p className="text-sm theme-text-muted m-0">
+                                Estás firmando de recibido para los siguientes activos en conjunto:
+                            </p>
+                            <ul className="text-xs theme-text-main font-bold space-y-1 list-disc pl-5">
+                                {asignacion.map((asig) => (
+                                    <li key={asig.id}>
+                                        {asig.folio || asig.activo?.folio} — {asig.nombre || asig.activo?.nombre}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : (
+                        <p className="text-sm theme-text-muted m-0">
+                            Estás firmando de recibido para el activo:{' '}
+                            <strong className="theme-text-main">
+                                {asignacion.activo?.folio || asignacion.folio} — {asignacion.activo?.nombre || asignacion.nombre}
+                            </strong>
+                        </p>
+                    )}
 
-                    {asignacion.condiciones_entrega && (
+                    {!esConjunto && asignacion.condiciones_entrega && (
                         <div className="p-3 rounded-xl border border-blue-100 bg-blue-50/30 dark:border-blue-900/30 dark:bg-blue-950/10">
                             <span className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 block mb-1">
                                 Condiciones de Entrega Registradas

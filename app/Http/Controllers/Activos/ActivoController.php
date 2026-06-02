@@ -56,12 +56,40 @@ class ActivoController extends Controller
 
         $alertas = $alertasService->ejecutar(Auth::user());
 
+        $userId = null;
+        if (!empty($filtros['mis_activos'])) {
+            $userId = Auth::id();
+        } elseif (!empty($filtros['responsable_user_id'])) {
+            $userId = (int) $filtros['responsable_user_id'];
+        }
+
+        $colaboradorAsignaciones = [];
+        if ($userId) {
+            $colaboradorAsignaciones = ActivoAsignacion::where('user_id', $userId)
+                ->where('activa', true)
+                ->with(['activo.tipo'])
+                ->get()
+                ->map(function ($asig) {
+                    return [
+                        'id' => $asig->id,
+                        'activo_id' => $asig->activo_id,
+                        'folio' => $asig->activo->folio,
+                        'nombre' => $asig->activo->nombre,
+                        'tipo' => $asig->activo->tipo?->nombre,
+                        'firmado' => $asig->firmado,
+                        'fecha_inicio' => $asig->fecha_inicio ? $asig->fecha_inicio->format('Y-m-d') : null,
+                        'condiciones_entrega' => $asig->condiciones_entrega,
+                    ];
+                });
+        }
+
         return Inertia::render('Activos/Index', [
             'activos' => $listarService->ejecutar(Auth::user(), $filtros),
             'tipos' => CatalogoTipoActivo::where('activo', true)->orderBy('nombre')->get(),
             'departamentos' => Departamento::where('activo', true)->orderBy('nombre')->get(),
             'usuarios' => User::select(['id', 'name', 'email'])->orderBy('name')->get(),
             'filtros' => $filtros,
+            'colaboradorAsignaciones' => $colaboradorAsignaciones,
             'alertasResumen' => [
                 'vencidos' => count($alertas['vencidos']),
                 'proximos_7' => count($alertas['proximos_7']),
@@ -123,12 +151,10 @@ class ActivoController extends Controller
             return response()->json(['error' => 'Código vacío.'], 422);
         }
 
-        if (preg_match('/\/activos\/consulta\/([a-f0-9-]{36})/i', $codigo, $coincidencias)) {
-            $codigo = $coincidencias[1];
-        }
-
-        if (preg_match('/^[a-f0-9-]{36}$/i', $codigo)) {
-            $activo = Activo::where('consulta_token', $codigo)->first();
+        // Buscar un UUID dentro del código escaneado (útil si escanean la URL completa del QR)
+        if (preg_match('/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i', $codigo, $coincidencias)) {
+            $token = $coincidencias[0];
+            $activo = Activo::where('consulta_token', $token)->first();
             if ($activo && $activo->estado !== 'baja') {
                 $this->autorizarAccesoActivo($activo);
 
@@ -499,6 +525,92 @@ class ActivoController extends Controller
         ]);
 
         return $pdf->download("Responsiva_{$asignacion->activo->folio}.pdf");
+    }
+
+    public function firmarConjunto(Request $request)
+    {
+        $request->validate([
+            'asignacion_ids' => 'required|array',
+            'asignacion_ids.*' => 'integer|exists:activo_asignaciones,id',
+            'firma' => 'required|string',
+        ]);
+
+        $usuario = Auth::user();
+        $asignacionIds = $request->input('asignacion_ids');
+        $base64 = $request->input('firma');
+
+        if (preg_match('/^data:image\/(\w+);base64,/', $base64, $type)) {
+            $data = substr($base64, strpos($base64, ',') + 1);
+            $type = strtolower($type[1]);
+
+            if (!in_array($type, ['png', 'jpg', 'jpeg'], true)) {
+                return back()->withErrors(['firma' => 'Formato de imagen inválido.']);
+            }
+
+            $data = base64_decode($data);
+
+            if ($data === false) {
+                return back()->withErrors(['firma' => 'Fallo al decodificar la firma.']);
+            }
+        } else {
+            return back()->withErrors(['firma' => 'Formato de datos de firma inválido.']);
+        }
+
+        foreach ($asignacionIds as $id) {
+            $asignacion = ActivoAsignacion::findOrFail($id);
+
+            if ($asignacion->user_id !== $usuario->id) {
+                $this->autorizarAccesoActivo($asignacion->activo);
+                if (!$usuario->hasRole(['Super Admin', 'Administrador']) && !$usuario->can('activos.asignar')) {
+                    abort(403, 'No tiene autorización para firmar esta asignación.');
+                }
+            }
+
+            $filename = "activos/firmas/{$asignacion->id}.{$type}";
+            Storage::disk('public')->put($filename, $data);
+
+            $asignacion->update([
+                'firmado' => true,
+                'firma_ruta' => $filename,
+                'firma_fecha' => now(),
+            ]);
+        }
+
+        return back()->with('success', 'Entrega en conjunto firmada correctamente.');
+    }
+
+    public function responsivaConjunta(User $usuario)
+    {
+        $currentUser = Auth::user();
+        if ($usuario->id !== $currentUser->id) {
+            if (!$currentUser->hasRole(['Super Admin', 'Administrador']) && !$currentUser->can('activos.asignar') && !$currentUser->can('activos.ver_todos')) {
+                abort(403, 'No tiene autorización para ver las asignaciones de este usuario.');
+            }
+        }
+
+        $asignaciones = ActivoAsignacion::where('user_id', $usuario->id)
+            ->where('activa', true)
+            ->with(['activo.tipo', 'activo.departamento', 'activo.area', 'asignadoPor'])
+            ->get();
+
+        if ($asignaciones->isEmpty()) {
+            abort(404, 'El colaborador no tiene asignaciones activas.');
+        }
+
+        foreach ($asignaciones as $asignacion) {
+            if ($usuario->id !== $currentUser->id) {
+                $this->autorizarAccesoActivo($asignacion->activo);
+            }
+        }
+
+        $pdf = Pdf::loadView('activos.responsiva_conjunta', [
+            'asignaciones' => $asignaciones,
+            'usuario' => $usuario,
+            'fecha' => now()->format('d/m/Y'),
+            'terminos' => ActivoConfiguracion::obtenerTerminos(),
+        ]);
+
+        return $pdf->download("Responsiva_Conjunta_{$usuario->name}.pdf");
     }
 
     public function guardarConfiguracion(Request $request)

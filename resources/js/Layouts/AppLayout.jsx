@@ -36,6 +36,12 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     useWebPush(auth, tonos_alertas);
 
+    useEffect(() => {
+        if (typeof window !== 'undefined' && !url.startsWith('/activos')) {
+            sessionStorage.removeItem('activos_filtros_guardados');
+        }
+    }, [url]);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState(null);
 
