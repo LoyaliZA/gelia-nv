@@ -271,6 +271,9 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{activo}', [ActivoController::class, 'update'])->middleware('can:activos.editar')->name('update');
         Route::post('/{activo}/asignar', [ActivoController::class, 'asignar'])->middleware('can:activos.asignar')->name('asignar');
         Route::post('/{activo}/devolver', [ActivoController::class, 'devolver'])->middleware('can:activos.asignar')->name('devolver');
+        Route::post('/asignaciones/{asignacion}/firmar', [ActivoController::class, 'firmar'])->name('asignaciones.firmar');
+        Route::get('/asignaciones/{asignacion}/responsiva', [ActivoController::class, 'responsiva'])->name('asignaciones.responsiva');
+        Route::post('/configuracion', [ActivoController::class, 'guardarConfiguracion'])->middleware('can:activos.configurar_tipos')->name('configuracion.guardar');
         Route::post('/{activo}/transferir', [ActivoController::class, 'transferir'])->middleware('can:activos.transferir')->name('transferir');
         Route::post('/{activo}/estado', [ActivoController::class, 'cambiarEstado'])->middleware('can:activos.cambiar_estado')->name('estado');
         Route::post('/{activo}/mantenimiento', [ActivoController::class, 'programarMantenimiento'])->middleware('can:activos.cambiar_estado')->name('mantenimiento');

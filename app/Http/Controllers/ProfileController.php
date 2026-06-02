@@ -128,6 +128,8 @@ class ProfileController extends Controller
             'tema_visual.sidebar_modo'     => 'nullable|string|in:collapsed,expanded',
             'tema_visual.sidebar_posicion_fija' => 'nullable|string|in:left,right,top,bottom',
             'tema_visual.efecto_cristal'   => 'nullable|boolean',
+            'firma'                        => 'nullable|string',
+            'remove_firma'                 => 'nullable|boolean',
         ]);
 
         
@@ -185,12 +187,39 @@ class ProfileController extends Controller
             $configVisual['fondo_base'] = 'none';
         }
 
+        // 5.5 GESTIÓN DE FIRMA DIGITAL (Para responsiva de activos)
+        if ($request->filled('firma')) {
+            $base64 = $request->input('firma');
+            if (preg_match('/^data:image\/(\w+);base64,/', $base64, $type)) {
+                $data = substr($base64, strpos($base64, ',') + 1);
+                $type = strtolower($type[1]);
+                if (in_array($type, ['png', 'jpg', 'jpeg'], true)) {
+                    $data = base64_decode($data);
+                    if ($data !== false) {
+                        if ($user->firma_ruta) {
+                            Storage::disk('public')->delete($user->firma_ruta);
+                        }
+                        $filename = "perfiles/firmas/{$user->id}.{$type}";
+                        Storage::disk('public')->put($filename, $data);
+                        $datos['firma_ruta'] = $filename;
+                    }
+                }
+            }
+        } elseif ($request->boolean('remove_firma')) {
+            if ($user->firma_ruta) {
+                Storage::disk('public')->delete($user->firma_ruta);
+            }
+            $datos['firma_ruta'] = null;
+        }
+
         // 6. LIMPIEZA PARA ACTUALIZACIÓN DE TABLA 'users'
         unset(
             $datos['remove_foto'],
             $datos['archivo_fondo'],
             $datos['remove_fondo'],
-            $datos['tema_visual']
+            $datos['tema_visual'],
+            $datos['firma'],
+            $datos['remove_firma']
         );
 
         // 7. ACTUALIZACIÓN EN TABLA 'users'

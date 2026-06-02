@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Package, Plus, Download, Eye, Wrench, ImageIcon, BookOpen } from 'lucide-react';
+import { Package, Plus, Download, Eye, Wrench, ImageIcon, BookOpen, Settings } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import FiltrosActivos from './Partials/FiltrosActivos';
 import ModalFormActivo from './Partials/ModalFormActivo';
+import ModalConfigActivos from './Partials/ModalConfigActivos';
 import PanelAlertas from './Partials/PanelAlertas';
 import GuiaVisualActivos from './Partials/GuiaVisualActivos';
 import TarjetaActivoMobile from './Partials/TarjetaActivoMobile';
@@ -74,8 +75,9 @@ function FilaActivoDesktop({ activo }) {
     );
 }
 
-export default function Index({ auth, activos, tipos, departamentos, usuarios, filtros, alertasResumen, alertas }) {
+export default function Index({ auth, activos, tipos, departamentos, usuarios, filtros, alertasResumen, alertas, terminosCondiciones }) {
     const [modalAbierto, setModalAbierto] = useState(false);
+    const [modalConfigAbierto, setModalConfigAbierto] = useState(false);
     const [guiaOculta, setGuiaOculta] = useState(() => {
         if (typeof window === 'undefined') return false;
         return localStorage.getItem('activos_guia_oculta') === '1';
@@ -144,6 +146,11 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
                         {can('activos.exportar') && (
                             <button type="button" onClick={exportar} className={`${BTN_SECONDARY_CLASS} theme-btn-primary--compact`}>
                                 <Download className="w-4 h-4 shrink-0" /> Exportar
+                            </button>
+                        )}
+                        {can('activos.configurar_tipos') && (
+                            <button type="button" onClick={() => setModalConfigAbierto(true)} className={`${BTN_SECONDARY_CLASS} theme-btn-primary--compact`}>
+                                <Settings className="w-4 h-4 shrink-0" /> Configurar
                             </button>
                         )}
                         {can('activos.crear') && (
@@ -230,6 +237,7 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
             </div>
 
             <ModalFormActivo abierto={modalAbierto} onCerrar={() => setModalAbierto(false)} tipos={tipos} departamentos={departamentos} />
+            <ModalConfigActivos abierto={modalConfigAbierto} onCerrar={() => setModalConfigAbierto(false)} terminosCondiciones={terminosCondiciones} />
 
             {can('activos.crear') && (
                 <button

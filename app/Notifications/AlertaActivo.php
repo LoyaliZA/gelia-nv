@@ -34,6 +34,7 @@ class AlertaActivo extends Notification implements ShouldQueue, ShouldBroadcast
         'activo_vencimiento' => 'Vencimiento de activo',
         'activo_mantenimiento_proximo' => 'Mantenimiento próximo',
         'resumen_activos' => 'Resumen de activos',
+        'activo_pendiente_firma' => 'Firma de activo pendiente',
     ];
 
     public function __construct(Activo $activo, string $tipoAlerta, string $mensaje, array $extras = [])
@@ -115,6 +116,7 @@ class AlertaActivo extends Notification implements ShouldQueue, ShouldBroadcast
             'activo_vencimiento' => "Atención {$nombre}, el activo {$nombreActivo}, {$folio}, está por vencer o venció.",
             'activo_mantenimiento_proximo' => "Atención {$nombre}, el activo {$nombreActivo}, {$folio}, requiere mantenimiento próximo.",
             'resumen_activos' => "Atención {$nombre}, hay un resumen de alertas de activos pendientes de revisión.",
+            'activo_pendiente_firma' => "Atención {$nombre}, el activo {$nombreActivo}, {$folio}, requiere firma de recibido.",
             default => "Atención {$nombre}, tienes una notificación sobre el activo {$nombreActivo}, {$folio}.",
         };
     }

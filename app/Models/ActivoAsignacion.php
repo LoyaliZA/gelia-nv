@@ -17,12 +17,19 @@ class ActivoAsignacion extends Model
         'fecha_fin',
         'activa',
         'notas',
+        'firmado',
+        'firma_ruta',
+        'firma_fecha',
+        'condiciones_entrega',
+        'condiciones_devolucion',
     ];
 
     protected $casts = [
         'fecha_inicio' => 'date',
         'fecha_fin' => 'date',
         'activa' => 'boolean',
+        'firmado' => 'boolean',
+        'firma_fecha' => 'datetime',
     ];
 
     public function activo(): BelongsTo

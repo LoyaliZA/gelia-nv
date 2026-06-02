@@ -113,25 +113,73 @@ export default function TimelineMovimientos({ movimientos = [], mantenimientos =
     );
 }
 
-export function HistorialAsignaciones({ asignaciones = [] }) {
+export function HistorialAsignaciones({ asignaciones = [], canSign = false, onSign = null, currentUser = null }) {
     if (!asignaciones.length) return null;
 
     return (
         <div className="space-y-3 mt-4">
             <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Historial de pertenencia</p>
             {asignaciones.map((a) => (
-                <div key={a.id} className="rounded-xl px-4 py-3 theme-element border theme-border text-sm">
-                    <div className="flex justify-between gap-2">
-                        <Link href={route('activos.index', { responsable_user_id: a.usuario?.id })} className="font-bold hover:underline" style={{ color: 'var(--color-primario)' }}>
-                            {a.usuario?.name}
-                        </Link>
-                        <span className={`text-[10px] font-black uppercase ${a.activa ? 'text-green-600 dark:text-green-400' : 'theme-text-muted'}`}>
-                            {a.activa ? 'Activa' : 'Cerrada'}
-                        </span>
+                <div key={a.id} className="rounded-xl px-4 py-3 theme-element border theme-border text-sm space-y-2">
+                    <div className="flex justify-between items-start gap-2">
+                        <div>
+                            <Link href={route('activos.index', { responsable_user_id: a.usuario?.id })} className="font-bold hover:underline" style={{ color: 'var(--color-primario)' }}>
+                                {a.usuario?.name}
+                            </Link>
+                            <span className="block text-[10px] theme-text-muted mt-0.5">
+                                {a.fecha_inicio}{a.fecha_fin ? ` → ${a.fecha_fin}` : ' → presente'}
+                            </span>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                            <span className={`text-[10px] font-black uppercase ${a.activa ? 'text-green-600 dark:text-green-400' : 'theme-text-muted'}`}>
+                                {a.activa ? 'Activa' : 'Cerrada'}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${a.firmado ? 'bg-green-100 text-green-800 dark:bg-green-950/20 dark:text-green-400' : 'bg-amber-100 text-amber-800 dark:bg-amber-950/20 dark:text-amber-400'}`}>
+                                {a.firmado ? 'Firmado' : 'Sin firmar'}
+                            </span>
+                        </div>
                     </div>
-                    <p className="text-[10px] theme-text-muted mt-1">
-                        {a.fecha_inicio}{a.fecha_fin ? ` → ${a.fecha_fin}` : ' → presente'}
-                    </p>
+
+                    {(a.condiciones_entrega || a.condiciones_devolucion || a.notas) && (
+                        <div className="text-xs space-y-1 pt-1 border-t theme-border">
+                            {a.condiciones_entrega && (
+                                <p className="m-0"><span className="font-bold theme-text-muted text-[9px] uppercase">Entrega: </span>{a.condiciones_entrega}</p>
+                            )}
+                            {a.condiciones_devolucion && (
+                                <p className="m-0"><span className="font-bold theme-text-muted text-[9px] uppercase">Devolución: </span>{a.condiciones_devolucion}</p>
+                            )}
+                            {a.notas && (
+                                <p className="m-0"><span className="font-bold theme-text-muted text-[9px] uppercase">Notas: </span>{a.notas}</p>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex gap-2 items-center justify-between pt-1 border-t theme-border">
+                        <a
+                            href={route('activos.asignaciones.responsiva', a.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-blue-600 hover:underline"
+                        >
+                            Descargar Responsiva
+                        </a>
+
+                        {a.activa && !a.firmado && (currentUser?.id === a.user_id || canSign) && onSign && (
+                            <button
+                                type="button"
+                                onClick={() => onSign(a)}
+                                className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-amber-600 hover:underline cursor-pointer"
+                            >
+                                Firmar recibido
+                            </button>
+                        )}
+
+                        {a.firmado && a.firma_fecha && (
+                            <span className="text-[9px] theme-text-muted italic">
+                                Firmado: {String(a.firma_fecha).substring(0, 10)}
+                            </span>
+                        )}
+                    </div>
                 </div>
             ))}
         </div>

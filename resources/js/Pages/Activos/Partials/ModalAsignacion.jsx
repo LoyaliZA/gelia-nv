@@ -7,7 +7,7 @@ import ActivosModalShell from './ActivosModalShell';
 import { TEXTAREA_CLASS, LABEL_CLASS, BTN_PRIMARY_CLASS } from './activosFormStyles';
 
 export default function ModalAsignacion({ abierto, onCerrar, activo }) {
-    const { data, setData, post, processing, errors, reset } = useForm({ user_id: '', notas: '' });
+    const { data, setData, post, processing, errors, reset } = useForm({ user_id: '', notas: '', condiciones_entrega: '' });
 
     if (!abierto || !activo) return null;
 
@@ -38,7 +38,12 @@ export default function ModalAsignacion({ abierto, onCerrar, activo }) {
                         {errors.user_id && <p className="text-red-500 text-xs mt-1">{errors.user_id}</p>}
                     </div>
                     <div>
-                        <label className={LABEL_CLASS}>Notas</label>
+                        <label className={LABEL_CLASS}>Condiciones de entrega</label>
+                        <textarea value={data.condiciones_entrega} onChange={(e) => setData('condiciones_entrega', e.target.value)} rows={2} placeholder="Ej. Excelente estado, con cargador, sin detalles estéticos" className={TEXTAREA_CLASS} />
+                        {errors.condiciones_entrega && <p className="text-red-500 text-xs mt-1">{errors.condiciones_entrega}</p>}
+                    </div>
+                    <div>
+                        <label className={LABEL_CLASS}>Notas de asignación</label>
                         <textarea value={data.notas} onChange={(e) => setData('notas', e.target.value)} rows={2} className={TEXTAREA_CLASS} />
                     </div>
                 </div>

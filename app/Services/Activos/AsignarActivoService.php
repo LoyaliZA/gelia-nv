@@ -16,7 +16,7 @@ class AsignarActivoService
         private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
-    public function ejecutar(Activo $activo, User $actor, int $userId, ?string $notas = null): Activo
+    public function ejecutar(Activo $activo, User $actor, int $userId, ?string $notas = null, ?string $condicionesEntrega = null): Activo
     {
         if (!in_array($activo->estado, ['disponible', 'asignado'], true)) {
             throw ValidationException::withMessages([
@@ -32,7 +32,7 @@ class AsignarActivoService
             ]);
         }
 
-        return DB::transaction(function () use ($activo, $actor, $destinatario, $notas) {
+        return DB::transaction(function () use ($activo, $actor, $destinatario, $notas, $condicionesEntrega) {
             $activo->loadMissing(['responsable', 'tipo', 'departamento']);
             $snapshot = $this->construirSnapshot->ejecutar($activo);
             $tipoMovimiento = $activo->responsable_user_id ? 'reasignacion' : 'asignacion';
@@ -54,6 +54,8 @@ class AsignarActivoService
                 'fecha_inicio' => now()->toDateString(),
                 'activa' => true,
                 'notas' => $notas,
+                'condiciones_entrega' => $condicionesEntrega,
+                'firmado' => false,
             ]);
 
             $estadoAnterior = $activo->estado;

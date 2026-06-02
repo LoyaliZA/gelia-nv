@@ -15,6 +15,7 @@ import QrActivo from './Partials/QrActivo';
 import AccionesActivoSheet from './Partials/AccionesActivoSheet';
 import useDispositivoCampo from './Partials/useDispositivoCampo';
 import GeliaLoader from '../../Components/GeliaLoader';
+import ModalFirmarActivo from './Partials/ModalFirmarActivo';
 import { ESTADO_BADGE, ESTADO_LABELS, METADATA_BADGE, CHIP_BADGE, getActivosCardClass } from './Partials/activosFormStyles';
 
 function IdentificacionChips({ atributos = {} }) {
@@ -56,12 +57,13 @@ function SeccionAcordeon({ titulo, children, defaultAbierto = false, className =
     );
 }
 
-export default function Show({ auth, activo, tipos, departamentos }) {
+export default function Show({ auth, activo, tipos, departamentos, terminosCondiciones }) {
     const [modalEditar, setModalEditar] = useState(false);
     const [modalAsignar, setModalAsignar] = useState(false);
     const [modalTransferir, setModalTransferir] = useState(false);
     const [modalEstado, setModalEstado] = useState(null);
     const [modalMantenimiento, setModalMantenimiento] = useState(false);
+    const [modalFirmar, setModalFirmar] = useState(null);
     const [sheetAcciones, setSheetAcciones] = useState(false);
     const [procesando, setProcesando] = useState(false);
     const { esMovil } = useDispositivoCampo();
@@ -73,9 +75,10 @@ export default function Show({ auth, activo, tipos, departamentos }) {
     };
 
     const devolver = () => {
-        if (!confirm('¿Devolver este activo al inventario disponible?')) return;
+        const condiciones = prompt('¿Confirmas la devolución de este activo? Ingresa las condiciones en las que se regresa (opcional):', 'Excelente estado');
+        if (condiciones === null) return;
         setProcesando(true);
-        router.post(route('activos.devolver', activo.id), {}, { onFinish: () => setProcesando(false) });
+        router.post(route('activos.devolver', activo.id), { condiciones_devolucion: condiciones }, { onFinish: () => setProcesando(false) });
     };
 
     const cardClass = (extra = '') => getActivosCardClass(`p-6 space-y-4 ${extra}`.trim());
@@ -93,22 +96,69 @@ export default function Show({ auth, activo, tipos, departamentos }) {
     const primaria = accionPrimaria();
     const PrimariaIcon = primaria?.icon;
 
+    const activeAsignacion = activo.asignaciones?.find((a) => a.activa);
+
     const contenidoPertenece = (
         <>
             {activo.responsable ? (
-                <div className="flex items-center gap-3 rounded-xl p-4 theme-element border theme-border">
-                    <User className="w-8 h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                    <div>
-                        <Link href={route('activos.index', { responsable_user_id: activo.responsable.id })} className="text-lg font-black hover:underline" style={{ color: 'var(--color-primario)' }}>
-                            {activo.responsable.name}
-                        </Link>
-                        <p className="text-xs theme-text-muted">{activo.responsable.email}</p>
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3 rounded-xl p-4 theme-element border theme-border">
+                        <User className="w-8 h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                        <div className="min-w-0 flex-1">
+                            <Link href={route('activos.index', { responsable_user_id: activo.responsable.id })} className="text-lg font-black hover:underline block truncate" style={{ color: 'var(--color-primario)' }}>
+                                {activo.responsable.name}
+                            </Link>
+                            <p className="text-xs theme-text-muted truncate">{activo.responsable.email}</p>
+                        </div>
                     </div>
+
+                    {activeAsignacion && (
+                        <div className="rounded-xl p-4 theme-element border theme-border text-xs space-y-2">
+                            {activeAsignacion.condiciones_entrega && (
+                                <div>
+                                    <span className="text-[9px] font-black uppercase theme-text-muted block">Condiciones de Entrega</span>
+                                    <p className="m-0 theme-text-main italic font-medium">"{activeAsignacion.condiciones_entrega}"</p>
+                                </div>
+                            )}
+                            <div className="flex items-center justify-between gap-2 pt-2 border-t theme-border">
+                                <div>
+                                    <span className="text-[9px] font-black uppercase theme-text-muted block">Estado de Firma</span>
+                                    <span className={`inline-block font-black uppercase text-[9px] ${activeAsignacion.firmado ? 'text-green-600' : 'text-amber-600 animate-pulse'}`}>
+                                        {activeAsignacion.firmado ? 'Firmado' : 'Firma Pendiente'}
+                                    </span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <a
+                                        href={route('activos.asignaciones.responsiva', activeAsignacion.id)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="px-2 py-1 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded text-[9px] font-black uppercase tracking-wider hover:opacity-85"
+                                    >
+                                        Responsiva
+                                    </a>
+                                    {!activeAsignacion.firmado && (auth.user?.id === activeAsignacion.user_id || can('activos.asignar')) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setModalFirmar(activeAsignacion)}
+                                            className="px-2 py-1 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 rounded text-[9px] font-black uppercase tracking-wider hover:opacity-85 cursor-pointer"
+                                        >
+                                            Firmar
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             ) : (
                 <p className="text-sm theme-text-muted italic">Sin usuario asignado — disponible en inventario.</p>
             )}
-            <HistorialAsignaciones asignaciones={activo.asignaciones} />
+            <HistorialAsignaciones 
+                asignaciones={activo.asignaciones} 
+                canSign={can('activos.asignar')} 
+                onSign={(a) => setModalFirmar(a)} 
+                currentUser={auth.user} 
+            />
         </>
     );
 
@@ -287,6 +337,7 @@ export default function Show({ auth, activo, tipos, departamentos }) {
             <ModalTransferencia abierto={modalTransferir} onCerrar={() => setModalTransferir(false)} activo={activo} departamentos={departamentos} />
             <ModalCambioEstado abierto={!!modalEstado} onCerrar={() => setModalEstado(null)} activo={activo} estadoDestino={modalEstado} />
             <ModalMantenimiento abierto={modalMantenimiento} onCerrar={() => setModalMantenimiento(false)} activo={activo} />
+            <ModalFirmarActivo abierto={!!modalFirmar} onCerrar={() => setModalFirmar(null)} asignacion={modalFirmar} terminosCondiciones={terminosCondiciones} />
         </AppLayout>
     );
 }

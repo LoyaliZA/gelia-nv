@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
-import { Filter, Search, User, UserX, Wrench, RotateCcw, ChevronDown, ChevronUp, ScanLine } from 'lucide-react';
+import { Filter, Search, User, UserX, Wrench, RotateCcw, ChevronDown, ChevronUp, ScanLine, PenTool } from 'lucide-react';
 import { INPUT_CLASS, SELECT_CLASS, LABEL_CLASS, getActivosCardClass } from './activosFormStyles';
 import ModalEscanearCodigo from './ModalEscanearCodigo';
 import { resolverCodigoEscaneado } from './resolverCodigoEscaneado';
@@ -61,6 +61,7 @@ function contarFiltrosActivos(filtros) {
     if (filtros.mis_activos) n += 1;
     if (filtros.sin_asignar) n += 1;
     if (filtros.en_mantenimiento) n += 1;
+    if (filtros.pendientes_firma) n += 1;
     return n;
 }
 
@@ -86,6 +87,7 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
             mis_activos: filtros.mis_activos || '',
             sin_asignar: filtros.sin_asignar || '',
             en_mantenimiento: filtros.en_mantenimiento || '',
+            pendientes_firma: filtros.pendientes_firma || '',
             ...overrides,
         };
 
@@ -93,25 +95,37 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
             merged.responsable_user_id = '';
             merged.sin_asignar = '';
             merged.en_mantenimiento = '';
+            merged.pendientes_firma = '';
         }
         if (overrides.sin_asignar) {
             merged.responsable_user_id = '';
             merged.mis_activos = '';
             merged.en_mantenimiento = '';
+            merged.pendientes_firma = '';
         }
         if (overrides.en_mantenimiento) {
             merged.responsable_user_id = '';
             merged.mis_activos = '';
             merged.sin_asignar = '';
             merged.estado = '';
+            merged.pendientes_firma = '';
+        }
+        if (overrides.pendientes_firma) {
+            merged.responsable_user_id = '';
+            merged.mis_activos = '';
+            merged.sin_asignar = '';
+            merged.en_mantenimiento = '';
+            merged.estado = '';
         }
         if (overrides.responsable_user_id) {
             merged.mis_activos = '';
             merged.sin_asignar = '';
             merged.en_mantenimiento = '';
+            merged.pendientes_firma = '';
         }
         if (overrides.estado) {
             merged.en_mantenimiento = '';
+            merged.pendientes_firma = '';
         }
 
         const params = Object.fromEntries(
@@ -201,6 +215,9 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
                     </ChipFiltro>
                     <ChipFiltro active={!!filtros.en_mantenimiento} onClick={() => aplicar({ en_mantenimiento: '1' })} icon={Wrench}>
                         En mantenimiento
+                    </ChipFiltro>
+                    <ChipFiltro active={!!filtros.pendientes_firma} onClick={() => aplicar({ pendientes_firma: '1' })} icon={PenTool}>
+                        Sin firmar
                     </ChipFiltro>
                     {hayFiltrosActivos && (
                         <button
@@ -317,6 +334,9 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
                             </ChipFiltro>
                             <ChipFiltro active={!!filtros.en_mantenimiento} onClick={() => aplicar({ en_mantenimiento: '1' })} icon={Wrench}>
                                 En mantenimiento
+                            </ChipFiltro>
+                            <ChipFiltro active={!!filtros.pendientes_firma} onClick={() => aplicar({ pendientes_firma: '1' })} icon={PenTool}>
+                                Sin firmar
                             </ChipFiltro>
                         </div>
                         {hayFiltrosActivos && (

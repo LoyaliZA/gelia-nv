@@ -28,6 +28,7 @@ class User extends Authenticatable
         'fecha_nacimiento',
         'edad',
         'foto_perfil',
+        'firma_ruta',
         'catalogo_sexo_id',
         'area_id' // Agregado para permitir la asignación organizacional
     ];

@@ -84,5 +84,12 @@ class ListarActivosService
         } elseif (!empty($filtros['responsable_user_id'])) {
             $query->where('responsable_user_id', $filtros['responsable_user_id']);
         }
+
+        if (!empty($filtros['pendientes_firma'])) {
+            $query->where('estado', 'asignado')
+                ->whereHas('asignaciones', function ($q) {
+                    $q->where('activa', true)->where('firmado', false);
+                });
+        }
     }
 }

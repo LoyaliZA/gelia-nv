@@ -16,7 +16,7 @@ class DevolverActivoService
         private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
-    public function ejecutar(Activo $activo, User $actor, ?string $notas = null): Activo
+    public function ejecutar(Activo $activo, User $actor, ?string $notas = null, ?string $condicionesDevolucion = null): Activo
     {
         if ($activo->estado !== 'asignado' || !$activo->responsable_user_id) {
             throw ValidationException::withMessages([
@@ -24,7 +24,7 @@ class DevolverActivoService
             ]);
         }
 
-        return DB::transaction(function () use ($activo, $actor, $notas) {
+        return DB::transaction(function () use ($activo, $actor, $notas, $condicionesDevolucion) {
             $activo->loadMissing(['responsable', 'tipo', 'departamento']);
             $snapshot = $this->construirSnapshot->ejecutar($activo);
             $responsableAnterior = $activo->responsable;
@@ -34,6 +34,7 @@ class DevolverActivoService
                 ->update([
                     'activa' => false,
                     'fecha_fin' => now()->toDateString(),
+                    'condiciones_devolucion' => $condicionesDevolucion,
                 ]);
 
             $estadoAnterior = $activo->estado;

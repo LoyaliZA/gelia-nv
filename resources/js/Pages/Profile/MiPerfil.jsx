@@ -5,7 +5,7 @@ import {
     User, Mail, Smartphone, Camera,
     Save, ShieldCheck, Upload, X, Trash2, AlertTriangle, Check, XCircle,
     Lock, KeyRound, CalendarDays, Building2, MapPin, ChevronDown, Eye, EyeOff,
-    Settings2, Monitor, LogOut, Sparkles, AtSign, Shield,
+    Settings2, Monitor, LogOut, Sparkles, AtSign, Shield, PenTool,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -55,6 +55,141 @@ export default function MiPerfil({ perfilUsuario = {}, sesiones = [], sesiones_s
     const [showConfirm, setShowConfirm] = useState(false);
     const [revokingSessions, setRevokingSessions] = useState(false);
 
+    // Firma digital para responsables de Activos (TI)
+    const [showSignature, setShowSignature] = useState(false);
+    const [dibujandoFirma, setDibujandoFirma] = useState(false);
+    const [firmaTrazada, setFirmaTrazada] = useState(false);
+    const [firmaPreview, setFirmaPreview] = useState(
+        usuario?.firma_ruta ? `/storage/${usuario.firma_ruta}` : null
+    );
+    const signatureCanvasRef = useRef(null);
+    const lastSigPosRef = useRef({ x: 0, y: 0, time: 0, width: 3.5 });
+
+    const puedeFirmarComoResponsable = 
+        roles.includes('Super Admin') || 
+        roles.includes('Administrador') || 
+        usuario?.permissions?.includes('activos.asignar') ||
+        auth?.user?.permissions?.includes('activos.asignar');
+
+    useEffect(() => {
+        if (!showSignature) return;
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = '#1e3a8a';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+    }, [showSignature]);
+
+    const confirmarTrazoFirma = () => {
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        const dataUrl = canvas.toDataURL('image/png');
+        setData((prev) => ({ ...prev, firma: dataUrl, remove_firma: false }));
+        setFirmaPreview(dataUrl);
+        setFirmaTrazada(true);
+    };
+
+    const limpiarTrazoFirma = () => {
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        setFirmaTrazada(false);
+        setData((prev) => ({ ...prev, firma: null }));
+    };
+
+    const obtenerCoordenadasFirma = (e, canvas) => {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+            x: ((clientX - rect.left) / rect.width) * canvas.width,
+            y: ((clientY - rect.top) / rect.height) * canvas.height
+        };
+    };
+
+    const iniciarDibujoFirma = (e) => {
+        if (e.cancelable) e.preventDefault();
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const pos = obtenerCoordenadasFirma(e, canvas);
+
+        lastSigPosRef.current = {
+            x: pos.x,
+            y: pos.y,
+            time: Date.now(),
+            width: 3.5
+        };
+
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, 1.75, 0, 2 * Math.PI);
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fill();
+
+        setDibujandoFirma(true);
+    };
+
+    const dibujarFirma = (e) => {
+        if (!dibujandoFirma) return;
+        if (e.cancelable) e.preventDefault();
+        const canvas = signatureCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const pos = obtenerCoordenadasFirma(e, canvas);
+
+        const lastPos = lastSigPosRef.current;
+        const dx = pos.x - lastPos.x;
+        const dy = pos.y - lastPos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist === 0) return;
+
+        const now = Date.now();
+        const dt = Math.max(1, now - lastPos.time);
+        const velocity = dist / dt;
+
+        const MIN_WIDTH = 1.0;
+        const MAX_WIDTH = 4.5;
+        const MAX_VELOCITY = 2.0;
+
+        const targetWidth = Math.max(
+            MIN_WIDTH,
+            Math.min(MAX_WIDTH, MAX_WIDTH - (velocity / MAX_VELOCITY) * (MAX_WIDTH - MIN_WIDTH))
+        );
+
+        const currentWidth = lastPos.width * 0.7 + targetWidth * 0.3;
+
+        ctx.beginPath();
+        ctx.moveTo(lastPos.x, lastPos.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.strokeStyle = '#1e3a8a';
+        ctx.lineWidth = currentWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        lastSigPosRef.current = {
+            x: pos.x,
+            y: pos.y,
+            time: now,
+            width: currentWidth
+        };
+
+        setFirmaTrazada(true);
+    };
+
+    const detenerDibujoFirma = () => {
+        setDibujandoFirma(false);
+    };
+
+    const removerFirmaPerfil = () => {
+        setData((prev) => ({ ...prev, firma: null, remove_firma: true }));
+        setFirmaPreview(null);
+        setFirmaTrazada(false);
+    };
+
     const otrasSesiones = sesiones.filter((s) => !s.es_actual);
 
     const { data, setData, post, processing, recentlySuccessful, errors, transform } = useForm({
@@ -68,6 +203,8 @@ export default function MiPerfil({ perfilUsuario = {}, sesiones = [], sesiones_s
         password_confirmation: '',
         foto_perfil: null,
         remove_foto: false,
+        firma: null,
+        remove_firma: false,
     });
 
     useEffect(() => {
@@ -580,6 +717,101 @@ export default function MiPerfil({ perfilUsuario = {}, sesiones = [], sesiones_s
                             </div>
                         )}
                     </div>
+
+                    {/* Firma Digital (Responsables de Activos) */}
+                    {puedeFirmarComoResponsable && (
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setShowSignature((v) => !v)}
+                                className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-200 outline-none group
+                                    ${showSignature
+                                        ? 'border-[var(--color-primario)]/40 bg-[var(--color-primario)]/5'
+                                        : 'theme-border theme-surface hover:border-[var(--color-primario)]/30'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
+                                        <PenTool className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-sm font-black theme-text-main uppercase tracking-widest block leading-tight">Firma del Responsable (TI)</span>
+                                        <span className="text-[10px] font-bold theme-text-muted uppercase tracking-widest">Para firmar responsivas de entrega de activos</span>
+                                    </div>
+                                </div>
+                                <ChevronDown className={`w-5 h-5 theme-text-muted transition-transform duration-300 ${showSignature ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {showSignature && (
+                                <div className={`${formZoneClassWide} items-start`}>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase theme-text-muted tracking-widest block mb-2">Mi Firma Registrada</span>
+                                            {firmaPreview ? (
+                                                <div className="relative inline-block border theme-border rounded-xl p-2 bg-white dark:bg-slate-900">
+                                                    <img src={firmaPreview} className="max-h-[85px] max-w-[220px] object-contain block" alt="Firma digital" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={removerFirmaPerfil}
+                                                        className="absolute -top-2 -right-2 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors cursor-pointer"
+                                                        title="Eliminar firma"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs theme-text-muted italic m-0">No tienes una firma registrada en tu perfil.</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1 block">Registrar / Dibujar Nueva Firma</label>
+                                        <div className="border theme-border rounded-xl bg-white dark:bg-slate-900 p-1 relative overflow-hidden">
+                                            <canvas
+                                                ref={signatureCanvasRef}
+                                                width={450}
+                                                height={180}
+                                                className="w-full h-[150px] touch-none cursor-crosshair bg-white dark:bg-slate-950 rounded-lg"
+                                                onMouseDown={iniciarDibujoFirma}
+                                                onMouseMove={dibujarFirma}
+                                                onMouseUp={detenerDibujoFirma}
+                                                onMouseLeave={detenerDibujoFirma}
+                                                onTouchStart={iniciarDibujoFirma}
+                                                onTouchMove={dibujarFirma}
+                                                onTouchEnd={detenerDibujoFirma}
+                                            />
+                                            {!firmaTrazada && (
+                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-30 select-none">
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                                                        <PenTool className="w-3.5 h-3.5" /> Dibuja aquí para actualizar
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-2 justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={limpiarTrazoFirma}
+                                                className="px-3 py-1.5 rounded-lg border theme-border theme-text-muted hover:theme-text-main text-[10px] font-black uppercase cursor-pointer"
+                                                disabled={!firmaTrazada}
+                                            >
+                                                Limpiar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={confirmarTrazoFirma}
+                                                className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase cursor-pointer"
+                                                disabled={!firmaTrazada}
+                                            >
+                                                Confirmar trazo
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div className="w-full pt-6 border-t border-zinc-200/60 dark:border-zinc-700/50 flex flex-col md:flex-row items-center justify-between gap-6">
                         <p className="text-[11px] font-bold theme-text-muted m-0 text-center md:text-left leading-tight max-w-xl">

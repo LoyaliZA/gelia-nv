@@ -16,6 +16,7 @@ class AsignarActivoRequest extends FormRequest
         return [
             'user_id' => 'required|exists:users,id',
             'notas' => 'nullable|string|max:1000',
+            'condiciones_entrega' => 'nullable|string|max:1000',
         ];
     }
 }

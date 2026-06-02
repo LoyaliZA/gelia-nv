@@ -40,6 +40,7 @@ class StoreActivoRequest extends FormRequest
             'registro_continuo' => 'nullable|boolean',
             'user_id' => 'nullable|exists:users,id',
             'notas' => 'nullable|string|max:1000',
+            'condiciones_entrega' => 'nullable|string|max:1000',
         ];
     }
 

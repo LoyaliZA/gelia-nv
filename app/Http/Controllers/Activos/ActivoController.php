@@ -10,11 +10,15 @@ use App\Http\Requests\Activos\StoreActivoRequest;
 use App\Http\Requests\Activos\TransferirActivoRequest;
 use App\Http\Requests\Activos\UpdateActivoRequest;
 use App\Models\Activo;
+use App\Models\ActivoAsignacion;
 use App\Models\ActivoFoto;
 use App\Models\ActivoMantenimiento;
 use App\Models\CatalogoTipoActivo;
 use App\Models\Departamento;
 use App\Models\User;
+use App\Models\ActivoConfiguracion;
+use Illuminate\Support\Facades\Storage;
+use Barryvdh\DomPDF\Facade\Pdf;
 use App\Services\Activos\ActualizarActivoService;
 use App\Services\Activos\AlertasActivosService;
 use App\Services\Activos\AsignarActivoService;
@@ -65,6 +69,7 @@ class ActivoController extends Controller
                 'mantenimiento' => count($alertas['mantenimiento']),
             ],
             'alertas' => $alertas,
+            'terminosCondiciones' => ActivoConfiguracion::obtenerTerminos(),
         ]);
     }
 
@@ -93,6 +98,7 @@ class ActivoController extends Controller
             'activo' => $activo,
             'tipos' => CatalogoTipoActivo::where('activo', true)->orderBy('nombre')->get(),
             'departamentos' => Departamento::where('activo', true)->with('areas')->orderBy('nombre')->get(),
+            'terminosCondiciones' => ActivoConfiguracion::obtenerTerminos(),
         ]);
     }
 
@@ -178,7 +184,8 @@ class ActivoController extends Controller
         $datos = $request->validated();
         $userIdAsignacion = $datos['user_id'] ?? null;
         $notasAsignacion = $datos['notas'] ?? null;
-        unset($datos['user_id'], $datos['notas']);
+        $condicionesEntrega = $datos['condiciones_entrega'] ?? null;
+        unset($datos['user_id'], $datos['notas'], $datos['condiciones_entrega']);
 
         $activo = $crearService->ejecutar(Auth::user(), $datos);
 
@@ -187,7 +194,7 @@ class ActivoController extends Controller
         }
 
         if ($userIdAsignacion) {
-            $activo = $asignarService->ejecutar($activo, Auth::user(), (int) $userIdAsignacion, $notasAsignacion);
+            $activo = $asignarService->ejecutar($activo, Auth::user(), (int) $userIdAsignacion, $notasAsignacion, $condicionesEntrega);
         }
 
         $mensaje = $userIdAsignacion
@@ -222,7 +229,13 @@ class ActivoController extends Controller
     public function asignar(AsignarActivoRequest $request, Activo $activo, AsignarActivoService $service)
     {
         $this->autorizarAccesoActivo($activo);
-        $service->ejecutar($activo, Auth::user(), $request->validated('user_id'), $request->validated('notas'));
+        $service->ejecutar(
+            $activo,
+            Auth::user(),
+            $request->validated('user_id'),
+            $request->validated('notas'),
+            $request->validated('condiciones_entrega')
+        );
 
         return back()->with('success', 'Activo asignado correctamente.');
     }
@@ -230,8 +243,11 @@ class ActivoController extends Controller
     public function devolver(Request $request, Activo $activo, DevolverActivoService $service)
     {
         $this->autorizarAccesoActivo($activo);
-        $request->validate(['notas' => 'nullable|string|max:1000']);
-        $service->ejecutar($activo, Auth::user(), $request->input('notas'));
+        $request->validate([
+            'notas' => 'nullable|string|max:1000',
+            'condiciones_devolucion' => 'nullable|string|max:1000',
+        ]);
+        $service->ejecutar($activo, Auth::user(), $request->input('notas'), $request->input('condiciones_devolucion'));
 
         return back()->with('success', 'Activo devuelto correctamente.');
     }
@@ -419,6 +435,84 @@ class ActivoController extends Controller
                 ->orWhere('atributos->no_serie', $codigo)
                 ->orWhere('atributos->imei', $codigo);
         })->first();
+    }
+
+    public function firmar(Request $request, ActivoAsignacion $asignacion)
+    {
+        $usuario = Auth::user();
+        if ($asignacion->user_id !== $usuario->id) {
+            $this->autorizarAccesoActivo($asignacion->activo);
+            if (!$usuario->hasRole(['Super Admin', 'Administrador']) && !$usuario->can('activos.asignar')) {
+                abort(403, 'No tiene autorización para firmar esta asignación.');
+            }
+        }
+
+        $request->validate([
+            'firma' => 'required|string',
+        ]);
+
+        $base64 = $request->input('firma');
+        if (preg_match('/^data:image\/(\w+);base64,/', $base64, $type)) {
+            $data = substr($base64, strpos($base64, ',') + 1);
+            $type = strtolower($type[1]);
+
+            if (!in_array($type, ['png', 'jpg', 'jpeg'], true)) {
+                return back()->withErrors(['firma' => 'Formato de imagen inválido.']);
+            }
+
+            $data = base64_decode($data);
+
+            if ($data === false) {
+                return back()->withErrors(['firma' => 'Fallo al decodificar la firma.']);
+            }
+        } else {
+            return back()->withErrors(['firma' => 'Formato de datos de firma inválido.']);
+        }
+
+        $filename = "activos/firmas/{$asignacion->id}.{$type}";
+        Storage::disk('public')->put($filename, $data);
+
+        $asignacion->update([
+            'firmado' => true,
+            'firma_ruta' => $filename,
+            'firma_fecha' => now(),
+        ]);
+
+        return back()->with('success', 'Activo firmado de recibido correctamente.');
+    }
+
+    public function responsiva(ActivoAsignacion $asignacion)
+    {
+        $usuario = Auth::user();
+        if ($asignacion->user_id !== $usuario->id) {
+            $this->autorizarAccesoActivo($asignacion->activo);
+        }
+
+        $asignacion->load(['activo.tipo', 'activo.departamento', 'usuario', 'asignadoPor']);
+
+        $pdf = Pdf::loadView('activos.responsiva', [
+            'asignacion' => $asignacion,
+            'activo' => $asignacion->activo,
+            'usuario' => $asignacion->usuario,
+            'fecha' => $asignacion->fecha_inicio ? $asignacion->fecha_inicio->format('d/m/Y') : now()->format('d/m/Y'),
+            'terminos' => ActivoConfiguracion::obtenerTerminos(),
+        ]);
+
+        return $pdf->download("Responsiva_{$asignacion->activo->folio}.pdf");
+    }
+
+    public function guardarConfiguracion(Request $request)
+    {
+        $request->validate([
+            'terminos_condiciones' => 'required|string|max:10000',
+        ]);
+
+        ActivoConfiguracion::updateOrCreate(
+            ['id' => 1],
+            ['terminos_condiciones' => $request->input('terminos_condiciones')]
+        );
+
+        return back()->with('success', 'Configuración de activos actualizada correctamente.');
     }
 
     private function autorizarAccesoActivo(Activo $activo): void
