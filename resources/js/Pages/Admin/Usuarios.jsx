@@ -275,6 +275,10 @@ export default function Usuarios({
                 url.searchParams.set('page', '1');
                 window.history.replaceState({}, '', url.pathname + url.search);
             }).catch(error => {
+                if (error.response && error.response.status === 409) {
+                    window.location.reload();
+                    return;
+                }
                 console.error("Error al buscar usuarios:", error);
             }).finally(() => {
                 setBuscando(false);
@@ -299,6 +303,10 @@ export default function Usuarios({
             window.history.replaceState({}, '', url.pathname + url.search);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }).catch(error => {
+            if (error.response && error.response.status === 409) {
+                window.location.reload();
+                return;
+            }
             console.error("Error al paginar usuarios:", error);
         }).finally(() => {
             setBuscando(false);
