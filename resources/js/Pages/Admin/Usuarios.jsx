@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Head, useForm, router } from '@inertiajs/react';
+import { Head, useForm, router, usePage } from '@inertiajs/react';
 import { animate } from 'animejs/animation';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
@@ -186,6 +186,15 @@ function FilaUsuarioDesktop({ usuario, onEditar }) {
     );
 }
 
+function headersRecargaParcial(version) {
+    return {
+        'X-Inertia': 'true',
+        'X-Inertia-Version': version ?? '',
+        'X-Inertia-Partial-Component': 'Admin/Usuarios',
+        'X-Inertia-Partial-Data': 'usuarios,filtros',
+    };
+}
+
 export default function Usuarios({
     auth,
     usuarios = { data: [], current_page: 1, last_page: 1, per_page: 12, total: 0, from: 0, to: 0 },
@@ -200,8 +209,10 @@ export default function Usuarios({
     esSuperAdmin = false,
     permisosUsuario = [],
 }) {
+    const { version: inertiaVersion } = usePage();
     const [usuariosState, setUsuariosState] = useState(usuarios);
     const [buscando, setBuscando] = useState(false);
+    const abortRef = useRef(null);
 
     useEffect(() => {
         setUsuariosState(usuarios);
@@ -253,63 +264,63 @@ export default function Usuarios({
         setBusqueda(busquedaInicial);
     }, [busquedaInicial]);
 
-    const aplicarBusqueda = useCallback((valor) => {
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => {
-            setBuscando(true);
-            axios.get(route('admin.usuarios'), {
-                params: { busqueda: valor.trim() || undefined, page: 1 },
-                headers: {
-                    'X-Inertia': 'true',
-                    'X-Inertia-Partial-Component': 'Admin/Usuarios',
-                    'X-Inertia-Partial-Data': 'usuarios,filtros'
-                }
-            }).then(response => {
-                setUsuariosState(response.data.props.usuarios);
+    const recargarUsuarios = useCallback(async (params, { actualizarUrl } = {}) => {
+        if (abortRef.current) abortRef.current.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+        setBuscando(true);
+
+        try {
+            const response = await axios.get(route('admin.usuarios'), {
+                params,
+                headers: headersRecargaParcial(inertiaVersion),
+                signal: controller.signal,
+            });
+
+            if (abortRef.current !== controller) return;
+
+            setUsuariosState(response.data.props.usuarios);
+
+            if (actualizarUrl) {
                 const url = new URL(window.location.href);
-                if (valor.trim()) {
-                    url.searchParams.set('busqueda', valor.trim());
+                if (params.busqueda) {
+                    url.searchParams.set('busqueda', params.busqueda);
                 } else {
                     url.searchParams.delete('busqueda');
                 }
-                url.searchParams.set('page', '1');
+                url.searchParams.set('page', String(params.page ?? 1));
                 window.history.replaceState({}, '', url.pathname + url.search);
-            }).catch(error => {
-                if (error.response && error.response.status === 409) {
-                    window.location.reload();
-                    return;
-                }
-                console.error("Error al buscar usuarios:", error);
-            }).finally(() => {
+            }
+        } catch (error) {
+            if (abortRef.current !== controller) return;
+            if (axios.isCancel(error) || error.code === 'ERR_CANCELED') return;
+
+            console.error('Error al cargar usuarios:', error);
+        } finally {
+            if (abortRef.current === controller) {
                 setBuscando(false);
-            });
+            }
+        }
+    }, [inertiaVersion]);
+
+    const aplicarBusqueda = useCallback((valor) => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            const termino = valor.trim();
+            recargarUsuarios(
+                { busqueda: termino || undefined, page: 1 },
+                { actualizarUrl: true },
+            );
         }, 350);
-    }, []);
+    }, [recargarUsuarios]);
 
     const irAPagina = (pagina) => {
         if (pagina < 1 || pagina > (usuariosState.last_page || 1)) return;
-        setBuscando(true);
-        axios.get(route('admin.usuarios'), {
-            params: { busqueda: busqueda.trim() || undefined, page: pagina },
-            headers: {
-                'X-Inertia': 'true',
-                'X-Inertia-Partial-Component': 'Admin/Usuarios',
-                'X-Inertia-Partial-Data': 'usuarios,filtros'
-            }
-        }).then(response => {
-            setUsuariosState(response.data.props.usuarios);
-            const url = new URL(window.location.href);
-            url.searchParams.set('page', pagina);
-            window.history.replaceState({}, '', url.pathname + url.search);
+        recargarUsuarios(
+            { busqueda: busqueda.trim() || undefined, page: pagina },
+            { actualizarUrl: true },
+        ).then(() => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        }).catch(error => {
-            if (error.response && error.response.status === 409) {
-                window.location.reload();
-                return;
-            }
-            console.error("Error al paginar usuarios:", error);
-        }).finally(() => {
-            setBuscando(false);
         });
     };
 
