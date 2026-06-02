@@ -243,6 +243,11 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
                     factura={modalExpediente.factura}
                 />
             )}
+            {modalCrear && (
+                <ModalFormFactura
+                    onClose={() => setModalCrear(false)}
+                />
+            )}
         </AppLayout>
     );
 }
