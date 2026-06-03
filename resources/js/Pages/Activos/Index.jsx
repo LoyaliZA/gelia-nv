@@ -12,6 +12,12 @@ import GuiaVisualActivos from './Partials/GuiaVisualActivos';
 import TarjetaActivoMobile from './Partials/TarjetaActivoMobile';
 import ResumenAlertasActivos from './Partials/ResumenAlertasActivos';
 import { ESTADO_BADGE, ESTADO_LABELS, getActivosCardClass, BTN_PRIMARY_CLASS, BTN_SECONDARY_CLASS, FAB_CLASS } from './Partials/activosFormStyles';
+import {
+    leerFiltrosActivosGuardados,
+    navegarListadoActivos,
+    paramsFiltrosActivos,
+    STORAGE_FILTROS_ACTIVOS,
+} from './Partials/navegarListadoActivos';
 
 function fotoPrincipal(activo) {
     const fotos = activo.fotos || [];
@@ -68,7 +74,7 @@ function FilaActivoDesktop({ activo }) {
                 </div>
             </td>
             <td className="px-4 py-4 text-right whitespace-nowrap">
-                <Link href={route('activos.show', activo.id)} className="inline-flex items-center gap-1 text-[10px] font-black uppercase" style={{ color: 'var(--color-primario)' }}>
+                <Link href={route('activos.show', activo.id)} prefetch={false} className="inline-flex items-center gap-1 text-[10px] font-black uppercase" style={{ color: 'var(--color-primario)' }}>
                     <Eye className="w-3.5 h-3.5" /> Ver
                 </Link>
             </td>
@@ -96,28 +102,19 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
         if (!filtrosRestaurados.current) {
             filtrosRestaurados.current = true;
             if (!hasActiveParams) {
-                const guardadosRaw = sessionStorage.getItem('activos_filtros_guardados');
-                if (guardadosRaw) {
-                    try {
-                        const guardados = JSON.parse(guardadosRaw);
-                        if (Object.keys(guardados).length > 0) {
-                            router.replace(route('activos.index'), { data: guardados, replace: true });
-                            return;
-                        }
-                    } catch (e) {
-                        // ignore
-                    }
+                const guardados = leerFiltrosActivosGuardados();
+                const params = paramsFiltrosActivos(guardados);
+                if (Object.keys(params).length > 0) {
+                    navegarListadoActivos({ replace: true, preserveState: true });
+                    return;
                 }
             }
         }
 
-        const aGuardar = {};
-        for (const [k, v] of Object.entries(filtros || {})) {
-            if (v !== '' && v !== null && v !== undefined) {
-                aGuardar[k] = v;
-            }
+        const aGuardar = paramsFiltrosActivos(filtros || {});
+        if (Object.keys(aGuardar).length > 0 || hasActiveParams) {
+            sessionStorage.setItem(STORAGE_FILTROS_ACTIVOS, JSON.stringify(aGuardar));
         }
-        sessionStorage.setItem('activos_filtros_guardados', JSON.stringify(aGuardar));
     }, [filtros]);
 
     const can = (permiso) => {
@@ -133,7 +130,11 @@ export default function Index({ auth, activos, tipos, departamentos, usuarios, f
 
     const irAPagina = (pagina) => {
         if (pagina < 1 || pagina > activos.last_page) return;
-        router.get(route('activos.index'), { ...filtros, page: pagina }, { preserveState: true, preserveScroll: true });
+        router.get(route('activos.index'), { ...filtros, page: pagina }, {
+            preserveState: true,
+            preserveScroll: true,
+            showProgress: false,
+        });
     };
 
     const mostrarGuiaNuevamente = () => {

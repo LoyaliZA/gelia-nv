@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
+import { navegarListadoActivos } from './Partials/navegarListadoActivos';
 import { ArrowLeft, User, UserMinus, UserPlus, ArrowRightLeft, Wrench, Ban, Edit2, MoreHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import DynamicActivoFields from './Partials/DynamicActivoFields';
@@ -201,12 +202,13 @@ export default function Show({ auth, activo, tipos, departamentos, terminosCondi
             <GeliaLoader isVisible={procesando} message="Procesando_" />
 
             <div className={`max-w-[1400px] mx-auto p-4 md:p-8 space-y-6 ${esMovil ? 'pb-44' : ''}`}>
-                <Link
-                    href={route('activos.index')}
+                <button
+                    type="button"
+                    onClick={() => navegarListadoActivos()}
                     className="inline-flex items-center gap-2 text-sm font-black uppercase theme-text-main theme-surface rounded-xl px-4 py-2 border theme-border hover:opacity-90 transition-opacity animate-page-reveal"
                 >
                     <ArrowLeft className="w-4 h-4" style={{ color: 'var(--color-primario)' }} /> Volver al listado
-                </Link>
+                </button>
 
                 <header className={getActivosCardClass('p-6 md:p-10')}>
                     <div className="flex flex-col lg:flex-row gap-6">

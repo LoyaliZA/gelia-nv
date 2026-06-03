@@ -27,6 +27,7 @@ import {
 } from '../utils/fontScale';
 import useWebPush from '@/hooks/useWebPush';
 import { GELIA_PREVENT_OVERFLOW_X } from '../utils/geliaTheme';
+import { STORAGE_FILTROS_ACTIVOS } from '../Pages/Activos/Partials/navegarListadoActivos';
 
 const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
@@ -38,7 +39,7 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     useEffect(() => {
         if (typeof window !== 'undefined' && !url.startsWith('/activos')) {
-            sessionStorage.removeItem('activos_filtros_guardados');
+            sessionStorage.removeItem(STORAGE_FILTROS_ACTIVOS);
         }
     }, [url]);
 

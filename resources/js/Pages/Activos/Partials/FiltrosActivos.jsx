@@ -4,6 +4,7 @@ import { Filter, Search, User, UserX, Wrench, RotateCcw, ChevronDown, ChevronUp,
 import { INPUT_CLASS, SELECT_CLASS, LABEL_CLASS, getActivosCardClass } from './activosFormStyles';
 import ModalEscanearCodigo from './ModalEscanearCodigo';
 import { resolverCodigoEscaneado } from './resolverCodigoEscaneado';
+import { STORAGE_FILTROS_ACTIVOS } from './navegarListadoActivos';
 
 const STORAGE_FILTROS_EXPANDIDOS = 'activos_filtros_expandidos';
 
@@ -132,13 +133,17 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
             Object.entries(merged).filter(([, v]) => v !== '' && v !== false && v !== null && v !== undefined)
         );
 
-        router.get(route('activos.index'), params, { preserveState: true, preserveScroll: true });
+        router.get(route('activos.index'), params, {
+            preserveState: true,
+            preserveScroll: true,
+            showProgress: false,
+        });
         onAplicar?.(merged);
     };
 
     const limpiar = () => {
-        sessionStorage.removeItem('activos_filtros_guardados');
-        router.get(route('activos.index'));
+        sessionStorage.removeItem(STORAGE_FILTROS_ACTIVOS);
+        router.get(route('activos.index'), {}, { preserveState: true, preserveScroll: true, showProgress: false });
     };
 
     const manejarCodigoEscaneado = async (codigo) => {

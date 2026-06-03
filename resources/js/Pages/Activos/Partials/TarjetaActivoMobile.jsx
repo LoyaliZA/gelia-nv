@@ -7,6 +7,7 @@ export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimient
     return (
         <Link
             href={route('activos.show', activo.id)}
+            prefetch={false}
             className={`${getActivosCardClass('p-4 md:p-5 flex flex-col gap-3 block hover:opacity-95 transition-opacity active:scale-[0.99]')}`}
         >
             <div className="flex items-start gap-3">
