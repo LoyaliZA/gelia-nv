@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm, usePage } from '@inertiajs/react';
 import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered, FileText, AlertTriangle } from 'lucide-react';
+import { soloDigitosNumeroCliente } from '../../../utils/numeroClienteInput';
 
-const numeroPareceNombre = (valor) => /^[\p{L}\s]{12,}$/u.test(String(valor || '').trim());
 const nombrePareceNumero = (valor) => /^\d+(\.\d+)?$/.test(String(valor || '').trim());
 
 export default function ModalFormCliente({ onClose, modoModal, clienteActual, tiposCliente = [], vendedores = [], listas = [] }) {
@@ -12,7 +12,7 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
     
     // --- SECCIÓN: INICIALIZACIÓN DE FORMULARIO 360 ---
     const { data, setData, post, put, processing, errors } = useForm({
-        numero_cliente: clienteActual?.numero_cliente || '',
+        numero_cliente: soloDigitosNumeroCliente(clienteActual?.numero_cliente || ''),
         nombre: clienteActual?.nombre || '',
         vendedor_id: clienteActual?.vendedor_id || '',
         es_heredado: clienteActual?.es_heredado === 1 || clienteActual?.es_heredado === true,
@@ -31,8 +31,8 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
     });
 
     const alertaIntercambio = useMemo(() => {
-        if (numeroPareceNombre(data.numero_cliente) || nombrePareceNumero(data.nombre)) {
-            return 'Revise los campos: el número no debe parecer un nombre y el nombre no debe ser solo dígitos.';
+        if (nombrePareceNumero(data.nombre)) {
+            return 'El nombre no puede ser solo dígitos; verifique que no sea el número de cliente.';
         }
         return null;
     }, [data.numero_cliente, data.nombre]);
@@ -74,12 +74,20 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                             <div className="space-y-2">
                                 <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Número Cliente</label>
                                 <input 
-                                    type="text" 
+                                    type="text"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    autoComplete="off"
                                     value={data.numero_cliente} 
-                                    onChange={e => setData('numero_cliente', e.target.value)}
+                                    onChange={e => setData('numero_cliente', soloDigitosNumeroCliente(e.target.value))}
+                                    onPaste={e => {
+                                        e.preventDefault();
+                                        const texto = e.clipboardData?.getData('text') ?? '';
+                                        setData('numero_cliente', soloDigitosNumeroCliente(texto));
+                                    }}
                                     className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main theme-placeholder outline-none focus:ring-2 transition-all shadow-sm"
                                     style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                    placeholder="W-0000"
+                                    placeholder="Ej. 8930"
                                     onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
                                     onBlur={e => e.target.style.borderColor = ''}
                                 />

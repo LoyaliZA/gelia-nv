@@ -37,8 +37,7 @@ class GuardarClienteRequest extends FormRequest
             'required',
             'string',
             'max:32',
-            'regex:/^[A-Za-z0-9\-]+$/',
-            'not_regex:/^[\p{L}\s]{12,}$/u',
+            'regex:/^\d+$/',
         ];
 
         $permiteEmergencia = $this->boolean('correccion_emergencia')
@@ -80,8 +79,7 @@ class GuardarClienteRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'numero_cliente.regex' => 'El número de cliente solo puede contener letras, números y guiones (sin espacios).',
-            'numero_cliente.not_regex' => 'El número de cliente parece un nombre; verifique que no esté en el campo equivocado.',
+            'numero_cliente.regex' => 'El número de cliente solo puede contener dígitos (0-9).',
             'numero_cliente.unique' => 'Ese número ya pertenece a otro cliente. Use corrección de emergencia si debe reasignarlo.',
             'nombre.regex' => 'El nombre debe incluir al menos una letra.',
             'nombre.not_regex' => 'El nombre no puede ser solo números; verifique que no sea el número de cliente.',

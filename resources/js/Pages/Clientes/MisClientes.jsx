@@ -4,6 +4,7 @@ import { Users, Plus, X, Hash, User, Calendar, ShieldAlert } from 'lucide-react'
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
 import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
+import { soloDigitosNumeroCliente } from '../../utils/numeroClienteInput';
 
 export default function MisClientes({ auth, clientes }) {
     /*
@@ -196,8 +197,16 @@ export default function MisClientes({ auth, clientes }) {
                                     </div>
                                     <input
                                         type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        autoComplete="off"
                                         value={data.numero_cliente}
-                                        onChange={(e) => setData('numero_cliente', e.target.value)}
+                                        onChange={(e) => setData('numero_cliente', soloDigitosNumeroCliente(e.target.value))}
+                                        onPaste={(e) => {
+                                            e.preventDefault();
+                                            const texto = e.clipboardData?.getData('text') ?? '';
+                                            setData('numero_cliente', soloDigitosNumeroCliente(texto));
+                                        }}
                                         className={`w-full pl-11 pr-4 py-3 theme-surface border rounded-xl theme-text-main text-sm font-bold outline-none transition-all shadow-sm ${errors.numero_cliente ? 'border-red-500 focus:ring-1 focus:ring-red-500' : 'theme-border focus:border-[var(--color-primario)]'}`}
                                         placeholder="Ej. 10045"
                                         autoFocus
