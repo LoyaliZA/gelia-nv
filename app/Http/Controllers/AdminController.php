@@ -367,44 +367,89 @@ class AdminController extends Controller
     }
 
     // --- MÓDULOS RESTANTES ---
-    public function clientes(): Response
+    public function clientes(Request $request): Response
     {
-        // 1. Cargamos clientes con sus relaciones para la tabla
-        $clientes = Cliente::with(['vendedor', 'listaDescuento', 'tipo'])->get();
+        $query = Cliente::with(['vendedor', 'listaDescuento', 'tipo']);
 
-        // 2. Obtenemos las vendedoras
-        $vendedores = User::all();
+        if ($request->filled('q')) {
+            $termino = trim($request->q);
+            $query->where(function ($sub) use ($termino) {
+                if (preg_match('/^\d/', $termino)) {
+                    $sub->where('numero_cliente', 'like', "{$termino}%");
+                }
+                $sub->orWhere('nombre', 'like', "{$termino}%")
+                    ->orWhere('nombre', 'like', "%{$termino}%");
+            });
+        }
 
-        // 3. Obtenemos el catálogo de tipos de cliente
+        if ($request->filled('lista_id')) {
+            $query->where('lista_actual_id', $request->integer('lista_id'));
+        }
+
+        if ($request->tipo === 'heredados') {
+            $query->where('es_heredado', true);
+        } elseif ($request->tipo === 'directos') {
+            $query->where('es_heredado', false);
+        }
+
+        if ($request->estado === 'inactivos') {
+            $query->where('es_inactivo', true);
+        } elseif ($request->estado === 'activos') {
+            $query->where('es_inactivo', false);
+        }
+
+        $orden = $request->input('orden', 'numero_asc');
+        match ($orden) {
+            'numero_desc' => $query->ordenarPorNumeroCliente('desc'),
+            'monto_asc'   => $query->orderBy('monto_venta_actual'),
+            'monto_desc'  => $query->orderByDesc('monto_venta_actual'),
+            default       => $query->ordenarPorNumeroCliente('asc'),
+        };
+
+        $vendedores = User::whereHas('roles', function ($q) {
+            $q->where('name', 'colaborador');
+        })
+            ->orderBy('name')
+            ->get(['id', 'name', 'username']);
+
         try {
             $tipos_cliente = CatalogoTipoCliente::where('activo', true)->orderBy('nombre')->get();
         } catch (\Exception $e) {
-            $tipos_cliente = []; 
+            $tipos_cliente = [];
         }
 
-        // 4. Obtenemos el catálogo de listas de descuento activas (LO NUEVO)
         $listas = CatalogoListaDescuento::where('activo', true)
             ->orderBy('monto_requerido', 'desc')
             ->get();
 
-        // 5. Enviamos todo a la vista de React
         return Inertia::render('Admin/Clientes', [
-            'clientes'      => $clientes,
+            'clientes'      => $query->paginate(25)->withQueryString(),
             'vendedores'    => $vendedores,
             'tipos_cliente' => $tipos_cliente,
-            'listas'        => $listas, // <-- INYECTADO PARA EL MODAL 360
+            'listas'        => $listas,
+            'filtros'       => $request->only(['q', 'lista_id', 'tipo', 'estado', 'orden']),
         ]);
     }
 
     public function importarClientes(Request $request, ImportarClientesWizerpService $importadorService)
     {
-        Gate::authorize('clientes.carga_masiva'); // <-- Se actualizó al permiso atómico real
+        Gate::authorize('clientes.carga_masiva');
 
         $request->validate(['archivo' => 'required|mimes:csv,txt']);
 
+        @set_time_limit(0);
+
         try {
-            $importadorService->ejecutar($request->file('archivo'));
-            return back()->with('success', 'Base de datos de clientes actualizada correctamente.');
+            $resultado = $importadorService->ejecutar($request->file('archivo'));
+            $inactivos = $resultado['clientes_marcados_inactivos'] ?? 0;
+            $mensaje = 'Base de datos de clientes actualizada correctamente.';
+            if ($inactivos > 0) {
+                $mensaje .= " {$inactivos} cliente(s) marcado(s) como inactivo(s).";
+            }
+
+            return back()
+                ->with('success', $mensaje)
+                ->with('reporte_importacion', $resultado['ascensos'] ?? []);
         } catch (\Exception $e) {
             return back()->withErrors(['archivo' => 'Error procesando archivo. Verifique el formato de las cabeceras. Detalles: ' . $e->getMessage()]);
         }
@@ -412,7 +457,9 @@ class AdminController extends Controller
 
     public function historialCliente(Cliente $cliente)
     {
-        return response()->json($cliente->historialMontos()->get());
+        return response()->json(
+            $cliente->historialMontos()->latest()->paginate(50)
+        );
     }
 
     public function comisiones(): Response

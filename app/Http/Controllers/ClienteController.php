@@ -26,6 +26,7 @@ class ClienteController extends Controller
             'monto_venta_actual'       => 'nullable|numeric|min:0',
             'lista_actual_id'          => 'nullable|exists:catalogo_listas_descuento,id',
             'lista_bloqueada'          => 'nullable|boolean',
+            'es_inactivo'              => 'nullable|boolean',
             'rfc'                      => 'nullable|string|max:13',
             'codigo_postal'            => 'nullable|string|regex:/^\d{5}$/',
             'regimen_fiscal'           => 'nullable|string|max:255',
@@ -37,6 +38,7 @@ class ClienteController extends Controller
         // Forzamos la captura del booleano para que no dependa de si el input llegó o no
         $validated['es_heredado'] = $request->boolean('es_heredado');
         $validated['lista_bloqueada'] = $request->boolean('lista_bloqueada');
+        $validated['es_inactivo'] = $request->boolean('es_inactivo');
 
         Cliente::create($validated);
 
@@ -56,6 +58,7 @@ class ClienteController extends Controller
             'monto_venta_actual'       => 'nullable|numeric|min:0',
             'lista_actual_id'          => 'nullable|exists:catalogo_listas_descuento,id',
             'lista_bloqueada'          => 'nullable|boolean',
+            'es_inactivo'              => 'nullable|boolean',
             'rfc'                      => 'nullable|string|max:13',
             'codigo_postal'            => 'nullable|string|regex:/^\d{5}$/',
             'regimen_fiscal'           => 'nullable|string|max:255',
@@ -68,6 +71,7 @@ class ClienteController extends Controller
         // Esto permite "desactivar" la herencia si ya estaba activa.
         $validated['es_heredado'] = $request->boolean('es_heredado');
         $validated['lista_bloqueada'] = $request->boolean('lista_bloqueada');
+        $validated['es_inactivo'] = $request->boolean('es_inactivo');
 
         $cliente->update($validated);
 
@@ -85,11 +89,11 @@ class ClienteController extends Controller
         $request->validate(['archivo' => 'required|file|mimes:csv,txt']);
 
         try {
-            $reporte = $importarService->ejecutar($request->file('archivo'));
-            
+            $resultado = $importarService->ejecutar($request->file('archivo'));
+
             return back()
                 ->with('success', 'Carga masiva procesada y listas recalculadas correctamente.')
-                ->with('reporte_importacion', $reporte);
+                ->with('reporte_importacion', $resultado['ascensos'] ?? []);
                 
         } catch (\Exception $e) {
             return back()->withErrors(['archivo' => 'Error al procesar el archivo: ' . $e->getMessage()]);
@@ -101,9 +105,11 @@ class ClienteController extends Controller
         $usuarioId = Auth::id();
 
         // Corrección en los nombres de las relaciones según Cliente.php
-        $clientes = Cliente::with(['listaDescuento', 'tipo']) 
-            ->where('vendedor_original_id', $usuarioId)
-            ->orWhere('vendedor_id', $usuarioId)
+        $clientes = Cliente::with(['listaDescuento', 'tipo'])
+            ->where(function ($q) use ($usuarioId) {
+                $q->where('vendedor_original_id', $usuarioId)
+                    ->orWhere('vendedor_id', $usuarioId);
+            })
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
@@ -171,10 +177,13 @@ class ClienteController extends Controller
     public function obtenerEspeciales()
     {
         $clientesEspeciales = Cliente::with(['listaDescuento'])
-            ->where('lista_bloqueada', true)
-            ->orWhereHas('listaDescuento', function($q) {
-                $q->whereIn('nombre', ['COLABORADORES', 'PLATAFORMAS']);
+            ->where(function ($q) {
+                $q->where('lista_bloqueada', true)
+                    ->orWhereHas('listaDescuento', function ($sub) {
+                        $sub->whereIn('nombre', ['COLABORADORES', 'PLATAFORMAS']);
+                    });
             })
+            ->limit(500)
             ->get(['id', 'numero_cliente', 'nombre', 'lista_actual_id', 'lista_bloqueada']);
 
         return response()->json($clientesEspeciales);

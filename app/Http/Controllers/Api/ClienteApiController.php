@@ -4,44 +4,66 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cliente;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ClienteApiController extends Controller
 {
-    // --- SECCIÓN: BÚSQUEDA Y LISTADO EN TIEMPO REAL ---
     public function index(Request $request): JsonResponse
     {
-        $termino = $request->query('q', '');
+        $termino = trim($request->query('q', ''));
 
-        $clientes = Cliente::with('listaDescuento')
-            ->when($termino, function($query, $termino) {
-                $query->where('numero_cliente', 'like', "%{$termino}%")
-                      ->orWhere('nombre', 'like', "%{$termino}%");
-            })
-            ->limit(50)
-            ->get()
-            ->map(function($cliente) {
-                return [
-                    'id' => $cliente->id,
-                    'numero_cliente' => $cliente->numero_cliente,
-                    'nombre' => $cliente->nombre,
-                    'nombre_razon_social' => $cliente->nombre_razon_social,
-                    'rfc' => $cliente->rfc,
-                    'es_heredado' => (bool) $cliente->es_heredado,
-                    'lista_actual_id' => $cliente->lista_actual_id, // Añadido para comparación exacta
-                    'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
-                    'monto_venta_actual' => (float) $cliente->monto_venta_actual // Añadido para el motor de decisión
-                ];
-            });
+        if (mb_strlen($termino) < 2) {
+            return response()->json([]);
+        }
 
-        return response()->json($clientes);
+        $query = Cliente::query()
+            ->select([
+                'id',
+                'numero_cliente',
+                'nombre',
+                'nombre_razon_social',
+                'rfc',
+                'es_heredado',
+                'es_inactivo',
+                'lista_actual_id',
+                'monto_venta_actual',
+            ])
+            ->with('listaDescuento:id,nombre');
+
+        $this->aplicarBusqueda($query, $termino);
+
+        $clientes = $query->limit(50)->get()->map(fn ($cliente) => [
+            'id' => $cliente->id,
+            'numero_cliente' => $cliente->numero_cliente,
+            'nombre' => $cliente->nombre,
+            'nombre_razon_social' => $cliente->nombre_razon_social,
+            'rfc' => $cliente->rfc,
+            'es_heredado' => (bool) $cliente->es_heredado,
+            'es_inactivo' => (bool) $cliente->es_inactivo,
+            'lista_actual_id' => $cliente->lista_actual_id,
+            'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
+            'monto_venta_actual' => (float) $cliente->monto_venta_actual,
+        ]);
+
+        return response()
+            ->json($clientes)
+            ->header('Cache-Control', 'private, max-age=60');
     }
 
-    // --- SECCIÓN: BÚSQUEDA EXACTA ---
     public function show($numero): JsonResponse
     {
-        $cliente = Cliente::with('listaDescuento')
+        $cliente = Cliente::query()
+            ->select([
+                'id',
+                'numero_cliente',
+                'nombre',
+                'es_heredado',
+                'es_inactivo',
+                'lista_actual_id',
+                'monto_venta_actual',
+            ])
+            ->with('listaDescuento:id,nombre')
             ->where('numero_cliente', $numero)
             ->first();
 
@@ -54,9 +76,25 @@ class ClienteApiController extends Controller
             'id' => $cliente->id,
             'nombre' => $cliente->nombre,
             'es_heredado' => (bool) $cliente->es_heredado,
-            'lista_actual_id' => $cliente->lista_actual_id, // Añadido
+            'es_inactivo' => (bool) $cliente->es_inactivo,
+            'lista_actual_id' => $cliente->lista_actual_id,
             'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
-            'monto_venta_actual' => (float) $cliente->monto_venta_actual // Añadido
+            'monto_venta_actual' => (float) $cliente->monto_venta_actual,
         ]);
+    }
+
+    private function aplicarBusqueda($query, string $termino): void
+    {
+        $query->where(function ($sub) use ($termino) {
+            if (preg_match('/^\d/', $termino)) {
+                $sub->where('numero_cliente', 'like', "{$termino}%");
+            }
+
+            $sub->orWhere('nombre', 'like', "{$termino}%");
+
+            if (mb_strlen($termino) >= 3) {
+                $sub->orWhere('nombre', 'like', "%{$termino}%");
+            }
+        });
     }
 }

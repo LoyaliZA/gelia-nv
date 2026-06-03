@@ -76,6 +76,7 @@ export default function ModalFormOperativa({ onClose, procesos = [], bancos = []
     const [buscandoCliente, setBuscandoCliente] = useState(false);
     const [mostrarDropdown, setMostrarDropdown] = useState(false);
     const temporizadorBusqueda = useRef(null);
+    const abortBusquedaCliente = useRef(null);
 
     const { data, setData, post, processing, errors, reset } = useForm({
         numero_cliente: '',
@@ -100,16 +101,31 @@ export default function ModalFormOperativa({ onClose, procesos = [], bancos = []
     }, [procesoInicialId]);
 
     const fetchClientes = async (term) => {
-        if (!term) return;
+        const limpio = term.trim();
+        if (limpio.length < 2) {
+            setListaClientes([]);
+            setMostrarDropdown(false);
+            return;
+        }
+        abortBusquedaCliente.current?.abort();
+        const controller = new AbortController();
+        abortBusquedaCliente.current = controller;
         setBuscandoCliente(true);
         setMostrarDropdown(true);
         try {
-            const response = await axios.get(`/api/clientes?q=${term}`);
+            const response = await axios.get('/api/clientes', {
+                params: { q: limpio },
+                signal: controller.signal,
+            });
             setListaClientes(response.data);
-        } catch {
-            setListaClientes([]);
+        } catch (err) {
+            if (!axios.isCancel(err) && err?.code !== 'ERR_CANCELED') {
+                setListaClientes([]);
+            }
         } finally {
-            setBuscandoCliente(false);
+            if (!controller.signal.aborted) {
+                setBuscandoCliente(false);
+            }
         }
     };
 
@@ -118,6 +134,7 @@ export default function ModalFormOperativa({ onClose, procesos = [], bancos = []
         setInfoCliente(null);
         if (temporizadorBusqueda.current) clearTimeout(temporizadorBusqueda.current);
         if (valor.trim() === '') {
+            abortBusquedaCliente.current?.abort();
             setMostrarDropdown(false);
             setListaClientes([]);
             return;

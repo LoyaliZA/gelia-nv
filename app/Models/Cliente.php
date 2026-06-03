@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,6 +26,7 @@ class Cliente extends Model
         'vendedor_original_id', // Agregado a la asignación masiva
         'monto_venta_actual',
         'es_heredado',
+        'es_inactivo',
         'catalogo_tipo_cliente_id',
         'lista_bloqueada', // <-- NUEVO CAMPO PARA CONTROLAR BLOQUEO DE LISTA
     ];
@@ -32,6 +34,7 @@ class Cliente extends Model
     protected $casts = [
         'monto_venta_actual' => 'decimal:2',
         'es_heredado' => 'boolean',
+        'es_inactivo' => 'boolean',
         'lista_bloqueada' => 'boolean',
     ];
 
@@ -65,5 +68,28 @@ class Cliente extends Model
     {
         // <-- CORREGIDO: Se quitó la "s" en la llave foránea
         return $this->belongsTo(CatalogoTipoCliente::class, 'catalogo_tipo_cliente_id');
+    }
+
+    public function historialMontos(): HasMany
+    {
+        return $this->hasMany(HistorialMontoCliente::class);
+    }
+
+    /**
+     * Orden numérico del número de cliente (menor ↔ mayor), con desempate alfabético.
+     */
+    public function scopeOrdenarPorNumeroCliente(Builder $query, string $direction = 'asc'): Builder
+    {
+        $dir = strtolower($direction) === 'desc' ? 'desc' : 'asc';
+        $driver = $query->getConnection()->getDriverName();
+
+        $cast = match ($driver) {
+            'mysql', 'mariadb' => 'CAST(numero_cliente AS UNSIGNED)',
+            default => 'CAST(numero_cliente AS INTEGER)',
+        };
+
+        return $query
+            ->orderByRaw("{$cast} {$dir}")
+            ->orderBy('numero_cliente', $dir);
     }
 }

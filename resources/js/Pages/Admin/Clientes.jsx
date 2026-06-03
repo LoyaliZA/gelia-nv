@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Head, useForm, usePage } from '@inertiajs/react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Head, useForm, usePage, router } from '@inertiajs/react';
 import {
     Users, Upload, Search,
     FileSpreadsheet, TrendingUp,
     CheckCircle, Database, Edit3, ChevronDown, Sparkles,
-    ChevronLeft, ChevronRight, Plus, Shield
+    Plus, Shield, X,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
+import GeliaPaginacion from '../../Components/GeliaPaginacion';
 
 // --- IMPORTACIÓN DEL PARCIAL ---
 import ModalFormCliente from './Partials/ModalFormCliente';
@@ -58,16 +59,16 @@ const ModalReporteImportacion = ({ reporte, onClose }) => {
     );
 };
 
-export default function Clientes({ auth, clientes = [], vendedores = [], tipos_cliente = [], listas = [] }) {
+export default function Clientes({ auth, clientes, vendedores = [], tipos_cliente = [], listas = [], filtros = {} }) {
 
     // --- SECCIÓN: ESTADOS GLOBALES ---
-    const [busqueda, setBusqueda] = useState('');
-    const [filtroLista, setFiltroLista] = useState('Todas');
-    const [filtroTipo, setFiltroTipo] = useState('Todos');
+    const [busqueda, setBusqueda] = useState(filtros.q || '');
+    const [filtroListaId, setFiltroListaId] = useState(filtros.lista_id ? String(filtros.lista_id) : '');
+    const [filtroTipo, setFiltroTipo] = useState(filtros.tipo || '');
+    const [filtroEstado, setFiltroEstado] = useState(filtros.estado || '');
+    const [filtroOrden, setFiltroOrden] = useState(filtros.orden || 'numero_asc');
     const [dragActive, setDragActive] = useState(false);
-
-    const [paginaActual, setPaginaActual] = useState(1);
-    const itemsPorPagina = 10;
+    const [cargandoLista, setCargandoLista] = useState(false);
 
     // Control del Modal unificado
     const [modalConfig, setModalConfig] = useState({ abierto: false, modo: null, cliente: null });
@@ -78,17 +79,68 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
     });
 
     useEffect(() => {
-        setPaginaActual(1);
-    }, [busqueda, filtroLista, filtroTipo]);
+        setBusqueda(filtros.q || '');
+        setFiltroListaId(filtros.lista_id ? String(filtros.lista_id) : '');
+        setFiltroTipo(filtros.tipo || '');
+        setFiltroEstado(filtros.estado || '');
+        setFiltroOrden(filtros.orden || 'numero_asc');
+    }, [filtros.q, filtros.lista_id, filtros.tipo, filtros.estado, filtros.orden]);
+
+    const paramsFiltros = useCallback(() => ({
+        q: busqueda.trim() || undefined,
+        lista_id: filtroListaId || undefined,
+        tipo: filtroTipo || undefined,
+        estado: filtroEstado || undefined,
+        orden: filtroOrden || 'numero_asc',
+    }), [busqueda, filtroListaId, filtroTipo, filtroEstado, filtroOrden]);
+
+    const recargarClientes = useCallback((extra = {}) => {
+        router.get(route('admin.clientes'), { ...paramsFiltros(), ...extra }, {
+            only: ['clientes', 'filtros'],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            showProgress: false,
+            onStart: () => setCargandoLista(true),
+            onFinish: () => setCargandoLista(false),
+        });
+    }, [paramsFiltros]);
+
+    useEffect(() => {
+        const t = setTimeout(() => {
+            const qActual = filtros.q || '';
+            const listaActual = filtros.lista_id ? String(filtros.lista_id) : '';
+            const tipoActual = filtros.tipo || '';
+            const estadoActual = filtros.estado || '';
+            const ordenActual = filtros.orden || 'numero_asc';
+            if (
+                busqueda !== qActual
+                || filtroListaId !== listaActual
+                || filtroTipo !== tipoActual
+                || filtroEstado !== estadoActual
+                || filtroOrden !== ordenActual
+            ) {
+                recargarClientes({ page: 1 });
+            }
+        }, 400);
+        return () => clearTimeout(t);
+    }, [busqueda, filtroListaId, filtroTipo, filtroEstado, filtroOrden, filtros, recargarClientes]);
+
+    const irAPagina = (pagina) => {
+        if (pagina < 1 || pagina > (clientes?.last_page || 1)) return;
+        recargarClientes({ page: pagina });
+    };
 
     // --- SECCIÓN: MANEJO DE ACCIONES ---
     const handleUpload = (e) => {
         e.preventDefault();
+        if (formCarga.processing) return;
         formCarga.post(route('admin.clientes.importar'), {
+            preserveScroll: true,
             onSuccess: () => {
                 formCarga.reset();
-                alert('Base de datos sincronizada correctamente.');
-            }
+                router.reload({ only: ['clientes'] });
+            },
         });
     };
 
@@ -135,27 +187,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
         }
     };
 
-    // --- SECCIÓN: FILTRADO Y PAGINACIÓN ---
-    const listasUnicas = ['Todas', ...new Set(clientes.map(c => c.lista_descuento?.nombre || 'Sin Lista'))];
-
-    const clientesFiltrados = clientes.filter(cliente => {
-        const matchBusqueda = cliente.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-            cliente.numero_cliente.toLowerCase().includes(busqueda.toLowerCase());
-
-        const nombreLista = cliente.lista_descuento?.nombre || 'Sin Lista';
-        const matchLista = filtroLista === 'Todas' || nombreLista === filtroLista;
-
-        const matchTipo = filtroTipo === 'Todos' ||
-            (filtroTipo === 'Heredados' ? cliente.es_heredado : !cliente.es_heredado);
-
-        return matchBusqueda && matchLista && matchTipo;
-    });
-
-    const indiceUltimoItem = paginaActual * itemsPorPagina;
-    const indicePrimerItem = indiceUltimoItem - itemsPorPagina;
-    const clientesPaginados = clientesFiltrados.slice(indicePrimerItem, indiceUltimoItem);
-    const totalPaginas = Math.ceil(clientesFiltrados.length / itemsPorPagina);
-
+    const listaClientes = clientes?.data || [];
     const activeCardClass = geliaCardClass('relative z-10');
 
     return (
@@ -283,12 +315,18 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                 )}
 
                                 <button
+                                    type="submit"
                                     disabled={formCarga.processing || !formCarga.data.archivo}
                                     className="w-full py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all hover:scale-105 shadow-xl disabled:opacity-50 disabled:scale-100 outline-none flex justify-center items-center gap-2"
                                     style={{ backgroundColor: 'var(--color-primario)' }}
                                 >
                                     <Database className="w-4 h-4" /> {formCarga.processing ? 'Sincronizando...' : 'Actualizar BD_'}
                                 </button>
+                                {formCarga.processing && (
+                                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 text-center">
+                                        No cierre esta pestaña hasta que termine la sincronización.
+                                    </p>
+                                )}
                             </form>
 
                             <div className="mt-8 pt-6 border-t theme-border space-y-4">
@@ -300,10 +338,13 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                     El sistema detecta automáticamente los campos. Puedes enviar un archivo solo con las columnas necesarias. <br /><br />
                                     <strong style={{ color: 'var(--color-primario)' }}>numero_cliente</strong> (Requerido)<br />
                                     <strong style={{ color: 'var(--color-primario)' }}>nombre</strong><br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7)<br />
+                                    <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = inactivo; sin columna = solo actualiza monto)<br />
                                     <strong style={{ color: 'var(--color-primario)' }}>monto_venta_actual</strong><br />
                                     <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)<br />
                                     <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)<br /><br />
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-amber-600">
+                                        Ejecute la carga antes de las 09:00 para evitar conflicto con el rechazo automático de pagos vencidos.
+                                    </span><br /><br />
                                     <span className="text-[9px] font-black uppercase tracking-widest text-blue-500">Datos fiscales (opcionales, importación futura):</span><br />
                                     <strong style={{ color: 'var(--color-primario)' }}>rfc</strong>, <strong style={{ color: 'var(--color-primario)' }}>codigo_postal</strong>, <strong style={{ color: 'var(--color-primario)' }}>regimen_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>correo_electronico</strong>, <strong style={{ color: 'var(--color-primario)' }}>uso_factura</strong>, <strong style={{ color: 'var(--color-primario)' }}>nombre_razon_social</strong>
                                 </p>
@@ -315,7 +356,7 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                     <div className="lg:col-span-2 space-y-8">
                         <section className={`${activeCardClass} p-8 space-y-8`} style={{ animationDelay: '200ms' }}>
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                                <div className="md:col-span-6 relative">
+                                <div className="md:col-span-12 relative">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
                                     <input
                                         type="text"
@@ -331,15 +372,16 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
 
                                 <div className="md:col-span-3 relative">
                                     <select
-                                        value={filtroLista}
-                                        onChange={e => setFiltroLista(e.target.value)}
+                                        value={filtroListaId}
+                                        onChange={e => setFiltroListaId(e.target.value)}
                                         className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
                                         style={{ '--tw-ring-color': 'var(--color-primario)' }}
                                         onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
                                         onBlur={e => e.target.style.borderColor = ''}
                                     >
-                                        {listasUnicas.map(lista => (
-                                            <option key={lista} value={lista}>{lista}</option>
+                                        <option value="">Todas las listas</option>
+                                        {listas.map(lista => (
+                                            <option key={lista.id} value={String(lista.id)}>{lista.nombre}</option>
                                         ))}
                                     </select>
                                     <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
@@ -356,9 +398,45 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                         onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
                                         onBlur={e => e.target.style.borderColor = ''}
                                     >
-                                        <option value="Todos">TODOS</option>
-                                        <option value="Directos">DIRECTOS</option>
-                                        <option value="Heredados">HEREDADOS</option>
+                                        <option value="">TODOS</option>
+                                        <option value="directos">DIRECTOS</option>
+                                        <option value="heredados">HEREDADOS</option>
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                    </div>
+                                </div>
+
+                                <div className="md:col-span-3 relative">
+                                    <select
+                                        value={filtroEstado}
+                                        onChange={e => setFiltroEstado(e.target.value)}
+                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    >
+                                        <option value="">ESTADO: TODOS</option>
+                                        <option value="activos">ACTIVOS</option>
+                                        <option value="inactivos">INACTIVOS</option>
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                    </div>
+                                </div>
+
+                                <div className="md:col-span-3 relative">
+                                    <select
+                                        value={filtroOrden}
+                                        onChange={e => {
+                                            setFiltroOrden(e.target.value);
+                                            recargarClientes({ page: 1, orden: e.target.value });
+                                        }}
+                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    >
+                                        <option value="numero_asc">NÚMERO (MENOR A MAYOR)</option>
+                                        <option value="numero_desc">NÚMERO (MAYOR A MENOR)</option>
+                                        <option value="monto_desc">MAYOR MONTO</option>
+                                        <option value="monto_asc">MENOR MONTO</option>
                                     </select>
                                     <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
                                         <ChevronDown className="w-4 h-4 theme-text-muted" />
@@ -366,15 +444,15 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                {clientesFiltrados.length === 0 ? (
+                            <div className={`space-y-4 ${cargandoLista ? 'opacity-60 pointer-events-none' : ''}`}>
+                                {listaClientes.length === 0 ? (
                                     <div className="text-center py-16 theme-element border-2 border-dashed theme-border rounded-[2rem]">
                                         <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
                                         <h3 className="text-lg font-black italic uppercase theme-text-main">Sin resultados</h3>
                                         <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted mt-2">No se encontraron coincidencias.</p>
                                     </div>
                                 ) : (
-                                    clientesPaginados.map((cliente) => (
+                                    listaClientes.map((cliente) => (
                                         <div key={cliente.id} className="theme-element border theme-border p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 transition-all duration-150 hover:ring-2 hover:ring-[var(--color-primario)]/40 hover:shadow-md group">
 
                                             <div className="flex items-center gap-4 w-full md:w-auto">
@@ -388,6 +466,11 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                                     </h3>
                                                     <div className="flex flex-wrap items-center gap-2 mt-2">
                                                         {renderBadgeLista(cliente.lista_descuento?.nombre)}
+                                                        {(cliente.es_inactivo === true || cliente.es_inactivo === 1) && (
+                                                            <span className="px-2 py-1 bg-amber-500/10 text-amber-600 border border-amber-500/30 text-[9px] font-black uppercase tracking-widest rounded-md">
+                                                                Inactivo
+                                                            </span>
+                                                        )}
                                                         <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest theme-text-muted">
                                                             <TrendingUp className="w-3 h-3 text-emerald-500" />
                                                             {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(cliente.monto_venta_actual)}
@@ -433,55 +516,13 @@ export default function Clientes({ auth, clientes = [], vendedores = [], tipos_c
                                     ))
                                 )}
 
-                                {totalPaginas > 1 && (
-                                    <div className="flex flex-col md:flex-row items-center justify-between pt-8 mt-4 border-t theme-border gap-4">
-                                        <span className="text-[10px] font-black theme-text-muted uppercase tracking-widest">
-                                            Viendo {indicePrimerItem + 1} al {Math.min(indiceUltimoItem, clientesFiltrados.length)} de {clientesFiltrados.length}
-                                        </span>
-
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => setPaginaActual(p => Math.max(1, p - 1))}
-                                                disabled={paginaActual === 1}
-                                                className="p-3 theme-element border theme-border rounded-xl disabled:opacity-50 transition-all hover:shadow-md outline-none"
-                                                style={{ color: paginaActual === 1 ? 'var(--theme-text-muted)' : 'var(--color-primario)' }}
-                                            >
-                                                <ChevronLeft className="w-4 h-4" />
-                                            </button>
-
-                                            <div className="flex items-center gap-1">
-                                                {Array.from({ length: totalPaginas }, (_, i) => i + 1)
-                                                    .filter(num => num === 1 || num === totalPaginas || Math.abs(paginaActual - num) <= 1)
-                                                    .map((num, i, arr) => (
-                                                        <React.Fragment key={num}>
-                                                            {i > 0 && arr[i - 1] !== num - 1 && (
-                                                                <span className="text-xs theme-text-muted px-1 font-bold">...</span>
-                                                            )}
-                                                            <button
-                                                                onClick={() => setPaginaActual(num)}
-                                                                className={`w-10 h-10 rounded-xl text-xs font-black transition-all outline-none shadow-sm ${paginaActual === num
-                                                                        ? 'text-white'
-                                                                        : 'theme-surface border theme-border theme-text-muted hover:scale-105'
-                                                                    }`}
-                                                                style={{ backgroundColor: paginaActual === num ? 'var(--color-primario)' : '' }}
-                                                            >
-                                                                {num}
-                                                            </button>
-                                                        </React.Fragment>
-                                                    ))
-                                                }
-                                            </div>
-
-                                            <button
-                                                onClick={() => setPaginaActual(p => Math.min(totalPaginas, p + 1))}
-                                                disabled={paginaActual === totalPaginas}
-                                                className="p-3 theme-element border theme-border rounded-xl disabled:opacity-50 transition-all hover:shadow-md outline-none"
-                                                style={{ color: paginaActual === totalPaginas ? 'var(--theme-text-muted)' : 'var(--color-primario)' }}
-                                            >
-                                                <ChevronRight className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </div>
+                                {(clientes?.total ?? 0) > 0 && (
+                                    <GeliaPaginacion
+                                        paginator={clientes}
+                                        onIrAPagina={irAPagina}
+                                        embedded
+                                        className="pt-8 mt-4"
+                                    />
                                 )}
                             </div>
                         </section>

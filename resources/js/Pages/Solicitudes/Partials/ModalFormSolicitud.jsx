@@ -155,6 +155,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     const [alertaHeredado, setAlertaHeredado] = useState(false);
     const [analisisFinanciero, setAnalisisFinanciero] = useState(null);
     const temporizadorBusqueda = useRef(null);
+    const abortBusquedaCliente = useRef(null);
 
     const { data, setData, post, processing, reset, transform, errors } = useForm({
         numero_cliente: solicitudAEditar?.cliente?.numero_cliente || '',
@@ -257,16 +258,31 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     }, [data.monto_cotizado, data.catalogo_lista_descuento_id, data.catalogo_proceso_id, infoCliente, listas]);
 
     const fetchClientes = async (term = '') => {
-        if (!term) return;
+        const limpio = term.trim();
+        if (limpio.length < 2) {
+            setListaClientes([]);
+            setMostrarDropdown(false);
+            return;
+        }
+        abortBusquedaCliente.current?.abort();
+        const controller = new AbortController();
+        abortBusquedaCliente.current = controller;
         setBuscandoCliente(true);
         setMostrarDropdown(true);
         try {
-            const response = await axios.get(`/api/clientes?q=${term}`);
+            const response = await axios.get('/api/clientes', {
+                params: { q: limpio },
+                signal: controller.signal,
+            });
             setListaClientes(response.data);
-        } catch {
-            setListaClientes([]);
+        } catch (err) {
+            if (!axios.isCancel(err) && err?.code !== 'ERR_CANCELED') {
+                setListaClientes([]);
+            }
         } finally {
-            setBuscandoCliente(false);
+            if (!controller.signal.aborted) {
+                setBuscandoCliente(false);
+            }
         }
     };
 
@@ -277,7 +293,12 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setAlertaLista(null);
         setAnalisisFinanciero(null);
         if (temporizadorBusqueda.current) clearTimeout(temporizadorBusqueda.current);
-        if (valor.trim() === '') { setMostrarDropdown(false); setListaClientes([]); return; }
+        if (valor.trim() === '') {
+            abortBusquedaCliente.current?.abort();
+            setMostrarDropdown(false);
+            setListaClientes([]);
+            return;
+        }
         temporizadorBusqueda.current = setTimeout(() => { fetchClientes(valor); }, 400);
     };
 

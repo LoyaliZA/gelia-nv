@@ -15,6 +15,7 @@ export default function ModalFormFactura({ onClose }) {
     const [dragExcel, setDragExcel] = useState(false);
     const excelInputRef = useRef(null);
     const debounceRef = useRef(null);
+    const abortBusquedaCliente = useRef(null);
 
     const { data, setData, post, processing, errors, transform } = useForm({
         razon_social: '',
@@ -25,21 +26,32 @@ export default function ModalFormFactura({ onClose }) {
 
     useEffect(() => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
-        if (busquedaCliente.length < 2) {
+        if (busquedaCliente.trim().length < 2) {
+            abortBusquedaCliente.current?.abort();
             setListaClientes([]);
             return;
         }
         debounceRef.current = setTimeout(async () => {
+            abortBusquedaCliente.current?.abort();
+            const controller = new AbortController();
+            abortBusquedaCliente.current = controller;
             setBuscandoCliente(true);
             try {
-                const res = await axios.get(route('api.clientes.index'), { params: { q: busquedaCliente } });
+                const res = await axios.get(route('api.clientes.index'), {
+                    params: { q: busquedaCliente.trim() },
+                    signal: controller.signal,
+                });
                 setListaClientes(res.data || []);
-            } catch {
-                setListaClientes([]);
+            } catch (err) {
+                if (!axios.isCancel(err) && err?.code !== 'ERR_CANCELED') {
+                    setListaClientes([]);
+                }
             } finally {
-                setBuscandoCliente(false);
+                if (!controller.signal.aborted) {
+                    setBuscandoCliente(false);
+                }
             }
-        }, 300);
+        }, 400);
         return () => clearTimeout(debounceRef.current);
     }, [busquedaCliente]);
 

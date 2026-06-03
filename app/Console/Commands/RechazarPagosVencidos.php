@@ -9,6 +9,7 @@ use App\Models\HistorialMontoCliente;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use App\Notifications\AlertaSolicitud;
@@ -21,6 +22,11 @@ class RechazarPagosVencidos extends Command
 
     public function handle()
     {
+        if (Cache::get('import_clientes_en_curso')) {
+            $this->warn('Importación de clientes en curso. Se omite rechazo de pagos vencidos para evitar conflictos de montos.');
+            return;
+        }
+
         $solicitudesVencidas = SolicitudTag::with(['cliente.vendedor', 'cliente.listaDescuento', 'cliente.tipo', 'proceso'])
             ->sujetasAPlazoDePago()
             ->where('created_at', '<', now()->subHours(48))
