@@ -185,7 +185,7 @@
         color: white;
     }
 
-    @container module-card (max-width: 5.49rem), module-card (max-height: 4.74rem) {
+    @container module-card (max-width: 5.49rem) or (max-height: 4.74rem) {
         .dashboard-module-card:hover .dashboard-module-card__tooltip,
         .dashboard-module-card:focus-visible .dashboard-module-card__tooltip {
             opacity: 1;
@@ -414,7 +414,7 @@
         display: block;
     }
 
-    @container dashboard-widget (max-width: 13rem), dashboard-widget (max-height: 15rem) {
+    @container dashboard-widget (max-width: 13rem) or (max-height: 15rem) {
         .dashboard-adaptive-widget {
             padding: 0.75rem 1rem;
         }
@@ -440,7 +440,7 @@
         }
     }
 
-    @container dashboard-widget (max-width: 9rem), dashboard-widget (max-height: 9rem) {
+    @container dashboard-widget (max-width: 9rem) or (max-height: 9rem) {
         .dashboard-widget__body,
         .dashboard-widget__footer,
         .dashboard-widget__summary {
