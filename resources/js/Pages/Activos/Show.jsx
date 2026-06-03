@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { navegarListadoActivos } from './Partials/navegarListadoActivos';
-import { ArrowLeft, User, UserMinus, UserPlus, ArrowRightLeft, Wrench, Ban, Edit2, MoreHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, User, UserMinus, UserPlus, ArrowRightLeft, Wrench, Ban, Edit2, MoreHorizontal, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import DynamicActivoFields from './Partials/DynamicActivoFields';
 import TimelineMovimientos, { HistorialAsignaciones } from './Partials/TimelineMovimientos';
@@ -17,6 +17,7 @@ import AccionesActivoSheet from './Partials/AccionesActivoSheet';
 import useDispositivoCampo from './Partials/useDispositivoCampo';
 import GeliaLoader from '../../Components/GeliaLoader';
 import ModalFirmarActivo from './Partials/ModalFirmarActivo';
+import ModalVistaPreviaResponsiva from './Partials/ModalVistaPreviaResponsiva';
 import { ESTADO_BADGE, ESTADO_LABELS, METADATA_BADGE, CHIP_BADGE, getActivosCardClass } from './Partials/activosFormStyles';
 
 function IdentificacionChips({ atributos = {} }) {
@@ -58,13 +59,14 @@ function SeccionAcordeon({ titulo, children, defaultAbierto = false, className =
     );
 }
 
-export default function Show({ auth, activo, tipos, departamentos, terminosCondiciones }) {
+export default function Show({ auth, activo, tipos, categorias = [], departamentos, terminosCondiciones }) {
     const [modalEditar, setModalEditar] = useState(false);
     const [modalAsignar, setModalAsignar] = useState(false);
     const [modalTransferir, setModalTransferir] = useState(false);
     const [modalEstado, setModalEstado] = useState(null);
     const [modalMantenimiento, setModalMantenimiento] = useState(false);
     const [modalFirmar, setModalFirmar] = useState(null);
+    const [previewResponsiva, setPreviewResponsiva] = useState(null);
     const [sheetAcciones, setSheetAcciones] = useState(false);
     const [procesando, setProcesando] = useState(false);
     const { esMovil } = useDispositivoCampo();
@@ -129,23 +131,30 @@ export default function Show({ auth, activo, tipos, departamentos, terminosCondi
                                     </span>
                                 </div>
                                 <div className="flex gap-2">
-                                    <a
-                                        href={route('activos.asignaciones.responsiva', activeAsignacion.id)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                    <button
+                                        type="button"
+                                        onClick={() => setPreviewResponsiva({
+                                            previewUrl: route('activos.asignaciones.responsiva_vista_previa', activeAsignacion.id),
+                                            downloadUrl: route('activos.asignaciones.responsiva', activeAsignacion.id),
+                                            titulo: `Vista previa — ${activo.folio}`,
+                                        })}
                                         className="px-2 py-1 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 rounded text-[9px] font-black uppercase tracking-wider hover:opacity-85"
                                     >
-                                        Responsiva
-                                    </a>
-                                    <a
-                                        href={route('activos.usuarios.responsiva_conjunta', activeAsignacion.user_id)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                        <Eye className="w-3 h-3 inline mr-1" />
+                                        Vista previa
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPreviewResponsiva({
+                                            previewUrl: route('activos.usuarios.responsiva_conjunta_vista_previa', activeAsignacion.user_id),
+                                            downloadUrl: route('activos.usuarios.responsiva_conjunta', activeAsignacion.user_id),
+                                            titulo: 'Vista previa — Responsiva completa',
+                                        })}
                                         className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 rounded text-[9px] font-black uppercase tracking-wider hover:opacity-85"
-                                        title="Descargar responsiva de todos los activos asignados a este colaborador"
+                                        title="Vista previa de todos los activos asignados a este colaborador"
                                     >
-                                        Responsiva Completa
-                                    </a>
+                                        Completa
+                                    </button>
                                     {!activeAsignacion.firmado && (auth.user?.id === activeAsignacion.user_id || can('activos.asignar')) && (
                                         <button
                                             type="button"
@@ -166,7 +175,12 @@ export default function Show({ auth, activo, tipos, departamentos, terminosCondi
             <HistorialAsignaciones 
                 asignaciones={activo.asignaciones} 
                 canSign={can('activos.asignar')} 
-                onSign={(a) => setModalFirmar(a)} 
+                onSign={(a) => setModalFirmar(a)}
+                onPreviewResponsiva={(a) => setPreviewResponsiva({
+                    previewUrl: route('activos.asignaciones.responsiva_vista_previa', a.id),
+                    downloadUrl: route('activos.asignaciones.responsiva', a.id),
+                    titulo: `Vista previa — ${activo.folio}`,
+                })}
                 currentUser={auth.user} 
             />
         </>
@@ -186,6 +200,31 @@ export default function Show({ auth, activo, tipos, departamentos, terminosCondi
                     <div><span className="text-[10px] font-black uppercase theme-text-muted block">Valor</span><span className="theme-text-main">${Number(activo.valor).toLocaleString('es-MX')}</span></div>
                 )}
             </div>
+            {activo.padre && (
+                <div className="rounded-xl p-4 theme-element border theme-border text-sm">
+                    <span className="text-[9px] font-black uppercase theme-text-muted block mb-1">Vinculado a</span>
+                    <Link href={route('activos.show', activo.padre.id)} className="font-bold hover:underline" style={{ color: 'var(--color-primario)' }}>
+                        {activo.padre.folio} — {activo.padre.nombre}
+                    </Link>
+                </div>
+            )}
+            {activo.accesorios?.length > 0 && (
+                <div className="rounded-xl p-4 theme-element border theme-border text-sm space-y-2">
+                    <span className="text-[9px] font-black uppercase theme-text-muted block">Accesorios vinculados</span>
+                    <ul className="space-y-2 m-0 p-0 list-none">
+                        {activo.accesorios.map((acc) => (
+                            <li key={acc.id} className="flex items-center justify-between gap-2">
+                                <Link href={route('activos.show', acc.id)} className="font-medium hover:underline truncate" style={{ color: 'var(--color-primario)' }}>
+                                    {acc.folio} — {acc.nombre}
+                                </Link>
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase shrink-0 ${ESTADO_BADGE[acc.estado] || ''}`}>
+                                    {ESTADO_LABELS[acc.estado] || acc.estado}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
             <DynamicActivoFields
                 fields={activo.tipo?.esquema_atributos?.fields || []}
                 values={activo.atributos || {}}
@@ -234,6 +273,7 @@ export default function Show({ auth, activo, tipos, departamentos, terminosCondi
                                         {ESTADO_LABELS[activo.estado] || activo.estado}
                                     </span>
                                     <span className={METADATA_BADGE}>{activo.tipo?.nombre}</span>
+                                    {activo.categoria?.nombre && <span className={METADATA_BADGE}>{activo.categoria.nombre}</span>}
                                     <span className={METADATA_BADGE}>{activo.departamento?.nombre}</span>
                                 </div>
                                 <IdentificacionChips atributos={activo.atributos} />
@@ -343,12 +383,19 @@ export default function Show({ auth, activo, tipos, departamentos, terminosCondi
                 onBaja={() => setModalEstado('baja')}
             />
 
-            <ModalFormActivo abierto={modalEditar} onCerrar={() => setModalEditar(false)} tipos={tipos} departamentos={departamentos} activo={activo} />
+            <ModalFormActivo abierto={modalEditar} onCerrar={() => setModalEditar(false)} tipos={tipos} categorias={categorias} departamentos={departamentos} activo={activo} />
             <ModalAsignacion abierto={modalAsignar} onCerrar={() => setModalAsignar(false)} activo={activo} />
             <ModalTransferencia abierto={modalTransferir} onCerrar={() => setModalTransferir(false)} activo={activo} departamentos={departamentos} />
             <ModalCambioEstado abierto={!!modalEstado} onCerrar={() => setModalEstado(null)} activo={activo} estadoDestino={modalEstado} />
             <ModalMantenimiento abierto={modalMantenimiento} onCerrar={() => setModalMantenimiento(false)} activo={activo} />
             <ModalFirmarActivo abierto={!!modalFirmar} onCerrar={() => setModalFirmar(null)} asignacion={modalFirmar} terminosCondiciones={terminosCondiciones} />
+            <ModalVistaPreviaResponsiva
+                abierto={!!previewResponsiva}
+                onCerrar={() => setPreviewResponsiva(null)}
+                previewUrl={previewResponsiva?.previewUrl}
+                downloadUrl={previewResponsiva?.downloadUrl}
+                titulo={previewResponsiva?.titulo}
+            />
         </AppLayout>
     );
 }

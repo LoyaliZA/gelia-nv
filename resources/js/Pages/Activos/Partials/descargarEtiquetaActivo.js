@@ -33,6 +33,31 @@ function dibujarTextoMultilinea(ctx, texto, x, y, maxAncho, altoLinea) {
     return cursorY;
 }
 
+function dibujarLogosMarcas(ctx, aromasImg, bellaromaImg, centroX, centroY, altoLogo) {
+    const aromasRatio = aromasImg.width / aromasImg.height;
+    const bellaromaRatio = bellaromaImg.width / bellaromaImg.height;
+    const aromasAlto = altoLogo;
+    const aromasAncho = aromasAlto * aromasRatio;
+    const bellaromaAlto = altoLogo;
+    const bellaromaAncho = bellaromaAlto * bellaromaRatio;
+    const separador = 12;
+    const totalAncho = aromasAncho + separador + bellaromaAncho;
+    let x = centroX - totalAncho / 2;
+
+    ctx.drawImage(aromasImg, x, centroY - aromasAlto / 2, aromasAncho, aromasAlto);
+    x += aromasAncho + separador / 2;
+
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, centroY - altoLogo * 0.45);
+    ctx.lineTo(x, centroY + altoLogo * 0.45);
+    ctx.stroke();
+
+    x += separador / 2;
+    ctx.drawImage(bellaromaImg, x, centroY - bellaromaAlto / 2, bellaromaAncho, bellaromaAlto);
+}
+
 export async function descargarEtiquetaActivo({ activo, qrPngSrc, tipoNombre }) {
     const ancho = 800;
     const alto = 400;
@@ -55,6 +80,7 @@ export async function descargarEtiquetaActivo({ activo, qrPngSrc, tipoNombre }) 
 
     const textoX = padding + qrTam + 32;
     const maxTexto = ancho - textoX - padding;
+    const centroX = textoX + maxTexto / 2;
 
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 36px system-ui, -apple-system, sans-serif';
@@ -65,7 +91,17 @@ export async function descargarEtiquetaActivo({ activo, qrPngSrc, tipoNombre }) 
 
     ctx.fillStyle = '#525252';
     ctx.font = '20px system-ui, -apple-system, sans-serif';
-    ctx.fillText(tipoNombre || activo.tipo?.nombre || 'Activo', textoX, finNombre + 40);
+    ctx.fillText(tipoNombre || activo.tipo?.nombre || 'Activo', textoX, finNombre + 28);
+
+    try {
+        const [aromasImg, bellaromaImg] = await Promise.all([
+            cargarImagen('/Images/Logos/aromas_logo_negro.png'),
+            cargarImagen('/Images/Logos/bellaroma_logo_negro.png'),
+        ]);
+        dibujarLogosMarcas(ctx, aromasImg, bellaromaImg, centroX, alto * 0.58, 52);
+    } catch {
+        // Si falla la carga de logos, la etiqueta sigue siendo usable.
+    }
 
     ctx.fillStyle = '#737373';
     ctx.font = '16px system-ui, -apple-system, sans-serif';

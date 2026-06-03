@@ -33,6 +33,8 @@ class CrearActivoService
                 'folio' => $this->generarFolio->ejecutar($tipo, $departamento),
                 'consulta_token' => (string) Str::uuid(),
                 'catalogo_tipo_activo_id' => $tipo->id,
+                'catalogo_categoria_activo_id' => $datos['catalogo_categoria_activo_id'] ?? null,
+                'activo_padre_id' => $datos['activo_padre_id'] ?? null,
                 'departamento_id' => $datos['departamento_id'],
                 'area_id' => $datos['area_id'] ?? null,
                 'nombre' => $datos['nombre'],
@@ -51,7 +53,7 @@ class CrearActivoService
                 'datos_snapshot' => $this->construirSnapshot->ejecutar($activo),
             ]);
 
-            return $activo->load(['tipo', 'departamento', 'area', 'responsable']);
+            return $activo->load(['tipo', 'departamento', 'area', 'responsable', 'categoria', 'padre']);
         });
     }
 }

@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\AuditoriaListaDescuentoController;
 use App\Http\Controllers\Admin\PersonalizacionController;
 use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\ActivoController;
+use App\Http\Controllers\Activos\CategoriaActivoController;
 use App\Http\Controllers\Activos\TipoActivoController;
 use App\Http\Controllers\Rh\ColaboradorController;
 use App\Http\Controllers\Rh\ConfiguracionRhController;
@@ -262,6 +263,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [ActivoController::class, 'index'])->name('index');
         Route::get('/resolver-codigo', [ActivoController::class, 'resolverCodigo'])->name('resolver_codigo');
         Route::get('/exportar', [ActivoController::class, 'exportar'])->middleware('can:activos.exportar')->name('exportar');
+        Route::get('/etiquetas', [ActivoController::class, 'etiquetas'])->middleware('can:activos.exportar')->name('etiquetas');
+        Route::get('/etiquetas/contar', [ActivoController::class, 'etiquetasContar'])->middleware('can:activos.exportar')->name('etiquetas.contar');
+        Route::get('/etiquetas/vista-previa', [ActivoController::class, 'etiquetasVistaPrevia'])->middleware('can:activos.exportar')->name('etiquetas.vista_previa');
+        Route::get('/etiquetas/descargar', [ActivoController::class, 'etiquetasDescargar'])->middleware('can:activos.exportar')->name('etiquetas.descargar');
         Route::get('/alertas', [ActivoController::class, 'alertas'])->name('alertas');
         Route::get('/{activo}/qr.svg', [ActivoController::class, 'qr'])->name('qr');
         Route::get('/{activo}/qr.png', [ActivoController::class, 'qrPng'])->name('qr_png');
@@ -273,8 +278,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{activo}/devolver', [ActivoController::class, 'devolver'])->middleware('can:activos.asignar')->name('devolver');
         Route::post('/asignaciones/{asignacion}/firmar', [ActivoController::class, 'firmar'])->name('asignaciones.firmar');
         Route::get('/asignaciones/{asignacion}/responsiva', [ActivoController::class, 'responsiva'])->name('asignaciones.responsiva');
+        Route::get('/asignaciones/{asignacion}/responsiva/vista-previa', [ActivoController::class, 'responsivaVistaPrevia'])->name('asignaciones.responsiva_vista_previa');
         Route::post('/asignaciones/firmar-conjunto', [ActivoController::class, 'firmarConjunto'])->name('asignaciones.firmar_conjunto');
         Route::get('/usuarios/{usuario}/responsiva-conjunta', [ActivoController::class, 'responsivaConjunta'])->name('usuarios.responsiva_conjunta');
+        Route::get('/usuarios/{usuario}/responsiva-conjunta/vista-previa', [ActivoController::class, 'responsivaConjuntaVistaPrevia'])->name('usuarios.responsiva_conjunta_vista_previa');
         Route::post('/configuracion', [ActivoController::class, 'guardarConfiguracion'])->middleware('can:activos.configurar_tipos')->name('configuracion.guardar');
         Route::post('/{activo}/transferir', [ActivoController::class, 'transferir'])->middleware('can:activos.transferir')->name('transferir');
         Route::post('/{activo}/estado', [ActivoController::class, 'cambiarEstado'])->middleware('can:activos.cambiar_estado')->name('estado');
@@ -538,6 +545,10 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/tipos-activo', [TipoActivoController::class, 'store'])->name('tipos_activo.store')->middleware('can:activos.configurar_tipos');
                 Route::put('/tipos-activo/{id}', [TipoActivoController::class, 'update'])->name('tipos_activo.update')->middleware('can:activos.configurar_tipos');
                 Route::delete('/tipos-activo/{id}', [TipoActivoController::class, 'destroy'])->name('tipos_activo.destroy')->middleware('can:activos.configurar_tipos');
+
+                Route::post('/categorias-activo', [CategoriaActivoController::class, 'store'])->name('categorias_activo.store')->middleware('can:activos.configurar_tipos');
+                Route::put('/categorias-activo/{id}', [CategoriaActivoController::class, 'update'])->name('categorias_activo.update')->middleware('can:activos.configurar_tipos');
+                Route::delete('/categorias-activo/{id}', [CategoriaActivoController::class, 'destroy'])->name('categorias_activo.destroy')->middleware('can:activos.configurar_tipos');
             });
         });
 
@@ -608,6 +619,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/clientes', [ClienteApiController::class, 'index'])->name('clientes.index');
         Route::get('/clientes/{numero}', [ClienteApiController::class, 'show'])->name('clientes.show');
         Route::get('/activos/usuarios', [ActivoController::class, 'buscarUsuarios'])->name('activos.usuarios');
+        Route::get('/activos/buscar', [ActivoController::class, 'buscarActivos'])->name('activos.buscar');
         Route::get('/activos/marcas', [ActivoController::class, 'buscarMarcas'])->name('activos.marcas');
         Route::get('/activos/modelos', [ActivoController::class, 'buscarModelos'])->name('activos.modelos');
         Route::middleware(['auth'])->post('/entregas/cotizar', [CotizacionEntregaController::class, 'calcularCosto'])->name('entregas.cotizar');

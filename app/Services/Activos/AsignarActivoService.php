@@ -16,7 +16,7 @@ class AsignarActivoService
         private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
-    public function ejecutar(Activo $activo, User $actor, int $userId, ?string $notas = null, ?string $condicionesEntrega = null): Activo
+    public function ejecutar(Activo $activo, User $actor, int $userId, ?string $notas = null, ?string $condicionesEntrega = null, bool $asignarAccesorios = true): Activo
     {
         if (!in_array($activo->estado, ['disponible', 'asignado'], true)) {
             throw ValidationException::withMessages([
@@ -32,7 +32,7 @@ class AsignarActivoService
             ]);
         }
 
-        return DB::transaction(function () use ($activo, $actor, $destinatario, $notas, $condicionesEntrega) {
+        $activoActualizado = DB::transaction(function () use ($activo, $actor, $destinatario, $notas, $condicionesEntrega) {
             $activo->loadMissing(['responsable', 'tipo', 'departamento']);
             $snapshot = $this->construirSnapshot->ejecutar($activo);
             $tipoMovimiento = $activo->responsable_user_id ? 'reasignacion' : 'asignacion';
@@ -89,5 +89,43 @@ class AsignarActivoService
 
             return $activoActualizado;
         });
+
+        if ($asignarAccesorios) {
+            $this->asignarAccesoriosVinculados(
+                $activoActualizado,
+                $actor,
+                $destinatario,
+                $notas,
+                $condicionesEntrega,
+            );
+        }
+
+        return $activoActualizado->fresh(['tipo', 'departamento', 'area', 'responsable', 'asignaciones.usuario']);
+    }
+
+    private function asignarAccesoriosVinculados(
+        Activo $activo,
+        User $actor,
+        User $destinatario,
+        ?string $notas,
+        ?string $condicionesEntrega,
+    ): void {
+        $activo->loadMissing('accesorios');
+
+        foreach ($activo->accesorios as $accesorio) {
+            if ($accesorio->estado === 'baja') {
+                continue;
+            }
+
+            if ($accesorio->responsable_user_id === $destinatario->id) {
+                continue;
+            }
+
+            if (!in_array($accesorio->estado, ['disponible', 'asignado'], true)) {
+                continue;
+            }
+
+            $this->ejecutar($accesorio, $actor, $destinatario->id, $notas, $condicionesEntrega, false);
+        }
     }
 }

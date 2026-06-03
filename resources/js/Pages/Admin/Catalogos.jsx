@@ -17,10 +17,11 @@ import TablaPorcentajesEscalonamiento from './Partials/Catalogos/TablaPorcentaje
 import TablaPorcentajesListado from './Partials/Catalogos/TablaPorcentajesListado';
 import TablaBancos from './Partials/Catalogos/TablaBancos';
 import TablaTiposActivo from './Partials/Catalogos/TablaTiposActivo';
+import TablaCategoriasActivo from './Partials/Catalogos/TablaCategoriasActivo';
 import TablaProductos from './Partials/Catalogos/TablaProductos';
 
 
-export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [], bancos = [], tipos_activo = [], productos = [] }) {
+export default function Catalogos({ auth, procesos, listas, estados, departamentos, areas, tipos_cliente, zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [], bancos = [], tipos_activo = [], categorias_activo = [], productos = [] }) {
     const [tabActiva, setTabActiva] = useState('departamentos');
     const activeCardClass = geliaCardClass('relative z-10');
 
@@ -35,6 +36,7 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
         { id: 'estados',       label: 'Estados',       icon: Activity },
         { id: 'bancos',        label: 'Bancos',        icon: Landmark },
         { id: 'tipos_activo', label: 'Tipos Activo', icon: Package },
+        { id: 'categorias_activo', label: 'Categorías Activo', icon: Tags },
         { id: 'productos', label: 'Productos', icon: Package },
         { id: 'zonas_entrega', label: 'Zonas Logísticas', icon: Map },
         { id: 'horarios_entrega', label: 'Horarios Entrega', icon: Clock }
@@ -85,6 +87,7 @@ export default function Catalogos({ auth, procesos, listas, estados, departament
                     {tabActiva === 'estados' && <TablaEstados datos={estados} />}
                     {tabActiva === 'bancos' && <TablaBancos datos={bancos} />}
                     {tabActiva === 'tipos_activo' && <TablaTiposActivo datos={tipos_activo} />}
+                    {tabActiva === 'categorias_activo' && <TablaCategoriasActivo datos={categorias_activo} />}
                     {tabActiva === 'productos' && <TablaProductos datos={productos} />}
                     {tabActiva === 'tipos_cliente' && <TablaTipoClientes datos={tipos_cliente} />}
                     {tabActiva === 'zonas_entrega' && <TablaZonasEntrega datos={zonas_entrega} auth={auth} />}

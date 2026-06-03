@@ -30,7 +30,7 @@ class User extends Authenticatable
         'foto_perfil',
         'firma_ruta',
         'catalogo_sexo_id',
-        'area_id' // Agregado para permitir la asignación organizacional
+        'area_id',
     ];
 
     protected $hidden = [
@@ -65,6 +65,12 @@ class User extends Authenticatable
     public function areas()
     {
         return $this->belongsToMany(Area::class);
+    }
+
+    /** Área principal del colaborador (reportes, RH, responsivas). */
+    public function area(): BelongsTo
+    {
+        return $this->belongsTo(Area::class, 'area_id');
     }
 
     // Quiénes son los gerentes de este usuario

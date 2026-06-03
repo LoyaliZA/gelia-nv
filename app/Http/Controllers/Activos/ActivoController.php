@@ -14,16 +14,20 @@ use App\Models\ActivoAsignacion;
 use App\Models\ActivoFoto;
 use App\Models\ActivoMantenimiento;
 use App\Models\CatalogoTipoActivo;
+use App\Models\CatalogoCategoriaActivo;
 use App\Models\Departamento;
 use App\Models\User;
 use App\Models\ActivoConfiguracion;
 use Illuminate\Support\Facades\Storage;
-use Barryvdh\DomPDF\Facade\Pdf;
 use App\Services\Activos\ActualizarActivoService;
 use App\Services\Activos\AlertasActivosService;
 use App\Services\Activos\AsignarActivoService;
 use App\Services\Activos\BuscarMarcasModelosActivoService;
+use App\Services\Activos\BuscarActivosService;
 use App\Services\Activos\BuscarUsuariosActivoService;
+use App\Services\Activos\GenerarResponsivaService;
+use App\Services\Activos\GenerarEtiquetasActivosService;
+use App\Services\Activos\ResolverDimensionesEtiquetaService;
 use App\Services\Activos\CambiarEstadoActivoService;
 use App\Services\Activos\CompletarMantenimientoActivoService;
 use App\Services\Activos\CrearActivoService;
@@ -34,7 +38,7 @@ use App\Services\Activos\ListarActivosService;
 use App\Services\Activos\PresentarConsultaPublicaActivoService;
 use App\Services\Activos\ProgramarMantenimientoActivoService;
 use App\Services\Activos\SubirFotosActivoService;
-use App\Services\Activos\TransferirActivoService;
+use App\Support\EtiquetaActivoAssets;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
@@ -50,8 +54,8 @@ class ActivoController extends Controller
     public function index(Request $request, ListarActivosService $listarService, AlertasActivosService $alertasService): Response
     {
         $filtros = $request->only([
-            'busqueda', 'catalogo_tipo_activo_id', 'departamento_id',
-            'estado', 'responsable_user_id', 'mis_activos', 'sin_asignar', 'en_mantenimiento',
+            'busqueda', 'catalogo_tipo_activo_id', 'catalogo_categoria_activo_id', 'departamento_id',
+            'estado', 'responsable_user_id', 'mis_activos', 'sin_asignar', 'en_mantenimiento', 'pendientes_firma',
         ]);
 
         $alertas = $alertasService->ejecutar(Auth::user());
@@ -86,6 +90,7 @@ class ActivoController extends Controller
         return Inertia::render('Activos/Index', [
             'activos' => $listarService->ejecutar(Auth::user(), $filtros),
             'tipos' => CatalogoTipoActivo::where('activo', true)->orderBy('nombre')->get(),
+            'categorias' => CatalogoCategoriaActivo::where('activo', true)->orderBy('nombre')->get(),
             'departamentos' => Departamento::where('activo', true)->orderBy('nombre')->get(),
             'usuarios' => User::select(['id', 'name', 'email'])->orderBy('name')->get(),
             'filtros' => $filtros,
@@ -107,6 +112,9 @@ class ActivoController extends Controller
 
         $activo->load([
             'tipo',
+            'categoria',
+            'padre.tipo',
+            'accesorios.tipo',
             'departamento',
             'area',
             'responsable',
@@ -125,6 +133,7 @@ class ActivoController extends Controller
         return Inertia::render('Activos/Show', [
             'activo' => $activo,
             'tipos' => CatalogoTipoActivo::where('activo', true)->orderBy('nombre')->get(),
+            'categorias' => CatalogoCategoriaActivo::where('activo', true)->orderBy('nombre')->get(),
             'departamentos' => Departamento::where('activo', true)->with('areas')->orderBy('nombre')->get(),
             'terminosCondiciones' => ActivoConfiguracion::obtenerTerminos(),
         ]);
@@ -221,6 +230,17 @@ class ActivoController extends Controller
 
         if ($userIdAsignacion) {
             $activo = $asignarService->ejecutar($activo, Auth::user(), (int) $userIdAsignacion, $notasAsignacion, $condicionesEntrega);
+        } elseif ($activo->activo_padre_id) {
+            $padre = Activo::find($activo->activo_padre_id);
+            if ($padre?->responsable_user_id) {
+                $activo = $asignarService->ejecutar(
+                    $activo,
+                    Auth::user(),
+                    (int) $padre->responsable_user_id,
+                    $notasAsignacion,
+                    $condicionesEntrega,
+                );
+            }
         }
 
         $mensaje = $userIdAsignacion
@@ -354,14 +374,96 @@ class ActivoController extends Controller
     public function exportar(Request $request, ExportarActivosService $service)
     {
         $filtros = $request->only([
-            'busqueda', 'catalogo_tipo_activo_id', 'departamento_id',
-            'estado', 'responsable_user_id', 'mis_activos', 'sin_asignar', 'en_mantenimiento',
+            'busqueda', 'catalogo_tipo_activo_id', 'catalogo_categoria_activo_id', 'departamento_id',
+            'estado', 'responsable_user_id', 'mis_activos', 'sin_asignar', 'en_mantenimiento', 'pendientes_firma',
         ]);
 
         $activos = $service->ejecutar(Auth::user(), $filtros);
         $nombreArchivo = 'activos-' . now()->format('Y-m-d-His') . '.xlsx';
 
         return (new FastExcel($service->filas($activos)))->download($nombreArchivo);
+    }
+
+    public function etiquetas(ListarActivosService $listarService, ResolverDimensionesEtiquetaService $dimensiones): Response
+    {
+        $this->authorize('activos.exportar');
+
+        $filtros = $this->filtrosEtiquetas(request());
+        $activos = $listarService->ejecutar(Auth::user(), $filtros, false);
+        $layout = $dimensiones->resolver(
+            request()->filled('ancho_mm') ? (float) request('ancho_mm') : null,
+            request()->filled('alto_mm') ? (float) request('alto_mm') : null,
+            $this->opcionesLayoutEtiquetas(request()),
+        );
+
+        $muestra = $activos->take(4)->map(fn (Activo $a) => [
+            'id' => $a->id,
+            'folio' => $a->folio,
+            'nombre' => $a->nombre,
+            'tipo' => $a->tipo?->nombre,
+            'qr_url' => route('activos.qr_png', $a->id),
+        ])->values()->all();
+
+        return Inertia::render('Activos/Etiquetas', [
+            'tipos' => CatalogoTipoActivo::where('activo', true)->orderBy('nombre')->get(),
+            'categorias' => CatalogoCategoriaActivo::where('activo', true)->orderBy('nombre')->get(),
+            'departamentos' => Departamento::where('activo', true)->orderBy('nombre')->get(),
+            'usuarios' => User::select(['id', 'name', 'email'])->orderBy('name')->get(),
+            'filtros' => $this->filtrosEtiquetasPublicos($filtros),
+            'conteo' => $activos->count(),
+            'muestra' => $muestra,
+            'layout' => $layout,
+            'max_etiquetas' => GenerarEtiquetasActivosService::MAX_ETIQUETAS,
+            'tamanos_hoja' => EtiquetaActivoAssets::tamanosParaFrontend(),
+        ]);
+    }
+
+    public function etiquetasContar(Request $request, ListarActivosService $listarService)
+    {
+        $this->authorize('activos.exportar');
+
+        $activos = $listarService->ejecutar(Auth::user(), $this->filtrosEtiquetas($request), false);
+
+        return response()->json([
+            'total' => $activos->count(),
+            'muestra' => $activos->take(4)->map(fn (Activo $a) => [
+                'id' => $a->id,
+                'folio' => $a->folio,
+                'nombre' => $a->nombre,
+                'tipo' => $a->tipo?->nombre,
+                'qr_url' => route('activos.qr_png', $a->id),
+            ])->values()->all(),
+        ]);
+    }
+
+    public function etiquetasVistaPrevia(Request $request, ListarActivosService $listarService, GenerarEtiquetasActivosService $generarService)
+    {
+        $this->authorize('activos.exportar');
+
+        $activos = $listarService->ejecutar(Auth::user(), $this->filtrosEtiquetas($request), false);
+        $pdf = $generarService->ejecutar(
+            $activos,
+            $request->filled('ancho_mm') ? (float) $request->input('ancho_mm') : null,
+            $request->filled('alto_mm') ? (float) $request->input('alto_mm') : null,
+            $this->opcionesLayoutEtiquetas($request),
+        );
+
+        return $pdf->stream('etiquetas-activos-vista-previa.pdf');
+    }
+
+    public function etiquetasDescargar(Request $request, ListarActivosService $listarService, GenerarEtiquetasActivosService $generarService)
+    {
+        $this->authorize('activos.exportar');
+
+        $activos = $listarService->ejecutar(Auth::user(), $this->filtrosEtiquetas($request), false);
+        $pdf = $generarService->ejecutar(
+            $activos,
+            $request->filled('ancho_mm') ? (float) $request->input('ancho_mm') : null,
+            $request->filled('alto_mm') ? (float) $request->input('alto_mm') : null,
+            $this->opcionesLayoutEtiquetas($request),
+        );
+
+        return $pdf->download('etiquetas-activos-' . now()->format('Y-m-d-His') . '.pdf');
     }
 
     public function buscarUsuarios(Request $request, BuscarUsuariosActivoService $service)
@@ -507,24 +609,28 @@ class ActivoController extends Controller
         return back()->with('success', 'Activo firmado de recibido correctamente.');
     }
 
-    public function responsiva(ActivoAsignacion $asignacion)
+    public function responsiva(ActivoAsignacion $asignacion, GenerarResponsivaService $generarService)
     {
         $usuario = Auth::user();
         if ($asignacion->user_id !== $usuario->id) {
             $this->autorizarAccesoActivo($asignacion->activo);
         }
 
-        $asignacion->load(['activo.tipo', 'activo.departamento', 'usuario', 'asignadoPor']);
-
-        $pdf = Pdf::loadView('activos.responsiva', [
-            'asignacion' => $asignacion,
-            'activo' => $asignacion->activo,
-            'usuario' => $asignacion->usuario,
-            'fecha' => $asignacion->fecha_inicio ? $asignacion->fecha_inicio->format('d/m/Y') : now()->format('d/m/Y'),
-            'terminos' => ActivoConfiguracion::obtenerTerminos(),
-        ]);
+        $pdf = $generarService->individual($asignacion);
 
         return $pdf->download("Responsiva_{$asignacion->activo->folio}.pdf");
+    }
+
+    public function responsivaVistaPrevia(ActivoAsignacion $asignacion, GenerarResponsivaService $generarService)
+    {
+        $usuario = Auth::user();
+        if ($asignacion->user_id !== $usuario->id) {
+            $this->autorizarAccesoActivo($asignacion->activo);
+        }
+
+        $pdf = $generarService->individual($asignacion);
+
+        return $pdf->stream("Responsiva_{$asignacion->activo->folio}.pdf");
     }
 
     public function firmarConjunto(Request $request)
@@ -579,7 +685,7 @@ class ActivoController extends Controller
         return back()->with('success', 'Entrega en conjunto firmada correctamente.');
     }
 
-    public function responsivaConjunta(User $usuario)
+    public function responsivaConjunta(User $usuario, GenerarResponsivaService $generarService)
     {
         $currentUser = Auth::user();
         if ($usuario->id !== $currentUser->id) {
@@ -590,7 +696,7 @@ class ActivoController extends Controller
 
         $asignaciones = ActivoAsignacion::where('user_id', $usuario->id)
             ->where('activa', true)
-            ->with(['activo.tipo', 'activo.departamento', 'activo.area', 'asignadoPor'])
+            ->with(['activo.tipo', 'activo.departamento', 'activo.area', 'activo.categoria', 'activo.accesorios.tipo', 'asignadoPor'])
             ->get();
 
         if ($asignaciones->isEmpty()) {
@@ -603,14 +709,49 @@ class ActivoController extends Controller
             }
         }
 
-        $pdf = Pdf::loadView('activos.responsiva_conjunta', [
-            'asignaciones' => $asignaciones,
-            'usuario' => $usuario,
-            'fecha' => now()->format('d/m/Y'),
-            'terminos' => ActivoConfiguracion::obtenerTerminos(),
-        ]);
+        $pdf = $generarService->conjunta($usuario, $asignaciones);
 
         return $pdf->download("Responsiva_Conjunta_{$usuario->name}.pdf");
+    }
+
+    public function responsivaConjuntaVistaPrevia(User $usuario, GenerarResponsivaService $generarService)
+    {
+        $currentUser = Auth::user();
+        if ($usuario->id !== $currentUser->id) {
+            if (!$currentUser->hasRole(['Super Admin', 'Administrador']) && !$currentUser->can('activos.asignar') && !$currentUser->can('activos.ver_todos')) {
+                abort(403, 'No tiene autorización para ver las asignaciones de este usuario.');
+            }
+        }
+
+        $asignaciones = ActivoAsignacion::where('user_id', $usuario->id)
+            ->where('activa', true)
+            ->with(['activo.tipo', 'activo.departamento', 'activo.area', 'activo.categoria', 'activo.accesorios.tipo', 'asignadoPor'])
+            ->get();
+
+        if ($asignaciones->isEmpty()) {
+            abort(404, 'El colaborador no tiene asignaciones activas.');
+        }
+
+        foreach ($asignaciones as $asignacion) {
+            if ($usuario->id !== $currentUser->id) {
+                $this->autorizarAccesoActivo($asignacion->activo);
+            }
+        }
+
+        $pdf = $generarService->conjunta($usuario, $asignaciones);
+
+        return $pdf->stream("Responsiva_Conjunta_{$usuario->name}.pdf");
+    }
+
+    public function buscarActivos(Request $request, BuscarActivosService $service)
+    {
+        return response()->json(
+            $service->ejecutar(
+                Auth::user(),
+                trim((string) $request->input('q', '')),
+                $request->integer('excluir_id') ?: null,
+            )
+        );
     }
 
     public function guardarConfiguracion(Request $request)
@@ -640,5 +781,61 @@ class ActivoController extends Controller
         if (!in_array($activo->departamento_id, $departamentos, true)) {
             abort(403, 'No tiene acceso a este activo.');
         }
+    }
+
+    private function filtrosEtiquetas(Request $request): array
+    {
+        $filtros = $request->only([
+            'busqueda',
+            'catalogo_tipo_activo_id',
+            'catalogo_categoria_activo_id',
+            'departamento_id',
+            'estado',
+            'responsable_user_id',
+            'mis_activos',
+            'sin_asignar',
+            'en_mantenimiento',
+            'pendientes_firma',
+        ]);
+
+        $responsables = $request->input('responsable_user_ids', []);
+        if (is_string($responsables)) {
+            $responsables = array_filter(explode(',', $responsables));
+        }
+        if (is_array($responsables) && !empty($responsables)) {
+            $filtros['responsable_user_ids'] = $responsables;
+        }
+
+        $filtros['excluir_baja'] = true;
+
+        if (empty($filtros['estado'])) {
+            unset($filtros['estado']);
+        }
+
+        return $filtros;
+    }
+
+    private function filtrosEtiquetasPublicos(array $filtros): array
+    {
+        $publicos = collect($filtros)->except(['excluir_baja'])->all();
+
+        if (!empty($publicos['responsable_user_ids'])) {
+            $publicos['responsable_user_ids'] = array_values($publicos['responsable_user_ids']);
+        }
+
+        return $publicos;
+    }
+
+    private function opcionesLayoutEtiquetas(Request $request): array
+    {
+        return [
+            'proporcion' => $request->input('proporcion') === '1:1' ? '1:1' : '2:1',
+            'tamanio_hoja' => array_key_exists($request->input('tamanio_hoja'), EtiquetaActivoAssets::TAMANOS_HOJA)
+                ? strtolower((string) $request->input('tamanio_hoja'))
+                : ResolverDimensionesEtiquetaService::DEFAULT_TAMANIO_HOJA,
+            'orientacion_hoja' => $request->input('orientacion_hoja') === 'portrait' ? 'portrait' : 'landscape',
+            'orientacion_etiqueta' => $request->input('orientacion_etiqueta') === 'vertical' ? 'vertical' : 'horizontal',
+            'gap_mm' => $request->filled('gap_mm') ? (float) $request->input('gap_mm') : ResolverDimensionesEtiquetaService::DEFAULT_GAP_MM,
+        ];
     }
 }

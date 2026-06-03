@@ -403,6 +403,10 @@
          DATOS DEL COLABORADOR
     ============================================================ --}}
     <div class="section-title">Datos del Colaborador (Responsable)</div>
+    @php
+        $areaColaborador = $usuario->area ?? $usuario->areas->first();
+        $departamentoColaborador = $areaColaborador?->departamento ?? $usuario->departamentos->first();
+    @endphp
     <table class="info-table">
         <tr>
             <th>Nombre Completo:</th>
@@ -412,9 +416,9 @@
         </tr>
         <tr>
             <th>Departamento:</th>
-            <td>{{ $asignaciones->first()->activo->departamento?->nombre ?? 'N/A' }}</td>
+            <td>{{ $departamentoColaborador?->nombre ?? 'N/A' }}</td>
             <th>Área:</th>
-            <td>{{ $asignaciones->first()->activo->area?->nombre ?? 'N/A' }}</td>
+            <td>{{ $areaColaborador?->nombre ?? 'N/A' }}</td>
         </tr>
     </table>
 
@@ -446,7 +450,16 @@
                             @foreach($activo->atributos as $key => $value)
                                 <strong>{{ ucwords(str_replace('_', ' ', $key)) }}:</strong> {{ $value }}<br>
                             @endforeach
-                        @else
+                        @endif
+                        @if($activo->categoria)
+                            <strong>Categoría:</strong> {{ $activo->categoria->nombre }}<br>
+                        @endif
+                        @if($activo->accesorios && $activo->accesorios->count() > 0)
+                            <strong>Accesorios:</strong>
+                            @foreach($activo->accesorios as $accesorio)
+                                {{ $accesorio->folio }} — {{ $accesorio->nombre }}@if(!$loop->last); @endif
+                            @endforeach
+                        @elseif(empty($activo->atributos) && !$activo->categoria)
                             —
                         @endif
                     </td>

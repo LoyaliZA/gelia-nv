@@ -4,10 +4,10 @@ import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, GELIA_SEGMENT_TABS_SCROLL, GELI
 export const ACCENT = 'var(--color-primario)';
 
 export const ESTADO_BADGE = {
-    1: 'bg-amber-500/15 text-amber-600 border-amber-500/30',
-    2: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30',
-    3: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30',
-    4: 'bg-red-500/15 text-red-600 border-red-500/30',
+    1: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+    2: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+    3: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 border-emerald-500/30',
+    4: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30',
 };
 
 export const ESTADO_LABELS = {
@@ -19,12 +19,12 @@ export const ESTADO_LABELS = {
 };
 
 export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
-export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-primary--compact`;
-
-export { GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK };
+export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-secondary--compact`;
 
 /** @deprecated Usar ACCENT */
 export const FACTURA_ACCENT = ACCENT;
+
+export { GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK };
 
 export function urlArchivoFactura(facturaId, tipo, indice = 0) {
     const base = route('facturas.archivo', { factura: facturaId, tipo });

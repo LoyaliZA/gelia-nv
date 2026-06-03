@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, router } from '@inertiajs/react';
 import { Eye, Wrench, ImageIcon } from 'lucide-react';
 import { ESTADO_BADGE, ESTADO_LABELS, getActivosCardClass } from './activosFormStyles';
 
-export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimiento }) {
+export default function TarjetaActivoCard({ activo, fotoUrl, tieneMantenimiento }) {
     return (
         <Link
             href={route('activos.show', activo.id)}
             prefetch={false}
-            className={`${getActivosCardClass('p-4 md:p-5 flex flex-col gap-3 block hover:opacity-95 transition-opacity active:scale-[0.99]')}`}
+            className={`${getActivosCardClass('h-full p-4 md:p-5 flex flex-col gap-3 block hover:opacity-95 transition-opacity active:scale-[0.99]')}`}
         >
             <div className="flex items-start gap-3">
                 <div className="w-14 h-14 rounded-xl overflow-hidden border theme-border bg-black/5 shrink-0 flex items-center justify-center">
@@ -19,19 +19,28 @@ export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimient
                     )}
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-mono font-bold theme-text-muted">{activo.folio}</p>
-                    <h3 className="text-sm font-black uppercase italic theme-text-main leading-tight">{activo.nombre}</h3>
-                    <p className="text-[10px] theme-text-muted mt-0.5">{activo.tipo?.nombre}</p>
+                    <p className="text-[10px] font-mono font-bold theme-text-muted m-0">{activo.folio}</p>
+                    <h3 className="text-sm font-black uppercase italic theme-text-main leading-tight m-0">{activo.nombre}</h3>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        {activo.tipo?.nombre && (
+                            <span className="text-[9px] font-bold theme-text-muted uppercase">{activo.tipo.nombre}</span>
+                        )}
+                        {activo.categoria?.nombre && (
+                            <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md border theme-border theme-text-muted">
+                                {activo.categoria.nombre}
+                            </span>
+                        )}
+                    </div>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${ESTADO_BADGE[activo.estado] || ''}`}>
                         {ESTADO_LABELS[activo.estado] || activo.estado}
                     </span>
-                    {tieneMantenimiento && <Wrench className="w-3.5 h-3.5 text-amber-500" />}
+                    {tieneMantenimiento && <Wrench className="w-3.5 h-3.5 text-amber-500" title="Mantenimiento" />}
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[10px]">
+            <div className="grid grid-cols-2 gap-2 text-[10px] flex-1">
                 <div className="theme-element rounded-xl p-2 border theme-border">
                     <span className="font-black uppercase theme-text-muted block mb-0.5">Marca / Modelo</span>
                     <span className="font-bold theme-text-main">{activo.atributos?.marca || '—'}</span>
@@ -43,8 +52,18 @@ export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimient
                         <span
                             role="link"
                             tabIndex={0}
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.get(route('activos.index', { responsable_user_id: activo.responsable.id })); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); router.get(route('activos.index', { responsable_user_id: activo.responsable.id })); } }}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                router.get(route('activos.index', { responsable_user_id: activo.responsable.id }));
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    router.get(route('activos.index', { responsable_user_id: activo.responsable.id }));
+                                }
+                            }}
                             className="font-bold truncate block cursor-pointer hover:underline"
                             style={{ color: 'var(--color-primario)' }}
                         >
@@ -56,7 +75,7 @@ export default function TarjetaActivoMobile({ activo, fotoUrl, tieneMantenimient
                 </div>
             </div>
 
-            <span className="inline-flex items-center justify-center gap-1 text-[10px] font-black uppercase w-full py-2 rounded-xl border theme-border theme-text-main">
+            <span className="inline-flex items-center justify-center gap-1 text-[10px] font-black uppercase w-full py-2 rounded-xl border theme-border theme-text-main mt-auto">
                 <Eye className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primario)' }} /> Ver detalle
             </span>
         </Link>

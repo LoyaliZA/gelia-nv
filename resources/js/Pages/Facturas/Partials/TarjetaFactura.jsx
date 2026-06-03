@@ -42,7 +42,7 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                     </span>
                 )}
                 {factura.tiene_pdf_emitido && (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
                         <FileText className="w-3 h-3 shrink-0" /> PDF
                     </span>
                 )}
@@ -84,7 +84,7 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                         <button
                             type="button"
                             onClick={() => onReportar(factura)}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-red-500/10 text-red-600 border border-red-500/30 outline-none"
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/30 outline-none"
                         >
                             <XCircle className="w-3.5 h-3.5 shrink-0" /> Error
                         </button>
@@ -94,7 +94,7 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                     <button
                         type="button"
                         onClick={() => onVerificar(factura)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-700 border border-emerald-500/30 outline-none"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 outline-none"
                     >
                         <Receipt className="w-3.5 h-3.5 shrink-0" /> Verificar
                     </button>

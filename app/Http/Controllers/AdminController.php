@@ -25,6 +25,7 @@ use App\Models\CatalogoSexo;
 use App\Models\CatalogoZonaEntrega;
 use App\Models\CatalogoHorarioEntrega;
 use App\Models\CatalogoBanco;
+use App\Models\CatalogoCategoriaActivo;
 use App\Models\CatalogoTipoActivo;
 use App\Models\Producto;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
@@ -32,6 +33,7 @@ use App\Models\CatalogoPorcentajeListadoLista;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
 use App\Services\Permisos\AsignarPermisosUsuarioService;
 use App\Services\Permisos\ValidarAsignacionPermisosService;
+use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
@@ -96,6 +98,7 @@ class AdminController extends Controller
             'porcentajes_listado' => CatalogoPorcentajeListadoLista::with('listaDescuento')->get(),
             'bancos' => CatalogoBanco::orderBy('nombre')->get(),
             'tipos_activo' => CatalogoTipoActivo::orderBy('nombre')->get(),
+            'categorias_activo' => CatalogoCategoriaActivo::orderBy('nombre')->get(),
             'productos' => Producto::orderBy('descripcion')->get(),
         ]);
     }
@@ -108,6 +111,7 @@ class AdminController extends Controller
 
         $relaciones = [
             'areas',
+            'area.departamento',
             'departamentos',
             'gerentes',
             'roles',
@@ -237,6 +241,7 @@ class AdminController extends Controller
             'catalogo_sexo_id' => 'nullable|exists:catalogo_sexos,id',
             'departamentos' => 'nullable|array',
             'areas' => 'nullable|array',
+            'area_id' => 'nullable|integer|exists:areas,id',
             'gerentes' => 'nullable|array',
             'roles_asignados' => 'array',
             'permisos_individuales' => 'array',
@@ -255,6 +260,8 @@ class AdminController extends Controller
             $data['permisos_individuales'] ?? []
         );
 
+        $areaPrincipalId = $this->resolverAreaPrincipal($data);
+
         $usuario = User::create([
             'name' => $data['name'],
             'apellido_paterno' => $data['apellido_paterno'],
@@ -265,11 +272,14 @@ class AdminController extends Controller
             'telefono' => $data['telefono'] ?? null,
             'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
             'catalogo_sexo_id' => $data['catalogo_sexo_id'] ?? null,
+            'area_id' => $areaPrincipalId,
         ]);
 
         if (isset($data['departamentos'])) $usuario->departamentos()->sync($data['departamentos']);
         if (isset($data['areas'])) $usuario->areas()->sync($data['areas']);
         if (isset($data['gerentes'])) $usuario->gerentes()->sync($data['gerentes']);
+
+        $this->sincronizarAreaRhColaborador($usuario, $areaPrincipalId);
 
         $usuario->syncRoles($rolesJerarquicos);
 
@@ -299,6 +309,7 @@ class AdminController extends Controller
             'catalogo_sexo_id' => 'nullable|exists:catalogo_sexos,id',
             'departamentos' => 'nullable|array',
             'areas' => 'nullable|array',
+            'area_id' => 'nullable|integer|exists:areas,id',
             'gerentes' => 'nullable|array',
             'roles_asignados' => 'array',
             'permisos_individuales' => 'array',
@@ -333,6 +344,8 @@ class AdminController extends Controller
 
         $data['permisos_individuales'] = $permisosFinales;
 
+        $areaPrincipalId = $this->resolverAreaPrincipal($data);
+
         $user->update([
             'name' => $data['name'],
             'apellido_paterno' => $data['apellido_paterno'],
@@ -342,6 +355,7 @@ class AdminController extends Controller
             'telefono' => $data['telefono'] ?? null,
             'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
             'catalogo_sexo_id' => $data['catalogo_sexo_id'] ?? null,
+            'area_id' => $areaPrincipalId,
         ]);
 
         if ($request->filled('password')) {
@@ -351,6 +365,8 @@ class AdminController extends Controller
         $user->departamentos()->sync($data['departamentos'] ?? []);
         $user->areas()->sync($data['areas'] ?? []);
         $user->gerentes()->sync($data['gerentes'] ?? []);
+
+        $this->sincronizarAreaRhColaborador($user, $areaPrincipalId);
 
         $user->syncRoles($rolesJerarquicos);
 
@@ -558,5 +574,48 @@ class AdminController extends Controller
         })->filter(fn ($p) => $p['permiso'])->values()->all();
 
         return $data;
+    }
+
+    private function resolverAreaPrincipal(array $data): ?int
+    {
+        $areas = collect($data['areas'] ?? [])
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $areaId = isset($data['area_id']) && $data['area_id'] !== ''
+            ? (int) $data['area_id']
+            : null;
+
+        if ($areaId !== null && !$areas->contains($areaId)) {
+            throw ValidationException::withMessages([
+                'area_id' => 'El área principal debe estar incluida en las áreas asignadas.',
+            ]);
+        }
+
+        if ($areaId === null && $areas->count() === 1) {
+            return $areas->first();
+        }
+
+        if ($areas->count() > 1 && $areaId === null) {
+            throw ValidationException::withMessages([
+                'area_id' => 'Selecciona el área principal cuando el colaborador tiene varias áreas asignadas.',
+            ]);
+        }
+
+        if ($areas->isEmpty()) {
+            return null;
+        }
+
+        return $areaId;
+    }
+
+    private function sincronizarAreaRhColaborador(User $usuario, ?int $areaId): void
+    {
+        $usuario->loadMissing('perfilRh');
+
+        if ($usuario->perfilRh && $areaId !== null) {
+            $usuario->perfilRh->update(['area_id' => $areaId]);
+        }
     }
 }

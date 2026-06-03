@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Camera, AlertTriangle } from 'lucide-react';
+import { Camera, AlertTriangle, Flashlight, FlashlightOff } from 'lucide-react';
 import ActivosModalShell from './ActivosModalShell';
 import { BTN_SECONDARY_CLASS } from './activosFormStyles';
 import { cargarHtml5Qrcode } from './cargarHtml5Qrcode';
@@ -24,6 +24,35 @@ async function detenerEscaner(escaner) {
     }
 }
 
+async function detectarSoporteFlash(escaner) {
+    try {
+        const caps = escaner.getRunningTrackCameraCapabilities?.();
+        return Boolean(caps?.torch);
+    } catch {
+        return false;
+    }
+}
+
+async function aplicarFlash(escaner, encender) {
+    if (!escaner) return false;
+
+    const intentos = [
+        { advanced: [{ torch: encender }] },
+        { torch: encender },
+    ];
+
+    for (const constraints of intentos) {
+        try {
+            await escaner.applyVideoConstraints(constraints);
+            return true;
+        } catch {
+            // probar siguiente formato
+        }
+    }
+
+    return false;
+}
+
 export default function ModalEscanearCodigo({
     abierto,
     onCerrar,
@@ -37,8 +66,15 @@ export default function ModalEscanearCodigo({
     const scannerId = useId().replace(/:/g, '');
     const [error, setError] = useState(null);
     const [iniciando, setIniciando] = useState(true);
+    const [flashActivo, setFlashActivo] = useState(false);
+    const [soportaFlash, setSoportaFlash] = useState(false);
+    const flashActivoRef = useRef(false);
 
     onEscaneadoRef.current = onEscaneado;
+
+    useEffect(() => {
+        flashActivoRef.current = flashActivo;
+    }, [flashActivo]);
 
     useEffect(() => {
         if (!abierto) return undefined;
@@ -48,6 +84,8 @@ export default function ModalEscanearCodigo({
         const iniciar = async () => {
             setError(null);
             setIniciando(true);
+            setFlashActivo(false);
+            setSoportaFlash(false);
 
             await esperarDom();
             if (cancelado || !hostRef.current) return;
@@ -96,6 +134,9 @@ export default function ModalEscanearCodigo({
                         if (!valor) return;
 
                         cancelado = true;
+                        if (flashActivoRef.current) {
+                            await aplicarFlash(escanerRef.current, false);
+                        }
                         await detenerEscaner(escanerRef.current);
                         escanerRef.current = null;
                         onEscaneadoRef.current?.(valor);
@@ -103,7 +144,10 @@ export default function ModalEscanearCodigo({
                     () => {},
                 );
 
-                if (!cancelado) setIniciando(false);
+                if (!cancelado) {
+                    setSoportaFlash(await detectarSoporteFlash(escaner));
+                    setIniciando(false);
+                }
             } catch (err) {
                 if (cancelado) return;
                 setError(err?.message || 'No se pudo acceder a la cámara.');
@@ -122,6 +166,17 @@ export default function ModalEscanearCodigo({
             });
         };
     }, [abierto, scannerId]);
+
+    const toggleFlash = async () => {
+        const escaner = escanerRef.current;
+        if (!escaner || !soportaFlash) return;
+
+        const next = !flashActivo;
+        const ok = await aplicarFlash(escaner, next);
+        if (ok) {
+            setFlashActivo(next);
+        }
+    };
 
     if (!abierto) return null;
 
@@ -150,10 +205,33 @@ export default function ModalEscanearCodigo({
 
                 <p className="text-[10px] theme-text-muted m-0">
                     Compatible con QR, Code 128/39, EAN y otros formatos habituales en etiquetas de serie y MAC.
+                    {soportaFlash ? ' Usa el flash si el entorno está oscuro.' : ' El flash no está disponible en este dispositivo o navegador.'}
                 </p>
             </div>
 
-            <div className="gelia-modal-footer p-5 md:p-6 flex justify-end">
+            <div className="gelia-modal-footer p-5 md:p-6 flex flex-wrap justify-between gap-2">
+                {soportaFlash ? (
+                    <button
+                        type="button"
+                        onClick={toggleFlash}
+                        className={`${BTN_SECONDARY_CLASS} inline-flex items-center gap-2`}
+                        aria-pressed={flashActivo}
+                    >
+                        {flashActivo ? (
+                            <>
+                                <FlashlightOff className="w-4 h-4 shrink-0" />
+                                Apagar flash
+                            </>
+                        ) : (
+                            <>
+                                <Flashlight className="w-4 h-4 shrink-0" />
+                                Encender flash
+                            </>
+                        )}
+                    </button>
+                ) : (
+                    <span />
+                )}
                 <button type="button" onClick={onCerrar} className={BTN_SECONDARY_CLASS}>
                     Cancelar
                 </button>

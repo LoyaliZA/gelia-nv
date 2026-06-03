@@ -4,7 +4,8 @@ import { useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { X, Receipt, Search, Download, FileSpreadsheet } from 'lucide-react';
 import ZonaAdjuntoVoucher from './ZonaAdjuntoVoucher';
-import { FACTURA_ACCENT } from './facturasStyles';
+import { FACTURA_ACCENT, BTN_PRIMARY } from './facturasStyles';
+import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 
 export default function ModalFormFactura({ onClose }) {
     const [vouchers, setVouchers] = useState([]);
@@ -77,19 +78,21 @@ export default function ModalFormFactura({ onClose }) {
     const voucherError = errors.vouchers || errors['vouchers.0'];
 
     return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
+        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
             <div
-                className="w-full max-w-2xl theme-surface border theme-border rounded-[2rem] p-8 shadow-2xl relative max-h-[92vh] overflow-y-auto custom-scrollbar"
+                className={`${THEME_MODAL_SHELL} max-w-2xl w-full flex flex-col text-left`}
+                style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                 onClick={e => e.stopPropagation()}
             >
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none"><X className="w-5 h-5" /></button>
-
-                <div className="flex items-center gap-3 mb-8">
-                    <Receipt className="w-8 h-8" style={{ color: FACTURA_ACCENT }} />
-                    <h2 className="text-2xl font-black italic theme-text-main uppercase tracking-tighter m-0">Nueva Solicitud de Factura_</h2>
+                <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <Receipt className="w-7 h-7 shrink-0" style={{ color: FACTURA_ACCENT }} />
+                        <h2 className="text-lg font-black italic theme-text-main uppercase tracking-tighter m-0">Nueva Solicitud de Factura_</h2>
+                    </div>
+                    <button type="button" onClick={onClose} className="p-2 theme-text-muted hover:theme-text-main rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"><X className="w-5 h-5" /></button>
                 </div>
 
-                <form onSubmit={enviar} className="space-y-6">
+                <form onSubmit={enviar} className="gelia-modal-body p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 space-y-6">
                     <div className="space-y-2 relative">
                         <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cliente (opcional)_</label>
                         <div className="relative">
@@ -164,8 +167,7 @@ export default function ModalFormFactura({ onClose }) {
                     <button
                         type="submit"
                         disabled={processing || vouchers.length === 0}
-                        className="w-full py-4 rounded-2xl text-white font-black uppercase tracking-widest text-xs disabled:opacity-50 outline-none shadow-md"
-                        style={{ backgroundColor: FACTURA_ACCENT }}
+                        className={`${BTN_PRIMARY} w-full !py-4 disabled:opacity-50`}
                     >
                         {processing ? 'Enviando…' : 'Enviar Solicitud'}
                     </button>

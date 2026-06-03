@@ -8,7 +8,7 @@ class ConstruirSnapshotActivoService
 {
     public function ejecutar(Activo $activo): array
     {
-        $activo->loadMissing(['tipo', 'departamento']);
+        $activo->loadMissing(['tipo', 'departamento', 'categoria']);
 
         return [
             'folio' => $activo->folio,
@@ -24,6 +24,11 @@ class ConstruirSnapshotActivoService
                 'nombre' => $activo->tipo->nombre,
                 'categoria' => $activo->tipo->categoria,
             ] : null,
+            'categoria_activo' => $activo->categoria ? [
+                'id' => $activo->categoria->id,
+                'nombre' => $activo->categoria->nombre,
+            ] : null,
+            'activo_padre_id' => $activo->activo_padre_id,
             'departamento' => $activo->departamento ? [
                 'id' => $activo->departamento->id,
                 'nombre' => $activo->departamento->nombre,

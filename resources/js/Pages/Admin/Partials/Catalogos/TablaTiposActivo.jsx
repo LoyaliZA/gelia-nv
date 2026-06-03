@@ -110,7 +110,7 @@ export default function TablaTiposActivo({ datos = [] }) {
                 <thead>
                     <tr className="border-b theme-border text-[10px] font-black uppercase theme-text-muted">
                         <th className="py-3">Nombre</th>
-                        <th className="py-3">Categoría</th>
+                        <th className="py-3">Clasificación</th>
                         <th className="py-3">Campos</th>
                         <th className="py-3">Estado</th>
                         <th className="py-3">Acciones</th>
@@ -141,6 +141,7 @@ export default function TablaTiposActivo({ datos = [] }) {
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
                             <input value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} placeholder="Nombre" className="w-full rounded-xl px-3 py-2 theme-element border theme-border" />
+                            <label className="text-[10px] font-black uppercase theme-text-muted block mb-1">Clasificación</label>
                             <select value={data.categoria} onChange={(e) => setData('categoria', e.target.value)} className="w-full rounded-xl px-3 py-2 theme-element border theme-border">
                                 {CATEGORIAS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                             </select>

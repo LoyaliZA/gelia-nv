@@ -5,23 +5,49 @@ import GeliaLoader from '../../../Components/GeliaLoader';
 import DynamicActivoFields from './DynamicActivoFields';
 import GaleriaFotosActivo from './GaleriaFotosActivo';
 import SelectorUsuarioGelia from './SelectorUsuarioGelia';
+import SelectorActivoPadre from './SelectorActivoPadre';
 import ActivosModalShell from './ActivosModalShell';
 import useDispositivoCampo from './useDispositivoCampo';
 import { validarAtributosActivo } from './validarAtributosActivo';
+import { aplicarDefaultsAtributos } from './defaultsAtributosActivo';
 import {
     INPUT_CLASS, SELECT_CLASS, TEXTAREA_CLASS, LABEL_CLASS,
     BTN_PRIMARY_CLASS, BTN_SECONDARY_CLASS, BTN_TOUCH_CLASS,
 } from './activosFormStyles';
 
 const STORAGE_CONTINUO = 'activos_registro_continuo';
-const PASOS = [
+const STORAGE_RESPONSABLE = 'activos_registro_responsable';
+
+const PASOS_BASE = [
+    { id: 'asignar', label: 'Asignar' },
     { id: 1, label: 'Tipo' },
     { id: 2, label: 'Datos' },
     { id: 3, label: 'Fotos' },
     { id: 4, label: 'Atributos' },
 ];
 
-export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departamentos = [], activo = null }) {
+function leerResponsablePersistido() {
+    if (typeof window === 'undefined') return { user_id: '', notas: '', condiciones_entrega: '' };
+    try {
+        const raw = localStorage.getItem(STORAGE_RESPONSABLE);
+        if (!raw) return { user_id: '', notas: '', condiciones_entrega: '' };
+        return JSON.parse(raw);
+    } catch {
+        return { user_id: '', notas: '', condiciones_entrega: '' };
+    }
+}
+
+function guardarResponsablePersistido({ user_id, notas, condiciones_entrega }) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(STORAGE_RESPONSABLE, JSON.stringify({ user_id, notas, condiciones_entrega }));
+}
+
+function limpiarResponsablePersistido() {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(STORAGE_RESPONSABLE);
+}
+
+export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categorias = [], departamentos = [], activo = null }) {
     const esEdicion = !!activo;
     const { esMovil } = useDispositivoCampo();
     const { flash, auth } = usePage().props;
@@ -31,7 +57,15 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
         const isAdmin = roles.includes('Admin') || roles.includes('Super admin (admin)') || roles.includes('Super Admin');
         return auth?.user?.permissions?.includes('activos.asignar') || isAdmin;
     }, [auth]);
-    const [paso, setPaso] = useState(1);
+
+    const pasosWizard = useMemo(() => {
+        if (esEdicion || !puedeAsignar) {
+            return PASOS_BASE.filter((p) => p.id !== 'asignar');
+        }
+        return PASOS_BASE;
+    }, [esEdicion, puedeAsignar]);
+
+    const [paso, setPaso] = useState(pasosWizard[0]?.id === 'asignar' ? 'asignar' : 1);
     const [registroContinuo, setRegistroContinuo] = useState(() => {
         if (typeof window === 'undefined') return false;
         return localStorage.getItem(STORAGE_CONTINUO) === '1';
@@ -39,8 +73,17 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
     const [ultimoFolio, setUltimoFolio] = useState(null);
     const [erroresLocales, setErroresLocales] = useState({});
 
+    const responsableInicial = useMemo(() => {
+        if (esEdicion || !registroContinuo) {
+            return { user_id: '', notas: '', condiciones_entrega: '' };
+        }
+        return leerResponsablePersistido();
+    }, [esEdicion, registroContinuo, abierto]);
+
     const { data, setData, post, put, processing, errors, reset, clearErrors, transform } = useForm({
         catalogo_tipo_activo_id: '',
+        catalogo_categoria_activo_id: '',
+        activo_padre_id: '',
         departamento_id: '',
         area_id: '',
         nombre: '',
@@ -51,8 +94,9 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
         valor: '',
         fotos: [],
         registro_continuo: false,
-        user_id: '',
-        notas: '',
+        user_id: responsableInicial.user_id || '',
+        notas: responsableInicial.notas || '',
+        condiciones_entrega: responsableInicial.condiciones_entrega || '',
     });
 
     const tipoSeleccionado = useMemo(
@@ -60,13 +104,21 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
         [tipos, data.catalogo_tipo_activo_id]
     );
 
+    const esAccesorio = tipoSeleccionado?.slug === 'accesorio';
     const usarWizard = esMovil && !esEdicion;
     const camposTipo = tipoSeleccionado?.esquema_atributos?.fields || [];
     const erroresCombinados = { ...errors, ...erroresLocales };
 
+    const indicePasoActual = pasosWizard.findIndex((p) => p.id === paso);
+    const pasoNumerico = indicePasoActual >= 0 ? indicePasoActual + 1 : 1;
+
     const resetCamposVariables = (tipoId, deptId) => {
+        const responsable = registroContinuo ? leerResponsablePersistido() : { user_id: '', notas: '', condiciones_entrega: '' };
+
         setData({
             catalogo_tipo_activo_id: tipoId,
+            catalogo_categoria_activo_id: '',
+            activo_padre_id: '',
             departamento_id: deptId,
             area_id: '',
             nombre: '',
@@ -77,10 +129,11 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
             valor: '',
             fotos: [],
             registro_continuo: registroContinuo,
-            user_id: '',
-            notas: '',
+            user_id: responsable.user_id || '',
+            notas: responsable.notas || '',
+            condiciones_entrega: responsable.condiciones_entrega || '',
         });
-        setPaso(2);
+        setPaso(pasosWizard.find((p) => p.id !== 'asignar')?.id || 1);
         clearErrors();
         setErroresLocales({});
     };
@@ -91,6 +144,8 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
         if (activo) {
             setData({
                 catalogo_tipo_activo_id: activo.catalogo_tipo_activo_id || '',
+                catalogo_categoria_activo_id: activo.catalogo_categoria_activo_id || '',
+                activo_padre_id: activo.activo_padre_id || '',
                 departamento_id: activo.departamento_id || '',
                 area_id: activo.area_id || '',
                 nombre: activo.nombre || '',
@@ -103,10 +158,18 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
                 registro_continuo: false,
                 user_id: '',
                 notas: '',
+                condiciones_entrega: '',
             });
         } else {
+            const responsable = registroContinuo ? leerResponsablePersistido() : { user_id: '', notas: '', condiciones_entrega: '' };
             reset();
-            setPaso(1);
+            setData((prev) => ({
+                ...prev,
+                user_id: responsable.user_id || '',
+                notas: responsable.notas || '',
+                condiciones_entrega: responsable.condiciones_entrega || '',
+            }));
+            setPaso(pasosWizard[0]?.id === 'asignar' ? 'asignar' : 1);
             setUltimoFolio(null);
         }
         clearErrors();
@@ -119,6 +182,16 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
         }
     }, [flash?.activo_registrado?.folio]);
 
+    useEffect(() => {
+        if (registroContinuo && !esEdicion) {
+            guardarResponsablePersistido({
+                user_id: data.user_id,
+                notas: data.notas,
+                condiciones_entrega: data.condiciones_entrega,
+            });
+        }
+    }, [data.user_id, data.notas, data.condiciones_entrega, registroContinuo, esEdicion]);
+
     if (!abierto) return null;
 
     const tieneFotos = (data.fotos || []).length > 0;
@@ -126,15 +199,23 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
     const validarPaso = (pasoActual = paso) => {
         const locales = {};
 
+        if (pasoActual === 'asignar') {
+            return true;
+        }
+
         if (pasoActual === 1 || !usarWizard) {
             if (!data.catalogo_tipo_activo_id) locales.catalogo_tipo_activo_id = 'Selecciona un tipo.';
             if (!data.departamento_id) locales.departamento_id = 'Selecciona un departamento.';
+            if (esAccesorio && !data.activo_padre_id) {
+                locales.activo_padre_id = 'Vincula el accesorio a un activo principal.';
+            }
         }
         if (pasoActual === 2 || !usarWizard) {
             if (!data.nombre?.trim()) locales.nombre = 'El nombre es obligatorio.';
         }
         if (pasoActual === 4 || !usarWizard) {
-            Object.assign(locales, validarAtributosActivo(camposTipo, data.atributos));
+            const atributosNormalizados = aplicarDefaultsAtributos(camposTipo, data.atributos);
+            Object.assign(locales, validarAtributosActivo(camposTipo, atributosNormalizados));
         }
 
         setErroresLocales(locales);
@@ -142,23 +223,40 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
     };
 
     const avanzarPaso = () => {
-        if (validarPaso(paso)) setPaso((p) => Math.min(p + 1, PASOS.length));
+        if (validarPaso(paso)) {
+            const idx = pasosWizard.findIndex((p) => p.id === paso);
+            if (idx >= 0 && idx < pasosWizard.length - 1) {
+                setPaso(pasosWizard[idx + 1].id);
+            }
+        }
     };
 
-    const retrocederPaso = () => setPaso((p) => Math.max(p - 1, 1));
+    const retrocederPaso = () => {
+        const idx = pasosWizard.findIndex((p) => p.id === paso);
+        if (idx > 0) {
+            setPaso(pasosWizard[idx - 1].id);
+        }
+    };
 
     const submit = (e) => {
         e.preventDefault();
-        if (!validarPaso(usarWizard ? PASOS.length : 2)) return;
+        if (!validarPaso(usarWizard ? pasosWizard[pasosWizard.length - 1].id : 2)) return;
 
         const accion = esEdicion ? put : post;
         const ruta = esEdicion ? route('activos.update', activo.id) : route('activos.store');
 
-        transform((formData) => ({
-            ...formData,
-            atributos: typeof formData.atributos === 'object' ? JSON.stringify(formData.atributos) : formData.atributos,
-            registro_continuo: !esEdicion && registroContinuo,
-        }));
+        transform((formData) => {
+            const atributosRaw = typeof formData.atributos === 'object'
+                ? formData.atributos
+                : (JSON.parse(formData.atributos || '{}') || {});
+            const atributos = aplicarDefaultsAtributos(camposTipo, atributosRaw);
+
+            return {
+                ...formData,
+                atributos: JSON.stringify(atributos),
+                registro_continuo: !esEdicion && registroContinuo,
+            };
+        });
 
         accion(ruta, {
             onSuccess: () => {
@@ -179,10 +277,56 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
         setRegistroContinuo(next);
         localStorage.setItem(STORAGE_CONTINUO, next ? '1' : '0');
         setData('registro_continuo', next);
+        if (!next) {
+            limpiarResponsablePersistido();
+        } else {
+            guardarResponsablePersistido({
+                user_id: data.user_id,
+                notas: data.notas,
+                condiciones_entrega: data.condiciones_entrega,
+            });
+        }
     };
+
+    const renderAsignacionOpcional = () => (
+        <div className="border theme-border rounded-xl p-4 space-y-3 bg-black/[0.02] dark:bg-white/[0.02]">
+            <div className="flex items-center gap-2">
+                <UserPlus className="w-4 h-4 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                <p className={`${LABEL_CLASS} m-0`}>Asignar a (opcional)</p>
+            </div>
+            <p className="text-xs theme-text-muted m-0">
+                Puedes asignar el activo al guardar. Con registro continuo, el responsable se mantiene entre registros.
+            </p>
+            <div>
+                <label className={LABEL_CLASS}>Usuario Gelia</label>
+                <SelectorUsuarioGelia
+                    value={data.user_id}
+                    onChange={(id) => setData('user_id', id)}
+                    departamentoId={data.departamento_id}
+                    placeholder="Buscar responsable..."
+                />
+                {erroresCombinados.user_id && <p className="text-red-500 text-xs mt-1">{erroresCombinados.user_id}</p>}
+            </div>
+            {data.user_id && (
+                <>
+                    <div>
+                        <label className={LABEL_CLASS}>Condiciones de entrega</label>
+                        <textarea value={data.condiciones_entrega} onChange={(e) => setData('condiciones_entrega', e.target.value)} rows={2} className={TEXTAREA_CLASS} placeholder="Ej. Buen estado, sin observaciones" />
+                    </div>
+                    <div>
+                        <label className={LABEL_CLASS}>Notas de asignación</label>
+                        <textarea value={data.notas} onChange={(e) => setData('notas', e.target.value)} rows={2} className={TEXTAREA_CLASS} />
+                    </div>
+                </>
+            )}
+        </div>
+    );
+
+    const renderPasoAsignar = () => renderAsignacionOpcional();
 
     const renderPaso1 = () => (
         <div className="grid grid-cols-1 gap-4">
+            {!esEdicion && puedeAsignar && !usarWizard && renderAsignacionOpcional()}
             <div>
                 <label className={LABEL_CLASS}>Tipo *</label>
                 <select value={data.catalogo_tipo_activo_id} onChange={(e) => setData('catalogo_tipo_activo_id', e.target.value)} disabled={esEdicion} className={SELECT_CLASS}>
@@ -191,6 +335,15 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
                 </select>
                 {erroresCombinados.catalogo_tipo_activo_id && <p className="text-red-500 text-xs mt-1">{erroresCombinados.catalogo_tipo_activo_id}</p>}
             </div>
+            {categorias.length > 0 && (
+                <div>
+                    <label className={LABEL_CLASS}>Categoría</label>
+                    <select value={data.catalogo_categoria_activo_id} onChange={(e) => setData('catalogo_categoria_activo_id', e.target.value)} className={SELECT_CLASS}>
+                        <option value="">Sin categoría</option>
+                        {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    </select>
+                </div>
+            )}
             <div>
                 <label className={LABEL_CLASS}>Departamento *</label>
                 <select value={data.departamento_id} onChange={(e) => setData('departamento_id', e.target.value)} className={SELECT_CLASS}>
@@ -199,6 +352,18 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
                 </select>
                 {erroresCombinados.departamento_id && <p className="text-red-500 text-xs mt-1">{erroresCombinados.departamento_id}</p>}
             </div>
+            {esAccesorio && (
+                <div>
+                    <label className={LABEL_CLASS}>Activo principal *</label>
+                    <SelectorActivoPadre
+                        value={data.activo_padre_id}
+                        onChange={(id) => setData('activo_padre_id', id)}
+                        excluirId={activo?.id}
+                        placeholder="Buscar equipo al que pertenece..."
+                    />
+                    {erroresCombinados.activo_padre_id && <p className="text-red-500 text-xs mt-1">{erroresCombinados.activo_padre_id}</p>}
+                </div>
+            )}
         </div>
     );
 
@@ -223,36 +388,6 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
                 <label className={LABEL_CLASS}>Descripción</label>
                 <textarea value={data.descripcion} onChange={(e) => setData('descripcion', e.target.value)} rows={2} className={TEXTAREA_CLASS} />
             </div>
-            {!esEdicion && puedeAsignar && renderAsignacionOpcional()}
-        </div>
-    );
-
-    const renderAsignacionOpcional = () => (
-        <div className="border-t theme-border pt-4 space-y-3">
-            <div className="flex items-center gap-2">
-                <UserPlus className="w-4 h-4 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                <p className={`${LABEL_CLASS} m-0`}>Asignar a (opcional)</p>
-            </div>
-            <p className="text-xs theme-text-muted m-0">
-                Puedes asignar el activo al guardar, sin tener que registrarlo primero.
-            </p>
-            <div>
-                <label className={LABEL_CLASS}>Usuario Gelia</label>
-                <SelectorUsuarioGelia
-                    value={data.user_id}
-                    onChange={(id) => setData('user_id', id)}
-                    departamentoId={data.departamento_id}
-                    placeholder="Buscar responsable..."
-                />
-                {erroresCombinados.user_id && <p className="text-red-500 text-xs mt-1">{erroresCombinados.user_id}</p>}
-            </div>
-            {data.user_id && (
-                <div>
-                    <label className={LABEL_CLASS}>Notas de asignación</label>
-                    <textarea value={data.notas} onChange={(e) => setData('notas', e.target.value)} rows={2} className={TEXTAREA_CLASS} />
-                    {erroresCombinados.notas && <p className="text-red-500 text-xs mt-1">{erroresCombinados.notas}</p>}
-                </div>
-            )}
         </div>
     );
 
@@ -277,7 +412,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
                 tipoActivoId={data.catalogo_tipo_activo_id}
             />
         ) : (
-            <p className="text-sm theme-text-muted italic">Selecciona un tipo de activo en el paso 1.</p>
+            <p className="text-sm theme-text-muted italic">Selecciona un tipo de activo en el paso correspondiente.</p>
         )
     );
 
@@ -297,26 +432,34 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
         </>
     );
 
+    const renderContenidoPaso = () => {
+        if (paso === 'asignar') return renderPasoAsignar();
+        if (paso === 1) return renderPaso1();
+        if (paso === 2) return renderPaso2();
+        if (paso === 3) return renderPaso3();
+        if (paso === 4) return renderPaso4();
+        return null;
+    };
+
     const renderWizard = () => (
         <>
             <div className="flex gap-2 mb-4">
-                {PASOS.map((p) => (
+                {pasosWizard.map((p, idx) => (
                     <div
-                        key={p.id}
-                        className={`flex-1 h-1.5 rounded-full ${paso >= p.id ? '' : 'bg-black/10 dark:bg-white/10'}`}
-                        style={paso >= p.id ? { backgroundColor: 'var(--color-primario)' } : undefined}
+                        key={String(p.id)}
+                        className={`flex-1 h-1.5 rounded-full ${idx <= indicePasoActual ? '' : 'bg-black/10 dark:bg-white/10'}`}
+                        style={idx <= indicePasoActual ? { backgroundColor: 'var(--color-primario)' } : undefined}
                     />
                 ))}
             </div>
             <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-4">
-                Paso {paso} de {PASOS.length} — {PASOS[paso - 1]?.label}
+                Paso {pasoNumerico} de {pasosWizard.length} — {pasosWizard[indicePasoActual]?.label}
             </p>
-            {paso === 1 && renderPaso1()}
-            {paso === 2 && renderPaso2()}
-            {paso === 3 && renderPaso3()}
-            {paso === 4 && renderPaso4()}
+            {renderContenidoPaso()}
         </>
     );
+
+    const ultimoPaso = pasosWizard[pasosWizard.length - 1]?.id;
 
     return (
         <ActivosModalShell
@@ -339,13 +482,13 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
                     {!esEdicion && (
                         <label className="flex items-center gap-3 pt-2 cursor-pointer">
                             <input type="checkbox" checked={registroContinuo} onChange={toggleContinuo} className="rounded w-5 h-5" />
-                            <span className="text-sm theme-text-main">Registro continuo (mantener tipo y departamento)</span>
+                            <span className="text-sm theme-text-main">Registro continuo (mantener tipo, departamento y responsable)</span>
                         </label>
                     )}
                 </div>
 
                 <div className="gelia-modal-footer p-5 md:p-6 flex flex-col-reverse sm:flex-row justify-end gap-3">
-                    {usarWizard && paso > 1 && (
+                    {usarWizard && indicePasoActual > 0 && (
                         <button type="button" onClick={retrocederPaso} className={`${BTN_SECONDARY_CLASS} w-full sm:w-auto min-h-[44px]`}>
                             <ChevronLeft className="w-4 h-4" /> Anterior
                         </button>
@@ -353,7 +496,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], departa
                     <button type="button" onClick={onCerrar} className={`${BTN_SECONDARY_CLASS} w-full sm:w-auto min-h-[44px]`}>
                         Cancelar
                     </button>
-                    {usarWizard && paso < PASOS.length ? (
+                    {usarWizard && paso !== ultimoPaso ? (
                         <button type="button" onClick={avanzarPaso} className={`${BTN_TOUCH_CLASS} w-full sm:w-auto justify-center`}>
                             Siguiente <ChevronRight className="w-4 h-4" />
                         </button>

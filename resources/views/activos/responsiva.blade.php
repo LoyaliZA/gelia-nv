@@ -404,6 +404,10 @@
          DATOS DEL COLABORADOR
     ============================================================ --}}
     <div class="section-title">Datos del Colaborador (Responsable)</div>
+    @php
+        $areaColaborador = $usuario->area ?? $usuario->areas->first();
+        $departamentoColaborador = $areaColaborador?->departamento ?? $usuario->departamentos->first();
+    @endphp
     <table class="info-table">
         <tr>
             <th>Nombre Completo:</th>
@@ -413,9 +417,9 @@
         </tr>
         <tr>
             <th>Departamento:</th>
-            <td>{{ $activo->departamento?->nombre ?? 'N/A' }}</td>
+            <td>{{ $departamentoColaborador?->nombre ?? 'N/A' }}</td>
             <th>Área:</th>
-            <td>{{ $activo->area?->nombre ?? 'N/A' }}</td>
+            <td>{{ $areaColaborador?->nombre ?? 'N/A' }}</td>
         </tr>
     </table>
 
@@ -430,6 +434,12 @@
             <th>Tipo de Activo:</th>
             <td>{{ $activo->tipo?->nombre ?? 'N/A' }}</td>
         </tr>
+        @if($activo->categoria)
+        <tr>
+            <th>Categoría:</th>
+            <td colspan="3">{{ $activo->categoria->nombre }}</td>
+        </tr>
+        @endif
         <tr>
             <th>Descripción:</th>
             <td colspan="3">{{ $activo->descripcion ?: 'Sin descripción detallada.' }}</td>
@@ -455,6 +465,24 @@
             </tr>
         @endif
     </table>
+
+    @if($activo->accesorios && $activo->accesorios->count() > 0)
+        <div class="section-title">Accesorios incluidos en la entrega</div>
+        <table class="info-table">
+            <tr>
+                <th>Folio</th>
+                <th>Nombre</th>
+                <th>Condición</th>
+            </tr>
+            @foreach($activo->accesorios as $accesorio)
+                <tr>
+                    <td>{{ $accesorio->folio }}</td>
+                    <td>{{ $accesorio->nombre }}</td>
+                    <td>{{ $accesorio->atributos['condicion'] ?? ($accesorio->atributos['descripcion_corta'] ?? 'N/A') }}</td>
+                </tr>
+            @endforeach
+        </table>
+    @endif
 
     {{-- ============================================================
          TÉRMINOS Y CONDICIONES

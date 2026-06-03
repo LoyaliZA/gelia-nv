@@ -59,4 +59,3 @@ export function renderActivosModal(content) {
 }
 
 export const BTN_TOUCH_CLASS = `${THEME_BTN_PRIMARY} min-h-[44px] text-base sm:text-sm`;
-export const FAB_CLASS = 'fixed bottom-6 right-6 z-40 flex items-center justify-center gap-2 min-h-[52px] px-5 rounded-2xl text-white font-black uppercase text-xs shadow-lg lg:hidden';

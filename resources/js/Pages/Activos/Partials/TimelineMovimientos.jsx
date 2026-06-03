@@ -15,6 +15,23 @@ const TIPO_LABELS = {
 
 const MANT_TIPO = { preventivo: 'Preventivo', correctivo: 'Correctivo', garantia: 'Garantía' };
 
+function formatearFechaActivo(valor) {
+    if (!valor) return '';
+    const texto = String(valor);
+    if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
+        return texto.substring(0, 10);
+    }
+    const fecha = new Date(texto);
+    if (Number.isNaN(fecha.getTime())) return texto;
+    return fecha.toLocaleDateString('es-MX');
+}
+
+function rangoAsignacion(fechaInicio, fechaFin) {
+    const inicio = formatearFechaActivo(fechaInicio);
+    if (!inicio) return '';
+    return fechaFin ? `${inicio} → ${formatearFechaActivo(fechaFin)}` : `${inicio} → presente`;
+}
+
 function SnapshotDetalle({ snapshot }) {
     const [abierto, setAbierto] = useState(false);
 
@@ -113,7 +130,7 @@ export default function TimelineMovimientos({ movimientos = [], mantenimientos =
     );
 }
 
-export function HistorialAsignaciones({ asignaciones = [], canSign = false, onSign = null, currentUser = null }) {
+export function HistorialAsignaciones({ asignaciones = [], canSign = false, onSign = null, onPreviewResponsiva = null, currentUser = null }) {
     if (!asignaciones.length) return null;
 
     return (
@@ -127,7 +144,7 @@ export function HistorialAsignaciones({ asignaciones = [], canSign = false, onSi
                                 {a.usuario?.name}
                             </Link>
                             <span className="block text-[10px] theme-text-muted mt-0.5">
-                                {a.fecha_inicio}{a.fecha_fin ? ` → ${a.fecha_fin}` : ' → presente'}
+                                {rangoAsignacion(a.fecha_inicio, a.fecha_fin)}
                             </span>
                         </div>
                         <div className="flex flex-col items-end gap-1">
@@ -155,14 +172,24 @@ export function HistorialAsignaciones({ asignaciones = [], canSign = false, onSi
                     )}
 
                     <div className="flex gap-2 items-center justify-between pt-1 border-t theme-border">
-                        <a
-                            href={route('activos.asignaciones.responsiva', a.id)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-blue-600 hover:underline"
-                        >
-                            Descargar Responsiva
-                        </a>
+                        {onPreviewResponsiva ? (
+                            <button
+                                type="button"
+                                onClick={() => onPreviewResponsiva(a)}
+                                className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-blue-600 hover:underline"
+                            >
+                                Vista previa responsiva
+                            </button>
+                        ) : (
+                            <a
+                                href={route('activos.asignaciones.responsiva', a.id)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-black uppercase text-blue-600 hover:underline"
+                            >
+                                Descargar Responsiva
+                            </a>
+                        )}
 
                         {a.activa && !a.firmado && (currentUser?.id === a.user_id || canSign) && onSign && (
                             <button
@@ -176,7 +203,7 @@ export function HistorialAsignaciones({ asignaciones = [], canSign = false, onSi
 
                         {a.firmado && a.firma_fecha && (
                             <span className="text-[9px] theme-text-muted italic">
-                                Firmado: {String(a.firma_fecha).substring(0, 10)}
+                                Firmado: {formatearFechaActivo(a.firma_fecha)}
                             </span>
                         )}
                     </div>

@@ -74,8 +74,7 @@ export default function ZonaAdjuntoVoucher({ vouchers, onChange, error }) {
 
             <div
                 tabIndex={0}
-                className="border-2 border-dashed rounded-2xl p-5 space-y-3 outline-none focus:border-[var(--color-primario)] transition-colors"
-                style={{ borderColor: error ? '#ef4444' : 'var(--border-color, rgba(128,128,128,0.3))' }}
+                className={`border-2 border-dashed rounded-2xl p-5 space-y-3 outline-none transition-colors ${error ? 'border-red-500' : 'theme-border focus:border-[var(--color-primario)]'}`}
             >
                 <p className="text-[10px] font-bold theme-text-muted text-center italic">
                     Pegue captura con Ctrl+V o seleccione imagen/PDF

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Activos;
 
+use App\Services\Activos\BuscarActivosService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -21,12 +22,22 @@ class StoreActivoRequest extends FormRequest
         if ($this->has('user_id') && $this->input('user_id') === '') {
             $this->merge(['user_id' => null]);
         }
+
+        if ($this->has('catalogo_categoria_activo_id') && $this->input('catalogo_categoria_activo_id') === '') {
+            $this->merge(['catalogo_categoria_activo_id' => null]);
+        }
+
+        if ($this->has('activo_padre_id') && $this->input('activo_padre_id') === '') {
+            $this->merge(['activo_padre_id' => null]);
+        }
     }
 
     public function rules(): array
     {
         return [
             'catalogo_tipo_activo_id' => 'required|exists:catalogo_tipos_activo,id',
+            'catalogo_categoria_activo_id' => 'nullable|exists:catalogo_categorias_activo,id',
+            'activo_padre_id' => 'nullable|exists:activos,id',
             'departamento_id' => 'required|exists:departamentos,id',
             'area_id' => 'nullable|exists:areas,id',
             'nombre' => 'required|string|max:255',
@@ -49,6 +60,23 @@ class StoreActivoRequest extends FormRequest
         $validator->after(function (Validator $validator) {
             if ($this->filled('user_id') && !$this->user()->can('activos.asignar')) {
                 $validator->errors()->add('user_id', 'No tienes permiso para asignar activos.');
+            }
+
+            if (!$this->filled('catalogo_tipo_activo_id')) {
+                return;
+            }
+
+            try {
+                app(BuscarActivosService::class)->validarActivoPadre(
+                    $this->input('activo_padre_id') ? (int) $this->input('activo_padre_id') : null,
+                    (int) $this->input('catalogo_tipo_activo_id'),
+                );
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                foreach ($e->errors() as $field => $messages) {
+                    foreach ($messages as $message) {
+                        $validator->errors()->add($field, $message);
+                    }
+                }
             }
         });
     }

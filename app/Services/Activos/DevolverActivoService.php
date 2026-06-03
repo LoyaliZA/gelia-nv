@@ -16,7 +16,7 @@ class DevolverActivoService
         private ConstruirSnapshotActivoService $construirSnapshot,
     ) {}
 
-    public function ejecutar(Activo $activo, User $actor, ?string $notas = null, ?string $condicionesDevolucion = null): Activo
+    public function ejecutar(Activo $activo, User $actor, ?string $notas = null, ?string $condicionesDevolucion = null, bool $devolverAccesorios = true): Activo
     {
         if ($activo->estado !== 'asignado' || !$activo->responsable_user_id) {
             throw ValidationException::withMessages([
@@ -24,7 +24,9 @@ class DevolverActivoService
             ]);
         }
 
-        return DB::transaction(function () use ($activo, $actor, $notas, $condicionesDevolucion) {
+        $responsableId = $activo->responsable_user_id;
+
+        $activoDevuelto = DB::transaction(function () use ($activo, $actor, $notas, $condicionesDevolucion) {
             $activo->loadMissing(['responsable', 'tipo', 'departamento']);
             $snapshot = $this->construirSnapshot->ejecutar($activo);
             $responsableAnterior = $activo->responsable;
@@ -63,5 +65,19 @@ class DevolverActivoService
 
             return $activoActualizado;
         });
+
+        if ($devolverAccesorios) {
+            $activo->loadMissing('accesorios');
+            foreach ($activo->accesorios as $accesorio) {
+                if (
+                    $accesorio->estado === 'asignado'
+                    && $accesorio->responsable_user_id === $responsableId
+                ) {
+                    $this->ejecutar($accesorio, $actor, $notas, $condicionesDevolucion, false);
+                }
+            }
+        }
+
+        return $activoDevuelto->fresh(['tipo', 'departamento', 'area', 'responsable', 'asignaciones.usuario', 'accesorios']);
     }
 }

@@ -11,6 +11,7 @@ class ValidarAtributosActivoService
     public function ejecutar(CatalogoTipoActivo $tipo, array $atributos): array
     {
         $fields = $tipo->esquema_atributos['fields'] ?? [];
+        $atributos = $this->aplicarValoresPorDefecto($fields, $atributos);
         $rules = [];
         $messages = [];
 
@@ -101,5 +102,55 @@ class ValidarAtributosActivoService
         }
 
         return null;
+    }
+
+    private function aplicarValoresPorDefecto(array $fields, array $atributos): array
+    {
+        $defaultsPorClave = [
+            'serial' => 'S/N',
+            'numero_serie' => 'S/N',
+            'no_serie' => 'S/N',
+            'imei' => 'S/N',
+            'mac' => 'N/A',
+            'ip' => 'N/A',
+            'material' => 'N/A',
+            'color' => 'N/A',
+            'ubicacion_fisica' => 'N/A',
+            'proveedor' => 'N/A',
+            'clave_licencia' => 'N/A',
+        ];
+
+        $sinDefault = ['marca', 'modelo', 'marca_id', 'modelo_id'];
+
+        foreach ($fields as $field) {
+            $key = $field['key'] ?? null;
+            if (!$key || in_array($key, $sinDefault, true)) {
+                continue;
+            }
+
+            $valor = $atributos[$key] ?? null;
+            if ($valor !== null && $valor !== '' && trim((string) $valor) !== '') {
+                continue;
+            }
+
+            $type = $field['type'] ?? 'text';
+            if (in_array($type, ['boolean', 'date', 'number'], true)) {
+                continue;
+            }
+            if ($type === 'select' && !empty($field['options'])) {
+                continue;
+            }
+            if (in_array($type, ['catalog_marca', 'catalog_modelo'], true)) {
+                continue;
+            }
+
+            if (isset($defaultsPorClave[$key])) {
+                $atributos[$key] = $defaultsPorClave[$key];
+            } elseif (in_array($type, ['text', 'textarea'], true)) {
+                $atributos[$key] = 'N/A';
+            }
+        }
+
+        return $atributos;
     }
 }

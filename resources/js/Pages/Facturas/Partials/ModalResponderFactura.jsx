@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { X, CheckCircle2, AlertOctagon, Upload, Send, FileText } from 'lucide-react';
-import { FACTURA_ACCENT } from './facturasStyles';
+import { FACTURA_ACCENT, BTN_PRIMARY } from './facturasStyles';
+import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 
 export default function ModalResponderFactura({ onClose, factura, estadoId }) {
     const esAprobacion = estadoId === 2;
@@ -26,21 +27,26 @@ export default function ModalResponderFactura({ onClose, factura, estadoId }) {
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
-            <div className="w-full max-w-3xl theme-surface border theme-border rounded-[2.5rem] p-10 shadow-2xl relative" onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main rounded-2xl outline-none"><X className="w-5 h-5" /></button>
-
-                <div className="flex items-center gap-3 mb-8">
-                    {esError ? <AlertOctagon className="w-8 h-8 text-red-500" /> : <CheckCircle2 className="w-8 h-8" style={{ color: 'var(--color-primario)' }} />}
-                    <div>
-                        <h2 className="text-2xl font-black italic theme-text-main uppercase m-0">
-                            {esError ? 'Reportar Error_' : 'Emitir Factura_'}
-                        </h2>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1">{factura.folio}</p>
+        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+            <div
+                className={`${THEME_MODAL_SHELL} max-w-3xl w-full flex flex-col text-left`}
+                style={{ maxHeight: 'calc(100dvh - 2rem)' }}
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        {esError ? <AlertOctagon className="w-7 h-7 text-red-500 shrink-0" /> : <CheckCircle2 className="w-7 h-7 shrink-0" style={{ color: FACTURA_ACCENT }} />}
+                        <div className="min-w-0">
+                            <h2 className="text-lg font-black italic theme-text-main uppercase m-0 leading-tight">
+                                {esError ? 'Reportar Error_' : 'Emitir Factura_'}
+                            </h2>
+                            <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1 m-0">{factura.folio}</p>
+                        </div>
                     </div>
+                    <button type="button" onClick={onClose} className="p-2 theme-text-muted hover:theme-text-main rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"><X className="w-5 h-5" /></button>
                 </div>
 
-                <form onSubmit={enviar} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <form onSubmit={enviar} className="gelia-modal-body p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-6">
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
@@ -96,8 +102,7 @@ export default function ModalResponderFactura({ onClose, factura, estadoId }) {
                         <button
                             type="submit"
                             disabled={processing}
-                            className="w-full py-4 rounded-2xl text-white font-black uppercase tracking-widest text-xs disabled:opacity-50 outline-none shadow-md"
-                            style={{ backgroundColor: esError ? '#ef4444' : FACTURA_ACCENT }}
+                            className={`${BTN_PRIMARY} w-full !py-4 disabled:opacity-50 ${esError ? '!bg-red-600 hover:!bg-red-700 dark:!bg-red-600' : ''}`}
                         >
                             <Send className="w-4 h-4 inline mr-2" />
                             {processing ? 'Procesando…' : 'Confirmar'}

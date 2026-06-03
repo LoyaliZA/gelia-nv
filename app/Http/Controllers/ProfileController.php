@@ -20,18 +20,18 @@ class ProfileController extends Controller
      */
     public function index(Request $request, UserSessionService $userSessionService): Response
     {
-        $user = $request->user()->load('areas.departamento');
-        $primeraArea = $user->areas->first();
+        $user = $request->user()->load(['area.departamento', 'areas.departamento']);
+        $areaPrincipal = $user->area ?? $user->areas->first();
 
         return Inertia::render('Profile/MiPerfil', [
             'perfilUsuario' => [
                 'fecha_nacimiento' => $user->fecha_nacimiento
                     ? Carbon::parse($user->fecha_nacimiento)->format('Y-m-d')
                     : null,
-                'area' => $primeraArea ? [
-                    'nombre'       => $primeraArea->nombre,
-                    'departamento' => $primeraArea->departamento ? [
-                        'nombre' => $primeraArea->departamento->nombre,
+                'area' => $areaPrincipal ? [
+                    'nombre'       => $areaPrincipal->nombre,
+                    'departamento' => $areaPrincipal->departamento ? [
+                        'nombre' => $areaPrincipal->departamento->nombre,
                     ] : null,
                 ] : null,
             ],
@@ -73,7 +73,7 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): Response
     {
-        $user = $request->user()->load('areas.departamento');
+        $user = $request->user()->load(['area.departamento', 'areas.departamento']);
 
         $configuracion = DB::table('configuraciones_usuarios')
             ->where('user_id', $user->id)
@@ -81,7 +81,7 @@ class ProfileController extends Controller
 
         $temaVisual = $configuracion ? json_decode($configuracion->tema_visual, true) : [];
 
-        $primeraArea = $user->areas->first();
+        $areaPrincipal = $user->area ?? $user->areas->first();
 
         return Inertia::render('Profile/Edit', [
             'tema_visual' => $temaVisual,
@@ -89,10 +89,10 @@ class ProfileController extends Controller
                 'fecha_nacimiento' => $user->fecha_nacimiento
                     ? Carbon::parse($user->fecha_nacimiento)->format('Y-m-d')
                     : null,
-                'area' => $primeraArea ? [
-                    'nombre'       => $primeraArea->nombre,
-                    'departamento' => $primeraArea->departamento ? [
-                        'nombre' => $primeraArea->departamento->nombre,
+                'area' => $areaPrincipal ? [
+                    'nombre'       => $areaPrincipal->nombre,
+                    'departamento' => $areaPrincipal->departamento ? [
+                        'nombre' => $areaPrincipal->departamento->nombre,
                     ] : null,
                 ] : null,
             ],

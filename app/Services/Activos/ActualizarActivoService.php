@@ -34,6 +34,12 @@ class ActualizarActivoService
 
             $activo->update([
                 'catalogo_tipo_activo_id' => $datos['catalogo_tipo_activo_id'] ?? $activo->catalogo_tipo_activo_id,
+                'catalogo_categoria_activo_id' => array_key_exists('catalogo_categoria_activo_id', $datos)
+                    ? $datos['catalogo_categoria_activo_id']
+                    : $activo->catalogo_categoria_activo_id,
+                'activo_padre_id' => array_key_exists('activo_padre_id', $datos)
+                    ? $datos['activo_padre_id']
+                    : $activo->activo_padre_id,
                 'departamento_id' => $datos['departamento_id'] ?? $activo->departamento_id,
                 'area_id' => array_key_exists('area_id', $datos) ? $datos['area_id'] : $activo->area_id,
                 'nombre' => $datos['nombre'] ?? $activo->nombre,
@@ -48,7 +54,7 @@ class ActualizarActivoService
                 'datos_snapshot' => $snapshot,
             ]);
 
-            return $activo->fresh(['tipo', 'departamento', 'area', 'responsable']);
+            return $activo->fresh(['tipo', 'departamento', 'area', 'responsable', 'categoria', 'padre']);
         });
     }
 }

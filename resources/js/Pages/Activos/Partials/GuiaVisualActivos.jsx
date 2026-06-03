@@ -18,7 +18,7 @@ const PASOS = [
     {
         icon: Bell,
         titulo: 'Mantenimiento y vencimientos',
-        descripcion: 'Programa mantenimientos y revisa alertas en el panel lateral y en la campana de notificaciones.',
+        descripcion: 'Programa mantenimientos y consulta vencimientos desde el botón de alertas del panel superior.',
     },
     {
         icon: Eye,

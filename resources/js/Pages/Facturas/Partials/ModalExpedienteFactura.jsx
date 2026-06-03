@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, FileSpreadsheet, FileText, Download, ChevronLeft, ChevronRight, Copy, Check, Loader2, Receipt } from 'lucide-react';
-import { ACCENT, esImagenVoucher, esPdfVoucher, urlArchivoFactura } from './facturasStyles';
-import { geliaCardClass } from '../../../utils/geliaTheme';
+import { ACCENT, BTN_PRIMARY, BTN_SECONDARY, esImagenVoucher, esPdfVoucher, urlArchivoFactura } from './facturasStyles';
+import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 
 const ETIQUETAS_DEFAULT = {
     rfc: 'RFC',
@@ -38,6 +38,11 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
     const [cargandoDatos, setCargandoDatos] = useState(false);
     const [errorDatos, setErrorDatos] = useState(null);
     const [copiadoKey, setCopiadoKey] = useState(null);
+
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = 'unset'; };
+    }, []);
 
     useEffect(() => {
         if (!facturaInicial?.id) return;
@@ -95,135 +100,155 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
     };
 
     return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
-            <div className={`w-full max-w-4xl ${geliaCardClass('rounded-[2rem] p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar')}`} onClick={e => e.stopPropagation()}>
-                <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none"><X className="w-5 h-5" /></button>
-
-                <div className="flex items-center gap-3 mb-6">
-                    <Receipt className="w-7 h-7" style={{ color: ACCENT }} />
-                    <div>
-                        <h3 className="text-xl font-black italic theme-text-main uppercase m-0">Expediente Fiscal_</h3>
-                        <p className="text-[10px] font-mono font-bold theme-text-muted mt-1">{factura?.folio || facturaInicial.folio}</p>
+        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+            <div
+                className={`${THEME_MODAL_SHELL} max-w-4xl w-full flex flex-col text-left`}
+                style={{ maxHeight: 'calc(100dvh - 2rem)' }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <Receipt className="w-7 h-7 shrink-0" style={{ color: ACCENT }} />
+                        <div className="min-w-0">
+                            <h3 className="text-lg font-black italic uppercase theme-text-main m-0 leading-tight">Expediente fiscal</h3>
+                            <p className="text-[10px] font-mono font-bold theme-text-muted mt-1 m-0">{factura?.folio || facturaInicial.folio}</p>
+                        </div>
                     </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="p-2 theme-text-muted hover:theme-text-main rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors outline-none shrink-0"
+                        aria-label="Cerrar"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
                 </div>
 
-                {cargandoFactura && (
-                    <div className="flex items-center gap-2 p-6 text-xs font-bold theme-text-muted italic mb-4">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Cargando archivos adjuntos…
-                    </div>
-                )}
-
-                {errorFactura && (
-                    <p className="text-xs font-bold text-red-500 p-4 rounded-2xl border border-red-500/20 bg-red-500/5 mb-4">{errorFactura}</p>
-                )}
-
-                {!cargandoFactura && factura && (
-                    <>
-                        <div className="p-4 rounded-2xl border theme-border mb-6 theme-element">
-                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Razón Social</p>
-                            <p className="text-sm font-black theme-text-main">{factura.razon_social || '—'}</p>
+                <div className="gelia-modal-body p-5 md:p-6 overflow-y-auto custom-scrollbar flex-1 min-h-0">
+                    {cargandoFactura && (
+                        <div className="flex items-center gap-2 p-4 text-xs font-bold theme-text-muted italic mb-4">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Cargando archivos adjuntos…
                         </div>
+                    )}
 
-                        <div className="space-y-6">
-                            <section>
-                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Datos fiscales</p>
-                                {cargandoDatos && (
-                                    <div className="flex items-center gap-2 p-4 text-xs font-bold theme-text-muted italic">
-                                        <Loader2 className="w-4 h-4 animate-spin" /> Extrayendo datos…
-                                    </div>
-                                )}
-                                {!cargandoDatos && errorDatos && (
-                                    <p className="text-xs font-bold text-red-500 p-4 rounded-2xl border border-red-500/20 bg-red-500/5">{errorDatos}</p>
-                                )}
-                                {!cargandoDatos && !errorDatos && filasDatos.length > 0 && (
-                                    <div className="rounded-2xl border theme-border overflow-hidden">
-                                        <table className="w-full text-left">
-                                            <tbody>
-                                                {filasDatos.map(clave => (
-                                                    <tr key={clave} className="border-b theme-border last:border-b-0">
-                                                        <td className="px-4 py-3 text-[10px] font-black uppercase theme-text-muted w-[40%]">{etiquetas[clave]}</td>
-                                                        <td className="px-4 py-3 text-xs font-bold theme-text-main break-all">{datosFiscales[clave]}</td>
-                                                        <td className="px-4 py-3">
-                                                            <button type="button" onClick={() => copiarCampo(clave, datosFiscales[clave])} className="p-1.5 rounded-lg theme-element border theme-border outline-none">
-                                                                {copiadoKey === clave ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                                {!cargandoDatos && !datosFiscales && !factura.tiene_archivo_fiscal && (
-                                    <p className="text-xs italic theme-text-muted p-4 border border-dashed theme-border rounded-2xl">Sin datos fiscales registrados.</p>
-                                )}
-                            </section>
+                    {errorFactura && (
+                        <p className="text-xs font-bold text-red-600 dark:text-red-400 p-4 rounded-2xl border border-red-500/20 bg-red-500/5 mb-4">{errorFactura}</p>
+                    )}
 
-                            {factura.tiene_archivo_fiscal && (
+                    {!cargandoFactura && factura && (
+                        <>
+                            <div className="p-4 rounded-2xl border theme-border mb-6 theme-element">
+                                <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Razón Social</p>
+                                <p className="text-sm font-black theme-text-main m-0">{factura.razon_social || '—'}</p>
+                            </div>
+
+                            <div className="space-y-6">
                                 <section>
-                                    <p className="text-[10px] font-black uppercase theme-text-muted mb-3">Excel fiscal</p>
-                                    <a
-                                        href={urlArchivoFactura(factura.id, 'fiscal')}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase border theme-border theme-element hover:border-[var(--color-primario)]"
-                                    >
-                                        <FileSpreadsheet className="w-4 h-4" style={{ color: ACCENT }} /> Descargar / ver Excel
-                                    </a>
-                                </section>
-                            )}
-
-                            <section>
-                                <p className="text-[10px] font-black uppercase theme-text-muted mb-3">Vouchers ({vouchers.length})</p>
-                                {vouchers.length === 0 ? (
-                                    <p className="text-xs italic theme-text-muted">Sin vouchers adjuntos.</p>
-                                ) : (
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="text-[10px] font-bold truncate">{voucherActual?.nombre_original || 'Voucher'}</span>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                <button type="button" disabled={voucherIndex <= 0} onClick={() => setVoucherIndex(i => i - 1)} className="p-2 rounded-lg theme-element border theme-border disabled:opacity-30 outline-none"><ChevronLeft className="w-4 h-4" /></button>
-                                                <span className="text-[9px] font-black">{voucherIndex + 1}/{vouchers.length}</span>
-                                                <button type="button" disabled={voucherIndex >= vouchers.length - 1} onClick={() => setVoucherIndex(i => i + 1)} className="p-2 rounded-lg theme-element border theme-border disabled:opacity-30 outline-none"><ChevronRight className="w-4 h-4" /></button>
-                                                <a href={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg theme-element border theme-border"><Download className="w-4 h-4" /></a>
-                                            </div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Datos fiscales</p>
+                                    {cargandoDatos && (
+                                        <div className="flex items-center gap-2 p-4 text-xs font-bold theme-text-muted italic">
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Extrayendo datos…
                                         </div>
-                                        {esImagenVoucher(voucherActual) ? (
-                                            <img src={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} alt="Voucher" className="w-full max-h-[360px] object-contain rounded-2xl border theme-border bg-white" />
-                                        ) : esPdfVoucher(voucherActual) ? (
-                                            <iframe title="Voucher PDF" src={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} className="w-full h-[360px] rounded-2xl border theme-border bg-white" />
-                                        ) : (
-                                            <a href={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs font-bold" style={{ color: ACCENT }}>
-                                                Abrir archivo adjunto
-                                            </a>
-                                        )}
-                                    </div>
-                                )}
-                            </section>
-
-                            {(factura.tiene_pdf_emitido || factura.tiene_xml) && (
-                                <section>
-                                    <p className="text-[10px] font-black uppercase theme-text-muted mb-3">Factura emitida</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {factura.tiene_pdf_emitido && (
-                                            <a href={urlArchivoFactura(factura.id, 'pdf')} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase theme-element border theme-border hover:border-[var(--color-primario)]">
-                                                <FileText className="w-4 h-4" style={{ color: ACCENT }} /> PDF Factura
-                                            </a>
-                                        )}
-                                        {factura.tiene_xml && (
-                                            <a href={urlArchivoFactura(factura.id, 'xml')} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase theme-element border theme-border">
-                                                <Download className="w-4 h-4" /> XML CFDI
-                                            </a>
-                                        )}
-                                    </div>
-                                    {factura.tiene_pdf_emitido && (
-                                        <iframe title="Factura PDF" src={urlArchivoFactura(factura.id, 'pdf')} className="w-full h-[420px] mt-4 rounded-2xl border theme-border bg-white" />
+                                    )}
+                                    {!cargandoDatos && errorDatos && (
+                                        <p className="text-xs font-bold text-red-600 dark:text-red-400 p-4 rounded-2xl border border-red-500/20 bg-red-500/5">{errorDatos}</p>
+                                    )}
+                                    {!cargandoDatos && !errorDatos && filasDatos.length > 0 && (
+                                        <div className="rounded-2xl border theme-border overflow-hidden">
+                                            <table className="w-full text-left">
+                                                <tbody>
+                                                    {filasDatos.map(clave => (
+                                                        <tr key={clave} className="border-b theme-border last:border-b-0">
+                                                            <td className="px-4 py-3 text-[10px] font-black uppercase theme-text-muted w-[40%]">{etiquetas[clave]}</td>
+                                                            <td className="px-4 py-3 text-xs font-bold theme-text-main break-all">{datosFiscales[clave]}</td>
+                                                            <td className="px-4 py-3">
+                                                                <button type="button" onClick={() => copiarCampo(clave, datosFiscales[clave])} className={`${BTN_SECONDARY} !py-1.5 !px-2`}>
+                                                                    {copiadoKey === clave ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                    {!cargandoDatos && !datosFiscales && !factura.tiene_archivo_fiscal && (
+                                        <p className="text-xs italic theme-text-muted p-4 border border-dashed theme-border rounded-2xl">Sin datos fiscales registrados.</p>
                                     )}
                                 </section>
-                            )}
-                        </div>
-                    </>
-                )}
+
+                                {factura.tiene_archivo_fiscal && (
+                                    <section>
+                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Excel fiscal</p>
+                                        <a
+                                            href={urlArchivoFactura(factura.id, 'fiscal')}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className={`${BTN_SECONDARY} inline-flex items-center gap-2`}
+                                        >
+                                            <FileSpreadsheet className="w-4 h-4 shrink-0" style={{ color: ACCENT }} /> Descargar / ver Excel
+                                        </a>
+                                    </section>
+                                )}
+
+                                <section>
+                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Vouchers ({vouchers.length})</p>
+                                    {vouchers.length === 0 ? (
+                                        <p className="text-xs italic theme-text-muted">Sin vouchers adjuntos.</p>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[10px] font-bold truncate">{voucherActual?.nombre_original || 'Voucher'}</span>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <button type="button" disabled={voucherIndex <= 0} onClick={() => setVoucherIndex(i => i - 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronLeft className="w-4 h-4" /></button>
+                                                    <span className="text-[9px] font-black">{voucherIndex + 1}/{vouchers.length}</span>
+                                                    <button type="button" disabled={voucherIndex >= vouchers.length - 1} onClick={() => setVoucherIndex(i => i + 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronRight className="w-4 h-4" /></button>
+                                                    <a href={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} target="_blank" rel="noopener noreferrer" className={`${BTN_SECONDARY} !p-2`}><Download className="w-4 h-4" /></a>
+                                                </div>
+                                            </div>
+                                            {esImagenVoucher(voucherActual) ? (
+                                                <div className="rounded-2xl border theme-border overflow-hidden bg-white">
+                                                    <img src={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} alt="Voucher" className="w-full max-h-[360px] object-contain" />
+                                                </div>
+                                            ) : esPdfVoucher(voucherActual) ? (
+                                                <iframe title="Voucher PDF" src={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} className="w-full h-[360px] rounded-2xl border theme-border bg-white" />
+                                            ) : (
+                                                <a href={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} target="_blank" rel="noopener noreferrer" className={`${BTN_PRIMARY} inline-flex items-center gap-2`}>
+                                                    Abrir archivo adjunto
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
+                                </section>
+
+                                {(factura.tiene_pdf_emitido || factura.tiene_xml) && (
+                                    <section>
+                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Factura emitida</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {factura.tiene_pdf_emitido && (
+                                                <a href={urlArchivoFactura(factura.id, 'pdf')} target="_blank" rel="noopener noreferrer" className={`${BTN_SECONDARY} inline-flex items-center gap-2`}>
+                                                    <FileText className="w-4 h-4 shrink-0" style={{ color: ACCENT }} /> PDF Factura
+                                                </a>
+                                            )}
+                                            {factura.tiene_xml && (
+                                                <a href={urlArchivoFactura(factura.id, 'xml')} className={`${BTN_SECONDARY} inline-flex items-center gap-2`}>
+                                                    <Download className="w-4 h-4 shrink-0" /> XML CFDI
+                                                </a>
+                                            )}
+                                        </div>
+                                        {factura.tiene_pdf_emitido && (
+                                            <iframe title="Factura PDF" src={urlArchivoFactura(factura.id, 'pdf')} className="w-full h-[420px] mt-4 rounded-2xl border theme-border bg-white" />
+                                        )}
+                                    </section>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                <div className="gelia-modal-footer p-5 md:p-6 border-t theme-border flex justify-end shrink-0">
+                    <button type="button" onClick={onClose} className={BTN_SECONDARY}>Cerrar</button>
+                </div>
             </div>
         </div>,
         document.body

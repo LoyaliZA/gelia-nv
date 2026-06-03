@@ -56,6 +56,7 @@ function contarFiltrosActivos(filtros) {
     let n = 0;
     if (filtros.busqueda) n += 1;
     if (filtros.catalogo_tipo_activo_id) n += 1;
+    if (filtros.catalogo_categoria_activo_id) n += 1;
     if (filtros.departamento_id) n += 1;
     if (filtros.estado) n += 1;
     if (filtros.responsable_user_id) n += 1;
@@ -66,7 +67,7 @@ function contarFiltrosActivos(filtros) {
     return n;
 }
 
-export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos = [], usuarios = [], onAplicar }) {
+export default function FiltrosActivos({ filtros = {}, tipos = [], categorias = [], departamentos = [], usuarios = [], onAplicar }) {
     const [expandido, setExpandido] = useState(estadoInicialExpandido);
     const [modalEscaner, setModalEscaner] = useState(false);
 
@@ -82,6 +83,7 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
         const merged = {
             busqueda: filtros.busqueda || '',
             catalogo_tipo_activo_id: filtros.catalogo_tipo_activo_id || '',
+            catalogo_categoria_activo_id: filtros.catalogo_categoria_activo_id || '',
             departamento_id: filtros.departamento_id || '',
             estado: filtros.estado || '',
             responsable_user_id: filtros.responsable_user_id || '',
@@ -281,6 +283,20 @@ export default function FiltrosActivos({ filtros = {}, tipos = [], departamentos
                                 <option value="">Todos los tipos</option>
                                 {tipos.map((t) => (
                                     <option key={t.id} value={t.id}>{t.nombre}</option>
+                                ))}
+                            </select>
+                        </CampoFiltro>
+
+                        <CampoFiltro label="Categoría" htmlFor="activos-filtro-categoria">
+                            <select
+                                id="activos-filtro-categoria"
+                                value={filtros.catalogo_categoria_activo_id || ''}
+                                onChange={(e) => aplicar({ catalogo_categoria_activo_id: e.target.value })}
+                                className={`${SELECT_CLASS} w-full`}
+                            >
+                                <option value="">Todas las categorías</option>
+                                {categorias.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.nombre}</option>
                                 ))}
                             </select>
                         </CampoFiltro>

@@ -242,6 +242,7 @@ export default function Usuarios({
         catalogo_sexo_id: '',
         departamentos: [],
         areas: [],
+        area_id: '',
         gerentes: [],
         roles_asignados: [],
         permisos_individuales: [],
@@ -361,6 +362,7 @@ export default function Usuarios({
                 catalogo_sexo_id: usuario.catalogo_sexo_id || '',
                 departamentos: usuario.departamentos ? usuario.departamentos.map(d => d.id) : [],
                 areas: usuario.areas ? usuario.areas.map(a => a.id) : [],
+                area_id: usuario.area_id || '',
                 gerentes: usuario.gerentes ? usuario.gerentes.map(g => g.id) : [],
                 roles_asignados: rolesJerarquicos,
                 permisos_individuales: usuario.permissions ? usuario.permissions.map(p => p.name) : [],
@@ -390,7 +392,20 @@ export default function Usuarios({
             ? actuales.filter(item => item !== idOrName)
             : [...actuales, idOrName];
         setData(campo, nuevos);
+
+        if (campo === 'areas') {
+            const areaIdActual = data.area_id ? Number(data.area_id) : null;
+            if (areaIdActual && !nuevos.includes(areaIdActual)) {
+                setData('area_id', nuevos.length === 1 ? String(nuevos[0]) : '');
+            } else if (!areaIdActual && nuevos.length === 1) {
+                setData('area_id', String(nuevos[0]));
+            }
+        }
     };
+
+    const areasSeleccionadas = (departamentos || [])
+        .flatMap((depto) => depto.areas || [])
+        .filter((area) => (data.areas || []).includes(area.id));
 
     const aplicarPlantilla = (nombreGrupo) => {
         if (plantillaSeleccionada === nombreGrupo) {
@@ -735,7 +750,37 @@ export default function Usuarios({
                                             </div>
 
                                             <div className="space-y-2">
-                                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">3. Reporta a (Gerentes / Líderes)</label>
+                                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">
+                                                    3. Área Principal (Reportes y RH)
+                                                </label>
+                                                <select
+                                                    value={data.area_id || ''}
+                                                    onChange={(e) => setData('area_id', e.target.value)}
+                                                    disabled={areasSeleccionadas.length === 0}
+                                                    required={areasSeleccionadas.length > 1}
+                                                    className="w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none appearance-none transition-all focus:ring-1 focus:ring-transparent disabled:opacity-50"
+                                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                                >
+                                                    <option value="">
+                                                        {areasSeleccionadas.length === 0
+                                                            ? 'Selecciona al menos un área operativa'
+                                                            : areasSeleccionadas.length === 1
+                                                                ? 'Se asignará automáticamente'
+                                                                : 'Selecciona el área principal...'}
+                                                    </option>
+                                                    {areasSeleccionadas.map((area) => (
+                                                        <option key={`area-principal-${area.id}`} value={area.id}>
+                                                            {area.nombre}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <p className="text-[9px] theme-text-muted ml-2 leading-relaxed">
+                                                    Define el área que aparecerá en responsivas y reportes. Debe ser una de las áreas operativas asignadas arriba.
+                                                </p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">4. Reporta a (Gerentes / Líderes)</label>
                                                 <div className="flex flex-wrap gap-2 p-3 border theme-border rounded-2xl theme-element bg-transparent max-h-32 overflow-y-auto custom-scrollbar">
                                                     {(posiblesGerentes || []).length === 0 ? (
                                                         <span className="text-xs theme-text-muted italic px-2">No hay gerentes disponibles.</span>

@@ -17,6 +17,8 @@ class Activo extends Model
         'folio',
         'consulta_token',
         'catalogo_tipo_activo_id',
+        'catalogo_categoria_activo_id',
+        'activo_padre_id',
         'departamento_id',
         'area_id',
         'nombre',
@@ -40,6 +42,28 @@ class Activo extends Model
     public function tipo(): BelongsTo
     {
         return $this->belongsTo(CatalogoTipoActivo::class, 'catalogo_tipo_activo_id');
+    }
+
+    public function categoria(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoCategoriaActivo::class, 'catalogo_categoria_activo_id');
+    }
+
+    public function padre(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'activo_padre_id');
+    }
+
+    public function accesorios(): HasMany
+    {
+        return $this->hasMany(self::class, 'activo_padre_id');
+    }
+
+    public function esAccesorio(): bool
+    {
+        $this->loadMissing('tipo');
+
+        return $this->tipo?->slug === 'accesorio';
     }
 
     public function departamento(): BelongsTo

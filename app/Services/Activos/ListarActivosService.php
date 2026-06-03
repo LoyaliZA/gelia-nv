@@ -12,6 +12,7 @@ class ListarActivosService
     {
         $query = Activo::with([
             'tipo',
+            'categoria',
             'departamento',
             'area',
             'responsable',
@@ -67,6 +68,10 @@ class ListarActivosService
             $query->where('catalogo_tipo_activo_id', $filtros['catalogo_tipo_activo_id']);
         }
 
+        if (!empty($filtros['catalogo_categoria_activo_id'])) {
+            $query->where('catalogo_categoria_activo_id', $filtros['catalogo_categoria_activo_id']);
+        }
+
         if (!empty($filtros['departamento_id'])) {
             $query->where('departamento_id', $filtros['departamento_id']);
         }
@@ -83,6 +88,23 @@ class ListarActivosService
             $query->whereNull('responsable_user_id')->where('estado', 'disponible');
         } elseif (!empty($filtros['responsable_user_id'])) {
             $query->where('responsable_user_id', $filtros['responsable_user_id']);
+        }
+
+        if (!empty($filtros['responsable_user_ids']) && is_array($filtros['responsable_user_ids'])) {
+            $ids = collect($filtros['responsable_user_ids'])
+                ->filter(fn ($id) => $id !== null && $id !== '')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            if (!empty($ids)) {
+                $query->whereIn('responsable_user_id', $ids);
+            }
+        }
+
+        if (!empty($filtros['excluir_baja'])) {
+            $query->where('estado', '!=', 'baja');
         }
 
         if (!empty($filtros['pendientes_firma'])) {
