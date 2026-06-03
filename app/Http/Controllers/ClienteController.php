@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Http\Requests\Admin\GuardarClienteRequest;
 use App\Models\Cliente;
 use App\Models\CatalogoListaDescuento;
-use App\Models\HistorialMontoCliente;
+use App\Services\Clientes\CorreccionEmergenciaNumeroClienteService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Auth;
@@ -16,29 +17,9 @@ class ClienteController extends Controller
     /**
      * Crea un nuevo cliente desde el modal.
      */
-    public function store(Request $request)
+    public function store(GuardarClienteRequest $request)
     {
-        $validated = $request->validate([
-            'numero_cliente'           => 'required|string|max:255|unique:clientes,numero_cliente',
-            'nombre'                   => 'required|string|max:255',
-            'vendedor_id'              => 'nullable|exists:users,id',
-            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
-            'monto_venta_actual'       => 'nullable|numeric|min:0',
-            'lista_actual_id'          => 'nullable|exists:catalogo_listas_descuento,id',
-            'lista_bloqueada'          => 'nullable|boolean',
-            'es_inactivo'              => 'nullable|boolean',
-            'rfc'                      => 'nullable|string|max:13',
-            'codigo_postal'            => 'nullable|string|regex:/^\d{5}$/',
-            'regimen_fiscal'           => 'nullable|string|max:255',
-            'correo_electronico'       => 'nullable|email|max:255',
-            'uso_factura'              => 'nullable|string|max:255',
-            'nombre_razon_social'      => 'nullable|string|max:255',
-        ]);
-
-        // Forzamos la captura del booleano para que no dependa de si el input llegó o no
-        $validated['es_heredado'] = $request->boolean('es_heredado');
-        $validated['lista_bloqueada'] = $request->boolean('lista_bloqueada');
-        $validated['es_inactivo'] = $request->boolean('es_inactivo');
+        $validated = $this->datosClienteDesdeRequest($request);
 
         Cliente::create($validated);
 
@@ -48,34 +29,40 @@ class ClienteController extends Controller
     /**
      * Actualiza un cliente existente desde el modal.
      */
-    public function update(Request $request, Cliente $cliente)
+    public function update(GuardarClienteRequest $request, Cliente $cliente, CorreccionEmergenciaNumeroClienteService $correccionEmergencia)
     {
-        $validated = $request->validate([
-            'numero_cliente'           => 'required|string|max:255|unique:clientes,numero_cliente,' . $cliente->id,
-            'nombre'                   => 'required|string|max:255',
-            'vendedor_id'              => 'nullable|exists:users,id',
-            'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
-            'monto_venta_actual'       => 'nullable|numeric|min:0',
-            'lista_actual_id'          => 'nullable|exists:catalogo_listas_descuento,id',
-            'lista_bloqueada'          => 'nullable|boolean',
-            'es_inactivo'              => 'nullable|boolean',
-            'rfc'                      => 'nullable|string|max:13',
-            'codigo_postal'            => 'nullable|string|regex:/^\d{5}$/',
-            'regimen_fiscal'           => 'nullable|string|max:255',
-            'correo_electronico'       => 'nullable|email|max:255',
-            'uso_factura'              => 'nullable|string|max:255',
-            'nombre_razon_social'      => 'nullable|string|max:255',
-        ]);
+        $validated = $this->datosClienteDesdeRequest($request);
+        $numero = $validated['numero_cliente'];
+        $nombre = $validated['nombre'];
+        unset($validated['numero_cliente'], $validated['nombre']);
 
-        // Al usar boolean(), si el checkbox no se marcó, devolverá false automáticamente
-        // Esto permite "desactivar" la herencia si ya estaba activa.
+        if ($request->boolean('correccion_emergencia')) {
+            Gate::authorize('clientes.correccion_emergencia');
+            $correccionEmergencia->aplicar($cliente, $numero, $nombre, $validated);
+        } else {
+            $cliente->update(array_merge($validated, [
+                'numero_cliente' => $numero,
+                'nombre' => $nombre,
+            ]));
+        }
+
+        return redirect()->back()->with('success', 'Cliente actualizado exitosamente.');
+    }
+
+    private function datosClienteDesdeRequest(GuardarClienteRequest $request): array
+    {
+        $validated = $request->validated();
+        unset($validated['correccion_emergencia']);
+
         $validated['es_heredado'] = $request->boolean('es_heredado');
         $validated['lista_bloqueada'] = $request->boolean('lista_bloqueada');
         $validated['es_inactivo'] = $request->boolean('es_inactivo');
 
-        $cliente->update($validated);
+        if (array_key_exists('lista_actual_id', $validated) && $validated['lista_actual_id'] === null) {
+            unset($validated['lista_actual_id']);
+        }
 
-        return redirect()->back()->with('success', 'Cliente actualizado exitosamente.');
+        return $validated;
     }
 
     /**
@@ -122,35 +109,16 @@ class ClienteController extends Controller
      * Procesa la captura rápida de un cliente nuevo.
      * Se maneja la validación manualmente y se captura cualquier excepción SQL.
      */
-    public function registroRapido(Request $request)
+    public function registroRapido(GuardarClienteRequest $request)
     {
-        // 1. Validación manual
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-            'numero_cliente' => 'required|string|max:255|unique:clientes,numero_cliente',
-            'nombre'         => 'required|string|max:255',
-        ], [
-            'numero_cliente.unique'   => 'Este número de cliente ya se encuentra registrado.',
-            'numero_cliente.required' => 'El número es obligatorio.',
-            'nombre.required'         => 'El nombre es obligatorio.',
-        ]);
-
-        if ($validator->fails()) {
-            return redirect()->route('mis_clientes.index')
-                ->withErrors($validator)
-                ->withInput();
-        }
-
         $numeroCliente = trim($request->numero_cliente);
         $nombre = trim($request->nombre);
         $usuarioId = Auth::id();
 
-        // 2. Lógica de negocio: Obtener la lista base (PG)
-        // Buscamos la lista con el menor monto requerido (usualmente 0 para Público General)
-        $listaBase = \App\Models\CatalogoListaDescuento::orderBy('monto_requerido', 'asc')->first();
+        $listaBase = CatalogoListaDescuento::orderBy('monto_requerido', 'asc')->first();
         $listaBaseId = $listaBase ? $listaBase->id : null;
 
         try {
-            // 3. Transacción segura
             DB::transaction(function () use ($numeroCliente, $nombre, $usuarioId, $listaBaseId) {
                 Cliente::create([
                     'numero_cliente'           => $numeroCliente,
@@ -158,7 +126,7 @@ class ClienteController extends Controller
                     'vendedor_id'              => $usuarioId,
                     'vendedor_original_id'     => $usuarioId,
                     'catalogo_tipo_cliente_id' => null,
-                    'lista_actual_id'          => $listaBaseId, // <-- Parche aplicado
+                    'lista_actual_id'          => $listaBaseId,
                     'es_heredado'              => false,
                     'monto_venta_actual'       => 0.00
                 ]);

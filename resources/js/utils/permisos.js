@@ -20,6 +20,8 @@ export const DESCRIPCIONES_PERMISOS = {
     'clientes.ver': 'Permite consultar el catálogo de clientes.',
     'clientes.crear': 'Permite registrar clientes manualmente.',
     'clientes.carga_masiva': 'Permite importar clientes de forma masiva.',
+    'mis_clientes.gestionar': 'Permite ver la cartera propia y registrar clientes en Mis Clientes.',
+    'clientes.correccion_emergencia': 'Permite corregir número y nombre intercambiados o en conflicto de unicidad.',
     'configuracion.ver_auditoria': 'Permite consultar la bitácora de auditoría de solicitudes.',
     'usuarios.gestionar': 'Permite administrar usuarios del sistema.',
     'usuarios.generar_permisos': 'Permite asignar permisos a otros usuarios.',

@@ -26,6 +26,8 @@ class RolesSeeder extends Seeder
             'clientes.ver',
             'clientes.crear',
             'clientes.carga_masiva',
+            'mis_clientes.gestionar',
+            'clientes.correccion_emergencia',
             'configuracion.ver_auditoria',
             'usuarios.gestionar',
             'usuarios.generar_permisos',

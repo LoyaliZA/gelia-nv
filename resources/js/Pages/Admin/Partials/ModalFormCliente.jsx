@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useForm } from '@inertiajs/react';
-import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered, FileText } from 'lucide-react';
+import { useForm, usePage } from '@inertiajs/react';
+import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered, FileText, AlertTriangle } from 'lucide-react';
+
+const numeroPareceNombre = (valor) => /^[\p{L}\s]{12,}$/u.test(String(valor || '').trim());
+const nombrePareceNumero = (valor) => /^\d+(\.\d+)?$/.test(String(valor || '').trim());
 
 export default function ModalFormCliente({ onClose, modoModal, clienteActual, tiposCliente = [], vendedores = [], listas = [] }) {
+    const { auth } = usePage().props;
+    const puedeCorreccionEmergencia = auth?.user?.permissions?.includes('clientes.correccion_emergencia') ?? false;
     
     // --- SECCIÓN: INICIALIZACIÓN DE FORMULARIO 360 ---
     const { data, setData, post, put, processing, errors } = useForm({
@@ -22,10 +27,21 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
         correo_electronico: clienteActual?.correo_electronico || '',
         uso_factura: clienteActual?.uso_factura || '',
         nombre_razon_social: clienteActual?.nombre_razon_social || '',
+        correccion_emergencia: false,
     });
+
+    const alertaIntercambio = useMemo(() => {
+        if (numeroPareceNombre(data.numero_cliente) || nombrePareceNumero(data.nombre)) {
+            return 'Revise los campos: el número no debe parecer un nombre y el nombre no debe ser solo dígitos.';
+        }
+        return null;
+    }, [data.numero_cliente, data.nombre]);
 
     const guardarCliente = (e) => {
         e.preventDefault();
+        if (alertaIntercambio && !data.correccion_emergencia) {
+            return;
+        }
         const config = { onSuccess: () => onClose() };
         if (modoModal === 'crear') {
             post(route('admin.clientes.store'), config);
@@ -68,6 +84,11 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                     onBlur={e => e.target.style.borderColor = ''}
                                 />
                                 {errors.numero_cliente && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.numero_cliente}</p>}
+                                {alertaIntercambio && (
+                                    <p className="text-[9px] text-amber-500 font-bold ml-1 flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3 shrink-0" /> {alertaIntercambio}
+                                    </p>
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre Completo</label>
@@ -213,6 +234,24 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                             </div>
                         </div>
 
+                        {modoModal === 'editar' && puedeCorreccionEmergencia && (
+                            <div
+                                className="p-4 theme-element border border-amber-500/40 rounded-xl flex items-center justify-between cursor-pointer transition-all hover:shadow-md"
+                                onClick={() => setData('correccion_emergencia', !data.correccion_emergencia)}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <AlertTriangle className={`w-5 h-5 ${data.correccion_emergencia ? 'text-amber-500' : 'theme-text-muted'}`} />
+                                    <div>
+                                        <span className="text-[11px] font-black theme-text-main uppercase tracking-widest block leading-tight">Corrección de emergencia_</span>
+                                        <span className="text-[9px] font-bold theme-text-muted uppercase">Permite corregir número duplicado o intercambiado</span>
+                                    </div>
+                                </div>
+                                <div className="gelia-switch shrink-0 pointer-events-none" data-active={data.correccion_emergencia}>
+                                    <div className="gelia-switch-thumb shadow-md" />
+                                </div>
+                            </div>
+                        )}
+
                         {/* --- BLOQUE 4: SWITCHES DE PROTECCIÓN --- */}
                         <div className="flex flex-col gap-3">
                             <div 
@@ -270,7 +309,7 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                         </div>
                     </div>
 
-                    <button type="submit" disabled={processing} className="w-full py-4 mt-4 rounded-2xl text-white font-black uppercase tracking-widest text-[11px] transition-transform hover:scale-105 shadow-md flex justify-center items-center gap-2 outline-none disabled:opacity-50 disabled:scale-100" style={{ backgroundColor: 'var(--color-primario)' }}>
+                    <button type="submit" disabled={processing || (alertaIntercambio && !data.correccion_emergencia)} className="w-full py-4 mt-4 rounded-2xl text-white font-black uppercase tracking-widest text-[11px] transition-transform hover:scale-105 shadow-md flex justify-center items-center gap-2 outline-none disabled:opacity-50 disabled:scale-100" style={{ backgroundColor: 'var(--color-primario)' }}>
                         <Check className="w-5 h-5" /> {processing ? 'Sincronizando...' : 'Guardar Cambios_'}
                     </button>
                 </form>

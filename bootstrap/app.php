@@ -48,6 +48,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
+            if ($e instanceof \Illuminate\Validation\ValidationException) {
+                return null;
+            }
+
             $status = $e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface
                 ? $e->getStatusCode()
                 : 500;
