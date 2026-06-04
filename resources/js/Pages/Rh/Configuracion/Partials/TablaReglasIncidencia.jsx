@@ -13,7 +13,7 @@ import {
     THEME_BTN_SECONDARY,
     THEME_BTN_ICON,
 } from '../../../../utils/geliaTheme';
-import { formatoMoneda } from '../../../../utils/formatoMoneda';
+import { formatoMoneda, calcularDeduccionPreview, nombreCompletoColaborador } from '../../../../utils/formatoMoneda';
 
 const COMPORTAMIENTOS = {
     cobro_fijo: 'Cobro Fijo',
@@ -90,12 +90,13 @@ function MultiSelectDeptArea({ label, help, departamentos, selectedDepts, select
     );
 }
 
-export default function TablaReglasIncidencia({ datos = [], bonos = [], departamentos = [] }) {
+export default function TablaReglasIncidencia({ datos = [], bonos = [], departamentos = [], colaboradores = [] }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalEliminar, setModalEliminar] = useState(false);
     const [itemActual, setItemActual] = useState(null);
+    const [colaboradorEjemploId, setColaboradorEjemploId] = useState('');
 
-    const { data, setData, post, put, processing, reset, errors, transform } = useForm({ ...FORM_INICIAL });
+    const { data, setData, post, put, delete: destroyRecord, processing, reset, errors, transform } = useForm({ ...FORM_INICIAL });
 
     transform((formData) => ({
         ...formData,
@@ -145,8 +146,7 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
     };
 
     const confirmDelete = () => {
-        post(route('rh.catalogos.reglas_incidencia.destroy', itemActual.id), {
-            _method: 'delete',
+        destroyRecord(route('rh.catalogos.reglas_incidencia.destroy', itemActual.id), {
             onSuccess: () => { setModalEliminar(false); setItemActual(null); },
         });
     };
@@ -156,6 +156,16 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
         if (item.tipo_comportamiento === 'cancelacion_bono_especifico') return item.bono?.nombre || '—';
         return 'Según producto';
     };
+
+    const colaboradorEjemplo = useMemo(() => {
+        if (!colaboradorEjemploId) return null;
+        return colaboradores.find((c) => String(c.id) === String(colaboradorEjemploId));
+    }, [colaboradores, colaboradorEjemploId]);
+
+    const previewCalculo = useMemo(() => {
+        if (!colaboradorEjemplo) return null;
+        return calcularDeduccionPreview({ ...data, factor_multiplicador: 1 }, colaboradorEjemplo, data);
+    }, [data, colaboradorEjemplo]);
 
     return (
         <div>
@@ -321,6 +331,46 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                                 <input type="checkbox" checked={!!data.activo} onChange={(e) => setData('activo', e.target.checked)} />
                                 <span className="text-[10px] font-black uppercase theme-text-main">Activa</span>
                             </label>
+
+                            <div className="pt-4 border-t theme-border space-y-4">
+                                <h3 className="text-sm font-black uppercase theme-text-main">Simulador de Deducción (Ejemplo)</h3>
+                                <div>
+                                    <label className={THEME_LABEL}>Seleccionar colaborador para ejemplo</label>
+                                    <select value={colaboradorEjemploId} onChange={(e) => setColaboradorEjemploId(e.target.value)} className={THEME_SELECT}>
+                                        <option value="">Ninguno...</option>
+                                        {colaboradores.map(c => (
+                                            <option key={c.id} value={c.id}>{nombreCompletoColaborador(c)} ({c.departamento?.nombre})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {previewCalculo && (
+                                    <div className="p-4 rounded-2xl bg-[var(--color-primario)]/5 border border-[var(--color-primario)]/20 space-y-2">
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="theme-text-muted uppercase font-black">Salario Base Diario (× factor)</span>
+                                            <span className="font-mono font-bold text-red-500">-{formatoMoneda(previewCalculo.deduccion_salario_base)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="theme-text-muted uppercase font-black">Bono Puntualidad (× factor)</span>
+                                            <span className="font-mono font-bold text-red-500">-{formatoMoneda(previewCalculo.deduccion_bono_puntualidad)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="theme-text-muted uppercase font-black">Bono Productividad (× factor)</span>
+                                            <span className="font-mono font-bold text-red-500">-{formatoMoneda(previewCalculo.deduccion_bono_productividad)}</span>
+                                        </div>
+                                        {data.tipo_comportamiento !== 'deduccion_nomina' && data.tipo_comportamiento !== 'cancelacion_bono_especifico' && (
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="theme-text-muted uppercase font-black">Monto Fijo / Producto</span>
+                                                <span className="font-mono font-bold text-red-500">-{formatoMoneda(previewCalculo.monto_deduccion_base)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between items-center text-sm pt-2 border-t border-[var(--color-primario)]/20">
+                                            <span className="theme-text-main uppercase font-black">Descuento Total Estimado</span>
+                                            <span className="font-mono font-black text-red-500">-{formatoMoneda(previewCalculo.monto_total_final)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             <button type="submit" className={`${THEME_BTN_PRIMARY} w-full`}>
                                 <Save className="w-4 h-4" /> Guardar regla
                             </button>

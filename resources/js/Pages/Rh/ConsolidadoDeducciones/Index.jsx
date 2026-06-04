@@ -13,6 +13,15 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
         router.get(route('rh.consolidado_deducciones.index'), { ...filtros, ...cambios }, { preserveState: true });
     };
 
+    const sellarPeriodo = () => {
+        if (confirm(`¿Estás seguro de sellar las deducciones del periodo ${resumen.fecha_inicio} al ${resumen.fecha_fin}? Esta acción aplicará las deducciones y generará arrastres automáticamente para los bonos de puntualidad que excedan el máximo del periodo.`)) {
+            router.post(route('rh.consolidado_deducciones.sellar'), {
+                fecha_inicio: resumen.fecha_inicio,
+                fecha_fin: resumen.fecha_fin,
+            });
+        }
+    };
+
     // Calcular KPIs globales basados en los datos visibles
     const kpiTotalDeducciones = resumen.filas.reduce((acc, f) => acc + f.gran_total, 0);
     const kpiTotalPrestamos = resumen.filas.reduce((acc, f) => acc + f.prestamos, 0);
@@ -112,9 +121,12 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                             ))}
                         </RhSelect>
                     </div>
-                    <div className="flex items-end">
-                        <button type="button" onClick={() => aplicar({})} className="w-full px-4 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
+                    <div className="flex items-end gap-2">
+                        <button type="button" onClick={() => aplicar({})} className="flex-1 px-4 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
                             <Calendar className="w-4 h-4" /> Actualizar
+                        </button>
+                        <button type="button" onClick={sellarPeriodo} className="flex-1 px-4 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700">
+                            Sellar Periodo
                         </button>
                     </div>
                 </div>

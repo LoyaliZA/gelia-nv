@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { Clock, Plus, AlertTriangle, BookOpen, Users } from 'lucide-react';
+import { Clock, Plus, AlertTriangle, BookOpen, Users, FileDown } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
@@ -224,7 +224,7 @@ export default function Index({
                                 )}
                             </div>
 
-                            <div className={`${geliaCardClass('p-4 md:p-5')} border-dashed`}>
+                            <div className={`${geliaCardClass('p-4 md:p-5')} border-dashed mb-4`}>
                                 <div className="flex items-start gap-3">
                                     <BookOpen className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--color-primario)' }} />
                                     <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest leading-relaxed m-0">
@@ -232,6 +232,16 @@ export default function Index({
                                     </p>
                                 </div>
                             </div>
+                            
+                            <a
+                                href={route('rh.descargar_manual')}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center justify-center gap-3 w-full py-4 px-5 rounded-2xl text-[10px] font-black uppercase tracking-widest theme-element theme-border border-2 hover:border-[var(--color-primario)] transition-colors"
+                            >
+                                <FileDown className="w-4 h-4 shrink-0" />
+                                Descargar Manual RH (PDF)
+                            </a>
                         </div>
                     </aside>
                 </div>

@@ -1,12 +1,13 @@
 import React from 'react';
-import { Receipt, FileText, Paperclip, User, Calendar, Eye, CheckCircle2, XCircle, FileSpreadsheet } from 'lucide-react';
+import { Receipt, FileText, Paperclip, User, Calendar, Eye, CheckCircle2, XCircle, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { ESTADO_BADGE } from './facturasStyles';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 
-export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprobar, onReportar, onVerificar }) {
+export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprobar, onReportar, onVerificar, onEliminar }) {
     const permisos = auth?.user?.permissions || [];
     const puedeResponder = permisos.includes('facturas.responder');
     const puedeVerificar = permisos.includes('facturas.verificar');
+    const puedeEliminar = permisos.includes('facturas.eliminar');
     const estadoId = factura.catalogo_estado_solicitud_id ?? factura.estado?.id;
     const estadoNombre = factura.estado?.nombre || '—';
     const rfc = factura.datos_fiscales?.rfc || factura.cliente?.rfc || '—';
@@ -97,6 +98,15 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 outline-none"
                     >
                         <Receipt className="w-3.5 h-3.5 shrink-0" /> Verificar
+                    </button>
+                )}
+                {puedeEliminar && (
+                    <button
+                        type="button"
+                        onClick={() => onEliminar(factura)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30 outline-none ml-auto hover:bg-red-500/20 transition-colors"
+                    >
+                        <Trash2 className="w-3.5 h-3.5 shrink-0" /> Eliminar
                     </button>
                 )}
             </div>

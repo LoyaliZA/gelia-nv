@@ -9,6 +9,7 @@ use App\Services\Rh\ResumenDashboardRhService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class DashboardRhController extends Controller
 {
@@ -29,5 +30,11 @@ class DashboardRhController extends Controller
             'puedeCrearHe' => Auth::user()->can('rh.horas_extra.crear'),
             'puedeCrearIncidencia' => Auth::user()->can('rh.incidencias.crear'),
         ]);
+    }
+
+    public function descargarManual()
+    {
+        $pdf = Pdf::loadView('rh.manual_pdf');
+        return $pdf->download('Manual_RH.pdf');
     }
 }

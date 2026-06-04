@@ -7,6 +7,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Solicitudes\SolicitudController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CatalogoController;
+use App\Http\Controllers\ProductoCatalogoController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Api\CotizacionEntregaController;
@@ -297,6 +298,7 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     Route::middleware(['can:rh.ver'])->prefix('rh')->name('rh.')->group(function () {
         Route::get('/', [DashboardRhController::class, 'index'])->name('index');
+        Route::get('/descargar-manual', [DashboardRhController::class, 'descargarManual'])->name('descargar_manual');
 
         Route::get('/colaboradores', [ColaboradorController::class, 'index'])->name('colaboradores.index');
         Route::post('/colaboradores/preview-calculos', [ColaboradorController::class, 'previewCalculos'])->name('colaboradores.preview_calculos');
@@ -401,6 +403,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['can:rh.ver'])->group(function () {
             Route::get('/periodo-pago', [PeriodoPagoController::class, 'index'])->name('periodo_pago.index');
             Route::get('/consolidado-deducciones', [ConsolidadoDeduccionesController::class, 'index'])->name('consolidado_deducciones.index');
+            Route::post('/consolidado-deducciones/sellar', [ConsolidadoDeduccionesController::class, 'sellarPeriodo'])->name('consolidado_deducciones.sellar');
             Route::get('/consolidado-horas-extra', [ConsolidadoHorasExtraController::class, 'index'])->name('consolidado_horas_extra.index');
             Route::post('/consolidado-horas-extra/liquidar', [ConsolidadoHorasExtraController::class, 'liquidar'])->name('consolidado_horas_extra.liquidar');
         });
@@ -479,6 +482,11 @@ Route::middleware(['auth'])->group(function () {
         // --- 3. Catálogos Globales (Acceso Estricto Administrativo) ---
         Route::middleware(['can:catalogos.gestionar'])->group(function () {
             Route::get('/catalogos', [AdminController::class, 'catalogos'])->name('catalogos');
+
+            // --- Catálogo Maestro Sprint 2.1 ---
+            Route::get('/catalogo-maestro', [ProductoCatalogoController::class, 'index'])->name('catalogo-maestro.index');
+            Route::post('/catalogo-maestro/import-preview', [ProductoCatalogoController::class, 'importPreview'])->name('catalogo-maestro.import_preview');
+            Route::post('/catalogo-maestro/import-process', [ProductoCatalogoController::class, 'importProcess'])->name('catalogo-maestro.import_process');
 
             Route::prefix('catalogos')->name('catalogos.')->group(function () {
                 // Departamentos

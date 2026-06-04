@@ -19,6 +19,7 @@ import {
     Lock,
     Shield,
     Tag,
+    Database,
 } from 'lucide-react';
 
 function routeHref(name, fallback) {
@@ -163,7 +164,15 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             label: 'Administración',
             icon: Shield,
             href: () => routeHref('admin.index', '/admin'),
-            active: (url) => url.startsWith('/admin'),
+            active: (url) => url.startsWith('/admin') && !url.startsWith('/admin/catalogo-maestro'),
+        },
+        showAdminMenu && {
+            type: 'link',
+            id: 'catalogo_maestro',
+            label: 'Catálogo Maestro',
+            icon: Database,
+            href: () => routeHref('admin.catalogo-maestro.index', '/admin/catalogo-maestro'),
+            active: (url) => url.startsWith('/admin/catalogo-maestro'),
         },
     ].filter(Boolean);
 

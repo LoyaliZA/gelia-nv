@@ -10,7 +10,7 @@ import TablaPuestos from './Partials/TablaPuestos';
 import TablaBonos from './Partials/TablaBonos';
 import TablaReglasIncidencia from './Partials/TablaReglasIncidencia';
 
-export default function Index({ auth, configuracion, folioPreview: folioPreviewInicial, heFolioPreview: heFolioPreviewInicial, incFolioPreview: incFolioPreviewInicial, preFolioPreview: preFolioPreviewInicial, salFolioPreview: salFolioPreviewInicial, puestos, bonos = [], reglasIncidencia = [], departamentos = [] }) {
+export default function Index({ auth, configuracion, folioPreview: folioPreviewInicial, heFolioPreview: heFolioPreviewInicial, incFolioPreview: incFolioPreviewInicial, preFolioPreview: preFolioPreviewInicial, salFolioPreview: salFolioPreviewInicial, puestos, bonos = [], reglasIncidencia = [], departamentos = [], colaboradores = [] }) {
     const [folioPreview, setFolioPreview] = useState(folioPreviewInicial || '');
     const [heFolioPreview, setHeFolioPreview] = useState(heFolioPreviewInicial || '');
     const [incFolioPreview, setIncFolioPreview] = useState(incFolioPreviewInicial || '');
@@ -287,7 +287,7 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
 
                 {canReglasIncidencia && (
                     <div className={geliaCardClass('overflow-hidden')}>
-                        <TablaReglasIncidencia datos={reglasIncidencia} bonos={bonos} departamentos={departamentos} />
+                        <TablaReglasIncidencia datos={reglasIncidencia} bonos={bonos} departamentos={departamentos} colaboradores={colaboradores} />
                     </div>
                 )}
             </GeliaPageShell>

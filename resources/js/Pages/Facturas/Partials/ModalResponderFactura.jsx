@@ -9,7 +9,7 @@ export default function ModalResponderFactura({ onClose, factura, estadoId }) {
     const esAprobacion = estadoId === 2;
     const esError = estadoId === 4;
 
-    const { data, setData, post, processing } = useForm({
+    const { data, setData, post, processing, errors } = useForm({
         catalogo_estado_solicitud_id: estadoId,
         motivo: '',
         factura_pdf: null,
@@ -57,8 +57,9 @@ export default function ModalResponderFactura({ onClose, factura, estadoId }) {
                                 rows={5}
                                 value={data.motivo}
                                 onChange={e => setData('motivo', e.target.value)}
-                                className="w-full p-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none resize-none"
+                                className={`w-full p-4 theme-surface border ${errors.motivo ? 'border-red-500' : 'theme-border'} rounded-xl theme-text-main text-sm font-bold outline-none resize-none`}
                             />
+                            {errors.motivo && <p className="text-xs text-red-500 mt-1 font-bold">{errors.motivo}</p>}
                         </div>
                     </div>
 
@@ -91,11 +92,14 @@ export default function ModalResponderFactura({ onClose, factura, estadoId }) {
                         {esError && (
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Evidencia (opcional)</label>
-                                <label className="flex flex-col items-center justify-center border-2 border-dashed theme-border rounded-2xl p-6 cursor-pointer">
-                                    <Upload className="w-8 h-8 theme-text-muted mb-2" />
-                                    <span className="text-[10px] font-bold theme-text-muted uppercase">Captura o PDF</span>
+                                <label className={`flex flex-col items-center justify-center border-2 border-dashed ${errors.evidencia_error ? 'border-red-500' : 'theme-border hover:border-[var(--color-primario)]'} rounded-2xl p-6 cursor-pointer transition-colors text-center`}>
+                                    <Upload className={`w-8 h-8 mb-2 ${data.evidencia_error ? 'text-[var(--color-primario)]' : 'theme-text-muted'}`} />
+                                    <span className="text-[10px] font-bold theme-text-muted uppercase px-2 w-full truncate">
+                                        {data.evidencia_error ? data.evidencia_error.name : 'Captura o PDF'}
+                                    </span>
                                     <input type="file" className="hidden" accept="image/*,.pdf" onChange={e => setData('evidencia_error', e.target.files[0] || null)} />
                                 </label>
+                                {errors.evidencia_error && <p className="text-xs text-red-500 font-bold">{errors.evidencia_error}</p>}
                             </div>
                         )}
 

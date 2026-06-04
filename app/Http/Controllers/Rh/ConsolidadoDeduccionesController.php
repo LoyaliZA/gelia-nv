@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RhColaborador;
 use App\Models\RhConfiguracion;
 use App\Services\Rh\CalcularConsolidadoDeduccionesService;
+use App\Services\Rh\SellarConsolidadoDeduccionesService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -43,5 +44,22 @@ class ConsolidadoDeduccionesController extends Controller
                 'rh_colaborador_id' => $colaboradorId,
             ],
         ]);
+    }
+
+    public function sellarPeriodo(Request $request, SellarConsolidadoDeduccionesService $sellarService): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless(Auth::user()->can('rh.periodo_pago.ver') || Auth::user()->can('rh.ver'), 403);
+
+        $datos = $request->validate([
+            'fecha_inicio' => 'required|date',
+            'fecha_fin' => 'required|date',
+        ]);
+
+        $fechaInicio = Carbon::parse($datos['fecha_inicio']);
+        $fechaFin = Carbon::parse($datos['fecha_fin']);
+
+        $afectados = $sellarService->ejecutar($fechaInicio, $fechaFin, Auth::user());
+
+        return back()->with('success', "Se cerró el periodo correctamente. Se aplicaron {$afectados} deducciones.");
     }
 }

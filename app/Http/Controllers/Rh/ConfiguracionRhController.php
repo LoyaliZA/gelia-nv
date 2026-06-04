@@ -45,6 +45,7 @@ class ConfiguracionRhController extends Controller
                 'areasVisibilidad',
             ])->orderBy('nombre')->get(),
             'departamentos' => Departamento::where('activo', true)->with('areas')->orderBy('nombre')->get(),
+            'colaboradores' => \App\Models\RhColaborador::where('activo', true)->with(['departamento', 'area'])->get(),
         ]);
     }
 

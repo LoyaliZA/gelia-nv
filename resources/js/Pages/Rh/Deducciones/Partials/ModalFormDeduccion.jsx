@@ -26,7 +26,6 @@ const FORM_INICIAL = {
     catalogo_regla_incidencia_id: '',
     producto_id: '',
     producto_sku: '',
-    factor_multiplicador: '1',
     descripcion_detallada: '',
     origen_deduccion: 'nomina',
     fecha_deduccion_nomina: '',
@@ -47,7 +46,7 @@ export default function ModalFormDeduccion({
 
     transform((formData) => ({
         ...formData,
-        factor_multiplicador: Number(formData.factor_multiplicador) || 1,
+        factor_multiplicador: 1, // Siempre 1 tras esta actualización
         firma_gerente_data: firmaGerenteRef.current?.getDataUrl() || undefined,
         firma_colaborador_data: firmaColaboradorRef.current?.getDataUrl() || undefined,
     }));
@@ -107,7 +106,6 @@ export default function ModalFormDeduccion({
                 catalogo_regla_incidencia_id: registro.catalogo_regla_incidencia_id || '',
                 producto_id: registro.producto_id || '',
                 producto_sku: registro.producto_sku_snapshot || '',
-                factor_multiplicador: String(registro.factor_multiplicador ?? 1),
                 descripcion_detallada: registro.descripcion_detallada || registro.observaciones || '',
                 origen_deduccion: registro.origen_deduccion || 'nomina',
                 fecha_deduccion_nomina: registro.fecha_deduccion_nomina?.slice?.(0, 10) || registro.fecha_deduccion_nomina || '',
@@ -265,11 +263,7 @@ export default function ModalFormDeduccion({
                                 </div>
                             )}
 
-                            <div>
-                                <label className={THEME_LABEL}>Factor multiplicador</label>
-                                <input type="number" min="0.01" step="0.01" value={data.factor_multiplicador} onChange={(e) => setData('factor_multiplicador', e.target.value)} className={THEME_INPUT} />
-                            </div>
-                            <div>
+                            <div className="md:col-span-2">
                                 <label className={THEME_LABEL}>Origen de la deducción *</label>
                                 <select value={data.origen_deduccion} onChange={(e) => setData('origen_deduccion', e.target.value)} className={THEME_SELECT}>
                                     {Object.entries(ORIGEN_DEDUCCION_LABELS).map(([k, v]) => (
@@ -279,12 +273,46 @@ export default function ModalFormDeduccion({
                             </div>
                         </div>
 
-                        <div className="mt-4 p-4 rounded-2xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <CalcItem label="Monto base" value={formatoMoneda(preview.monto_deduccion_base)} />
-                            <CalcItem label="Parcial (× factor)" value={formatoMoneda(preview.total_parcial)} />
-                            <CalcItem label="Total final" value={formatoMoneda(preview.monto_total_final)} highlight />
-                            <CalcItem label="Estado" value={ESTADO_DEDUCCION_LABELS[preview.estado_deduccion] || preview.estado_deduccion} />
-                        </div>
+                        {reglaSel && preview && (
+                            <div className="mt-4 p-4 rounded-2xl border border-red-500/20 bg-red-500/5 space-y-2">
+                                <h4 className="text-[10px] font-black uppercase text-red-500 tracking-widest mb-3">Desglose de la Deducción</h4>
+                                
+                                {preview.deduccion_salario_base > 0 && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="theme-text-main font-bold">Salario Base</span>
+                                        <span className="font-mono font-bold text-red-500">-{formatoMoneda(preview.deduccion_salario_base)}</span>
+                                    </div>
+                                )}
+                                {preview.deduccion_bono_puntualidad > 0 && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="theme-text-main font-bold">Bono Puntualidad</span>
+                                        <span className="font-mono font-bold text-red-500">-{formatoMoneda(preview.deduccion_bono_puntualidad)}</span>
+                                    </div>
+                                )}
+                                {preview.deduccion_bono_productividad > 0 && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="theme-text-main font-bold">Bono Productividad</span>
+                                        <span className="font-mono font-bold text-red-500">-{formatoMoneda(preview.deduccion_bono_productividad)}</span>
+                                    </div>
+                                )}
+                                {reglaSel.tipo_comportamiento !== 'deduccion_nomina' && reglaSel.tipo_comportamiento !== 'cancelacion_bono_especifico' && preview.monto_deduccion_base > 0 && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="theme-text-main font-bold">Monto Fijo / Producto</span>
+                                        <span className="font-mono font-bold text-red-500">-{formatoMoneda(preview.monto_deduccion_base)}</span>
+                                    </div>
+                                )}
+                                
+                                <div className="flex justify-between items-center pt-3 mt-3 border-t border-red-500/20">
+                                    <span className="text-sm font-black uppercase theme-text-main">Total a descontar</span>
+                                    <span className="text-lg font-black font-mono text-red-500">-{formatoMoneda(preview.monto_total_final)}</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="inline-block px-2 py-1 mt-1 rounded text-[9px] font-black uppercase bg-black/10 dark:bg-white/10 theme-text-muted">
+                                        Estado: {ESTADO_DEDUCCION_LABELS[preview.estado_deduccion] || preview.estado_deduccion}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                     </section>
 
                     <section>

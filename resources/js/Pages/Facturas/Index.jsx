@@ -98,6 +98,20 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
         router.put(route('facturas.verificar', factura.id), {}, { preserveScroll: true });
     };
 
+    const eliminar = useCallback((factura) => {
+        const motivo = window.prompt('Motivo de la eliminación (mínimo 5 caracteres):');
+        if (motivo !== null) {
+            if (motivo.trim().length >= 5) {
+                router.delete(route('facturas.destroy', factura.id), {
+                    data: { motivo },
+                    preserveScroll: true,
+                });
+            } else {
+                alert('El motivo debe tener al menos 5 caracteres.');
+            }
+        }
+    }, []);
+
     const listaServidor = facturas?.data || [];
 
     /** Vista optimista: filtra la página actual mientras llega la pestaña correcta del servidor. */
@@ -219,6 +233,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
                                             onAprobar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: 2 })}
                                             onReportar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: 4 })}
                                             onVerificar={verificar}
+                                            onEliminar={eliminar}
                                         />
                                     ))}
                                 </div>
