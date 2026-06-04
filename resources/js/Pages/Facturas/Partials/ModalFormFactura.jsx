@@ -7,7 +7,7 @@ import ZonaAdjuntoVoucher from './ZonaAdjuntoVoucher';
 import { FACTURA_ACCENT, BTN_PRIMARY } from './facturasStyles';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 
-export default function ModalFormFactura({ onClose }) {
+export default function ModalFormFactura({ onClose, onExito }) {
     const [vouchers, setVouchers] = useState([]);
     const [busquedaCliente, setBusquedaCliente] = useState('');
     const [listaClientes, setListaClientes] = useState([]);
@@ -71,7 +71,10 @@ export default function ModalFormFactura({ onClose }) {
         transform(d => ({ ...d, vouchers }));
         post(route('facturas.store'), {
             forceFormData: true,
-            onSuccess: () => onClose(),
+            onSuccess: () => {
+                onExito?.();
+                onClose();
+            },
         });
     };
 

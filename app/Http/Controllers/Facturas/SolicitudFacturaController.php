@@ -88,7 +88,12 @@ class SolicitudFacturaController extends Controller
         SolicitudFactura $factura,
         ResponderSolicitudFacturaService $responderService
     ): RedirectResponse {
-        if ($factura->catalogo_estado_solicitud_id !== 1 && (int) $request->catalogo_estado_solicitud_id === 2) {
+        $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
+        $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+
+        if ($idPendiente !== null && $idRespondida !== null
+            && (int) $factura->catalogo_estado_solicitud_id !== $idPendiente
+            && (int) $request->catalogo_estado_solicitud_id === $idRespondida) {
             abort(422, 'Solo se puede aprobar una solicitud en estado Pendiente.');
         }
 
@@ -112,18 +117,21 @@ class SolicitudFacturaController extends Controller
     {
         Gate::authorize('facturas.verificar');
 
-        if ($factura->catalogo_estado_solicitud_id !== 2) {
+        $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+        $idVerificada = CatalogoEstadoSolicitud::idDe('Verificada');
+
+        if ($idRespondida === null || (int) $factura->catalogo_estado_solicitud_id !== $idRespondida) {
             abort(422, 'Solo se pueden verificar solicitudes respondidas.');
         }
 
         $estadoAnterior = $factura->catalogo_estado_solicitud_id;
-        $factura->update(['catalogo_estado_solicitud_id' => 3]);
+        $factura->update(['catalogo_estado_solicitud_id' => $idVerificada]);
 
         AuditoriaSolicitudFactura::create([
             'solicitud_factura_id' => $factura->id,
             'usuario_id' => Auth::id(),
             'estado_anterior_id' => $estadoAnterior,
-            'estado_nuevo_id' => 3,
+            'estado_nuevo_id' => $idVerificada,
             'motivo_reporte' => 'Solicitud verificada por auxiliar.',
         ]);
 

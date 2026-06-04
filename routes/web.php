@@ -194,7 +194,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{factura}', [SolicitudFacturaController::class, 'show'])->name('show');
     });
 
-    Route::middleware(['can:facturas.responder'])->prefix('facturas')->name('facturas.')->group(function () {
+    Route::prefix('facturas')->name('facturas.')->group(function () {
         Route::put('/{factura}/estado', [SolicitudFacturaController::class, 'actualizarEstado'])->name('actualizar_estado');
     });
 

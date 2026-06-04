@@ -23,4 +23,21 @@ class CatalogoEstadoSolicitud extends Model
     {
         return $this->hasMany(SolicitudTag::class, 'catalogo_estado_solicitud_id');
     }
+
+    /** @var array<string, int>|null */
+    private static ?array $idsPorNombre = null;
+
+    public static function idDe(string $nombre): ?int
+    {
+        if (self::$idsPorNombre === null) {
+            self::$idsPorNombre = static::query()->pluck('id', 'nombre')->all();
+        }
+
+        return self::$idsPorNombre[$nombre] ?? null;
+    }
+
+    public static function reiniciarCache(): void
+    {
+        self::$idsPorNombre = null;
+    }
 }

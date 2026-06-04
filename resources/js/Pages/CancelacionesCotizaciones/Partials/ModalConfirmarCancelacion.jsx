@@ -9,13 +9,13 @@ import {
     THEME_BTN_SECONDARY,
 } from '../../../utils/geliaTheme';
 
-export default function ModalConfirmarCancelacion({ onClose, solicitud }) {
+export default function ModalConfirmarCancelacion({ onClose, onExito, solicitud }) {
     const { put, processing } = useForm({});
 
     const submit = (e) => {
         e.preventDefault();
         put(route('cancelaciones_cotizaciones.cancelar', solicitud.id), {
-            onSuccess: () => onClose(),
+            onSuccess: () => { onExito?.(); onClose(); },
         });
     };
 

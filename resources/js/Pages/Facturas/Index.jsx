@@ -9,28 +9,33 @@ import ModalFormFactura from './Partials/ModalFormFactura';
 import ModalResponderFactura from './Partials/ModalResponderFactura';
 import ModalExpedienteFactura from './Partials/ModalExpedienteFactura';
 import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/facturasStyles';
-import { filtrarFacturasPorTab } from './Partials/facturasFiltros';
+import { filtrarFacturasPorTab, idEstadoPorNombre } from './Partials/facturasFiltros';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass, GELIA_LISTADO_GRID } from '../../utils/geliaTheme';
+import { puedePermiso } from '../../utils/permisos';
+import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
+
+const PROPS_LISTADO = ['facturas', 'metricas', 'filtros'];
 
 const OPCIONES_LISTADO = {
     preserveState: true,
     preserveScroll: true,
     replace: true,
     showProgress: false,
-    only: ['facturas', 'filtros'],
+    only: PROPS_LISTADO,
 };
 
-export default function Index({ auth, facturas, metricas, filtros, vendedores }) {
-    const permisos = auth?.user?.permissions || [];
-    const puedeCrear = permisos.includes('facturas.crear');
-    const puedeExportar = permisos.includes('facturas.exportar');
-    const puedeDatosFiscales = permisos.includes('facturas.gestionar_datos_fiscales');
+export default function Index({ auth, facturas, metricas, filtros, vendedores, estados = [] }) {
+    const puedeCrear = puedePermiso(auth, 'facturas.crear');
+    const puedeExportar = puedePermiso(auth, 'facturas.exportar');
+    const puedeDatosFiscales = puedePermiso(auth, 'facturas.gestionar_datos_fiscales');
+    const idRespondida = idEstadoPorNombre(estados, 'Respondida');
+    const idIncorrecta = idEstadoPorNombre(estados, 'Incorrecta');
 
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
     const [listaCargando, setListaCargando] = useState(false);
     const [modalCrear, setModalCrear] = useState(false);
-    const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, factura: null, estadoId: null });
+    const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, factura: null, estadoId: null, modo: 'emitir' });
     const [modalExpediente, setModalExpediente] = useState({ abierto: false, factura: null });
 
     useEffect(() => {
@@ -94,8 +99,15 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
         [paramsBase, facturas?.last_page]
     );
 
+    const recargarTrasAccion = useCallback(() => {
+        recargarModuloInertia(PROPS_LISTADO);
+    }, []);
+
     const verificar = (factura) => {
-        router.put(route('facturas.verificar', factura.id), {}, { preserveScroll: true });
+        router.put(route('facturas.verificar', factura.id), {}, {
+            preserveScroll: true,
+            onSuccess: recargarTrasAccion,
+        });
     };
 
     const eliminar = useCallback((factura) => {
@@ -105,12 +117,13 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
                 router.delete(route('facturas.destroy', factura.id), {
                     data: { motivo },
                     preserveScroll: true,
+                    onSuccess: recargarTrasAccion,
                 });
             } else {
                 alert('El motivo debe tener al menos 5 caracteres.');
             }
         }
-    }, []);
+    }, [recargarTrasAccion]);
 
     const listaServidor = facturas?.data || [];
 
@@ -230,8 +243,8 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
                                             factura={f}
                                             auth={auth}
                                             onVerExpediente={(factura) => setModalExpediente({ abierto: true, factura })}
-                                            onAprobar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: 2 })}
-                                            onReportar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: 4 })}
+                                            onAprobar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: idRespondida, modo: 'emitir' })}
+                                            onReportar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: idIncorrecta, modo: 'reportar' })}
                                             onVerificar={verificar}
                                             onEliminar={eliminar}
                                         />
@@ -247,9 +260,11 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
             </GeliaPageShell>
             {modalRespuesta.abierto && (
                 <ModalResponderFactura
-                    onClose={() => setModalRespuesta({ abierto: false, factura: null, estadoId: null })}
+                    onClose={() => setModalRespuesta({ abierto: false, factura: null, estadoId: null, modo: 'emitir' })}
                     factura={modalRespuesta.factura}
                     estadoId={modalRespuesta.estadoId}
+                    modo={modalRespuesta.modo}
+                    onExito={recargarTrasAccion}
                 />
             )}
             {modalExpediente.abierto && (
@@ -261,6 +276,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores })
             {modalCrear && (
                 <ModalFormFactura
                     onClose={() => setModalCrear(false)}
+                    onExito={recargarTrasAccion}
                 />
             )}
         </AppLayout>

@@ -34,7 +34,13 @@ class ArchivoFacturaController extends Controller
             $mime = $this->inferirMime($archivo['path'], $tipo);
         }
 
-        $disposition = in_array($tipo, ['voucher', 'pdf', 'fiscal'], true) ? 'inline' : 'attachment';
+        $forzarDescarga = $request->boolean('descargar');
+
+        $disposition = match (true) {
+            $tipo === 'pdf' && $forzarDescarga => 'attachment',
+            in_array($tipo, ['voucher', 'pdf', 'fiscal'], true) => 'inline',
+            default => 'attachment',
+        };
 
         return Storage::disk('public')->response($archivo['path'], $archivo['nombre'], [
             'Content-Type' => $mime ?: 'application/octet-stream',

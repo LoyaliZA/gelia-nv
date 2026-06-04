@@ -70,7 +70,7 @@ function CampoTextarea({ icon: Icon, label, required, value, onChange, error, pl
     );
 }
 
-export default function ModalFormOperativa({ onClose, procesos = [], bancos = [], procesoInicialId = '' }) {
+export default function ModalFormOperativa({ onClose, onExito, procesos = [], bancos = [], procesoInicialId = '' }) {
     const [infoCliente, setInfoCliente] = useState(null);
     const [listaClientes, setListaClientes] = useState([]);
     const [buscandoCliente, setBuscandoCliente] = useState(false);
@@ -152,7 +152,7 @@ export default function ModalFormOperativa({ onClose, procesos = [], bancos = []
     const guardar = (e) => {
         e.preventDefault();
         post(route('cancelaciones_cotizaciones.store'), {
-            onSuccess: () => { reset(); onClose(); },
+            onSuccess: () => { reset(); onExito?.(); onClose(); },
             preserveScroll: true,
         });
     };

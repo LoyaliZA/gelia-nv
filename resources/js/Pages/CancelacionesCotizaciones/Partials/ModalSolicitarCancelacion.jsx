@@ -10,7 +10,7 @@ import {
     THEME_BTN_PRIMARY,
 } from '../../../utils/geliaTheme';
 
-export default function ModalSolicitarCancelacion({ onClose, solicitud }) {
+export default function ModalSolicitarCancelacion({ onClose, onExito, solicitud }) {
     const { data, setData, post, processing } = useForm({
         motivo_cancelacion: '',
     });
@@ -18,7 +18,7 @@ export default function ModalSolicitarCancelacion({ onClose, solicitud }) {
     const submit = (e) => {
         e.preventDefault();
         post(route('cancelaciones_cotizaciones.solicitar_cancelacion', solicitud.id), {
-            onSuccess: () => onClose(),
+            onSuccess: () => { onExito?.(); onClose(); },
         });
     };
 

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { X, MessageSquare, CheckCircle2, XCircle, Upload, Send } from 'lucide-react';
 
-export default function ModalRespuestaConsulta({ onClose, solicitud, consulta }) {
+export default function ModalRespuestaConsulta({ onClose, onExito, solicitud, consulta }) {
     const [previewEvidencia, setPreviewEvidencia] = useState(null);
 
     const { data, setData, post, processing } = useForm({
@@ -72,7 +72,7 @@ export default function ModalRespuestaConsulta({ onClose, solicitud, consulta })
         e.preventDefault();
         post(route('solicitudes.consultas.responder', [solicitud.id, consulta.id]), {
             forceFormData: true,
-            onSuccess: onClose,
+            onSuccess: () => { onExito?.(); onClose(); },
         });
     };
 

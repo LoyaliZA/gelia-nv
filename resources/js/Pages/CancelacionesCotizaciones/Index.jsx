@@ -18,13 +18,16 @@ import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/operativasStyles';
 import { filtrarSolicitudesPorTab } from './Partials/operativasFiltros';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass, GELIA_LISTADO_GRID } from '../../utils/geliaTheme';
+import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
+
+const PROPS_LISTADO = ['solicitudes', 'metricas', 'filtros'];
 
 const OPCIONES_LISTADO = {
     preserveState: true,
     preserveScroll: true,
     replace: true,
     showProgress: false,
-    only: ['solicitudes', 'filtros'],
+    only: PROPS_LISTADO,
 };
 
 const MenuAcciones = ({
@@ -191,11 +194,19 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
 
     const filtrosActivos = [filtros.vendedor_id, filtros.fecha_inicio, filtros.fecha_fin].filter(Boolean).length;
 
-    const eliminarSolicitud = (id) => {
+    const recargarTrasAccion = useCallback(() => {
+        recargarModuloInertia(PROPS_LISTADO);
+    }, []);
+
+    const eliminarSolicitud = useCallback((id) => {
         const motivo = window.prompt('Motivo de eliminación (mín. 10 caracteres):');
         if (!motivo || motivo.length < 10) return;
-        router.delete(route('cancelaciones_cotizaciones.destroy', id), { data: { motivo } });
-    };
+        router.delete(route('cancelaciones_cotizaciones.destroy', id), {
+            data: { motivo },
+            preserveScroll: true,
+            onSuccess: recargarTrasAccion,
+        });
+    }, [recargarTrasAccion]);
 
     const abrirFormulario = (procesoId = '') => {
         setModalForm({ abierto: true, procesoId });
@@ -364,6 +375,7 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                     procesos={procesos}
                     bancos={bancos}
                     procesoInicialId={modalForm.procesoId}
+                    onExito={recargarTrasAccion}
                 />
             )}
             {modalRespuesta.abierto && (
@@ -371,6 +383,7 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                     onClose={() => setModalRespuesta({ abierto: false, solicitud: null, estadoId: null })}
                     solicitud={modalRespuesta.solicitud}
                     estadoId={modalRespuesta.estadoId}
+                    onExito={recargarTrasAccion}
                 />
             )}
             {modalBitacora.abierto && (
@@ -383,12 +396,14 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
                 <ModalSolicitarCancelacion
                     onClose={() => setModalCancelacion({ abierto: false, solicitud: null })}
                     solicitud={modalCancelacion.solicitud}
+                    onExito={recargarTrasAccion}
                 />
             )}
             {modalConfirmarCancelacion.abierto && (
                 <ModalConfirmarCancelacion
                     onClose={() => setModalConfirmarCancelacion({ abierto: false, solicitud: null })}
                     solicitud={modalConfirmarCancelacion.solicitud}
+                    onExito={recargarTrasAccion}
                 />
             )}
 

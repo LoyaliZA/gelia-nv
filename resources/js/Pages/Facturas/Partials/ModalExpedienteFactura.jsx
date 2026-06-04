@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FileSpreadsheet, FileText, Download, ChevronLeft, ChevronRight, Copy, Check, Loader2, Receipt } from 'lucide-react';
-import { ACCENT, BTN_PRIMARY, BTN_SECONDARY, esImagenVoucher, esPdfVoucher, urlArchivoFactura } from './facturasStyles';
+import { X, FileSpreadsheet, Download, ChevronLeft, ChevronRight, Copy, Check, Loader2, Receipt, AlertOctagon } from 'lucide-react';
+import { ACCENT, BTN_PRIMARY, BTN_SECONDARY, esImagenVoucher, esPdfVoucher, urlArchivoFactura, nombreArchivoFacturaPdf } from './facturasStyles';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 
 const ETIQUETAS_DEFAULT = {
@@ -143,6 +143,36 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                             </div>
 
                             <div className="space-y-6">
+                                {((factura.estado?.nombre === 'Incorrecta') || factura.evidencia_error_path) && (
+                                    <section>
+                                        <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 mb-3">
+                                            <AlertOctagon className="w-3.5 h-3.5" /> Error Reportado
+                                        </p>
+                                        {factura.motivo_respuesta && (
+                                            <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 mb-4">
+                                                <p className="text-sm font-bold text-red-600 dark:text-red-400 m-0 whitespace-pre-wrap">{factura.motivo_respuesta}</p>
+                                            </div>
+                                        )}
+                                        {factura.evidencia_error_path && (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between gap-2 px-1">
+                                                    <span className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-widest">Evidencia del Error</span>
+                                                    <a href={urlArchivoFactura(factura.id, 'evidencia_error')} target="_blank" rel="noopener noreferrer" className={`${BTN_SECONDARY} !p-2 !border-red-500/30 !text-red-600 dark:!text-red-400 hover:!bg-red-500/10`}>
+                                                        <Download className="w-4 h-4" />
+                                                    </a>
+                                                </div>
+                                                {factura.evidencia_error_path.toLowerCase().endsWith('.pdf') ? (
+                                                    <iframe title="Evidencia Error PDF" src={urlArchivoFactura(factura.id, 'evidencia_error')} className="w-full h-[360px] rounded-2xl border border-red-500/30 bg-white" />
+                                                ) : (
+                                                    <div className="rounded-2xl border border-red-500/30 overflow-hidden bg-white">
+                                                        <img src={urlArchivoFactura(factura.id, 'evidencia_error')} alt="Evidencia Error" className="w-full max-h-[360px] object-contain" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </section>
+                                )}
+
                                 <section>
                                     <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Datos fiscales</p>
                                     {cargandoDatos && (
@@ -226,8 +256,12 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Factura emitida</p>
                                         <div className="flex flex-wrap gap-2">
                                             {factura.tiene_pdf_emitido && (
-                                                <a href={urlArchivoFactura(factura.id, 'pdf')} target="_blank" rel="noopener noreferrer" className={`${BTN_SECONDARY} inline-flex items-center gap-2`}>
-                                                    <FileText className="w-4 h-4 shrink-0" style={{ color: ACCENT }} /> PDF Factura
+                                                <a
+                                                    href={urlArchivoFactura(factura.id, 'pdf', 0, { descargar: true })}
+                                                    download={nombreArchivoFacturaPdf(factura)}
+                                                    className={`${BTN_SECONDARY} inline-flex items-center gap-2`}
+                                                >
+                                                    <Download className="w-4 h-4 shrink-0" /> Descargar PDF
                                                 </a>
                                             )}
                                             {factura.tiene_xml && (

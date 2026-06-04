@@ -26,12 +26,45 @@ export const FACTURA_ACCENT = ACCENT;
 
 export { GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK };
 
-export function urlArchivoFactura(facturaId, tipo, indice = 0) {
+export function urlArchivoFactura(facturaId, tipo, indice = 0, options = {}) {
     const base = route('facturas.archivo', { factura: facturaId, tipo });
+    const params = new URLSearchParams();
     if (tipo === 'voucher') {
-        return `${base}?indice=${indice}`;
+        params.set('indice', String(indice));
     }
-    return base;
+    if (options.descargar) {
+        params.set('descargar', '1');
+    }
+    const qs = params.toString();
+    return qs ? `${base}?${qs}` : base;
+}
+
+function numeroClienteFactura(factura) {
+    const raw = factura?.cliente?.numero_cliente
+        ?? factura?.datos_fiscales?.numero_cliente
+        ?? null;
+    if (!raw) return 'sin-cliente';
+    return String(raw).replace(/[^\w-]+/g, '_') || 'sin-cliente';
+}
+
+function fechaFacturaPdf(factura) {
+    const raw = factura?.respondida_at ?? factura?.created_at;
+    if (!raw) {
+        return new Date().toISOString().slice(0, 10);
+    }
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) {
+        return new Date().toISOString().slice(0, 10);
+    }
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+/** Nombre de descarga: Factura_NumeroDelCliente_fecha.pdf */
+export function nombreArchivoFacturaPdf(factura) {
+    return `Factura_${numeroClienteFactura(factura)}_${fechaFacturaPdf(factura)}.pdf`;
 }
 
 export function esPdfVoucher(voucher) {

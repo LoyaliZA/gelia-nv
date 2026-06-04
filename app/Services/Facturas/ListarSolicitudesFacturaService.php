@@ -16,7 +16,11 @@ class ListarSolicitudesFacturaService
             'departamento:id,nombre',
             'estado:id,nombre',
             'cliente:id,numero_cliente,nombre,rfc',
+            'respondidaPor:id,name',
             'vouchers:id,solicitud_factura_id,path,nombre_original,mime,orden',
+            'auditorias' => fn ($q) => $q->latest('id')->limit(3),
+            'auditorias.usuario:id,name',
+            'auditorias.estadoNuevo:id,nombre',
         ])->orderByDesc('created_at');
 
         if ($usuario) {
@@ -36,13 +40,17 @@ class ListarSolicitudesFacturaService
         }
 
         $hoy = now()->toDateString();
-        $idRespondida = CatalogoEstadoSolicitud::where('nombre', 'Respondida')->value('id');
+        $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
+        $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+        $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
 
         return [
-            'pendientes' => (clone $query)->where('catalogo_estado_solicitud_id', 1)->count(),
-            'respondidas_hoy' => (clone $query)->where('catalogo_estado_solicitud_id', $idRespondida)
-                ->whereDate('respondida_at', $hoy)->count(),
-            'incorrectas' => (clone $query)->where('catalogo_estado_solicitud_id', 4)->count(),
+            'pendientes' => $idPendiente ? (clone $query)->where('catalogo_estado_solicitud_id', $idPendiente)->count() : 0,
+            'respondidas_hoy' => $idRespondida
+                ? (clone $query)->where('catalogo_estado_solicitud_id', $idRespondida)
+                    ->whereDate('respondida_at', $hoy)->count()
+                : 0,
+            'incorrectas' => $idIncorrecta ? (clone $query)->where('catalogo_estado_solicitud_id', $idIncorrecta)->count() : 0,
         ];
     }
 
@@ -95,10 +103,10 @@ class ListarSolicitudesFacturaService
     {
         if (!empty($filtros['tab']) && $filtros['tab'] !== 'TODAS') {
             match ($filtros['tab']) {
-                'PENDIENTES' => $query->where('catalogo_estado_solicitud_id', 1),
-                'RESPONDIDAS' => $query->where('catalogo_estado_solicitud_id', 2),
-                'VERIFICADAS' => $query->where('catalogo_estado_solicitud_id', 3),
-                'INCORRECTAS' => $query->where('catalogo_estado_solicitud_id', 4),
+                'PENDIENTES' => $this->filtrarPorEstado($query, 'Pendiente'),
+                'RESPONDIDAS' => $this->filtrarPorEstado($query, 'Respondida'),
+                'VERIFICADAS' => $this->filtrarPorEstado($query, 'Verificada'),
+                'INCORRECTAS' => $this->filtrarPorEstado($query, 'Incorrecta'),
                 'CANCELADAS' => $query->whereHas('estado', fn ($q) => $q->where('nombre', 'Cancelada')),
                 default => null,
             };
@@ -137,6 +145,16 @@ class ListarSolicitudesFacturaService
                     }
                 });
             });
+        }
+    }
+
+    private function filtrarPorEstado(Builder $query, string $nombreEstado): void
+    {
+        $estadoId = CatalogoEstadoSolicitud::idDe($nombreEstado);
+        if ($estadoId) {
+            $query->where('catalogo_estado_solicitud_id', $estadoId);
+        } else {
+            $query->whereRaw('1 = 0');
         }
     }
 }

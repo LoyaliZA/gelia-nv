@@ -43,7 +43,8 @@ export const DESCRIPCIONES_PERMISOS = {
     'personalizacion.gestionar': 'Permite gestionar temas y personalización visual.',
     'facturas.ver_listado': 'Permite acceder al módulo de solicitudes de facturas.',
     'facturas.crear': 'Permite crear solicitudes de factura con comprobante de pago.',
-    'facturas.responder': 'Permite emitir factura (PDF/XML) o reportar errores.',
+    'facturas.responder': 'Permite emitir factura (PDF/XML) en solicitudes pendientes.',
+    'facturas.reportar_error': 'Permite reportar error en solicitudes de factura pendientes.',
     'facturas.verificar': 'Permite marcar solicitudes de factura como verificadas.',
     'facturas.eliminar': 'Permite eliminar solicitudes de factura con auditoría.',
     'facturas.gestionar_datos_fiscales': 'Permite administrar datos fiscales de clientes desde el módulo de facturas.',
@@ -62,6 +63,21 @@ export const DESCRIPCIONES_PERMISOS = {
 
 export function descripcionPermiso(permisoName) {
     return DESCRIPCIONES_PERMISOS[permisoName] || null;
+}
+
+/** Normaliza permisos compartidos por Inertia (array o objeto indexado por id). */
+export function permisosUsuario(auth) {
+    const raw = auth?.user?.permissions;
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === 'object') return Object.values(raw);
+    return [];
+}
+
+/** Evalúa permiso atómico con bypass de Super Admin (mismo criterio que Sidebar). */
+export function puedePermiso(auth, permiso) {
+    const roles = auth?.user?.roles || [];
+    if (roles.includes('Super Admin')) return true;
+    return permisosUsuario(auth).includes(permiso);
 }
 
 export function permisoDePlantilla(permisoName, plantillasActivas, roles) {

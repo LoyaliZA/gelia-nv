@@ -2,20 +2,28 @@
 
 namespace App\Http\Requests\Facturas;
 
+use App\Models\CatalogoEstadoSolicitud;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ResponderSolicitudFacturaRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        $estadoNuevo = (int) $this->input('catalogo_estado_solicitud_id');
+        $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
+        if ($idIncorrecta !== null && $estadoNuevo === $idIncorrecta) {
+            return $this->user()->can('facturas.reportar_error');
+        }
         return $this->user()->can('facturas.responder');
     }
 
     public function rules(): array
     {
         $estadoNuevo = (int) $this->input('catalogo_estado_solicitud_id');
-        $esAprobacion = $estadoNuevo === 2;
-        $esError = $estadoNuevo === 4;
+        $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+        $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
+        $esAprobacion = $idRespondida !== null && $estadoNuevo === $idRespondida;
+        $esError = $idIncorrecta !== null && $estadoNuevo === $idIncorrecta;
 
         return [
             'catalogo_estado_solicitud_id' => ['required', 'exists:catalogo_estados_solicitud,id'],

@@ -70,8 +70,8 @@ class HandleInertiaRequests extends Middleware
             'catalogo_temas'  => PersonalizacionCatalogoService::temasActivos(),
             'auth' => [
                 'user' => $user ? array_merge($user->toArray(), [
-                    'roles' => $user->getRoleNames(), 
-                    'permissions' => $user->getAllPermissions()->pluck('name'), 
+                    'roles' => $user->getRoleNames()->values()->all(),
+                    'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(), 
                 ]) : null,
                 'tema_visual' => $temaVisual,
                 

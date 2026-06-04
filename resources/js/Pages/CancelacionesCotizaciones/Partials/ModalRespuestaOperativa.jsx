@@ -10,7 +10,7 @@ import {
     THEME_BTN_PRIMARY,
 } from '../../../utils/geliaTheme';
 
-export default function ModalRespuestaOperativa({ onClose, solicitud, estadoId }) {
+export default function ModalRespuestaOperativa({ onClose, onExito, solicitud, estadoId }) {
     const [previewEvidenciaRespuesta, setPreviewEvidenciaRespuesta] = useState(null);
 
     const { data, setData, post, processing, reset } = useForm({
@@ -70,7 +70,7 @@ export default function ModalRespuestaOperativa({ onClose, solicitud, estadoId }
     const enviarRespuesta = (e) => {
         e.preventDefault();
         post(route('cancelaciones_cotizaciones.actualizar_estado', solicitud.id), {
-            onSuccess: () => { reset(); setPreviewEvidenciaRespuesta(null); onClose(); },
+            onSuccess: () => { reset(); setPreviewEvidenciaRespuesta(null); onExito?.(); onClose(); },
             forceFormData: true,
         });
     };

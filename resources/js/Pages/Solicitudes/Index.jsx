@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
@@ -19,6 +19,9 @@ import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import { badgeClaseEstadoSolicitud } from './Partials/solicitudesStyles';
+import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
+
+const PROPS_LISTADO = ['solicitudes', 'filtros'];
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
 const formatearTiempoRelativo = (fechaString) => {
@@ -303,14 +306,14 @@ const MotivoCancelacionBloque = ({ solicitud, compacto = false }) => {
     );
 };
 
-const ModalConfirmarCancelacion = ({ onClose, solicitud, onProcesando }) => {
+const ModalConfirmarCancelacion = ({ onClose, onExito, solicitud, onProcesando }) => {
     const { put, processing } = useForm({});
 
     const submit = (e) => {
         e.preventDefault();
         onProcesando?.(true);
         put(route('solicitudes.cancelar', solicitud.id), {
-            onSuccess: () => onClose(),
+            onSuccess: () => { onExito?.(); onClose(); },
             onFinish: () => onProcesando?.(false),
         });
     };
@@ -377,7 +380,7 @@ const ModalConfirmarPago = ({ onClose, solicitud, onConfirmar }) => {
     );
 };
 
-const ModalSolicitarCancelacion = ({ onClose, solicitud, listas = [], onConfirmar }) => {
+const ModalSolicitarCancelacion = ({ onClose, onExito, solicitud, listas = [] }) => {
     const esCambioLista = esProcesoCambioLista(solicitud);
     const listasInferiores = listasInferioresParaCancelacion(listas, solicitud);
     const { data, setData, post, processing } = useForm({
@@ -388,7 +391,7 @@ const ModalSolicitarCancelacion = ({ onClose, solicitud, listas = [], onConfirma
     const submit = (e) => {
         e.preventDefault();
         post(route('solicitudes.solicitar_cancelacion', solicitud.id), {
-            onSuccess: () => { onConfirmar?.(); onClose(); },
+            onSuccess: () => { onExito?.(); onClose(); },
         });
     };
 
@@ -676,18 +679,28 @@ export default function Index({
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) ?? false;
     const puedeExportar = can('solicitudes.exportar');
 
+    const recargarTrasAccion = useCallback(() => {
+        recargarModuloInertia(PROPS_LISTADO);
+    }, []);
+
     const eliminarSolicitud = (id) => {
         const motivo = window.prompt("ATENCIÓN: Se eliminará este registro y se creará un respaldo en la auditoría.\n\nIngresa el motivo de la eliminación (Mínimo 10 caracteres):");
         if (motivo === null) return;
         if (motivo.trim().length < 10) { alert("Operación cancelada: El motivo debe tener al menos 10 caracteres."); return; }
         setMenuAbierto(null); setProcesandoAccion(true);
-        router.delete(route('solicitudes.destroy', id), { data: { motivo: motivo.trim() }, onFinish: () => setProcesandoAccion(false) });
+        router.delete(route('solicitudes.destroy', id), {
+            data: { motivo: motivo.trim() },
+            preserveScroll: true,
+            onSuccess: recargarTrasAccion,
+            onFinish: () => setProcesandoAccion(false),
+        });
     };
 
     const marcarConsultaLeida = (solicitudId, consultaId) => {
         setProcesandoAccion(true);
         router.put(route('solicitudes.consultas.leer', [solicitudId, consultaId]), {}, {
             preserveScroll: true,
+            onSuccess: recargarTrasAccion,
             onFinish: () => setProcesandoAccion(false),
         });
     };
@@ -722,14 +735,20 @@ export default function Index({
     const confirmarPagoConMonto = (id, formData) => {
         setModalPago({ abierto: false, solicitud: null });
         setProcesandoAccion(true);
-        router.put(route('solicitudes.confirmar_pago', id), formData, { onFinish: () => setProcesandoAccion(false) });
+        router.put(route('solicitudes.confirmar_pago', id), formData, {
+            preserveScroll: true,
+            onSuccess: recargarTrasAccion,
+            onFinish: () => setProcesandoAccion(false),
+        });
     };
 
     const confirmarCambioLista = (id) => {
         if (window.confirm('¿Confirmar el ajuste de lista para este cliente?')) {
             setProcesandoAccion(true);
             router.put(route('solicitudes.confirmar_lista', id), {}, {
-                onFinish: () => setProcesandoAccion(false)
+                preserveScroll: true,
+                onSuccess: recargarTrasAccion,
+                onFinish: () => setProcesandoAccion(false),
             });
         }
     };
@@ -738,7 +757,9 @@ export default function Index({
         if (window.confirm('¿Confirmar la reversión de cambios por vencimiento de pago? La vendedora deberá iniciar una nueva solicitud.')) {
             setProcesandoAccion(true);
             router.put(route('solicitudes.confirmar_rollback', id), {}, {
-                onFinish: () => setProcesandoAccion(false)
+                preserveScroll: true,
+                onSuccess: recargarTrasAccion,
+                onFinish: () => setProcesandoAccion(false),
             });
         }
     };
@@ -803,6 +824,7 @@ export default function Index({
                     onClose={() => setModalCancelacion({ abierto: false, solicitud: null })}
                     solicitud={modalCancelacion.solicitud}
                     listas={listas}
+                    onExito={recargarTrasAccion}
                 />
             )}
             {modalConfirmarCancelacion.abierto && (
@@ -810,6 +832,7 @@ export default function Index({
                     onClose={() => setModalConfirmarCancelacion({ abierto: false, solicitud: null })}
                     solicitud={modalConfirmarCancelacion.solicitud}
                     onProcesando={setProcesandoAccion}
+                    onExito={recargarTrasAccion}
                 />
             )}
             <div className="max-w-[1440px] mx-auto p-4 md:p-8 space-y-6 md:space-y-8">
@@ -1031,11 +1054,11 @@ export default function Index({
                 <Paginacion solicitudes={solicitudes} onIrAPagina={irAPagina} />
             </div>
 
-            {modalForm.abierto && <ModalFormSolicitud onClose={() => setModalForm({ ...modalForm, abierto: false })} procesos={procesos} listas={listas} tiposCliente={tipos_cliente} bancos={bancos} modoEdicion={modalForm.modoEdicion} solicitudAEditar={modalForm.solicitud} />}
-            {modalRespuesta.abierto && <ModalRespuestaSolicitud onClose={() => setModalRespuesta({ ...modalRespuesta, abierto: false })} solicitud={modalRespuesta.solicitud} estadoId={modalRespuesta.estadoId} />}
+            {modalForm.abierto && <ModalFormSolicitud onClose={() => setModalForm({ ...modalForm, abierto: false })} onExito={recargarTrasAccion} procesos={procesos} listas={listas} tiposCliente={tipos_cliente} bancos={bancos} modoEdicion={modalForm.modoEdicion} solicitudAEditar={modalForm.solicitud} />}
+            {modalRespuesta.abierto && <ModalRespuestaSolicitud onClose={() => setModalRespuesta({ ...modalRespuesta, abierto: false })} onExito={recargarTrasAccion} solicitud={modalRespuesta.solicitud} estadoId={modalRespuesta.estadoId} />}
             {modalBitacora.abierto && <ModalBitacoraSolicitud onClose={() => setModalBitacora({ ...modalBitacora, abierto: false })} solicitud={modalBitacora.solicitud} listas={listas} tiposCliente={tipos_cliente} />}
-            {modalConsulta.abierto && <ModalConsultaSolicitud onClose={() => setModalConsulta({ ...modalConsulta, abierto: false })} solicitud={modalConsulta.solicitud} />}
-            {modalRespuestaConsulta.abierto && <ModalRespuestaConsulta onClose={() => setModalRespuestaConsulta({ ...modalRespuestaConsulta, abierto: false })} solicitud={modalRespuestaConsulta.solicitud} consulta={modalRespuestaConsulta.consulta} />}
+            {modalConsulta.abierto && <ModalConsultaSolicitud onClose={() => setModalConsulta({ ...modalConsulta, abierto: false })} onExito={recargarTrasAccion} solicitud={modalConsulta.solicitud} />}
+            {modalRespuestaConsulta.abierto && <ModalRespuestaConsulta onClose={() => setModalRespuestaConsulta({ ...modalRespuestaConsulta, abierto: false })} onExito={recargarTrasAccion} solicitud={modalRespuestaConsulta.solicitud} consulta={modalRespuestaConsulta.consulta} />}
         </AppLayout>
     );
 }

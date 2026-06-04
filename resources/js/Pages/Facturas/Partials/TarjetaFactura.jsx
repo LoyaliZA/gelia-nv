@@ -1,15 +1,22 @@
 import React from 'react';
-import { Receipt, FileText, Paperclip, User, Calendar, Eye, CheckCircle2, XCircle, FileSpreadsheet, Trash2 } from 'lucide-react';
-import { ESTADO_BADGE } from './facturasStyles';
+import { Receipt, FileText, Paperclip, User, Calendar, Eye, CheckCircle2, XCircle, FileSpreadsheet, Trash2, Download } from 'lucide-react';
+import { ESTADO_BADGE, urlArchivoFactura, nombreArchivoFacturaPdf } from './facturasStyles';
 import { geliaCardClass } from '../../../utils/geliaTheme';
+import { puedePermiso } from '../../../utils/permisos';
+import { nombreEstadoFactura } from './facturasFiltros';
+import FeedbackResolucionFactura from './FeedbackResolucionFactura';
 
 export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprobar, onReportar, onVerificar, onEliminar }) {
-    const permisos = auth?.user?.permissions || [];
-    const puedeResponder = permisos.includes('facturas.responder');
-    const puedeVerificar = permisos.includes('facturas.verificar');
-    const puedeEliminar = permisos.includes('facturas.eliminar');
+    const puedeResponder = puedePermiso(auth, 'facturas.responder');
+    const puedeReportar = puedePermiso(auth, 'facturas.reportar_error');
+    const puedeVerificar = puedePermiso(auth, 'facturas.verificar');
+    const puedeEliminar = puedePermiso(auth, 'facturas.eliminar');
+    const estadoNombre = nombreEstadoFactura(factura) || '—';
+    const esPendiente = estadoNombre === 'Pendiente';
+    const esRespondida = estadoNombre === 'Respondida';
+    const esVerificada = estadoNombre === 'Verificada';
+    const puedeDescargarEmitidos = (esRespondida || esVerificada) && (factura.tiene_pdf_emitido || factura.tiene_xml);
     const estadoId = factura.catalogo_estado_solicitud_id ?? factura.estado?.id;
-    const estadoNombre = factura.estado?.nombre || '—';
     const rfc = factura.datos_fiscales?.rfc || factura.cliente?.rfc || '—';
 
     return (
@@ -65,6 +72,8 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                 </span>
             </div>
 
+            <FeedbackResolucionFactura factura={factura} />
+
             <div className="flex flex-wrap gap-2 pt-4 mt-auto border-t theme-border">
                 <button
                     type="button"
@@ -73,25 +82,29 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                 >
                     <Eye className="w-3.5 h-3.5 shrink-0" /> Expediente
                 </button>
-                {estadoId === 1 && puedeResponder && (
+                {esPendiente && (
                     <>
-                        <button
-                            type="button"
-                            onClick={() => onAprobar(factura)}
-                            className="theme-btn-primary theme-btn-primary--compact !py-2 !px-3 text-[9px]"
-                        >
-                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Emitir
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => onReportar(factura)}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/30 outline-none"
-                        >
-                            <XCircle className="w-3.5 h-3.5 shrink-0" /> Error
-                        </button>
+                        {puedeResponder && (
+                            <button
+                                type="button"
+                                onClick={() => onAprobar(factura)}
+                                className="theme-btn-primary theme-btn-primary--compact !py-2 !px-3 text-[9px]"
+                            >
+                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Emitir
+                            </button>
+                        )}
+                        {puedeReportar && (
+                            <button
+                                type="button"
+                                onClick={() => onReportar(factura)}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/30 outline-none hover:bg-red-500/20 transition-colors"
+                            >
+                                <XCircle className="w-3.5 h-3.5 shrink-0" /> Error
+                            </button>
+                        )}
                     </>
                 )}
-                {estadoId === 2 && puedeVerificar && (
+                {esRespondida && puedeVerificar && (
                     <button
                         type="button"
                         onClick={() => onVerificar(factura)}
@@ -99,6 +112,28 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                     >
                         <Receipt className="w-3.5 h-3.5 shrink-0" /> Verificar
                     </button>
+                )}
+                {puedeDescargarEmitidos && factura.tiene_pdf_emitido && (
+                    <a
+                        href={urlArchivoFactura(factura.id, 'pdf', 0, { descargar: true })}
+                        download={nombreArchivoFacturaPdf(factura)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase theme-element border theme-border outline-none hover:border-[var(--color-primario)] transition-colors"
+                    >
+                        <Download className="w-3.5 h-3.5 shrink-0" /> PDF
+                    </a>
+                )}
+                {puedeDescargarEmitidos && factura.tiene_xml && (
+                    <a
+                        href={urlArchivoFactura(factura.id, 'xml')}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase theme-element border theme-border outline-none hover:border-[var(--color-primario)] transition-colors"
+                    >
+                        <Download className="w-3.5 h-3.5 shrink-0" /> XML
+                    </a>
                 )}
                 {puedeEliminar && (
                     <button

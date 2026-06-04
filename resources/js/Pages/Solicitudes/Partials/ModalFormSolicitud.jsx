@@ -144,7 +144,7 @@ const evaluarEscalonamiento = (cliente, cotizacion, catalogoListas, listaActualO
     };
 };
 
-export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCliente = [], bancos = [], modoEdicion, solicitudAEditar }) {
+export default function ModalFormSolicitud({ onClose, onExito, procesos, listas, tiposCliente = [], bancos = [], modoEdicion, solicitudAEditar }) {
 
     const infoClienteInicial = solicitudAEditar?.cliente || null;
     const [infoCliente, setInfoCliente] = useState(infoClienteInicial);
@@ -331,7 +331,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         }
 
         const config = {
-            onSuccess: () => { reset(); onClose(); },
+            onSuccess: () => { reset(); onExito?.(); onClose(); },
             preserveScroll: true,
         };
 

@@ -3,6 +3,7 @@
 namespace App\Services\Facturas;
 
 use App\Models\AuditoriaSolicitudFactura;
+use App\Models\CatalogoEstadoSolicitud;
 use App\Models\SolicitudFactura;
 use App\Models\User;
 use App\Notifications\AlertaFactura;
@@ -18,6 +19,7 @@ class ResponderSolicitudFacturaService
         return DB::transaction(function () use ($solicitud, $datos, $usuario) {
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
             $estadoNuevoId = (int) $datos['catalogo_estado_solicitud_id'];
+            $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
 
             $updates = [
                 'catalogo_estado_solicitud_id' => $estadoNuevoId,
@@ -26,7 +28,7 @@ class ResponderSolicitudFacturaService
                 'respondida_at' => now(),
             ];
 
-            if ($estadoNuevoId === 4) {
+            if ($idIncorrecta !== null && $estadoNuevoId === $idIncorrecta) {
                 $updates['motivo_incorrecta'] = 'error_reportado';
             } else {
                 $updates['motivo_incorrecta'] = null;
@@ -70,8 +72,9 @@ class ResponderSolicitudFacturaService
             ]);
 
             if ($solicitud->vendedor) {
-                $tipo = $estadoNuevoId === 4 ? 'rechazada' : 'respondida';
-                $mensaje = $estadoNuevoId === 4
+                $esError = $idIncorrecta !== null && $estadoNuevoId === $idIncorrecta;
+                $tipo = $esError ? 'rechazada' : 'respondida';
+                $mensaje = $esError
                     ? 'Se reportó un error en tu solicitud de factura.'
                     : 'Tu solicitud de factura fue procesada. Revisa los archivos adjuntos.';
 

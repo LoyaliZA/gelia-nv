@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { X, MessageSquare, Tag, TrendingUp, Send } from 'lucide-react';
 
-export default function ModalConsultaSolicitud({ onClose, solicitud }) {
+export default function ModalConsultaSolicitud({ onClose, onExito, solicitud }) {
     const { data, setData, post, processing } = useForm({
         consulta_tag: false,
         consulta_lista: false,
@@ -17,7 +17,7 @@ export default function ModalConsultaSolicitud({ onClose, solicitud }) {
             return;
         }
         post(route('solicitudes.consultas.store', solicitud.id), {
-            onSuccess: onClose,
+            onSuccess: () => { onExito?.(); onClose(); },
         });
     };
 

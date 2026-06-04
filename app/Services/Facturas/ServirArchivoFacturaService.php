@@ -23,7 +23,7 @@ class ServirArchivoFacturaService
                 $solicitud->archivo_fiscal_path,
                 $this->nombreFiscal($solicitud->archivo_fiscal_path)
             ),
-            'pdf' => $this->archivoSimple($solicitud->factura_pdf_path, $solicitud->factura_pdf_nombre ?? 'factura.pdf'),
+            'pdf' => $this->archivoPdf($solicitud),
             'xml' => $this->archivoSimple($solicitud->factura_xml_path, $solicitud->factura_xml_nombre ?? 'factura.xml'),
             'evidencia_error' => $this->archivoSimple($solicitud->evidencia_error_path, 'evidencia-error'),
             'voucher' => $this->resolverVoucher($solicitud, $indice ?? 0),
@@ -40,6 +40,34 @@ class ServirArchivoFacturaService
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
 
         return 'datos-fiscales.' . ($ext ?: 'xlsx');
+    }
+
+    private function archivoPdf(SolicitudFactura $solicitud): ?array
+    {
+        if (!$solicitud->factura_pdf_path) {
+            return null;
+        }
+
+        return [
+            'path' => $solicitud->factura_pdf_path,
+            'nombre' => $this->nombrePdfDescarga($solicitud),
+        ];
+    }
+
+    private function nombrePdfDescarga(SolicitudFactura $solicitud): string
+    {
+        $solicitud->loadMissing('cliente:id,numero_cliente');
+
+        $numeroCliente = $solicitud->cliente?->numero_cliente
+            ?? data_get($solicitud->datos_fiscales, 'numero_cliente')
+            ?? 'sin-cliente';
+
+        $numeroCliente = preg_replace('/[^\w\-]+/u', '_', (string) $numeroCliente) ?: 'sin-cliente';
+
+        $fecha = ($solicitud->respondida_at ?? $solicitud->created_at)?->format('Y-m-d')
+            ?? now()->format('Y-m-d');
+
+        return "Factura_{$numeroCliente}_{$fecha}.pdf";
     }
 
     private function archivoSimple(?string $path, string $nombreDefault): ?array
