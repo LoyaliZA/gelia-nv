@@ -42,7 +42,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'activos.exportar': 'Permite exportar activos a Excel.',
     'personalizacion.gestionar': 'Permite gestionar temas y personalización visual.',
     'facturas.ver_listado': 'Permite acceder al módulo de solicitudes de facturas.',
-    'facturas.crear': 'Permite crear solicitudes de factura con comprobante de pago.',
+    'facturas.crear': 'Permite crear y reparar solicitudes de factura propias (comprobante de pago).',
     'facturas.responder': 'Permite emitir factura (PDF/XML) en solicitudes pendientes.',
     'facturas.reportar_error': 'Permite reportar error en solicitudes de factura pendientes.',
     'facturas.verificar': 'Permite marcar solicitudes de factura como verificadas.',

@@ -34,7 +34,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
 
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
     const [listaCargando, setListaCargando] = useState(false);
-    const [modalCrear, setModalCrear] = useState(false);
+    const [modalForm, setModalForm] = useState({ abierto: false, modoEdicion: false, factura: null });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, factura: null, estadoId: null, modo: 'emitir' });
     const [modalExpediente, setModalExpediente] = useState({ abierto: false, factura: null });
 
@@ -175,7 +175,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                             </a>
                         )}
                         {puedeCrear && (
-                            <button type="button" onClick={() => setModalCrear(true)} className={BTN_PRIMARY}>
+                            <button type="button" onClick={() => setModalForm({ abierto: true, modoEdicion: false, factura: null })} className={BTN_PRIMARY}>
                                 <Plus className="w-4 h-4 shrink-0" /> Nueva solicitud
                             </button>
                         )}
@@ -247,6 +247,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                                             onReportar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: idIncorrecta, modo: 'reportar' })}
                                             onVerificar={verificar}
                                             onEliminar={eliminar}
+                                            onReparar={(factura) => setModalForm({ abierto: true, modoEdicion: true, factura })}
                                         />
                                     ))}
                                 </div>
@@ -273,10 +274,13 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                     factura={modalExpediente.factura}
                 />
             )}
-            {modalCrear && (
+            {modalForm.abierto && (
                 <ModalFormFactura
-                    onClose={() => setModalCrear(false)}
+                    key={modalForm.modoEdicion ? `reparar-${modalForm.factura?.id}` : 'nueva'}
+                    onClose={() => setModalForm({ abierto: false, modoEdicion: false, factura: null })}
                     onExito={recargarTrasAccion}
+                    modoEdicion={modalForm.modoEdicion}
+                    facturaAEditar={modalForm.factura}
                 />
             )}
         </AppLayout>

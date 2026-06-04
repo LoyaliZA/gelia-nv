@@ -184,6 +184,7 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:facturas.crear'])->prefix('facturas')->name('facturas.')->group(function () {
         Route::get('/plantilla-fiscales/descargar', [SolicitudFacturaController::class, 'descargarPlantilla'])->name('plantilla_fiscales');
         Route::post('/', [SolicitudFacturaController::class, 'store'])->name('store');
+        Route::put('/{factura}/reparar', [SolicitudFacturaController::class, 'reparar'])->name('reparar');
     });
 
     Route::middleware(['can:facturas.ver_listado'])->prefix('facturas')->name('facturas.')->group(function () {

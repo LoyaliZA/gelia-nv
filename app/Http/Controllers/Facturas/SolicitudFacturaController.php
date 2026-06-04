@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Facturas;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Facturas\RepararSolicitudFacturaRequest;
 use App\Http\Requests\Facturas\ResponderSolicitudFacturaRequest;
 use App\Http\Requests\Facturas\StoreSolicitudFacturaRequest;
 use App\Models\CatalogoEstadoSolicitud;
@@ -12,6 +13,7 @@ use App\Services\Facturas\CrearSolicitudFacturaService;
 use App\Services\Facturas\EliminarSolicitudFacturaService;
 use App\Services\Facturas\ImportarDatosFiscalesService;
 use App\Services\Facturas\ListarSolicitudesFacturaService;
+use App\Services\Facturas\RepararSolicitudFacturaService;
 use App\Services\Facturas\ResponderSolicitudFacturaService;
 use App\Notifications\AlertaFactura;
 use App\Models\AuditoriaSolicitudFactura;
@@ -60,6 +62,26 @@ class SolicitudFacturaController extends Controller
         $crearService->ejecutar($datos, Auth::id());
 
         return redirect()->back()->with('success', 'Solicitud de factura creada correctamente.');
+    }
+
+    public function reparar(
+        RepararSolicitudFacturaRequest $request,
+        SolicitudFactura $factura,
+        RepararSolicitudFacturaService $repararService
+    ): RedirectResponse {
+        $datos = $request->validated();
+        $datos['vouchers_conservar'] = $request->input('vouchers_conservar', []);
+        $datos['eliminar_archivo_fiscal'] = $request->boolean('eliminar_archivo_fiscal');
+        if ($request->hasFile('archivo_fiscal')) {
+            $datos['archivo_fiscal'] = $request->file('archivo_fiscal');
+        }
+        if ($request->hasFile('vouchers')) {
+            $datos['vouchers'] = $request->file('vouchers');
+        }
+
+        $repararService->ejecutar($factura, $datos, Auth::user());
+
+        return redirect()->back()->with('success', 'Solicitud corregida y enviada a revisión.');
     }
 
     public function show(SolicitudFactura $factura, ListarSolicitudesFacturaService $listarService): JsonResponse

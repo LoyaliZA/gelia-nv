@@ -24,6 +24,7 @@ class AlertaFactura extends Notification implements ShouldQueue, ShouldBroadcast
         'nueva' => 'Nueva solicitud de factura',
         'respondida' => 'Factura emitida',
         'rechazada' => 'Error en factura',
+        'reparada' => 'Solicitud de factura reparada',
         'verificada' => 'Factura verificada',
     ];
 
