@@ -2,12 +2,6 @@
 # Script de Despliegue Automatizado para Producción - GeliaNV
 #./deploy.sh
 
-set -e
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/backup-db.sh
-source "${SCRIPT_DIR}/scripts/backup-db.sh"
-
 echo "--- Iniciando Despliegue de GeliaNV ---"
 
 # 1. Compilar imagen base y levantar contenedores

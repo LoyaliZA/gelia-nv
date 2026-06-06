@@ -49,25 +49,41 @@ class AppServiceProvider extends ServiceProvider
         // Cargar configuraciones del sistema desde la base de datos
         try {
             if (\Illuminate\Support\Facades\Schema::hasTable('configuraciones_sistema')) {
+                // Ensure class is loaded so any lingering old cache can unserialize properly
+                class_exists(\App\Models\ConfiguracionSistema::class);
+                
                 $configuraciones = \Illuminate\Support\Facades\Cache::rememberForever('configuraciones_sistema_globales', function () {
-                    return \App\Models\ConfiguracionSistema::all();
+                    return \App\Models\ConfiguracionSistema::all()->toArray();
                 });
 
                 foreach ($configuraciones as $configuracion) {
-                    $valor = $configuracion->valor;
-                    
+                    if (is_object($configuracion)) {
+                        $valor = $configuracion->valor ?? null;
+                        $tipo = $configuracion->tipo ?? null;
+                        $clave = $configuracion->clave ?? null;
+                    } elseif (is_array($configuracion)) {
+                        $valor = $configuracion['valor'] ?? null;
+                        $tipo = $configuracion['tipo'] ?? null;
+                        $clave = $configuracion['clave'] ?? null;
+                    } else {
+                        continue;
+                    }
+
+                    if (!$clave) continue;
+
                     // Castear booleanos si es necesario
-                    if ($configuracion->tipo === 'boolean') {
+                    if ($tipo === 'boolean') {
                         $valor = filter_var($valor, FILTER_VALIDATE_BOOLEAN);
-                    } elseif ($configuracion->tipo === 'integer') {
+                    } elseif ($tipo === 'integer') {
                         $valor = (int) $valor;
                     }
 
-                    config([$configuracion->clave => $valor]);
+                    config([$clave => $valor]);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Ignorar errores durante la carga inicial o migraciones si la tabla no existe
+            \Illuminate\Support\Facades\Log::error('AppServiceProvider config load error: ' . $e->getMessage());
         }
         // 1. Forzar HTTPS en entorno de producción para evitar contenido mixto
         if (config('app.env') === 'production') {

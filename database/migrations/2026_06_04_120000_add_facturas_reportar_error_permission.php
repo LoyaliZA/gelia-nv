@@ -11,15 +11,19 @@ return new class extends Migration
     {
         Permission::findOrCreate('facturas.reportar_error', 'web');
 
-        foreach (User::permission('facturas.responder')->get() as $usuario) {
-            if (!$usuario->hasPermissionTo('facturas.reportar_error')) {
-                $usuario->givePermissionTo('facturas.reportar_error');
+        if (Permission::where('name', 'facturas.responder')->where('guard_name', 'web')->exists()) {
+            foreach (User::permission('facturas.responder')->get() as $usuario) {
+                if (!$usuario->hasPermissionTo('facturas.reportar_error')) {
+                    $usuario->givePermissionTo('facturas.reportar_error');
+                }
             }
         }
 
-        foreach (User::permission('solicitudes.reportar')->get() as $usuario) {
-            if (!$usuario->hasPermissionTo('facturas.reportar_error')) {
-                $usuario->givePermissionTo('facturas.reportar_error');
+        if (Permission::where('name', 'solicitudes.reportar')->where('guard_name', 'web')->exists()) {
+            foreach (User::permission('solicitudes.reportar')->get() as $usuario) {
+                if (!$usuario->hasPermissionTo('facturas.reportar_error')) {
+                    $usuario->givePermissionTo('facturas.reportar_error');
+                }
             }
         }
 
