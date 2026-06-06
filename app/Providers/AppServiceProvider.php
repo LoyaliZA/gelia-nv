@@ -71,11 +71,13 @@ class AppServiceProvider extends ServiceProvider
 
                     if (!$clave) continue;
 
-                    // Castear booleanos si es necesario
+                    // Castear booleanos y limpiar strings
                     if ($tipo === 'boolean') {
                         $valor = filter_var($valor, FILTER_VALIDATE_BOOLEAN);
                     } elseif ($tipo === 'integer') {
                         $valor = (int) $valor;
+                    } elseif (is_string($valor)) {
+                        $valor = trim($valor);
                     }
 
                     config([$clave => $valor]);
