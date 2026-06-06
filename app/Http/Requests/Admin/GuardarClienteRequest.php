@@ -14,7 +14,7 @@ class GuardarClienteRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        foreach (['vendedor_id', 'catalogo_tipo_cliente_id', 'lista_actual_id'] as $campo) {
+        foreach (['vendedor_id', 'catalogo_tipo_cliente_id', 'lista_actual_id', 'monto_credito_autorizado', 'dias_credito', 'fecha_inicio_credito'] as $campo) {
             if ($this->has($campo) && $this->input($campo) === '') {
                 $this->merge([$campo => null]);
             }
@@ -72,6 +72,9 @@ class GuardarClienteRequest extends FormRequest
             'correo_electronico'       => 'nullable|email|max:255',
             'uso_factura'              => 'nullable|string|max:255',
             'nombre_razon_social'      => 'nullable|string|max:255',
+            'monto_credito_autorizado' => 'nullable|numeric|min:0',
+            'dias_credito'             => 'nullable|integer|min:0',
+            'fecha_inicio_credito'     => 'nullable|date',
             'correccion_emergencia'    => 'nullable|boolean',
         ];
     }

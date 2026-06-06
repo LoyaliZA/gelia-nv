@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Cliente extends Model
 {
@@ -29,6 +30,10 @@ class Cliente extends Model
         'es_inactivo',
         'catalogo_tipo_cliente_id',
         'lista_bloqueada', // <-- NUEVO CAMPO PARA CONTROLAR BLOQUEO DE LISTA
+        'monto_credito_autorizado',
+        'dias_credito',
+        'fecha_inicio_credito',
+        'alerta_aumento_credito',
     ];
 
     protected $casts = [
@@ -36,6 +41,10 @@ class Cliente extends Model
         'es_heredado' => 'boolean',
         'es_inactivo' => 'boolean',
         'lista_bloqueada' => 'boolean',
+        'monto_credito_autorizado' => 'decimal:2',
+        'dias_credito' => 'integer',
+        'fecha_inicio_credito' => 'date:Y-m-d',
+        'alerta_aumento_credito' => 'boolean',
     ];
 
     /**
@@ -73,6 +82,28 @@ class Cliente extends Model
     public function historialMontos(): HasMany
     {
         return $this->hasMany(HistorialMontoCliente::class);
+    }
+
+    public function bitacorasCobranza(): HasMany
+    {
+        return $this->hasMany(CobranzaBitacora::class)->orderBy('created_at', 'desc');
+    }
+
+    public function facturasCobranza(): HasMany
+    {
+        return $this->hasMany(CobranzaFactura::class, 'cliente_id');
+    }
+
+    public function facturaCobranzaActiva(): HasOne
+    {
+        return $this->hasOne(CobranzaFactura::class, 'cliente_id')
+            ->where('pagada', false)
+            ->latestOfMany();
+    }
+
+    public function alertasCobranza(): HasMany
+    {
+        return $this->hasMany(CobranzaAlerta::class, 'cliente_id');
     }
 
     /**

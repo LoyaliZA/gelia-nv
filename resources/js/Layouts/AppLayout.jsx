@@ -85,14 +85,14 @@ export default function AppLayout({ children, fullScreen = false }) {
     useEffect(() => {
         const removeStart = router.on('start', (event) => {
             // REGLA: Si la petición indica showProgress: false, ignoramos el loader
-            if (event.detail.visit.showProgress === false) return;
+            if (event.detail.visit?.showProgress === false) return;
             
             setIsGlobalLoading(true);
             setGlobalProgress(null);
         });
 
         const removeProgress = router.on('progress', (event) => {
-            if (event.detail.visit.showProgress === false) return;
+            if (event.detail.visit?.showProgress === false) return;
             
             if (event.detail.progress && event.detail.progress.percentage) {
                 setGlobalProgress(event.detail.progress.percentage);

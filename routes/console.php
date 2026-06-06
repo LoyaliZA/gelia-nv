@@ -18,3 +18,5 @@ Schedule::command('rh:generar-cuotas-prestamos')->dailyAt('07:00');
 Schedule::command('activos:notificar-pendientes-firma')->dailyAt('09:00');
 Schedule::command('activos:notificar-pendientes-firma')->dailyAt('12:00');
 
+Schedule::command('cobranza:evaluar-alertas')->dailyAt('11:00');
+

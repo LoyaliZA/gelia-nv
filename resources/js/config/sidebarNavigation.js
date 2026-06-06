@@ -75,6 +75,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             href: () => routeHref('mis_clientes.index', '/mis-clientes'),
             active: (url) => url.startsWith('/mis-clientes'),
         },
+        can('cobranza.ver') && {
+            type: 'link',
+            id: 'auto_cobranza',
+            label: 'Auto-Cobranza',
+            icon: CreditCard,
+            href: () => routeHref('auto-cobranza.index', '/auto-cobranza'),
+            active: (url) => url.startsWith('/auto-cobranza'),
+        },
     ].filter(Boolean);
 
     const logisticaChildren = [

@@ -1,8 +1,19 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase,
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard
 } from 'lucide-react';
 
 export const DASHBOARD_MODULE_CARDS = [
+    {
+        id: 'card_auto_cobranza',
+        titulo: 'Auto-Cobranza',
+        subtitulo: 'Control de crédito y cobros.',
+        permiso: 'cobranza.ver',
+        href: () => route('auto-cobranza.index'),
+        icon: CreditCard,
+        borderClass: 'border-red-500/20',
+        iconWrapClass: 'bg-red-500/10 border-red-500/20',
+        iconClass: 'text-red-500',
+    },
     {
         id: 'card_usuarios',
         titulo: 'Control de Usuarios',

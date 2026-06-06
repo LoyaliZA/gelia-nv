@@ -46,6 +46,29 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Cargar configuraciones del sistema desde la base de datos
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('configuraciones_sistema')) {
+                $configuraciones = \Illuminate\Support\Facades\Cache::rememberForever('configuraciones_sistema_globales', function () {
+                    return \App\Models\ConfiguracionSistema::all();
+                });
+
+                foreach ($configuraciones as $configuracion) {
+                    $valor = $configuracion->valor;
+                    
+                    // Castear booleanos si es necesario
+                    if ($configuracion->tipo === 'boolean') {
+                        $valor = filter_var($valor, FILTER_VALIDATE_BOOLEAN);
+                    } elseif ($configuracion->tipo === 'integer') {
+                        $valor = (int) $valor;
+                    }
+
+                    config([$configuracion->clave => $valor]);
+                }
+            }
+        } catch (\Exception $e) {
+            // Ignorar errores durante la carga inicial o migraciones si la tabla no existe
+        }
         // 1. Forzar HTTPS en entorno de producción para evitar contenido mixto
         if (config('app.env') === 'production') {
             URL::forceScheme('https');

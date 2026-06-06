@@ -8,6 +8,7 @@ import {
     History,
     Globe,
     Map,
+    Settings,
 } from 'lucide-react';
 
 /** Módulos del panel de administración (sidebar + /admin). */
@@ -92,6 +93,15 @@ export const ADMIN_MODULES = [
         routeName: 'admin.mapa_logistico.index',
         icon: Map,
         permission: 'entregas.configurar_zonas',
+    },
+    {
+        id: 'configuracion_sistema',
+        title: 'Configuración del Sistema',
+        description: 'Variables globales, sobreescritura de .env y testeo de integraciones clave.',
+        path: '/admin/configuracion-sistema',
+        routeName: 'admin.configuracion_sistema.index',
+        icon: Settings,
+        permission: 'configuracion_sistema.gestionar',
     },
 ];
 

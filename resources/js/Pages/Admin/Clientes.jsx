@@ -4,10 +4,11 @@ import {
     Users, Upload, Search,
     FileSpreadsheet, TrendingUp,
     CheckCircle, Database, Edit3, ChevronDown, Sparkles,
-    Plus, Shield, X,
+    Plus, Shield, X, ChevronRight,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
+import GeliaLoader from '../../Components/GeliaLoader';
 
 // --- IMPORTACIÓN DEL PARCIAL ---
 import ModalFormCliente from './Partials/ModalFormCliente';
@@ -69,6 +70,8 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
     const [filtroOrden, setFiltroOrden] = useState(filtros.orden || 'numero_asc');
     const [dragActive, setDragActive] = useState(false);
     const [cargandoLista, setCargandoLista] = useState(false);
+    
+    const [modalExitoAbierto, setModalExitoAbierto] = useState(false);
 
     // Control del Modal unificado
     const [modalConfig, setModalConfig] = useState({ abierto: false, modo: null, cliente: null });
@@ -140,6 +143,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
             onSuccess: () => {
                 formCarga.reset();
                 router.reload({ only: ['clientes'] });
+                setModalExitoAbierto(true);
             },
         });
     };
@@ -221,6 +225,13 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                 />
             )}
 
+            <GeliaLoader
+                isVisible={modalExitoAbierto}
+                message="¡Carga Exitosa!"
+                progress={null}
+                onClose={() => setModalExitoAbierto(false)}
+            />
+
             <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
 
                 {/* --- HEADER --- */}
@@ -257,12 +268,12 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                     </div>
                 </header>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch h-[calc(100vh-240px)] min-h-[600px]">
 
                     {/* --- PANEL LATERAL: CARGA MASIVA --- */}
-                    <div className="lg:col-span-1 space-y-8">
-                        <section className={`${activeCardClass} p-8`} style={{ animationDelay: '100ms' }}>
-                            <div className="flex items-center gap-3 mb-6">
+                    <div className="lg:col-span-1 h-full">
+                        <section className={`${activeCardClass} p-8 h-full overflow-y-auto custom-scrollbar`} style={{ animationDelay: '100ms' }}>
+                            <div className="flex items-center gap-3 mb-6 shrink-0">
                                 <Upload className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
                                 <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
                                     Carga Masiva_
@@ -353,9 +364,9 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                     </div>
 
                     {/* --- PANEL PRINCIPAL: LISTADO --- */}
-                    <div className="lg:col-span-2 space-y-8">
-                        <section className={`${activeCardClass} p-8 space-y-8`} style={{ animationDelay: '200ms' }}>
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <div className="lg:col-span-2 h-full min-h-0">
+                        <section className={`${activeCardClass} p-8 h-full flex flex-col`} style={{ animationDelay: '200ms' }}>
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 shrink-0 mb-4">
                                 <div className="md:col-span-12 relative">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
                                     <input
@@ -444,7 +455,17 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                 </div>
                             </div>
 
-                            <div className={`space-y-4 ${cargandoLista ? 'opacity-60 pointer-events-none' : ''}`}>
+                            {(clientes?.total ?? 0) > 0 && (
+                                <div className="pt-2 pb-4 shrink-0">
+                                    <GeliaPaginacion
+                                        paginator={clientes}
+                                        onIrAPagina={irAPagina}
+                                        embedded
+                                    />
+                                </div>
+                            )}
+
+                            <div className={`space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-3 pb-4 ${cargandoLista ? 'opacity-60 pointer-events-none' : ''}`}>
                                 {listaClientes.length === 0 ? (
                                     <div className="text-center py-16 theme-element border-2 border-dashed theme-border rounded-[2rem]">
                                         <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
@@ -516,14 +537,6 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                     ))
                                 )}
 
-                                {(clientes?.total ?? 0) > 0 && (
-                                    <GeliaPaginacion
-                                        paginator={clientes}
-                                        onIrAPagina={irAPagina}
-                                        embedded
-                                        className="pt-8 mt-4"
-                                    />
-                                )}
                             </div>
                         </section>
                     </div>

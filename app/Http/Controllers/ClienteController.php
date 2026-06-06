@@ -36,6 +36,10 @@ class ClienteController extends Controller
         $nombre = $validated['nombre'];
         unset($validated['numero_cliente'], $validated['nombre']);
 
+        $viejoMonto = (float) $cliente->monto_credito_autorizado;
+        $viejoDias = (int) $cliente->dias_credito;
+        $viejaFecha = $cliente->fecha_inicio_credito ? $cliente->fecha_inicio_credito->toDateString() : null;
+
         if ($request->boolean('correccion_emergencia')) {
             Gate::authorize('clientes.correccion_emergencia');
             $correccionEmergencia->aplicar($cliente, $numero, $nombre, $validated);
@@ -44,6 +48,27 @@ class ClienteController extends Controller
                 'numero_cliente' => $numero,
                 'nombre' => $nombre,
             ]));
+        }
+
+        $nuevoMonto = (float) $cliente->monto_credito_autorizado;
+        $nuevoDias = (int) $cliente->dias_credito;
+        $nuevaFecha = $cliente->fecha_inicio_credito ? $cliente->fecha_inicio_credito->toDateString() : null;
+
+        if ($viejoMonto !== $nuevoMonto || $viejoDias !== $nuevoDias || $viejaFecha !== $nuevaFecha) {
+            $cambios = [];
+            if ($viejoMonto !== $nuevoMonto) $cambios[] = "Monto Autorizado (\$" . number_format($viejoMonto, 2) . " a \$" . number_format($nuevoMonto, 2) . ")";
+            if ($viejoDias !== $nuevoDias) $cambios[] = "Días de Plazo ($viejoDias a $nuevoDias)";
+            if ($viejaFecha !== $nuevaFecha) $cambios[] = "Fecha de Inicio (" . ($viejaFecha ?: 'ninguna') . " a " . ($nuevaFecha ?: 'ninguna') . ")";
+            
+            \App\Models\CobranzaBitacora::create([
+                'cliente_id' => $cliente->id,
+                'usuario_id' => Auth::id(),
+                'tipo_evento' => 'ajuste_manual',
+                'monto_anterior' => $viejoMonto,
+                'monto_nuevo' => $nuevoMonto,
+                'descripcion' => 'Ajuste manual de parámetros de crédito. Cambios: ' . implode(', ', $cambios) . '.',
+                'es_alerta' => false,
+            ]);
         }
 
         return redirect()->back()->with('success', 'Cliente actualizado exitosamente.');
@@ -60,6 +85,12 @@ class ClienteController extends Controller
 
         if (array_key_exists('lista_actual_id', $validated) && $validated['lista_actual_id'] === null) {
             unset($validated['lista_actual_id']);
+        }
+
+        if (!Auth::user() || !Auth::user()->can('cobranza.editar_credito')) {
+            unset($validated['monto_credito_autorizado']);
+            unset($validated['dias_credito']);
+            unset($validated['fecha_inicio_credito']);
         }
 
         return $validated;

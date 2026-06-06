@@ -9,6 +9,7 @@ const nombrePareceNumero = (valor) => /^\d+(\.\d+)?$/.test(String(valor || '').t
 export default function ModalFormCliente({ onClose, modoModal, clienteActual, tiposCliente = [], vendedores = [], listas = [] }) {
     const { auth } = usePage().props;
     const puedeCorreccionEmergencia = auth?.user?.permissions?.includes('clientes.correccion_emergencia') ?? false;
+    const puedeEditarCredito = auth?.user?.permissions?.includes('cobranza.editar_credito') || auth?.user?.roles?.includes('Super Admin');
     
     // --- SECCIÓN: INICIALIZACIÓN DE FORMULARIO 360 ---
     const { data, setData, post, put, processing, errors } = useForm({
@@ -27,6 +28,9 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
         correo_electronico: clienteActual?.correo_electronico || '',
         uso_factura: clienteActual?.uso_factura || '',
         nombre_razon_social: clienteActual?.nombre_razon_social || '',
+        monto_credito_autorizado: clienteActual?.monto_credito_autorizado || 0,
+        dias_credito: clienteActual?.dias_credito || 0,
+        fecha_inicio_credito: clienteActual?.fecha_inicio_credito || '',
         correccion_emergencia: false,
     });
 
@@ -159,6 +163,53 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                             <ChevronDown className="w-4 h-4 theme-text-muted" />
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t theme-border pt-4">
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Monto de Crédito Autorizado</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01"
+                                        value={data.monto_credito_autorizado} 
+                                        onChange={e => setData('monto_credito_autorizado', e.target.value)}
+                                        disabled={!puedeEditarCredito}
+                                        className={`w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 transition-all shadow-sm ${!puedeEditarCredito ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        onFocus={e => puedeEditarCredito && (e.target.style.borderColor = 'var(--color-primario)')}
+                                        onBlur={e => e.target.style.borderColor = ''}
+                                    />
+                                    {errors.monto_credito_autorizado && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.monto_credito_autorizado}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Días de Crédito</label>
+                                    <input 
+                                        type="number" 
+                                        value={data.dias_credito} 
+                                        onChange={e => setData('dias_credito', e.target.value)}
+                                        disabled={!puedeEditarCredito}
+                                        className={`w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 transition-all shadow-sm ${!puedeEditarCredito ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        onFocus={e => puedeEditarCredito && (e.target.style.borderColor = 'var(--color-primario)')}
+                                        onBlur={e => e.target.style.borderColor = ''}
+                                        placeholder="Ej. 15"
+                                    />
+                                    {errors.dias_credito && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.dias_credito}</p>}
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Fecha de Inicio de Crédito</label>
+                                    <input 
+                                        type="date" 
+                                        value={data.fecha_inicio_credito} 
+                                        onChange={e => setData('fecha_inicio_credito', e.target.value)}
+                                        disabled={!puedeEditarCredito}
+                                        className={`w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 transition-all shadow-sm ${!puedeEditarCredito ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                        onFocus={e => puedeEditarCredito && (e.target.style.borderColor = 'var(--color-primario)')}
+                                        onBlur={e => e.target.style.borderColor = ''}
+                                    />
+                                    {errors.fecha_inicio_credito && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.fecha_inicio_credito}</p>}
                                 </div>
                             </div>
                         </div>

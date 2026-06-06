@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import GeliaLogo from './GeliaLogo'; // <-- Importamos nuestro Smart Component
 
-export default function GeliaLoader({ isVisible, message = "Sincronizando datos_", progress = null }) {
+export default function GeliaLoader({ isVisible, message = "Sincronizando datos_", progress = null, onClose = null, buttonText = "Aceptar y Continuar" }) {
     if (!isVisible) return null;
 
     // Lógica dinámica: Si recibimos un número de progreso, usamos el relleno fluido. 
@@ -27,7 +27,7 @@ export default function GeliaLoader({ isVisible, message = "Sincronizando datos_
                     className="w-20 h-20 relative z-10 drop-shadow-2xl" 
                 />
                 
-                <div className="text-center space-y-2 relative z-10">
+                <div className="text-center space-y-2 relative z-10 w-full">
                     <h3 className="text-xl font-black uppercase italic tracking-tighter theme-text-main m-0 drop-shadow-sm">
                         {message}
                     </h3>
@@ -39,9 +39,20 @@ export default function GeliaLoader({ isVisible, message = "Sincronizando datos_
                         </p>
                     )}
 
-                    <p className="text-[10px] font-bold theme-text-muted tracking-widest uppercase mt-2">
-                        Por favor, no cierres esta ventana
-                    </p>
+                    {!onClose ? (
+                        <p className="text-[10px] font-bold theme-text-muted tracking-widest uppercase mt-2">
+                            Por favor, no cierres esta ventana
+                        </p>
+                    ) : (
+                        <button 
+                            onClick={onClose}
+                            className="w-full mt-6 px-8 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg transition-all hover:scale-105 outline-none relative overflow-hidden group"
+                            style={{ backgroundColor: 'var(--color-primario)' }}
+                        >
+                            <span className="relative z-10">{buttonText}</span>
+                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+                        </button>
+                    )}
                 </div>
 
             </div>

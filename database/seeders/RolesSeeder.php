@@ -32,7 +32,8 @@ class RolesSeeder extends Seeder
             'usuarios.gestionar',
             'usuarios.generar_permisos',
             'catalogos.comisiones.ver',
-            'catalogos.comisiones.gestionar'
+            'catalogos.comisiones.gestionar',
+            'configuracion_sistema.gestionar'
         ];
 
         foreach ($permisos as $permiso) {

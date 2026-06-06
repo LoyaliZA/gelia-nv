@@ -9,6 +9,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\CatalogoController;
 use App\Http\Controllers\ProductoCatalogoController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\AutoCobranzaController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Api\CotizacionEntregaController;
 use App\Http\Controllers\Api\ClienteApiController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\MapaLogisticoController;
 use App\Http\Controllers\Admin\AuditoriaListaDescuentoController;
 use App\Http\Controllers\Admin\PersonalizacionController;
+use App\Http\Controllers\Admin\ConfiguracionSistemaController;
 use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\ActivoController;
 use App\Http\Controllers\Activos\CategoriaActivoController;
@@ -133,6 +135,16 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:mis_clientes.gestionar'])->group(function () {
         Route::get('/mis-clientes', [ClienteController::class, 'misClientes'])->name('mis_clientes.index');
         Route::post('/mis-clientes/rapido', [ClienteController::class, 'registroRapido'])->name('mis_clientes.rapido');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: AUTO-COBRANZA
+    // ══════════════════════════════════════════════════════════════════════
+    Route::prefix('auto-cobranza')->name('auto-cobranza.')->group(function () {
+        Route::get('/', [AutoCobranzaController::class, 'index'])->name('index');
+        Route::post('/importar', [AutoCobranzaController::class, 'importarReporte'])->name('importar');
+        Route::put('/alertas/{alerta}', [AutoCobranzaController::class, 'actualizarAlerta'])->name('alertas.update');
+        Route::get('/clientes/{clienteId}/bitacora', [AutoCobranzaController::class, 'bitacora'])->name('bitacora');
     });
 
     Route::middleware(['can:solicitudes.ver_listado'])->group(function () {
@@ -447,6 +459,15 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/', [AdminController::class, 'panel'])->name('index');
+
+        // --- Configuración Global del Sistema ---
+        Route::middleware(['can:configuracion_sistema.gestionar'])->prefix('configuracion-sistema')->name('configuracion_sistema.')->group(function () {
+            Route::get('/', [ConfiguracionSistemaController::class, 'index'])->name('index');
+            Route::post('/', [ConfiguracionSistemaController::class, 'store'])->name('store');
+            Route::put('/{configuracion}', [ConfiguracionSistemaController::class, 'update'])->name('update');
+            Route::delete('/{configuracion}', [ConfiguracionSistemaController::class, 'destroy'])->name('destroy');
+            Route::post('/test-mail', [ConfiguracionSistemaController::class, 'testMail'])->name('test_mail');
+        });
 
         // --- 1. Gestión de Usuarios ---
         Route::middleware(['can:usuarios.gestionar'])->group(function () {
