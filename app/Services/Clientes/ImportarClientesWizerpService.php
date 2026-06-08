@@ -11,6 +11,8 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
+use App\Notifications\AlertaLimiteCreditoSuperadoMasivoNotification;
 
 class ImportarClientesWizerpService
 {
@@ -71,16 +73,19 @@ class ImportarClientesWizerpService
 
         Cache::put('import_clientes_en_curso', true, now()->addHours(2));
 
+        $alertasLimiteExcedido = [];
+
         try {
             foreach (array_chunk($filas, self::CHUNK_SIZE) as $chunk) {
-                DB::transaction(function () use ($chunk, $listas, $mapaVendedoras, $importaCodigoLista, &$reporteAscensos, &$marcadosInactivos, &$stats) {
+                DB::transaction(function () use ($chunk, $listas, $mapaVendedoras, $importaCodigoLista, &$reporteAscensos, &$marcadosInactivos, &$stats, &$alertasLimiteExcedido) {
                     $historialBatch = [];
                     $numeros = array_values(array_unique(array_map(
                         fn (array $fila) => trim($fila['numero_cliente']),
                         $chunk
                     )));
 
-                    $clientesPorNumero = Cliente::whereIn('numero_cliente', $numeros)
+                    $clientesPorNumero = Cliente::with('facturaCobranzaActiva')
+                        ->whereIn('numero_cliente', $numeros)
                         ->get()
                         ->keyBy('numero_cliente');
 
@@ -93,7 +98,8 @@ class ImportarClientesWizerpService
                                 $clientesPorNumero,
                                 $historialBatch,
                                 $importaCodigoLista,
-                                $marcadosInactivos
+                                $marcadosInactivos,
+                                $alertasLimiteExcedido
                             );
                             $stats['procesadas']++;
                             if ($cambio) {
@@ -114,6 +120,13 @@ class ImportarClientesWizerpService
             }
         } finally {
             Cache::forget('import_clientes_en_curso');
+        }
+
+        if (!empty($alertasLimiteExcedido)) {
+            $usuariosNotificar = User::permission('cobranza.recibir_alertas')->get();
+            if ($usuariosNotificar->isNotEmpty()) {
+                Notification::send($usuariosNotificar, new AlertaLimiteCreditoSuperadoMasivoNotification($alertasLimiteExcedido));
+            }
         }
 
         $duracion = round(microtime(true) - $inicio, 2);
@@ -150,6 +163,9 @@ class ImportarClientesWizerpService
         $alias = [
             'numero_cli'        => 'numero_cliente',
             'monto_venta_actua' => 'monto_venta_actual',
+            'limite_asignado'   => 'monto_credito_autorizado',
+            'limite_de_credito' => 'monto_credito_autorizado',
+            'dias_de_credito'   => 'dias_credito',
         ];
 
         return $alias[$header] ?? $header;
@@ -160,6 +176,9 @@ class ImportarClientesWizerpService
         $alias = [
             'numero_cli'        => 'numero_cliente',
             'monto_venta_actua' => 'monto_venta_actual',
+            'limite_asignado'   => 'monto_credito_autorizado',
+            'limite_de_credito' => 'monto_credito_autorizado',
+            'dias_de_credito'   => 'dias_credito',
         ];
 
         foreach ($alias as $from => $to) {

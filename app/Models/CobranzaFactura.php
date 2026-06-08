@@ -17,6 +17,8 @@ class CobranzaFactura extends Model
         'fecha_emision',
         'fecha_vencimiento',
         'pagada',
+        'verificado_manualmente',
+        'tiene_abono',
     ];
 
     protected $casts = [
@@ -24,6 +26,8 @@ class CobranzaFactura extends Model
         'fecha_emision' => 'date',
         'fecha_vencimiento' => 'date',
         'pagada' => 'boolean',
+        'verificado_manualmente' => 'boolean',
+        'tiene_abono' => 'boolean',
     ];
 
     public function cliente(): BelongsTo

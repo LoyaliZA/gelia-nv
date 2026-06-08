@@ -94,6 +94,11 @@ class Cliente extends Model
         return $this->hasMany(CobranzaFactura::class, 'cliente_id');
     }
 
+    public function facturasActivas(): HasMany
+    {
+        return $this->hasMany(CobranzaFactura::class, 'cliente_id')->where('pagada', false);
+    }
+
     public function facturaCobranzaActiva(): HasOne
     {
         return $this->hasOne(CobranzaFactura::class, 'cliente_id')

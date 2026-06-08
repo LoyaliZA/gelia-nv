@@ -59,12 +59,39 @@ class AutoCobranzaController extends Controller
             }
         }
 
+        $aumentosPendientes = Cliente::with('facturasActivas')
+            ->where('alerta_aumento_credito', true)
+            ->get();
+
+        $configuracionHorarios = \Illuminate\Support\Facades\Cache::rememberForever('cobranza_horarios', function () {
+            $config = \App\Models\CobranzaConfiguracion::where('llave', 'horarios_alertas')->first();
+            return $config ? $config->valor : ['10:00', '12:00'];
+        });
+
         return Inertia::render('AutoCobranza/Index', [
             'clientes' => $clientes,
             'alertas' => $alertas,
             'cartera' => $cartera,
-            'filtros' => $request->only(['page', 'q', 'orden']),
+            'aumentosPendientes' => $aumentosPendientes,
+            'configuracionHorarios' => $configuracionHorarios,
+            'filtros' => [
+                'q' => $request->q,
+                'orden' => $request->orden,
+            ]
         ]);
+    }
+
+    public function guardarConfiguracion(Request $request)
+    {
+        $this->authorize('cobranza.configurar_alertas');
+        $request->validate(['horarios' => 'required|array']);
+
+        $config = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'horarios_alertas']);
+        $config->update(['valor' => $request->horarios]);
+
+        \Illuminate\Support\Facades\Cache::forever('cobranza_horarios', $request->horarios);
+
+        return redirect()->back()->with('success', 'Configuración actualizada exitosamente.');
     }
 
     private function queryClientesConCredito(Request $request)
@@ -92,13 +119,30 @@ class AutoCobranzaController extends Controller
             ->orderByDesc('monto')
             ->limit(1);
 
-        match ($request->input('orden', 'saldo_desc')) {
+        $estadoSubquery = CobranzaFactura::query()
+            ->selectRaw("
+                CASE 
+                    WHEN clientes.dias_credito IS NULL OR clientes.dias_credito = 0 OR clientes.monto_credito_autorizado IS NULL OR clientes.monto_credito_autorizado = 0 THEN 5
+                    WHEN fecha_vencimiento < CURDATE() THEN 1
+                    WHEN fecha_vencimiento >= CURDATE() AND fecha_vencimiento <= DATE_ADD(CURDATE(), INTERVAL 5 DAY) THEN 2
+                    WHEN tiene_abono = 1 THEN 3
+                    ELSE 4
+                END
+            ")
+            ->whereColumn('cliente_id', 'clientes.id')
+            ->where('pagada', false)
+            ->orderByDesc('monto')
+            ->limit(1);
+
+        match ($request->input('orden', 'automatico')) {
+            'automatico'         => $query->orderBy($estadoSubquery)->orderByDesc($saldoSubquery),
             'saldo_asc'          => $query->orderBy($saldoSubquery),
+            'saldo_desc'         => $query->orderByDesc($saldoSubquery),
             'nombre_asc'         => $query->orderBy('nombre'),
             'nombre_desc'        => $query->orderByDesc('nombre'),
             'fecha_credito_desc' => $query->orderByDesc('fecha_inicio_credito'),
             'numero_asc'         => $query->ordenarPorNumeroCliente('asc'),
-            default              => $query->orderByDesc($saldoSubquery),
+            default              => $query->orderBy($estadoSubquery)->orderByDesc($saldoSubquery),
         };
 
         return $query->paginate(6)->withQueryString();
@@ -154,5 +198,161 @@ class AutoCobranzaController extends Controller
             ->get();
 
         return response()->json($bitacora);
+    }
+
+    /**
+     * Devuelve los clientes con historial de crédito (paginado) para la pestaña de Historial.
+     */
+    public function historial(Request $request)
+    {
+        $this->authorize('cobranza.ver');
+
+        $query = Cliente::with(['facturasCobranza'])
+            ->whereHas('facturasCobranza');
+
+        if ($request->filled('q')) {
+            $terminos = array_filter(array_map('trim', explode(',', $request->q)));
+            
+            $query->where(function ($sub) use ($terminos) {
+                foreach ($terminos as $termino) {
+                    $sub->orWhere(function ($sub2) use ($termino) {
+                        if (preg_match('/^\d/', $termino)) {
+                            $sub2->where('numero_cliente', 'like', "{$termino}%");
+                        }
+                        $sub2->orWhere('nombre', 'like', "%{$termino}%");
+                    });
+                }
+            });
+        }
+
+        $clientes = $query->orderByDesc('id')->paginate(10);
+
+        return response()->json($clientes);
+    }
+
+    /**
+     * Permite a un administrador confirmar visualmente que una factura fue pagada.
+     */
+    public function verificarPago(Request $request, CobranzaFactura $factura)
+    {
+        $this->authorize('cobranza.ver');
+
+        if (!$factura->pagada) {
+            return response()->json(['message' => 'Solo se pueden verificar facturas que ya están pagadas.'], 422);
+        }
+
+        $factura->update(['verificado_manualmente' => true]);
+
+        \App\Models\CobranzaBitacora::create([
+            'cliente_id' => $factura->cliente_id,
+            'usuario_id' => auth()->id(),
+            'tipo_evento' => 'verificacion_manual',
+            'monto_anterior' => $factura->monto,
+            'monto_nuevo' => $factura->monto,
+            'descripcion' => "Pago de factura {$factura->folio} verificado manualmente por el administrador.",
+        ]);
+
+        return response()->json(['message' => 'Factura verificada exitosamente.']);
+    }
+
+    /**
+     * Devuelve los abonos registrados el día de hoy.
+     */
+    public function abonosDelDia()
+    {
+        $this->authorize('cobranza.ver');
+
+        $abonos = \App\Models\CobranzaBitacora::with('cliente:id,nombre,numero_cliente')
+            ->where('tipo_evento', 'abono')
+            ->whereDate('created_at', now()->toDateString())
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json($abonos);
+    }
+
+    /**
+     * Marca la alerta de aumento de crédito como resuelta.
+     */
+    public function resolverAumento(Request $request, Cliente $cliente)
+    {
+        $this->authorize('cobranza.ver');
+
+        $cliente->update(['alerta_aumento_credito' => false]);
+
+        \App\Models\CobranzaBitacora::create([
+            'cliente_id' => $cliente->id,
+            'usuario_id' => auth()->id() ?? 1,
+            'tipo_evento' => 'verificacion_manual',
+            'monto_anterior' => 0,
+            'monto_nuevo' => 0,
+            'descripcion' => 'Alerta de aumento de saldo marcada como atendida por el administrador.',
+        ]);
+
+        return redirect()->back()->with('success', 'Alerta resuelta.');
+    }
+
+    public function repararFechaInicio(Request $request, Cliente $cliente)
+    {
+        if (!auth()->user()->hasRole('Super Admin') && !auth()->user()->can('cobranza.reparar_fecha')) {
+            abort(403, 'No tienes permiso para reparar la fecha de inicio de crédito.');
+        }
+
+        $request->validate([
+            'fecha_inicio_credito' => 'required|date',
+        ]);
+
+        $nuevaFecha = \Carbon\Carbon::parse($request->fecha_inicio_credito)->startOfDay();
+        $viejaFecha = $cliente->fecha_inicio_credito ? \Carbon\Carbon::parse($cliente->fecha_inicio_credito)->toDateString() : 'N/A';
+
+        $cliente->update(['fecha_inicio_credito' => $nuevaFecha]);
+
+        $facturaActiva = \App\Models\CobranzaFactura::where('cliente_id', $cliente->id)
+            ->where('pagada', false)
+            ->first();
+
+        if ($facturaActiva) {
+            $diasCredito = ($cliente->dias_credito > 0) ? $cliente->dias_credito : 30;
+            $vencimientoCalculado = $nuevaFecha->copy()->addDays($diasCredito)->startOfDay();
+            $facturaActiva->update([
+                'fecha_vencimiento' => $vencimientoCalculado
+            ]);
+
+            $hoy = now()->startOfDay();
+            $diasAtraso = $vencimientoCalculado->diffInDays($hoy, false);
+
+            if ($diasAtraso >= 1) {
+                $alertaPendiente = \App\Models\CobranzaAlerta::where('factura_id', $facturaActiva->id)
+                    ->where('estado', 'pendiente')
+                    ->first();
+
+                if ($alertaPendiente) {
+                    $alertaPendiente->update(['dias_atraso' => $diasAtraso, 'fecha_alerta' => now()->toDateString()]);
+                } else {
+                    \App\Models\CobranzaAlerta::create([
+                        'cliente_id' => $cliente->id,
+                        'factura_id' => $facturaActiva->id,
+                        'dias_atraso' => $diasAtraso,
+                        'fecha_alerta' => now()->toDateString(),
+                        'estado' => 'pendiente',
+                    ]);
+                }
+            } else {
+                \App\Models\CobranzaAlerta::where('factura_id', $facturaActiva->id)
+                    ->where('estado', 'pendiente')
+                    ->delete();
+            }
+        }
+
+        \App\Models\CobranzaBitacora::create([
+            'cliente_id' => $cliente->id,
+            'usuario_id' => auth()->id() ?? 1,
+            'tipo_evento' => 'inicio_credito', // Usamos un evento existente para evitar errores
+            'monto_anterior' => 0,
+            'monto_nuevo' => 0,
+            'descripcion' => "Reparación manual de fecha de inicio de crédito. Anterior: $viejaFecha. Nueva: {$nuevaFecha->toDateString()}",
+        ]);
+
+        return redirect()->back()->with('success', 'Fecha de inicio de crédito reparada con éxito. Los cálculos han sido actualizados.');
     }
 }

@@ -8,6 +8,7 @@ use App\Events\AlertaAumentoCreditoEvent;
 use App\Models\CobranzaBitacora;
 use App\Models\User;
 use App\Notifications\AlertaAumentoCreditoNotification;
+use App\Notifications\AlertasAumentoCreditoMasivoNotification;
 use Exception;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Http\UploadedFile;
@@ -48,8 +49,10 @@ class ImportarReporteCobranzaService
         $clientesProcesados = [];
         $contadorNuevos = 0;
         $contadorActualizados = 0;
+        $alertasDetectadas = [];
+        $alertasLimiteExcedidoMasivo = [];
 
-        DB::transaction(function () use ($file, $headers, $delimiter, &$clientesProcesados, &$contadorNuevos, &$contadorActualizados) {
+        DB::transaction(function () use ($file, $headers, $delimiter, &$clientesProcesados, &$contadorNuevos, &$contadorActualizados, &$alertasDetectadas, &$alertasLimiteExcedidoMasivo) {
             $today = now()->toDateString();
 
             while (($row = fgetcsv($file, 0, $delimiter)) !== false) {
@@ -129,7 +132,7 @@ class ImportarReporteCobranzaService
                         $cliente->update(['fecha_inicio_credito' => $today]);
                     }
 
-                    // Plazo solo si ya está configurado en el cliente (admin); fallback interno sin persistir
+                    // Plazo basado en configuración o 30 por defecto
                     $diasCredito = ($cliente->dias_credito > 0) ? $cliente->dias_credito : 30;
                     $fechaInicioCredito = $cliente->fecha_inicio_credito ? $cliente->fecha_inicio_credito->toDateString() : $today;
                     $vencimientoCalculado = \Carbon\Carbon::parse($fechaInicioCredito)->addDays($diasCredito)->toDateString();
@@ -140,74 +143,142 @@ class ImportarReporteCobranzaService
                         ->first();
 
                     if (!$facturaActiva) {
-                        // Determinar fecha de vencimiento inicial
-                        if ($totalOverdue > 0) {
-                            $fechaVencimiento = $today; // ya venció, empezamos a contar desde hoy
-                            $fechaEmision = \Carbon\Carbon::parse($today)->subDays($diasCredito)->toDateString();
-                        } else {
-                            $fechaVencimiento = $vencimientoCalculado; // vencerá en el futuro
-                            $fechaEmision = $fechaInicioCredito;
-                        }
-
-                        CobranzaFactura::create([
+                        // Creación de crédito, la fecha_emision es cuando inició, y el vencimiento es estricto a los días
+                        $facturaActiva = CobranzaFactura::create([
                             'cliente_id' => $cliente->id,
                             'folio' => 'COB-' . $cliente->numero_cliente . '-' . date('Ymd'),
                             'monto' => $consolidado,
-                            'fecha_emision' => $fechaEmision,
-                            'fecha_vencimiento' => $fechaVencimiento,
+                            'fecha_emision' => $fechaInicioCredito,
+                            'fecha_vencimiento' => $vencimientoCalculado,
                             'pagada' => false,
                         ]);
 
                         CobranzaBitacora::create([
                             'cliente_id' => $cliente->id,
-                            'usuario_id' => auth()->id(),
+                            'usuario_id' => auth()->id() ?? 1,
                             'tipo_evento' => 'inicio_credito',
                             'monto_anterior' => 0,
                             'monto_nuevo' => $consolidado,
                             'descripcion' => 'Inicio de nuevo crédito detectado por importación.',
                         ]);
-                    } else {
-                        // Determinar actualización de fecha de vencimiento
-                        if ($totalOverdue > 0) {
-                            // Si ya venció pero antes estaba marcada con vencimiento futuro
-                            if (\Carbon\Carbon::parse($facturaActiva->fecha_vencimiento)->isFuture()) {
-                                $fechaVencimiento = $today;
-                            } else {
-                                $fechaVencimiento = $facturaActiva->fecha_vencimiento->toDateString(); // Mantener antigüedad
+                        
+                        // Validar si inicia ya excedido
+                        $limiteFinal = (float) $cliente->monto_credito_autorizado;
+                        if ($limiteFinal > 0 && $consolidado > $limiteFinal) {
+                            $alertaPendiente = \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
+                                ->where('tipo', 'limite_superado')
+                                ->where('estado', 'pendiente')
+                                ->first();
+
+                            if (!$alertaPendiente) {
+                                \App\Models\CobranzaAlerta::create([
+                                    'cliente_id' => $cliente->id,
+                                    'factura_id' => $facturaActiva->id,
+                                    'tipo' => 'limite_superado',
+                                    'dias_atraso' => null,
+                                    'fecha_alerta' => $today,
+                                    'estado' => 'pendiente',
+                                ]);
+                                $alertasLimiteExcedidoMasivo[] = [
+                                    'cliente' => $cliente,
+                                    'monto_actual' => $consolidado,
+                                    'limite' => $limiteFinal
+                                ];
                             }
-                        } else {
-                            // Sigue vigente, actualizar según días de crédito
-                            $fechaVencimiento = $vencimientoCalculado;
                         }
 
+                    } else {
                         $montoAnterior = $facturaActiva->monto;
 
+                        // Actualizamos monto y fecha de vencimiento (por si el usuario cambió los días de crédito)
                         $facturaActiva->update([
                             'monto' => $consolidado,
-                            'fecha_vencimiento' => $fechaVencimiento,
+                            'fecha_vencimiento' => $vencimientoCalculado,
                         ]);
 
-                        if ($consolidado > $montoAnterior) {
+                        if ($consolidado < $montoAnterior) {
+                            $facturaActiva->update(['tiene_abono' => true]);
+                            // Detección de ABONO parcial
                             CobranzaBitacora::create([
                                 'cliente_id' => $cliente->id,
-                                'usuario_id' => auth()->id(),
-                                'tipo_evento' => 'alerta_aumento',
+                                'usuario_id' => auth()->id() ?? 1,
+                                'tipo_evento' => 'abono',
                                 'monto_anterior' => $montoAnterior,
                                 'monto_nuevo' => $consolidado,
-                                'descripcion' => 'Se detectó un aumento en el monto de crédito sin reportarse como pagado previamente.',
-                                'es_alerta' => true,
+                                'descripcion' => 'Abono parcial detectado.',
+                                'es_alerta' => false,
                             ]);
+                        } elseif ($consolidado > $montoAnterior) {
+                            // Detección de AUMENTO
+                            $vencido = \Carbon\Carbon::parse($today)->greaterThan(\Carbon\Carbon::parse($facturaActiva->fecha_vencimiento));
+                            $limiteFinal = (float) $cliente->monto_credito_autorizado;
+                            $limiteSuperado = ($limiteFinal > 0 && $consolidado > $limiteFinal);
+                            
+                            if ($vencido) {
+                                // Aumento IRREGULAR (después de fecha vencimiento)
+                                CobranzaBitacora::create([
+                                    'cliente_id' => $cliente->id,
+                                    'usuario_id' => auth()->id() ?? 1,
+                                    'tipo_evento' => 'alerta_aumento',
+                                    'monto_anterior' => $montoAnterior,
+                                    'monto_nuevo' => $consolidado,
+                                    'descripcion' => 'Aumento de crédito detectado con periodo de crédito ya vencido.',
+                                    'es_alerta' => true,
+                                ]);
 
-                            $cliente->update(['alerta_aumento_credito' => true]);
+                                $cliente->update(['alerta_aumento_credito' => true]);
 
-                            event(new AlertaAumentoCreditoEvent($cliente, $montoAnterior, $consolidado));
+                                // Agrupar para correo masivo y notificaciones web
+                                $alertasDetectadas[] = [
+                                    'cliente' => $cliente,
+                                    'montoAnterior' => $montoAnterior,
+                                    'montoNuevo' => $consolidado,
+                                ];
+                            } elseif ($limiteSuperado) {
+                                // Aumento con Límite Superado
+                                CobranzaBitacora::create([
+                                    'cliente_id' => $cliente->id,
+                                    'usuario_id' => auth()->id() ?? 1,
+                                    'tipo_evento' => 'alerta_limite',
+                                    'monto_anterior' => $montoAnterior,
+                                    'monto_nuevo' => $consolidado,
+                                    'descripcion' => 'Aumento de crédito detectado superando el límite autorizado de $' . number_format($limiteFinal, 2) . '.',
+                                    'es_alerta' => true,
+                                ]);
 
-                            $usuariosParaNotificar = User::permission('cobranza.recibir_alertas')->get();
-                            $superAdmins = User::role('Super Admin')->get();
-                            $todosLosUsuarios = $usuariosParaNotificar->merge($superAdmins)->unique('id');
+                                // Crear alerta pendiente si no existe
+                                $alertaPendiente = \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
+                                    ->where('tipo', 'limite_superado')
+                                    ->where('estado', 'pendiente')
+                                    ->first();
 
-                            if ($todosLosUsuarios->isNotEmpty()) {
-                                Notification::send($todosLosUsuarios, new AlertaAumentoCreditoNotification($cliente, $montoAnterior, $consolidado));
+                                if (!$alertaPendiente) {
+                                    \App\Models\CobranzaAlerta::create([
+                                        'cliente_id' => $cliente->id,
+                                        'factura_id' => $facturaActiva->id,
+                                        'tipo' => 'limite_superado',
+                                        'dias_atraso' => null,
+                                        'fecha_alerta' => $today,
+                                        'estado' => 'pendiente',
+                                    ]);
+                                    
+                                    $alertasLimiteExcedidoMasivo[] = [
+                                        'cliente' => $cliente,
+                                        'monto_actual' => $consolidado,
+                                        'limite' => $limiteFinal
+                                    ];
+                                }
+                            } else {
+                                // Aumento NORMAL (dentro de días de crédito y no excede límite)
+                                CobranzaBitacora::create([
+                                    'cliente_id' => $cliente->id,
+                                    'usuario_id' => auth()->id() ?? 1,
+                                    'tipo_evento' => 'aumento_credito',
+                                    'monto_anterior' => $montoAnterior,
+                                    'monto_nuevo' => $consolidado,
+                                    'descripcion' => 'Aumento de crédito normal detectado dentro del periodo de crédito.',
+                                    'es_alerta' => false,
+                                ]);
                             }
                         }
                     }
@@ -239,6 +310,21 @@ class ImportarReporteCobranzaService
                 }
             }
         });
+
+        if (!empty($alertasDetectadas) || !empty($alertasLimiteExcedidoMasivo)) {
+            $usuariosParaNotificar = User::permission('cobranza.recibir_alertas')->get();
+            $superAdmins = User::role('Super Admin')->get();
+            $todosLosUsuarios = $usuariosParaNotificar->merge($superAdmins)->unique('id');
+
+            if ($todosLosUsuarios->isNotEmpty()) {
+                if (!empty($alertasDetectadas)) {
+                    Notification::send($todosLosUsuarios, new AlertasAumentoCreditoMasivoNotification($alertasDetectadas));
+                }
+                if (!empty($alertasLimiteExcedidoMasivo)) {
+                    Notification::send($todosLosUsuarios, new \App\Notifications\AlertaLimiteCreditoSuperadoMasivoNotification($alertasLimiteExcedidoMasivo));
+                }
+            }
+        }
 
         fclose($file);
 

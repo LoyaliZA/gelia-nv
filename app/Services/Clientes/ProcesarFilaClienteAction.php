@@ -31,7 +31,8 @@ class ProcesarFilaClienteAction
         Collection $clientesPorNumero,
         array &$historialBatch,
         bool $importaCodigoLista,
-        int &$marcadosInactivos
+        int &$marcadosInactivos,
+        array &$alertasLimiteExcedido
     ): ?array {
         $numeroCliente = trim($data['numero_cliente'] ?? '');
         if (empty($numeroCliente)) {
@@ -48,11 +49,12 @@ class ProcesarFilaClienteAction
                 $mapaVendedoras,
                 $historialBatch,
                 $importaCodigoLista,
-                $marcadosInactivos
+                $marcadosInactivos,
+                $alertasLimiteExcedido
             );
         }
 
-        $nuevo = $this->crearNuevoCliente($data, $listas, $mapaVendedoras, $importaCodigoLista, $marcadosInactivos);
+        $nuevo = $this->crearNuevoCliente($data, $listas, $mapaVendedoras, $importaCodigoLista, $marcadosInactivos, $alertasLimiteExcedido);
         if ($nuevo) {
             $clientesPorNumero->put($numeroCliente, $nuevo);
         }
@@ -65,7 +67,8 @@ class ProcesarFilaClienteAction
         $listas,
         array $mapaVendedoras,
         bool $importaCodigoLista,
-        int &$marcadosInactivos
+        int &$marcadosInactivos,
+        array &$alertasLimiteExcedido
     ): ?Cliente {
         if (empty(trim($data['nombre'] ?? ''))) {
             return null;
@@ -97,7 +100,24 @@ class ProcesarFilaClienteAction
             $clienteNuevo['lista_actual_id'] = $this->resolverListaFinal(null, $montoExtraido, $listas);
         }
 
-        return Cliente::create($clienteNuevo);
+        if (isset($data['monto_credito_autorizado']) && trim($data['monto_credito_autorizado']) !== '') {
+            $clienteNuevo['monto_credito_autorizado'] = $this->limpiarMonto($data['monto_credito_autorizado']);
+        }
+        if (isset($data['dias_credito']) && trim($data['dias_credito']) !== '') {
+            $clienteNuevo['dias_credito'] = (int) trim($data['dias_credito']);
+        }
+
+        $nuevoRegistro = Cliente::create($clienteNuevo);
+
+        if ($nuevoRegistro && $nuevoRegistro->monto_credito_autorizado > 0 && $nuevoRegistro->monto_venta_actual > $nuevoRegistro->monto_credito_autorizado) {
+            $alertasLimiteExcedido[] = [
+                'cliente' => $nuevoRegistro,
+                'monto_actual' => $nuevoRegistro->monto_venta_actual,
+                'limite' => $nuevoRegistro->monto_credito_autorizado
+            ];
+        }
+
+        return $nuevoRegistro;
     }
 
     private function actualizarClienteExistente(
@@ -107,19 +127,9 @@ class ProcesarFilaClienteAction
         array $mapaVendedoras,
         array &$historialBatch,
         bool $importaCodigoLista,
-        int &$marcadosInactivos
+        int &$marcadosInactivos,
+        array &$alertasLimiteExcedido
     ): ?array {
-        if ($cliente->lista_bloqueada) {
-            $montoExtraido = $this->limpiarMonto($data['monto_venta_actual'] ?? null);
-
-            if ($montoExtraido !== null && !$this->montosSonIguales($cliente->monto_venta_actual, $montoExtraido)) {
-                $this->agregarHistorialMonto($cliente, $montoExtraido, $historialBatch);
-                $cliente->update(['monto_venta_actual' => $montoExtraido]);
-            }
-
-            return null;
-        }
-
         $updateData = [];
         $listaOriginalId = $cliente->lista_actual_id;
         $cambioReporte = null;
@@ -144,7 +154,7 @@ class ProcesarFilaClienteAction
         }
 
         $listaIdCSV = null;
-        if ($importaCodigoLista) {
+        if ($importaCodigoLista && !$cliente->lista_bloqueada) {
             if ($this->codigoListaVacio($data)) {
                 if (!$cliente->es_inactivo) {
                     $marcadosInactivos++;
@@ -169,7 +179,7 @@ class ProcesarFilaClienteAction
 
             $listaEvaluacionId = $updateData['lista_actual_id'] ?? $cliente->lista_actual_id;
 
-            if ($montoExtraido > 0.001 && !$this->esListaExcluida($listaEvaluacionId, $listas)) {
+            if (!$cliente->lista_bloqueada && $montoExtraido > 0.001 && !$this->esListaExcluida($listaEvaluacionId, $listas)) {
                 $nuevaListaIdPorMonto = $this->determinarListaPorMonto($montoExtraido, $listas);
 
                 $listaActualValidacion = $listas->firstWhere('id', $listaEvaluacionId);
@@ -181,6 +191,20 @@ class ProcesarFilaClienteAction
             }
 
             $this->agregarHistorialMonto($cliente, $montoExtraido, $historialBatch);
+        }
+
+        if (isset($data['monto_credito_autorizado']) && trim($data['monto_credito_autorizado']) !== '') {
+            $nuevoLimite = $this->limpiarMonto($data['monto_credito_autorizado']);
+            if (!$this->montosSonIguales((float) $cliente->monto_credito_autorizado, (float) $nuevoLimite)) {
+                $updateData['monto_credito_autorizado'] = $nuevoLimite;
+            }
+        }
+
+        if (isset($data['dias_credito']) && trim($data['dias_credito']) !== '') {
+            $nuevosDias = (int) trim($data['dias_credito']);
+            if ($cliente->dias_credito !== $nuevosDias) {
+                $updateData['dias_credito'] = $nuevosDias;
+            }
         }
 
         if (!empty($updateData)) {
@@ -202,6 +226,20 @@ class ProcesarFilaClienteAction
             }
 
             $cliente->update($updateData);
+        }
+
+        $limiteFinal = (float) $cliente->monto_credito_autorizado;
+        $montoFinal = (float) $cliente->monto_venta_actual;
+        $consolidado = (float) ($cliente->facturaCobranzaActiva?->monto ?? 0);
+        
+        $deudaReal = max($montoFinal, $consolidado);
+
+        if ($limiteFinal > 0 && $deudaReal > $limiteFinal) {
+            $alertasLimiteExcedido[] = [
+                'cliente' => $cliente,
+                'monto_actual' => $deudaReal,
+                'limite' => $limiteFinal
+            ];
         }
 
         return $cambioReporte;

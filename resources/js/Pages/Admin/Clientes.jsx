@@ -352,7 +352,9 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                     <strong style={{ color: 'var(--color-primario)' }}>codigo_lista</strong> (Ej: PG, 1, 2, 3, 4, 7; celda vacía = inactivo; sin columna = solo actualiza monto)<br />
                                     <strong style={{ color: 'var(--color-primario)' }}>monto_venta_actual</strong><br />
                                     <strong style={{ color: 'var(--color-primario)' }}>vendedor_id</strong> (TAG de la Vendedora)<br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)<br /><br />
+                                    <strong style={{ color: 'var(--color-primario)' }}>es_heredado</strong> (SI o NO)<br />
+                                    <strong style={{ color: 'var(--color-primario)' }}>limite_asignado</strong> o <strong style={{ color: 'var(--color-primario)' }}>monto_credito_autorizado</strong> (Sin símbolos, ej: 5000)<br />
+                                    <strong style={{ color: 'var(--color-primario)' }}>dias_credito</strong> o <strong style={{ color: 'var(--color-primario)' }}>dias_de_credito</strong> (Número entero, ej: 15)<br /><br />
                                     <span className="text-[9px] font-black uppercase tracking-widest text-amber-600">
                                         Ejecute la carga antes de las 09:00 para evitar conflicto con el rechazo automático de pagos vencidos.
                                     </span><br /><br />

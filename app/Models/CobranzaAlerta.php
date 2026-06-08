@@ -12,6 +12,7 @@ class CobranzaAlerta extends Model
     protected $fillable = [
         'cliente_id',
         'factura_id',
+        'tipo',
         'dias_atraso',
         'fecha_alerta',
         'estado',

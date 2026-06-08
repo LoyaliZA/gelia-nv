@@ -98,7 +98,13 @@ export default function NotificationBell({ notifications: propNotifications = []
     const handleNotificationClick = (n) => {
         let destino = '/solicitudes';
 
-        if (n.data?.activo_id) {
+        if (n.data?.modulo === 'cobranza') {
+            destino = '/auto-cobranza';
+            if (n.data?.clientes_busqueda) {
+                destino += `?q=${n.data.clientes_busqueda}`;
+                // Assuming active tab for search is 'clients' or similar if needed. We'll just pass the query.
+            }
+        } else if (n.data?.activo_id) {
             destino = `/activos/${n.data.activo_id}`;
         } else if (n.data?.solicitud_id) {
             destino = `/solicitudes?folio=${n.data.solicitud_id}`;

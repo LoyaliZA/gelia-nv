@@ -1,51 +1,21 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\Auth\RegistroController;
-use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Auth\{LoginController,RegistroController};
+use App\Http\Controllers\{DashboardController,AdminController,CatalogoController,ProductoCatalogoController,ClienteController,AutoCobranzaController,ProfileController};
 use App\Http\Controllers\Solicitudes\SolicitudController;
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\CatalogoController;
-use App\Http\Controllers\ProductoCatalogoController;
-use App\Http\Controllers\ClienteController;
-use App\Http\Controllers\AutoCobranzaController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\Api\CotizacionEntregaController;
-use App\Http\Controllers\Api\ClienteApiController;
+use App\Http\Controllers\Api\{CotizacionEntregaController,ClienteApiController};
 use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\MapaLogisticoController;
-use App\Http\Controllers\Admin\AuditoriaListaDescuentoController;
-use App\Http\Controllers\Admin\PersonalizacionController;
-use App\Http\Controllers\Admin\ConfiguracionSistemaController;
+use App\Http\Controllers\Admin\{AuditoriaListaDescuentoController,PersonalizacionController,ConfiguracionSistemaController};
 use App\Http\Controllers\AromasListasController;
-use App\Http\Controllers\Activos\ActivoController;
-use App\Http\Controllers\Activos\CategoriaActivoController;
-use App\Http\Controllers\Activos\TipoActivoController;
-use App\Http\Controllers\Rh\ColaboradorController;
-use App\Http\Controllers\Rh\ConfiguracionRhController;
-use App\Http\Controllers\Rh\CatalogoPuestoController;
-use App\Http\Controllers\Rh\CatalogoTipoFaltaController;
-use App\Http\Controllers\Rh\CatalogoBonoController;
-use App\Http\Controllers\Rh\CatalogoReglaIncidenciaController;
-use App\Http\Controllers\Rh\DashboardRhController;
-use App\Http\Controllers\Rh\HorasExtraController;
-use App\Http\Controllers\Rh\DeduccionController;
-use App\Http\Controllers\Rh\PeriodoPagoController;
-use App\Http\Controllers\Rh\PrestamoPagoFijoController;
-use App\Http\Controllers\Rh\SalidaPersonalController;
-use App\Http\Controllers\Rh\ConsolidadoDeduccionesController;
-use App\Http\Controllers\Rh\ConsolidadoHorasExtraController;
-use App\Http\Controllers\Rh\BancoTiempoController;
+use App\Http\Controllers\Activos\{ActivoController,CategoriaActivoController,TipoActivoController};
+use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController};
 use App\Http\Controllers\ProductoController;
-use App\Http\Controllers\Facturas\SolicitudFacturaController;
-use App\Http\Controllers\Reportes\ReporteSolicitudesController;
-use App\Http\Controllers\Facturas\DatosFiscalesController;
-use App\Http\Controllers\Facturas\ArchivoFacturaController;
+use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
-use App\Http\Controllers\Mensajeria\ConversacionController;
-use App\Http\Controllers\Mensajeria\MensajeController;
-use App\Http\Controllers\Mensajeria\AdjuntoMensajeController;
+use App\Http\Controllers\Mensajeria\{ConversacionController,MensajeController,AdjuntoMensajeController};
+use App\Http\Controllers\WebPushController;
 
 // ══════════════════════════════════════════════════════════════════════
 // 1. REDIRECCIÓN INICIAL
@@ -145,6 +115,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/importar', [AutoCobranzaController::class, 'importarReporte'])->name('importar');
         Route::put('/alertas/{alerta}', [AutoCobranzaController::class, 'actualizarAlerta'])->name('alertas.update');
         Route::get('/clientes/{clienteId}/bitacora', [AutoCobranzaController::class, 'bitacora'])->name('bitacora');
+        Route::get('/historial', [AutoCobranzaController::class, 'historial'])->name('historial');
+        Route::get('/abonos-hoy', [AutoCobranzaController::class, 'abonosDelDia'])->name('abonos-hoy');
+        Route::post('/clientes/{cliente}/resolver-aumento', [AutoCobranzaController::class, 'resolverAumento'])->name('alertas.resolver-aumento');
+        Route::put('/clientes/{cliente}/reparar-fecha', [AutoCobranzaController::class, 'repararFechaInicio'])->name('clientes.reparar-fecha');
+        Route::post('/facturas/{factura}/verificar', [AutoCobranzaController::class, 'verificarPago'])->name('facturas.verificar');
+        Route::post('/configuracion', [AutoCobranzaController::class, 'guardarConfiguracion'])->name('configuracion.store');
     });
 
     Route::middleware(['can:solicitudes.ver_listado'])->group(function () {
