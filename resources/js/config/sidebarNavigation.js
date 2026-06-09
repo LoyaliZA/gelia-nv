@@ -153,7 +153,7 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
         can('plantilla_pedidos.ver') && {
             type: 'link',
             id: 'plantilla_bellaroma',
-            label: 'Plantilla Bellaroma',
+            label: 'Plantilla Pedidos',
             icon: FileSpreadsheet,
             href: () => routeHref('plantilla_bellaroma.index', '/plantilla-bellaroma'),
             active: (url) => url.startsWith('/plantilla-bellaroma'),

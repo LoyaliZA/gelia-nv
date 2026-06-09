@@ -25,8 +25,8 @@ class PlantillaBellaromaGenerada extends Notification implements ShouldQueue, Sh
     public function __construct(BellaromaTemplate $template)
     {
         $this->template = $template;
-        $this->titulo = 'Plantilla Bellaroma Generada';
-        $this->mensajeVisible = "Se ha generado una nueva plantilla de Bellaroma: {$template->nombre_archivo}";
+        $this->titulo = 'Plantilla Pedidos Generada';
+        $this->mensajeVisible = "Se ha generado una nueva plantilla de pedidos: {$template->nombre_archivo}";
     }
 
     /**
@@ -45,9 +45,9 @@ class PlantillaBellaromaGenerada extends Notification implements ShouldQueue, Sh
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject('Nueva Plantilla de Bellaroma Generada')
+            ->subject('Nueva Plantilla de Pedidos Generada')
             ->greeting('¡Hola ' . $notifiable->name . '!')
-            ->line('Se ha generado una nueva plantilla de Excel para Bellaroma.')
+            ->line('Se ha generado una nueva plantilla de Excel para pedidos.')
             ->line('Archivo: ' . $this->template->nombre_archivo)
             ->line('Tamaño: ' . $this->template->tamano_kb);
 
@@ -69,7 +69,7 @@ class PlantillaBellaromaGenerada extends Notification implements ShouldQueue, Sh
     {
         return new BroadcastMessage(array_merge(
             $this->construirPayload(),
-            ['mensaje_voz' => "Atención, se ha generado una nueva plantilla de Bellaroma llamada {$this->template->nombre_archivo}."]
+            ['mensaje_voz' => "Atención, se ha generado una nueva plantilla de pedidos llamada {$this->template->nombre_archivo}."]
         ));
     }
 

@@ -19,14 +19,38 @@ class PlantillaBellaromaController extends Controller
 
         $hoy = date('Y-m-d');
 
-        $templatesHoy = BellaromaTemplate::whereDate('created_at', $hoy)
+        $templatesHoy = BellaromaTemplate::where(function($q) use ($hoy) {
+                $q->whereNull('fecha_entrega')
+                  ->whereDate('created_at', $hoy);
+            })
+            ->orWhere(function($q) use ($hoy) {
+                $q->whereNotNull('fecha_entrega')
+                  ->whereDate('fecha_entrega', $hoy)
+                  ->where('fecha_entrega', '<=', now());
+            })
             ->orderByDesc('id')
             ->get();
 
-        $templatesHistorial = BellaromaTemplate::whereDate('created_at', '<', $hoy)
+        $templatesHistorial = BellaromaTemplate::where(function($q) use ($hoy) {
+                $q->whereNull('fecha_entrega')
+                  ->whereDate('created_at', '<', $hoy);
+            })
+            ->orWhere(function($q) use ($hoy) {
+                $q->whereNotNull('fecha_entrega')
+                  ->whereDate('fecha_entrega', '<', $hoy)
+                  ->where('fecha_entrega', '<=', now());
+            })
             ->orderByDesc('id')
             ->limit(100)
             ->get();
+
+        $templatesProgramados = [];
+        if (auth()->user()->can('plantilla_pedidos.ver_programadas')) {
+            $templatesProgramados = BellaromaTemplate::whereNotNull('fecha_entrega')
+                ->where('fecha_entrega', '>', now())
+                ->orderBy('fecha_entrega', 'asc')
+                ->get();
+        }
 
         $configUsers = BellaromaConfig::where('llave', 'notified_users')->first();
         $notifiedUserIds = $configUsers && $configUsers->valor ? json_decode($configUsers->valor, true) : [];
@@ -43,11 +67,13 @@ class PlantillaBellaromaController extends Controller
             'descargar' => $user->can('plantilla_pedidos.descargar'),
             'visualizar' => $user->can('plantilla_pedidos.visualizar'),
             'eliminar' => $user->can('plantilla_pedidos.eliminar'),
+            'ver_programadas' => $user->can('plantilla_pedidos.ver_programadas'),
         ];
 
         return Inertia::render('PlantillaBellaroma/Index', [
             'templatesHoy' => $templatesHoy,
             'templatesHistorial' => $templatesHistorial,
+            'templatesProgramados' => $templatesProgramados,
             'notifiedUserIds' => $notifiedUserIds,
             'users' => $users,
             'permisos' => $permisos,
@@ -61,13 +87,15 @@ class PlantillaBellaromaController extends Controller
         $request->validate([
             'existencias' => 'required|file',
             'precios' => 'required|file',
-            'para_manana' => 'nullable|boolean'
+            'tipo_entrega' => 'required|string|in:inmediata,manana,fecha',
+            'fecha_programada' => 'nullable|date',
         ]);
 
         $template = $service->procesar(
             $request->file('existencias'),
             $request->file('precios'),
-            $request->boolean('para_manana', false)
+            $request->input('tipo_entrega', 'inmediata'),
+            $request->input('fecha_programada')
         );
 
         return response()->json([

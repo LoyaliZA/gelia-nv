@@ -14,7 +14,8 @@ export default function GeneradorBellaroma({ onSuccess }) {
     const { data, setData, reset } = useForm({
         existencias: null,
         precios: null,
-        para_manana: false,
+        tipo_entrega: 'inmediata',
+        fecha_programada: '',
     });
 
     const handleFileChange = (e, field) => {
@@ -35,7 +36,10 @@ export default function GeneradorBellaroma({ onSuccess }) {
         const formData = new FormData();
         formData.append('existencias', data.existencias);
         formData.append('precios', data.precios);
-        formData.append('para_manana', data.para_manana ? '1' : '0');
+        formData.append('tipo_entrega', data.tipo_entrega);
+        if (data.tipo_entrega === 'fecha' && data.fecha_programada) {
+            formData.append('fecha_programada', data.fecha_programada);
+        }
 
         try {
             const csrfMeta = document.querySelector('meta[name="csrf-token"]');
@@ -58,17 +62,21 @@ export default function GeneradorBellaroma({ onSuccess }) {
                 return;
             }
 
-            setSuccessMsg("¡Plantilla Generada y Enviada Exitosamente!");
+            if (data.tipo_entrega === 'inmediata') {
+                setSuccessMsg("¡Plantilla Generada y Enviada Exitosamente!");
+                // Trigger download
+                const a = document.createElement("a");
+                a.href = resData.download_url;
+                a.target = "_blank";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } else {
+                setSuccessMsg("¡Plantilla Programada Exitosamente!");
+            }
+
             onSuccess(resData.template);
             reset();
-            
-            // Trigger download
-            const a = document.createElement("a");
-            a.href = resData.download_url;
-            a.target = "_blank";
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
 
             setTimeout(() => setSuccessMsg(null), 5000);
         } catch (error) {
@@ -102,7 +110,10 @@ export default function GeneradorBellaroma({ onSuccess }) {
                 
                 {/* Upload Existencias */}
                 <div 
-                    className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${data.existencias ? 'border-[#8a2be2] bg-[#8a2be2]/5' : 'theme-border hover:border-[#8a2be2] hover:bg-black/5 dark:hover:bg-white/5'}`}
+                    className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${data.existencias ? 'bg-black/5 dark:bg-white/5' : 'theme-border hover:bg-black/5 dark:hover:bg-white/5'}`}
+                    style={data.existencias ? { borderColor: 'var(--color-primario)' } : {}}
+                    onMouseEnter={(e) => { if(!data.existencias) e.currentTarget.style.borderColor = 'var(--color-primario)'; }}
+                    onMouseLeave={(e) => { if(!data.existencias) e.currentTarget.style.borderColor = ''; }}
                     onClick={() => existenciasRef.current?.click()}
                 >
                     <input 
@@ -112,7 +123,7 @@ export default function GeneradorBellaroma({ onSuccess }) {
                         accept=".csv,.txt,.xlsx,.xls"
                         onChange={(e) => handleFileChange(e, 'existencias')}
                     />
-                    <UploadCloud className={`w-10 h-10 mx-auto mb-3 ${data.existencias ? 'text-[#8a2be2]' : 'theme-text-muted'}`} />
+                    <UploadCloud className={`w-10 h-10 mx-auto mb-3 ${data.existencias ? '' : 'theme-text-muted'}`} style={data.existencias ? { color: 'var(--color-primario)' } : {}} />
                     <h4 className="text-sm font-black uppercase theme-text-main">
                         {data.existencias ? 'Archivo de Existencias' : 'Subir Existencias'}
                     </h4>
@@ -123,7 +134,10 @@ export default function GeneradorBellaroma({ onSuccess }) {
 
                 {/* Upload Precios */}
                 <div 
-                    className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${data.precios ? 'border-[#8a2be2] bg-[#8a2be2]/5' : 'theme-border hover:border-[#8a2be2] hover:bg-black/5 dark:hover:bg-white/5'}`}
+                    className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${data.precios ? 'bg-black/5 dark:bg-white/5' : 'theme-border hover:bg-black/5 dark:hover:bg-white/5'}`}
+                    style={data.precios ? { borderColor: 'var(--color-primario)' } : {}}
+                    onMouseEnter={(e) => { if(!data.precios) e.currentTarget.style.borderColor = 'var(--color-primario)'; }}
+                    onMouseLeave={(e) => { if(!data.precios) e.currentTarget.style.borderColor = ''; }}
                     onClick={() => preciosRef.current?.click()}
                 >
                     <input 
@@ -133,7 +147,7 @@ export default function GeneradorBellaroma({ onSuccess }) {
                         accept=".csv,.txt,.xlsx,.xls"
                         onChange={(e) => handleFileChange(e, 'precios')}
                     />
-                    <UploadCloud className={`w-10 h-10 mx-auto mb-3 ${data.precios ? 'text-[#8a2be2]' : 'theme-text-muted'}`} />
+                    <UploadCloud className={`w-10 h-10 mx-auto mb-3 ${data.precios ? '' : 'theme-text-muted'}`} style={data.precios ? { color: 'var(--color-primario)' } : {}} />
                     <h4 className="text-sm font-black uppercase theme-text-main">
                         {data.precios ? 'Archivo de Precios' : 'Subir Precios'}
                     </h4>
@@ -142,25 +156,64 @@ export default function GeneradorBellaroma({ onSuccess }) {
                     </p>
                 </div>
 
-                <label className="flex items-start space-x-3 cursor-pointer group p-4 theme-surface border theme-border rounded-xl hover:border-[#8a2be2] transition-all">
-                    <input 
-                        type="checkbox" 
-                        checked={data.para_manana}
-                        onChange={(e) => setData('para_manana', e.target.checked)}
-                        className="mt-0.5 w-5 h-5 rounded border-gray-300 text-[#8a2be2] focus:ring-[#8a2be2] cursor-pointer" 
-                    />
-                    <div className="flex flex-col">
-                        <span className="text-sm font-black uppercase theme-text-main group-hover:text-[#8a2be2] transition-colors">Fechar para mañana</span>
-                        <span className="text-[10px] font-bold theme-text-muted uppercase">El nombre del archivo llevará la fecha de mañana.</span>
+                <div className="flex flex-col gap-3 p-4 theme-surface border theme-border rounded-xl">
+                    <span className="text-sm font-black uppercase theme-text-main">Programar Entrega</span>
+                    
+                    <div className="flex flex-wrap gap-6 mt-2">
+                        {[
+                            { id: 'inmediata', label: 'Inmediata' },
+                            { id: 'manana', label: 'Mañana (7 AM)' },
+                            { id: 'fecha', label: 'Fecha Específica (7 AM)' }
+                        ].map((opcion) => (
+                            <label key={opcion.id} className="flex items-center space-x-2 cursor-pointer group">
+                                <input 
+                                    type="radio" 
+                                    name="tipo_entrega"
+                                    value={opcion.id}
+                                    checked={data.tipo_entrega === opcion.id}
+                                    onChange={(e) => setData('tipo_entrega', e.target.value)}
+                                    className="hidden" 
+                                />
+                                <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200"
+                                     style={{ borderColor: data.tipo_entrega === opcion.id ? 'var(--color-primario)' : '#4b5563' }}
+                                >
+                                    {data.tipo_entrega === opcion.id && (
+                                        <div className="w-2.5 h-2.5 rounded-full animate-fade-in" style={{ backgroundColor: 'var(--color-primario)' }}></div>
+                                    )}
+                                </div>
+                                <span className={`text-xs font-black uppercase transition-colors duration-200 ${data.tipo_entrega === opcion.id ? 'theme-text-main' : 'theme-text-muted group-hover:opacity-80'}`}>
+                                    {opcion.label}
+                                </span>
+                            </label>
+                        ))}
                     </div>
-                </label>
+
+                    {data.tipo_entrega === 'fecha' && (
+                        <div className="mt-2 animate-fade-in">
+                            <input 
+                                type="date" 
+                                value={data.fecha_programada}
+                                onChange={(e) => setData('fecha_programada', e.target.value)}
+                                className="w-full px-4 py-2 text-sm theme-surface border theme-border rounded-lg theme-text-main focus:outline-none transition-colors"
+                                style={{ backgroundColor: 'var(--color-fondo-secundario)' }}
+                                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--color-primario)'; }}
+                                onBlur={(e) => { e.currentTarget.style.borderColor = ''; }}
+                                required={data.tipo_entrega === 'fecha'}
+                            />
+                            <p className="text-[10px] font-bold theme-text-muted mt-2 uppercase">La plantilla se entregará el día seleccionado a las 7:00 AM.</p>
+                        </div>
+                    )}
+                    {data.tipo_entrega === 'manana' && (
+                        <p className="text-[10px] font-bold theme-text-muted mt-1 uppercase">La plantilla se entregará mañana a las 7:00 AM.</p>
+                    )}
+                </div>
 
                 <button 
                     type="submit" 
                     disabled={procesando || !data.existencias || !data.precios}
                     className={`mt-4 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all flex justify-center items-center gap-2 shadow-lg hover:shadow-xl
                         ${(!data.existencias || !data.precios) ? 'opacity-50 cursor-not-allowed theme-surface theme-text-muted border theme-border' : 'text-white hover:scale-[1.02]'}`}
-                    style={(data.existencias && data.precios) ? { backgroundColor: '#8a2be2' } : {}}
+                    style={(data.existencias && data.precios) ? { backgroundColor: 'var(--color-primario)' } : {}}
                 >
                     <Download className="w-5 h-5" />
                     {procesando ? 'Procesando...' : 'Generar Plantilla'}

@@ -14,5 +14,6 @@ class BellaromaTemplate extends Model
         'ruta_fisica',
         'tamano_kb',
         'enviado_correo',
+        'fecha_entrega',
     ];
 }

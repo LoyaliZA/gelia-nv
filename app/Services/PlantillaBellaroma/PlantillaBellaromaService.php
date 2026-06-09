@@ -14,16 +14,23 @@ use Vtiful\Kernel\Format;
 
 class PlantillaBellaromaService
 {
-    public function procesar($archivoExistencias, $archivoPrecios, $paraManana = false)
+    public function procesar($archivoExistencias, $archivoPrecios, $tipoEntrega = 'inmediata', $fechaProgramada = null)
     {
         set_time_limit(0);
         ini_set('memory_limit', '-1');
 
-        $fecha = $paraManana ? date('d-m-y', strtotime('+1 day')) : date('d-m-y');
+        $fechaEntrega = null;
+        if ($tipoEntrega === 'manana') {
+            $fechaEntrega = now()->addDay()->setTime(7, 0, 0);
+        } elseif ($tipoEntrega === 'fecha' && $fechaProgramada) {
+            $fechaEntrega = \Carbon\Carbon::parse($fechaProgramada)->setTime(7, 0, 0);
+        }
+
+        $fecha = $fechaEntrega ? $fechaEntrega->format('d-m-y') : date('d-m-y');
         $hashUnico = uniqid();
 
-        $nombreVisual = "PLANTILLA-BELLAROMA-{$fecha}.xlsx";
-        $nombreFisico = "PLANTILLA-BELLAROMA-{$fecha}_{$hashUnico}.xlsx";
+        $nombreVisual = "PLANTILLA-PEDIDOS-{$fecha}.xlsx";
+        $nombreFisico = "PLANTILLA-PEDIDOS-{$fecha}_{$hashUnico}.xlsx";
 
         $rutaTemp = sys_get_temp_dir();
 
@@ -102,6 +109,7 @@ class PlantillaBellaromaService
             'ruta_fisica' => $rutaStorage,
             'tamano_kb' => $tamanoKb,
             'enviado_correo' => true, // Lo marcaremos como true ya que se despacha a la cola
+            'fecha_entrega' => $fechaEntrega,
         ]);
 
         $this->notificarUsuarios($template);
@@ -211,7 +219,11 @@ class PlantillaBellaromaService
             if (is_array($userIds) && count($userIds) > 0) {
                 $usuarios = User::whereIn('id', $userIds)->get();
                 foreach ($usuarios as $usuario) {
-                    $usuario->notify(new PlantillaBellaromaGenerada($template));
+                    $notificacion = new PlantillaBellaromaGenerada($template);
+                    if ($template->fecha_entrega) {
+                        $notificacion->delay(\Carbon\Carbon::parse($template->fecha_entrega));
+                    }
+                    $usuario->notify($notificacion);
                 }
             }
         }

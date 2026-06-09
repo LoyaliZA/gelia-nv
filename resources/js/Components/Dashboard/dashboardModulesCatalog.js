@@ -129,14 +129,17 @@ export const DASHBOARD_MODULE_CARDS = [
     },
     {
         id: 'card_plantilla_bellaroma',
-        titulo: 'Plantilla Bellaroma',
+        titulo: 'Plantilla Pedidos',
         subtitulo: 'Generación de lista de precios.',
         permiso: 'plantilla_pedidos.ver',
         href: () => route('plantilla_bellaroma.index'),
         icon: FileSpreadsheet,
-        borderClass: 'border-[#8a2be2]/20',
-        iconWrapClass: 'bg-[#8a2be2]/10 border-[#8a2be2]/20',
-        iconClass: 'text-[#8a2be2]',
+        borderClass: '',
+        borderStyle: { borderColor: 'var(--color-primario)' },
+        iconWrapClass: '',
+        iconWrapStyle: { backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' },
+        iconClass: '',
+        iconStyle: { color: 'var(--color-primario)' },
     },
 ];
 

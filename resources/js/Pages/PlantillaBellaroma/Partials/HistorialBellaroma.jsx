@@ -25,9 +25,9 @@ export default function HistorialBellaroma({ titulo, templates, permisos }) {
             
             <div className="flex-1 overflow-y-auto max-h-[300px] custom-scrollbar pr-2 space-y-3">
                 {templates.map(template => (
-                    <div key={template.id} className="p-4 rounded-xl border theme-border theme-surface flex justify-between items-center group hover:border-[#8a2be2] transition-colors">
+                    <div key={template.id} className="p-4 rounded-xl border theme-border theme-surface flex justify-between items-center group transition-colors" onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-primario)'; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = ''; }}>
                         <div className="flex items-center gap-3 overflow-hidden">
-                            <div className="p-2 rounded-lg bg-[#8a2be2]/10 text-[#8a2be2]">
+                            <div className="p-2 rounded-lg bg-black/5 dark:bg-white/5" style={{ color: 'var(--color-primario)' }}>
                                 <FileSpreadsheet className="w-5 h-5" />
                             </div>
                             <div className="flex flex-col truncate">
@@ -41,7 +41,10 @@ export default function HistorialBellaroma({ titulo, templates, permisos }) {
                             {permisos?.descargar && (
                                 <a 
                                     href={route('plantilla_bellaroma.descargar', template.id)} 
-                                    className="p-2 rounded-lg bg-gray-100 hover:bg-[#8a2be2] text-gray-500 hover:text-white dark:bg-white/5 dark:hover:bg-[#8a2be2] transition-colors"
+                                    className="p-2 rounded-lg bg-gray-100 text-gray-500 hover:text-white dark:bg-white/5 transition-colors"
+                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-primario)'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ''; }}
                                     title="Descargar"
                                 >
                                     <Download className="w-4 h-4" />
