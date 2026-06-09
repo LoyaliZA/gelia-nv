@@ -59,6 +59,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'cancelaciones_cotizaciones.eliminar': 'Permite eliminar solicitudes operativas con auditoría.',
     'api_externa.gestionar': 'Permite administrar la API externa, aplicaciones, permisos y documentación.',
     'api_externa.ver_auditoria': 'Permite consultar la bitácora de uso de la API externa.',
+    'funciones.limpieza_clientes': 'Permite acceder a la herramienta operativa de Limpieza de Clientes.',
 };
 
 export function descripcionPermiso(permisoName) {

@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\{LoginController,RegistroController};
-use App\Http\Controllers\{DashboardController,AdminController,CatalogoController,ProductoCatalogoController,ClienteController,AutoCobranzaController,ProfileController};
+use App\Http\Controllers\{DashboardController,AdminController,CatalogoController,ProductoCatalogoController,ClienteController,LimpiezaClientesController,AutoCobranzaController,ProfileController};
 use App\Http\Controllers\Solicitudes\SolicitudController;
 use App\Http\Controllers\Api\{CotizacionEntregaController,ClienteApiController};
 use App\Http\Controllers\EntregasController;
@@ -105,6 +105,14 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:mis_clientes.gestionar'])->group(function () {
         Route::get('/mis-clientes', [ClienteController::class, 'misClientes'])->name('mis_clientes.index');
         Route::post('/mis-clientes/rapido', [ClienteController::class, 'registroRapido'])->name('mis_clientes.rapido');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: LIMPIEZA DE CLIENTES (Función Operativa)
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:funciones.limpieza_clientes'])->group(function () {
+        Route::get('/funciones/limpieza-clientes', [LimpiezaClientesController::class, 'index'])->name('funciones.limpieza-clientes.index');
+        Route::post('/funciones/limpieza-clientes/procesar', [LimpiezaClientesController::class, 'procesar'])->name('funciones.limpieza-clientes.procesar');
     });
 
     // ══════════════════════════════════════════════════════════════════════

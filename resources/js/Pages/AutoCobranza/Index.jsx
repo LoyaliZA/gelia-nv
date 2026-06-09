@@ -25,7 +25,7 @@ const ORDEN_OPCIONES = [
     { value: 'numero_asc', label: 'No. cliente' },
 ];
 
-export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], configuracionHorarios = ['10:00', '12:00'], filtros = {} }) {
+export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], configuracionHorarios = ['10:00', '12:00'], configuracionAlertas = { intervalo_dias: 3, umbral_diario: 30 }, filtros = {} }) {
     const puedeVerAdmin = auth?.user?.permissions?.includes('cobranza.ver_admin') || auth?.user?.roles?.includes('Super Admin');
     const puedeEjecutarLlamadas = auth?.user?.permissions?.includes('cobranza.ejecutar_llamadas') || auth?.user?.roles?.includes('Super Admin');
     const puedeImportarReporte = auth?.user?.permissions?.includes('cobranza.importar_reporte') || auth?.user?.roles?.includes('Super Admin');
@@ -67,7 +67,9 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     // Configuración Alertas
     const [configModal, setConfigModal] = useState(false);
     const formConfig = useForm({
-        horarios: configuracionHorarios || ['10:00', '12:00']
+        horarios: configuracionHorarios || ['10:00', '12:00'],
+        intervalo_dias: configuracionAlertas?.intervalo_dias ?? 3,
+        umbral_diario: configuracionAlertas?.umbral_diario ?? 30
     });
 
     useEffect(() => {
@@ -367,7 +369,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                         <div className="space-y-1">
                             <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Alertas Operativas Hoy</p>
                             <h3 className="text-3xl font-black theme-text-main m-0">{totalAlertasHoy}</h3>
-                            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wider">Pendientes de llamada (3, 6, 9, 12 días)</p>
+                            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wider">Pendientes de llamada (Cada {configuracionAlertas.intervalo_dias} días o &gt; {configuracionAlertas.umbral_diario})</p>
                         </div>
                         <div className="p-3 rounded-2xl theme-element border theme-border shadow-sm">
                             <Clock className="w-6 h-6 text-amber-500" />
@@ -551,7 +553,11 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                                 </td>
                                             </tr>
                                         ) : (
-                                            alertas.map((alerta) => (
+                                            alertas.map((alerta) => {
+                                                const esDiaDeLlamada = alerta.dias_atraso >= configuracionAlertas.umbral_diario || alerta.dias_atraso % configuracionAlertas.intervalo_dias === 0;
+                                                const diasParaLlamar = configuracionAlertas.intervalo_dias - (alerta.dias_atraso % configuracionAlertas.intervalo_dias);
+
+                                                return (
                                                 <tr key={alerta.id} className="border-b theme-border last:border-0 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                                                     <td className="px-6 py-4">
                                                         <div className="text-sm font-bold theme-text-main">{alerta.cliente.nombre}</div>
@@ -563,9 +569,9 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                                                 Límite Superado
                                                             </span>
                                                         ) : (
-                                                            alerta.dias_atraso < 3 ? (
+                                                            !esDiaDeLlamada ? (
                                                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-600 border border-amber-500/20 uppercase tracking-widest">
-                                                                    {3 - alerta.dias_atraso} {3 - alerta.dias_atraso === 1 ? 'día' : 'días'} p/ llamar
+                                                                    {diasParaLlamar} {diasParaLlamar === 1 ? 'día' : 'días'} p/ llamar
                                                                 </span>
                                                             ) : (
                                                                 <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-black bg-red-500/10 text-red-500 border border-red-500/20 uppercase tracking-widest">
@@ -593,7 +599,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                                         </button>
                                                     </td>
                                                 </tr>
-                                            ))
+                                            )})
                                         )}
                                     </tbody>
                                 </table>
@@ -1267,6 +1273,31 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                 >
                                     + Añadir Horario
                                 </button>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4 mt-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Periodo intermedio de llamadas (días)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={formConfig.data.intervalo_dias}
+                                        onChange={e => formConfig.setData('intervalo_dias', e.target.value)}
+                                        className={THEME_INPUT + " w-full"}
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Días de atraso para notificar a diario</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={formConfig.data.umbral_diario}
+                                        onChange={e => formConfig.setData('umbral_diario', e.target.value)}
+                                        className={THEME_INPUT + " w-full"}
+                                        required
+                                    />
+                                </div>
                             </div>
                             <div className="pt-4 flex justify-end gap-3">
                                 <button type="button" onClick={() => setConfigModal(false)} className="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border">

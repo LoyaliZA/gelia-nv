@@ -141,4 +141,15 @@ export const DASHBOARD_FUNCTION_CARDS = [
         iconWrapClass: 'bg-emerald-500/10 border-emerald-500/20',
         iconClass: 'text-emerald-500',
     },
+    {
+        id: 'func_limpieza_clientes',
+        titulo: 'Limpieza de Clientes',
+        subtitulo: 'Corrección de codificación Wizerp.',
+        permiso: 'funciones.limpieza_clientes',
+        href: () => route('funciones.limpieza-clientes.index'),
+        icon: Database,
+        borderClass: 'border-blue-500/20',
+        iconWrapClass: 'bg-blue-500/10 border-blue-500/20',
+        iconClass: 'text-blue-500',
+    },
 ];

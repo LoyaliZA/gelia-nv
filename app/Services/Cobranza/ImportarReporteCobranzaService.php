@@ -300,6 +300,10 @@ class ImportarReporteCobranzaService
                             'monto_nuevo' => 0,
                             'descripcion' => 'Crédito liquidado (saldo consolidado $0).',
                         ]);
+
+                        \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
+                            ->where('estado', 'pendiente')
+                            ->delete();
                     }
 
                     // Limpiar fecha de inicio de crédito y alerta

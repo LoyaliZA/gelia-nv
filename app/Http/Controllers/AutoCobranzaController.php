@@ -22,9 +22,14 @@ class AutoCobranzaController extends Controller
         // 1. Clientes con saldo activo: búsqueda y orden en servidor
         $clientes = $this->queryClientesConCredito($request);
 
-        // 2. Alertas operativas pendientes para hoy (días 3, 6, 9 y 12)
+        // 2. Alertas operativas pendientes para hoy (filtradas por clientes con saldo activo)
         $alertas = CobranzaAlerta::with(['cliente', 'factura'])
             ->where('estado', 'pendiente')
+            ->whereHas('cliente', function ($query) {
+                $query->whereHas('facturasCobranza', function ($q) {
+                    $q->where('pagada', false)->where('monto', '>', 0);
+                });
+            })
             ->orderBy('fecha_alerta', 'desc')
             ->get();
 
@@ -68,12 +73,18 @@ class AutoCobranzaController extends Controller
             return $config ? $config->valor : ['10:00', '12:00'];
         });
 
+        $configuracionAlertas = \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_alertas', function () {
+            $config = \App\Models\CobranzaConfiguracion::where('llave', 'config_alertas')->first();
+            return $config ? $config->valor : ['intervalo_dias' => 3, 'umbral_diario' => 30];
+        });
+
         return Inertia::render('AutoCobranza/Index', [
             'clientes' => $clientes,
             'alertas' => $alertas,
             'cartera' => $cartera,
             'aumentosPendientes' => $aumentosPendientes,
             'configuracionHorarios' => $configuracionHorarios,
+            'configuracionAlertas' => $configuracionAlertas,
             'filtros' => [
                 'q' => $request->q,
                 'orden' => $request->orden,
@@ -84,12 +95,26 @@ class AutoCobranzaController extends Controller
     public function guardarConfiguracion(Request $request)
     {
         $this->authorize('cobranza.configurar_alertas');
-        $request->validate(['horarios' => 'required|array']);
+        $request->validate([
+            'horarios' => 'required|array',
+            'intervalo_dias' => 'required|integer|min:1',
+            'umbral_diario' => 'required|integer|min:1'
+        ]);
 
-        $config = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'horarios_alertas']);
-        $config->update(['valor' => $request->horarios]);
+        $configHorarios = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'horarios_alertas']);
+        $configHorarios->update(['valor' => $request->horarios]);
+
+        $configAlertas = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'config_alertas']);
+        $configAlertas->update(['valor' => [
+            'intervalo_dias' => (int) $request->intervalo_dias,
+            'umbral_diario' => (int) $request->umbral_diario,
+        ]]);
 
         \Illuminate\Support\Facades\Cache::forever('cobranza_horarios', $request->horarios);
+        \Illuminate\Support\Facades\Cache::forever('cobranza_config_alertas', [
+            'intervalo_dias' => (int) $request->intervalo_dias,
+            'umbral_diario' => (int) $request->umbral_diario,
+        ]);
 
         return redirect()->back()->with('success', 'Configuración actualizada exitosamente.');
     }

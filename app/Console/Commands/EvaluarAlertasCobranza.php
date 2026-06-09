@@ -18,6 +18,14 @@ class EvaluarAlertasCobranza extends Command
         $today = now()->toDateString();
         $this->info("Iniciando evaluación de cobranza para la fecha: {$today}");
 
+        $configuracionAlertas = \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_alertas', function () {
+            $config = \App\Models\CobranzaConfiguracion::where('llave', 'config_alertas')->first();
+            return $config ? $config->valor : ['intervalo_dias' => 3, 'umbral_diario' => 30];
+        });
+        
+        $intervaloDias = (int) ($configuracionAlertas['intervalo_dias'] ?? 3);
+        $umbralDiario = (int) ($configuracionAlertas['umbral_diario'] ?? 30);
+
         $facturasActivas = \App\Models\CobranzaFactura::with('cliente')
             ->where('pagada', false)
             ->get();
@@ -64,8 +72,10 @@ class EvaluarAlertasCobranza extends Command
                     $alertaParaNotificar = $alertaPendiente;
                 }
 
-                // Notificar a los administradores / superadmins y al vendedor del cliente SOLO en días específicos
-                if ($alertaParaNotificar && in_array($diasAtraso, [3, 6, 9, 12])) {
+                // Notificar a los administradores / superadmins y al vendedor del cliente según el intervalo configurado
+                $esDiaDeLlamada = ($diasAtraso >= $umbralDiario) || ($diasAtraso % $intervaloDias === 0);
+
+                if ($alertaParaNotificar && $esDiaDeLlamada) {
                     $mensajeVoz = "Cliente {$cliente->nombre} tiene un saldo vencido hace {$diasAtraso} días";
                     
                     $usuariosANotificar = \App\Models\User::role(['Super Admin', 'Administrador'])->get();

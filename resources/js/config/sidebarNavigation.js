@@ -37,7 +37,8 @@ function routeHref(name, fallback) {
 export function buildSidebarNavigation({ can, showAdminMenu }) {
     const showReportes = can('solicitudes.exportar');
     const showListados = can('listados.ver');
-    const showHerramientas = showReportes || showListados;
+    const showLimpieza = can('funciones.limpieza_clientes');
+    const showHerramientas = showReportes || showListados || showLimpieza;
 
     const solicitudesChildren = [
         can('solicitudes.ver_listado') && {
@@ -136,6 +137,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: List,
             href: () => routeHref('listados.index', '/funciones/listados'),
             active: (url) => url.startsWith('/funciones/listados') || url.startsWith('/listados'),
+        },
+        showLimpieza && {
+            type: 'link',
+            id: 'limpieza_clientes',
+            label: 'Limpieza de Clientes',
+            icon: Database,
+            href: () => routeHref('funciones.limpieza-clientes.index', '/funciones/limpieza-clientes'),
+            active: (url) => url.startsWith('/funciones/limpieza-clientes'),
         },
     ].filter(Boolean);
 
