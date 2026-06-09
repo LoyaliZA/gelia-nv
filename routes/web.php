@@ -116,6 +116,17 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: PLANTILLA BELLAROMA
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:plantilla_pedidos.ver'])->prefix('plantilla-bellaroma')->name('plantilla_bellaroma.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\PlantillaBellaromaController::class, 'index'])->name('index');
+        Route::post('/generar', [\App\Http\Controllers\PlantillaBellaromaController::class, 'generar'])->name('generar');
+        Route::get('/{id}/descargar', [\App\Http\Controllers\PlantillaBellaromaController::class, 'descargar'])->name('descargar');
+        Route::delete('/{id}', [\App\Http\Controllers\PlantillaBellaromaController::class, 'eliminar'])->name('eliminar');
+        Route::post('/configuracion', [\App\Http\Controllers\PlantillaBellaromaController::class, 'guardarConfiguracion'])->name('configuracion.guardar');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: AUTO-COBRANZA
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('auto-cobranza')->name('auto-cobranza.')->group(function () {

@@ -1,5 +1,5 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet
 } from 'lucide-react';
 
 export const DASHBOARD_MODULE_CARDS = [
@@ -126,6 +126,17 @@ export const DASHBOARD_MODULE_CARDS = [
         borderClass: 'border-indigo-500/20',
         iconWrapClass: 'bg-indigo-500/10 border-indigo-500/20',
         iconClass: 'text-indigo-500',
+    },
+    {
+        id: 'card_plantilla_bellaroma',
+        titulo: 'Plantilla Bellaroma',
+        subtitulo: 'Generación de lista de precios.',
+        permiso: 'plantilla_pedidos.ver',
+        href: () => route('plantilla_bellaroma.index'),
+        icon: FileSpreadsheet,
+        borderClass: 'border-[#8a2be2]/20',
+        iconWrapClass: 'bg-[#8a2be2]/10 border-[#8a2be2]/20',
+        iconClass: 'text-[#8a2be2]',
     },
 ];
 

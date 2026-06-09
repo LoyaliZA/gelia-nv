@@ -16,7 +16,7 @@ class ValidarAsignacionPermisosService
 
     public static function permisosDelUsuario(User $user): array
     {
-        if (self::esSuperAdmin($user)) {
+        if (self::esSuperAdmin($user) || $user->hasRole('Administrador')) {
             return Permission::pluck('name')->all();
         }
 
@@ -110,7 +110,7 @@ class ValidarAsignacionPermisosService
      */
     public static function assertPuedeAsignar(User $asignador, array $rolesNames, array $permisosIndividuales = []): void
     {
-        if (self::esSuperAdmin($asignador)) {
+        if (self::esSuperAdmin($asignador) || $asignador->hasRole('Administrador')) {
             return;
         }
 
@@ -128,7 +128,7 @@ class ValidarAsignacionPermisosService
      */
     public static function filtrarRolesAsignables($roles, User $user)
     {
-        if (self::esSuperAdmin($user)) {
+        if (self::esSuperAdmin($user) || $user->hasRole('Administrador')) {
             return $roles;
         }
 

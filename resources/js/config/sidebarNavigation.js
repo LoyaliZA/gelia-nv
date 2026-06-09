@@ -20,6 +20,7 @@ import {
     Shield,
     Tag,
     Database,
+    FileSpreadsheet,
 } from 'lucide-react';
 
 function routeHref(name, fallback) {
@@ -149,6 +150,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
     ].filter(Boolean);
 
     const gestionChildren = [
+        can('plantilla_pedidos.ver') && {
+            type: 'link',
+            id: 'plantilla_bellaroma',
+            label: 'Plantilla Bellaroma',
+            icon: FileSpreadsheet,
+            href: () => routeHref('plantilla_bellaroma.index', '/plantilla-bellaroma'),
+            active: (url) => url.startsWith('/plantilla-bellaroma'),
+        },
         can('rh.ver') && {
             type: 'link',
             id: 'rh',
