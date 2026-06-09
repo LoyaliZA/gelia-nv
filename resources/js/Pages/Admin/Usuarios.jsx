@@ -195,6 +195,20 @@ function headersRecargaParcial(version) {
     };
 }
 
+/** Resuelve área principal para el formulario (datos legacy en prod sin area_id). */
+function resolverAreaPrincipalFormulario(areas = [], areaId = null) {
+    const ids = (areas || [])
+        .map((id) => Number(id))
+        .filter((id) => !Number.isNaN(id));
+    if (ids.length === 0) return '';
+
+    const parsed = areaId !== '' && areaId != null ? Number(areaId) : null;
+    if (parsed != null && ids.includes(parsed)) return String(parsed);
+    if (ids.length >= 1) return String(ids[0]);
+
+    return '';
+}
+
 export default function Usuarios({
     auth,
     usuarios = { data: [], current_page: 1, last_page: 1, per_page: 12, total: 0, from: 0, to: 0 },
@@ -230,7 +244,7 @@ export default function Usuarios({
     const [procedenciaActual, setProcedenciaActual] = useState({});
 
     // --- FORMULARIO MATRICIAL ---
-    const { data, setData, post, put, processing, reset } = useForm({
+    const { data, setData, post, put, processing, reset, errors, setError, clearErrors } = useForm({
         name: '',
         apellido_paterno: '',
         apellido_materno: '',
@@ -362,7 +376,10 @@ export default function Usuarios({
                 catalogo_sexo_id: usuario.catalogo_sexo_id || '',
                 departamentos: usuario.departamentos ? usuario.departamentos.map(d => d.id) : [],
                 areas: usuario.areas ? usuario.areas.map(a => a.id) : [],
-                area_id: usuario.area_id || '',
+                area_id: resolverAreaPrincipalFormulario(
+                    usuario.areas ? usuario.areas.map(a => a.id) : [],
+                    usuario.area_id,
+                ),
                 gerentes: usuario.gerentes ? usuario.gerentes.map(g => g.id) : [],
                 roles_asignados: rolesJerarquicos,
                 permisos_individuales: usuario.permissions ? usuario.permissions.map(p => p.name) : [],
@@ -394,12 +411,7 @@ export default function Usuarios({
         setData(campo, nuevos);
 
         if (campo === 'areas') {
-            const areaIdActual = data.area_id ? Number(data.area_id) : null;
-            if (areaIdActual && !nuevos.includes(areaIdActual)) {
-                setData('area_id', nuevos.length === 1 ? String(nuevos[0]) : '');
-            } else if (!areaIdActual && nuevos.length === 1) {
-                setData('area_id', String(nuevos[0]));
-            }
+            setData('area_id', resolverAreaPrincipalFormulario(nuevos, data.area_id));
         }
     };
 
@@ -493,8 +505,17 @@ export default function Usuarios({
             );
             permisosLimpios = deduplicarPermisos([...intocables, ...protegidos, ...gestionados]);
         }
+
+        clearErrors();
+        const areaPrincipalId = resolverAreaPrincipalFormulario(data.areas, data.area_id);
+        if ((data.areas || []).length > 1 && !areaPrincipalId) {
+            setError('area_id', 'Selecciona el área principal cuando el colaborador tiene varias áreas asignadas.');
+            return;
+        }
+
         const payload = {
             ...data,
+            area_id: areaPrincipalId || null,
             permisos_individuales: permisosLimpios,
             plantilla_origen: plantillaSeleccionada || null,
             plantilla_por_permiso: plantillaPorPermiso,
@@ -507,7 +528,7 @@ export default function Usuarios({
             });
         } else {
             post(route('admin.usuarios.store'), payload, {
-                onSuccess: () => cerrarModal()
+                onSuccess: () => cerrarModal(),
             });
         }
     };
@@ -776,7 +797,15 @@ export default function Usuarios({
                                                 </select>
                                                 <p className="text-[9px] theme-text-muted ml-2 leading-relaxed">
                                                     Define el área que aparecerá en responsivas y reportes. Debe ser una de las áreas operativas asignadas arriba.
+                                                    {areasSeleccionadas.length > 1 && !usuarioEditando?.area_id && (
+                                                        <span className="block mt-1 text-amber-600 dark:text-amber-400">
+                                                            Se preseleccionó la primera área asignada; confirma o cambia la principal antes de guardar.
+                                                        </span>
+                                                    )}
                                                 </p>
+                                                {errors.area_id && (
+                                                    <p className="text-[9px] text-red-500 font-bold ml-2 mt-1">{errors.area_id}</p>
+                                                )}
                                             </div>
 
                                             <div className="space-y-2">
