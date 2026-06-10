@@ -104,7 +104,7 @@ export default function CatalogCombobox({ field, value, onChange, onItemSelect, 
                 Escriba libremente; al guardar el activo se añadirá al catálogo si es nuevo.
             </p>
             {abierto && (opciones.length > 0 || mostrarCrearNueva || cargando) && (
-                <div className="absolute z-50 mt-1 w-full max-h-44 overflow-y-auto rounded-xl border theme-border theme-surface shadow-xl">
+                <div className="mt-1 w-full max-h-44 overflow-y-auto rounded-xl border theme-border theme-surface shadow-xl bg-white dark:bg-zinc-900 md:absolute md:z-50">
                     {cargando && opciones.length === 0 && !mostrarCrearNueva && (
                         <p className="px-3 py-2 text-xs theme-text-muted">Buscando...</p>
                     )}

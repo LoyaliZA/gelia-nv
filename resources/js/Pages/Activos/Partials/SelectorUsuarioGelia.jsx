@@ -50,7 +50,7 @@ export default function SelectorUsuarioGelia({ value, onChange, departamentoId =
                         <input type="text" value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setAbierto(true)} placeholder={placeholder} className={`${INPUT_CLASS} pl-10`} />
                     </div>
                     {abierto && (
-                        <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border theme-border theme-surface shadow-xl">
+                        <div className="mt-1 w-full max-h-48 overflow-y-auto rounded-xl border theme-border theme-surface shadow-xl bg-white dark:bg-zinc-900 md:absolute md:z-50">
                             {resultados.length === 0 ? (
                                 <p className="px-3 py-2 text-xs theme-text-muted italic">Sin resultados</p>
                             ) : resultados.map((u) => (

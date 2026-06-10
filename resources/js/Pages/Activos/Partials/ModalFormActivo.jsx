@@ -468,7 +468,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             size={esMovil && !esEdicion ? 'max-w-full sm:max-w-3xl' : 'max-w-3xl'}
             loader={<GeliaLoader isVisible={processing} message="Guardando_" />}
         >
-            <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
+            <form onSubmit={(e) => e.preventDefault()} className="flex flex-col flex-1 min-h-0">
                 <div className="gelia-modal-body p-5 md:p-8 space-y-5">
                     {ultimoFolio && !esEdicion && (
                         <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300 text-sm">
@@ -501,7 +501,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
                             Siguiente <ChevronRight className="w-4 h-4" />
                         </button>
                     ) : (
-                        <button type="submit" disabled={processing} className={`${BTN_TOUCH_CLASS} w-full sm:w-auto justify-center`}>
+                        <button type="button" onClick={submit} disabled={processing} className={`${BTN_TOUCH_CLASS} w-full sm:w-auto justify-center`}>
                             <Save className="w-4 h-4 shrink-0" /> Guardar
                         </button>
                     )}
