@@ -123,7 +123,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             area_id: '',
             nombre: '',
             descripcion: '',
-            atributos: {},
+            atributos: aplicarDefaultsAtributos(campos, {}),
             fecha_adquisicion: '',
             fecha_vencimiento: '',
             valor: '',
@@ -214,8 +214,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             if (!data.nombre?.trim()) locales.nombre = 'El nombre es obligatorio.';
         }
         if (pasoActual === 4 || !usarWizard) {
-            const atributosNormalizados = aplicarDefaultsAtributos(camposTipo, data.atributos);
-            Object.assign(locales, validarAtributosActivo(camposTipo, atributosNormalizados));
+            Object.assign(locales, validarAtributosActivo(camposTipo, data.atributos));
         }
 
         setErroresLocales(locales);
@@ -249,11 +248,10 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             const atributosRaw = typeof formData.atributos === 'object'
                 ? formData.atributos
                 : (JSON.parse(formData.atributos || '{}') || {});
-            const atributos = aplicarDefaultsAtributos(camposTipo, atributosRaw);
 
             return {
                 ...formData,
-                atributos: JSON.stringify(atributos),
+                atributos: JSON.stringify(atributosRaw),
                 registro_continuo: !esEdicion && registroContinuo,
             };
         });
@@ -329,7 +327,16 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             {!esEdicion && puedeAsignar && !usarWizard && renderAsignacionOpcional()}
             <div>
                 <label className={LABEL_CLASS}>Tipo *</label>
-                <select value={data.catalogo_tipo_activo_id} onChange={(e) => setData('catalogo_tipo_activo_id', e.target.value)} disabled={esEdicion} className={SELECT_CLASS}>
+                <select value={data.catalogo_tipo_activo_id} onChange={(e) => {
+                    const newTipoId = e.target.value;
+                    const newTipo = tipos.find(t => String(t.id) === String(newTipoId));
+                    const newFields = newTipo?.esquema_atributos?.fields || [];
+                    setData(prev => ({
+                        ...prev,
+                        catalogo_tipo_activo_id: newTipoId,
+                        atributos: aplicarDefaultsAtributos(newFields, {})
+                    }));
+                }} disabled={esEdicion} className={SELECT_CLASS}>
                     <option value="">Seleccionar...</option>
                     {tipos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                 </select>
