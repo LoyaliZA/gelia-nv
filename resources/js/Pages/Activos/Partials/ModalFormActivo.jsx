@@ -123,7 +123,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             area_id: '',
             nombre: '',
             descripcion: '',
-            atributos: {},
+            atributos: aplicarDefaultsAtributos(campos, {}),
             fecha_adquisicion: '',
             fecha_vencimiento: '',
             valor: '',
@@ -214,8 +214,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             if (!data.nombre?.trim()) locales.nombre = 'El nombre es obligatorio.';
         }
         if (pasoActual === 4 || !usarWizard) {
-            const atributosNormalizados = aplicarDefaultsAtributos(camposTipo, data.atributos);
-            Object.assign(locales, validarAtributosActivo(camposTipo, atributosNormalizados));
+            Object.assign(locales, validarAtributosActivo(camposTipo, data.atributos));
         }
 
         setErroresLocales(locales);
@@ -249,11 +248,10 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             const atributosRaw = typeof formData.atributos === 'object'
                 ? formData.atributos
                 : (JSON.parse(formData.atributos || '{}') || {});
-            const atributos = aplicarDefaultsAtributos(camposTipo, atributosRaw);
 
             return {
                 ...formData,
-                atributos: JSON.stringify(atributos),
+                atributos: JSON.stringify(atributosRaw),
                 registro_continuo: !esEdicion && registroContinuo,
             };
         });
@@ -329,7 +327,16 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             {!esEdicion && puedeAsignar && !usarWizard && renderAsignacionOpcional()}
             <div>
                 <label className={LABEL_CLASS}>Tipo *</label>
-                <select value={data.catalogo_tipo_activo_id} onChange={(e) => setData('catalogo_tipo_activo_id', e.target.value)} disabled={esEdicion} className={SELECT_CLASS}>
+                <select value={data.catalogo_tipo_activo_id} onChange={(e) => {
+                    const newTipoId = e.target.value;
+                    const newTipo = tipos.find(t => String(t.id) === String(newTipoId));
+                    const newFields = newTipo?.esquema_atributos?.fields || [];
+                    setData(prev => ({
+                        ...prev,
+                        catalogo_tipo_activo_id: newTipoId,
+                        atributos: aplicarDefaultsAtributos(newFields, {})
+                    }));
+                }} disabled={esEdicion} className={SELECT_CLASS}>
                     <option value="">Seleccionar...</option>
                     {tipos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                 </select>
@@ -468,7 +475,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
             size={esMovil && !esEdicion ? 'max-w-full sm:max-w-3xl' : 'max-w-3xl'}
             loader={<GeliaLoader isVisible={processing} message="Guardando_" />}
         >
-            <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
+            <form onSubmit={(e) => e.preventDefault()} className="flex flex-col flex-1 min-h-0">
                 <div className="gelia-modal-body p-5 md:p-8 space-y-5">
                     {ultimoFolio && !esEdicion && (
                         <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300 text-sm">
@@ -501,7 +508,7 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
                             Siguiente <ChevronRight className="w-4 h-4" />
                         </button>
                     ) : (
-                        <button type="submit" disabled={processing} className={`${BTN_TOUCH_CLASS} w-full sm:w-auto justify-center`}>
+                        <button type="button" onClick={submit} disabled={processing} className={`${BTN_TOUCH_CLASS} w-full sm:w-auto justify-center`}>
                             <Save className="w-4 h-4 shrink-0" /> Guardar
                         </button>
                     )}

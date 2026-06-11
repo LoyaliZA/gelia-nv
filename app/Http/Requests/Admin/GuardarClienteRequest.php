@@ -14,7 +14,15 @@ class GuardarClienteRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        foreach (['vendedor_id', 'catalogo_tipo_cliente_id', 'lista_actual_id', 'monto_credito_autorizado', 'dias_credito', 'fecha_inicio_credito'] as $campo) {
+        $camposLimpiar = [
+            'vendedor_id', 'catalogo_tipo_cliente_id', 'lista_actual_id', 
+            'monto_credito_autorizado', 'dias_credito', 'fecha_inicio_credito',
+            'direccion_fiscal', 'colonia_fiscal', 'municipio_fiscal', 'estado_fiscal', 'pais_fiscal',
+            'direccion_contacto', 'colonia_contacto', 'municipio_contacto', 'estado_contacto', 'pais_contacto', 'cp_contacto', 'telefono',
+            'dias_cheque_postfechado', 'parte_relacional', 'variable_contable'
+        ];
+        
+        foreach ($camposLimpiar as $campo) {
             if ($this->has($campo) && $this->input($campo) === '') {
                 $this->merge([$campo => null]);
             }
@@ -76,6 +84,21 @@ class GuardarClienteRequest extends FormRequest
             'dias_credito'             => 'nullable|integer|min:0',
             'fecha_inicio_credito'     => 'nullable|date',
             'correccion_emergencia'    => 'nullable|boolean',
+            'direccion_fiscal'         => 'nullable|string|max:255',
+            'colonia_fiscal'           => 'nullable|string|max:255',
+            'municipio_fiscal'         => 'nullable|string|max:255',
+            'estado_fiscal'            => 'nullable|string|max:255',
+            'pais_fiscal'              => 'nullable|string|max:255',
+            'direccion_contacto'       => 'nullable|string|max:255',
+            'colonia_contacto'         => 'nullable|string|max:255',
+            'municipio_contacto'       => 'nullable|string|max:255',
+            'estado_contacto'          => 'nullable|string|max:255',
+            'pais_contacto'            => 'nullable|string|max:255',
+            'cp_contacto'              => 'nullable|string|max:10',
+            'telefono'                 => 'nullable|string|max:255',
+            'dias_cheque_postfechado'  => 'nullable|integer|min:0',
+            'parte_relacional'         => 'nullable|string|max:255',
+            'variable_contable'        => 'nullable|string|max:255',
         ];
     }
 

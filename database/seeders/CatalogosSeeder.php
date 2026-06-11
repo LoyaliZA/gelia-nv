@@ -46,7 +46,7 @@ class CatalogosSeeder extends Seeder
         $procesosOperativos = [
             ['nombre' => 'CANCELACIÓN DE REMISIÓN'],
             ['nombre' => 'CANCELACIÓN DE PEDIDO'],
-            ['nombre' => 'SOLICITAR COTIZACIÓN SOBRE PEDIDO'],
+            ['nombre' => 'SOLICITAR COTIZACION SOBRE PEDIDO CANCELADO'],
         ];
 
         foreach ($procesosOperativos as $proceso) {

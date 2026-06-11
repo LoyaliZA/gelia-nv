@@ -166,6 +166,10 @@ class ImportarClientesWizerpService
             'limite_asignado'   => 'monto_credito_autorizado',
             'limite_de_credito' => 'monto_credito_autorizado',
             'dias_de_credito'   => 'dias_credito',
+            'correo'            => 'correo_electronico',
+            'email'             => 'correo_electronico',
+            'cp'                => 'codigo_postal',
+            'razon_social'      => 'nombre_razon_social',
         ];
 
         return $alias[$header] ?? $header;
@@ -179,6 +183,10 @@ class ImportarClientesWizerpService
             'limite_asignado'   => 'monto_credito_autorizado',
             'limite_de_credito' => 'monto_credito_autorizado',
             'dias_de_credito'   => 'dias_credito',
+            'correo'            => 'correo_electronico',
+            'email'             => 'correo_electronico',
+            'cp'                => 'codigo_postal',
+            'razon_social'      => 'nombre_razon_social',
         ];
 
         foreach ($alias as $from => $to) {

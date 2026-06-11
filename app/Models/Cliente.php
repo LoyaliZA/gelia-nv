@@ -34,6 +34,21 @@ class Cliente extends Model
         'dias_credito',
         'fecha_inicio_credito',
         'alerta_aumento_credito',
+        'direccion_fiscal',
+        'colonia_fiscal',
+        'municipio_fiscal',
+        'estado_fiscal',
+        'pais_fiscal',
+        'direccion_contacto',
+        'colonia_contacto',
+        'municipio_contacto',
+        'estado_contacto',
+        'pais_contacto',
+        'cp_contacto',
+        'telefono',
+        'dias_cheque_postfechado',
+        'parte_relacional',
+        'variable_contable',
     ];
 
     protected $casts = [
@@ -45,6 +60,7 @@ class Cliente extends Model
         'dias_credito' => 'integer',
         'fecha_inicio_credito' => 'date:Y-m-d',
         'alerta_aumento_credito' => 'boolean',
+        'dias_cheque_postfechado' => 'integer',
     ];
 
     /**

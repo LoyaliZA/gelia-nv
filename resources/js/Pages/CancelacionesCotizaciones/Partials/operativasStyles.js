@@ -34,8 +34,8 @@ export const TIPOS_OPERATIVO = [
 
 export const tipoOperativoDeProceso = (proceso) => {
     const nombre = proceso?.nombre?.toUpperCase() || '';
+    if (nombre.includes('COTIZACIÓN') || nombre.includes('COTIZACION')) return 'cotizacion_pedido';
     if (nombre.includes('REMISIÓN') || nombre.includes('REMISION')) return 'remision';
     if (nombre.includes('PEDIDO') && nombre.includes('CANCEL')) return 'pedido';
-    if (nombre.includes('COTIZACIÓN') || nombre.includes('COTIZACION')) return 'cotizacion_pedido';
     return 'generico';
 };

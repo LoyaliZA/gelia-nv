@@ -64,7 +64,9 @@ class StoreSolicitudOperativaRequest extends FormRequest
 
         $reglas = [];
 
-        if (str_contains($nombre, 'REMISIÓN') || str_contains($nombre, 'REMISION')) {
+        if (str_contains($nombre, 'COTIZACIÓN') || str_contains($nombre, 'COTIZACION')) {
+            $reglas['numero_pedido'] = ['required', 'string', 'max:255'];
+        } elseif (str_contains($nombre, 'REMISIÓN') || str_contains($nombre, 'REMISION')) {
             $reglas['numero_remision'] = ['required', 'string', 'max:255'];
             $reglas['fecha_operacion'] = ['required', 'date'];
             $reglas['motivo_operacion'] = ['required', 'string', 'min:5'];
@@ -74,8 +76,6 @@ class StoreSolicitudOperativaRequest extends FormRequest
             if (str_contains($nombre, 'CANCEL')) {
                 $reglas['motivo_operacion'] = ['required', 'string', 'min:5'];
             }
-        } elseif (str_contains($nombre, 'COTIZACIÓN') || str_contains($nombre, 'COTIZACION')) {
-            $reglas['numero_pedido'] = ['required', 'string', 'max:255'];
         }
 
         return $reglas;
