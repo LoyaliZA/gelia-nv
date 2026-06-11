@@ -114,7 +114,38 @@ export default function PermisosAtomicos({
 
     if (!hayRejilla && !haySoloLectura) return null;
 
+    const esAsignadoPorMi = (meta) =>
+        meta?.asignado_por?.id != null
+        && usuarioActualId != null
+        && Number(meta.asignado_por.id) === Number(usuarioActualId);
+
+    const esOrigenSistema = (meta) =>
+        !meta || meta?.plantilla_origen === 'sistema:migracion';
+
+    const clasePermisoActivo = (meta, isDePlantilla) => {
+        if (esOrigenSistema(meta)) {
+            return 'border-teal-500/40 bg-teal-500/10 text-teal-600 dark:text-teal-400';
+        }
+        if (isDePlantilla && !meta?.asignado_por) {
+            return 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400';
+        }
+        if (esAsignadoPorMi(meta)) {
+            return 'border-orange-500 bg-orange-500/10 text-orange-600';
+        }
+        if (meta?.asignado_por) {
+            return 'border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-400';
+        }
+        return 'border-orange-500/40 bg-orange-500/5 text-orange-500/80';
+    };
+
     const renderEtiquetaAsignador = (meta) => {
+        if (meta?.plantilla_origen === 'sistema:migracion') {
+            return (
+                <span className="text-[8px] font-bold normal-case tracking-wide opacity-80 italic text-teal-500">
+                    origen: actualización del sistema
+                </span>
+            );
+        }
         if (meta?.asignado_por?.nombre) {
             return (
                 <span className="text-[8px] font-bold normal-case tracking-wide opacity-80 italic text-violet-500">
@@ -139,7 +170,9 @@ export default function PermisosAtomicos({
             </h3>
             <p className="text-[10px] theme-text-muted mb-4 font-bold tracking-widest">
                 INDICADORES: <span className="text-blue-500 mx-1">AZUL</span> sugerido de plantilla.{' '}
-                <span className="text-orange-500 mx-1">NARANJA</span> asignado por ti.
+                <span className="text-orange-500 mx-1">NARANJA</span> asignado por ti.{' '}
+                <span className="text-violet-500 mx-1">VIOLETA</span> asignado por otro.{' '}
+                <span className="text-teal-500 mx-1">VERDE</span> heredado por actualización del sistema.
                 {!esSuperAdmin && (
                     <span className="block mt-1 text-amber-600 dark:text-amber-400">
                         Solo puedes modificar permisos que tú asignaste. Los de administración aparecen bloqueados abajo.
@@ -175,9 +208,7 @@ export default function PermisosAtomicos({
                                             onClick={() => togglePermisoIndividual(permiso.name)}
                                             className={`flex flex-col items-start gap-1 px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
                                                 isAsignado
-                                                    ? isDePlantilla && !meta?.asignado_por
-                                                        ? 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                                                        : 'border-orange-500 bg-orange-500/10 text-orange-600'
+                                                    ? clasePermisoActivo(meta, isDePlantilla)
                                                     : isDePlantilla
                                                       ? 'border-blue-500/20 bg-blue-500/5 text-blue-500/70 hover:border-blue-500/40'
                                                       : 'theme-border theme-text-muted hover:border-gray-400'
