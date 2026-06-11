@@ -110,7 +110,8 @@ class ProcesarFilaClienteAction
         $camposNuevos = [
             'direccion_fiscal', 'colonia_fiscal', 'municipio_fiscal', 'estado_fiscal', 'pais_fiscal',
             'direccion_contacto', 'colonia_contacto', 'municipio_contacto', 'estado_contacto', 'pais_contacto', 'cp_contacto', 'telefono',
-            'parte_relacional', 'variable_contable'
+            'parte_relacional', 'variable_contable',
+            'rfc', 'codigo_postal', 'regimen_fiscal', 'correo_electronico', 'uso_factura', 'nombre_razon_social'
         ];
 
         foreach ($camposNuevos as $campo) {
@@ -125,13 +126,9 @@ class ProcesarFilaClienteAction
 
         $nuevoRegistro = Cliente::create($clienteNuevo);
 
-        if ($nuevoRegistro && $nuevoRegistro->monto_credito_autorizado > 0 && $nuevoRegistro->monto_venta_actual > $nuevoRegistro->monto_credito_autorizado) {
-            $alertasLimiteExcedido[] = [
-                'cliente' => $nuevoRegistro,
-                'monto_actual' => $nuevoRegistro->monto_venta_actual,
-                'limite' => $nuevoRegistro->monto_credito_autorizado
-            ];
-        }
+        // Se elimina la comparación entre monto_venta_actual y monto_credito_autorizado, 
+        // ya que monto_venta_actual representa ventas, no deuda.
+        // Al ser un cliente nuevo, su deuda actual (saldo de facturas) es 0.
 
         return $nuevoRegistro;
     }
@@ -226,7 +223,8 @@ class ProcesarFilaClienteAction
         $camposNuevos = [
             'direccion_fiscal', 'colonia_fiscal', 'municipio_fiscal', 'estado_fiscal', 'pais_fiscal',
             'direccion_contacto', 'colonia_contacto', 'municipio_contacto', 'estado_contacto', 'pais_contacto', 'cp_contacto', 'telefono',
-            'parte_relacional', 'variable_contable'
+            'parte_relacional', 'variable_contable',
+            'rfc', 'codigo_postal', 'regimen_fiscal', 'correo_electronico', 'uso_factura', 'nombre_razon_social'
         ];
 
         foreach ($camposNuevos as $campo) {
@@ -267,10 +265,7 @@ class ProcesarFilaClienteAction
         }
 
         $limiteFinal = (float) $cliente->monto_credito_autorizado;
-        $montoFinal = (float) $cliente->monto_venta_actual;
-        $consolidado = (float) ($cliente->facturaCobranzaActiva?->monto ?? 0);
-        
-        $deudaReal = max($montoFinal, $consolidado);
+        $deudaReal = (float) ($cliente->facturaCobranzaActiva?->monto ?? 0);
 
         if ($limiteFinal > 0 && $deudaReal > $limiteFinal) {
             $alertasLimiteExcedido[] = [
