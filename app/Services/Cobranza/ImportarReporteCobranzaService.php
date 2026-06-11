@@ -51,8 +51,10 @@ class ImportarReporteCobranzaService
         $contadorActualizados = 0;
         $alertasDetectadas = [];
         $alertasLimiteExcedidoMasivo = [];
+        $clientesLiquidadosAnotificados = [];
+        $clientesNuevosCreditosAnotificados = [];
 
-        DB::transaction(function () use ($file, $headers, $delimiter, &$clientesProcesados, &$contadorNuevos, &$contadorActualizados, &$alertasDetectadas, &$alertasLimiteExcedidoMasivo) {
+        DB::transaction(function () use ($file, $headers, $delimiter, &$clientesProcesados, &$contadorNuevos, &$contadorActualizados, &$alertasDetectadas, &$alertasLimiteExcedidoMasivo, &$clientesLiquidadosAnotificados, &$clientesNuevosCreditosAnotificados) {
             $today = now()->toDateString();
 
             while (($row = fgetcsv($file, 0, $delimiter)) !== false) {
@@ -161,6 +163,11 @@ class ImportarReporteCobranzaService
                             'monto_nuevo' => $consolidado,
                             'descripcion' => 'Inicio de nuevo crédito detectado por importación.',
                         ]);
+
+                        $clientesNuevosCreditosAnotificados[] = [
+                            'cliente' => $cliente,
+                            'monto' => $consolidado
+                        ];
                         
                         // Validar si inicia ya excedido
                         $limiteFinal = (float) $cliente->monto_credito_autorizado;
@@ -195,6 +202,18 @@ class ImportarReporteCobranzaService
                             'monto' => $consolidado,
                             'fecha_vencimiento' => $vencimientoCalculado,
                         ]);
+                        
+                        // Sincronizar monto_venta_actual del cliente con el último importe activo
+                        $cliente->update(['monto_venta_actual' => $consolidado]);
+
+                        // Limpiar facturas duplicadas para evitar fantasmas de pruebas anteriores
+                        $facturasExtra = CobranzaFactura::where('cliente_id', $cliente->id)
+                            ->where('pagada', false)
+                            ->where('id', '!=', $facturaActiva->id)
+                            ->get();
+                        foreach ($facturasExtra as $extra) {
+                            $extra->update(['pagada' => true, 'tiene_abono' => true]);
+                        }
 
                         if ($consolidado < $montoAnterior) {
                             $facturaActiva->update(['tiene_abono' => true]);
@@ -208,6 +227,15 @@ class ImportarReporteCobranzaService
                                 'descripcion' => 'Abono parcial detectado.',
                                 'es_alerta' => false,
                             ]);
+                            
+                            // Si baja del límite autorizado, resolver cualquier alerta de límite superado pendiente
+                            $limiteFinal = (float) $cliente->monto_credito_autorizado;
+                            if ($limiteFinal > 0 && $consolidado <= $limiteFinal) {
+                                \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
+                                    ->where('tipo', 'limite_superado')
+                                    ->where('estado', '!=', 'resuelta')
+                                    ->update(['estado' => 'resuelta']);
+                            }
                         } elseif ($consolidado > $montoAnterior) {
                             // Detección de AUMENTO
                             $vencido = \Carbon\Carbon::parse($today)->greaterThan(\Carbon\Carbon::parse($facturaActiva->fecha_vencimiento));
@@ -242,14 +270,14 @@ class ImportarReporteCobranzaService
                                     'tipo_evento' => 'alerta_limite',
                                     'monto_anterior' => $montoAnterior,
                                     'monto_nuevo' => $consolidado,
-                                    'descripcion' => 'Aumento de crédito detectado superando el límite autorizado de $' . number_format($limiteFinal, 2) . '.',
+                                    'descripcion' => 'Aumento detectado que supera el límite de crédito.',
                                     'es_alerta' => true,
                                 ]);
 
                                 // Crear alerta pendiente si no existe
                                 $alertaPendiente = \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
                                     ->where('tipo', 'limite_superado')
-                                    ->where('estado', 'pendiente')
+                                    ->where('estado', '!=', 'resuelta')
                                     ->first();
 
                                 if (!$alertaPendiente) {
@@ -294,12 +322,17 @@ class ImportarReporteCobranzaService
 
                         CobranzaBitacora::create([
                             'cliente_id' => $cliente->id,
-                            'usuario_id' => auth()->id(),
+                            'usuario_id' => auth()->id() ?? 1,
                             'tipo_evento' => 'pago',
                             'monto_anterior' => $montoPagado,
                             'monto_nuevo' => 0,
                             'descripcion' => 'Crédito liquidado (saldo consolidado $0).',
                         ]);
+
+                        $clientesLiquidadosAnotificados[] = [
+                            'cliente' => $cliente,
+                            'montoPagado' => $montoPagado
+                        ];
 
                         \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
                             ->where('estado', 'pendiente')
@@ -312,6 +345,48 @@ class ImportarReporteCobranzaService
                         'alerta_aumento_credito' => false,
                     ]);
                 }
+            }
+            
+            // POST-PROCESSING: Clientes con deuda activa que NO aparecieron en el archivo
+            $clientesFaltantes = Cliente::whereHas('facturasCobranza', function($q) {
+                    $q->where('pagada', false);
+                })
+                ->whereNotIn('id', $clientesProcesados)
+                ->get();
+
+            foreach ($clientesFaltantes as $clienteFaltante) {
+                $facturasActivas = CobranzaFactura::where('cliente_id', $clienteFaltante->id)->where('pagada', false)->get();
+                if ($facturasActivas->isNotEmpty()) {
+                    $montoPagado = $facturasActivas->sum('monto');
+                    CobranzaFactura::where('cliente_id', $clienteFaltante->id)
+                        ->where('pagada', false)
+                        ->update(['pagada' => true]);
+
+                    CobranzaBitacora::create([
+                        'cliente_id' => $clienteFaltante->id,
+                        'usuario_id' => auth()->id() ?? 1,
+                        'tipo_evento' => 'pago',
+                        'monto_anterior' => $montoPagado,
+                        'monto_nuevo' => 0,
+                        'descripcion' => 'Crédito liquidado (no se detectó deuda en el reporte importado).',
+                    ]);
+
+                    $clientesLiquidadosAnotificados[] = [
+                        'cliente' => $clienteFaltante,
+                        'montoPagado' => $montoPagado
+                    ];
+
+                    \App\Models\CobranzaAlerta::where('cliente_id', $clienteFaltante->id)
+                        ->where('estado', 'pendiente')
+                        ->delete();
+                }
+
+                $clienteFaltante->update([
+                    'fecha_inicio_credito' => null,
+                    'alerta_aumento_credito' => false,
+                ]);
+                
+                $contadorActualizados++;
             }
         });
 
@@ -326,6 +401,25 @@ class ImportarReporteCobranzaService
                 }
                 if (!empty($alertasLimiteExcedidoMasivo)) {
                     Notification::send($todosLosUsuarios, new \App\Notifications\AlertaLimiteCreditoSuperadoMasivoNotification($alertasLimiteExcedidoMasivo));
+                }
+            }
+        }
+
+        if (!empty($clientesLiquidadosAnotificados) || !empty($clientesNuevosCreditosAnotificados)) {
+            $configUsersPagos = \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_users_pagos', function () {
+                $config = \App\Models\CobranzaConfiguracion::where('llave', 'notified_users_pagos')->first();
+                return $config && $config->valor ? json_decode($config->valor, true) : [];
+            });
+            
+            if (!empty($configUsersPagos)) {
+                $usuariosPago = User::whereIn('id', $configUsersPagos)->get();
+                if ($usuariosPago->isNotEmpty()) {
+                    if (!empty($clientesLiquidadosAnotificados)) {
+                        Notification::send($usuariosPago, new \App\Notifications\AlertaPagoLiquidoNotification($clientesLiquidadosAnotificados));
+                    }
+                    if (!empty($clientesNuevosCreditosAnotificados)) {
+                        Notification::send($usuariosPago, new \App\Notifications\AlertaNuevoCreditoMasivoNotification($clientesNuevosCreditosAnotificados));
+                    }
                 }
             }
         }

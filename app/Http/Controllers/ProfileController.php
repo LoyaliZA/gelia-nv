@@ -244,6 +244,17 @@ class ProfileController extends Controller
             );
         }
 
+        \App\Services\Auditoria\RegistrarAuditoriaConfiguracionService::ejecutar(
+            'Perfil',
+            'Actualización de cuenta propia',
+            [
+                'descripcion' => 'El usuario modificó sus datos personales o preferencias visuales.',
+                'tema_visual' => $configVisual,
+                'cambios_principales' => array_keys($datos)
+            ],
+            $user->id
+        );
+
         return back()->with('success', 'Perfil actualizado exitosamente.');
     }
 

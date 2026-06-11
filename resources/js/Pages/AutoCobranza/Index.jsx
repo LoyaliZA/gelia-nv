@@ -25,7 +25,7 @@ const ORDEN_OPCIONES = [
     { value: 'numero_asc', label: 'No. cliente' },
 ];
 
-export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], configuracionHorarios = ['10:00', '12:00'], configuracionAlertas = { intervalo_dias: 3, umbral_diario: 30 }, filtros = {} }) {
+export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], configuracionHorarios = ['10:00', '12:00'], configuracionAlertas = { intervalo_dias: 3, umbral_diario: 30 }, filtros = {}, users = [], notifiedUsersPagos = [] }) {
     const puedeVerAdmin = auth?.user?.permissions?.includes('cobranza.ver_admin') || auth?.user?.roles?.includes('Super Admin');
     const puedeEjecutarLlamadas = auth?.user?.permissions?.includes('cobranza.ejecutar_llamadas') || auth?.user?.roles?.includes('Super Admin');
     const puedeImportarReporte = auth?.user?.permissions?.includes('cobranza.importar_reporte') || auth?.user?.roles?.includes('Super Admin');
@@ -69,7 +69,8 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     const formConfig = useForm({
         horarios: configuracionHorarios || ['10:00', '12:00'],
         intervalo_dias: configuracionAlertas?.intervalo_dias ?? 3,
-        umbral_diario: configuracionAlertas?.umbral_diario ?? 30
+        umbral_diario: configuracionAlertas?.umbral_diario ?? 30,
+        notified_users_pagos: notifiedUsersPagos || []
     });
 
     useEffect(() => {
@@ -534,75 +535,113 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                 A continuación se muestran los clientes vencidos. Se mostrará en amarillo el tiempo de espera y en rojo cuando ya es momento de contactarlos. Las notificaciones automáticas y evaluación del Cron Job están programadas a las: <span className="font-bold text-[var(--color-primario)]">{configuracionHorarios.join(', ')}</span>.
                             </p>
 
-                            <div className="overflow-x-auto">
-                                <table className="w-full border-collapse">
-                                    <thead>
-                                        <tr className="border-b theme-border bg-black/5 dark:bg-white/5">
-                                            <th className="px-6 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Cliente</th>
-                                            <th className="px-6 py-4 text-center text-[9px] font-black uppercase tracking-widest theme-text-muted">Días Vencido</th>
-                                            <th className="px-6 py-4 text-right text-[9px] font-black uppercase tracking-widest theme-text-muted">Monto Vencido</th>
-                                            <th className="px-6 py-4 text-center text-[9px] font-black uppercase tracking-widest theme-text-muted">Fecha Alerta</th>
-                                            <th className="px-6 py-4 text-center text-[9px] font-black uppercase tracking-widest theme-text-muted">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {alertas.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="5" className="px-6 py-12 text-center text-xs theme-text-muted uppercase tracking-wider font-bold">
-                                                    No hay llamadas programadas para hoy.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            alertas.map((alerta) => {
-                                                const esDiaDeLlamada = alerta.dias_atraso >= configuracionAlertas.umbral_diario || alerta.dias_atraso % configuracionAlertas.intervalo_dias === 0;
-                                                const diasParaLlamar = configuracionAlertas.intervalo_dias - (alerta.dias_atraso % configuracionAlertas.intervalo_dias);
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                                {alertas.length === 0 ? (
+                                    <div className="col-span-full py-12 text-center text-xs theme-text-muted uppercase tracking-wider font-bold">
+                                        No hay llamadas programadas ni clientes pendientes de contactar.
+                                    </div>
+                                ) : (
+                                    alertas.map((alerta) => {
+                                        const esDiaDeLlamada = alerta.dias_atraso >= configuracionAlertas.umbral_diario || alerta.dias_atraso % configuracionAlertas.intervalo_dias === 0;
+                                        const diasParaLlamar = configuracionAlertas.intervalo_dias - (alerta.dias_atraso % configuracionAlertas.intervalo_dias);
+                                        const esPendiente = alerta.estado === 'pendiente';
 
-                                                return (
-                                                <tr key={alerta.id} className="border-b theme-border last:border-0 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <div className="text-sm font-bold theme-text-main">{alerta.cliente.nombre}</div>
-                                                        <div className="text-[10px] theme-text-muted font-mono">{alerta.cliente.numero_cliente}</div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        {alerta.tipo === 'limite_superado' ? (
-                                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-black bg-purple-500/10 text-purple-600 border border-purple-500/20 uppercase tracking-widest animate-pulse">
-                                                                Límite Superado
+                                        return (
+                                            <div key={alerta.id} className={geliaCardClass('p-6 border flex flex-col hover:shadow-md transition-all duration-300 theme-border hover:border-[var(--color-primario)]/50')}>
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center flex-wrap gap-2 mb-1">
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)]">
+                                                                No. {alerta.cliente.numero_cliente}
                                                             </span>
-                                                        ) : (
-                                                            !esDiaDeLlamada ? (
-                                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black bg-amber-500/10 text-amber-600 border border-amber-500/20 uppercase tracking-widest">
-                                                                    {diasParaLlamar} {diasParaLlamar === 1 ? 'día' : 'días'} p/ llamar
+                                                            {alerta.tipo === 'limite_superado' ? (
+                                                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-purple-500 text-white animate-pulse">
+                                                                    Límite Superado
                                                                 </span>
                                                             ) : (
-                                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-black bg-red-500/10 text-red-500 border border-red-500/20 uppercase tracking-widest">
-                                                                    Vencido ({alerta.dias_atraso} días)
+                                                                !esDiaDeLlamada ? (
+                                                                    <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-amber-500 text-white">
+                                                                        {diasParaLlamar} {diasParaLlamar === 1 ? 'día' : 'días'} p/ llamar
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-500 text-white animate-pulse">
+                                                                        Vencido ({alerta.dias_atraso} días)
+                                                                    </span>
+                                                                )
+                                                            )}
+                                                            {!esPendiente && (
+                                                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-blue-500 text-white">
+                                                                    {alerta.estado.replace('_', ' ')}
                                                                 </span>
-                                                            )
-                                                        )}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right text-sm font-black theme-text-main">
-                                                        {alerta.tipo === 'limite_superado'
-                                                            ? formatoMoneda(Math.max(Number(alerta.cliente?.monto_venta_actual || 0), Number(alerta.factura?.monto || 0)))
-                                                            : formatoMoneda(alerta.factura?.monto || 0)}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
-                                                        <div className="text-[10px] font-black theme-text-main uppercase tracking-widest bg-black/5 dark:bg-white/5 inline-block px-3 py-1.5 rounded-lg border theme-border">
-                                                            {new Date(alerta.fecha_alerta).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }).replace('.', '')}
+                                                            )}
                                                         </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center">
+                                                        <h3 className="text-sm font-bold theme-text-main leading-tight">
+                                                            {alerta.cliente.nombre}
+                                                        </h3>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t theme-border/60">
+                                                    <div>
+                                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Teléfono</p>
+                                                        <p className="text-xs font-bold theme-text-main truncate">
+                                                            {alerta.cliente.telefono || <span className="theme-text-muted font-normal italic">Sin teléfono</span>}
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Correo</p>
+                                                        <p className="text-xs font-bold theme-text-main truncate" title={alerta.cliente.correo_electronico}>
+                                                            {alerta.cliente.correo_electronico || <span className="theme-text-muted font-normal italic">Sin correo</span>}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t theme-border/60">
+                                                    <div>
+                                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Inicio Crédito</p>
+                                                        <p className="text-xs font-bold theme-text-main">
+                                                            {alerta.cliente.fecha_inicio_credito || <span className="theme-text-muted font-normal italic">N/A</span>}
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Vencimiento</p>
+                                                        <p className="text-xs font-bold theme-text-main">
+                                                            {alerta.factura?.fecha_vencimiento ? new Date(alerta.factura.fecha_vencimiento).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).replace('.', '') : <span className="theme-text-muted font-normal italic">N/A</span>}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-4 pt-4 border-t theme-border/60 gap-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Monto Vencido</span>
+                                                        <span className="text-sm font-black text-red-500">
+                                                            {alerta.tipo === 'limite_superado'
+                                                                ? formatoMoneda(Math.max(Number(alerta.cliente?.monto_venta_actual || 0), Number(alerta.factura?.monto || 0)))
+                                                                : formatoMoneda(alerta.factura?.monto || 0)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex gap-2 items-center">
+                                                        {puedeVerBitacora && (
+                                                            <button
+                                                                onClick={() => abrirBitacora(alerta.cliente)}
+                                                                className="p-2 rounded-xl text-[10px] font-black uppercase theme-element border border-transparent hover:border-[var(--color-primario)]/30 text-zinc-500 hover:text-[var(--color-primario)] transition-colors"
+                                                                title="Ver Bitácora"
+                                                            >
+                                                                <FileText className="w-4 h-4" />
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => abrirModalLlamada(alerta)}
-                                                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[9px] font-black uppercase theme-element border theme-border hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all"
+                                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase theme-element border theme-border hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all"
                                                         >
-                                                            Registrar Bitácora <MessageSquare className="w-3 h-3" />
+                                                            <MessageSquare className="w-3.5 h-3.5" /> Bitácora
                                                         </button>
-                                                    </td>
-                                                </tr>
-                                            )})
-                                        )}
-                                    </tbody>
-                                </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1297,6 +1336,35 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                         className={THEME_INPUT + " w-full"}
                                         required
                                     />
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-2 mt-4">
+                                <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Usuarios que reciben alerta de pago recibido</label>
+                                <div className="max-h-40 overflow-y-auto border theme-border rounded-xl p-2 space-y-1">
+                                    {users.map(user => (
+                                        <label key={user.id} className="flex items-center gap-2 p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={formConfig.data.notified_users_pagos.includes(user.id)}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    let newUsers = [...formConfig.data.notified_users_pagos];
+                                                    if (checked) {
+                                                        newUsers.push(user.id);
+                                                    } else {
+                                                        newUsers = newUsers.filter(id => id !== user.id);
+                                                    }
+                                                    formConfig.setData('notified_users_pagos', newUsers);
+                                                }}
+                                                className="rounded border-zinc-300 text-[var(--color-primario)] focus:ring-[var(--color-primario)]"
+                                            />
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-bold theme-text-main">{user.name}</span>
+                                                <span className="text-[9px] theme-text-muted">{user.email}</span>
+                                            </div>
+                                        </label>
+                                    ))}
                                 </div>
                             </div>
                             <div className="pt-4 flex justify-end gap-3">

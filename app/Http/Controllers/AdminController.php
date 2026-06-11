@@ -191,6 +191,16 @@ class AdminController extends Controller
 
         $role->syncPermissions($data['permisos_heredados'] ?? []);
 
+        \App\Services\Auditoria\RegistrarAuditoriaConfiguracionService::ejecutar(
+            'Roles y Permisos',
+            'Actualización de plantilla de rol',
+            [
+                'descripcion' => "Se modificaron los permisos de la plantilla '{$role->name}'.",
+                'rol_modificado' => $role->name,
+                'nuevos_permisos' => $data['permisos_heredados'] ?? [],
+            ]
+        );
+
         return back()->with('success', "Plantilla del rol «{$role->name}» actualizada.");
     }
 
@@ -223,6 +233,16 @@ class AdminController extends Controller
         ]);
 
         $rol->syncPermissions($data['permisos_heredados'] ?? []);
+
+        \App\Services\Auditoria\RegistrarAuditoriaConfiguracionService::ejecutar(
+            'Roles y Permisos',
+            'Creación de grupo predefinido',
+            [
+                'descripcion' => "Se creó el grupo '{$nombreGrupo}' con sus permisos base.",
+                'nombre_grupo' => $nombreGrupo,
+                'permisos' => $data['permisos_heredados'] ?? [],
+            ]
+        );
 
         return back()->with('success', "Grupo «{$nombreGrupo}» creado correctamente.");
     }
@@ -291,6 +311,47 @@ class AdminController extends Controller
             $data['plantilla_por_permiso'] ?? null
         );
 
+        $obtenerNombresAreas = fn($ids) => \App\Models\Area::whereIn('id', $ids)->pluck('nombre')->toArray();
+        $obtenerNombresDeptos = fn($ids) => \App\Models\Departamento::whereIn('id', $ids)->pluck('nombre')->toArray();
+        $nombreArea = fn($id) => $id ? \App\Models\Area::find($id)?->nombre : null;
+
+        $detallesAuditoria = [
+            'descripcion' => 'Se creó el usuario y se asignaron sus roles y permisos.',
+            'roles' => [
+                'asignados' => $rolesJerarquicos,
+            ],
+            'permisos' => [
+                'actuales' => $data['permisos_individuales'] ?? [],
+                'asignados' => $data['permisos_individuales'] ?? [],
+                'retirados' => [],
+            ],
+        ];
+
+        if ($areaPrincipalId) {
+            $detallesAuditoria['area_principal'] = [
+                'nueva' => $nombreArea($areaPrincipalId)
+            ];
+        }
+
+        if (!empty($data['areas'])) {
+            $detallesAuditoria['areas'] = [
+                'asignadas' => $obtenerNombresAreas($data['areas'])
+            ];
+        }
+
+        if (!empty($data['departamentos'])) {
+            $detallesAuditoria['departamentos'] = [
+                'asignados' => $obtenerNombresDeptos($data['departamentos'])
+            ];
+        }
+
+        \App\Services\Auditoria\RegistrarAuditoriaConfiguracionService::ejecutar(
+            'Usuarios',
+            'Creación de usuario y asignación inicial',
+            $detallesAuditoria,
+            $usuario->id
+        );
+
         return back()->with('success', 'Colaborador registrado exitosamente.');
     }
 
@@ -322,7 +383,15 @@ class AdminController extends Controller
             ->values()
             ->all();
 
-        $user->loadMissing('permissions');
+        $user->loadMissing(['permissions', 'areas', 'departamentos', 'roles']);
+        
+        // --- CAPTURA DE ESTADO ANTERIOR PARA AUDITORÍA ---
+        $permisosActuales = $user->permissions->pluck('name')->toArray();
+        $areasActualesIds = $user->areas->pluck('id')->toArray();
+        $deptosActualesIds = $user->departamentos->pluck('id')->toArray();
+        $rolesActuales = $user->roles->pluck('name')->toArray();
+        $areaPrincipalActualId = $user->area_id;
+
         $permisosSolicitados = $data['permisos_individuales'] ?? [];
         $permisosFinales = ValidarAsignacionPermisosService::resolverPermisosActualizacion(
             $asignador,
@@ -377,6 +446,67 @@ class AdminController extends Controller
             $data['plantilla_origen'] ?? null,
             $data['plantilla_por_permiso'] ?? null,
             ValidarAsignacionPermisosService::esSuperAdmin($asignador) ? null : $permisosGestionables
+        );
+
+        // --- CÁLCULO DE DIFERENCIAS PARA AUDITORÍA ---
+        $obtenerNombresAreas = fn($ids) => \App\Models\Area::whereIn('id', $ids)->pluck('nombre')->toArray();
+        $obtenerNombresDeptos = fn($ids) => \App\Models\Departamento::whereIn('id', $ids)->pluck('nombre')->toArray();
+        $nombreArea = fn($id) => $id ? \App\Models\Area::find($id)?->nombre : null;
+
+        $areasAsignadasIds = array_diff($data['areas'] ?? [], $areasActualesIds);
+        $areasRetiradasIds = array_diff($areasActualesIds, $data['areas'] ?? []);
+        $deptosAsignadosIds = array_diff($data['departamentos'] ?? [], $deptosActualesIds);
+        $deptosRetiradosIds = array_diff($deptosActualesIds, $data['departamentos'] ?? []);
+        
+        $permisosAsignados = array_diff($permisosFinales, $permisosActuales);
+        $permisosRetirados = array_diff($permisosActuales, $permisosFinales);
+        
+        $rolesAsignados = array_diff($rolesJerarquicos, $rolesActuales);
+        $rolesRetirados = array_diff($rolesActuales, $rolesJerarquicos);
+
+        $detallesAuditoria = [
+            'descripcion' => 'Se actualizaron los datos, roles o permisos del usuario.',
+            'permisos' => [
+                'actuales' => array_values($permisosFinales),
+                'asignados' => array_values($permisosAsignados),
+                'retirados' => array_values($permisosRetirados),
+            ]
+        ];
+
+        if (!empty($rolesAsignados) || !empty($rolesRetirados)) {
+            $detallesAuditoria['roles'] = [
+                'actuales' => array_values($rolesJerarquicos),
+                'asignados' => array_values($rolesAsignados),
+                'retirados' => array_values($rolesRetirados),
+            ];
+        }
+
+        if ($areaPrincipalActualId !== $areaPrincipalId) {
+            $detallesAuditoria['area_principal'] = [
+                'anterior' => $nombreArea($areaPrincipalActualId),
+                'nueva' => $nombreArea($areaPrincipalId)
+            ];
+        }
+
+        if (!empty($areasAsignadasIds) || !empty($areasRetiradasIds)) {
+            $detallesAuditoria['areas'] = [
+                'asignadas' => $obtenerNombresAreas($areasAsignadasIds),
+                'retiradas' => $obtenerNombresAreas($areasRetiradasIds),
+            ];
+        }
+
+        if (!empty($deptosAsignadosIds) || !empty($deptosRetiradosIds)) {
+            $detallesAuditoria['departamentos'] = [
+                'asignados' => $obtenerNombresDeptos($deptosAsignadosIds),
+                'retirados' => $obtenerNombresDeptos($deptosRetiradosIds),
+            ];
+        }
+
+        \App\Services\Auditoria\RegistrarAuditoriaConfiguracionService::ejecutar(
+            'Usuarios',
+            'Actualización de perfil y/o permisos',
+            $detallesAuditoria,
+            $user->id
         );
 
         return back()->with('success', 'Perfil actualizado.');

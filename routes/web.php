@@ -138,7 +138,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/abonos-hoy', [AutoCobranzaController::class, 'abonosDelDia'])->name('abonos-hoy');
         Route::post('/clientes/{cliente}/resolver-aumento', [AutoCobranzaController::class, 'resolverAumento'])->name('alertas.resolver-aumento');
         Route::put('/clientes/{cliente}/reparar-fecha', [AutoCobranzaController::class, 'repararFechaInicio'])->name('clientes.reparar-fecha');
-        Route::post('/facturas/{factura}/verificar', [AutoCobranzaController::class, 'verificarPago'])->name('facturas.verificar');
+        Route::post('/facturas/{cobranzaFactura}/verificar', [AutoCobranzaController::class, 'verificarPago'])->name('facturas.verificar');
         Route::post('/configuracion', [AutoCobranzaController::class, 'guardarConfiguracion'])->name('configuracion.store');
     });
 
@@ -148,8 +148,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['can:solicitudes.exportar'])->group(function () {
         Route::get('/solicitudes/exportar', [SolicitudController::class, 'exportar'])->name('solicitudes.exportar');
-        Route::get('/reportes/solicitudes', [ReporteSolicitudesController::class, 'index'])->name('reportes.solicitudes.index');
-        Route::get('/reportes/solicitudes/exportar', [ReporteSolicitudesController::class, 'exportar'])->name('reportes.solicitudes.exportar');
+        // Route::get('/reportes/solicitudes', [ReporteSolicitudesController::class, 'index'])->name('reportes.solicitudes.index');
+        // Route::get('/reportes/solicitudes/exportar', [ReporteSolicitudesController::class, 'exportar'])->name('reportes.solicitudes.exportar');
     });
 
     Route::middleware(['can:solicitudes.crear'])->group(function () {

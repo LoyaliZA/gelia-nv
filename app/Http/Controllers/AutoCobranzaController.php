@@ -22,13 +22,11 @@ class AutoCobranzaController extends Controller
         // 1. Clientes con saldo activo: búsqueda y orden en servidor
         $clientes = $this->queryClientesConCredito($request);
 
-        // 2. Alertas operativas pendientes para hoy (filtradas por clientes con saldo activo)
+        // 2. Alertas operativas (filtradas por facturas activas y que no estén resueltas)
         $alertas = CobranzaAlerta::with(['cliente', 'factura'])
-            ->where('estado', 'pendiente')
-            ->whereHas('cliente', function ($query) {
-                $query->whereHas('facturasCobranza', function ($q) {
-                    $q->where('pagada', false)->where('monto', '>', 0);
-                });
+            ->where('estado', '!=', 'resuelta')
+            ->whereHas('factura', function ($query) {
+                $query->where('pagada', false)->where('monto', '>', 0);
             })
             ->orderBy('fecha_alerta', 'desc')
             ->get();
@@ -88,7 +86,12 @@ class AutoCobranzaController extends Controller
             'filtros' => [
                 'q' => $request->q,
                 'orden' => $request->orden,
-            ]
+            ],
+            'users' => \App\Models\User::select('id', 'name', 'email')->get(),
+            'notifiedUsersPagos' => \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_users_pagos', function () {
+                $config = \App\Models\CobranzaConfiguracion::where('llave', 'notified_users_pagos')->first();
+                return $config && $config->valor ? json_decode($config->valor, true) : [];
+            }),
         ]);
     }
 
@@ -115,6 +118,12 @@ class AutoCobranzaController extends Controller
             'intervalo_dias' => (int) $request->intervalo_dias,
             'umbral_diario' => (int) $request->umbral_diario,
         ]);
+
+        if ($request->has('notified_users_pagos')) {
+            $configUsersPagos = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'notified_users_pagos']);
+            $configUsersPagos->update(['valor' => json_encode($request->notified_users_pagos)]);
+            \Illuminate\Support\Facades\Cache::forever('cobranza_config_users_pagos', $request->notified_users_pagos);
+        }
 
         return redirect()->back()->with('success', 'Configuración actualizada exitosamente.');
     }
@@ -207,6 +216,15 @@ class AutoCobranzaController extends Controller
 
         $alerta->update($validated);
 
+        \App\Models\CobranzaBitacora::create([
+            'cliente_id' => $alerta->cliente_id,
+            'usuario_id' => auth()->id() ?? 1,
+            'tipo_evento' => 'llamada',
+            'monto_anterior' => 0,
+            'monto_nuevo' => 0,
+            'descripcion' => "Registro de contacto: " . ucfirst(str_replace('_', ' ', $validated['estado'])) . ". " . ($validated['observaciones'] ? "Observaciones: " . $validated['observaciones'] : ""),
+        ]);
+
         return redirect()->back()->with('success', 'Bitácora de llamada registrada y alerta actualizada.');
     }
 
@@ -258,23 +276,23 @@ class AutoCobranzaController extends Controller
     /**
      * Permite a un administrador confirmar visualmente que una factura fue pagada.
      */
-    public function verificarPago(Request $request, CobranzaFactura $factura)
+    public function verificarPago(Request $request, CobranzaFactura $cobranzaFactura)
     {
         $this->authorize('cobranza.ver');
 
-        if (!$factura->pagada) {
+        if (!$cobranzaFactura->pagada) {
             return response()->json(['message' => 'Solo se pueden verificar facturas que ya están pagadas.'], 422);
         }
 
-        $factura->update(['verificado_manualmente' => true]);
+        $cobranzaFactura->update(['verificado_manualmente' => true]);
 
         \App\Models\CobranzaBitacora::create([
-            'cliente_id' => $factura->cliente_id,
+            'cliente_id' => $cobranzaFactura->cliente_id,
             'usuario_id' => auth()->id(),
             'tipo_evento' => 'verificacion_manual',
-            'monto_anterior' => $factura->monto,
-            'monto_nuevo' => $factura->monto,
-            'descripcion' => "Pago de factura {$factura->folio} verificado manualmente por el administrador.",
+            'monto_anterior' => $cobranzaFactura->monto,
+            'monto_nuevo' => $cobranzaFactura->monto,
+            'descripcion' => "Pago de factura {$cobranzaFactura->folio} verificado manualmente por el administrador.",
         ]);
 
         return response()->json(['message' => 'Factura verificada exitosamente.']);
