@@ -58,13 +58,22 @@ class ListarSolicitudesService
 
     private function filtrarPorDepartamento(Builder $query, User $usuario): void
     {
+        $usuario->loadMissing('area');
         $departamentosUsuario = $usuario->departamentos->pluck('id')->toArray();
 
-        if (!empty($departamentosUsuario)) {
-            $query->whereIn('departamento_id', $departamentosUsuario);
-        } else {
-            $query->where('id', 0);
+        if (empty($departamentosUsuario) && $usuario->area?->departamento_id) {
+            $departamentosUsuario = [$usuario->area->departamento_id];
         }
+
+        if (!empty($departamentosUsuario)) {
+            $query->where(function (Builder $q) use ($departamentosUsuario, $usuario) {
+                $q->whereIn('departamento_id', $departamentosUsuario)
+                    ->orWhere('vendedor_id', $usuario->id);
+            });
+            return;
+        }
+
+        $query->where('vendedor_id', $usuario->id);
     }
 
     private function aplicarFiltros(Builder $query, array $filtros): void

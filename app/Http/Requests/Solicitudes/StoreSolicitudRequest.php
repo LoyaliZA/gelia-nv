@@ -113,6 +113,16 @@ class StoreSolicitudRequest extends FormRequest
                     return;
                 }
 
+                $usuario = $this->user()->loadMissing(['departamentos', 'area']);
+                $tieneDepartamento = $usuario->departamentos->isNotEmpty() || $usuario->area?->departamento_id;
+                if (!$tieneDepartamento) {
+                    $validator->errors()->add(
+                        'catalogo_proceso_id',
+                        'No puedes crear solicitudes: tu usuario no tiene departamento asignado. Contacta a administración.'
+                    );
+                    return;
+                }
+
                 if ($this->aplicaFlujoCompraEnTienda()) {
                     if (!str_contains(strtoupper($proceso->nombre), 'ASIGNAR CLIENTE NUEVO')) {
                         $validator->errors()->add('compra_en_tienda', 'La compra en tienda solo aplica a solicitudes de asignar cliente nuevo.');
