@@ -1,17 +1,16 @@
 <?php
 
-use App\Services\Permisos\RepararProcedenciaPermisosService;
 use Illuminate\Database\Migrations\Migration;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        RepararProcedenciaPermisosService::repararHuerfanos();
+        // Obsoleto: la política cambió en 2026_06_11_180000_revoke_system_assigned_permissions.
     }
 
     public function down(): void
     {
-        // No revertir: los registros reparados reflejan el estado real de permisos existentes.
+        //
     }
 };

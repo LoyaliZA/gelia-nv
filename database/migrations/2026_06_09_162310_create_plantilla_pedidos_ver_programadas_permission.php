@@ -1,31 +1,17 @@
 <?php
 
+use App\Services\Permisos\PermisoCatalogoMigracion;
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
-use Spatie\Permission\Models\Permission;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Permission::firstOrCreate([
-            'name' => 'plantilla_pedidos.ver_programadas',
-            'guard_name' => 'web'
-        ]);
+        PermisoCatalogoMigracion::registrar('plantilla_pedidos.ver_programadas');
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        $permission = Permission::where('name', 'plantilla_pedidos.ver_programadas')->first();
-        if ($permission) {
-            $permission->delete();
-        }
+        \Spatie\Permission\Models\Permission::where('name', 'plantilla_pedidos.ver_programadas')->delete();
     }
 };

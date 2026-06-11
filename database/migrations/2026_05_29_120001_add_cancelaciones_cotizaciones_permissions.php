@@ -1,8 +1,7 @@
 <?php
 
-use App\Models\User;
+use App\Services\Permisos\PermisoCatalogoMigracion;
 use Illuminate\Database\Migrations\Migration;
-use Spatie\Permission\Models\Permission;
 
 return new class extends Migration
 {
@@ -15,53 +14,16 @@ return new class extends Migration
         'cancelaciones_cotizaciones.cancelar',
         'cancelaciones_cotizaciones.exportar',
         'cancelaciones_cotizaciones.eliminar',
+        'solicitudes.eliminar',
     ];
 
     public function up(): void
     {
-        foreach (self::PERMISOS as $permiso) {
-            Permission::findOrCreate($permiso, 'web');
-        }
-
-        Permission::findOrCreate('solicitudes.eliminar', 'web');
-
-        $mapa = [
-            'solicitudes.crear' => ['cancelaciones_cotizaciones.crear', 'cancelaciones_cotizaciones.ver_listado'],
-            'solicitudes.reportar' => ['cancelaciones_cotizaciones.reportar', 'cancelaciones_cotizaciones.ver_listado', 'cancelaciones_cotizaciones.exportar'],
-            'solicitudes.verificar' => ['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.ver_listado'],
-            'solicitudes.solicitar_cancelacion' => ['cancelaciones_cotizaciones.solicitar_cancelacion'],
-            'solicitudes.cancelar' => ['cancelaciones_cotizaciones.cancelar'],
-            'solicitudes.eliminar' => ['cancelaciones_cotizaciones.eliminar'],
-        ];
-
-        foreach ($mapa as $permisoOrigen => $permisosNuevos) {
-            if (!Permission::where('name', $permisoOrigen)->where('guard_name', 'web')->exists()) {
-                continue;
-            }
-
-            $usuarios = User::permission($permisoOrigen)->get();
-            foreach ($usuarios as $usuario) {
-                foreach ($permisosNuevos as $permisoNuevo) {
-                    if (!$usuario->hasPermissionTo($permisoNuevo)) {
-                        $usuario->givePermissionTo($permisoNuevo);
-                    }
-                }
-            }
-        }
-
-        if (\Spatie\Permission\Models\Role::where('name', 'Super Admin')->where('guard_name', 'web')->exists()) {
-            User::role('Super Admin')->each(function (User $usuario) {
-                foreach (self::PERMISOS as $permiso) {
-                    if (!$usuario->hasPermissionTo($permiso)) {
-                        $usuario->givePermissionTo($permiso);
-                    }
-                }
-            });
-        }
+        PermisoCatalogoMigracion::registrar(self::PERMISOS);
     }
 
     public function down(): void
     {
-        Permission::whereIn('name', self::PERMISOS)->delete();
+        \Spatie\Permission\Models\Permission::whereIn('name', self::PERMISOS)->delete();
     }
 };

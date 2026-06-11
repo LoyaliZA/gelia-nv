@@ -1,8 +1,7 @@
 <?php
 
-use App\Models\User;
+use App\Services\Permisos\PermisoCatalogoMigracion;
 use Illuminate\Database\Migrations\Migration;
-use Spatie\Permission\Models\Permission;
 
 return new class extends Migration
 {
@@ -14,52 +13,16 @@ return new class extends Migration
         'facturas.eliminar',
         'facturas.gestionar_datos_fiscales',
         'facturas.exportar',
+        'solicitudes.eliminar',
     ];
 
     public function up(): void
     {
-        foreach (self::PERMISOS as $permiso) {
-            Permission::findOrCreate($permiso, 'web');
-        }
-
-        Permission::findOrCreate('solicitudes.eliminar', 'web');
-
-        $mapa = [
-            'solicitudes.crear' => ['facturas.crear', 'facturas.ver_listado'],
-            'solicitudes.reportar' => ['facturas.responder', 'facturas.ver_listado', 'facturas.exportar'],
-            'solicitudes.verificar' => ['facturas.verificar', 'facturas.ver_listado'],
-            'solicitudes.eliminar' => ['facturas.eliminar'],
-            'clientes.ver' => ['facturas.gestionar_datos_fiscales'],
-        ];
-
-        foreach ($mapa as $permisoOrigen => $permisosNuevos) {
-            if (!Permission::where('name', $permisoOrigen)->where('guard_name', 'web')->exists()) {
-                continue;
-            }
-
-            $usuarios = User::permission($permisoOrigen)->get();
-            foreach ($usuarios as $usuario) {
-                foreach ($permisosNuevos as $permisoNuevo) {
-                    if (!$usuario->hasPermissionTo($permisoNuevo)) {
-                        $usuario->givePermissionTo($permisoNuevo);
-                    }
-                }
-            }
-        }
-
-        if (\Spatie\Permission\Models\Role::where('name', 'Super Admin')->where('guard_name', 'web')->exists()) {
-            User::role('Super Admin')->each(function (User $usuario) {
-                foreach (self::PERMISOS as $permiso) {
-                    if (!$usuario->hasPermissionTo($permiso)) {
-                        $usuario->givePermissionTo($permiso);
-                    }
-                }
-            });
-        }
+        PermisoCatalogoMigracion::registrar(self::PERMISOS);
     }
 
     public function down(): void
     {
-        Permission::whereIn('name', self::PERMISOS)->delete();
+        \Spatie\Permission\Models\Permission::whereIn('name', self::PERMISOS)->delete();
     }
 };
