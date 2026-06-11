@@ -31,6 +31,21 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
         monto_credito_autorizado: clienteActual?.monto_credito_autorizado || 0,
         dias_credito: clienteActual?.dias_credito || 0,
         fecha_inicio_credito: clienteActual?.fecha_inicio_credito || '',
+        dias_cheque_postfechado: clienteActual?.dias_cheque_postfechado || '',
+        parte_relacional: clienteActual?.parte_relacional || '',
+        variable_contable: clienteActual?.variable_contable || '',
+        direccion_fiscal: clienteActual?.direccion_fiscal || '',
+        colonia_fiscal: clienteActual?.colonia_fiscal || '',
+        municipio_fiscal: clienteActual?.municipio_fiscal || '',
+        estado_fiscal: clienteActual?.estado_fiscal || '',
+        pais_fiscal: clienteActual?.pais_fiscal || '',
+        direccion_contacto: clienteActual?.direccion_contacto || '',
+        colonia_contacto: clienteActual?.colonia_contacto || '',
+        municipio_contacto: clienteActual?.municipio_contacto || '',
+        estado_contacto: clienteActual?.estado_contacto || '',
+        pais_contacto: clienteActual?.pais_contacto || '',
+        cp_contacto: clienteActual?.cp_contacto || '',
+        telefono: clienteActual?.telefono || '',
         correccion_emergencia: false,
     });
 
@@ -211,6 +226,18 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                     />
                                     {errors.fecha_inicio_credito && <p className="text-[9px] text-red-500 font-bold ml-1">{errors.fecha_inicio_credito}</p>}
                                 </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Días Cheque Postfechado</label>
+                                    <input type="number" value={data.dias_cheque_postfechado} onChange={e => setData('dias_cheque_postfechado', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" placeholder="Ej. 15" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Parte Relacional</label>
+                                    <input type="text" value={data.parte_relacional} onChange={e => setData('parte_relacional', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Variable Contable</label>
+                                    <input type="text" value={data.variable_contable} onChange={e => setData('variable_contable', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
                             </div>
                         </div>
 
@@ -289,6 +316,64 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 <div className="space-y-2 md:col-span-2">
                                     <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Nombre (Razón Social)</label>
                                     <input type="text" value={data.nombre_razon_social} onChange={e => setData('nombre_razon_social', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Dirección Fiscal</label>
+                                    <input type="text" value={data.direccion_fiscal} onChange={e => setData('direccion_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Colonia</label>
+                                    <input type="text" value={data.colonia_fiscal} onChange={e => setData('colonia_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Municipio / Alcaldía</label>
+                                    <input type="text" value={data.municipio_fiscal} onChange={e => setData('municipio_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Estado</label>
+                                    <input type="text" value={data.estado_fiscal} onChange={e => setData('estado_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">País</label>
+                                    <input type="text" value={data.pais_fiscal} onChange={e => setData('pais_fiscal', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* --- BLOQUE: DATOS DE CONTACTO --- */}
+                        <div className="p-6 theme-element border theme-border rounded-2xl space-y-4 shadow-sm">
+                            <div className="flex items-center gap-2 mb-2">
+                                <User className="w-4 h-4 text-orange-500 drop-shadow-sm" />
+                                <span className="text-[10px] font-black uppercase tracking-widest theme-text-main">Datos de Contacto_</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Dirección de Contacto / Entrega</label>
+                                    <input type="text" value={data.direccion_contacto} onChange={e => setData('direccion_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Código Postal</label>
+                                    <input type="text" value={data.cp_contacto} onChange={e => setData('cp_contacto', e.target.value)} maxLength={10} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Teléfono</label>
+                                    <input type="text" value={data.telefono} onChange={e => setData('telefono', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Colonia</label>
+                                    <input type="text" value={data.colonia_contacto} onChange={e => setData('colonia_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Municipio / Alcaldía</label>
+                                    <input type="text" value={data.municipio_contacto} onChange={e => setData('municipio_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Estado</label>
+                                    <input type="text" value={data.estado_contacto} onChange={e => setData('estado_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">País</label>
+                                    <input type="text" value={data.pais_contacto} onChange={e => setData('pais_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                             </div>
                         </div>

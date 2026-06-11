@@ -87,8 +87,7 @@ class ListarSolicitudesOperativasService
         $tieneVisibilidadArea = $usuario->hasRole('Gerente') ||
             $usuario->hasAnyPermission([
                 'cancelaciones_cotizaciones.verificar',
-                'cancelaciones_cotizaciones.reportar',
-                'cancelaciones_cotizaciones.cancelar',
+                'configuracion.ver_auditoria',
             ]);
 
         if ($tieneVisibilidadArea) {
@@ -117,8 +116,7 @@ class ListarSolicitudesOperativasService
         $tieneVisibilidadArea = $usuario->hasRole('Gerente') ||
             $usuario->hasAnyPermission([
                 'cancelaciones_cotizaciones.verificar',
-                'cancelaciones_cotizaciones.reportar',
-                'cancelaciones_cotizaciones.cancelar',
+                'configuracion.ver_auditoria',
             ]);
 
         if ($tieneVisibilidadArea) {

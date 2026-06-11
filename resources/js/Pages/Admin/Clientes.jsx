@@ -156,6 +156,49 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
         setModalConfig({ abierto: false, modo: null, cliente: null });
     };
 
+    const descargarPlantilla = () => {
+        const cabeceras = [
+            "numero_cliente",
+            "nombre",
+            "direccion_fiscal",
+            "colonia_fiscal",
+            "municipio_fiscal",
+            "codigo_postal",
+            "estado_fiscal",
+            "pais_fiscal",
+            "direccion_contacto",
+            "colonia_contacto",
+            "municipio_contacto",
+            "estado_contacto",
+            "pais_contacto",
+            "cp_contacto",
+            "rfc",
+            "telefono",
+            "correo_electronico",
+            "monto_credito_autorizado",
+            "monto_venta_actual",
+            "dias_cheque_postfechado",
+            "dias_credito",
+            "parte_relacional",
+            "regimen_fiscal",
+            "uso_factura",
+            "codigo_lista",
+            "variable_contable",
+            "vendedor_id",
+            "nombre_razon_social",
+            "es_heredado"
+        ];
+        
+        const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + cabeceras.join(",");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "plantilla_clientes.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     // Extraemos la sesión flash usando el hook de Inertia
     const { flash } = usePage().props;
     const [reporteModal, setReporteModal] = useState(null);
@@ -273,11 +316,21 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                     {/* --- PANEL LATERAL: CARGA MASIVA --- */}
                     <div className="lg:col-span-1 h-full">
                         <section className={`${activeCardClass} p-8 h-full overflow-y-auto custom-scrollbar`} style={{ animationDelay: '100ms' }}>
-                            <div className="flex items-center gap-3 mb-6 shrink-0">
-                                <Upload className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                                <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
-                                    Carga Masiva_
-                                </h2>
+                            <div className="flex items-center justify-between gap-3 mb-6 shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <Upload className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
+                                    <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
+                                        Carga Masiva_
+                                    </h2>
+                                </div>
+                                <button 
+                                    type="button"
+                                    onClick={descargarPlantilla}
+                                    className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest theme-text-main theme-element border theme-border rounded-lg hover:shadow-md transition-all flex items-center gap-1.5"
+                                >
+                                    <FileSpreadsheet className="w-3 h-3" />
+                                    Plantilla
+                                </button>
                             </div>
 
                             <form onSubmit={handleUpload} className="space-y-6">
@@ -358,8 +411,11 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                     <span className="text-[9px] font-black uppercase tracking-widest text-amber-600">
                                         Ejecute la carga antes de las 09:00 para evitar conflicto con el rechazo automático de pagos vencidos.
                                     </span><br /><br />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-500">Datos fiscales (opcionales, importación futura):</span><br />
-                                    <strong style={{ color: 'var(--color-primario)' }}>rfc</strong>, <strong style={{ color: 'var(--color-primario)' }}>codigo_postal</strong>, <strong style={{ color: 'var(--color-primario)' }}>regimen_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>correo_electronico</strong>, <strong style={{ color: 'var(--color-primario)' }}>uso_factura</strong>, <strong style={{ color: 'var(--color-primario)' }}>nombre_razon_social</strong>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-500">Datos fiscales:</span><br />
+                                    <strong style={{ color: 'var(--color-primario)' }}>rfc</strong>, <strong style={{ color: 'var(--color-primario)' }}>codigo_postal</strong>, <strong style={{ color: 'var(--color-primario)' }}>regimen_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>correo_electronico</strong>, <strong style={{ color: 'var(--color-primario)' }}>uso_factura</strong>, <strong style={{ color: 'var(--color-primario)' }}>nombre_razon_social</strong>, <strong style={{ color: 'var(--color-primario)' }}>direccion_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>colonia_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>municipio_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>estado_fiscal</strong>, <strong style={{ color: 'var(--color-primario)' }}>pais_fiscal</strong><br /><br />
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-orange-500">Datos de contacto y control:</span><br />
+                                    <strong style={{ color: 'var(--color-primario)' }}>direccion_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>colonia_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>municipio_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>estado_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>pais_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>cp_contacto</strong>, <strong style={{ color: 'var(--color-primario)' }}>telefono</strong><br />
+                                    <strong style={{ color: 'var(--color-primario)' }}>dias_cheque_postfechado</strong>, <strong style={{ color: 'var(--color-primario)' }}>parte_relacional</strong>, <strong style={{ color: 'var(--color-primario)' }}>variable_contable</strong>
                                 </p>
                             </div>
                         </section>

@@ -266,6 +266,15 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
                                         ))}
                                     </SelectConIcono>
                                 </div>
+                                <label className="flex items-start gap-3 p-4 rounded-xl border theme-border theme-element cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!data.solicitar_cotizacion}
+                                        onChange={(e) => setData('solicitar_cotizacion', e.target.checked)}
+                                        className="mt-1 w-4 h-4 accent-[var(--color-primario)]"
+                                    />
+                                    <span className="text-sm font-bold theme-text-main">Solicitar cotizacion sobre esta remisión</span>
+                                </label>
                             </div>
                         )}
 
