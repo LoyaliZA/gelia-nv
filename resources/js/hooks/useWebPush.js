@@ -1,10 +1,14 @@
 import { useEffect, useRef } from 'react';
 import WebPushService from '@/Services/WebPushService';
+import NotificationBrowserService from '@/Services/NotificationBrowserService';
 import { resolveAlertasPrefs, shouldTriggerChannel, MENSAJERIA_TIPO_ALERTA } from '@/utils/alertasPrefs';
 
 /**
  * Registra el Service Worker y la suscripción Web Push cuando el usuario
  * tiene activadas las alertas de escritorio.
+ *
+ * Además señaliza a NotificationBrowserService si hay push activo
+ * para evitar notificaciones de escritorio duplicadas.
  */
 export default function useWebPush(auth, tonosAlertas = []) {
     const intentadoRef = useRef(false);
@@ -25,14 +29,16 @@ export default function useWebPush(auth, tonosAlertas = []) {
         intentadoRef.current = true;
 
         WebPushService.publicKey = webpush.public_key;
-
-        if (Notification.permission === 'granted') {
-            WebPushService.ensureSubscribed();
-            return;
-        }
-
-        if (Notification.permission === 'default') {
-            WebPushService.ensureSubscribed();
-        }
+        WebPushService.ensureSubscribed()
+            .then((result) => {
+                // Si la suscripción push es exitosa, señalizar para evitar
+                // notificaciones de escritorio duplicadas (el SW las muestra).
+                NotificationBrowserService.setServiceWorkerPushActive(result?.ok === true);
+            })
+            .catch(() => {
+                NotificationBrowserService.setServiceWorkerPushActive(false);
+                // Si falla la suscripción, permitir reintentar en el próximo render.
+                intentadoRef.current = false;
+            });
     }, [auth?.user?.id, auth?.webpush?.enabled, auth?.webpush?.public_key, tonosAlertas]);
 }

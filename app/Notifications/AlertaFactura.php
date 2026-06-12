@@ -64,7 +64,10 @@ class AlertaFactura extends Notification implements ShouldQueue, ShouldBroadcast
 
     public function toBroadcast(object $notifiable): BroadcastMessage
     {
-        return new BroadcastMessage($this->payload());
+        return new BroadcastMessage(array_merge(
+            $this->payload(),
+            ['mensaje_voz' => $this->construirMensajeVoz($notifiable)]
+        ));
     }
 
     private function payload(): array
@@ -81,5 +84,21 @@ class AlertaFactura extends Notification implements ShouldQueue, ShouldBroadcast
             'fecha' => now()->toDateTimeString(),
             'modulo' => 'facturas',
         ];
+    }
+
+    private function construirMensajeVoz(object $notifiable): string
+    {
+        $nombre = explode(' ', trim($notifiable->name))[0];
+        $folio = $this->solicitud->folio;
+        $vendedor = explode(' ', trim($this->solicitud->vendedor->name ?? 'un colaborador'))[0];
+
+        return match ($this->tipoAlerta) {
+            'nueva' => "Atención {$nombre}, {$vendedor} envió una solicitud de factura, {$folio}.",
+            'respondida' => "{$nombre}, la factura {$folio} fue emitida exitosamente.",
+            'rechazada' => "{$nombre}, se reportó un error en la solicitud de factura {$folio}.",
+            'reparada' => "Atención {$nombre}, la solicitud de factura {$folio} fue reparada y está lista para revisión.",
+            'verificada' => "{$nombre}, la factura {$folio} fue verificada correctamente.",
+            default => "{$nombre}, tienes una notificación sobre la factura {$folio}.",
+        };
     }
 }

@@ -24,9 +24,9 @@ class NotificationBrowserService {
         this.preferences = { ...DEFAULT_ALERTAS_PREFS };
         this.tonosAlertas = [];
 
-        this._utteranceCache = new Map();
         this._selectedVoice = null;
         this._voicesReady = false;
+        this._swPushActivo = false;
 
         if (typeof window !== 'undefined') {
             this._loadAudio(this.currentTonePath);
@@ -146,13 +146,12 @@ class NotificationBrowserService {
         }
     }
 
-    _getUtterance(text) {
-        const MAX_CACHE_SIZE = 50;
-
-        if (this._utteranceCache.has(text)) {
-            return this._utteranceCache.get(text);
-        }
-
+    /**
+     * Siempre crea un SpeechSynthesisUtterance nuevo.
+     * Los navegadores ignoran silenciosamente utterances que ya terminaron
+     * de reproducirse, por lo que NO se deben cachear ni reutilizar.
+     */
+    _createUtterance(text) {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'es-MX';
         utterance.rate = 1.0;
@@ -162,12 +161,10 @@ class NotificationBrowserService {
             utterance.voice = this._selectedVoice;
         }
 
-        if (this._utteranceCache.size >= MAX_CACHE_SIZE) {
-            const firstKey = this._utteranceCache.keys().next().value;
-            this._utteranceCache.delete(firstKey);
-        }
+        utterance.onerror = (event) => {
+            console.warn('[NotificationBrowserService] Error en speechSynthesis:', event.error);
+        };
 
-        this._utteranceCache.set(text, utterance);
         return utterance;
     }
 
@@ -178,7 +175,7 @@ class NotificationBrowserService {
 
         window.speechSynthesis.cancel();
 
-        const utterance = this._getUtterance(text);
+        const utterance = this._createUtterance(text);
 
         if (!this._voicesReady) {
             setTimeout(() => window.speechSynthesis.speak(utterance), 100);
@@ -187,8 +184,29 @@ class NotificationBrowserService {
         }
     }
 
+    /**
+     * Verifica si hay un Service Worker activo con suscripción push.
+     * Si existe, el SW ya mostrará la notificación vía Web Push,
+     * por lo que no debemos duplicar con la Notification API del navegador.
+     */
+    _hasActiveServiceWorkerPush() {
+        return this._swPushActivo === true;
+    }
+
+    /**
+     * Llamado desde useWebPush una vez que se confirma la suscripción push.
+     * Indica que las notificaciones de escritorio se entregarán vía SW.
+     */
+    setServiceWorkerPushActive(activo) {
+        this._swPushActivo = activo;
+    }
+
     showDesktopNotification(title, options, force = false, onClick = null) {
         if (!force && this.preferences?.canales?.escritorio === false) return;
+
+        // Si hay SW push activo, no duplicar: el Service Worker ya muestra la notificación.
+        if (this._hasActiveServiceWorkerPush()) return;
+
         if (this.permissionsGranted && Notification.permission === 'granted') {
             const notification = new Notification(title, options);
             if (onClick) {
@@ -211,7 +229,7 @@ class NotificationBrowserService {
 
         if (sonido) this.playAudio(true);
         if (voz && voiceMessage) {
-            setTimeout(() => this.speakText(voiceMessage, false), 1000);
+            setTimeout(() => this.speakText(voiceMessage, true), 1000);
         }
         if (escritorio) {
             this.showDesktopNotification(title, { body: message }, true, onClick);
@@ -219,7 +237,8 @@ class NotificationBrowserService {
     }
 
     clearCache() {
-        this._utteranceCache.clear();
+        // No-op: se mantiene por retrocompatibilidad.
+        // Los utterances ya no se cachean (los navegadores ignoran utterances reutilizados).
     }
 
     getSelectedVoiceName() {

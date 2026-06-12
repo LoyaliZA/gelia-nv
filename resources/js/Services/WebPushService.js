@@ -133,7 +133,7 @@ class WebPushService {
     }
 
     async ensureSubscribed() {
-        if (!this.soportado || Notification.permission !== 'granted') {
+        if (!this.soportado || Notification.permission === 'denied') {
             return { ok: false };
         }
 

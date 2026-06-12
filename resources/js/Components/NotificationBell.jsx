@@ -141,7 +141,11 @@ export default function NotificationBell({ notifications: propNotifications = []
         setIsOpen(true);
         await NotificationBrowserService.requestDesktopPermissions();
         if (WebPushService.isSupported()) {
-            WebPushService.ensureSubscribed();
+            WebPushService.ensureSubscribed()
+                .then((result) => {
+                    NotificationBrowserService.setServiceWorkerPushActive(result?.ok === true);
+                })
+                .catch(() => {});
         }
     };
 
