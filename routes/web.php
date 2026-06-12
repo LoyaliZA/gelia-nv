@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\{LoginController,RegistroController};
 use App\Http\Controllers\{DashboardController,AdminController,CatalogoController,ProductoCatalogoController,ClienteController,LimpiezaClientesController,AutoCobranzaController,ProfileController};
 use App\Http\Controllers\Solicitudes\SolicitudController;
+use App\Http\Controllers\Reportes\ReporteSolicitudesController;
 use App\Http\Controllers\Api\{CotizacionEntregaController,ClienteApiController};
 use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\MapaLogisticoController;
@@ -148,8 +149,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['can:solicitudes.exportar'])->group(function () {
         Route::get('/solicitudes/exportar', [SolicitudController::class, 'exportar'])->name('solicitudes.exportar');
-        // Route::get('/reportes/solicitudes', [ReporteSolicitudesController::class, 'index'])->name('reportes.solicitudes.index');
-        // Route::get('/reportes/solicitudes/exportar', [ReporteSolicitudesController::class, 'exportar'])->name('reportes.solicitudes.exportar');
+        Route::get('/reportes/solicitudes', [ReporteSolicitudesController::class, 'index'])->name('reportes.solicitudes.index');
+        Route::get('/reportes/solicitudes/exportar', [ReporteSolicitudesController::class, 'exportar'])->name('reportes.solicitudes.exportar');
     });
 
     Route::middleware(['can:solicitudes.crear'])->group(function () {
