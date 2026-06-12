@@ -26,7 +26,13 @@ class AlertaAumentoCreditoNotification extends Notification implements ShouldQue
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast', 'mail'];
+        $channels = ['database', 'broadcast'];
+
+        if (config('alertas.enviar_correo', false)) {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     public function toMail(object $notifiable)
@@ -59,6 +65,7 @@ class AlertaAumentoCreditoNotification extends Notification implements ShouldQue
             'cliente' => $this->cliente->nombre,
             'monto_anterior' => $this->montoAnterior,
             'monto_nuevo' => $this->montoNuevo,
+            'tipo' => 'aumento_credito',
             'titulo' => 'Alerta de Aumento de Crédito · ' . $this->cliente->nombre,
             'mensaje' => "Se detectó un aumento de saldo (de \${$this->montoAnterior} a \${$this->montoNuevo}) sin pago previo.",
             'mensaje_visible' => "Aumento de deuda sin pago detectado: \${$this->montoAnterior} -> \${$this->montoNuevo}",

@@ -52,17 +52,28 @@ export default function NotificationBell({ notifications: propNotifications = []
         [propNotifications]
     );
 
+    const authUserId = auth?.user?.id;
+
     useEffect(() => {
+        if (authUserId == null) {
+            setNotifications([]);
+            return;
+        }
+
         const base = auth?.notificaciones?.length > 0 ? auth.notificaciones : propNotifications;
 
         setNotifications(prev => {
             const registroMap = new Map();
             (base || []).forEach(n => { if (n?.id) registroMap.set(n.id, n); });
-            prev.forEach(n => { if (n?.id && !registroMap.has(n.id)) registroMap.set(n.id, n); });
+            prev.forEach(n => {
+                if (n?.id && String(n.id).startsWith('live-') && !registroMap.has(n.id)) {
+                    registroMap.set(n.id, n);
+                }
+            });
             return ordenarPorFecha(Array.from(registroMap.values()));
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [auth?.notificaciones, propNotificationsKey]);
+    }, [auth?.notificaciones, propNotificationsKey, authUserId]);
 
 
     useEffect(() => {
@@ -73,6 +84,8 @@ export default function NotificationBell({ notifications: propNotifications = []
                     ? `live-activo-${notification.activo_id}-${notification.tipo || 'evt'}-${Date.now()}`
                     : notification?.solicitud_id
                     ? `live-${notification.solicitud_id}-${notification.tipo || 'evt'}-${Date.now()}`
+                    : notification?.modulo === 'cobranza'
+                    ? `live-cobranza-${notification.tipo || 'evt'}-${notification.clientes_busqueda || notification.cliente_id || 'masivo'}-${Date.now()}`
                     : null);
             if (!entryId) return;
 

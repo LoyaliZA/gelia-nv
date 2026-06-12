@@ -109,14 +109,15 @@ class CrearSolicitudService
             $colaborador = User::find($vendedorId);
             $nombreColaborador = $colaborador ? $colaborador->name : 'Sistema';
 
-            $encargados = User::permission(
-                $esOperativo
-                    ? ['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar']
-                    : ['solicitudes.verificar', 'solicitudes.reportar']
-            )
+            $permisoEncargado = $esOperativo
+                ? 'cancelaciones_cotizaciones.verificar'
+                : 'solicitudes.verificar';
+
+            $encargados = User::permission($permisoEncargado)
                 ->whereHas('departamentos', function ($query) use ($departamentoOrigenId) {
                     $query->where('departamentos.id', $departamentoOrigenId);
                 })
+                ->where('id', '!=', $vendedorId)
                 ->get();
 
             if ($encargados->isNotEmpty()) {

@@ -477,7 +477,7 @@ class SolicitudController extends Controller
             $destinatarios->push($solicitud->vendedor);
         }
 
-        $verificadores = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])
+        $verificadores = User::permission('solicitudes.verificar')
             ->whereHas('departamentos', function ($query) use ($solicitud) {
                 $query->where('departamentos.id', $solicitud->departamento_id);
             })

@@ -44,6 +44,7 @@ class AlertaCobranza extends Notification implements ShouldQueue, ShouldBroadcas
             'cliente' => $this->alerta->cliente->nombre ?? null,
             'dias_atraso' => $this->alerta->dias_atraso,
             'monto' => $this->alerta->factura->monto ?? 0,
+            'tipo' => $this->alerta->tipo ?? 'cobranza_vencimiento',
             'titulo' => 'Aviso de Cobranza · ' . ($this->alerta->cliente->nombre ?? 'Cliente'),
             'mensaje' => "Cliente {$this->alerta->cliente->nombre} tiene un saldo vencido hace {$this->alerta->dias_atraso} días",
             'mensaje_visible' => "Cliente {$this->alerta->cliente->nombre} tiene un saldo vencido hace {$this->alerta->dias_atraso} días",

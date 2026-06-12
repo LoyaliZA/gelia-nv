@@ -28,7 +28,13 @@ class AlertaNuevoCreditoMasivoNotification extends Notification implements Shoul
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast', 'mail'];
+        $channels = ['database', 'broadcast'];
+
+        if (config('alertas.enviar_correo', false)) {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -84,6 +90,7 @@ class AlertaNuevoCreditoMasivoNotification extends Notification implements Shoul
             'clientes_busqueda' => collect($this->nuevosCreditos)->pluck('cliente.numero_cliente')->implode(','),
             'monto_anterior' => 0,
             'monto_nuevo' => 0,
+            'tipo' => 'nuevo_credito',
             'titulo' => 'Nuevos Créditos Detectados',
             'mensaje' => "Se detectaron {$count} nuevos inicios de crédito.",
             'mensaje_visible' => "Nuevos saldos: {$count} clientes iniciaron su periodo de crédito.",

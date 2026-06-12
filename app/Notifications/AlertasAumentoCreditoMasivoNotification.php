@@ -27,7 +27,13 @@ class AlertasAumentoCreditoMasivoNotification extends Notification implements Sh
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast', 'mail'];
+        $channels = ['database', 'broadcast'];
+
+        if (config('alertas.enviar_correo', false)) {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     public function toMail(object $notifiable)
@@ -85,6 +91,7 @@ class AlertasAumentoCreditoMasivoNotification extends Notification implements Sh
             'clientes_busqueda' => collect($this->alertas)->pluck('cliente.numero_cliente')->implode(','),
             'monto_anterior' => 0,
             'monto_nuevo' => 0,
+            'tipo' => 'aumento_credito_masivo',
             'titulo' => 'Alerta Masiva de Aumentos de Crédito',
             'mensaje' => "Se detectaron {$count} aumentos de saldo en clientes vencidos.",
             'mensaje_visible' => "Aumentos de deuda vencida detectados: {$count} clientes afectados.",

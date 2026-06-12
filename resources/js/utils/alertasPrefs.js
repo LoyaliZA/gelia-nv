@@ -115,6 +115,9 @@ export function getTipoAlerta(notification = {}) {
     const tipoExplicito = notification?.tipo || notification?.data?.tipo;
     if (tipoExplicito) return tipoExplicito;
 
+    const modulo = notification?.modulo || notification?.data?.modulo;
+    if (modulo === 'cobranza') return 'cobranza';
+
     // Laravel envía `type` como nombre de clase PHP; no usarlo como clave de preferencias.
     return 'actualizacion';
 }

@@ -63,6 +63,10 @@ class HandleInertiaRequests extends Middleware
 
         $tonosAlertas = PersonalizacionCatalogoService::tonosActivos();
 
+        $notificaciones = $user
+            ? $user->notifications()->orderByDesc('created_at')->take(50)->get()
+            : collect();
+
         return [
             ...parent::share($request),
             'tonos_alertas' => $tonosAlertas,
@@ -75,9 +79,7 @@ class HandleInertiaRequests extends Middleware
                 ]) : null,
                 'tema_visual' => $temaVisual,
                 
-                'notificaciones' => $user
-                    ? $user->notifications()->orderByDesc('created_at')->take(50)->get()
-                    : [],
+                'notificaciones' => $notificaciones,
                 'mensajeria_resumen' => $user
                     ? app(ListarConversacionesService::class)->resumen($user, 8)
                     : null,

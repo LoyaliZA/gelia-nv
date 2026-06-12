@@ -31,7 +31,13 @@ class AlertaPagoLiquidoNotification extends Notification implements ShouldQueue,
      */
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast', 'mail'];
+        $channels = ['database', 'broadcast'];
+
+        if (config('alertas.enviar_correo', false)) {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     /**
@@ -91,6 +97,7 @@ class AlertaPagoLiquidoNotification extends Notification implements ShouldQueue,
             'clientes_busqueda' => collect($this->clientesPagados)->pluck('cliente.numero_cliente')->implode(','),
             'monto_anterior' => 0,
             'monto_nuevo' => 0,
+            'tipo' => 'pago_liquidado',
             'titulo' => 'Liquidación de Créditos Detectada',
             'mensaje' => "Se detectaron {$count} liquidaciones de deuda de clientes.",
             'mensaje_visible' => "Pagos detectados: {$count} clientes liquidaron su saldo.",

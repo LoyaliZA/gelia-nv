@@ -3,13 +3,13 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\HtmlString;
 
-class AlertaLimiteCreditoSuperadoMasivoNotification extends Notification implements ShouldQueue, ShouldBroadcastNow
+class AlertaLimiteCreditoSuperadoMasivoNotification extends Notification implements ShouldQueue, ShouldBroadcast
 {
     use Queueable;
 
@@ -27,7 +27,13 @@ class AlertaLimiteCreditoSuperadoMasivoNotification extends Notification impleme
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast', 'mail'];
+        $channels = ['database', 'broadcast'];
+
+        if (config('alertas.enviar_correo', false)) {
+            $channels[] = 'mail';
+        }
+
+        return $channels;
     }
 
     public function toMail(object $notifiable)
@@ -86,6 +92,7 @@ class AlertaLimiteCreditoSuperadoMasivoNotification extends Notification impleme
             'clientes_busqueda' => collect($this->alertas)->pluck('cliente.numero_cliente')->implode(','),
             'monto_anterior' => 0,
             'monto_nuevo' => 0,
+            'tipo' => 'limite_credito_superado',
             'titulo' => 'Alerta: Exceso de Límite Autorizado',
             'mensaje' => "Se detectaron {$count} clientes con deuda superior a su límite de crédito.",
             'mensaje_visible' => "Límites de crédito superados: {$count} clientes detectados.",

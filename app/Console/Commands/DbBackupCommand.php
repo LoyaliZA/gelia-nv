@@ -68,21 +68,6 @@ class DbBackupCommand extends Command
         $bytes = File::size($path);
         $this->info("Respaldo creado: {$path} (" . number_format($bytes / 1024, 1) . ' KB)');
 
-        // #region agent log
-        $logPath = base_path('.cursor/debug-bb9f41.log');
-        if (is_dir(dirname($logPath))) {
-            file_put_contents($logPath, json_encode([
-                'sessionId' => 'bb9f41',
-                'runId' => 'post-fix',
-                'hypothesisId' => 'FIX',
-                'location' => 'DbBackupCommand::handle',
-                'message' => 'backup_created',
-                'data' => ['path' => $path, 'bytes' => $bytes, 'database' => $database],
-                'timestamp' => (int) (microtime(true) * 1000),
-            ]) . PHP_EOL, FILE_APPEND);
-        }
-        // #endregion
-
         return self::SUCCESS;
     }
 }

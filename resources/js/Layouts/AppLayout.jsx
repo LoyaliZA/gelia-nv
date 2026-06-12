@@ -192,7 +192,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                 window.Echo.leave(`App.Models.User.${auth.user.id}`);
             }
         };
-    }, [auth?.user]);
+    }, [auth?.user?.id]);
 
     const accentColors = {
         rosa: '#ec4899',
