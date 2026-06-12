@@ -1,5 +1,5 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt
 } from 'lucide-react';
 
 export const DASHBOARD_MODULE_CARDS = [
@@ -140,6 +140,17 @@ export const DASHBOARD_MODULE_CARDS = [
         iconWrapStyle: { backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' },
         iconClass: '',
         iconStyle: { color: 'var(--color-primario)' },
+    },
+    {
+        id: 'card_facturas',
+        titulo: 'Facturación',
+        subtitulo: 'Generación y control de facturas.',
+        permiso: 'facturas.ver_listado',
+        href: () => route('facturas.index'),
+        icon: Receipt,
+        borderClass: 'border-cyan-500/20',
+        iconWrapClass: 'bg-cyan-500/10 border-cyan-500/20',
+        iconClass: 'text-cyan-500',
     },
 ];
 
