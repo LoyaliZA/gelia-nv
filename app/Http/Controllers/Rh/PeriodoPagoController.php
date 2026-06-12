@@ -19,15 +19,20 @@ class PeriodoPagoController extends Controller
         abort_unless(Auth::user()->can('rh.periodo_pago.ver') || Auth::user()->can('rh.ver'), 403);
 
         $config = RhConfiguracion::obtener();
-        $diasPeriodo = max(1, (int) $config->dias_periodo_pago);
+        $diasPeriodo = $request->filled('dias_periodo')
+            ? max(1, (int) $request->input('dias_periodo'))
+            : max(1, (int) $config->dias_periodo_pago);
 
-        $fechaFin = $request->filled('fecha_fin')
-            ? Carbon::parse($request->input('fecha_fin'))
-            : now();
+        $fechaInicioGlobal = $config->periodo_actual_inicio ? Carbon::parse($config->periodo_actual_inicio) : now()->startOfMonth();
+        $fechaFinGlobal = $config->periodo_actual_fin ? Carbon::parse($config->periodo_actual_fin) : now()->endOfMonth();
 
         $fechaInicio = $request->filled('fecha_inicio')
             ? Carbon::parse($request->input('fecha_inicio'))
-            : $fechaFin->copy()->subDays($diasPeriodo - 1);
+            : $fechaInicioGlobal;
+
+        $fechaFin = $request->filled('fecha_fin')
+            ? Carbon::parse($request->input('fecha_fin'))
+            : $fechaFinGlobal;
 
         $colaboradorId = $request->input('rh_colaborador_id');
 

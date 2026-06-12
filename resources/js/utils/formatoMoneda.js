@@ -30,18 +30,22 @@ export function calcularSalariosPreview(datos, configuracion = {}) {
     const horas = Math.max(0.01, Number(datos.horas_laboradas_oficiales) || 8);
     const decimalesMinuto = Number(configuracion.decimales_salario_minuto) || 8;
 
-    const salarioBase = Number(datos.salario_base) || 0;
-    const bonoProd = Number(datos.bono_productividad) || 0;
-    const bonoPunt = Number(datos.bono_puntualidad) || 0;
+    const salarioDiario = Number(datos.salario_base) || 0;
+    const bonoProdDiario = Number(datos.bono_productividad) || 0;
+    const bonoPuntDiario = Number(datos.bono_puntualidad) || 0;
 
-    const salarioDiario = Math.round((salarioBase / dias) * 100) / 100;
+    const salarioPeriodo = Math.round((salarioDiario * dias) * 100) / 100;
+    const bonoProdPeriodo = Math.round((bonoProdDiario * dias) * 100) / 100;
+    const bonoPuntPeriodo = Math.round((bonoPuntDiario * dias) * 100) / 100;
+
     const salarioPorHora = Math.round((salarioDiario / horas) * 10000) / 10000;
     const salarioPorMinuto = Number((salarioDiario / (horas * 60)).toFixed(decimalesMinuto));
 
     return {
+        salario_periodo: salarioPeriodo,
         salario_diario: salarioDiario,
-        bono_productividad_diario: Math.round((bonoProd / dias) * 100) / 100,
-        bono_puntualidad_diario: Math.round((bonoPunt / dias) * 100) / 100,
+        bono_productividad_periodo: bonoProdPeriodo,
+        bono_puntualidad_periodo: bonoPuntPeriodo,
         salario_por_hora: salarioPorHora,
         salario_por_minuto: salarioPorMinuto,
     };

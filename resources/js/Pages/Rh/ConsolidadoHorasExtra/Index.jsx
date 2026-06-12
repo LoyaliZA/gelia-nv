@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { Calendar, ArrowLeft, Printer, Clock, Coins, Users, CheckCircle } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
@@ -9,8 +9,14 @@ import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formato
 import RhSubNav from '../Partials/RhSubNav';
 
 export default function Index({ auth, resumen, colaboradores, configuracion, filtros, puedeLiquidar }) {
-    const aplicar = (cambios) => {
-        router.get(route('rh.consolidado_horas_extra.index'), { ...filtros, ...cambios }, { preserveState: true });
+    const [localFiltros, setLocalFiltros] = useState({
+        fecha_inicio: filtros.fecha_inicio || '',
+        fecha_fin: filtros.fecha_fin || '',
+        rh_colaborador_id: filtros.rh_colaborador_id || '',
+    });
+
+    const aplicar = () => {
+        router.get(route('rh.consolidado_horas_extra.index'), localFiltros, { preserveState: true, preserveScroll: true });
     };
 
     // KPIs globales basados en los datos visibles
@@ -26,8 +32,9 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
         if (!window.confirm(mensaje)) return;
 
         router.post(route('rh.consolidado_horas_extra.liquidar'), {
-            fecha_fin: filtros.fecha_fin,
-            rh_colaborador_id: filtros.rh_colaborador_id,
+            fecha_inicio: localFiltros.fecha_inicio,
+            fecha_fin: localFiltros.fecha_fin,
+            rh_colaborador_id: localFiltros.rh_colaborador_id,
         }, {
             preserveScroll: true
         });
@@ -111,20 +118,24 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                 {/* Filtros */}
                 <div className={geliaCardClass('p-6 grid grid-cols-1 md:grid-cols-4 gap-4 no-print')}>
                     <div>
+                        <RhFieldLabel>Fecha inicio</RhFieldLabel>
+                        <input type="date" value={localFiltros.fecha_inicio} onChange={(e) => setLocalFiltros(prev => ({ ...prev, fecha_inicio: e.target.value }))} className={`${THEME_INPUT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`} />
+                    </div>
+                    <div>
                         <RhFieldLabel>Fecha corte (Fin)</RhFieldLabel>
-                        <input type="date" value={filtros.fecha_fin || ''} onChange={(e) => aplicar({ fecha_fin: e.target.value })} className={`${THEME_INPUT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`} />
+                        <input type="date" value={localFiltros.fecha_fin} onChange={(e) => setLocalFiltros(prev => ({ ...prev, fecha_fin: e.target.value }))} className={`${THEME_INPUT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`} />
                     </div>
                     <div>
                         <RhFieldLabel>Colaborador</RhFieldLabel>
-                        <RhSelect value={filtros.rh_colaborador_id || ''} onChange={(e) => aplicar({ rh_colaborador_id: e.target.value || undefined })}>
+                        <RhSelect value={localFiltros.rh_colaborador_id} onChange={(e) => setLocalFiltros(prev => ({ ...prev, rh_colaborador_id: e.target.value }))}>
                             <option value="">Todos</option>
                             {colaboradores.map((c) => (
                                 <option key={c.id} value={c.id}>{nombreCompletoColaborador(c)}</option>
                             ))}
                         </RhSelect>
                     </div>
-                    <div className="flex items-end md:col-span-2">
-                        <button type="button" onClick={() => aplicar({})} className="w-full px-4 py-3 rounded-2xl text-[10px] font-black uppercase theme-element border theme-border hover:theme-text-main flex items-center justify-center gap-2">
+                    <div className="flex items-end">
+                        <button type="button" onClick={aplicar} className="w-full px-4 py-3 rounded-2xl text-[10px] font-black uppercase theme-element border theme-border hover:theme-text-main flex items-center justify-center gap-2">
                             <Calendar className="w-4 h-4" /> Actualizar Filtros
                         </button>
                     </div>

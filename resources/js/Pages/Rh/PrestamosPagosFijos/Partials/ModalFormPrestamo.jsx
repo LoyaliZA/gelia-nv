@@ -20,7 +20,7 @@ import { MODALIDAD_LABELS } from './prestamosStyles';
 const FORM_INICIAL = {
     rh_colaborador_id: '',
     concepto: '',
-    monto_cuota: '',
+    monto_total: '',
     num_pagos_total: '',
     modalidad: 'recurrente',
     observaciones: '',
@@ -42,26 +42,34 @@ export default function ModalFormPrestamo({
     const esRecurrente = data.modalidad === 'recurrente';
 
     const previewTexto = useMemo(() => {
-        const monto = Number(data.monto_cuota) || 0;
+        const total = Number(data.monto_total) || 0;
+        const pagos = Number(data.num_pagos_total) || 1;
         const dias = configuracion?.dias_periodo_pago || 30;
+        const cuota = total / pagos;
 
         if (esUnicaVez) {
             const fecha = data.fecha_ejecucion_programada || 'el próximo corte de nómina';
-            return `Se descontará ${formatoMoneda(monto)} una sola vez en ${fecha}.`;
+            return `Se descontará un pago único de ${formatoMoneda(total)} en ${fecha}.`;
         }
 
-        const pagos = data.num_pagos_total ? `${data.num_pagos_total} pagos` : 'pagos indefinidos';
-        return `Se descontarán ${formatoMoneda(monto)} cada ${dias} días (${pagos}).`;
+        const textoPagos = data.num_pagos_total ? `${pagos} pagos` : 'pagos indefinidos (se cobrará el monto total como cuota)';
+        return `Se descontarán ${formatoMoneda(cuota)} cada ${dias} días (${textoPagos}) hasta cubrir ${formatoMoneda(total)}.`;
     }, [data, configuracion, esUnicaVez]);
 
     useEffect(() => {
         if (!abierto) return;
 
         if (registro) {
+            const numPagos = Number(registro.num_pagos_total) || 1;
+            const montoCuota = Number(registro.monto_cuota) || 0;
+            const montoTotalCalc = registro.modalidad === 'recurrente' && registro.num_pagos_total
+                ? (montoCuota * numPagos).toFixed(2)
+                : montoCuota.toFixed(2);
+
             setData({
                 rh_colaborador_id: registro.rh_colaborador_id || '',
                 concepto: registro.concepto || '',
-                monto_cuota: registro.monto_cuota ?? '',
+                monto_total: montoTotalCalc,
                 num_pagos_total: registro.num_pagos_total ?? '',
                 modalidad: registro.modalidad || 'recurrente',
                 observaciones: registro.observaciones || '',
@@ -85,11 +93,17 @@ export default function ModalFormPrestamo({
 
         accion(ruta, {
             preserveScroll: true,
-            transform: (formData) => ({
-                ...formData,
-                num_pagos_total: esRecurrente ? (formData.num_pagos_total || null) : 1,
-                fecha_ejecucion_programada: esUnicaVez ? (formData.fecha_ejecucion_programada || null) : null,
-            }),
+            preserveState: false, // Forzar recarga de estado para reflejar actualización inmediatamente
+            transform: (formData) => {
+                const pagos = Number(formData.num_pagos_total) || 1;
+                const total = Number(formData.monto_total) || 0;
+                return {
+                    ...formData,
+                    monto_cuota: (total / pagos).toFixed(2),
+                    num_pagos_total: esRecurrente ? (formData.num_pagos_total || null) : 1,
+                    fecha_ejecucion_programada: esUnicaVez ? (formData.fecha_ejecucion_programada || null) : null,
+                };
+            },
             onSuccess: () => {
                 onCerrar();
                 reset();
@@ -147,8 +161,8 @@ export default function ModalFormPrestamo({
                                 </select>
                             </div>
                             <div>
-                                <label className={THEME_LABEL}>Monto por periodo</label>
-                                <input type="number" min="0.01" step="0.01" value={data.monto_cuota} onChange={(e) => setData('monto_cuota', e.target.value)} className={THEME_INPUT} required />
+                                <label className={THEME_LABEL}>Monto Total</label>
+                                <input type="number" min="0.01" step="0.01" value={data.monto_total} onChange={(e) => setData('monto_total', e.target.value)} className={THEME_INPUT} required />
                                 {errors.monto_cuota && <p className="text-red-500 text-xs mt-1">{errors.monto_cuota}</p>}
                             </div>
                             {esRecurrente && (

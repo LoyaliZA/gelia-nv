@@ -13,18 +13,28 @@ export default function FiltrosPrestamos({
     tabActiva,
     onCambiarTab,
 }) {
-    const [busqueda, setBusqueda] = useState(filtros.busqueda || '');
+    const [localFiltros, setLocalFiltros] = useState({
+        busqueda: filtros.busqueda || '',
+        rh_colaborador_id: filtros.rh_colaborador_id || '',
+        modalidad: filtros.modalidad || '',
+        departamento_id: filtros.departamento_id || '',
+    });
 
     useEffect(() => {
-        setBusqueda(filtros.busqueda || '');
-    }, [filtros.busqueda]);
+        setLocalFiltros({
+            busqueda: filtros.busqueda || '',
+            rh_colaborador_id: filtros.rh_colaborador_id || '',
+            modalidad: filtros.modalidad || '',
+            departamento_id: filtros.departamento_id || '',
+        });
+    }, [filtros]);
 
     const aplicar = (cambios) => {
-        router.get(route('rh.prestamos.index'), { ...filtros, ...cambios, page: 1 }, { preserveState: true });
+        router.get(route('rh.prestamos.index'), { ...filtros, ...localFiltros, ...cambios, page: 1 }, { preserveState: true, preserveScroll: true });
     };
 
     const ejecutarBusqueda = () => {
-        aplicar({ busqueda: busqueda.trim() || undefined });
+        aplicar({ busqueda: localFiltros.busqueda.trim() || undefined });
     };
 
     const cambiarTab = (tab) => {
@@ -44,8 +54,8 @@ export default function FiltrosPrestamos({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="lg:col-span-2 flex flex-col sm:flex-row gap-3">
                     <RhSearchField
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
+                        value={localFiltros.busqueda}
+                        onChange={(e) => setLocalFiltros(prev => ({ ...prev, busqueda: e.target.value }))}
                         onSubmit={ejecutarBusqueda}
                         placeholder="Buscar folio, concepto o colaborador..."
                     />
@@ -59,8 +69,8 @@ export default function FiltrosPrestamos({
                     </button>
                 </div>
                 <RhSelect
-                    value={filtros.rh_colaborador_id || ''}
-                    onChange={(e) => aplicar({ rh_colaborador_id: e.target.value || undefined })}
+                    value={localFiltros.rh_colaborador_id}
+                    onChange={(e) => setLocalFiltros(prev => ({ ...prev, rh_colaborador_id: e.target.value }))}
                 >
                     <option value="">Todos los colaboradores</option>
                     {colaboradores.map((c) => (
@@ -68,16 +78,16 @@ export default function FiltrosPrestamos({
                     ))}
                 </RhSelect>
                 <RhSelect
-                    value={filtros.modalidad || ''}
-                    onChange={(e) => aplicar({ modalidad: e.target.value || undefined })}
+                    value={localFiltros.modalidad}
+                    onChange={(e) => setLocalFiltros(prev => ({ ...prev, modalidad: e.target.value }))}
                 >
                     <option value="">Todas las modalidades</option>
                     <option value="recurrente">Recurrente</option>
                     <option value="unica_vez">Única vez</option>
                 </RhSelect>
                 <RhSelect
-                    value={filtros.departamento_id || ''}
-                    onChange={(e) => aplicar({ departamento_id: e.target.value || undefined, area_id: undefined })}
+                    value={localFiltros.departamento_id}
+                    onChange={(e) => setLocalFiltros(prev => ({ ...prev, departamento_id: e.target.value }))}
                 >
                     <option value="">Todos los departamentos</option>
                     {departamentos.map((d) => (

@@ -11,7 +11,7 @@ use App\Http\Controllers\MapaLogisticoController;
 use App\Http\Controllers\Admin\{AuditoriaListaDescuentoController,PersonalizacionController,ConfiguracionSistemaController};
 use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\{ActivoController,CategoriaActivoController,TipoActivoController};
-use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController};
+use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController,ConsolidadoHorasExtraController,BancoTiempoController};
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
@@ -421,6 +421,8 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/configuracion', [ConfiguracionRhController::class, 'index'])->name('configuracion');
             Route::put('/configuracion', [ConfiguracionRhController::class, 'update'])->name('configuracion.update');
             Route::post('/configuracion/preview-folio', [ConfiguracionRhController::class, 'previewFolio'])->name('configuracion.preview_folio');
+            Route::post('/configuracion/periodo-actual', [ConfiguracionRhController::class, 'updatePeriodoActual'])->name('configuracion.periodo_actual.update');
+            Route::post('/configuracion/avanzar-periodo', [ConfiguracionRhController::class, 'avanzarPeriodo'])->name('configuracion.periodo_actual.avanzar');
         });
 
         Route::middleware(['can:rh.catalogos.puestos'])->prefix('catalogos/puestos')->name('catalogos.puestos.')->group(function () {

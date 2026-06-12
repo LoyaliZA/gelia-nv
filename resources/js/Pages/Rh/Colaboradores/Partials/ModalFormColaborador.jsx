@@ -43,7 +43,7 @@ export default function ModalFormColaborador({
     configuracion = {},
     puedeVincular = false,
 }) {
-    const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({ ...FORM_INICIAL });
+    const { data, setData, post, put, processing, errors, reset, clearErrors, transform } = useForm({ ...FORM_INICIAL });
 
     const areasDisponibles = useMemo(() => {
         if (!data.departamento_id) return [];
@@ -77,6 +77,7 @@ export default function ModalFormColaborador({
         if (!abierto) return;
 
         if (colaborador) {
+            const diasPeriodo = configuracion.dias_periodo_pago || 30;
             setData({
                 user_id: colaborador.user_id || '',
                 departamento_id: colaborador.departamento_id || '',
@@ -85,9 +86,9 @@ export default function ModalFormColaborador({
                 apellido_paterno: colaborador.apellido_paterno || '',
                 apellido_materno: colaborador.apellido_materno || '',
                 catalogo_puesto_id: colaborador.catalogo_puesto_id || '',
-                salario_base: colaborador.salario_base ?? '',
-                bono_productividad: colaborador.bono_productividad ?? '0',
-                bono_puntualidad: colaborador.bono_puntualidad ?? '0',
+                salario_base: (Number(colaborador.salario_base || 0) / diasPeriodo).toFixed(4),
+                bono_productividad: (Number(colaborador.bono_productividad || 0) / diasPeriodo).toFixed(4),
+                bono_puntualidad: (Number(colaborador.bono_puntualidad || 0) / diasPeriodo).toFixed(4),
                 horas_laboradas_oficiales: colaborador.horas_laboradas_oficiales ?? '8',
                 activo: colaborador.activo ?? true,
                 bonos: (colaborador.bonos || []).map((b) => ({
@@ -125,6 +126,16 @@ export default function ModalFormColaborador({
         const ruta = colaborador
             ? route('rh.colaboradores.update', colaborador.id)
             : route('rh.colaboradores.store');
+
+        transform((formData) => {
+            const diasPeriodo = configuracion.dias_periodo_pago || 30;
+            return {
+                ...formData,
+                salario_base: Number(formData.salario_base) * diasPeriodo,
+                bono_productividad: Number(formData.bono_productividad) * diasPeriodo,
+                bono_puntualidad: Number(formData.bono_puntualidad) * diasPeriodo,
+            };
+        });
 
         accion(ruta, {
             preserveScroll: true,
@@ -234,14 +245,14 @@ export default function ModalFormColaborador({
                             <DollarSign className="w-4 h-4 text-emerald-500" /> Compensación
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <Campo label="Salario Base *" error={errors.salario_base}>
-                                <input type="number" min="0" step="0.01" value={data.salario_base} onChange={(e) => setData('salario_base', e.target.value)} required className={THEME_INPUT} />
+                            <Campo label="Salario Diario Base *" error={errors.salario_base}>
+                                <input type="number" min="0" step="0.0001" value={data.salario_base} onChange={(e) => setData('salario_base', e.target.value)} required className={THEME_INPUT} />
                             </Campo>
-                            <Campo label="Bono Productividad" error={errors.bono_productividad}>
-                                <input type="number" min="0" step="0.01" value={data.bono_productividad} onChange={(e) => setData('bono_productividad', e.target.value)} className={THEME_INPUT} />
+                            <Campo label="Bono Productividad Diario" error={errors.bono_productividad}>
+                                <input type="number" min="0" step="0.0001" value={data.bono_productividad} onChange={(e) => setData('bono_productividad', e.target.value)} className={THEME_INPUT} />
                             </Campo>
-                            <Campo label="Bono Puntualidad" error={errors.bono_puntualidad}>
-                                <input type="number" min="0" step="0.01" value={data.bono_puntualidad} onChange={(e) => setData('bono_puntualidad', e.target.value)} className={THEME_INPUT} />
+                            <Campo label="Bono Puntualidad Diario" error={errors.bono_puntualidad}>
+                                <input type="number" min="0" step="0.0001" value={data.bono_puntualidad} onChange={(e) => setData('bono_puntualidad', e.target.value)} className={THEME_INPUT} />
                             </Campo>
                             <Campo label="Horas Laboradas Oficiales *" error={errors.horas_laboradas_oficiales}>
                                 <input type="number" min="0.5" max="24" step="0.25" value={data.horas_laboradas_oficiales} onChange={(e) => setData('horas_laboradas_oficiales', e.target.value)} required className={THEME_INPUT} />
@@ -274,9 +285,9 @@ export default function ModalFormColaborador({
                                 <Calculator className="w-3.5 h-3.5" /> Valores calculados (periodo: {configuracion.dias_periodo_pago || 30} días)
                             </p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                                <CalcItem label="Salario Diario" value={formatoMoneda(preview.salario_diario)} />
-                                <CalcItem label="Bono Prod. Diario" value={formatoMoneda(preview.bono_productividad_diario)} />
-                                <CalcItem label="Bono Punt. Diario" value={formatoMoneda(preview.bono_puntualidad_diario)} />
+                                <CalcItem label="Salario por Período" value={formatoMoneda(preview.salario_periodo)} />
+                                <CalcItem label="Bono Prod. Período" value={formatoMoneda(preview.bono_productividad_periodo)} />
+                                <CalcItem label="Bono Punt. Período" value={formatoMoneda(preview.bono_puntualidad_periodo)} />
                                 <CalcItem label="Salario por Hora" value={formatoMoneda(preview.salario_por_hora)} />
                                 <CalcItem label="Salario por Minuto" value={formatoDecimal(preview.salario_por_minuto, configuracion.decimales_salario_minuto || 8)} />
                             </div>

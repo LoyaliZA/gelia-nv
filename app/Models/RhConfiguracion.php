@@ -30,6 +30,8 @@ class RhConfiguracion extends Model
         'sal_folio_padding',
         'bdt_folio_prefijo',
         'bdt_folio_padding',
+        'periodo_actual_inicio',
+        'periodo_actual_fin',
     ];
 
     protected function casts(): array
@@ -49,6 +51,8 @@ class RhConfiguracion extends Model
             'pre_folio_padding' => 'integer',
             'sal_folio_padding' => 'integer',
             'bdt_folio_padding' => 'integer',
+            'periodo_actual_inicio' => 'date',
+            'periodo_actual_fin' => 'date',
         ];
     }
 
@@ -82,6 +86,8 @@ class RhConfiguracion extends Model
             'sal_folio_padding' => config('rh.sal_folio_padding', 6),
             'bdt_folio_prefijo' => config('rh.bdt_folio_prefijo', 'BDT'),
             'bdt_folio_padding' => config('rh.bdt_folio_padding', 6),
+            'periodo_actual_inicio' => now()->startOfMonth(),
+            'periodo_actual_fin' => now()->endOfMonth(),
         ]);
     }
 }

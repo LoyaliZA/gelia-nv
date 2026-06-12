@@ -107,6 +107,8 @@ export default function Show({
                         <InfoItem label="Horas Laboradas Oficiales" value={`${colaborador.horas_laboradas_oficiales} h`} />
                     </div>
                     <div className="pt-4 border-t theme-border grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <InfoItem label="Salario del Periodo" value={formatoMoneda(colaborador.salario_diario * configuracion.dias_periodo_pago)} highlight />
+                        <InfoItem label="Salario Mensual" value={formatoMoneda(colaborador.salario_diario * 30)} highlight />
                         <InfoItem label="Salario Diario" value={formatoMoneda(colaborador.salario_diario)} highlight />
                         <InfoItem label="Bono Prod. Diario" value={formatoMoneda(colaborador.bono_productividad_diario)} highlight />
                         <InfoItem label="Bono Punt. Diario" value={formatoMoneda(colaborador.bono_puntualidad_diario)} highlight />

@@ -77,9 +77,7 @@ class PrestamoPagoFijoController extends Controller
     ): RedirectResponse {
         $prestamo = $crearService->ejecutar(Auth::user(), $request->validated());
 
-        return redirect()
-            ->route('rh.prestamos.show', $prestamo)
-            ->with('success', "Convenio {$prestamo->folio} registrado correctamente.");
+        return back()->with('success', "Convenio {$prestamo->folio} registrado correctamente.");
     }
 
     public function update(
@@ -132,13 +130,16 @@ class PrestamoPagoFijoController extends Controller
         $config = RhConfiguracion::obtener();
         $diasPeriodo = max(1, (int) $config->dias_periodo_pago);
 
+        $fechaInicioGlobal = $config->periodo_actual_inicio ? Carbon::parse($config->periodo_actual_inicio) : now()->startOfMonth();
+        $fechaFinGlobal = $config->periodo_actual_fin ? Carbon::parse($config->periodo_actual_fin) : now()->endOfMonth();
+
         $fechaFin = $request->filled('fecha_fin')
             ? Carbon::parse($request->input('fecha_fin'))
-            : now();
+            : $fechaFinGlobal;
 
         $fechaInicio = $request->filled('fecha_inicio')
             ? Carbon::parse($request->input('fecha_inicio'))
-            : $fechaFin->copy()->subDays($diasPeriodo - 1);
+            : $fechaInicioGlobal;
 
         $resultado = $generarService->ejecutar($fechaInicio, $fechaFin, Auth::user());
 

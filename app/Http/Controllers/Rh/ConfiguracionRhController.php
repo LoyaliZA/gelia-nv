@@ -110,4 +110,40 @@ class ConfiguracionRhController extends Controller
             'folio_preview' => $generarFolio->preview($config),
         ]);
     }
+
+    public function updatePeriodoActual(Request $request): RedirectResponse
+    {
+        $datos = $request->validate([
+            'fecha_inicio' => 'required|date',
+            'fecha_fin' => 'required|date|after_or_equal:fecha_inicio',
+            'dias_periodo' => 'required|integer|min:1',
+        ]);
+
+        $config = RhConfiguracion::obtener();
+        $config->update([
+            'periodo_actual_inicio' => $datos['fecha_inicio'],
+            'periodo_actual_fin' => $datos['fecha_fin'],
+            'dias_periodo_pago' => $datos['dias_periodo'],
+        ]);
+
+        return back()->with('success', 'Periodo de pago actual configurado correctamente.');
+    }
+
+    public function avanzarPeriodo(Request $request): RedirectResponse
+    {
+        $config = RhConfiguracion::obtener();
+        
+        if ($config->periodo_actual_fin) {
+            $nuevoInicio = \Carbon\Carbon::parse($config->periodo_actual_fin)->addDay();
+            $dias = $config->dias_periodo_pago ?? 15;
+            $nuevoFin = $nuevoInicio->copy()->addDays($dias - 1);
+            
+            $config->update([
+                'periodo_actual_inicio' => $nuevoInicio->toDateString(),
+                'periodo_actual_fin' => $nuevoFin->toDateString(),
+            ]);
+        }
+
+        return back()->with('success', 'El periodo global ha avanzado al siguiente bloque de días.');
+    }
 }

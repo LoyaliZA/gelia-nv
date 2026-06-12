@@ -23,13 +23,16 @@ class ConsolidadoHorasExtraController extends Controller
         $config = RhConfiguracion::obtener();
         $diasPeriodo = max(1, (int) $config->dias_periodo_pago);
 
+        $fechaInicioGlobal = $config->periodo_actual_inicio ? Carbon::parse($config->periodo_actual_inicio) : now()->startOfMonth();
+        $fechaFinGlobal = $config->periodo_actual_fin ? Carbon::parse($config->periodo_actual_fin) : now()->endOfMonth();
+
         $fechaFin = $request->filled('fecha_fin')
             ? Carbon::parse($request->input('fecha_fin'))
-            : now();
+            : $fechaFinGlobal;
 
         $fechaInicio = $request->filled('fecha_inicio')
             ? Carbon::parse($request->input('fecha_inicio'))
-            : $fechaFin->copy()->subDays($diasPeriodo - 1);
+            : $fechaInicioGlobal;
 
         $colaboradorId = $request->input('rh_colaborador_id');
 
@@ -53,17 +56,19 @@ class ConsolidadoHorasExtraController extends Controller
         abort_unless(Auth::user()->can('rh.periodo_pago.sellar') || Auth::user()->can('rh.ver') || Auth::user()->hasRole('Super Admin'), 403);
 
         $request->validate([
+            'fecha_inicio' => 'required|date',
             'fecha_fin' => 'required|date',
             'rh_colaborador_id' => 'nullable|integer|exists:rh_colaboradores,id',
         ]);
 
+        $fechaInicio = Carbon::parse($request->input('fecha_inicio'))->toDateString();
         $fechaFin = Carbon::parse($request->input('fecha_fin'))->toDateString();
         $colaboradorId = $request->input('rh_colaborador_id');
         $fechaPago = now()->toDateString();
 
         $query = RhHorasExtra::query()
             ->whereNull('fecha_programada_pago')
-            ->where('fecha_turno', '<=', $fechaFin);
+            ->whereBetween('fecha_turno', [$fechaInicio, $fechaFin]);
 
         if ($colaboradorId) {
             $query->where('rh_colaborador_id', $colaboradorId);
