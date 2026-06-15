@@ -332,7 +332,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                     <div className="space-y-2 relative z-10">
                         <div className="flex items-center space-x-2">
                             <span className="h-1.5 w-8 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }}></span>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>Sprint 1.1</p>
+                            <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>Creditos y Cobranza</p>
                         </div>
                         <h1 className="text-3xl md:text-4xl font-black italic uppercase tracking-tighter theme-text-main m-0">
                             Auto-Cobranza
