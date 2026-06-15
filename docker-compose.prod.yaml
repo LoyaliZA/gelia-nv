@@ -65,7 +65,7 @@ services:
     container_name: gelianv_queue
     restart: unless-stopped
     working_dir: /var/www/html
-    command: php artisan queue:work --tries=3 --timeout=90
+    command: php artisan queue:work --tries=3 --timeout=630
     env_file: .env
     volumes:
       - .:/var/www/html

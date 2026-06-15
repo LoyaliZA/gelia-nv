@@ -17,7 +17,7 @@ class FetchWooCommercePricesJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, InteractsWithWooCommerceApi;
 
-    public int $timeout = 120;
+    public int $timeout = 600;
 
     public int $tries = 1;
 

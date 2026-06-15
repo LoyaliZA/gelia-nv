@@ -25,9 +25,11 @@ trait InteractsWithWooCommerceApi
             'Connection' => 'keep-alive',
         ])
             ->withBasicAuth($key, $secret)
-            ->timeout(60)
-            ->retry(3, 1500, function ($exception) {
-                return $exception->response && $exception->response->status() === 429;
+            ->timeout(120)
+            ->retry(3, 2000, function ($exception) {
+                return method_exists($exception, 'response')
+                    && $exception->response
+                    && $exception->response->status() === 429;
             });
     }
 

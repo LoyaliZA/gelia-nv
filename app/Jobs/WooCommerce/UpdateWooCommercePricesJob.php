@@ -26,11 +26,34 @@ class UpdateWooCommercePricesJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, InteractsWithWooCommerceApi;
 
-    public int $timeout = 120;
+    public int $timeout = 600;
 
     public int $tries = 1;
 
+    /** SKUs por job encadenado (legacy procesaba en bloques; cada job debe caber en el timeout del worker). */
     private const BATCH_SIZE = 50;
+
+    /** Ítems máximos por petición batch a WooCommerce dentro de un job. */
+    private const WOO_API_CHUNK_SIZE = 25;
+
+    // #region agent log
+    private function debugLog(string $hypothesisId, string $location, string $message, array $data = [], string $runId = 'pre-fix'): void
+    {
+        @file_put_contents(
+            base_path('.cursor/debug-d46fce.log'),
+            json_encode([
+                'sessionId' => 'd46fce',
+                'runId' => $runId,
+                'hypothesisId' => $hypothesisId,
+                'location' => $location,
+                'message' => $message,
+                'data' => $data,
+                'timestamp' => (int) round(microtime(true) * 1000),
+            ], JSON_UNESCAPED_UNICODE) . "\n",
+            FILE_APPEND
+        );
+    }
+    // #endregion
 
     public function __construct(
         protected int $syncLogId,
@@ -39,6 +62,18 @@ class UpdateWooCommercePricesJob implements ShouldQueue
 
     public function handle(): void
     {
+        // #region agent log
+        $jobStartedAt = microtime(true);
+        $this->debugLog('H4', 'UpdateWooCommercePricesJob:handle:start', 'Job batch started', [
+            'syncLogId' => $this->syncLogId,
+            'offset' => $this->offset,
+            'batchSize' => self::BATCH_SIZE,
+            'wooApiChunkSize' => self::WOO_API_CHUNK_SIZE,
+            'jobTimeoutSec' => $this->timeout,
+            'workerTimeoutHintSec' => 630,
+        ]);
+        // #endregion
+
         $log = WoocommerceSyncLog::find($this->syncLogId);
         if (!$log || $log->estado === 'cancelado') {
             return;
@@ -54,6 +89,13 @@ class UpdateWooCommercePricesJob implements ShouldQueue
 
             return;
         }
+
+        // #region agent log
+        $this->debugLog('H5', 'UpdateWooCommercePricesJob:handle:payload', 'Payload loaded', [
+            'payloadSkuCount' => count($preciosWizerp),
+            'payloadBytesApprox' => strlen(json_encode($preciosWizerp)),
+        ]);
+        // #endregion
 
         try {
             $preciosService = app(WooCommercePreciosService::class);
@@ -73,17 +115,20 @@ class UpdateWooCommercePricesJob implements ShouldQueue
                 return;
             }
 
+            $productosPorSku = WoocommerceProduct::whereIn('sku', $batchSkus)
+                ->get()
+                ->keyBy('sku');
+
             $loteSimples = [];
             $loteVariaciones = [];
             $procesadosEnLote = 0;
+            // #region agent log
+            $loopStartedAt = microtime(true);
+            // #endregion
 
             foreach ($batchSkus as $sku) {
-                if ($log->fresh()->estado === 'cancelado') {
-                    return;
-                }
-
                 $precioBase = $preciosWizerp[$sku];
-                $prod = WoocommerceProduct::where('sku', $sku)->first();
+                $prod = $productosPorSku->get($sku);
 
                 if (!$prod) {
                     $this->registrarDetalleAuditoria(
@@ -135,7 +180,28 @@ class UpdateWooCommercePricesJob implements ShouldQueue
                 $procesadosEnLote++;
             }
 
+            // #region agent log
+            $loopMs = (int) round((microtime(true) - $loopStartedAt) * 1000);
+            $this->debugLog('H2', 'UpdateWooCommercePricesJob:handle:loop', 'Batch loop finished', [
+                'batchSkuCount' => count($batchSkus),
+                'procesadosEnLote' => $procesadosEnLote,
+                'simpleBatchCount' => count($loteSimples),
+                'variationParentCount' => count($loteVariaciones),
+                'variationItemsCount' => array_sum(array_map('count', $loteVariaciones)),
+                'loopDurationMs' => $loopMs,
+            ]);
+            // #endregion
+
+            // #region agent log
+            $apiStartedAt = microtime(true);
+            // #endregion
             $this->enviarLotesWooCommerce($loteSimples, $loteVariaciones);
+            // #region agent log
+            $this->debugLog('H1', 'UpdateWooCommercePricesJob:handle:api', 'Woo API batches finished', [
+                'apiDurationMs' => (int) round((microtime(true) - $apiStartedAt) * 1000),
+                'estimatedApiCalls' => $this->contarPeticionesApi($loteSimples, $loteVariaciones),
+            ]);
+            // #endregion
 
             $nuevoSliceOffset = $this->offset + $procesadosEnLote;
             $log->update(['procesados' => min(
@@ -148,13 +214,31 @@ class UpdateWooCommercePricesJob implements ShouldQueue
             }
 
             if ($nuevoSliceOffset < count($allSkus)) {
+                // #region agent log
+                $this->debugLog('H4', 'UpdateWooCommercePricesJob:handle:chain', 'Chaining next batch', [
+                    'nextOffset' => $nuevoSliceOffset,
+                    'totalSkus' => count($allSkus),
+                    'totalDurationMs' => (int) round((microtime(true) - $jobStartedAt) * 1000),
+                ]);
+                // #endregion
                 self::dispatch($this->syncLogId, $nuevoSliceOffset);
 
                 return;
             }
 
             $this->finalizarSiCompleto($log);
+            // #region agent log
+            $this->debugLog('H4', 'UpdateWooCommercePricesJob:handle:complete', 'Job finished all batches', [
+                'totalDurationMs' => (int) round((microtime(true) - $jobStartedAt) * 1000),
+            ]);
+            // #endregion
         } catch (\Exception $e) {
+            // #region agent log
+            $this->debugLog('H1', 'UpdateWooCommercePricesJob:handle:error', 'Job failed with exception', [
+                'error' => $e->getMessage(),
+                'totalDurationMs' => (int) round((microtime(true) - $jobStartedAt) * 1000),
+            ]);
+            // #endregion
             $log->update(['estado' => 'error', 'mensaje_error' => $e->getMessage()]);
             $this->enviarNotificaciones($log->fresh());
             throw $e;
@@ -189,20 +273,75 @@ class UpdateWooCommercePricesJob implements ShouldQueue
     {
         $baseUrl = $this->getWooBaseUrl() . '/wp-json/wc/v3/products';
 
-        if (!empty($simples)) {
-            $this->ejecutarPeticionBatch("{$baseUrl}/batch", $simples);
+        foreach (array_chunk($simples, self::WOO_API_CHUNK_SIZE) as $chunkSimples) {
+            $this->ejecutarPeticionBatch("{$baseUrl}/batch", $chunkSimples);
         }
 
         foreach ($variaciones as $parentId => $variacionesHijas) {
             $url = "{$baseUrl}/{$parentId}/variations/batch";
-            $this->ejecutarPeticionBatch($url, $variacionesHijas);
+            foreach (array_chunk($variacionesHijas, self::WOO_API_CHUNK_SIZE) as $chunkVariaciones) {
+                $this->ejecutarPeticionBatch($url, $chunkVariaciones);
+            }
         }
+    }
+
+    private function contarPeticionesApi(array $simples, array $variaciones): int
+    {
+        $calls = (int) ceil(count($simples) / self::WOO_API_CHUNK_SIZE);
+
+        foreach ($variaciones as $variacionesHijas) {
+            $calls += (int) ceil(count($variacionesHijas) / self::WOO_API_CHUNK_SIZE);
+        }
+
+        return $calls;
     }
 
     private function ejecutarPeticionBatch(string $url, array $datosUpdate): void
     {
+        // #region agent log
+        $startedAt = microtime(true);
+        @file_put_contents(
+            base_path('.cursor/debug-d46fce.log'),
+            json_encode([
+                'sessionId' => 'd46fce',
+                'runId' => 'pre-fix',
+                'hypothesisId' => 'H3',
+                'location' => 'UpdateWooCommercePricesJob:ejecutarPeticionBatch:start',
+                'message' => 'Woo batch HTTP request starting',
+                'data' => [
+                    'urlTail' => substr($url, -40),
+                    'itemCount' => count($datosUpdate),
+                    'httpTimeoutSec' => 60,
+                ],
+                'timestamp' => (int) round(microtime(true) * 1000),
+            ], JSON_UNESCAPED_UNICODE) . "\n",
+            FILE_APPEND
+        );
+        // #endregion
+
         $response = $this->getWooClient('GeliaSystem-SyncBot/1.0')
             ->post($url, ['update' => $datosUpdate]);
+
+        // #region agent log
+        @file_put_contents(
+            base_path('.cursor/debug-d46fce.log'),
+            json_encode([
+                'sessionId' => 'd46fce',
+                'runId' => 'pre-fix',
+                'hypothesisId' => 'H3',
+                'location' => 'UpdateWooCommercePricesJob:ejecutarPeticionBatch:end',
+                'message' => 'Woo batch HTTP request finished',
+                'data' => [
+                    'urlTail' => substr($url, -40),
+                    'itemCount' => count($datosUpdate),
+                    'httpStatus' => $response->status(),
+                    'durationMs' => (int) round((microtime(true) - $startedAt) * 1000),
+                ],
+                'timestamp' => (int) round(microtime(true) * 1000),
+            ], JSON_UNESCAPED_UNICODE) . "\n",
+            FILE_APPEND
+        );
+        // #endregion
 
         if (!$response->successful()) {
             throw new \Exception('Error en la API de WooCommerce: ' . $response->body());
