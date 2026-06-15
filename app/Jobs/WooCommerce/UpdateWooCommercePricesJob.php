@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Woocommerce\WoocommerceConfiguracion;
 use App\Models\Woocommerce\WoocommerceMargin;
 use App\Models\Woocommerce\WoocommerceProduct;
+use App\Services\WooCommerce\WooCommercePreciosService;
 use App\Models\Woocommerce\WoocommerceSyncDetail;
 use App\Models\Woocommerce\WoocommerceSyncLog;
 use App\Notifications\WooCommerceSyncCompletada;
@@ -55,7 +56,8 @@ class UpdateWooCommercePricesJob implements ShouldQueue
         }
 
         try {
-            $iva = (float) (WoocommerceConfiguracion::obtener()->iva ?? 1.16);
+            $preciosService = app(WooCommercePreciosService::class);
+            $iva = $preciosService->obtenerIva();
             $margenes = WoocommerceMargin::orderBy('precio_min')->get();
 
             $allSkus = array_values(array_keys($preciosWizerp));
@@ -98,8 +100,8 @@ class UpdateWooCommercePricesJob implements ShouldQueue
                     continue;
                 }
 
-                $normal = $this->calcularPrecioFinal($precioBase, 'normal', $margenes, $iva);
-                $rebaja = $this->calcularPrecioFinal($precioBase, 'rebaja', $margenes, $iva);
+                $normal = $preciosService->calcular($precioBase, 'normal', $margenes, $iva);
+                $rebaja = $preciosService->calcular($precioBase, 'rebaja', $margenes, $iva);
 
                 $anteriorNormal = $prod->precio_normal;
                 $anteriorRebajado = $prod->precio_rebajado;
@@ -207,19 +209,6 @@ class UpdateWooCommercePricesJob implements ShouldQueue
         }
 
         $this->aplicarLatenciaSegura();
-    }
-
-    private function calcularPrecioFinal($base, string $tipo, $margenes, float $iva): float
-    {
-        $multiplicador = 1.0;
-        foreach ($margenes as $m) {
-            if ($base >= $m->precio_min && $base <= $m->precio_max) {
-                $multiplicador = ($tipo === 'rebaja') ? $m->multiplicador_rebaja : $m->multiplicador_normal;
-                break;
-            }
-        }
-
-        return round(($base * $multiplicador) / $iva, 2);
     }
 
     private function registrarDetalleAuditoria(

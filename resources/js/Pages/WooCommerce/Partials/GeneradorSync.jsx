@@ -86,7 +86,7 @@ export default function GeneradorSync({ permisos, configuracion, onTemplateGener
                 <UploadCloud className="w-10 h-10 mx-auto mb-3 theme-text-muted" style={archivo ? { color: 'var(--color-primario)' } : {}} />
                 <h4 className="text-sm font-black uppercase theme-text-main">Lista de Resurtido / Wizerp</h4>
                 <p className="text-[10px] font-bold theme-text-muted mt-1 uppercase">
-                    {archivo ? archivo.name : 'Cabeceras: SKU + PG · o Wizerp crudo col. B/F'}
+                    {archivo ? archivo.name : 'Cabeceras: SKU + Plataformas (Lista de Resurtido) · o Wizerp crudo col. B/F'}
                 </p>
             </div>
 
