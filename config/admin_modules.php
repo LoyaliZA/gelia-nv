@@ -15,4 +15,5 @@ return [
     'api_externa.gestionar',
     'api_externa.ver_auditoria',
     'entregas.configurar_zonas',
+    'woocommerce.configurar',
 ];

@@ -1,0 +1,4 @@
+ID,SKU,Nombre,Tipo,Superior
+1001,AROMA-001,Lavanda Premium,simple,
+2001,AROMA-VAR-01,Variante Rosa 100ml,variation,AROMA-VAR
+2000,AROMA-VAR,Rosa Variable,variable,

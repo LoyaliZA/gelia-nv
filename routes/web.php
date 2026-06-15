@@ -128,6 +128,30 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: WOOCOMMERCE — SINCRONIZAR PRECIOS
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:woocommerce.ver'])->prefix('woocommerce')->name('woocommerce.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\WooCommerceController::class, 'index'])->name('index');
+        Route::get('/auditoria', [\App\Http\Controllers\WooCommerceController::class, 'auditoria'])->name('auditoria')->middleware('can:woocommerce.auditoria');
+        Route::get('/auditoria/{id}/descargar', [\App\Http\Controllers\WooCommerceController::class, 'descargarAuditoria'])->name('auditoria.descargar')->middleware('can:woocommerce.auditoria');
+        Route::get('/alertas', [\App\Http\Controllers\WooCommerceController::class, 'alertas'])->name('alertas');
+        Route::get('/progreso/{id}', [\App\Http\Controllers\WooCommerceController::class, 'progreso'])->name('progreso');
+        Route::get('/templates/{id}/descargar', [\App\Http\Controllers\WooCommerceController::class, 'descargar'])->name('descargar');
+        Route::put('/configuracion', [\App\Http\Controllers\WooCommerceController::class, 'guardarConfiguracion'])->name('configuracion.update')->middleware('can:woocommerce.configurar');
+        Route::post('/previsualizar', [\App\Http\Controllers\WooCommerceController::class, 'previsualizar'])->name('previsualizar')->middleware('can:woocommerce.sincronizar');
+        Route::post('/procesar', [\App\Http\Controllers\WooCommerceController::class, 'procesar'])->name('procesar')->middleware('can:woocommerce.sincronizar');
+        Route::post('/sincronizar', [\App\Http\Controllers\WooCommerceController::class, 'sincronizar'])->name('sincronizar')->middleware('can:woocommerce.sincronizar');
+        Route::post('/fetch-precios', [\App\Http\Controllers\WooCommerceController::class, 'fetchPrecios'])->name('fetch_precios')->middleware('can:woocommerce.sincronizar');
+        Route::post('/catalogo/sincronizar', [\App\Http\Controllers\WooCommerceController::class, 'sincronizarCatalogo'])->name('catalogo.sincronizar')->middleware('can:woocommerce.sincronizar');
+        Route::post('/precios-locales', [\App\Http\Controllers\WooCommerceController::class, 'actualizarPreciosLocales'])->name('precios_locales')->middleware('can:woocommerce.sincronizar');
+        Route::get('/productos/{id}/consultar', [\App\Http\Controllers\WooCommerceController::class, 'consultarPrecioIndividual'])->name('productos.consultar')->middleware('can:woocommerce.sincronizar');
+        Route::put('/productos/{id}', [\App\Http\Controllers\WooCommerceController::class, 'actualizarPrecioIndividual'])->name('productos.update')->middleware('can:woocommerce.sincronizar');
+        Route::post('/emergencia/ocultar', [\App\Http\Controllers\WooCommerceController::class, 'emergenciaOcultar'])->name('emergencia.ocultar')->middleware('can:woocommerce.emergencia');
+        Route::delete('/sync/{id}/cancelar', [\App\Http\Controllers\WooCommerceController::class, 'cancelarSync'])->name('sync.cancelar')->middleware('can:woocommerce.sincronizar');
+        Route::delete('/templates/{id}', [\App\Http\Controllers\WooCommerceController::class, 'eliminar'])->name('templates.eliminar')->middleware('can:woocommerce.sincronizar');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: AUTO-COBRANZA
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('auto-cobranza')->name('auto-cobranza.')->group(function () {

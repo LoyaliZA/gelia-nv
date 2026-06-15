@@ -249,7 +249,7 @@ class SolicitudOperativaController extends Controller
             $destinatarios->push($solicitud->vendedor);
         }
 
-        $encargados = User::permission('cancelaciones_cotizaciones.verificar')
+        $encargados = User::permission(['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar'])
             ->whereHas('departamentos', function ($query) use ($solicitud) {
                 $query->where('departamentos.id', $solicitud->departamento_id);
             })

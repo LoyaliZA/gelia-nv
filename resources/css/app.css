@@ -13,6 +13,7 @@
 @import './gelia/print.css';
 @import './gelia/features/logo.css';
 @import './gelia/features/entregas.css';
+@import './gelia/features/woocommerce.css';
 @import './gelia/features/registro.css';
 
 /* Modo oscuro controlado por clase .dark en <html> (AppLayout), no por prefers-color-scheme */

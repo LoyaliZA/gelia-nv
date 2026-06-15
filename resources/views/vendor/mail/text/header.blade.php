@@ -1,1 +1,1 @@
-{{ $slot }}: {{ $url }}
+{{ config('mail.brand.name') }}: {{ $url }}

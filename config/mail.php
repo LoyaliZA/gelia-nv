@@ -115,4 +115,25 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Branding
+    |--------------------------------------------------------------------------
+    |
+    | Identidad visual centralizada para plantillas de correo del sistema.
+    |
+    */
+
+    'brand' => [
+        'name' => env('MAIL_BRAND_NAME', env('MAIL_FROM_NAME', env('APP_NAME', 'GELIA'))),
+        'salutation' => 'Saludos cordiales,',
+        'footer_note' => 'Este es un correo automático del sistema GELIA.',
+        'accent' => '#ec4899',
+        'logos' => [
+            ['src' => 'favicon-192.png', 'alt' => 'GELIA', 'height' => 56],
+            ['src' => 'Images/Logos/aromas_logo_negro.png', 'alt' => 'Aromas', 'height' => 44],
+            ['src' => 'Images/Logos/bellaroma_logo_negro.png', 'alt' => 'Bellaroma', 'height' => 44],
+        ],
+    ],
+
 ];

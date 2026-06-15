@@ -38,7 +38,7 @@ class RechazarPagosVencidos extends Command
         }
 
         $listas = CatalogoListaDescuento::orderBy('monto_requerido', 'desc')->get();
-        $encargadas = User::permission('solicitudes.verificar')->get();
+        $encargadas = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
         $contador = 0;
 
         foreach ($solicitudesVencidas as $solicitud) {

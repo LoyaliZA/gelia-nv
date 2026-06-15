@@ -1,5 +1,5 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag
 } from 'lucide-react';
 
 export const DASHBOARD_MODULE_CARDS = [
@@ -140,6 +140,17 @@ export const DASHBOARD_MODULE_CARDS = [
         iconWrapStyle: { backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' },
         iconClass: '',
         iconStyle: { color: 'var(--color-primario)' },
+    },
+    {
+        id: 'card_woocommerce',
+        titulo: 'Sincronizar Precios',
+        subtitulo: 'WooCommerce y catálogo Bellaroma.',
+        permiso: 'woocommerce.ver',
+        href: () => route('woocommerce.index'),
+        icon: ShoppingBag,
+        borderClass: 'border-violet-500/20',
+        iconWrapClass: 'bg-violet-500/10 border-violet-500/20',
+        iconClass: 'text-violet-500',
     },
     {
         id: 'card_facturas',

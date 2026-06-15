@@ -63,6 +63,8 @@ return [
             'activo_mantenimiento_proximo' => true,
             'resumen_activos'          => true,
             'mensaje_nuevo'            => true,
+            'woocommerce_sync_completada' => true,
+            'woocommerce_sync_fallida'    => true,
         ],
     ],
 

@@ -9,6 +9,7 @@ import {
     Globe,
     Map,
     Settings,
+    ShoppingBag,
 } from 'lucide-react';
 
 /** Módulos del panel de administración (sidebar + /admin). */
@@ -93,6 +94,15 @@ export const ADMIN_MODULES = [
         routeName: 'admin.mapa_logistico.index',
         icon: Map,
         permission: 'entregas.configurar_zonas',
+    },
+    {
+        id: 'woocommerce',
+        title: 'Sincronizar Precios',
+        description: 'WooCommerce: sincronización de precios, catálogo y auditoría.',
+        path: '/woocommerce',
+        routeName: 'woocommerce.index',
+        icon: ShoppingBag,
+        permission: 'woocommerce.configurar',
     },
     {
         id: 'configuracion_sistema',
