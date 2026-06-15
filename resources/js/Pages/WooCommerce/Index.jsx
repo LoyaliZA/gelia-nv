@@ -1,21 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
 import { geliaCardClass } from '../../utils/geliaTheme';
-import { Settings, ShoppingBag, ClipboardList, AlertTriangle } from 'lucide-react';
+import { Settings, ClipboardList, AlertTriangle } from 'lucide-react';
 import GeneradorSync from './Partials/GeneradorSync';
 import SincronizarCatalogo from './Partials/SincronizarCatalogo';
 import PanelInstruccionesExportacion from './Partials/PanelInstruccionesExportacion';
 import HistorialTemplates from './Partials/HistorialTemplates';
 import TablaProductos from './Partials/TablaProductos';
 import ModalConfiguracion from './Partials/ModalConfiguracion';
+import PanelProcesosFantasma from './Partials/PanelProcesosFantasma';
+import { startWooSyncTracking } from '../../utils/woocommerceSyncTracker';
 
 export default function Index({
     auth, templatesHoy, templatesHistorial, configuracion, margenes, productos,
-    filters, users, permisos, procesoActivo,
+    filters, users, permisos, procesoActivo, procesosFantasma,
 }) {
     const [tab, setTab] = useState('precios');
     const [showConfig, setShowConfig] = useState(false);
+
+    useEffect(() => {
+        if (procesoActivo?.id) {
+            startWooSyncTracking(procesoActivo.id);
+        }
+    }, [procesoActivo?.id]);
 
     const tabs = [
         { id: 'precios', label: 'Sincronizar Precios' },
@@ -40,31 +48,27 @@ export default function Index({
                     </div>
                     <div className="flex flex-wrap gap-2 justify-center">
                         {permisos.auditoria && (
-                            <Link href={route('woocommerce.auditoria')} className="px-4 py-2 rounded-xl border theme-border bg-white dark:bg-zinc-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 theme-text-main hover:bg-black/5 dark:hover:bg-white/5 hover:border-[var(--color-primario)] transition-all">
+                            <Link href={route('woocommerce.auditoria')} className="px-4 py-2 rounded-xl border theme-border bg-white dark:bg-zinc-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 theme-text-main hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-[var(--color-primario)] transition-all">
                                 <ClipboardList className="w-4 h-4" /> Auditoría
                             </Link>
                         )}
-                        <Link href={route('woocommerce.alertas')} className="px-4 py-2 rounded-xl border theme-border bg-white dark:bg-zinc-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 theme-text-main hover:bg-black/5 dark:hover:bg-white/5 hover:border-[var(--color-primario)] transition-all">
+                        <Link href={route('woocommerce.alertas')} className="px-4 py-2 rounded-xl border theme-border bg-white dark:bg-zinc-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 theme-text-main hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-[var(--color-primario)] transition-all">
                             <AlertTriangle className="w-4 h-4" /> Alertas
                         </Link>
                         {permisos.configurar && (
-                            <button onClick={() => setShowConfig(true)} className="px-4 py-2 rounded-xl border theme-border bg-white dark:bg-zinc-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 theme-text-main hover:bg-black/5 dark:hover:bg-white/5 hover:border-[var(--color-primario)] transition-all">
+                            <button onClick={() => setShowConfig(true)} className="px-4 py-2 rounded-xl border theme-border bg-white dark:bg-zinc-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 theme-text-main hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-[var(--color-primario)] transition-all">
                                 <Settings className="w-4 h-4" /> Configuración
                             </button>
                         )}
                     </div>
                 </header>
 
-                {procesoActivo && (
-                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 text-xs font-bold flex items-center gap-2">
-                        <ShoppingBag className="w-4 h-4" /> Proceso #{procesoActivo.id} en curso ({procesoActivo.estado}) — {procesoActivo.procesados}/{procesoActivo.total_productos}
-                    </div>
-                )}
+                <PanelProcesosFantasma procesosFantasma={procesosFantasma} permisos={permisos} />
 
-                <div className="flex gap-2">
+                <div className="inline-flex gap-1 p-1.5 rounded-2xl bg-white dark:bg-zinc-900 border theme-border shadow-sm">
                     {tabs.map((t) => (
                         <button key={t.id} onClick={() => setTab(t.id)}
-                            className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === t.id ? 'text-white border-transparent' : 'theme-text-muted border theme-border bg-white dark:bg-zinc-900 hover:bg-black/5 dark:hover:bg-white/5'}`}
+                            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === t.id ? 'text-white shadow-md' : 'theme-text-muted hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
                             style={tab === t.id ? { backgroundColor: 'var(--color-primario)' } : {}}>
                             {t.label}
                         </button>
@@ -84,11 +88,11 @@ export default function Index({
                             <PanelInstruccionesExportacion />
                             <SincronizarCatalogo permisos={permisos} configuracion={configuracion} />
                         </div>
-                        <TablaProductos productos={productos} filters={filters} permisos={permisos} />
+                        <TablaProductos productos={productos} filters={filters} permisos={permisos} configuracion={configuracion} />
                     </div>
                 )}
 
-                {tab === 'precios' && <TablaProductos productos={productos} filters={filters} permisos={permisos} />}
+                {tab === 'precios' && <TablaProductos productos={productos} filters={filters} permisos={permisos} configuracion={configuracion} />}
             </div>
 
             {showConfig && (

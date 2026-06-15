@@ -41,9 +41,24 @@ export default function PanelInstruccionesExportacion() {
                 <section>
                     <h4 className="font-black uppercase theme-text-main mb-2 flex items-center gap-2">
                         <span className="w-2 h-4 rounded bg-purple-500" />
-                        2. Excel Wizerp (Plantilla de Resurtido)
+                        2. Lista de Resurtido (Generador de Listados)
                     </h4>
-                    <p>No es export de WooCommerce. Debe contener cabeceras. Columna <strong className="theme-text-main">SKU</strong> y columna <strong className="theme-text-main">Plataforma</strong> (precio base).</p>
+                    <p className="mb-2">Columnas exportadas:</p>
+                    <p className="font-mono text-[10px] mb-2">Folio · SKU · Descripcion · Existencia · PG · Plataformas · Bronce</p>
+                    <div className="overflow-x-auto rounded-xl border theme-border mb-2">
+                        <table className="w-full text-[10px]">
+                            <thead><tr className="font-black uppercase theme-text-muted border-b theme-border">
+                                <th className="p-2 text-left">Columna</th><th className="p-2 text-left">¿Se usa en sync?</th>
+                            </tr></thead>
+                            <tbody>
+                                <tr className="border-b theme-border/50"><td className="p-2">SKU</td><td className="p-2 text-emerald-600 font-bold">Sí — cruce con catálogo</td></tr>
+                                <tr className="border-b theme-border/50"><td className="p-2">PG</td><td className="p-2 text-emerald-600 font-bold">Sí — precio base para márgenes Woo</td></tr>
+                                <tr className="border-b theme-border/50"><td className="p-2">Plataformas / Bronce</td><td className="p-2">No — solo informativas</td></tr>
+                                <tr><td className="p-2">Folio / Descripcion / Existencia</td><td className="p-2">No — ignoradas</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p>Alternativa: export Wizerp sin cabecera — col. <strong className="theme-text-main">B = SKU</strong>, col. <strong className="theme-text-main">F = precio</strong>.</p>
                 </section>
 
                 <section>

@@ -8,6 +8,7 @@ import { Bell, X, Menu } from 'lucide-react';
 
 import NotificationService from '../Services/NotificationBrowserService';
 import GeliaLoader from '../Components/GeliaLoader';
+import WooSyncFloatingTracker from '../Components/WooSyncFloatingTracker';
 import {
     resolveAlertasPrefs,
     getTipoAlerta,
@@ -80,6 +81,24 @@ export default function AppLayout({ children, fullScreen = false }) {
         window.addEventListener('alertas-prefs-changed', onPrefsChanged);
         return () => window.removeEventListener('alertas-prefs-changed', onPrefsChanged);
     }, [auth?.tema_visual?.alertas_prefs, tonos_alertas, auth]);
+
+    useEffect(() => {
+        const onGeliaToast = (event) => {
+            const { mensaje, tipo } = event.detail ?? {};
+            if (mensaje) {
+                addToast({ mensaje, tipo });
+            }
+        };
+
+        window.addEventListener('gelia-toast', onGeliaToast);
+        return () => window.removeEventListener('gelia-toast', onGeliaToast);
+    }, []);
+
+    const permisosWoo = auth?.user?.permissions ?? [];
+    const rolesWoo = auth?.user?.roles ?? [];
+    const esSuperAdmin = rolesWoo.includes('Super Admin') || rolesWoo.includes('Administrador');
+    const canViewWooSync = esSuperAdmin || permisosWoo.includes('woocommerce.ver') || permisosWoo.includes('woocommerce.sincronizar');
+    const canSyncWoo = esSuperAdmin || permisosWoo.includes('woocommerce.sincronizar');
 
     // --- ESCUCHADORES DE EVENTOS GLOBALES DE INERTIA ---
     useEffect(() => {
@@ -531,6 +550,8 @@ export default function AppLayout({ children, fullScreen = false }) {
                         </div>
                     ))}
                     </div>
+
+                    <WooSyncFloatingTracker canView={canViewWooSync} canSync={canSyncWoo} />
                 </div>
 
             </div>

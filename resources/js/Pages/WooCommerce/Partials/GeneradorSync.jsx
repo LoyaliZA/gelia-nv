@@ -3,7 +3,7 @@ import { UploadCloud, Eye, Download, CloudUpload, Info } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import ModalPrevisualizacion from './ModalPrevisualizacion';
-import ModalProgreso from './ModalProgreso';
+import { startWooSyncTracking } from '../../../utils/woocommerceSyncTracker';
 
 export default function GeneradorSync({ permisos, configuracion, onTemplateGenerado }) {
     const fileRef = useRef(null);
@@ -11,7 +11,6 @@ export default function GeneradorSync({ permisos, configuracion, onTemplateGener
     const [procesando, setProcesando] = useState(false);
     const [errorMsg, setErrorMsg] = useState(null);
     const [previewData, setPreviewData] = useState(null);
-    const [progresoId, setProgresoId] = useState(null);
 
     const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
@@ -30,7 +29,7 @@ export default function GeneradorSync({ permisos, configuracion, onTemplateGener
 
     const ejecutar = async (modo) => {
         if (!archivo) {
-            setErrorMsg('Selecciona el Excel de Wizerp (Listado Aromas) primero.');
+            setErrorMsg('Selecciona el Excel de Lista de Resurtido o Wizerp primero.');
             return;
         }
         setErrorMsg(null);
@@ -47,7 +46,7 @@ export default function GeneradorSync({ permisos, configuracion, onTemplateGener
                 setPreviewData(data.detalles);
             } else if (modo === 'nube') {
                 const data = await postArchivo(route('woocommerce.sincronizar'));
-                setProgresoId(data.log_id);
+                startWooSyncTracking(data.log_id);
             }
         } catch (e) {
             setErrorMsg(e.message);
@@ -85,8 +84,10 @@ export default function GeneradorSync({ permisos, configuracion, onTemplateGener
             >
                 <input ref={fileRef} type="file" className="hidden" accept=".xlsx,.xls" onChange={(e) => setArchivo(e.target.files[0] || null)} />
                 <UploadCloud className="w-10 h-10 mx-auto mb-3 theme-text-muted" style={archivo ? { color: 'var(--color-primario)' } : {}} />
-                <h4 className="text-sm font-black uppercase theme-text-main">Wizerp Excel (Plantilla Resurtido)</h4>
-                <p className="text-[10px] font-bold theme-text-muted mt-1 uppercase">{archivo ? archivo.name : 'Columnas requeridas: SKU y Plataforma (Precio)'}</p>
+                <h4 className="text-sm font-black uppercase theme-text-main">Lista de Resurtido / Wizerp</h4>
+                <p className="text-[10px] font-bold theme-text-muted mt-1 uppercase">
+                    {archivo ? archivo.name : 'Cabeceras: SKU + PG · o Wizerp crudo col. B/F'}
+                </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -106,7 +107,6 @@ export default function GeneradorSync({ permisos, configuracion, onTemplateGener
             </div>
 
             {previewData && <ModalPrevisualizacion detalles={previewData} onClose={() => setPreviewData(null)} onConfirm={() => { setPreviewData(null); ejecutar('nube'); }} />}
-            {progresoId && <ModalProgreso logId={progresoId} onClose={() => setProgresoId(null)} />}
         </div>
     );
 }

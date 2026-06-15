@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
-import { X, Save, Key, Settings2, Check } from 'lucide-react';
+import { X, Save, Key, Settings2, Check, Wifi } from 'lucide-react';
+import GeliaLoader from '../../../Components/GeliaLoader';
 
 export default function ModalConfiguracion({ configuracion, margenes, users, onClose }) {
     const { data, setData, processing, errors } = useForm({
@@ -17,6 +18,41 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
     });
 
     const [busqueda, setBusqueda] = useState('');
+    const [probandoConexion, setProbandoConexion] = useState(false);
+    const [resultadoConexion, setResultadoConexion] = useState(null);
+
+    const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+
+    const probarConexion = async () => {
+        setProbandoConexion(true);
+        setResultadoConexion(null);
+
+        try {
+            const response = await fetch(route('woocommerce.configuracion.probar_conexion'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify({
+                    store_url: data.store_url,
+                    consumer_key: data.consumer_key || undefined,
+                    consumer_secret: data.consumer_secret || undefined,
+                }),
+            });
+
+            const result = await response.json();
+            setResultadoConexion({
+                ok: response.ok && result.success,
+                message: result.message || (response.ok ? 'Conexión exitosa.' : 'Error de conexión.'),
+            });
+        } catch (err) {
+            setResultadoConexion({ ok: false, message: err.message });
+        } finally {
+            setProbandoConexion(false);
+        }
+    };
 
     const toggleUser = (userId) => {
         const current = [...data.notified_users];
@@ -25,10 +61,9 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
 
     const submit = async (e) => {
         e.preventDefault();
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
         const response = await fetch(route('woocommerce.configuracion.update'), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, Accept: 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken(), Accept: 'application/json' },
             body: JSON.stringify(data),
         });
         if (response.ok) onClose();
@@ -40,6 +75,7 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
 
     const modal = (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-md">
+            <GeliaLoader isVisible={probandoConexion} message="Probando conexión API_" />
             <div className="w-full max-w-4xl theme-surface border theme-border rounded-[2.5rem] p-6 md:p-10 max-h-[90vh] overflow-y-auto custom-scrollbar relative">
                 <button onClick={onClose} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main"><X className="w-5 h-5" /></button>
 
@@ -70,6 +106,32 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
                                 placeholder="Dejar en blanco para conservar..." className="w-full bg-transparent py-3 px-3 text-sm theme-text-main outline-none" />
                         </div>
                     </div>
+
+                    <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={probarConexion}
+                            disabled={probandoConexion}
+                            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-black uppercase border theme-border theme-text-main hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
+                        >
+                            <Wifi className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
+                            Probar conexión API
+                        </button>
+                        <p className="text-[10px] theme-text-muted font-bold">
+                            Usa los valores del formulario; si dejas key/secret vacíos, se prueban las credenciales guardadas.
+                        </p>
+                    </div>
+
+                    {resultadoConexion && (
+                        <div className={`md:col-span-2 p-3 rounded-xl text-xs font-bold ${
+                            resultadoConexion.ok
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-600'
+                                : 'bg-red-500/10 border border-red-500/20 text-red-500'
+                        }`}>
+                            {resultadoConexion.message}
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2">IVA Divisor</label>
                         <input type="number" step="0.01" value={data.iva} onChange={(e) => setData('iva', parseFloat(e.target.value))}

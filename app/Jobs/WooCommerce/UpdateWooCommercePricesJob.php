@@ -19,96 +19,168 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Rap2hpoutre\FastExcel\FastExcel;
+use Throwable;
 
 class UpdateWooCommercePricesJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, InteractsWithWooCommerceApi;
 
+    public int $timeout = 120;
+
+    public int $tries = 1;
+
+    private const BATCH_SIZE = 50;
+
     public function __construct(
         protected int $syncLogId,
-        protected array $preciosWizerp
+        protected int $offset = 0
     ) {}
 
     public function handle(): void
     {
         $log = WoocommerceSyncLog::find($this->syncLogId);
-        if (!$log) {
+        if (!$log || $log->estado === 'cancelado') {
             return;
         }
 
-        $log->update(['estado' => 'en_proceso']);
+        if ($log->estado === 'pendiente') {
+            $log->update(['estado' => 'en_proceso']);
+        }
+
+        $preciosWizerp = $log->payload ?? [];
+        if (empty($preciosWizerp)) {
+            $log->update(['estado' => 'error', 'mensaje_error' => 'No hay datos de precios para procesar.']);
+
+            return;
+        }
 
         try {
             $iva = (float) (WoocommerceConfiguracion::obtener()->iva ?? 1.16);
             $margenes = WoocommerceMargin::orderBy('precio_min')->get();
 
-            $skusProcesados = WoocommerceSyncDetail::where('sync_log_id', $this->syncLogId)->pluck('sku')->toArray();
-            $index = count($skusProcesados);
+            $allSkus = array_values(array_keys($preciosWizerp));
+            $batchSkus = array_slice($allSkus, $this->offset, self::BATCH_SIZE);
 
-            WoocommerceProduct::chunk(100, function ($productosLocales) use ($log, &$index, $margenes, $iva, $skusProcesados) {
-                if ($log->fresh()->estado === 'cancelado') {
-                    return false;
-                }
+            if (empty($batchSkus)) {
+                $this->finalizarSiCompleto($log);
 
-                $loteSimples = [];
-                $loteVariaciones = [];
-
-                foreach ($productosLocales as $prod) {
-                    $sku = $prod->sku;
-
-                    if (!isset($this->preciosWizerp[$sku]) || in_array($sku, $skusProcesados)) {
-                        continue;
-                    }
-
-                    $precioBase = $this->preciosWizerp[$sku];
-                    $normal = $this->calcularPrecioFinal($precioBase, 'normal', $margenes, $iva);
-                    $rebaja = $this->calcularPrecioFinal($precioBase, 'rebaja', $margenes, $iva);
-
-                    $anteriorNormal = $prod->precio_normal;
-                    $anteriorRebajado = $prod->precio_rebajado;
-
-                    if (empty($normal) || $normal <= 0) {
-                        $this->registrarDetalleAuditoria($log->id, $sku, $anteriorNormal, $anteriorRebajado, $normal, $rebaja, 'error', 'Precio calculado inválido.');
-                        continue;
-                    }
-
-                    if ($prod->precio_normal == $normal && $prod->precio_rebajado == $rebaja) {
-                        $this->registrarDetalleAuditoria($log->id, $sku, $anteriorNormal, $anteriorRebajado, $normal, $rebaja, 'exito', 'Omitido: Sin cambios.');
-                        $index++;
-                        continue;
-                    }
-
-                    $payload = [
-                        'id' => $prod->id,
-                        'regular_price' => (string) $normal,
-                        'sale_price' => (string) $rebaja,
-                    ];
-
-                    if ($prod->tipo === 'variation') {
-                        $loteVariaciones[$prod->parent_id][] = $payload;
-                    } else {
-                        $loteSimples[] = $payload;
-                    }
-
-                    $this->registrarDetalleAuditoria($log->id, $sku, $anteriorNormal, $anteriorRebajado, $normal, $rebaja, 'exito', 'Enviado en lote a Woo');
-                    $prod->update(['precio_normal' => $normal, 'precio_rebajado' => $rebaja]);
-                    $index++;
-                }
-
-                $this->enviarLotesWooCommerce($loteSimples, $loteVariaciones);
-                $log->update(['procesados' => $index]);
-            });
-
-            if ($log->fresh()->estado !== 'cancelado') {
-                $log->update(['estado' => 'completado']);
+                return;
             }
 
-            $this->enviarNotificaciones($log->fresh());
+            if ($log->fresh()->estado === 'cancelado') {
+                return;
+            }
+
+            $loteSimples = [];
+            $loteVariaciones = [];
+            $procesadosEnLote = 0;
+
+            foreach ($batchSkus as $sku) {
+                if ($log->fresh()->estado === 'cancelado') {
+                    return;
+                }
+
+                $precioBase = $preciosWizerp[$sku];
+                $prod = WoocommerceProduct::where('sku', $sku)->first();
+
+                if (!$prod) {
+                    $this->registrarDetalleAuditoria(
+                        $log->id,
+                        $sku,
+                        null,
+                        null,
+                        null,
+                        null,
+                        'error',
+                        'SKU no encontrado en catálogo local.'
+                    );
+                    $procesadosEnLote++;
+                    continue;
+                }
+
+                $normal = $this->calcularPrecioFinal($precioBase, 'normal', $margenes, $iva);
+                $rebaja = $this->calcularPrecioFinal($precioBase, 'rebaja', $margenes, $iva);
+
+                $anteriorNormal = $prod->precio_normal;
+                $anteriorRebajado = $prod->precio_rebajado;
+
+                if (empty($normal) || $normal <= 0) {
+                    $this->registrarDetalleAuditoria($log->id, $sku, $anteriorNormal, $anteriorRebajado, $normal, $rebaja, 'error', 'Precio calculado inválido.');
+                    $procesadosEnLote++;
+                    continue;
+                }
+
+                if ($prod->precio_normal == $normal && $prod->precio_rebajado == $rebaja) {
+                    $this->registrarDetalleAuditoria($log->id, $sku, $anteriorNormal, $anteriorRebajado, $normal, $rebaja, 'exito', 'Omitido: Sin cambios.');
+                    $procesadosEnLote++;
+                    continue;
+                }
+
+                $payload = [
+                    'id' => $prod->id,
+                    'regular_price' => (string) $normal,
+                    'sale_price' => (string) $rebaja,
+                ];
+
+                if ($prod->tipo === 'variation') {
+                    $loteVariaciones[$prod->parent_id][] = $payload;
+                } else {
+                    $loteSimples[] = $payload;
+                }
+
+                $this->registrarDetalleAuditoria($log->id, $sku, $anteriorNormal, $anteriorRebajado, $normal, $rebaja, 'exito', 'Enviado en lote a Woo');
+                $prod->update(['precio_normal' => $normal, 'precio_rebajado' => $rebaja]);
+                $procesadosEnLote++;
+            }
+
+            $this->enviarLotesWooCommerce($loteSimples, $loteVariaciones);
+
+            $nuevoSliceOffset = $this->offset + $procesadosEnLote;
+            $log->update(['procesados' => min(
+                (int) $log->procesados + $procesadosEnLote,
+                $log->total_productos
+            )]);
+
+            if ($log->fresh()->estado === 'cancelado') {
+                return;
+            }
+
+            if ($nuevoSliceOffset < count($allSkus)) {
+                self::dispatch($this->syncLogId, $nuevoSliceOffset);
+
+                return;
+            }
+
+            $this->finalizarSiCompleto($log);
         } catch (\Exception $e) {
             $log->update(['estado' => 'error', 'mensaje_error' => $e->getMessage()]);
             $this->enviarNotificaciones($log->fresh());
             throw $e;
         }
+    }
+
+    public function failed(?Throwable $exception): void
+    {
+        $log = WoocommerceSyncLog::find($this->syncLogId);
+        if (!$log || in_array($log->estado, ['completado', 'cancelado'])) {
+            return;
+        }
+
+        $mensaje = $exception?->getMessage() ?? 'El proceso fue interrumpido (timeout o error del worker).';
+        $log->update([
+            'estado' => 'interrumpido',
+            'mensaje_error' => $mensaje,
+        ]);
+    }
+
+    private function finalizarSiCompleto(WoocommerceSyncLog $log): void
+    {
+        if ($log->fresh()->estado === 'cancelado') {
+            return;
+        }
+
+        $log->update(['estado' => 'completado']);
+        $this->enviarNotificaciones($log->fresh());
     }
 
     private function enviarLotesWooCommerce(array $simples, array $variaciones): void
@@ -203,7 +275,7 @@ class UpdateWooCommercePricesJob implements ShouldQueue
             if ($usuarios->isNotEmpty()) {
                 Notification::send($usuarios, new WooCommerceSyncCompletada($log, $csvAbsolutePath));
             }
-        } else {
+        } elseif (in_array($log->estado, ['error', 'interrumpido'])) {
             if ($usuarios->isNotEmpty()) {
                 Notification::send($usuarios, new WooCommerceSyncFallida($log));
             }

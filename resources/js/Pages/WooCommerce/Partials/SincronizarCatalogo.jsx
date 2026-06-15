@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { UploadCloud, Database, Download, Loader2 } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
-import ModalProgreso from './ModalProgreso';
+import { startWooSyncTracking } from '../../../utils/woocommerceSyncTracker';
 
 export default function SincronizarCatalogo({ permisos, configuracion }) {
     const csvRef = useRef(null);
@@ -10,7 +10,6 @@ export default function SincronizarCatalogo({ permisos, configuracion }) {
     const [preciosFile, setPreciosFile] = useState(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState(null);
-    const [fetchLogId, setFetchLogId] = useState(null);
 
     const csrf = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
@@ -53,7 +52,7 @@ export default function SincronizarCatalogo({ permisos, configuracion }) {
                 method: 'POST', headers: { 'X-CSRF-TOKEN': csrf(), Accept: 'application/json' },
             });
             const data = await res.json();
-            if (res.ok) setFetchLogId(data.log_id);
+            if (res.ok) startWooSyncTracking(data.log_id);
             else setMsg({ ok: false, text: data.message });
         } catch (e) { setMsg({ ok: false, text: e.message }); }
         finally { setLoading(false); }
@@ -109,8 +108,6 @@ export default function SincronizarCatalogo({ permisos, configuracion }) {
                     Descargar Precios desde WooCommerce
                 </button>
             </div>
-
-            {fetchLogId && <ModalProgreso logId={fetchLogId} onClose={() => { setFetchLogId(null); window.location.reload(); }} />}
         </div>
     );
 }

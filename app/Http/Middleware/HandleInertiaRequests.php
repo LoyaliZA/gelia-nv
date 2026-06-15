@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use App\Models\ConfiguracionUsuario;
+use App\Models\Woocommerce\WoocommerceSyncLog;
 use App\Services\PersonalizacionCatalogoService;
 use App\Services\Mensajeria\ListarConversacionesService;
 use App\Services\Presencia\PresenciaUsuarioService;
@@ -97,6 +98,9 @@ class HandleInertiaRequests extends Middleware
                 // Permite el paso del reporte hacia React
                 'reporte_importacion' => fn () => $request->session()->get('reporte_importacion'),
             ],
+            'woocommerce_sync_activo' => fn () => ($user && $user->can('woocommerce.ver'))
+                ? WoocommerceSyncLog::activo()
+                : null,
         ];
     }
 }

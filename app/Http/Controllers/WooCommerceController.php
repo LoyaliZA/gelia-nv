@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -49,10 +50,7 @@ class WooCommerceController extends Controller
         $config = WoocommerceConfiguracion::obtener();
         $margenes = WoocommerceMargin::orderBy('precio_min')->get();
 
-        $procesoActivo = WoocommerceSyncLog::whereIn('estado', ['pendiente', 'en_proceso'])
-            ->where('updated_at', '>=', now()->subMinutes(10))
-            ->latest()
-            ->first();
+        $procesoActivo = WoocommerceSyncLog::activo();
 
         $productos = WoocommerceProduct::when($query, function ($q) use ($query) {
             return $q->where('sku', 'LIKE', "%{$query}%")
@@ -74,6 +72,7 @@ class WooCommerceController extends Controller
             'margenes' => $margenes,
             'productos' => $productos,
             'procesoActivo' => $procesoActivo,
+            'procesosFantasma' => WoocommerceSyncLog::fantasmas(),
             'filters' => [
                 'search' => $query,
                 'sort' => $sort,
@@ -126,6 +125,73 @@ class WooCommerceController extends Controller
         return response()->json(['success' => true, 'message' => 'Configuración actualizada correctamente.']);
     }
 
+    public function probarConexionApi(Request $request): JsonResponse
+    {
+        Gate::authorize('woocommerce.configurar');
+
+        $request->validate([
+            'store_url' => 'nullable|url',
+            'consumer_key' => 'nullable|string',
+            'consumer_secret' => 'nullable|string',
+        ]);
+
+        $config = WoocommerceConfiguracion::obtener();
+        $url = rtrim($request->input('store_url') ?: ($config->store_url ?? ''), '/');
+        $key = $request->filled('consumer_key')
+            ? $request->consumer_key
+            : $config->consumerKeyDecrypted();
+        $secret = $request->filled('consumer_secret')
+            ? $request->consumer_secret
+            : $config->consumerSecretDecrypted();
+
+        if (empty($url) || empty($key) || empty($secret)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Indica la URL de la tienda y las credenciales REST (nuevas o ya guardadas).',
+            ], 422);
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'User-Agent' => 'GeliaSystem-ConnectionTest/1.0',
+                'Accept' => 'application/json',
+                'X-Requested-With' => 'XMLHttpRequest',
+            ])
+                ->withBasicAuth($key, $secret)
+                ->timeout(30)
+                ->get("{$url}/wp-json/wc/v3/products", [
+                    'per_page' => 1,
+                    '_fields' => 'id,sku',
+                ]);
+
+            if (in_array($response->status(), [403, 429, 503])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Bloqueo de seguridad detectado (HTTP {$response->status()}).",
+                ], 400);
+            }
+
+            if (!$response->successful()) {
+                $mensaje = $response->json('message') ?? $response->body();
+
+                return response()->json([
+                    'success' => false,
+                    'message' => "Error HTTP {$response->status()}: {$mensaje}",
+                ], 400);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Conexión exitosa con WooCommerce REST API.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function sincronizarCatalogo(Request $request): JsonResponse
     {
         Gate::authorize('woocommerce.sincronizar');
@@ -171,12 +237,13 @@ class WooCommerceController extends Controller
         fputcsv($fileOut, ['SKU', 'Nombre', 'Precio rebajado', 'Precio normal']);
 
         foreach (WoocommerceProduct::all() as $prod) {
-            if (isset($preciosWizerp[$prod->sku])) {
-                $base = $preciosWizerp[$prod->sku];
-                $rebaja = $this->service->calcular($base, 'rebaja', $margenes, $iva);
-                $normal = $this->service->calcular($base, 'normal', $margenes, $iva);
-                fputcsv($fileOut, [$prod->sku, $prod->nombre, $rebaja, $normal]);
+            $base = $this->service->resolverPrecioPorSku($preciosWizerp, $prod->sku);
+            if ($base === null) {
+                continue;
             }
+            $rebaja = $this->service->calcular($base, 'rebaja', $margenes, $iva);
+            $normal = $this->service->calcular($base, 'normal', $margenes, $iva);
+            fputcsv($fileOut, [$prod->sku, $prod->nombre, $rebaja, $normal]);
         }
         fclose($fileOut);
 
@@ -211,7 +278,10 @@ class WooCommerceController extends Controller
 
         $preciosFiltrados = [];
         foreach ($cambios as $cambio) {
-            $preciosFiltrados[$cambio['sku']] = $preciosWizerp[$cambio['sku']];
+            $precio = $this->service->resolverPrecioPorSku($preciosWizerp, $cambio['sku']);
+            if ($precio !== null) {
+                $preciosFiltrados[$cambio['sku']] = $precio;
+            }
         }
 
         $total = count($preciosFiltrados);
@@ -220,12 +290,14 @@ class WooCommerceController extends Controller
         }
 
         $log = WoocommerceSyncLog::create([
+            'tipo' => 'upload_prices',
             'total_productos' => $total,
             'procesados' => 0,
             'estado' => 'pendiente',
+            'payload' => $preciosFiltrados,
         ]);
 
-        UpdateWooCommercePricesJob::dispatch($log->id, $preciosFiltrados);
+        UpdateWooCommercePricesJob::dispatch($log->id, 0);
 
         return response()->json(['success' => true, 'log_id' => $log->id]);
     }
@@ -234,7 +306,17 @@ class WooCommerceController extends Controller
     {
         Gate::authorize('woocommerce.ver');
 
-        return response()->json(WoocommerceSyncLog::findOrFail($id));
+        $log = WoocommerceSyncLog::findOrFail($id);
+        WoocommerceSyncLog::marcarZombieSiAplica($log);
+
+        return response()->json($log->fresh());
+    }
+
+    public function syncActivo(): JsonResponse
+    {
+        Gate::authorize('woocommerce.ver');
+
+        return response()->json(['log' => WoocommerceSyncLog::activo()]);
     }
 
     public function fetchPrecios(): JsonResponse
@@ -251,12 +333,14 @@ class WooCommerceController extends Controller
         }
 
         $log = WoocommerceSyncLog::create([
+            'tipo' => 'fetch_prices',
             'total_productos' => $total,
             'procesados' => 0,
             'estado' => 'pendiente',
+            'payload' => ['page' => 1],
         ]);
 
-        FetchWooCommercePricesJob::dispatch($log->id);
+        FetchWooCommercePricesJob::dispatch($log->id, 1);
 
         return response()->json(['success' => true, 'log_id' => $log->id]);
     }
@@ -365,8 +449,9 @@ class WooCommerceController extends Controller
         $producto = WoocommerceProduct::findOrFail($id);
 
         try {
-            $response = $this->getWooClient('GeliaSystem-SingleTest/1.0')
-                ->get("{$this->getWooBaseUrl()}/wp-json/wc/v3/products/{$producto->id}");
+            $url = $this->urlProductoWoo($producto);
+
+            $response = $this->getWooClient('GeliaSystem-SingleTest/1.0')->get($url);
 
             $this->validateSecurityResponse($response);
             $data = $response->json();
@@ -400,9 +485,7 @@ class WooCommerceController extends Controller
         ]);
 
         $producto = WoocommerceProduct::findOrFail($id);
-        $url = $producto->tipo === 'variation'
-            ? "{$this->getWooBaseUrl()}/wp-json/wc/v3/products/{$producto->parent_id}/variations/{$producto->id}"
-            : "{$this->getWooBaseUrl()}/wp-json/wc/v3/products/{$producto->id}";
+        $url = $this->urlProductoWoo($producto);
 
         $response = $this->getWooClient('GeliaSystem-Admin/1.0')->put($url, [
             'regular_price' => (string) $request->precio_normal,
@@ -459,14 +542,173 @@ class WooCommerceController extends Controller
         Gate::authorize('woocommerce.sincronizar');
 
         $log = WoocommerceSyncLog::findOrFail($id);
-        if ($log->estado === 'en_proceso') {
+
+        if (in_array($log->estado, ['pendiente', 'en_proceso'])) {
             $log->update(['estado' => 'cancelado']);
             Artisan::call('queue:restart');
+
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'El proceso fue cancelado y el motor de colas ha sido reiniciado.',
+                ]);
+            }
 
             return back()->with('success', 'El proceso fue cancelado y el motor de colas ha sido reiniciado.');
         }
 
+        if (request()->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El proceso no se puede cancelar porque ya finalizó o dio error.',
+            ], 422);
+        }
+
         return back()->with('error', 'El proceso no se puede cancelar porque ya finalizó o dio error.');
+    }
+
+    public function descartarSync(int $id): JsonResponse
+    {
+        Gate::authorize('woocommerce.sincronizar');
+
+        $log = WoocommerceSyncLog::findOrFail($id);
+
+        if (!$log->esFantasma()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo se pueden eliminar procesos pendientes, en curso, interrumpidos o con error.',
+            ], 422);
+        }
+
+        if (in_array($log->estado, ['pendiente', 'en_proceso'], true)) {
+            Artisan::call('queue:restart');
+        }
+
+        $log->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Proceso #{$id} eliminado correctamente.",
+        ]);
+    }
+
+    public function descartarTodosFantasmas(): JsonResponse
+    {
+        Gate::authorize('woocommerce.sincronizar');
+
+        $fantasmas = WoocommerceSyncLog::fantasmas();
+        $habiaActivos = $fantasmas->contains(
+            fn ($log) => in_array($log->estado, ['pendiente', 'en_proceso'], true)
+        );
+
+        $eliminados = $fantasmas->count();
+        foreach ($fantasmas as $log) {
+            $log->delete();
+        }
+
+        if ($habiaActivos) {
+            Artisan::call('queue:restart');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $eliminados > 0
+                ? "Se eliminaron {$eliminados} proceso(s) fantasma."
+                : 'No había procesos fantasma por eliminar.',
+            'eliminados' => $eliminados,
+        ]);
+    }
+
+    public function continuarSync(int $id): JsonResponse
+    {
+        Gate::authorize('woocommerce.sincronizar');
+
+        $log = WoocommerceSyncLog::findOrFail($id);
+        WoocommerceSyncLog::marcarZombieSiAplica($log);
+        $log = $log->fresh();
+
+        if (!$log->puedeContinuar() && !in_array($log->estado, ['interrumpido', 'error', 'en_proceso'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Este proceso no se puede continuar.',
+            ], 422);
+        }
+
+        if ($log->procesados >= $log->total_productos) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El proceso ya procesó todos los productos.',
+            ], 422);
+        }
+
+        $offset = (int) $log->procesados;
+        $payloadOriginal = $log->payload ?? [];
+        $tipo = $log->tipo ?? 'upload_prices';
+
+        if ($tipo !== 'fetch_prices' && empty($payloadOriginal)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No hay datos guardados para continuar este proceso.',
+            ], 422);
+        }
+
+        Artisan::call('queue:restart');
+
+        $log->update([
+            'estado' => 'completado',
+            'mensaje_error' => "Cerrado parcialmente en {$offset}/{$log->total_productos}. Continuado en nuevo proceso.",
+        ]);
+
+        if ($tipo === 'fetch_prices') {
+            $page = (int) ($payloadOriginal['page'] ?? max(1, (int) floor($offset / 100) + 1));
+
+            $nuevoLog = WoocommerceSyncLog::create([
+                'tipo' => 'fetch_prices',
+                'total_productos' => $log->total_productos,
+                'procesados' => $offset,
+                'estado' => 'pendiente',
+                'payload' => ['page' => $page],
+            ]);
+
+            FetchWooCommercePricesJob::dispatch($nuevoLog->id, $page);
+        } else {
+            $allSkus = array_values(array_keys($payloadOriginal));
+            $skusRestantes = array_slice($allSkus, $offset);
+            $preciosRestantes = [];
+
+            foreach ($skusRestantes as $sku) {
+                $preciosRestantes[$sku] = $payloadOriginal[$sku];
+            }
+
+            if (empty($preciosRestantes)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No quedan productos pendientes por procesar.',
+                ], 422);
+            }
+
+            $nuevoLog = WoocommerceSyncLog::create([
+                'tipo' => 'upload_prices',
+                'total_productos' => $log->total_productos,
+                'procesados' => $offset,
+                'estado' => 'pendiente',
+                'payload' => $preciosRestantes,
+            ]);
+
+            UpdateWooCommercePricesJob::dispatch($nuevoLog->id, 0);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Nuevo proceso iniciado desde el producto ' . ($offset + 1) . '.',
+            'log_id' => $nuevoLog->id,
+        ]);
+    }
+
+    /** @deprecated Usar continuarSync */
+    public function reanudarSync(int $id): JsonResponse
+    {
+        return $this->continuarSync($id);
     }
 
     public function descargar(int $id): StreamedResponse
@@ -487,5 +729,16 @@ class WooCommerceController extends Controller
         $t->delete();
 
         return response()->json(['success' => true]);
+    }
+
+    private function urlProductoWoo(WoocommerceProduct $producto): string
+    {
+        $base = $this->getWooBaseUrl() . '/wp-json/wc/v3/products';
+
+        if ($producto->tipo === 'variation' && $producto->parent_id) {
+            return "{$base}/{$producto->parent_id}/variations/{$producto->id}";
+        }
+
+        return "{$base}/{$producto->id}";
     }
 }
