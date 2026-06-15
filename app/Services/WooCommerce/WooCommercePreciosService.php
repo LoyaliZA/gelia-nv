@@ -9,8 +9,8 @@ use Rap2hpoutre\FastExcel\FastExcel;
 
 class WooCommercePreciosService
 {
-    /** Columnas de precio base aceptadas (prioridad). PG = Lista de Resurtido / Wizerp. */
-    private const COLUMNAS_PRECIO_BASE = ['pg', 'costowizerp', 'costocalculado'];
+    /** Columnas de precio base aceptadas (prioridad). Plataformas = Lista de Resurtido. */
+    private const COLUMNAS_PRECIO_BASE = ['plataformas', 'pg', 'costocalculado', 'costowizerp'];
 
     public function obtenerIva(): float
     {
@@ -21,8 +21,8 @@ class WooCommercePreciosService
      * Extrae SKU → precio base desde Excel.
      *
      * Formatos soportados:
-     * 1) Lista de Resurtido (cabeceras): Folio, SKU, Descripcion, Existencia, PG, Plataformas, Bronce → usa PG
-     * 2) Export Wizerp sin cabecera: col. B = SKU, col. F = precio base
+     * 1) Lista de Resurtido (cabeceras): Folio, SKU, Descripcion, Existencia, PG, Plataformas, Bronce → usa Plataformas
+     * 2) Export Wizerp sin cabecera: col. B = SKU, col. F = Plataformas (precio base)
      */
     public function extraerPreciosDesdeExcel(string $rutaArchivo): array
     {

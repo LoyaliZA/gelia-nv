@@ -52,13 +52,13 @@ export default function PanelInstruccionesExportacion() {
                             </tr></thead>
                             <tbody>
                                 <tr className="border-b theme-border/50"><td className="p-2">SKU</td><td className="p-2 text-emerald-600 font-bold">Sí — cruce con catálogo</td></tr>
-                                <tr className="border-b theme-border/50"><td className="p-2">PG</td><td className="p-2 text-emerald-600 font-bold">Sí — precio base para márgenes Woo</td></tr>
-                                <tr className="border-b theme-border/50"><td className="p-2">Plataformas / Bronce</td><td className="p-2">No — solo informativas</td></tr>
+                                <tr className="border-b theme-border/50"><td className="p-2">Plataformas</td><td className="p-2 text-emerald-600 font-bold">Sí — precio base para márgenes Woo</td></tr>
+                                <tr className="border-b theme-border/50"><td className="p-2">PG / Bronce</td><td className="p-2">No — solo informativas</td></tr>
                                 <tr><td className="p-2">Folio / Descripcion / Existencia</td><td className="p-2">No — ignoradas</td></tr>
                             </tbody>
                         </table>
                     </div>
-                    <p>Alternativa: export Wizerp sin cabecera — col. <strong className="theme-text-main">B = SKU</strong>, col. <strong className="theme-text-main">F = precio</strong>.</p>
+                    <p>Alternativa: export Wizerp sin cabecera — col. <strong className="theme-text-main">B = SKU</strong>, col. <strong className="theme-text-main">F = Plataformas</strong>.</p>
                 </section>
 
                 <section>
