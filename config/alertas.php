@@ -65,6 +65,9 @@ return [
             'mensaje_nuevo'            => true,
             'woocommerce_sync_completada' => true,
             'woocommerce_sync_fallida'    => true,
+            'soporte_ticket_nuevo'        => true,
+            'soporte_respuesta_agente'    => true,
+            'soporte_respuesta_usuario'   => true,
         ],
     ],
 

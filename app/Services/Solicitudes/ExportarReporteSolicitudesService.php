@@ -32,6 +32,7 @@ class ExportarReporteSolicitudesService
             $resolucion = $this->resolverResolucion->resolver($solicitud);
 
             return [
+                'Folio' => 'FOL-' . $solicitud->id,
                 'Nombre de la vendedora' => $solicitud->vendedor->name ?? 'N/A',
                 'Fecha de emisión' => $solicitud->created_at?->format('Y-m-d H:i') ?? '',
                 'Número de cliente' => $solicitud->cliente->numero_cliente ?? 'N/A',

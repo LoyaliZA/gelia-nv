@@ -31,6 +31,7 @@ class User extends Authenticatable
         'firma_ruta',
         'catalogo_sexo_id',
         'area_id',
+        'excluir_asignacion_tickets',
     ];
 
     protected $hidden = [
@@ -45,6 +46,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'fecha_nacimiento' => 'date',
+            'excluir_asignacion_tickets' => 'boolean',
         ];
     }
 

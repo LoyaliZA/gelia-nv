@@ -12,6 +12,8 @@ import WooSyncFloatingTracker from '../Components/WooSyncFloatingTracker';
 import {
     resolveAlertasPrefs,
     getTipoAlerta,
+    normalizeNotificationPayload,
+    resolveNotificationVoiceMessage,
     shouldTriggerChannel,
     MENSAJERIA_TIPO_ALERTA,
 } from '../utils/alertasPrefs';
@@ -140,29 +142,31 @@ export default function AppLayout({ children, fullScreen = false }) {
 
             window.Echo.private(channelName)
                 .notification((notification) => {
+                    const payload = normalizeNotificationPayload(notification);
                     const prefs = resolveAlertasPrefs(auth);
-                    const tipo = getTipoAlerta(notification);
+                    const tipo = getTipoAlerta(payload);
 
                     if (shouldTriggerChannel(prefs, tipo, 'app')) {
-                        const tituloToast = notification.titulo || notification.proceso || 'GELIA ERP';
-                        const texto = notification.mensaje_visible || notification.mensaje || 'Nueva actividad';
+                        const tituloToast = payload.titulo || payload.proceso || 'GELIA ERP';
+                        const texto = payload.mensaje_visible || payload.mensaje || 'Nueva actividad';
                         addToast({ mensaje: `${tituloToast} — ${texto}` });
                     }
 
                     const sonido = shouldTriggerChannel(prefs, tipo, 'sonido');
                     const voz = shouldTriggerChannel(prefs, tipo, 'voz');
                     const escritorio = shouldTriggerChannel(prefs, tipo, 'escritorio');
+                    const mensajeVoz = resolveNotificationVoiceMessage(payload, auth?.user, tipo);
 
                     if (sonido || voz || escritorio) {
                         NotificationService.triggerFullAlert(
-                            notification.titulo || notification.proceso || 'GELIA ERP',
-                            notification.mensaje_visible || notification.mensaje || 'Nueva notificación operativa.',
-                            notification.mensaje_voz,
+                            payload.titulo || payload.proceso || 'GELIA ERP',
+                            payload.mensaje_visible || payload.mensaje || 'Nueva notificación operativa.',
+                            voz ? mensajeVoz : null,
                             { sonido, voz, escritorio }
                         );
                     }
 
-                    window.dispatchEvent(new CustomEvent('notification-received', { detail: notification }));
+                    window.dispatchEvent(new CustomEvent('notification-received', { detail: payload }));
 
                     router.reload({ only: ['auth'], preserveScroll: true, preserveState: true });
                 })

@@ -24,6 +24,9 @@ export const ALERTAS_TIPOS = {
     activo_mantenimiento_proximo: 'Mantenimiento próximo',
     resumen_activos: 'Resumen de activos',
     mensaje_nuevo: 'Mensaje interno',
+    soporte_ticket_nuevo: 'Nuevo ticket de soporte',
+    soporte_respuesta_agente: 'Respuesta de soporte',
+    soporte_respuesta_usuario: 'Mensaje en ticket',
 };
 
 export const MENSAJERIA_TIPO_ALERTA = 'mensaje_nuevo';
@@ -106,16 +109,24 @@ export function resolveAlertasPrefs(source = {}) {
     return readStoredAlertasPrefs(temaVisual);
 }
 
-export function getTipoAlerta(notification = {}) {
-    if (notification?.total_vencidos !== undefined) return 'resumen_vencidos';
-    if (notification?.data?.total_vencidos !== undefined) return 'resumen_vencidos';
-    if (notification?.total_activos !== undefined) return 'resumen_activos';
-    if (notification?.data?.total_activos !== undefined) return 'resumen_activos';
+/** Unifica payload de Echo (campos en raíz o dentro de `data`). */
+export function normalizeNotificationPayload(notification = {}) {
+    const nested = notification?.data && typeof notification.data === 'object' && !Array.isArray(notification.data)
+        ? notification.data
+        : {};
 
-    const tipoExplicito = notification?.tipo || notification?.data?.tipo;
+    return { ...notification, ...nested };
+}
+
+export function getTipoAlerta(notification = {}) {
+    const payload = normalizeNotificationPayload(notification);
+    if (payload?.total_vencidos !== undefined) return 'resumen_vencidos';
+    if (payload?.total_activos !== undefined) return 'resumen_activos';
+
+    const tipoExplicito = payload?.tipo;
     if (tipoExplicito) return tipoExplicito;
 
-    const modulo = notification?.modulo || notification?.data?.modulo;
+    const modulo = payload?.modulo;
     if (modulo === 'cobranza') return 'cobranza';
 
     // Laravel envía `type` como nombre de clase PHP; no usarlo como clave de preferencias.
@@ -138,6 +149,23 @@ export function shouldTriggerChannel(prefs, tipo, canal) {
 export function resolveTonoPath(tonosAlertas = [], tonoId = 'default') {
     const tono = tonosAlertas.find((t) => t.id === tonoId) || tonosAlertas[0];
     return tono?.path || '/assets/sounds/notification.mp3';
+}
+
+export const SOPORTE_TIPOS_ALERTA = [
+    'soporte_ticket_nuevo',
+    'soporte_respuesta_agente',
+    'soporte_respuesta_usuario',
+];
+
+export function resolveNotificationVoiceMessage(payload = {}, authUser = null, tipo = '') {
+    if (payload.mensaje_voz) return payload.mensaje_voz;
+
+    if (SOPORTE_TIPOS_ALERTA.includes(tipo)) {
+        const nombre = (authUser?.name || 'Usuario').trim().split(/\s+/)[0];
+        return `${nombre}, tienes una actualización en tu ticket de soporte.`;
+    }
+
+    return payload.mensaje_visible || payload.mensaje || null;
 }
 
 export function resolveMensajeriaVozModo(prefs) {

@@ -38,6 +38,11 @@ class ConstruirPayloadDesdeNotificacionService
             return url('/activos');
         }
 
+        if (!empty($data['ticket_id'])) {
+            $url = $data['url'] ?? '/soporte/mis-tickets';
+            return str_starts_with($url, 'http') ? $url : url($url);
+        }
+
         return url('/dashboard');
     }
 
@@ -53,6 +58,10 @@ class ConstruirPayloadDesdeNotificacionService
 
         if (!empty($data['activo_id'])) {
             return 'activo-' . $data['activo_id'];
+        }
+
+        if (!empty($data['ticket_id'])) {
+            return 'soporte-ticket-' . $data['ticket_id'];
         }
 
         return 'gelia-' . ($data['tipo'] ?? 'general') . '-' . now()->format('Ymd');

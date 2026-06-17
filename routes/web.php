@@ -690,3 +690,5 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['auth'])->post('/entregas/cotizar', [CotizacionEntregaController::class, 'calcularCosto'])->name('entregas.cotizar');
     });
 });
+
+require __DIR__ . '/soporte.php';

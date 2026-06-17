@@ -21,3 +21,19 @@ Broadcast::channel('solicitudes.operativas', function ($user) {
     return $user->hasPermissionTo('cancelaciones_cotizaciones.ver_listado');
 });
 
+Broadcast::channel('soporte.agentes', function ($user) {
+    return $user->hasPermissionTo('soporte.gestionar');
+});
+
+Broadcast::channel('soporte.ticket.{ticketId}', function ($user, $ticketId) {
+    $ticket = \App\Models\SoporteTicket::find($ticketId);
+    if (!$ticket) {
+        return false;
+    }
+
+    if ((int) $ticket->user_id === (int) $user->id) {
+        return true;
+    }
+
+    return $user->can('soporte.gestionar');
+});

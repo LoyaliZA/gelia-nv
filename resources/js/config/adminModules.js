@@ -10,6 +10,7 @@ import {
     Map,
     Settings,
     ShoppingBag,
+    LifeBuoy,
 } from 'lucide-react';
 
 /** Módulos del panel de administración (sidebar + /admin). */
@@ -112,6 +113,15 @@ export const ADMIN_MODULES = [
         routeName: 'admin.configuracion_sistema.index',
         icon: Settings,
         permission: 'configuracion_sistema.gestionar',
+    },
+    {
+        id: 'soporte_gestion',
+        title: 'Gestión de Soporte',
+        description: 'Dashboard de tickets, configuración de SLA y catálogos.',
+        path: '/soporte/agente/tickets',
+        routeName: 'soporte.agente.tickets.index',
+        icon: LifeBuoy,
+        permissionAny: ['soporte.gestionar', 'soporte.administrar'],
     },
 ];
 

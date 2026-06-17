@@ -23,6 +23,8 @@ import {
     FileSpreadsheet,
     ShoppingBag,
     Calculator,
+    LifeBuoy,
+    Bug,
 } from 'lucide-react';
 
 function routeHref(name, fallback) {
@@ -202,6 +204,33 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
         },
     ].filter(Boolean);
 
+    const soporteChildren = [
+        (can('soporte.gestionar') || can('soporte.administrar')) && {
+            type: 'link',
+            id: 'soporte_dashboard',
+            label: 'Dashboard de Soporte',
+            icon: Shield,
+            href: () => routeHref('soporte.agente.tickets.index', '/soporte/agente/tickets'),
+            active: (url) => url.startsWith('/soporte/agente'),
+        },
+        {
+            type: 'link',
+            id: 'soporte_reportar',
+            label: 'Reportar Errores',
+            icon: Bug,
+            href: () => routeHref('soporte.tickets.index', '/soporte/mis-tickets'),
+            active: (url) => url.startsWith('/soporte/mis-tickets'),
+        },
+        {
+            type: 'link',
+            id: 'soporte_qa',
+            label: 'QyA',
+            icon: MessageCircle,
+            href: () => routeHref('soporte.qa.index', '/soporte/qa'),
+            active: (url) => url.startsWith('/soporte/qa'),
+        },
+    ].filter(Boolean);
+
     const sistemaChildren = [
         showAdminMenu && {
             type: 'link',
@@ -254,6 +283,13 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             label: 'Operaciones',
             icon: Briefcase,
             children: operacionesChildren,
+        },
+        soporteChildren.length > 0 && {
+            type: 'group',
+            id: 'soporte',
+            label: 'Soporte',
+            icon: LifeBuoy,
+            children: soporteChildren,
         },
         gestionChildren.length > 0 && {
             type: 'group',
