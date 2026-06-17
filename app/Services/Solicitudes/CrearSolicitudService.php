@@ -113,12 +113,20 @@ class CrearSolicitudService
                 ? ['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar']
                 : ['solicitudes.verificar', 'solicitudes.reportar'];
 
-            $encargados = User::permission($permisosEncargado)
-                ->whereHas('departamentos', function ($query) use ($departamentoOrigenId) {
-                    $query->where('departamentos.id', $departamentoOrigenId);
-                })
+            $encargadosPorDepto = $departamentoOrigenId
+                ? User::permission($permisosEncargado)
+                    ->whereHas('departamentos', function ($query) use ($departamentoOrigenId) {
+                        $query->where('departamentos.id', $departamentoOrigenId);
+                    })
+                    ->where('id', '!=', $vendedorId)
+                    ->get()
+                : collect();
+
+            $adminsGlobales = User::role(['Super Admin', 'Administrador'])
                 ->where('id', '!=', $vendedorId)
                 ->get();
+
+            $encargados = $encargadosPorDepto->merge($adminsGlobales)->unique('id');
 
             if ($encargados->isNotEmpty()) {
                 Notification::send($encargados, new AlertaSolicitud(

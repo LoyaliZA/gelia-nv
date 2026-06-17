@@ -77,11 +77,19 @@ class SolicitarCancelacionSolicitudService
                 'datos_snapshot' => null,
             ]);
 
-            $encargados = User::permission($permisosEncargados)
-                ->whereHas('departamentos', function ($query) use ($solicitud) {
-                    $query->where('departamentos.id', $solicitud->departamento_id);
-                })
-                ->get();
+            $encargadosPorDepto = $solicitud->departamento_id
+                ? User::permission($permisosEncargados)
+                    ->whereHas('departamentos', function ($query) use ($solicitud) {
+                        $query->where('departamentos.id', $solicitud->departamento_id);
+                    })
+                    ->get()
+                : collect();
+
+            $adminsGlobales = User::role(['Super Admin', 'Administrador'])->get();
+
+            $encargados = $encargadosPorDepto->merge($adminsGlobales)
+                ->unique('id')
+                ->reject(fn ($u) => $u->id === Auth::id());
 
             if ($encargados->isNotEmpty()) {
                 $mensaje = Auth::user()->name . ' solicita cancelar la solicitud FOL-' . $solicitud->id . '.';

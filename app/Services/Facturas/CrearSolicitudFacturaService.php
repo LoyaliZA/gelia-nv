@@ -24,8 +24,9 @@ class CrearSolicitudFacturaService
         return DB::transaction(function () use ($datos, $vendedorId) {
             $estadoPendiente = CatalogoEstadoSolicitud::where('nombre', 'Pendiente')->firstOrFail();
 
-            $vendedor = User::with('departamentos')->findOrFail($vendedorId);
-            $departamentoId = $vendedor->departamentos->first()?->id;
+            $vendedor = User::with(['departamentos', 'area.departamento'])->findOrFail($vendedorId);
+            $departamentoId = $vendedor->departamentos->first()?->id
+                ?? $vendedor->area?->departamento_id;
 
             $clienteId = null;
             $datosFiscales = null;
@@ -87,9 +88,17 @@ class CrearSolicitudFacturaService
                 ],
             ]);
 
-            $encargados = User::permission(['facturas.responder', 'facturas.verificar'])
-                ->whereHas('departamentos', fn ($q) => $q->where('departamentos.id', $departamentoId))
-                ->get();
+            $encargadosPorDepto = $departamentoId
+                ? User::permission(['facturas.responder', 'facturas.verificar'])
+                    ->whereHas('departamentos', fn ($q) => $q->where('departamentos.id', $departamentoId))
+                    ->get()
+                : collect();
+
+            $adminsGlobales = User::role(['Super Admin', 'Administrador'])->get();
+
+            $encargados = $encargadosPorDepto->merge($adminsGlobales)
+                ->unique('id')
+                ->reject(fn ($u) => $u->id === $vendedorId);
 
             if ($encargados->isNotEmpty()) {
                 Notification::send($encargados, new AlertaFactura(

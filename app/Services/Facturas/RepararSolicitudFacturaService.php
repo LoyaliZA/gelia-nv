@@ -138,17 +138,25 @@ class RepararSolicitudFacturaService
             $solicitud->load(['vendedor', 'estado', 'vouchers', 'cliente']);
 
             if ($solicitud->departamento_id) {
-                $encargados = User::permission(['facturas.responder', 'facturas.verificar'])
+                $encargadosPorDepto = User::permission(['facturas.responder', 'facturas.verificar'])
                     ->whereHas('departamentos', fn ($q) => $q->where('departamentos.id', $solicitud->departamento_id))
                     ->get();
+            } else {
+                $encargadosPorDepto = collect();
+            }
 
-                if ($encargados->isNotEmpty()) {
-                    Notification::send($encargados, new AlertaFactura(
-                        $solicitud,
-                        'reparada',
-                        "El colaborador {$usuario->name} reparó la solicitud {$solicitud->folio}."
-                    ));
-                }
+            $adminsGlobales = User::role(['Super Admin', 'Administrador'])->get();
+
+            $encargados = $encargadosPorDepto->merge($adminsGlobales)
+                ->unique('id')
+                ->reject(fn ($u) => $u->id === $usuario->id);
+
+            if ($encargados->isNotEmpty()) {
+                Notification::send($encargados, new AlertaFactura(
+                    $solicitud,
+                    'reparada',
+                    "El colaborador {$usuario->name} reparó la solicitud {$solicitud->folio}."
+                ));
             }
 
             return $solicitud;

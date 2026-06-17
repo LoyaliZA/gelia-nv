@@ -294,13 +294,18 @@ class SolicitudOperativaController extends Controller
             $destinatarios->push($solicitud->vendedor);
         }
 
-        $encargados = User::permission(['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar'])
-            ->whereHas('departamentos', function ($query) use ($solicitud) {
-                $query->where('departamentos.id', $solicitud->departamento_id);
-            })
-            ->get();
+        $encargadosPorDepto = $solicitud->departamento_id
+            ? User::permission(['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar'])
+                ->whereHas('departamentos', function ($query) use ($solicitud) {
+                    $query->where('departamentos.id', $solicitud->departamento_id);
+                })
+                ->get()
+            : collect();
 
-        return $destinatarios->merge($encargados)
+        $adminsGlobales = User::role(['Super Admin', 'Administrador'])->get();
+
+        return $destinatarios->merge($encargadosPorDepto)
+            ->merge($adminsGlobales)
             ->unique('id')
             ->reject(fn ($usuario) => $usuario->id === Auth::id());
     }
