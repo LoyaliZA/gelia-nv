@@ -49,7 +49,7 @@ class CrearConsultaSolicitudService
                 $consultaLista ? 'Lista' : null,
             ]);
 
-            $encargadas = User::permission('solicitudes.reportar')
+            $encargadas = User::permission('solicitudes.responder_consulta')
                 ->whereHas('departamentos', fn ($q) => $q->where('departamentos.id', $solicitud->departamento_id))
                 ->get();
 

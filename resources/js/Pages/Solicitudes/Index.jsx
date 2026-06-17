@@ -464,7 +464,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
 
     const roles = auth?.user?.roles || [];
     const esGerente = roles.some(r => String(r).toLowerCase().includes('gerente'));
-    const puedeReportarError = (can('solicitudes.reportar') || can('solicitudes.verificar') || esGerente)
+    const puedeReportarError = (can('solicitudes.reportar') || can('solicitudes.verificar') || esGerente || solicitud.vendedor_id === auth?.user?.id)
         && solicitud.estado?.nombre !== 'Incorrecta'
         && !esCancelada;
 
@@ -473,7 +473,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
     const esAlertaPago = ultimaAuditoria?.motivo_reporte?.toUpperCase().includes('ALERTA DE PAGO');
     const esVencimiento = solicitud.motivo_incorrecta === 'vencimiento_pago';
     const consultaPendiente = (solicitud.consultas || []).find(c => c.estado === 'pendiente');
-    const puedeConsultar = can('solicitudes.consultar')
+    const puedeConsultar = can('solicitudes.emitir_consulta')
         && solicitud.vendedor_id === auth.user.id
         && solicitud.estado?.nombre === 'Respondida'
         && !solicitud.pago_confirmado
@@ -528,7 +528,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {can('solicitudes.reportar') && consultaPendiente && (
+                {can('solicitudes.responder_consulta') && consultaPendiente && (
                     <button onClick={() => { setMenuAbierto(null); setModalRespuestaConsulta({ abierto: true, solicitud, consulta: consultaPendiente }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
                         <MessageSquare className="w-4 h-4" /> Responder Consulta
                     </button>

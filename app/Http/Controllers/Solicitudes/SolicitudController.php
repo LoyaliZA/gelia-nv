@@ -319,8 +319,10 @@ class SolicitudController extends Controller
     public function actualizarEstado(Request $request, SolicitudTag $solicitud)
     {
         $usuario = Auth::user();
+        $esVendedoraPropia = $solicitud->vendedor_id === $usuario->id;
         $puedeGestionarEstado = $usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar'])
-            || $usuario->hasRole('Gerente');
+            || $usuario->hasRole('Gerente')
+            || $esVendedoraPropia;
 
         if (!$puedeGestionarEstado) {
             abort(403, 'No tienes permiso para actualizar el estado de esta solicitud.');
@@ -346,6 +348,12 @@ class SolicitudController extends Controller
 
         if ($estadoNuevoId == 4 && $estadoAnteriorId == 4) {
             abort(422, 'Esta solicitud ya está marcada como incorrecta.');
+        }
+
+        if ($esVendedoraPropia && !$usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar']) && !$usuario->hasRole('Gerente')) {
+            if ($estadoNuevoId != 4) {
+                abort(403, 'Como vendedora, solo puedes reportar un error en tu propia solicitud.');
+            }
         }
 
         DB::transaction(function () use ($solicitud, $estadoAnteriorId, $estadoNuevoId, $request) {
@@ -391,9 +399,11 @@ class SolicitudController extends Controller
             $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, true);
 
             if ($destinatarios->isNotEmpty()) {
+                $esVendedoraPropia = $solicitud->vendedor_id === Auth::id();
                 $tipoAlerta = $estadoNuevoId == 4 ? 'rechazada' : 'actualizacion';
+                
                 $mensaje = $estadoNuevoId == 4
-                    ? 'Se ha reportado un error en tu solicitud. Revisa las observaciones.'
+                    ? ($esVendedoraPropia ? 'La vendedora ha reportado un error en su propia solicitud.' : 'Se ha reportado un error en tu solicitud. Revisa las observaciones.')
                     : 'El área administrativa ha emitido una resolución para tu solicitud.';
 
                 Notification::send($destinatarios, new AlertaSolicitud(
@@ -507,7 +517,7 @@ class SolicitudController extends Controller
 
     public function storeConsulta(Request $request, SolicitudTag $solicitud, CrearConsultaSolicitudService $service): RedirectResponse
     {
-        Gate::authorize('solicitudes.consultar');
+        Gate::authorize('solicitudes.emitir_consulta');
 
         $request->validate([
             'consulta_tag' => 'nullable|boolean',
@@ -522,7 +532,7 @@ class SolicitudController extends Controller
 
     public function responderConsulta(Request $request, SolicitudTag $solicitud, ConsultaSolicitud $consulta, ResponderConsultaSolicitudService $service): RedirectResponse
     {
-        Gate::authorize('solicitudes.reportar');
+        Gate::authorize('solicitudes.responder_consulta');
 
         $request->validate([
             'respuesta_positiva' => 'required',
