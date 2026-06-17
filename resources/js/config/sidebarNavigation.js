@@ -22,6 +22,7 @@ import {
     Database,
     FileSpreadsheet,
     ShoppingBag,
+    Calculator,
 } from 'lucide-react';
 
 function routeHref(name, fallback) {
@@ -40,7 +41,8 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
     const showReportes = can('solicitudes.exportar');
     const showListados = can('listados.ver');
     const showLimpieza = can('funciones.limpieza_clientes');
-    const showHerramientas = showReportes || showListados || showLimpieza;
+    const showEjercicioEscalonamiento = can('ejercicio_escalonamiento.ver');
+    const showHerramientas = showReportes || showListados || showLimpieza || showEjercicioEscalonamiento;
 
     const solicitudesChildren = [
         can('solicitudes.ver_listado') && {
@@ -147,6 +149,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: Database,
             href: () => routeHref('funciones.limpieza-clientes.index', '/funciones/limpieza-clientes'),
             active: (url) => url.startsWith('/funciones/limpieza-clientes'),
+        },
+        showEjercicioEscalonamiento && {
+            type: 'link',
+            id: 'ejercicio_escalonamiento',
+            label: 'Ejercicio Escalonamiento',
+            icon: Calculator,
+            href: () => routeHref('ejercicio_escalonamiento.index', '/funciones/ejercicio-escalonamiento'),
+            active: (url) => url.startsWith('/funciones/ejercicio-escalonamiento'),
         },
     ].filter(Boolean);
 

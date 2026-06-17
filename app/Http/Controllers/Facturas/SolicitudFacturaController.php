@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Facturas;
 
+use App\Events\SolicitudFacturaActualizada;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Facturas\RepararSolicitudFacturaRequest;
 use App\Http\Requests\Facturas\ResponderSolicitudFacturaRequest;
@@ -59,7 +60,15 @@ class SolicitudFacturaController extends Controller
             $datos['vouchers'] = $request->file('vouchers');
         }
 
-        $crearService->ejecutar($datos, Auth::id());
+        $solicitud = $crearService->ejecutar($datos, Auth::id());
+
+        event(new SolicitudFacturaActualizada(
+            solicitudId: $solicitud->id,
+            accion: 'creada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $solicitud->vendedor_id,
+            departamentoId: $solicitud->departamento_id,
+        ));
 
         return redirect()->back()->with('success', 'Solicitud de factura creada correctamente.');
     }
@@ -80,6 +89,14 @@ class SolicitudFacturaController extends Controller
         }
 
         $repararService->ejecutar($factura, $datos, Auth::user());
+
+        event(new SolicitudFacturaActualizada(
+            solicitudId: $factura->id,
+            accion: 'actualizada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $factura->vendedor_id,
+            departamentoId: $factura->departamento_id,
+        ));
 
         return redirect()->back()->with('success', 'Solicitud corregida y enviada a revisión.');
     }
@@ -132,6 +149,14 @@ class SolicitudFacturaController extends Controller
 
         $responderService->ejecutar($factura, $datos, Auth::user());
 
+        event(new SolicitudFacturaActualizada(
+            solicitudId: $factura->id,
+            accion: 'actualizada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $factura->vendedor_id,
+            departamentoId: $factura->departamento_id,
+        ));
+
         return redirect()->back()->with('success', 'Solicitud de factura actualizada.');
     }
 
@@ -161,6 +186,14 @@ class SolicitudFacturaController extends Controller
             $factura->vendedor->notify(new AlertaFactura($factura, 'verificada', 'Tu solicitud de factura fue verificada.'));
         }
 
+        event(new SolicitudFacturaActualizada(
+            solicitudId: $factura->id,
+            accion: 'actualizada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $factura->vendedor_id,
+            departamentoId: $factura->departamento_id,
+        ));
+
         return redirect()->back()->with('success', 'Solicitud verificada.');
     }
 
@@ -169,7 +202,20 @@ class SolicitudFacturaController extends Controller
         Gate::authorize('facturas.eliminar');
 
         $request->validate(['motivo' => 'required|string|min:5|max:500']);
+
+        $vendedorId = $factura->vendedor_id;
+        $departamentoId = $factura->departamento_id;
+        $facturaId = $factura->id;
+
         $eliminarService->ejecutar($factura, $request->motivo);
+
+        event(new SolicitudFacturaActualizada(
+            solicitudId: $facturaId,
+            accion: 'eliminada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $vendedorId,
+            departamentoId: $departamentoId,
+        ));
 
         return redirect()->back()->with('success', 'Solicitud eliminada.');
     }

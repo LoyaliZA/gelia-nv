@@ -295,6 +295,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/configuracion', [AromasListasController::class, 'guardarConfiguracion'])->name('config.guardar')->middleware('can:listados.configurar_porcentajes');
     });
 
+    // ══════════════════════════════════════════════════════════════════════
+    // FUNCIONES OPERATIVAS: EJERCICIO ESCALONAMIENTO
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:ejercicio_escalonamiento.ver'])->prefix('funciones/ejercicio-escalonamiento')->name('ejercicio_escalonamiento.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Herramientas\EjercicioEscalonamientoController::class, 'index'])->name('index');
+    });
+
 
     // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: CONTROL DE ACTIVOS

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\CancelacionesCotizaciones;
 
+use App\Events\SolicitudOperativaActualizada;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelacionesCotizaciones\StoreSolicitudOperativaRequest;
 use App\Models\AuditoriaSolicitud;
@@ -58,7 +59,15 @@ class SolicitudOperativaController extends Controller
 
     public function store(StoreSolicitudOperativaRequest $request, CrearSolicitudService $crearService): RedirectResponse
     {
-        $crearService->ejecutar($request->validated(), Auth::id());
+        $solicitud = $crearService->ejecutar($request->validated(), Auth::id());
+
+        event(new SolicitudOperativaActualizada(
+            solicitudId: $solicitud->id,
+            accion: 'creada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $solicitud->vendedor_id,
+            departamentoId: $solicitud->departamento_id,
+        ));
 
         return redirect()->back()->with('success', 'Solicitud operativa creada correctamente.');
     }
@@ -150,6 +159,14 @@ class SolicitudOperativaController extends Controller
             }
         });
 
+        event(new SolicitudOperativaActualizada(
+            solicitudId: $solicitud->id,
+            accion: 'actualizada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $solicitud->vendedor_id,
+            departamentoId: $solicitud->departamento_id,
+        ));
+
         return back()->with('success', 'El estado ha sido actualizado correctamente.');
     }
 
@@ -173,6 +190,14 @@ class SolicitudOperativaController extends Controller
             ['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar', 'cancelaciones_cotizaciones.cancelar']
         );
 
+        event(new SolicitudOperativaActualizada(
+            solicitudId: $solicitud->id,
+            accion: 'cancelacion_solicitada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $solicitud->vendedor_id,
+            departamentoId: $solicitud->departamento_id,
+        ));
+
         return back()->with('success', 'Solicitud de cancelación enviada al área administrativa.');
     }
 
@@ -191,6 +216,14 @@ class SolicitudOperativaController extends Controller
 
         $service->ejecutar($solicitud, $request->motivo_cancelacion);
 
+        event(new SolicitudOperativaActualizada(
+            solicitudId: $solicitud->id,
+            accion: 'cancelada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $solicitud->vendedor_id,
+            departamentoId: $solicitud->departamento_id,
+        ));
+
         return back()->with('success', 'La solicitud ha sido cancelada correctamente.');
     }
 
@@ -207,7 +240,19 @@ class SolicitudOperativaController extends Controller
             'motivo' => 'required|string|min:10|max:255',
         ]);
 
+        $vendedorId = $solicitud->vendedor_id;
+        $departamentoId = $solicitud->departamento_id;
+        $solicitudId = $solicitud->id;
+
         $eliminarService->ejecutar($solicitud, $request->motivo);
+
+        event(new SolicitudOperativaActualizada(
+            solicitudId: $solicitudId,
+            accion: 'eliminada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $vendedorId,
+            departamentoId: $departamentoId,
+        ));
 
         return redirect()->route('cancelaciones_cotizaciones.index')
             ->with('success', 'La solicitud ha sido eliminada y el evento ha sido auditado.');

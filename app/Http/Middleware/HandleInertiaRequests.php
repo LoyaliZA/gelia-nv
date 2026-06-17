@@ -76,7 +76,8 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $user ? array_merge($user->toArray(), [
                     'roles' => $user->getRoleNames()->values()->all(),
-                    'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(), 
+                    'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
+                    'departamento_ids' => $user->departamentos()->pluck('departamentos.id')->values()->all(),
                 ]) : null,
                 'tema_visual' => $temaVisual,
                 

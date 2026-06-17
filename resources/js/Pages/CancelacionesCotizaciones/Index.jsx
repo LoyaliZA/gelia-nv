@@ -19,6 +19,7 @@ import { filtrarSolicitudesPorTab } from './Partials/operativasFiltros';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass, GELIA_LISTADO_GRID } from '../../utils/geliaTheme';
 import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
+import useSolicitudRealtime from '../../hooks/useSolicitudRealtime';
 
 const PROPS_LISTADO = ['solicitudes', 'metricas', 'filtros'];
 
@@ -124,6 +125,8 @@ export default function Index({ auth, solicitudes, metricas, filtros = {}, proce
     useEffect(() => {
         setTipoOperativo(filtros.tipo_operativo || '');
     }, [filtros.tipo_operativo]);
+
+    useSolicitudRealtime('solicitudes.operativas', '.solicitud-operativa.actualizada', PROPS_LISTADO, auth);
 
     const paramsListado = useCallback(
         (extra = {}) => {

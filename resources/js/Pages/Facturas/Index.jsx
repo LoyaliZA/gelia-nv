@@ -14,6 +14,7 @@ import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass, GELIA_LISTADO_GRID } from '../../utils/geliaTheme';
 import { puedePermiso } from '../../utils/permisos';
 import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
+import useSolicitudRealtime from '../../hooks/useSolicitudRealtime';
 
 const PROPS_LISTADO = ['facturas', 'metricas', 'filtros'];
 
@@ -41,6 +42,8 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
     useEffect(() => {
         setTabActiva(filtros.tab || 'TODAS');
     }, [filtros.tab]);
+
+    useSolicitudRealtime('solicitudes.facturas', '.solicitud-factura.actualizada', PROPS_LISTADO, auth);
 
     const paramsBase = useCallback(
         (extra = {}) => {
