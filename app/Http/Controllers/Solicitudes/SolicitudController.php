@@ -91,14 +91,21 @@ class SolicitudController extends Controller
             $mensajeAuditoria = 'PAGO CONFIRMADO POR EL COLABORADOR';
             $esAlertaFaltaPago = false;
             $esAlertaAscenso = false;
+            $beneficiosProvisionalAplicados = false;
+            $montoHistoricoBase = 0.0;
+            $totalProyectado = 0.0;
+            $listaCalificada = null;
 
             // 1. Extraemos al cliente con su lista actual cargada para hacer la comparación real
             if ($solicitud->cliente_id) {
                 $cliente = Cliente::with('listaDescuento')->find($solicitud->cliente_id);
                 
                 if ($cliente) {
-                    $montoHistoricoBase = max(0, $cliente->monto_venta_actual - $montoOriginal);
-                    $totalProyectado = $montoHistoricoBase + $montoFinal;
+                    $beneficiosProvisionalAplicados = $this->beneficiosProvisionalEstanAplicados($solicitud, $cliente);
+                    $montoHistoricoBase = $beneficiosProvisionalAplicados
+                        ? max(0, (float) $cliente->monto_venta_actual - (float) $montoOriginal)
+                        : (float) $cliente->monto_venta_actual;
+                    $totalProyectado = $montoHistoricoBase + (float) $montoFinal;
 
                     $listaCalificada = CatalogoListaDescuento::where('activo', true)
                         ->where('nombre', 'not like', '%COLABORADOR%')
@@ -135,7 +142,9 @@ class SolicitudController extends Controller
             // 4. Persistencia y Control Monetario
             $snapshotDiff = [];
             if ($esAlertaFaltaPago) {
-                $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
+                $snapshotDiff = $beneficiosProvisionalAplicados
+                    ? $this->revertirBeneficiosCliente($solicitud)
+                    : $this->capturarSnapshotClienteSinCambioMonetario($solicitud);
 
                 $solicitud->update([
                     'pago_confirmado' => false,
@@ -144,12 +153,12 @@ class SolicitudController extends Controller
                     'motivo_incorrecta' => 'pago_insuficiente',
                 ]);
             } else {
-                $diferencia = $montoFinal - $montoOriginal;
                 if ($solicitud->cliente_id) {
                     $clienteObj = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
                     if ($clienteObj) {
                         $antes = $this->capturarSnapshotCliente($clienteObj);
-                        $clienteObj->monto_venta_actual = max(0, $clienteObj->monto_venta_actual + $diferencia);
+                        $montoObjetivo = max(0, $montoHistoricoBase + (float) $montoFinal);
+                        $clienteObj->monto_venta_actual = $montoObjetivo;
 
                         if ($esAlertaAscenso && isset($listaCalificada)) {
                             $clienteObj->lista_actual_id = $listaCalificada->id;
@@ -739,5 +748,65 @@ class SolicitudController extends Controller
 
         // Si no califica para ninguna por el monto (ej. monto 0), se asigna null o se maneja a Público General.
         $cliente->lista_actual_id = $listaCalificada ? $listaCalificada->id : null;
+    }
+
+    private function capturarSnapshotClienteSinCambioMonetario(SolicitudTag $solicitud): array
+    {
+        if (!$solicitud->cliente_id) {
+            return [];
+        }
+
+        $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
+        if (!$cliente) {
+            return [];
+        }
+
+        $snapshot = $this->capturarSnapshotCliente($cliente);
+
+        return [
+            'antes' => $snapshot,
+            'despues' => $snapshot,
+        ];
+    }
+
+    private function beneficiosProvisionalEstanAplicados(SolicitudTag $solicitud, Cliente $cliente): bool
+    {
+        $montoCotizado = (float) ($solicitud->monto_cotizado ?? 0);
+        if ($montoCotizado <= 0) {
+            return false;
+        }
+
+        $auditoriaAprobacion = AuditoriaSolicitud::query()
+            ->where('solicitud_id', $solicitud->id)
+            ->where('estado_nuevo_id', 2)
+            ->whereNotNull('datos_snapshot')
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$auditoriaAprobacion) {
+            return false;
+        }
+
+        $snapshot = $auditoriaAprobacion->datos_snapshot;
+        $montoAntesAprobacion = isset($snapshot['antes']['monto_venta'])
+            ? (float) $snapshot['antes']['monto_venta']
+            : null;
+        $montoDespuesAprobacion = isset($snapshot['despues']['monto_venta'])
+            ? (float) $snapshot['despues']['monto_venta']
+            : null;
+
+        if ($montoDespuesAprobacion === null || $montoAntesAprobacion === null) {
+            return false;
+        }
+
+        $incrementoEsperado = round($montoDespuesAprobacion - $montoAntesAprobacion, 2);
+        if ($incrementoEsperado <= 0) {
+            return false;
+        }
+
+        $montoClienteActual = round((float) $cliente->monto_venta_actual, 2);
+
+        return abs($montoClienteActual - $montoDespuesAprobacion) < 0.01
+            || $montoClienteActual >= $montoDespuesAprobacion;
     }
 }

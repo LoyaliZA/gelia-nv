@@ -128,6 +128,7 @@ export default function Index({ auth, tickets, modoPruebas, modulos, categorias,
                     ticket={activeTicketChat} 
                     onClose={() => setActiveTicketChat(null)} 
                     onMarkRead={() => markTicketRead(activeTicketChat.id)}
+                    onUpdateTicket={(updated) => setLocalTickets(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t))}
                     auth={auth}
                 />,
                 document.body
@@ -143,7 +144,36 @@ function CreateTicketModal({ modulos, categorias, prioridades, onClose }) {
         categoria_id: '',
         prioridad_id: '',
         descripcion: '',
+        adjuntos: [],
     });
+
+    useEffect(() => {
+        const handlePaste = (e) => {
+            const items = e.clipboardData.items;
+            const pastedFiles = [];
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].kind === 'file') {
+                    const file = items[i].getAsFile();
+                    if (file) pastedFiles.push(file);
+                }
+            }
+            if (pastedFiles.length > 0) {
+                setData('adjuntos', [...data.adjuntos, ...pastedFiles].slice(0, 5));
+            }
+        };
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+    }, [data.adjuntos, setData]);
+
+    const removeAdjunto = (index) => {
+        setData('adjuntos', data.adjuntos.filter((_, i) => i !== index));
+    };
+
+    const handleFileChange = (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setData('adjuntos', [...data.adjuntos, ...Array.from(e.target.files)].slice(0, 5));
+        }
+    };
 
     const submit = (e) => {
         e.preventDefault();
@@ -228,6 +258,25 @@ function CreateTicketModal({ modulos, categorias, prioridades, onClose }) {
                             <label className={THEME_LABEL}>Descripción detallada</label>
                             <textarea className={`${THEME_TEXTAREA} min-h-[120px]`} value={data.descripcion} onChange={e => setData('descripcion', e.target.value)} placeholder="Explica paso a paso lo que ocurrió. Si es posible, incluye el mensaje de error exacto." required />
                             {errors.descripcion && <p className="text-red-500 text-[10px] font-bold uppercase mt-1">{errors.descripcion}</p>}
+                        </div>
+
+                        <div>
+                            <label className={THEME_LABEL}>Evidencias (Opcional, máx 5)</label>
+                            <div className="border-2 border-dashed theme-border rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" onClick={() => document.getElementById('adjuntos-input').click()}>
+                                <input type="file" id="adjuntos-input" multiple className="hidden" accept="image/*,.pdf,.doc,.docx" onChange={handleFileChange} />
+                                <p className="text-sm theme-text-muted">Haz clic para buscar archivos o pega (Ctrl+V) una captura de pantalla</p>
+                            </div>
+                            {data.adjuntos.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {data.adjuntos.map((file, idx) => (
+                                        <div key={idx} className="relative group bg-gray-100 dark:bg-gray-800 p-2 rounded-lg flex items-center gap-2">
+                                            <span className="text-xs truncate max-w-[150px]">{file.name}</span>
+                                            <button type="button" onClick={() => removeAdjunto(idx)} className="text-red-500 hover:text-red-700">✕</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {errors.adjuntos && <p className="text-red-500 text-[10px] font-bold uppercase mt-1">{errors.adjuntos}</p>}
                         </div>
                     </form>
                 </div>

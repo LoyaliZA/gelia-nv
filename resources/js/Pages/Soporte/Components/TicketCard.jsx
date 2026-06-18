@@ -1,91 +1,135 @@
 import React from 'react';
+import { Clock, ArrowRight, User } from 'lucide-react';
 import { geliaCardClass } from '@/utils/geliaTheme';
-import { Clock, ArrowLeft, Users } from 'lucide-react';
 
 export default function TicketCard({ ticket, onClick, isAgent = false }) {
     const isUnread = ticket.has_unread;
+    const isOverdue = ticket.fecha_vencimiento_sla && new Date(ticket.fecha_vencimiento_sla) < new Date();
+    
+    // Extracción de variables de color
+    const prioridad = ticket.prioridadAsignada || ticket.prioridad_asignada;
+    const primaryColor = prioridad?.color || 'var(--color-primario)';
+    const statusColor = ticket.estado?.color || 'var(--color-primario)';
 
     return (
-        <div
+        <div 
             onClick={onClick}
-            className={`${geliaCardClass('p-5 cursor-pointer transition-all hover:shadow-lg relative group flex flex-col h-full')} ${isUnread ? 'ring-2 ring-[var(--color-primario)]' : 'hover:border-[var(--color-primario)]'}`}
+            className={`${geliaCardClass('cursor-pointer flex flex-col relative w-full h-full p-0 transition-transform hover:-translate-y-1 hover:shadow-xl group overflow-hidden')} ${isUnread ? 'ring-2 ring-[var(--color-primario)]' : 'hover:border-[var(--color-primario)]'}`}
+            style={{
+                maskImage: 'radial-gradient(circle at 0 75%, transparent 12px, black 13px), radial-gradient(circle at 100% 75%, transparent 12px, black 13px)',
+                maskSize: '51% 100%',
+                maskRepeat: 'no-repeat',
+                maskPosition: 'left, right',
+                WebkitMaskImage: 'radial-gradient(circle at 0 75%, transparent 12px, black 13px), radial-gradient(circle at 100% 75%, transparent 12px, black 13px)',
+                WebkitMaskSize: '51% 100%',
+                WebkitMaskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'left, right',
+            }}
         >
-            <div className="flex items-start justify-between gap-2 mb-3">
-                <span className="text-xs font-black theme-text-muted shrink-0">
-                    #{ticket.id}
-                </span>
-                <div className="flex flex-col items-end gap-1.5 min-w-0">
-                    {isUnread && (
-                        <span className="inline-flex items-center bg-[var(--color-primario)] text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md whitespace-nowrap">
-                            Actualización
-                        </span>
-                    )}
-                    <span
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase whitespace-nowrap"
-                        style={{ backgroundColor: `${ticket.estado?.color}20`, color: ticket.estado?.color }}
-                    >
-                        {ticket.estado?.nombre || 'Pendiente'}
+            {/* Tira superior (Striped border decoration) */}
+            <div 
+                className="absolute top-0 left-0 right-0 h-1.5 opacity-80" 
+                style={{ background: `repeating-linear-gradient(45deg, ${primaryColor}, ${primaryColor} 10px, transparent 10px, transparent 20px)` }}
+            ></div>
+
+            {/* Top Section */}
+            <div className="p-5 pt-6 flex flex-col flex-grow relative z-10">
+                <div className="text-center mb-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                        {ticket.modulo?.nombre || 'Soporte'}
                     </span>
+                    <h3 className="text-lg font-black uppercase leading-tight theme-text-main line-clamp-2 mt-1" style={{ color: primaryColor }}>
+                        {ticket.titulo}
+                    </h3>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center mb-4 border-y theme-border py-3">
+                    <div>
+                        <span className="block text-[9px] uppercase theme-text-muted mb-1 italic">Ticket</span>
+                        <span className="font-bold text-sm theme-text-main">#{ticket.id}</span>
+                    </div>
+                    <div className="border-l border-r theme-border">
+                        <span className="block text-[9px] uppercase theme-text-muted mb-1 italic">Prioridad</span>
+                        <span className="font-bold text-sm" style={{ color: primaryColor }}>
+                            {prioridad?.nombre || 'N/A'}
+                        </span>
+                    </div>
+                    <div>
+                        <span className="block text-[9px] uppercase theme-text-muted mb-1 italic">Estado</span>
+                        <span className="font-bold text-xs uppercase" style={{ color: statusColor }}>
+                            {ticket.estado?.nombre || 'Pendiente'}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-end text-xs mt-auto">
+                    <div>
+                        <span className="block text-[9px] uppercase theme-text-muted mb-1 italic">Creado</span>
+                        <span className="font-bold theme-text-main flex items-center gap-1 text-[11px]">
+                            {new Date(ticket.created_at).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })}
+                        </span>
+                    </div>
+                    <div className="text-right">
+                        <span className="block text-[9px] uppercase theme-text-muted mb-1 italic">Vence SLA</span>
+                        <span className={`font-bold text-[11px] flex items-center gap-1 justify-end ${isOverdue ? 'text-red-500' : 'theme-text-main'}`}>
+                            {ticket.fecha_vencimiento_sla 
+                                ? <>
+                                    <Clock className="w-3 h-3" />
+                                    {new Date(ticket.fecha_vencimiento_sla).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  </>
+                                : 'Sin definir'}
+                        </span>
+                    </div>
                 </div>
             </div>
 
-            <h3 className="text-sm font-bold theme-text-main line-clamp-2 mb-2 flex-grow">
-                {ticket.titulo}
-            </h3>
-
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-                {isAgent ? (
-                    <>
-                        <span className="text-[10px] theme-text-muted bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md flex items-center gap-1">
-                            <Users className="w-3 h-3" />
-                            {ticket.user?.name || 'Sistema'}
-                        </span>
-                        {ticket.modulo?.nombre && (
-                            <span className="text-[10px] theme-text-muted bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">
-                                {ticket.modulo.nombre}
-                            </span>
-                        )}
-                        {ticket.categoria?.nombre && (
-                            <span className="text-[10px] theme-text-muted bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">
-                                {ticket.categoria.nombre}
-                            </span>
-                        )}
-                    </>
-                ) : (
-                    <>
-                        <span className="text-[10px] theme-text-muted bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">
-                            {ticket.modulo?.nombre}
-                        </span>
-                        {ticket.categoria?.nombre && (
-                            <span className="text-[10px] theme-text-muted bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">
-                                {ticket.categoria.nombre}
-                            </span>
-                        )}
-                    </>
-                )}
-                {(ticket.asignadoA || ticket.asignado_a) ? (
-                    <span className="text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded-md flex items-center gap-1" title="Agente Asignado">
-                        <Users className="w-3 h-3" />
-                        {(ticket.asignadoA || ticket.asignado_a).name}
-                    </span>
-                ) : null}
-                {((ticket.prioridadAsignada || ticket.prioridad_asignada)) && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase" style={{ color: (ticket.prioridadAsignada || ticket.prioridad_asignada).color || 'var(--color-primario)' }}>
-                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: (ticket.prioridadAsignada || ticket.prioridad_asignada).color || 'var(--color-primario)' }}></span>
-                        {(ticket.prioridadAsignada || ticket.prioridad_asignada).nombre}
-                    </span>
-                )}
+            {/* Separator Line */}
+            <div className="relative z-10 w-full flex items-center">
+                <div className="absolute top-0 left-4 right-4 border-t-2 border-dashed theme-border opacity-50"></div>
             </div>
 
-            <div className="pt-3 border-t theme-border flex items-center justify-between text-xs theme-text-muted mt-auto">
-                <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(ticket.created_at).toLocaleDateString('es-MX', { month: 'short', day: 'numeric' })}
-                </span>
-                <span className={`flex items-center gap-1 font-bold ${isUnread ? 'text-[var(--color-primario)]' : 'group-hover:text-[var(--color-primario)] transition-colors'}`}>
-                    {isAgent ? 'Responder' : 'Ver Mensajes'}
-                    <ArrowLeft className="w-3 h-3 rotate-180" />
-                </span>
+            {/* Bottom Section */}
+            <div 
+                className="p-5 pt-5 flex justify-between items-center relative overflow-hidden"
+                style={{ backgroundColor: `${statusColor}10` }}
+            >
+                <div className="absolute top-0 left-0 w-1.5 h-full" style={{ backgroundColor: statusColor }}></div>
+
+                <div className="relative z-10 pl-2">
+                    <span className="block text-[10px] uppercase opacity-80 mb-1 italic theme-text-muted">
+                        {isAgent ? 'Usuario' : 'Asignado a'}
+                    </span>
+                    <span className="font-bold text-sm flex items-center gap-2 theme-text-main">
+                        <User className="w-4 h-4" />
+                        {isAgent ? (ticket.user?.name || 'Sistema') : (ticket.asignadoA?.name || ticket.asignado_a?.name || 'Sin Asignar')}
+                    </span>
+                </div>
+                
+                <div className="relative z-10 flex flex-col items-end">
+                    {isUnread && (
+                        <span className="bg-[var(--color-primario)] text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-md mb-1 shadow-sm">
+                            ¡Nuevo!
+                        </span>
+                    )}
+                    <span className="text-[10px] font-black uppercase opacity-90 flex items-center gap-1 group-hover:translate-x-1 transition-transform theme-text-main" style={{ color: statusColor }}>
+                        Entrar <ArrowRight className="w-3 h-3" />
+                    </span>
+                </div>
+
+                {/* Decorative Pattern GELIA Style */}
+                <div className="absolute -right-4 -bottom-4 opacity-10">
+                    <div className="grid grid-cols-3 gap-1 p-2 rounded-xl transform rotate-12 theme-text-main">
+                        <div className="w-4 h-4 bg-current"></div>
+                        <div className="w-4 h-4 bg-transparent"></div>
+                        <div className="w-4 h-4 bg-current"></div>
+                        <div className="w-4 h-4 bg-current"></div>
+                        <div className="w-4 h-4 bg-current"></div>
+                        <div className="w-4 h-4 bg-transparent"></div>
+                        <div className="w-4 h-4 bg-transparent"></div>
+                        <div className="w-4 h-4 bg-current"></div>
+                        <div className="w-4 h-4 bg-current"></div>
+                    </div>
+                </div>
             </div>
         </div>
     );

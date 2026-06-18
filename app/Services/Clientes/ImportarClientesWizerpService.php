@@ -234,9 +234,9 @@ class ImportarClientesWizerpService
     private function sincronizarListasWizerp(): void
     {
         $listasOficiales = [
-            ['nombre' => 'MAYOREO DIAMANTE', 'monto_requerido' => 85108.00],
-            ['nombre' => 'MAYOREO ORO',      'monto_requerido' => 31250.00],
-            ['nombre' => 'MAYOREO PLATA',    'monto_requerido' => 5104.00],
+            ['nombre' => 'MAYOREO DIAMANTE', 'monto_requerido' => 80001.00],
+            ['nombre' => 'MAYOREO ORO',      'monto_requerido' => 30001.00],
+            ['nombre' => 'MAYOREO PLATA',    'monto_requerido' => 5001.00],
             ['nombre' => 'MAYOREO BRONCE',   'monto_requerido' => 0.01],
             ['nombre' => 'PUBLICO GENERAL',  'monto_requerido' => 0.00],
             ['nombre' => 'PLATAFORMAS',      'monto_requerido' => 999999.00],

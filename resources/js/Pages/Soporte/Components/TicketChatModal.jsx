@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_SECONDARY, THEME_BTN_PRIMARY, THEME_INPUT } from '@/utils/geliaTheme';
+import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_SECONDARY, THEME_BTN_PRIMARY, THEME_INPUT, THEME_TEXTAREA } from '@/utils/geliaTheme';
 import { Send, MessageCircle, Clock, User, ShieldAlert, AlertCircle, HelpCircle } from 'lucide-react';
 
 function getPrioridadAsignada(ticket) {
@@ -11,7 +11,15 @@ function getPrioridadAsignadaId(ticket) {
     return ticket?.prioridad_asignada_id ?? getPrioridadAsignada(ticket)?.id ?? '';
 }
 
-export default function TicketChatModal({ ticket: initialTicket, onClose, isAgent = false, auth, prioridades = [], estados = [], onMarkRead }) {
+const formatToDatetimeLocal = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return '';
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+export default function TicketChatModal({ ticket: initialTicket, onClose, isAgent = false, auth, prioridades = [], estados = [], onMarkRead, onUpdateTicket }) {
     const [ticketData, setTicketData] = useState(initialTicket);
     const [loading, setLoading] = useState(true);
     const [replyMsg, setReplyMsg] = useState('');
@@ -22,6 +30,17 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [assigning, setAssigning] = useState(false);
     const chatContainerRef = useRef(null);
+
+    const [viewerImage, setViewerImage] = useState(null);
+    const [adjuntos, setAdjuntos] = useState([]);
+    
+    const [showCloseForm, setShowCloseForm] = useState(false);
+    const [closeSolution, setCloseSolution] = useState('');
+    const [closeAdjuntos, setCloseAdjuntos] = useState([]);
+    const [closing, setClosing] = useState(false);
+
+    const [selectedSlaDate, setSelectedSlaDate] = useState('');
+    const [updatingSla, setUpdatingSla] = useState(false);
 
     const appendInteraccion = useCallback((nueva) => {
         if (!nueva?.id) return;
@@ -38,8 +57,12 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
         setTicketData(res.data);
         setSelectedPriority(String(getPrioridadAsignadaId(res.data) || ''));
         setSelectedStatus(String(res.data.estado_id || ''));
+        if (res.data.fecha_vencimiento_sla) {
+            setSelectedSlaDate(formatToDatetimeLocal(res.data.fecha_vencimiento_sla));
+        }
+        if (onUpdateTicket) onUpdateTicket(res.data);
         return res.data;
-    }, [initialTicket.id, isAgent]);
+    }, [initialTicket.id, isAgent, onUpdateTicket]);
 
     useEffect(() => {
         if (initialTicket.id >= 99990 || typeof window === 'undefined' || !window.Echo) return;
@@ -81,6 +104,10 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
                 setTicketData(res.data);
                 setSelectedPriority(String(getPrioridadAsignadaId(res.data) || ''));
                 setSelectedStatus(String(res.data.estado_id || ''));
+                if (res.data.fecha_vencimiento_sla) {
+                    setSelectedSlaDate(formatToDatetimeLocal(res.data.fecha_vencimiento_sla));
+                }
+                if (onUpdateTicket) onUpdateTicket(res.data);
                 onMarkRead?.();
             } catch (err) {
                 console.error('Error fetching ticket', err);
@@ -102,8 +129,13 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
         setSending(true);
         try {
             const url = isAgent ? `/soporte/agente/tickets/${initialTicket.id}/reply` : `/soporte/mis-tickets/${initialTicket.id}/reply`;
-            await axios.post(url, { mensaje: replyMsg });
+            const formData = new FormData();
+            formData.append('mensaje', replyMsg);
+            adjuntos.forEach(file => formData.append('adjuntos[]', file));
+
+            await axios.post(url, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             setReplyMsg('');
+            setAdjuntos([]);
             await refetchTicket();
         } catch (err) {
             console.error('Error sending reply', err);
@@ -154,6 +186,69 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
             console.error('Error assigning ticket', err);
         } finally {
             setAssigning(false);
+        }
+    };
+
+    const handleUpdateSla = async () => {
+        if (!selectedSlaDate || updatingSla || initialTicket.id >= 99990) return;
+        setUpdatingSla(true);
+        try {
+            await axios.post(`/soporte/agente/tickets/${initialTicket.id}/sla`, {
+                fecha_vencimiento_sla: selectedSlaDate,
+            });
+            await refetchTicket();
+        } catch (err) {
+            console.error('Error updating SLA', err);
+        } finally {
+            setUpdatingSla(false);
+        }
+    };
+
+    const handleCloseTicket = async () => {
+        if (!closeSolution.trim() || closing || initialTicket.id >= 99990) return;
+        setClosing(true);
+        try {
+            const formData = new FormData();
+            formData.append('solucion', closeSolution);
+            closeAdjuntos.forEach(file => formData.append('adjuntos[]', file));
+
+            await axios.post(`/soporte/agente/tickets/${initialTicket.id}/close`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            setShowCloseForm(false);
+            setCloseSolution('');
+            setCloseAdjuntos([]);
+            await refetchTicket();
+        } catch (err) {
+            console.error('Error closing ticket', err);
+        } finally {
+            setClosing(false);
+        }
+    };
+
+    const handleReplyPaste = (e) => {
+        const items = e.clipboardData.items;
+        const pastedFiles = [];
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].kind === 'file') {
+                const file = items[i].getAsFile();
+                if (file) pastedFiles.push(file);
+            }
+        }
+        if (pastedFiles.length > 0) {
+            setAdjuntos(prev => [...prev, ...pastedFiles].slice(0, 5));
+        }
+    };
+
+    const handleClosePaste = (e) => {
+        const items = e.clipboardData.items;
+        const pastedFiles = [];
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].kind === 'file') {
+                const file = items[i].getAsFile();
+                if (file) pastedFiles.push(file);
+            }
+        }
+        if (pastedFiles.length > 0) {
+            setCloseAdjuntos(prev => [...prev, ...pastedFiles].slice(0, 5));
         }
     };
 
@@ -239,6 +334,19 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
                                                             <p className="text-sm leading-relaxed whitespace-pre-wrap">
                                                                 {interaccion.mensaje}
                                                             </p>
+                                                            {interaccion.adjuntos && interaccion.adjuntos.length > 0 && (
+                                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                                    {interaccion.adjuntos.map(adj => (
+                                                                        <img 
+                                                                            key={adj.id} 
+                                                                            src={`/storage/${adj.ruta_archivo}`} 
+                                                                            alt="Evidencia" 
+                                                                            className="w-20 h-20 object-cover rounded-lg cursor-zoom-in hover:opacity-80 transition-opacity bg-white"
+                                                                            onClick={() => setViewerImage(`/storage/${adj.ruta_archivo}`)}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <span className={`text-[10px] font-bold uppercase ${amITheAuthor ? 'theme-text-muted text-right opacity-70' : 'theme-text-muted text-left'}`}>
                                                             {new Date(interaccion.created_at).toLocaleString('es-MX', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })} - {interaccion.user?.name}
@@ -253,15 +361,26 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
                         </div>
 
                         <div className="flex-shrink-0 p-4 theme-surface border-t theme-border min-h-[88px] flex flex-col justify-center">
+                            {adjuntos.length > 0 && (
+                                <div className="mb-3 flex flex-wrap gap-2">
+                                    {adjuntos.map((file, idx) => (
+                                        <div key={idx} className="relative group bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded flex items-center gap-1">
+                                            <span className="text-xs truncate max-w-[100px]">{file.name}</span>
+                                            <button onClick={() => setAdjuntos(adjuntos.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 font-bold">✕</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             <div className="flex items-end gap-2">
                                 <div className="flex-1 theme-element border theme-border rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-[var(--color-primario)]/50 transition-shadow">
                                     <textarea
                                         className="w-full bg-transparent border-none focus:ring-0 px-4 py-3 text-sm theme-text-main resize-none min-h-[48px] max-h-[150px]"
-                                        placeholder={isDemoTicket ? 'Chat deshabilitado en modo pruebas' : 'Escribe tu respuesta aquí...'}
+                                        placeholder={isDemoTicket ? 'Chat deshabilitado en modo pruebas' : 'Escribe tu respuesta aquí o pega (Ctrl+V) una imagen...'}
                                         rows="1"
                                         value={replyMsg}
                                         disabled={isDemoTicket}
                                         onChange={e => setReplyMsg(e.target.value)}
+                                        onPaste={handleReplyPaste}
                                         onKeyDown={e => {
                                             if (e.key === 'Enter' && !e.shiftKey) {
                                                 e.preventDefault();
@@ -271,8 +390,19 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
                                     />
                                 </div>
                                 <button
+                                    onClick={() => document.getElementById('reply-adjuntos').click()}
+                                    disabled={isDemoTicket || adjuntos.length >= 5}
+                                    className="w-12 h-12 flex-shrink-0 bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-xl flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                    title="Adjuntar Archivos"
+                                >
+                                    <span className="text-lg">+</span>
+                                    <input type="file" id="reply-adjuntos" multiple className="hidden" accept="image/*,.pdf,.doc,.docx" onChange={(e) => {
+                                        if (e.target.files) setAdjuntos([...adjuntos, ...Array.from(e.target.files)].slice(0, 5));
+                                    }} />
+                                </button>
+                                <button
                                     onClick={handleSendReply}
-                                    disabled={sending || !replyMsg.trim() || isDemoTicket}
+                                    disabled={sending || (!replyMsg.trim() && adjuntos.length === 0) || isDemoTicket}
                                     className="w-12 h-12 flex-shrink-0 bg-[var(--color-primario)] text-white rounded-xl flex items-center justify-center hover:scale-105 transition-transform shadow-md disabled:opacity-50 disabled:hover:scale-100">
                                     <Send className={`w-5 h-5 -ml-0.5 mt-0.5 ${sending ? 'animate-pulse' : ''}`} />
                                 </button>
@@ -339,9 +469,28 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
                                         <span className="block text-[10px] font-black uppercase theme-text-muted opacity-80 mb-1 flex items-center gap-1">
                                             <AlertCircle className="w-3 h-3" /> Vence SLA
                                         </span>
-                                        <span className="text-sm font-bold theme-text-main">
-                                            {new Date(ticketData.fecha_vencimiento_sla).toLocaleString('es-MX', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                        </span>
+                                        {isAgent ? (
+                                            <div className="flex flex-col gap-2 mt-1">
+                                                <input 
+                                                    type="datetime-local" 
+                                                    className={`${THEME_INPUT} w-full text-xs py-1.5 px-2 h-auto`} 
+                                                    value={selectedSlaDate} 
+                                                    onChange={e => setSelectedSlaDate(e.target.value)} 
+                                                    disabled={isDemoTicket}
+                                                />
+                                                <button 
+                                                    onClick={handleUpdateSla} 
+                                                    disabled={updatingSla || isDemoTicket || !selectedSlaDate} 
+                                                    className={`${THEME_BTN_PRIMARY} w-full text-[10px] py-1.5 disabled:opacity-50`}
+                                                >
+                                                    {updatingSla ? 'Guardando...' : 'Actualizar SLA'}
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-sm font-bold theme-text-main">
+                                                {new Date(ticketData.fecha_vencimiento_sla).toLocaleString('es-MX', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -410,7 +559,60 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
                                             >
                                                 {updatingStatus ? 'Guardando...' : 'Actualizar Estado'}
                                             </button>
+                                            {ticketData.estado?.nombre !== 'Cerrado' && !isDemoTicket && (
+                                                <button
+                                                    onClick={() => setShowCloseForm(!showCloseForm)}
+                                                    className="w-full text-[10px] py-1.5 font-bold uppercase border border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                >
+                                                    Cerrar Ticket
+                                                </button>
+                                            )}
                                         </div>
+                                    </div>
+                                )}
+                                
+                                {showCloseForm && (
+                                    <div className="p-3 border border-red-200/50 bg-red-50/50 dark:bg-red-900/10 dark:border-red-800/50 rounded-lg space-y-3 mt-4 theme-surface">
+                                        <h4 className="text-xs font-bold text-red-600 dark:text-red-400 uppercase">Cierre de Ticket</h4>
+                                        <div>
+                                            <textarea 
+                                                className={`${THEME_TEXTAREA} text-xs min-h-[60px]`}
+                                                placeholder="Describe la solución proporcionada... (Pega imágenes con Ctrl+V)"
+                                                rows="3"
+                                                value={closeSolution}
+                                                onChange={e => setCloseSolution(e.target.value)}
+                                                onPaste={handleClosePaste}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] theme-text-muted mb-1 uppercase font-bold">Evidencias (Opcional)</label>
+                                            <input 
+                                                type="file" 
+                                                multiple 
+                                                accept="image/*,.pdf,.doc,.docx"
+                                                className="text-xs w-full theme-text-main file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-[var(--color-primario)] file:text-white hover:file:bg-[var(--color-primario)]/90"
+                                                onChange={(e) => {
+                                                    if (e.target.files) setCloseAdjuntos([...closeAdjuntos, ...Array.from(e.target.files)].slice(0, 5));
+                                                }}
+                                            />
+                                            {closeAdjuntos.length > 0 && (
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    {closeAdjuntos.map((file, idx) => (
+                                                        <div key={idx} className="relative group theme-element px-2 py-1 rounded flex items-center gap-1 border theme-border">
+                                                            <span className="text-xs truncate max-w-[100px] theme-text-main">{file.name}</span>
+                                                            <button onClick={() => setCloseAdjuntos(closeAdjuntos.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700 font-bold ml-1">✕</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button 
+                                            onClick={handleCloseTicket}
+                                            disabled={closing || !closeSolution.trim()}
+                                            className="w-full bg-red-500 text-white text-[10px] font-bold py-2 rounded uppercase hover:bg-red-600 disabled:opacity-50 transition-colors"
+                                        >
+                                            {closing ? 'Cerrando...' : 'Confirmar Cierre'}
+                                        </button>
                                     </div>
                                 )}
                             </div>
@@ -419,6 +621,21 @@ export default function TicketChatModal({ ticket: initialTicket, onClose, isAgen
 
                 </div>
             </div>
+            
+            {viewerImage && (
+                <div 
+                    className="fixed inset-0 z-[2000] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+                    onClick={() => setViewerImage(null)}
+                >
+                    <img src={viewerImage} alt="Visor" className="max-w-full max-h-full object-contain" />
+                    <button 
+                        onClick={() => setViewerImage(null)}
+                        className="absolute top-4 right-4 text-white bg-black/50 w-10 h-10 rounded-full flex items-center justify-center hover:bg-black/70"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
         </div>
     );
 }

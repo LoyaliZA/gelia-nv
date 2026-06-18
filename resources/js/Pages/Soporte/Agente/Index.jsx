@@ -133,6 +133,7 @@ export default function AgenteIndex({ auth, tickets, modoPruebas, configuracion,
                     prioridades={prioridades}
                     estados={estados}
                     onMarkRead={() => markTicketRead(activeTicketChat.id)}
+                    onUpdateTicket={(updated) => setLocalTickets(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t))}
                     auth={auth}
                 />,
                 document.body

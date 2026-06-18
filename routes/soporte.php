@@ -28,6 +28,8 @@ Route::middleware(['auth', 'verified'])->prefix('soporte')->name('soporte.')->gr
         Route::post('/tickets/{ticket}/status', [SoporteAgenteController::class, 'updateStatus'])->name('tickets.status');
         Route::post('/tickets/{ticket}/priority', [SoporteAgenteController::class, 'updatePriority'])->name('tickets.priority');
         Route::post('/tickets/{ticket}/assign', [SoporteAgenteController::class, 'assignAgent'])->name('tickets.assign');
+        Route::post('/tickets/{ticket}/close', [SoporteAgenteController::class, 'closeTicket'])->name('tickets.close');
+        Route::post('/tickets/{ticket}/sla', [SoporteAgenteController::class, 'updateSla'])->name('tickets.sla');
     });
 
     // Administración del Sistema de Soporte

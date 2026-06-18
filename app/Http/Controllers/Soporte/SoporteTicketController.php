@@ -59,7 +59,7 @@ class SoporteTicketController extends Controller
             abort(403);
         }
 
-        $ticket->load(['interacciones.user', 'user', 'modulo', 'categoria', 'estado', 'prioridadSugerida', 'prioridadAsignada', 'asignadoA']);
+        $ticket->load(['interacciones.user', 'interacciones.adjuntos', 'user', 'modulo', 'categoria', 'estado', 'prioridadSugerida', 'prioridadAsignada', 'asignadoA']);
         $lecturaService->markAsRead($ticket, $request->user());
 
         return response()->json($this->serializeTicket($ticket));
@@ -73,6 +73,8 @@ class SoporteTicketController extends Controller
 
         $request->validate([
             'mensaje' => 'required|string|max:2000',
+            'adjuntos' => 'nullable|array|max:5',
+            'adjuntos.*' => 'file|mimes:jpeg,png,jpg,gif,pdf,doc,docx|max:5120',
         ]);
 
         $interaccion = $ticket->interacciones()->create([
@@ -80,6 +82,18 @@ class SoporteTicketController extends Controller
             'mensaje' => $request->mensaje,
             'es_nota_interna' => false,
         ]);
+
+        if ($request->hasFile('adjuntos')) {
+            foreach ($request->file('adjuntos') as $file) {
+                $path = $file->store('soporte/adjuntos', 'public');
+                $interaccion->adjuntos()->create([
+                    'ticket_id' => $ticket->id,
+                    'ruta_archivo' => $path,
+                    'nombre_archivo' => $file->getClientOriginalName(),
+                ]);
+            }
+        }
+        $interaccion->load('adjuntos');
 
         broadcast(new \App\Events\Soporte\TicketInteraccionCreatedEvent($interaccion));
 
@@ -100,6 +114,8 @@ class SoporteTicketController extends Controller
             'modulo_id' => 'required|exists:soporte_catalogo_modulos,id',
             'categoria_id' => 'required|exists:soporte_catalogo_categorias,id',
             'prioridad_id' => 'required|exists:soporte_catalogo_prioridades,id',
+            'adjuntos' => 'nullable|array|max:5',
+            'adjuntos.*' => 'file|mimes:jpeg,png,jpg,gif,pdf,doc,docx|max:5120',
         ]);
 
         $config = SoporteConfiguracion::first();
@@ -135,9 +151,21 @@ class SoporteTicketController extends Controller
             'es_nota_interna' => false,
         ]);
 
+        if ($request->hasFile('adjuntos')) {
+            foreach ($request->file('adjuntos') as $file) {
+                $path = $file->store('soporte/adjuntos', 'public');
+                $interaccionInicial->adjuntos()->create([
+                    'ticket_id' => $ticket->id,
+                    'ruta_archivo' => $path,
+                    'nombre_archivo' => $file->getClientOriginalName(),
+                ]);
+            }
+        }
+        $interaccionInicial->load('adjuntos');
+
         broadcast(new \App\Events\Soporte\TicketInteraccionCreatedEvent($interaccionInicial));
 
-        $ticket->load(['user', 'modulo', 'categoria', 'estado', 'prioridadAsignada', 'asignadoA', 'interacciones.user']);
+        $ticket->load(['user', 'modulo', 'categoria', 'estado', 'prioridadAsignada', 'asignadoA', 'interacciones.user', 'interacciones.adjuntos']);
 
         if ($ticket->asignadoA) {
             $ticket->asignadoA->notify(new \App\Notifications\Soporte\TicketCreatedNotification($ticket));

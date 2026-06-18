@@ -55,7 +55,7 @@ class SoporteAgenteController extends Controller
 
     public function show(Request $request, SoporteTicket $ticket, TicketLecturaService $lecturaService)
     {
-        $ticket->load(['interacciones.user', 'user', 'modulo', 'categoria', 'estado', 'prioridadSugerida', 'prioridadAsignada', 'asignadoA']);
+        $ticket->load(['interacciones.user', 'interacciones.adjuntos', 'user', 'modulo', 'categoria', 'estado', 'prioridadSugerida', 'prioridadAsignada', 'asignadoA']);
         $lecturaService->markAsRead($ticket, $request->user());
 
         $serialized = $this->serializeTicket($ticket);
@@ -67,6 +67,8 @@ class SoporteAgenteController extends Controller
     {
         $request->validate([
             'mensaje' => 'required|string|max:2000',
+            'adjuntos' => 'nullable|array|max:5',
+            'adjuntos.*' => 'file|mimes:jpeg,png,jpg,gif,pdf,doc,docx|max:5120',
         ]);
 
         $interaccion = $ticket->interacciones()->create([
@@ -74,6 +76,18 @@ class SoporteAgenteController extends Controller
             'mensaje' => $request->mensaje,
             'es_nota_interna' => false,
         ]);
+
+        if ($request->hasFile('adjuntos')) {
+            foreach ($request->file('adjuntos') as $file) {
+                $path = $file->store('soporte/adjuntos', 'public');
+                $interaccion->adjuntos()->create([
+                    'ticket_id' => $ticket->id,
+                    'ruta_archivo' => $path,
+                    'nombre_archivo' => $file->getClientOriginalName(),
+                ]);
+            }
+        }
+        $interaccion->load('adjuntos');
 
         broadcast(new \App\Events\Soporte\TicketInteraccionCreatedEvent($interaccion));
 
@@ -150,6 +164,66 @@ class SoporteAgenteController extends Controller
         ]);
 
         return back()->with('success', 'Agente asignado correctamente.');
+    }
+
+    public function closeTicket(Request $request, SoporteTicket $ticket)
+    {
+        $request->validate([
+            'solucion' => 'required|string|max:2000',
+            'adjuntos' => 'nullable|array|max:5',
+            'adjuntos.*' => 'file|mimes:jpeg,png,jpg,gif,pdf,doc,docx|max:5120',
+        ]);
+
+        $estadoCerrado = SoporteCatalogoEstado::where('nombre', 'Cerrado')->first();
+
+        if (!$estadoCerrado) {
+            return back()->with('error', 'No existe el estado "Cerrado" en el catálogo.');
+        }
+
+        $ticket->update([
+            'estado_id' => $estadoCerrado->id,
+            'fecha_resolucion' => now(),
+        ]);
+
+        $interaccion = $ticket->interacciones()->create([
+            'user_id' => $request->user()->id,
+            'mensaje' => "[Solución Dada]\n" . $request->solucion,
+            'es_nota_interna' => false,
+        ]);
+
+        if ($request->hasFile('adjuntos')) {
+            foreach ($request->file('adjuntos') as $file) {
+                $path = $file->store('soporte/adjuntos', 'public');
+                $interaccion->adjuntos()->create([
+                    'ticket_id' => $ticket->id,
+                    'ruta_archivo' => $path,
+                    'nombre_archivo' => $file->getClientOriginalName(),
+                ]);
+            }
+        }
+        $interaccion->load('adjuntos');
+
+        broadcast(new \App\Events\Soporte\TicketInteraccionCreatedEvent($interaccion));
+
+        $ticket->loadMissing('user');
+        if ($ticket->user) {
+            $ticket->user->notify(new \App\Notifications\Soporte\TicketReplyNotification($interaccion, true));
+        }
+
+        return back()->with('success', 'Ticket cerrado exitosamente.');
+    }
+
+    public function updateSla(Request $request, SoporteTicket $ticket)
+    {
+        $request->validate([
+            'fecha_vencimiento_sla' => 'required|date',
+        ]);
+
+        $ticket->update([
+            'fecha_vencimiento_sla' => $request->fecha_vencimiento_sla,
+        ]);
+
+        return back()->with('success', 'Tiempo de respuesta actualizado.');
     }
 
     private function serializeTicket(SoporteTicket $ticket): array
