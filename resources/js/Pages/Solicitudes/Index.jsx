@@ -596,9 +596,16 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                 )}
 
                 {/* Eliminar */}
-                {can('solicitudes.eliminar') && (
+                {can('solicitudes.eliminar') && !solicitud.deleted_at && (
                     <button onClick={() => eliminarSolicitud(solicitud.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-red-900/10 text-red-600 dark:text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3">
                         <Trash2 className="w-4 h-4" /> Eliminar Registro
+                    </button>
+                )}
+
+                {/* Restaurar */}
+                {solicitud.deleted_at && can('solicitudes.eliminadas') && (
+                    <button onClick={() => { setMenuAbierto(null); restaurarSolicitud(solicitud.id); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-t theme-border mt-1 pt-3">
+                        <CheckCircle2 className="w-4 h-4" /> Restaurar Solicitud
                     </button>
                 )}
             </div>
@@ -764,6 +771,17 @@ export default function Index({
         }
     };
 
+    const restaurarSolicitud = (id) => {
+        if (window.confirm("ATENCIÓN: ¿Estás seguro de que deseas restaurar esta solicitud a modo informativo?")) {
+            setMenuAbierto(null); setProcesandoAccion(true);
+            router.put(route('solicitudes.restaurar', id), {}, {
+                preserveScroll: true,
+                onSuccess: recargarTrasAccion,
+                onFinish: () => setProcesandoAccion(false),
+            });
+        }
+    };
+
     const abrirMenu = (e, solicitud) => {
         const btn = e.currentTarget; const rect = btn.getBoundingClientRect(); const menuWidth = 224; const menuHeight = 220;
         const spaceBelow = window.innerHeight - rect.bottom; const openUpward = spaceBelow < menuHeight + 16;
@@ -815,6 +833,7 @@ export default function Index({
                 abrirModalConfirmarCancelacion={(s) => setModalConfirmarCancelacion({ abierto: true, solicitud: s })}
                 abrirModalCancelacion={(s) => setModalCancelacion({ abierto: true, solicitud: s })}
                 eliminarSolicitud={eliminarSolicitud}
+                restaurarSolicitud={restaurarSolicitud}
                 can={can}
                 auth={auth}
             />
@@ -893,6 +912,7 @@ export default function Index({
                     onCambiarTab={(tab) => aplicarFiltros({ tab })}
                     onAplicarFiltros={aplicarFiltros}
                     onLimpiarAdicionales={limpiarFiltrosAdicionales}
+                    mostrarEliminadas={can('solicitudes.eliminadas')}
                 />
 
                 <div className="block lg:hidden space-y-4 animate-page-reveal" style={{ animationDelay: '200ms' }}>

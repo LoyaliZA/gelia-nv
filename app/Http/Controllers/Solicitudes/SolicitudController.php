@@ -524,6 +524,27 @@ class SolicitudController extends Controller
         return redirect()->route('solicitudes.index')->with('success', 'La solicitud ha sido eliminada y el evento ha sido auditado.');
     }
 
+    public function restaurar($id, Request $request): RedirectResponse
+    {
+        if (!Auth::user()->can('solicitudes.eliminadas')) {
+            abort(403, 'No tienes los permisos necesarios para restaurar registros.');
+        }
+
+        $solicitud = SolicitudTag::withTrashed()->findOrFail($id);
+        $solicitud->restore();
+
+        AuditoriaSolicitud::create([
+            'solicitud_id' => $solicitud->id,
+            'usuario_id' => Auth::id(),
+            'estado_anterior_id' => null,
+            'estado_nuevo_id' => $solicitud->catalogo_estado_solicitud_id,
+            'motivo_reporte' => 'RESTAURACIÓN DE REGISTRO (INFORMATIVO)',
+            'datos_snapshot' => $solicitud->toArray()
+        ]);
+
+        return redirect()->back()->with('success', 'La solicitud ha sido restaurada correctamente.');
+    }
+
     public function storeConsulta(Request $request, SolicitudTag $solicitud, CrearConsultaSolicitudService $service): RedirectResponse
     {
         Gate::authorize('solicitudes.emitir_consulta');

@@ -210,6 +210,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/solicitudes/{solicitud}/consultas/{consulta}', [SolicitudController::class, 'responderConsulta'])->name('solicitudes.consultas.responder');
     Route::put('/solicitudes/{solicitud}/consultas/{consulta}/leer', [SolicitudController::class, 'marcarConsultaLeida'])->name('solicitudes.consultas.leer');
     Route::delete('/solicitudes/{solicitud}', [SolicitudController::class, 'destroy'])->name('solicitudes.destroy');
+    Route::put('/solicitudes/{id}/restaurar', [SolicitudController::class, 'restaurar'])->name('solicitudes.restaurar');
 
     // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: SOLICITUDES DE FACTURAS

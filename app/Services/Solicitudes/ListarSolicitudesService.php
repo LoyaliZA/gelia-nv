@@ -34,7 +34,7 @@ class ListarSolicitudesService
             $this->aplicarAislamientoDeDatos($query, $usuario);
         }
 
-        $this->aplicarFiltros($query, $filtros);
+        $this->aplicarFiltros($query, $filtros, $usuario);
 
         return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
     }
@@ -76,10 +76,10 @@ class ListarSolicitudesService
         $query->where('vendedor_id', $usuario->id);
     }
 
-    private function aplicarFiltros(Builder $query, array $filtros): void
+    private function aplicarFiltros(Builder $query, array $filtros, ?User $usuario): void
     {
         if (!empty($filtros['tab']) && $filtros['tab'] !== 'TODAS') {
-            $this->aplicarFiltroTab($query, $filtros['tab']);
+            $this->aplicarFiltroTab($query, $filtros['tab'], $usuario);
         }
 
         if (!empty($filtros['estado_id'])) {
@@ -137,7 +137,7 @@ class ListarSolicitudesService
         }
     }
 
-    private function aplicarFiltroTab(Builder $query, string $tab): void
+    private function aplicarFiltroTab(Builder $query, string $tab, ?User $usuario): void
     {
         $idCancelada = CatalogoEstadoSolicitud::where('nombre', 'Cancelada')->value('id');
 
@@ -155,6 +155,9 @@ class ListarSolicitudesService
             'INCORRECTAS' => $query->where('catalogo_estado_solicitud_id', 4),
             'CANCELADAS' => $idCancelada
                 ? $query->where('catalogo_estado_solicitud_id', $idCancelada)
+                : $query->whereRaw('1 = 0'),
+            'ELIMINADAS' => ($usuario && $usuario->can('solicitudes.eliminadas'))
+                ? $query->onlyTrashed()
                 : $query->whereRaw('1 = 0'),
             default => null,
         };

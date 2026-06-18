@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Search, Filter, AlertOctagon, SlidersHorizontal, X, Calendar } from 'lucide-react';
 import RangoFechasPersonalizado from '@/Components/Filtros/RangoFechasPersonalizado';
 
-const TABS = ['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'INCORRECTAS', 'CANCELADAS'];
-
 /**
  * Filtros compartidos: módulo Solicitudes y Reportes de solicitudes financieras.
  */
@@ -22,7 +20,13 @@ export default function FiltrosSolicitudes({
     onLimpiarAdicionales,
     idPrefixFechas = 'filtro-fecha',
     etiquetaBuscar = 'Buscar solicitudes',
+    mostrarEliminadas = false,
 }) {
+    const TABS = ['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'INCORRECTAS', 'CANCELADAS'];
+    if (mostrarEliminadas) {
+        TABS.push('ELIMINADAS');
+    }
+
     const [mostrarAdicionales, setMostrarAdicionales] = useState(
         filtrosActivos > 0 || tipoFecha !== 'TODAS'
     );
