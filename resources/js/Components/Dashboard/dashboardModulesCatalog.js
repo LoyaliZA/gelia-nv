@@ -1,5 +1,5 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Calculator
 } from 'lucide-react';
 
 export const DASHBOARD_MODULE_CARDS = [
@@ -187,5 +187,16 @@ export const DASHBOARD_FUNCTION_CARDS = [
         borderClass: 'border-blue-500/20',
         iconWrapClass: 'bg-blue-500/10 border-blue-500/20',
         iconClass: 'text-blue-500',
+    },
+    {
+        id: 'func_ejercicio_escalonamiento',
+        titulo: 'Ejercicio Escalonamiento',
+        subtitulo: 'Simula proyecciones Plata · Oro · Diamante.',
+        permiso: 'ejercicio_escalonamiento.ver',
+        href: () => route('ejercicio_escalonamiento.index'),
+        icon: Calculator,
+        borderClass: 'border-violet-500/20',
+        iconWrapClass: 'bg-violet-500/10 border-violet-500/20',
+        iconClass: 'text-violet-500',
     },
 ];

@@ -6,6 +6,7 @@ import {
     ROW_HEIGHT_PX,
     applyLayoutChange,
     getCollisions,
+    gridColumnStridePx,
     gridHeightFromLayout,
     layoutToPixelStyle,
     moveItem,
@@ -74,14 +75,14 @@ function DashboardGridItem({
             onInteractionStart(item.i);
 
             const rect = gridEl.getBoundingClientRect();
-            const colWidth = rect.width / GRID_COLS;
+            const colStride = gridColumnStridePx(rect.width);
             const rowStride = ROW_HEIGHT_PX + GRID_GAP_PX;
             const startX = e.clientX;
             const startY = e.clientY;
             const snapshot = { ...item };
 
             const onMovePointer = (ev) => {
-                const deltaCols = Math.round((ev.clientX - startX) / colWidth);
+                const deltaCols = Math.round((ev.clientX - startX) / colStride);
                 const deltaRows = Math.round((ev.clientY - startY) / rowStride);
                 onResize(snapshot, deltaCols, deltaRows);
             };
@@ -127,7 +128,7 @@ function DashboardGridItem({
                 </span>
             )}
 
-            <div className={`dashboard-grid-item__inner ${editMode ? 'pt-10' : ''}`}>
+            <div className="dashboard-grid-item__inner">
                 <div className="dashboard-grid-item__content h-full">{children}</div>
             </div>
 

@@ -524,6 +524,10 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/roles/grupos', [AdminController::class, 'storeGrupoPredefinido'])->name('roles.grupos.store');
         });
 
+        Route::middleware(['can:usuarios.archivar'])->group(function () {
+            Route::delete('/usuarios/{user}/archivar', [AdminController::class, 'archivarUsuario'])->name('usuarios.archivar');
+        });
+
         // --- 1b. Generación de Accesos (permiso separado) ---
         Route::middleware(['can:usuarios.generar_permisos'])->group(function () {
             Route::get('/enlaces', [AdminController::class, 'enlaces'])->name('enlaces');

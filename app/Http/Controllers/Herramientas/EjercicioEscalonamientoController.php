@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use App\Models\CatalogoListaDescuento;
-use App\Models\CatalogoPorcentajeEscalonamientoLista;
 
 class EjercicioEscalonamientoController extends Controller
 {
@@ -17,7 +16,6 @@ class EjercicioEscalonamientoController extends Controller
             'listas' => CatalogoListaDescuento::where('activo', true)
                 ->orderBy('monto_requerido', 'asc')
                 ->get(),
-            'porcentajes' => CatalogoPorcentajeEscalonamientoLista::all()
         ]);
     }
 }

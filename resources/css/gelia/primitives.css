@@ -11,6 +11,10 @@
     transition: background-color 0.3s, border-color 0.3s, backdrop-filter 0.3s;
 }
 
+.dark .gelia-desglose-fila-label {
+    color: color-mix(in srgb, var(--theme-text-muted) 92%, var(--theme-text-main));
+}
+
 .theme-text-main { color: var(--theme-text-main); }
 .theme-text-muted { color: var(--theme-text-muted); }
 .theme-border { border-color: var(--theme-border); }

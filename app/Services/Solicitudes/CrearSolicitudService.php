@@ -12,6 +12,7 @@ use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Http\UploadedFile;
+use App\Services\Solicitudes\EscalonamientoService;
 
 class CrearSolicitudService
 {
@@ -46,6 +47,28 @@ class CrearSolicitudService
                 $listaBronce = $this->resolverListaBronce();
                 $listaDescuentoId = $listaBronce?->id;
                 $montoCotizado = 0;
+            } elseif (!$esOperativo && $montoCotizado > 0 && $clienteId) {
+                $clienteEscalon = Cliente::find($clienteId);
+                if ($clienteEscalon) {
+                    $listasEscalon = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
+                    $listaActualEscalon = $clienteEscalon->lista_actual_id
+                        ? $listasEscalon->firstWhere('id', $clienteEscalon->lista_actual_id)
+                        : null;
+                    $escalon = app(EscalonamientoService::class)->evaluar(
+                        (float) ($clienteEscalon->monto_venta_actual ?? 0),
+                        $montoCotizado,
+                        $listaDescuentoId ? (int) $listaDescuentoId : null,
+                        $listasEscalon,
+                        $listaActualEscalon ? (float) $listaActualEscalon->monto_requerido : 0.0
+                    );
+
+                    if ($escalon['es_ascenso'] && $escalon['lista_calificada_bruto']) {
+                        $listaDescuentoId = (int) $escalon['lista_calificada_bruto']->id;
+                    }
+
+                    $montoFinalTentativo = $escalon['monto_final_tentativo'];
+                    $totalProyectadoNeto = $escalon['total_proyectado_neto'];
+                }
             }
 
             // 3. Creación de la Solicitud

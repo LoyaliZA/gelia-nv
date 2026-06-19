@@ -28,6 +28,10 @@ import {
     FONT_SCALE_STORAGE_KEY,
     applyFontScaleToRoot,
 } from '../utils/fontScale';
+import {
+    applyContentDensityToRoot,
+    resolveContentDensity,
+} from '../utils/contentDensity';
 import useWebPush from '@/hooks/useWebPush';
 import { GELIA_PREVENT_OVERFLOW_X } from '../utils/geliaTheme';
 import { STORAGE_FILTROS_ACTIVOS } from '../Pages/Activos/Partials/navegarListadoActivos';
@@ -46,6 +50,9 @@ export default function AppLayout({ children, fullScreen = false }) {
         }
     }, [url]);
 
+    const [contentDensityMode, setContentDensityMode] = useState(() =>
+        resolveContentDensity(auth?.tema_visual || {}).modo
+    );
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState(null);
 
@@ -424,7 +431,19 @@ export default function AppLayout({ children, fullScreen = false }) {
         if (isGlassActive) root.classList.add('glass-active');
         else root.classList.remove('glass-active');
 
+        const density = applyContentDensityToRoot(tema);
+        setContentDensityMode(density.modo);
+
     }, [isDarkMode, auth?.tema_visual]);
+
+    useEffect(() => {
+        const onThemeChanged = () => {
+            const density = applyContentDensityToRoot(auth?.tema_visual || {});
+            setContentDensityMode(density.modo);
+        };
+        window.addEventListener('theme-changed', onThemeChanged);
+        return () => window.removeEventListener('theme-changed', onThemeChanged);
+    }, [auth?.tema_visual]);
 
     const toggleTheme = () => {
         const newMode = !isDarkMode;
@@ -446,6 +465,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                 data-sidebar-layout={shellSidebarLayout}
                 data-sidebar-edge={shellSidebarEdge}
                 data-page-fullscreen={isMensajeriaFull ? 'true' : 'false'}
+                data-content-density={contentDensityMode}
                 data-immersive-mobile={mensajeriaImmersivaMovil ? 'true' : 'false'}
                 style={{
                     backgroundColor: 'var(--bg-app)',

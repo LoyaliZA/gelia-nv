@@ -1,9 +1,12 @@
 import {
     applyLayoutChange,
     buildDefaultLayout,
+    CARD_GRID_PANEL_MIN_H,
+    CARD_GRID_PANEL_MIN_W,
     compactLayout,
     getCollisions,
     layoutHasCollisions,
+    migrateLayoutFromLegacy,
     optimizeLayout,
     PANEL_GRID_MIN_H,
     PANEL_GRID_MIN_W,
@@ -89,9 +92,9 @@ describe('compactLayout', () => {
 });
 describe('optimizeLayout', () => {
     const defaultLayout = [
-        { i: 'a', x: 0, y: 0, w: 7, h: 12, minW: 2, minH: 2 },
-        { i: 'b', x: 7, y: 0, w: 5, h: 6, minW: 2, minH: 2 },
-        { i: 'c', x: 0, y: 8, w: 12, h: 4, minW: 2, minH: 2 },
+        { i: 'a', x: 0, y: 0, w: 14, h: 12, minW: 2, minH: 2 },
+        { i: 'b', x: 14, y: 0, w: 10, h: 6, minW: 2, minH: 2 },
+        { i: 'c', x: 0, y: 8, w: 24, h: 4, minW: 2, minH: 2 },
     ];
 
     it('genera disposición sin solapamientos', () => {
@@ -112,8 +115,27 @@ describe('optimizeLayout', () => {
         ];
         const optimized = optimizeLayout(layout, defaultLayout);
         const a = optimized.find((item) => item.i === 'a');
-        expect(a.w).toBe(7);
+        expect(a.w).toBe(14);
         expect(a.h).toBe(12);
+    });
+});
+
+describe('migrateLayoutFromLegacy', () => {
+    it('escala layouts de 12 columnas a 24', () => {
+        const legacy = [
+            { i: 'a', x: 0, y: 0, w: 12, h: 8, minW: 4, minH: 4 },
+            { i: 'b', x: 7, y: 0, w: 5, h: 6, minW: 4, minH: 4 },
+        ];
+        const migrated = migrateLayoutFromLegacy(legacy);
+        expect(migrated[0].w).toBe(24);
+        expect(migrated[1].x).toBe(14);
+        expect(migrated[1].w).toBe(10);
+    });
+
+    it('no modifica layouts ya en escala de 24 columnas', () => {
+        const modern = [{ i: 'a', x: 0, y: 0, w: 24, h: 8, minW: 4, minH: 4 }];
+        const result = migrateLayoutFromLegacy(modern);
+        expect(result[0].w).toBe(24);
     });
 });
 
@@ -135,7 +157,7 @@ describe('resolveLayout — mínimo 4×4 en todos los paneles', () => {
         expect(solicitudes.minH).toBe(PANEL_GRID_MIN_H);
     });
 
-    it('define minW/minH 4 en el layout por defecto', () => {
+    it('define minW/minH 4 en widgets y minH mayor en paneles de tarjetas', () => {
         const layout = buildDefaultLayout({
             hasModulos: true,
             hasFunciones: true,
@@ -145,10 +167,34 @@ describe('resolveLayout — mínimo 4×4 en todos los paneles', () => {
         });
         layout.forEach((item) => {
             expect(item.minW).toBe(PANEL_GRID_MIN_W);
-            expect(item.minH).toBe(PANEL_GRID_MIN_H);
             expect(item.w).toBeGreaterThanOrEqual(PANEL_GRID_MIN_W);
             expect(item.h).toBeGreaterThanOrEqual(PANEL_GRID_MIN_H);
+            if (item.i === PANEL_IDS.MODULOS || item.i === PANEL_IDS.FUNCIONES) {
+                expect(item.minH).toBe(CARD_GRID_PANEL_MIN_H);
+                expect(item.minW).toBe(CARD_GRID_PANEL_MIN_W);
+                expect(item.h).toBeGreaterThanOrEqual(CARD_GRID_PANEL_MIN_H);
+                expect(item.w).toBeGreaterThanOrEqual(CARD_GRID_PANEL_MIN_W);
+            } else {
+                expect(item.minH).toBe(PANEL_GRID_MIN_H);
+            }
         });
+    });
+
+    it('eleva h guardado por debajo del minH del panel base', () => {
+        const defaultLayout = buildDefaultLayout({
+            hasModulos: true,
+            hasFunciones: false,
+            hasWidgetSolicitudes: false,
+            hasWidgetCancelaciones: false,
+            hasWidgetActivos: false,
+        });
+        const saved = [{ i: PANEL_IDS.MODULOS, x: 0, y: 0, w: 14, h: 4, minW: 4, minH: 4 }];
+        const layout = resolveLayout(saved, [PANEL_IDS.MODULOS], defaultLayout);
+        const modulos = layout.find((item) => item.i === PANEL_IDS.MODULOS);
+        expect(modulos.h).toBeGreaterThanOrEqual(CARD_GRID_PANEL_MIN_H);
+        expect(modulos.minH).toBe(CARD_GRID_PANEL_MIN_H);
+        expect(modulos.w).toBeGreaterThanOrEqual(CARD_GRID_PANEL_MIN_W);
+        expect(modulos.minW).toBe(CARD_GRID_PANEL_MIN_W);
     });
 });
 

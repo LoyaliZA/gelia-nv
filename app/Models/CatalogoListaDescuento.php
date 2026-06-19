@@ -31,6 +31,10 @@ class CatalogoListaDescuento extends Model
 
     public function getPorcentajeEscalonamientoPctAttribute(): float
     {
+        if ($this->porcentaje_descuento !== null) {
+            return (float) $this->porcentaje_descuento;
+        }
+
         if (!$this->relationLoaded('porcentajeEscalonamiento')) {
             $this->load('porcentajeEscalonamiento');
         }

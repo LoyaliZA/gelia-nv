@@ -748,4 +748,55 @@ class AdminController extends Controller
             $usuario->perfilRh->update(['area_id' => $areaId]);
         }
     }
+
+    public function archivarUsuario(Request $request, User $user)
+    {
+        Gate::authorize('usuarios.archivar');
+
+        $request->validate([
+            'motivo' => 'required|string|max:1000'
+        ]);
+
+        if ($user->id === Auth::id()) {
+            return back()->withErrors(['error' => 'No puedes archivar tu propia cuenta.']);
+        }
+
+        if ($user->hasRole('Super Admin')) {
+            return back()->withErrors(['error' => 'No se puede archivar a un Super Admin.']);
+        }
+
+        $timestamp = time();
+        $suffix = "_archived_{$timestamp}";
+
+        $oldData = [
+            'email' => $user->email,
+            'username' => $user->username,
+            'telefono' => $user->telefono,
+        ];
+
+        $user->update([
+            'email' => $user->email . $suffix,
+            'username' => $user->username . $suffix,
+            'telefono' => $user->telefono ? $user->telefono . $suffix : null,
+        ]);
+
+        $user->delete();
+
+        \App\Services\Auditoria\RegistrarAuditoriaConfiguracionService::ejecutar(
+            'Usuarios',
+            'Archivado de cuenta (Deshabilitación)',
+            [
+                'descripcion' => 'Se archivó el usuario, desvinculando sus credenciales de acceso para liberar los correos y teléfonos.',
+                'motivo_archivado' => $request->motivo,
+                'datos_anteriores' => $oldData,
+                'usuario_afectado' => [
+                    'id' => $user->id,
+                    'nombre' => "{$user->name} {$user->apellido_paterno} {$user->apellido_materno}",
+                ]
+            ],
+            $user->id
+        );
+
+        return back()->with('success', 'El colaborador ha sido archivado exitosamente. Se ha registrado el motivo en la auditoría y sus datos (correo, teléfono) han quedado libres para reasignación.');
+    }
 }

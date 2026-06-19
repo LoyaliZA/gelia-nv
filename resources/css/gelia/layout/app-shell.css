@@ -67,6 +67,41 @@ body {
     margin-inline: auto;
 }
 
+/* Contenedor de página (GeliaPageShell) — ancho 100% del padre; padding vía tokens */
+.gelia-page-shell {
+    width: 100%;
+    max-width: 100%;
+    margin-inline: auto;
+    padding-block: var(--gelia-page-shell-padding-block);
+    padding-inline: var(--gelia-page-shell-padding-inline);
+    padding-bottom: clamp(1rem, 2.5vw, 1.75rem);
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.gelia-app-shell[data-content-density='completo']:not([data-page-fullscreen='true']) .gelia-app-content-inner {
+    max-width: min(var(--gelia-content-max), 100%);
+}
+
+/*
+ * Wrappers legacy con max-w-[1400px] (descendiente de content-inner vía animate-page-reveal):
+ * el ancho lo controla --gelia-content-max en .gelia-app-content-inner.
+ */
+.gelia-app-content-inner [class*='max-w-[1400px]'],
+.gelia-app-content-inner .gelia-page-shell {
+    max-width: 100% !important;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.gelia-app-shell[data-content-density='completo'] .gelia-app-content-inner [class*='max-w-[1400px]'],
+.gelia-app-shell[data-content-density='completo'] .gelia-app-content-inner .gelia-page-shell,
+.gelia-app-shell[data-content-density='personalizado'] .gelia-app-content-inner [class*='max-w-[1400px]'],
+.gelia-app-shell[data-content-density='personalizado'] .gelia-app-content-inner .gelia-page-shell {
+    padding-inline: var(--gelia-page-shell-padding-inline);
+    padding-block-start: var(--gelia-page-shell-padding-block);
+}
+
 .gelia-app-main--fullscreen {
     max-width: none;
     padding-inline: 0;

@@ -1,10 +1,14 @@
-export const GRID_COLS = 12;
+export const GRID_COLS = 24;
+export const LEGACY_GRID_COLS = 12;
 export const ROW_HEIGHT_PX = 48;
 export const GRID_GAP_PX = 16;
 
 /** Mínimo absoluto de todos los paneles personalizables del dashboard (ancho × alto en celdas). */
 export const PANEL_GRID_MIN_W = 4;
 export const PANEL_GRID_MIN_H = 4;
+/** Mínimos de paneles con cuadrícula de tarjetas (Módulos / Funciones). */
+export const CARD_GRID_PANEL_MIN_H = 4;
+export const CARD_GRID_PANEL_MIN_W = 10;
 
 export const PANEL_IDS = {
     MODULOS: 'panel_modulos',
@@ -20,58 +24,59 @@ export const PANEL_IDS = {
  */
 export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitudes, hasWidgetCancelaciones, hasWidgetActivos, hasWidgetRh }) {
     const layout = [];
-    let nextRow = 0;
-    const widgetCount = [hasWidgetSolicitudes, hasWidgetCancelaciones, hasWidgetActivos, hasWidgetRh].filter(Boolean).length;
-    const hasAnyWidget = widgetCount > 0;
-    const modulosWidth = hasAnyWidget ? 7 : 12;
-    const widgetWidth = hasModulos ? 5 : 12;
-    const widgetX = hasModulos ? 7 : 0;
-    const widgetHeight = widgetCount > 1 ? Math.max(PANEL_GRID_MIN_H, Math.floor(12 / widgetCount)) : 12;
-
-    if (hasModulos) {
-        layout.push({
-            i: PANEL_IDS.MODULOS,
-            x: 0,
-            y: 0,
-            w: Math.max(PANEL_GRID_MIN_W, modulosWidth),
-            h: 12,
-            minW: PANEL_GRID_MIN_W,
-            minH: PANEL_GRID_MIN_H,
-        });
-        nextRow = 12;
-    }
-
+    
+    // 1. Widgets en la parte superior (6x4 cada uno)
+    let widgetX = 0;
     let widgetY = 0;
+    let maxWidgetY = 0;
+
     const pushWidget = (id) => {
         layout.push({
             i: id,
             x: widgetX,
             y: widgetY,
-            w: Math.max(PANEL_GRID_MIN_W, widgetWidth),
-            h: Math.max(PANEL_GRID_MIN_H, widgetHeight),
+            w: 6,
+            h: 4,
             minW: PANEL_GRID_MIN_W,
             minH: PANEL_GRID_MIN_H,
         });
-        widgetY += widgetHeight;
-        if (!hasModulos) nextRow = Math.max(nextRow, widgetY);
+        widgetX += 6;
+        if (widgetX >= GRID_COLS) {
+            widgetX = 0;
+            widgetY += 4;
+        }
+        maxWidgetY = Math.max(maxWidgetY, widgetY + (widgetX > 0 ? 4 : 0));
     };
 
-    if (hasWidgetSolicitudes) pushWidget(PANEL_IDS.SOLICITUDES);
-    if (hasWidgetCancelaciones) pushWidget(PANEL_IDS.CANCELACIONES);
-    if (hasWidgetActivos) pushWidget(PANEL_IDS.ACTIVOS);
+    // Orden en el que aparecen de izquierda a derecha
     if (hasWidgetRh) pushWidget(PANEL_IDS.RH);
+    if (hasWidgetActivos) pushWidget(PANEL_IDS.ACTIVOS);
+    if (hasWidgetCancelaciones) pushWidget(PANEL_IDS.CANCELACIONES);
+    if (hasWidgetSolicitudes) pushWidget(PANEL_IDS.SOLICITUDES);
 
-    if (hasFunciones) {
+    // 2. Paneles principales debajo de los widgets (12x8 cada uno)
+    let nextRow = maxWidgetY;
+    let panelX = 0;
+
+    const pushPanel = (id) => {
         layout.push({
-            i: PANEL_IDS.FUNCIONES,
-            x: 0,
+            i: id,
+            x: panelX,
             y: nextRow,
             w: 12,
-            h: Math.max(PANEL_GRID_MIN_H, 7),
-            minW: PANEL_GRID_MIN_W,
-            minH: PANEL_GRID_MIN_H,
+            h: 8,
+            minW: CARD_GRID_PANEL_MIN_W,
+            minH: CARD_GRID_PANEL_MIN_H,
         });
-    }
+        panelX += 12;
+        if (panelX >= GRID_COLS) {
+            panelX = 0;
+            nextRow += 8;
+        }
+    };
+
+    if (hasModulos) pushPanel(PANEL_IDS.MODULOS);
+    if (hasFunciones) pushPanel(PANEL_IDS.FUNCIONES);
 
     return layout;
 }
@@ -248,18 +253,53 @@ export function applyLayoutChange(layout, changedId) {
 }
 
 /**
+ * Detecta layouts guardados con la cuadrícula anterior de 12 columnas.
+ */
+export function isLegacyGridLayout(layout) {
+    if (!layout?.length) return false;
+    const maxExtent = Math.max(...layout.map((item) => item.x + item.w));
+    return maxExtent <= LEGACY_GRID_COLS;
+}
+
+/**
+ * Escala un layout 12-col al sistema actual (24 columnas).
+ */
+export function migrateLayoutFromLegacy(layout) {
+    if (!layout?.length || !isLegacyGridLayout(layout)) {
+        return layout.map(clampItem);
+    }
+
+    const scale = GRID_COLS / LEGACY_GRID_COLS;
+
+    return layout.map((item) =>
+        clampItem({
+            ...item,
+            x: Math.round(item.x * scale),
+            w: Math.max(
+                item.minW ?? PANEL_GRID_MIN_W,
+                Math.round(item.w * scale)
+            ),
+            minW: item.minW
+                ? Math.max(PANEL_GRID_MIN_W, Math.round(item.minW * scale))
+                : PANEL_GRID_MIN_W,
+        })
+    );
+}
+
+/**
  * Combina layout guardado en BD con paneles visibles y valores por defecto.
  */
 export function resolveLayout(savedLayout, visiblePanelIds, defaultLayout) {
     const defaultsById = Object.fromEntries(defaultLayout.map((item) => [item.i, item]));
-    const savedById = Object.fromEntries((savedLayout || []).map((item) => [item.i, item]));
+    const migratedSaved = migrateLayoutFromLegacy(savedLayout || []);
+    const savedById = Object.fromEntries(migratedSaved.map((item) => [item.i, item]));
 
     let layout = visiblePanelIds
         .map((id) => {
             const base = defaultsById[id];
             if (!base) return null;
             const saved = savedById[id];
-            return clampItem(saved ? { ...base, ...saved, i: id } : base);
+            return clampItem({ ...base, ...saved, i: id, minW: base.minW, minH: base.minH });
         })
         .filter(Boolean);
 
@@ -268,6 +308,15 @@ export function resolveLayout(savedLayout, visiblePanelIds, defaultLayout) {
     }
 
     return layout;
+}
+
+export function gridColumnWidthPx(gridWidth, cols = GRID_COLS) {
+    if (!gridWidth || gridWidth <= 0) return 0;
+    return (gridWidth - (cols - 1) * GRID_GAP_PX) / cols;
+}
+
+export function gridColumnStridePx(gridWidth, cols = GRID_COLS) {
+    return gridColumnWidthPx(gridWidth, cols) + GRID_GAP_PX;
 }
 
 export function layoutToGridStyle(item) {
@@ -294,7 +343,7 @@ export function layoutToPixelStyle(item, gridWidth) {
         return layoutToAbsoluteStyle(item);
     }
 
-    const colWidth = (gridWidth - (GRID_COLS - 1) * GRID_GAP_PX) / GRID_COLS;
+    const colWidth = gridColumnWidthPx(gridWidth, GRID_COLS);
     const rowStride = ROW_HEIGHT_PX + GRID_GAP_PX;
 
     return {
@@ -314,10 +363,10 @@ export function gridHeightFromLayout(layout) {
 export function pointerToGridCell(clientX, clientY, gridRect, cols = GRID_COLS) {
     const relX = clientX - gridRect.left;
     const relY = clientY - gridRect.top;
-    const colWidth = gridRect.width / cols;
+    const strideX = gridColumnStridePx(gridRect.width, cols);
     const rowStride = ROW_HEIGHT_PX + GRID_GAP_PX;
 
-    const x = Math.max(0, Math.min(cols - 1, Math.floor(relX / colWidth)));
+    const x = Math.max(0, Math.min(cols - 1, Math.floor(relX / strideX)));
     const y = Math.max(0, Math.floor(relY / rowStride));
 
     return { x, y };

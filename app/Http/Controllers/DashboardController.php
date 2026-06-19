@@ -112,9 +112,9 @@ class DashboardController extends Controller
             'dashboard_ocultos' => 'sometimes|array',
             'dashboard_layout' => 'nullable|array',
             'dashboard_layout.*.i' => 'required_with:dashboard_layout|string|max:64',
-            'dashboard_layout.*.x' => 'required_with:dashboard_layout|integer|min:0|max:11',
+            'dashboard_layout.*.x' => 'required_with:dashboard_layout|integer|min:0|max:23',
             'dashboard_layout.*.y' => 'required_with:dashboard_layout|integer|min:0|max:200',
-            'dashboard_layout.*.w' => 'required_with:dashboard_layout|integer|min:4|max:12',
+            'dashboard_layout.*.w' => 'required_with:dashboard_layout|integer|min:4|max:24',
             'dashboard_layout.*.h' => 'required_with:dashboard_layout|integer|min:4|max:100',
         ]);
 

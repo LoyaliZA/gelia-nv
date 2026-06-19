@@ -195,13 +195,6 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             href: () => routeHref('activos.index', '/activos'),
             active: (url) => url.startsWith('/activos'),
         },
-        showHerramientas && {
-            type: 'group',
-            id: 'herramientas',
-            label: 'Herramientas',
-            icon: Wrench,
-            children: herramientasChildren,
-        },
     ].filter(Boolean);
 
     const soporteChildren = [
@@ -292,12 +285,12 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: Briefcase,
             children: operacionesChildren,
         },
-        soporteChildren.length > 0 && {
+        showHerramientas && herramientasChildren.length > 0 && {
             type: 'group',
-            id: 'soporte',
-            label: 'Soporte',
-            icon: LifeBuoy,
-            children: soporteChildren,
+            id: 'herramientas',
+            label: 'Herramientas',
+            icon: Wrench,
+            children: herramientasChildren,
         },
         gestionChildren.length > 0 && {
             type: 'group',
@@ -305,6 +298,13 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             label: 'Gestión Interna',
             icon: Settings,
             children: gestionChildren,
+        },
+        soporteChildren.length > 0 && {
+            type: 'group',
+            id: 'soporte',
+            label: 'Soporte',
+            icon: LifeBuoy,
+            children: soporteChildren,
         },
         sistemaChildren.length > 0 && {
             type: 'group',

@@ -87,12 +87,14 @@
     --gelia-sidebar-width-expanded: 5.25rem;
     /* Espacio exterior barra lateral ↔ panel desplegado (0.5rem = mitad del 1rem previo) */
     --gelia-sidebar-panel-exterior-gap: 0.5rem;
-    --gelia-sidebar-menu-width: 18.75rem;
+    --gelia-sidebar-menu-width: clamp(17rem, 22vw, 20rem);
     --gelia-sidebar-menu-max-height: min(85vh, calc(100dvh - 3rem));
     --gelia-mobile-topbar-height: calc(3.25rem + env(safe-area-inset-top, 0px));
     --gelia-content-max: 87.5rem;
     --gelia-content-max-wide: 112.5rem;
-    --gelia-main-padding-x: 1.5rem;
+    --gelia-main-padding-x: 1.25rem;
+    --gelia-page-shell-padding-block: clamp(0.75rem, 2vw, 1.5rem);
+    --gelia-page-shell-padding-inline: clamp(0.75rem, 2vw, 1.5rem);
     --gelia-main-inset-inline-start: 0px;
     --gelia-main-inset-inline-end: 0px;
     --gelia-main-inset-block-start: 0px;

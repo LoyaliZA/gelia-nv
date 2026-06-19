@@ -11,6 +11,7 @@ import {
     Minus, Plus, Volume2, Mic, Monitor, Bell, MessageCircle
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
+import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaLoader from '../../Components/GeliaLoader';
 import GeliaLogo from '../../Components/GeliaLogo';
 import NotificationBrowserService from '@/Services/NotificationBrowserService';
@@ -34,6 +35,27 @@ import {
     FONT_SCALE_STEP,
     FONT_SCALE_STORAGE_KEY,
 } from '../../utils/fontScale';
+import {
+    clampContentMaxRem,
+    clampContentPaddingRem,
+    normalizeDensityMode,
+    applyContentDensityToRoot,
+    persistContentDensityToStorage,
+    formatContentMaxLabel,
+    formatContentPaddingLabel,
+    CONTENT_DENSITY_DEFAULT,
+    CONTENT_MAX_REM_MIN,
+    CONTENT_MAX_REM_MAX,
+    CONTENT_MAX_REM_STEP,
+    CONTENT_MAX_REM_DEFAULT,
+    CONTENT_PADDING_REM_MIN,
+    CONTENT_PADDING_REM_MAX,
+    CONTENT_PADDING_REM_STEP,
+    CONTENT_PADDING_REM_DEFAULT,
+    CONTENT_DENSITY_STORAGE_KEY,
+    CONTENT_MAX_REM_STORAGE_KEY,
+    CONTENT_PADDING_REM_STORAGE_KEY,
+} from '../../utils/contentDensity';
 import {
     compressImageToWebp,
     validateImageSource,
@@ -65,6 +87,9 @@ function readStoredTheme(temaVisual = {}) {
             layout: temaVisual?.layout_sidebar || 'floating_left',
             sidebarMode: temaVisual?.sidebar_modo || 'collapsed',
             fixedPosition: temaVisual?.sidebar_posicion_fija || 'left',
+            contentDensity: normalizeDensityMode(temaVisual?.densidad_contenido ?? CONTENT_DENSITY_DEFAULT),
+            contentMaxRem: clampContentMaxRem(temaVisual?.contenido_max_rem ?? CONTENT_MAX_REM_DEFAULT),
+            contentPaddingRem: clampContentPaddingRem(temaVisual?.contenido_padding_rem ?? CONTENT_PADDING_REM_DEFAULT),
         };
     }
     const savedGlass = localStorage.getItem('theme_glass');
@@ -82,6 +107,15 @@ function readStoredTheme(temaVisual = {}) {
         layout: localStorage.getItem('theme_layout') || temaVisual?.layout_sidebar || 'floating_left',
         sidebarMode: localStorage.getItem('theme_sidebar_mode') || temaVisual?.sidebar_modo || 'collapsed',
         fixedPosition: localStorage.getItem('theme_fixed_position') || temaVisual?.sidebar_posicion_fija || 'left',
+        contentDensity: normalizeDensityMode(
+            localStorage.getItem(CONTENT_DENSITY_STORAGE_KEY) ?? temaVisual?.densidad_contenido ?? CONTENT_DENSITY_DEFAULT
+        ),
+        contentMaxRem: clampContentMaxRem(
+            localStorage.getItem(CONTENT_MAX_REM_STORAGE_KEY) ?? temaVisual?.contenido_max_rem ?? CONTENT_MAX_REM_DEFAULT
+        ),
+        contentPaddingRem: clampContentPaddingRem(
+            localStorage.getItem(CONTENT_PADDING_REM_STORAGE_KEY) ?? temaVisual?.contenido_padding_rem ?? CONTENT_PADDING_REM_DEFAULT
+        ),
     };
 }
 
@@ -97,6 +131,9 @@ function captureThemeSnapshot() {
         theme_layout: localStorage.getItem('theme_layout'),
         theme_sidebar_mode: localStorage.getItem('theme_sidebar_mode'),
         theme_fixed_position: localStorage.getItem('theme_fixed_position'),
+        [CONTENT_DENSITY_STORAGE_KEY]: localStorage.getItem(CONTENT_DENSITY_STORAGE_KEY),
+        [CONTENT_MAX_REM_STORAGE_KEY]: localStorage.getItem(CONTENT_MAX_REM_STORAGE_KEY),
+        [CONTENT_PADDING_REM_STORAGE_KEY]: localStorage.getItem(CONTENT_PADDING_REM_STORAGE_KEY),
     };
 }
 
@@ -378,6 +415,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [sidebarLayout, setSidebarLayout] = useState(initialTheme.layout);
     const [sidebarMode, setSidebarMode] = useState(initialTheme.sidebarMode);
     const [fixedPosition, setFixedPosition] = useState(initialTheme.fixedPosition);
+    const [contentDensity, setContentDensity] = useState(initialTheme.contentDensity);
+    const [contentMaxRem, setContentMaxRem] = useState(initialTheme.contentMaxRem);
+    const [contentPaddingRem, setContentPaddingRem] = useState(initialTheme.contentPaddingRem);
     const [alertasPrefs, setAlertasPrefs] = useState(() => readStoredAlertasPrefs(tema_visual));
     const [activeTab, setActiveTab] = useState(readPreferenciasTabFromHash);
 
@@ -454,6 +494,10 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             if (!themeSavedRef.current) restoreThemeSnapshot(themeSnapshotRef.current);
         };
     }, []);
+
+    useEffect(() => {
+        themeSnapshotRef.current = captureThemeSnapshot();
+    }, [contentDensity, contentMaxRem, contentPaddingRem]);
 
     const validateImageFile = useCallback((file, label) => validateImageSource(file, label), []);
 
@@ -561,6 +605,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             layout: overrides.layout ?? sidebarLayout,
             sidebarMode: overrides.sidebarMode ?? sidebarMode,
             fixedPosition: overrides.fixedPosition ?? fixedPosition,
+            contentDensity: overrides.contentDensity ?? contentDensity,
+            contentMaxRem: overrides.contentMaxRem ?? contentMaxRem,
+            contentPaddingRem: overrides.contentPaddingRem ?? contentPaddingRem,
         };
 
         localStorage.setItem('theme', theme.modo);
@@ -572,8 +619,18 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         localStorage.setItem('theme_layout', theme.layout);
         localStorage.setItem('theme_sidebar_mode', theme.sidebarMode);
         localStorage.setItem('theme_fixed_position', theme.fixedPosition);
+        persistContentDensityToStorage({
+            modo: theme.contentDensity,
+            contenidoMaxRem: theme.contentMaxRem,
+            contenidoPaddingRem: theme.contentPaddingRem,
+        });
+        applyContentDensityToRoot({
+            densidad_contenido: theme.contentDensity,
+            contenido_max_rem: theme.contentMaxRem,
+            contenido_padding_rem: theme.contentPaddingRem,
+        });
         window.dispatchEvent(new Event('theme-changed'));
-    }, [isDarkMode, selectedColor, selectedBg, typography, fontScale, glassEffect, sidebarLayout, sidebarMode, fixedPosition]);
+    }, [isDarkMode, selectedColor, selectedBg, typography, fontScale, glassEffect, sidebarLayout, sidebarMode, fixedPosition, contentDensity, contentMaxRem, contentPaddingRem]);
 
     // --- SUBMIT: Blindado con JSON.stringify ---
     const submitProfile = (e) => {
@@ -590,6 +647,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             sidebar_modo:    sidebarMode,
             sidebar_posicion_fija: fixedPosition,
             efecto_cristal:   glassEffect,
+            densidad_contenido: contentDensity,
+            contenido_max_rem: contentMaxRem,
+            contenido_padding_rem: contentPaddingRem,
             alertas_prefs:    alertasPrefs,
         };
 
@@ -680,6 +740,42 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             applyFontScaleToRoot(next);
             localStorage.setItem(FONT_SCALE_STORAGE_KEY, String(next));
             window.dispatchEvent(new Event('theme-changed'));
+            return next;
+        });
+    };
+
+    const previewContentDensity = useCallback((modo, maxRem, paddingRem) => {
+        persistContentDensityToStorage({
+            modo,
+            contenidoMaxRem: maxRem,
+            contenidoPaddingRem: paddingRem,
+        });
+        applyContentDensityToRoot({
+            densidad_contenido: modo,
+            contenido_max_rem: maxRem,
+            contenido_padding_rem: paddingRem,
+        });
+        window.dispatchEvent(new Event('theme-changed'));
+    }, []);
+
+    const handleContentDensityChange = (modo) => {
+        const normalized = normalizeDensityMode(modo);
+        setContentDensity(normalized);
+        previewContentDensity(normalized, contentMaxRem, contentPaddingRem);
+    };
+
+    const handleContentMaxStep = (direction) => {
+        setContentMaxRem((prev) => {
+            const next = clampContentMaxRem(prev + direction * CONTENT_MAX_REM_STEP);
+            previewContentDensity(contentDensity, next, contentPaddingRem);
+            return next;
+        });
+    };
+
+    const handleContentPaddingStep = (direction) => {
+        setContentPaddingRem((prev) => {
+            const next = clampContentPaddingRem(prev + direction * CONTENT_PADDING_REM_STEP);
+            previewContentDensity(contentDensity, contentMaxRem, next);
             return next;
         });
     };
@@ -893,7 +989,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                 document.body
             )}
 
-            <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 space-y-8 relative">
+            <GeliaPageShell className="space-y-8 relative" data-gelia-page-wrap="gelia-shell">
 
                 {/* --- HEADER --- */}
                 <header className={`${activeCardClass} p-8 md:p-12 flex flex-col gap-8 md:gap-10`}>
@@ -1070,7 +1166,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             </div>
                         </SettingsRow>
 
-                        <SettingsRow icon={Type} title="Tamaño de letra" subtitle={`${formatFontScaleLabel(FONT_SCALE_MIN)} – ${formatFontScaleLabel(FONT_SCALE_MAX)} · vista previa temporal`} border={false} stackOnMobile={true}>
+                        <SettingsRow icon={Type} title="Tamaño de letra" subtitle={`${formatFontScaleLabel(FONT_SCALE_MIN)} – ${formatFontScaleLabel(FONT_SCALE_MAX)} · vista previa temporal`} stackOnMobile={true}>
                             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
                                 <button
                                     type="button"
@@ -1097,6 +1193,47 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 </button>
                             </div>
                         </SettingsRow>
+
+                        <SettingsRow icon={Layers} title="Abarcamiento de datos" subtitle="Compacto centrado · Completo a pantalla · Personalizado" border={contentDensity !== 'personalizado'} stackOnMobile={true}>
+                            <div className="gelia-segment w-full sm:w-auto p-1 min-h-12 shadow-sm flex flex-col sm:flex-row">
+                                <button type="button" onClick={() => handleContentDensityChange('compacto')} className="gelia-segment-btn px-4 py-2 text-[10px] sm:text-xs" data-active={contentDensity === 'compacto'}>
+                                    Compacto
+                                </button>
+                                <button type="button" onClick={() => handleContentDensityChange('completo')} className="gelia-segment-btn px-4 py-2 text-[10px] sm:text-xs" data-active={contentDensity === 'completo'}>
+                                    Completo
+                                </button>
+                                <button type="button" onClick={() => handleContentDensityChange('personalizado')} className="gelia-segment-btn px-4 py-2 text-[10px] sm:text-xs" data-active={contentDensity === 'personalizado'}>
+                                    Personalizado
+                                </button>
+                            </div>
+                        </SettingsRow>
+
+                        {contentDensity === 'personalizado' && (
+                            <>
+                                <SettingsRow icon={Layers} title="Ancho máximo" subtitle={`${formatContentMaxLabel(CONTENT_MAX_REM_MIN)} – ${formatContentMaxLabel(CONTENT_MAX_REM_MAX)} · vista previa temporal`} stackOnMobile={true}>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                                        <button type="button" onClick={() => handleContentMaxStep(-1)} disabled={contentMaxRem <= CONTENT_MAX_REM_MIN} className="w-11 h-11 rounded-xl theme-element border theme-border flex items-center justify-center transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 outline-none shadow-sm" title="Reducir ancho" aria-label="Reducir ancho máximo">
+                                            <Minus className="w-5 h-5 theme-text-main" />
+                                        </button>
+                                        <span className="min-w-[5rem] text-center text-sm font-black theme-text-main tabular-nums px-2">{formatContentMaxLabel(contentMaxRem)}</span>
+                                        <button type="button" onClick={() => handleContentMaxStep(1)} disabled={contentMaxRem >= CONTENT_MAX_REM_MAX} className="w-11 h-11 rounded-xl theme-element border theme-border flex items-center justify-center transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 outline-none shadow-sm" title="Aumentar ancho" aria-label="Aumentar ancho máximo">
+                                            <Plus className="w-5 h-5 theme-text-main" />
+                                        </button>
+                                    </div>
+                                </SettingsRow>
+                                <SettingsRow icon={Layers} title="Margen lateral" subtitle={`${formatContentPaddingLabel(CONTENT_PADDING_REM_MIN)} – ${formatContentPaddingLabel(CONTENT_PADDING_REM_MAX)} · vista previa temporal`} border={false} stackOnMobile={true}>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                                        <button type="button" onClick={() => handleContentPaddingStep(-1)} disabled={contentPaddingRem <= CONTENT_PADDING_REM_MIN} className="w-11 h-11 rounded-xl theme-element border theme-border flex items-center justify-center transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 outline-none shadow-sm" title="Reducir margen" aria-label="Reducir margen lateral">
+                                            <Minus className="w-5 h-5 theme-text-main" />
+                                        </button>
+                                        <span className="min-w-[5rem] text-center text-sm font-black theme-text-main tabular-nums px-2">{formatContentPaddingLabel(contentPaddingRem)}</span>
+                                        <button type="button" onClick={() => handleContentPaddingStep(1)} disabled={contentPaddingRem >= CONTENT_PADDING_REM_MAX} className="w-11 h-11 rounded-xl theme-element border theme-border flex items-center justify-center transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 outline-none shadow-sm" title="Aumentar margen" aria-label="Aumentar margen lateral">
+                                            <Plus className="w-5 h-5 theme-text-main" />
+                                        </button>
+                                    </div>
+                                </SettingsRow>
+                            </>
+                        )}
                             </div>
 
                             <PreferenciasSubheading
@@ -1370,7 +1507,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                     </div>
                 </div>
 
-            </div>
+            </GeliaPageShell>
 
             {/* =========================================
                 PORTALS DE MODALES (AVATAR Y FONDO)

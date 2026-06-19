@@ -128,6 +128,9 @@ class ProfileController extends Controller
             'tema_visual.sidebar_modo'     => 'nullable|string|in:collapsed,expanded',
             'tema_visual.sidebar_posicion_fija' => 'nullable|string|in:left,right,top,bottom',
             'tema_visual.efecto_cristal'   => 'nullable|boolean',
+            'tema_visual.densidad_contenido' => 'nullable|string|in:compacto,completo,personalizado',
+            'tema_visual.contenido_max_rem' => 'nullable|numeric|min:60|max:120',
+            'tema_visual.contenido_padding_rem' => 'nullable|numeric|min:0.5|max:2',
             'firma'                        => 'nullable|string',
             'remove_firma'                 => 'nullable|boolean',
         ]);
@@ -143,6 +146,23 @@ class ProfileController extends Controller
             $escala = (float) $configVisual['escala_fuente'];
             $escala = round($escala / 0.0625) * 0.0625;
             $configVisual['escala_fuente'] = max(0.875, min(1.5, $escala));
+        }
+
+        if (isset($configVisual['densidad_contenido'])) {
+            $modos = ['compacto', 'completo', 'personalizado'];
+            if (! in_array($configVisual['densidad_contenido'], $modos, true)) {
+                unset($configVisual['densidad_contenido']);
+            }
+        }
+
+        if (isset($configVisual['contenido_max_rem'])) {
+            $maxRem = round(((float) $configVisual['contenido_max_rem']) / 2.5) * 2.5;
+            $configVisual['contenido_max_rem'] = max(60, min(120, $maxRem));
+        }
+
+        if (isset($configVisual['contenido_padding_rem'])) {
+            $padRem = round(((float) $configVisual['contenido_padding_rem']) / 0.125) * 0.125;
+            $configVisual['contenido_padding_rem'] = max(0.5, min(2, $padRem));
         }
 
         if (isset($configVisual['alertas_prefs']) && is_array($configVisual['alertas_prefs'])) {

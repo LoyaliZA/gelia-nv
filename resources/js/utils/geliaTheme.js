@@ -24,8 +24,7 @@ export const THEME_BTN_SECONDARY = 'theme-btn-secondary';
 export const THEME_MODAL_OVERLAY = 'gelia-modal-overlay animate-fade-in';
 export const THEME_MODAL_SHELL = 'gelia-modal-shell';
 
-export const GELIA_PAGE_SHELL =
-    'w-full max-w-[1400px] mx-auto p-4 md:p-8 pb-[clamp(1.5rem,4vw,2.5rem)] min-w-0 box-border';
+export const GELIA_PAGE_SHELL = 'gelia-page-shell min-w-0 box-border';
 
 export const GELIA_PAGE_SECTION = 'w-full max-w-full min-w-0 box-border';
 

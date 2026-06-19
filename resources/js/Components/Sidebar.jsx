@@ -30,7 +30,7 @@ const SIDEBAR_PANEL_EXTERIOR_GAP = 'gap-2';
 /** Ancho del shell flotante: 0 en layout cuando está cerrado (el árbol interior no se toca) */
 function floatShellLayoutWidth(shellExpanded, { mobile = false } = {}) {
     if (shellExpanded) {
-        return mobile ? 'w-[90vw] max-w-[320px] min-w-0' : 'w-[300px] max-w-[300px] min-w-0';
+        return mobile ? 'w-[90vw] max-w-[320px] min-w-0' : 'w-[var(--gelia-sidebar-menu-width)] max-w-[var(--gelia-sidebar-menu-width)] min-w-0';
     }
     return 'w-0 min-w-0 max-w-0 shrink-0';
 }
@@ -38,7 +38,7 @@ function floatShellLayoutWidth(shellExpanded, { mobile = false } = {}) {
 /** Ancho del panel perfil: nunca min-w-0 (evita colapso a ~2px en flex-col) */
 function profileShellLayoutWidth(shellExpanded, { mobile = false } = {}) {
     if (shellExpanded) {
-        return mobile ? 'w-[90vw] max-w-[320px] min-w-[280px] shrink-0' : 'w-[300px] max-w-[300px] min-w-[300px] shrink-0';
+        return mobile ? 'w-[90vw] max-w-[320px] min-w-[280px] shrink-0' : 'w-[var(--gelia-sidebar-menu-width)] max-w-[var(--gelia-sidebar-menu-width)] min-w-[var(--gelia-sidebar-menu-width)] shrink-0';
     }
     return 'w-0 min-w-0 max-w-0 shrink-0';
 }
@@ -562,7 +562,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     >
                         <div className="sidebar-menu-grid-inner overflow-hidden min-h-0 h-auto shrink-0">
                             <div
-                                className="sidebar-menu-content gelia-sidebar-profile-panel p-5 flex flex-col min-h-0 h-auto shrink-0 overflow-visible w-[300px]"
+                                className="sidebar-menu-content gelia-sidebar-profile-panel p-5 flex flex-col min-h-0 h-auto shrink-0 overflow-visible w-[var(--gelia-sidebar-menu-width)]"
                             >
                                 <span className="gelia-sidebar-nav-header px-4 mb-1">
                                     PERFIL_
@@ -592,7 +592,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     <div className={menuClasses}>
                         <div className="sidebar-menu-grid-inner overflow-hidden min-h-0 h-auto">
                             <div
-                                className={`sidebar-menu-content gelia-sidebar-access-panel p-5 flex flex-col min-h-0 max-h-full overflow-hidden w-[300px] h-auto ${isFixedVertical ? 'pt-10' : ''}`}
+                                className={`sidebar-menu-content gelia-sidebar-access-panel p-5 flex flex-col min-h-0 max-h-full overflow-hidden w-[var(--gelia-sidebar-menu-width)] h-auto ${isFixedVertical ? 'pt-10' : ''}`}
                             >
                                 <div className="gelia-sidebar-access-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar">
                                     <SidebarNavMenu

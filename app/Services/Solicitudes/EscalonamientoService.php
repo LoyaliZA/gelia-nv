@@ -13,8 +13,8 @@ class EscalonamientoService
             return 0.0;
         }
 
-        if ($lista->porcentaje_escalonamiento_pct !== null) {
-            return (float) $lista->porcentaje_escalonamiento_pct;
+        if ($lista->porcentaje_descuento !== null) {
+            return (float) $lista->porcentaje_descuento;
         }
 
         $pct = $lista->relationLoaded('porcentajeEscalonamiento')

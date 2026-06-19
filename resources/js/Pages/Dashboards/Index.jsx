@@ -212,7 +212,13 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
 
     const guardarDisposicion = () => {
         put(route('dashboard.preferencias'), {
-            onSuccess: () => setEditLayoutMode(false),
+            onSuccess: (page) => {
+                setEditLayoutMode(false);
+                const saved = page.props.auth?.tema_visual?.dashboard_layout;
+                if (Array.isArray(saved)) {
+                    setData('dashboard_layout', saved);
+                }
+            },
             preserveScroll: true,
         });
     };

@@ -4,6 +4,11 @@ import { useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, FileSpreadsheet, Upload, Trash2, Download, ChevronDown } from 'lucide-react';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
+import {
+    evaluarEscalonamiento,
+    buscarListaPorId,
+    fmtMontoEscalonamiento,
+} from '../../../utils/escalonamiento';
 
 const obtenerProceso = (procesos, procesoId) => procesos.find(p => String(p.id) === String(procesoId)) || null;
 
@@ -18,33 +23,7 @@ const resolverListaBronce = (catalogoListas) => {
     return bronce || null;
 };
 
-const obtenerPorcentajeEscalonamiento = (lista) => {
-    if (!lista) return 0;
-
-    if (lista.porcentaje_escalonamiento_pct != null && lista.porcentaje_escalonamiento_pct !== '') {
-        return parseFloat(lista.porcentaje_escalonamiento_pct) || 0;
-    }
-
-    const pct = lista.porcentaje_escalonamiento;
-    if (!pct) return 0;
-    if (typeof pct === 'object' && pct !== null) {
-        if (pct.activo === false || pct.activo === 0) return 0;
-        return parseFloat(pct.porcentaje_descuento || 0);
-    }
-    return parseFloat(pct || 0);
-};
-
-const buscarListaPorId = (catalogoListas, id) => {
-    if (!id) return null;
-    return catalogoListas.find(l => String(l.id) === String(id)) || null;
-};
-
-const calcularMontoFinalTentativo = (montoCotizado, porcentaje) => {
-    return Math.round(montoCotizado * (1 - porcentaje / 100) * 100) / 100;
-};
-
-const fmtMonto = (valor) =>
-    `$${Number(valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtMonto = fmtMontoEscalonamiento;
 
 const FilaMontoEscalonamiento = ({ etiqueta, valor, destacado = false, valorClassName = '' }) => (
     <div className={`flex justify-between items-baseline gap-4 ${destacado ? 'py-2.5 px-3 rounded-xl bg-black/5 dark:bg-white/5' : 'py-1'}`}>
@@ -54,95 +33,6 @@ const FilaMontoEscalonamiento = ({ etiqueta, valor, destacado = false, valorClas
         </span>
     </div>
 );
-
-const calcularMontoBrutoNecesario = (faltanteNeto, porcentaje) => {
-    if (faltanteNeto <= 0) return 0;
-    const mult = 1 - porcentaje / 100;
-    return mult <= 0 ? faltanteNeto : Math.round((faltanteNeto / mult) * 100) / 100;
-};
-
-const evaluarEscalonamiento = (cliente, cotizacion, catalogoListas, listaActualObj, listaSolicitadaId) => {
-    const montoHistorico = parseFloat(cliente?.monto_venta_actual?.toString().replace(/[^0-9.-]+/g, '') || 0);
-    const montoCotizado = parseFloat(cotizacion || 0);
-
-    const listasValidas = [...catalogoListas]
-        .filter(l => !l.nombre.toUpperCase().includes('COLABORADOR') && !l.nombre.toUpperCase().includes('PLATAFORMAS'))
-        .sort((a, b) => parseFloat(b.monto_requerido) - parseFloat(a.monto_requerido));
-
-    const totalProyectadoBruto = montoHistorico + montoCotizado;
-
-    const listaCalificadaBruto = listasValidas.find(l => totalProyectadoBruto >= parseFloat(l.monto_requerido)) || null;
-
-    const requisitoListaActual = listaActualObj ? parseFloat(listaActualObj.monto_requerido || 0) : 0;
-    const esAscenso = listaCalificadaBruto && parseFloat(listaCalificadaBruto.monto_requerido) > requisitoListaActual;
-
-    // Anticipación: descuento de la lista que alcanza el bruto (aunque el cliente aún no la tenga)
-    const listaAnticipada = listaCalificadaBruto;
-
-    const listaSolicitada = listaSolicitadaId
-        ? buscarListaPorId(catalogoListas, listaSolicitadaId)
-        : (esAscenso && listaCalificadaBruto ? listaCalificadaBruto : null);
-
-    const porcentajeDescuento = obtenerPorcentajeEscalonamiento(listaAnticipada);
-    const montoFinalTentativo = calcularMontoFinalTentativo(montoCotizado, porcentajeDescuento);
-    const totalProyectadoNeto = montoHistorico + montoFinalTentativo;
-
-    const listaCalificadaNeto = listasValidas.find(l => totalProyectadoNeto >= parseFloat(l.monto_requerido)) || null;
-
-    const listasAscendentes = [...listasValidas].sort((a, b) => parseFloat(a.monto_requerido) - parseFloat(b.monto_requerido));
-    const listaSiguienteNeto = listasAscendentes.find(l => parseFloat(l.monto_requerido) > totalProyectadoNeto) || null;
-    const faltanteNetoSiguiente = listaSiguienteNeto
-        ? Math.max(0, parseFloat(listaSiguienteNeto.monto_requerido) - totalProyectadoNeto)
-        : 0;
-    const porcentajeSiguiente = listaSiguienteNeto
-        ? obtenerPorcentajeEscalonamiento(listaSiguienteNeto)
-        : porcentajeDescuento;
-    const montoBrutoParaSiguiente = calcularMontoBrutoNecesario(faltanteNetoSiguiente, porcentajeSiguiente);
-
-    let mantieneListaAnticipada = true;
-    let faltanteNetoMantener = 0;
-    let montoBrutoParaMantener = 0;
-    let brutoCalificaNetoNo = false;
-
-    if (listaAnticipada) {
-        const umbral = parseFloat(listaAnticipada.monto_requerido);
-        mantieneListaAnticipada = totalProyectadoNeto >= umbral;
-        faltanteNetoMantener = Math.max(0, umbral - totalProyectadoNeto);
-        montoBrutoParaMantener = calcularMontoBrutoNecesario(faltanteNetoMantener, porcentajeDescuento);
-        brutoCalificaNetoNo = totalProyectadoBruto >= umbral && !mantieneListaAnticipada;
-    }
-
-    const desgloseListas = listasAscendentes.map(l => ({
-        id: l.id,
-        nombre: l.nombre,
-        monto_requerido: parseFloat(l.monto_requerido),
-        cubre: totalProyectadoNeto >= parseFloat(l.monto_requerido),
-    }));
-
-    return {
-        montoHistorico,
-        montoCotizado,
-        porcentajeDescuento,
-        porcentajeSiguiente,
-        montoFinalTentativo,
-        totalProyectadoBruto,
-        totalProyectadoNeto,
-        listaCalificadaBruto,
-        listaCalificadaNeto,
-        listaAnticipada,
-        listaSiguienteNeto,
-        faltanteNetoSiguiente,
-        montoBrutoParaSiguiente,
-        mantieneListaAnticipada,
-        mantieneListaSolicitada: mantieneListaAnticipada,
-        faltanteNetoMantener,
-        montoBrutoParaMantener,
-        brutoCalificaNetoNo,
-        esAscenso,
-        desgloseListas,
-        listaSolicitada,
-    };
-};
 
 export default function ModalFormSolicitud({ onClose, onExito, procesos, listas, tiposCliente = [], bancos = [], modoEdicion, solicitudAEditar }) {
 
@@ -236,8 +126,14 @@ export default function ModalFormSolicitud({ onClose, onExito, procesos, listas,
         setData('monto_final_tentativo', analisis.montoFinalTentativo);
         setData('total_proyectado_neto', analisis.totalProyectadoNeto);
 
-        if (analisis.esAscenso && !data.catalogo_lista_descuento_id && analisis.listaCalificadaBruto) {
-            setData('catalogo_lista_descuento_id', analisis.listaCalificadaBruto.id);
+        if (analisis.esAscenso && analisis.listaCalificadaBruto) {
+            const reqObjetivo = parseFloat(analisis.listaCalificadaBruto.monto_requerido);
+            const listaSeleccionada = buscarListaPorId(listas, data.catalogo_lista_descuento_id);
+            const reqSeleccionada = listaSeleccionada ? parseFloat(listaSeleccionada.monto_requerido) : -1;
+
+            if (reqObjetivo > reqSeleccionada) {
+                setData('catalogo_lista_descuento_id', String(analisis.listaCalificadaBruto.id));
+            }
         }
 
         if (analisis.esAscenso) {

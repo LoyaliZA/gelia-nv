@@ -42,7 +42,7 @@ export default function DashboardPanel({
     const shellClass = [
         'dashboard-panel-shell',
         'dashboard-panel-shell--card-grid',
-        'h-full w-full min-h-0 flex flex-col overflow-hidden',
+        'h-full w-full min-h-0 flex flex-col',
         'theme-surface border-2 theme-border',
         'p-3 sm:p-4 md:p-6 lg:p-8 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[2.5rem] shadow-sm',
         panelClassName,
@@ -58,7 +58,7 @@ export default function DashboardPanel({
                             style={iconStyle}
                         />
                     )}
-                    <h2 className="dashboard-panel-shell__title font-black uppercase tracking-widest theme-text-main truncate min-w-0">
+                    <h2 className="dashboard-panel-shell__title font-black uppercase tracking-widest theme-text-main min-w-0">
                         {title}
                     </h2>
                 </div>
@@ -98,5 +98,5 @@ export function DashboardCardSlot({ children, variant = 'desktop' }) {
         return <>{children}</>;
     }
 
-    return <div className="dashboard-card-slot w-full min-w-0 h-full min-h-[var(--card-min,3.75rem)]">{children}</div>;
+    return <div className="dashboard-card-slot">{children}</div>;
 }
