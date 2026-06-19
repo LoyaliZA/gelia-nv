@@ -37,7 +37,9 @@ class RolesSeeder extends Seeder
             'configuracion_sistema.gestionar',
             'soporte.reportar',
             'soporte.gestionar',
-            'soporte.administrar'
+            'soporte.administrar',
+            'mensajeria.monitorear',
+            'mensajeria.eliminar'
         ];
 
         foreach ($permisos as $permiso) {

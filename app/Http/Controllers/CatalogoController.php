@@ -53,12 +53,12 @@ class CatalogoController extends Controller
 
     // --- 3. CATÁLOGO DE LISTAS DE DESCUENTO (Con Revinculación) ---
     public function storeLista(Request $request) {
-        CatalogoListaDescuento::create($request->validate(['nombre' => 'required', 'monto_requerido' => 'required|numeric', 'activo' => 'boolean']));
+        CatalogoListaDescuento::create($request->validate(['nombre' => 'required', 'monto_requerido' => 'required|numeric', 'porcentaje_descuento' => 'required|numeric|min:0|max:100', 'activo' => 'boolean']));
         return back()->with('success', 'Lista creada correctamente.');
     }
 
     public function updateLista(Request $request, $id) {
-        CatalogoListaDescuento::findOrFail($id)->update($request->validate(['nombre' => 'required', 'monto_requerido' => 'required|numeric', 'activo' => 'boolean']));
+        CatalogoListaDescuento::findOrFail($id)->update($request->validate(['nombre' => 'required', 'monto_requerido' => 'required|numeric', 'porcentaje_descuento' => 'required|numeric|min:0|max:100', 'activo' => 'boolean']));
         return back()->with('success', 'Lista actualizada.');
     }
 

@@ -12,6 +12,7 @@ export default function TablaListas({ datos = [] }) {
     const { data, setData, post, put, processing, reset, errors } = useForm({
         nombre: '',
         monto_requerido: '',
+        porcentaje_descuento: '',
         activo: true
     });
 
@@ -30,6 +31,7 @@ export default function TablaListas({ datos = [] }) {
         setData({ 
             nombre: item.nombre, 
             monto_requerido: item.monto_requerido || '',
+            porcentaje_descuento: item.porcentaje_descuento || '',
             activo: item.activo 
         });
         setModalAbierto(true);
@@ -74,6 +76,7 @@ export default function TablaListas({ datos = [] }) {
                         <tr className="border-b-2 border-[var(--color-primario)]/30">
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Nombre / ID_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Monto Base_</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">% Descuento_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Status_</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Acciones_</th>
                         </tr>
@@ -87,6 +90,9 @@ export default function TablaListas({ datos = [] }) {
                                 </td>
                                 <td className="px-6 py-5">
                                     <span className="text-xs font-black theme-text-main">${Number(item.monto_requerido || 0).toLocaleString()}</span>
+                                </td>
+                                <td className="px-6 py-5">
+                                    <span className="text-xs font-black theme-text-main text-[var(--color-primario)]">{Number(item.porcentaje_descuento || 0).toLocaleString()}%</span>
                                 </td>
                                 <td className="px-6 py-5">
                                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${item.activo ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
@@ -152,6 +158,22 @@ export default function TablaListas({ datos = [] }) {
                                     style={{ '--tw-ring-color': 'var(--color-primario)' }}
                                 />
                                 {errors.monto_requerido && <p className="text-xs text-red-500 mt-1 px-1">{errors.monto_requerido}</p>}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Porcentaje de Descuento_</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    min="0"
+                                    max="100"
+                                    value={data.porcentaje_descuento} 
+                                    onChange={e => setData('porcentaje_descuento', e.target.value)} 
+                                    required 
+                                    className="w-full px-5 py-4 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md" 
+                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                />
+                                {errors.porcentaje_descuento && <p className="text-xs text-red-500 mt-1 px-1">{errors.porcentaje_descuento}</p>}
                             </div>
                             
                             <div className="flex items-center justify-between p-4 rounded-2xl border theme-border bg-black/5 dark:bg-white/5">

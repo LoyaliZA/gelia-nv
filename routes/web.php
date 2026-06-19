@@ -8,7 +8,7 @@ use App\Http\Controllers\Reportes\ReporteSolicitudesController;
 use App\Http\Controllers\Api\{CotizacionEntregaController,ClienteApiController};
 use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\MapaLogisticoController;
-use App\Http\Controllers\Admin\{AuditoriaListaDescuentoController,PersonalizacionController,ConfiguracionSistemaController};
+use App\Http\Controllers\Admin\{AuditoriaListaDescuentoController,PersonalizacionController,ConfiguracionSistemaController,MonitoreoMensajeriaController};
 use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\{ActivoController,CategoriaActivoController,TipoActivoController};
 use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController,ConsolidadoHorasExtraController,BancoTiempoController};
@@ -503,6 +503,15 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/{configuracion}', [ConfiguracionSistemaController::class, 'update'])->name('update');
             Route::delete('/{configuracion}', [ConfiguracionSistemaController::class, 'destroy'])->name('destroy');
             Route::post('/test-mail', [ConfiguracionSistemaController::class, 'testMail'])->name('test_mail');
+        });
+
+        // --- Monitoreo de Mensajería ---
+        Route::middleware(['can:mensajeria.monitorear'])->prefix('mensajeria-monitoreo')->name('mensajeria_monitoreo.')->group(function () {
+            Route::get('/', [MonitoreoMensajeriaController::class, 'index'])->name('index');
+            Route::get('/conversaciones', [MonitoreoMensajeriaController::class, 'conversaciones'])->name('conversaciones');
+            Route::get('/conversaciones/{conversacion}/mensajes', [MonitoreoMensajeriaController::class, 'mensajes'])->name('mensajes');
+            Route::delete('/conversaciones/{conversacion}', [MonitoreoMensajeriaController::class, 'destroyConversacion'])->name('conversaciones.destroy');
+            Route::delete('/mensajes/{mensaje}', [MonitoreoMensajeriaController::class, 'destroyMensaje'])->name('mensajes.destroy');
         });
 
         // --- 1. Gestión de Usuarios ---

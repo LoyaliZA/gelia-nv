@@ -248,6 +248,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             href: () => routeHref('admin.catalogo-maestro.index', '/admin/catalogo-maestro'),
             active: (url) => url.startsWith('/admin/catalogo-maestro'),
         },
+        can('mensajeria.monitorear') && {
+            type: 'link',
+            id: 'mensajeria_monitoreo',
+            label: 'Monitoreo Mensajería',
+            icon: MessageCircle,
+            href: () => routeHref('mensajeria_monitoreo.index', '/admin/mensajeria-monitoreo'),
+            active: (url) => url.startsWith('/admin/mensajeria-monitoreo'),
+        },
     ].filter(Boolean);
 
     return [

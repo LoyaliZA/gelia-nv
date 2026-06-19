@@ -13,6 +13,7 @@ class CatalogoListaDescuento extends Model
     protected $fillable = [
         'nombre',
         'monto_requerido',
+        'porcentaje_descuento',
         'monto_minimo',
         'monto_maximo',
         'activo'
@@ -20,6 +21,7 @@ class CatalogoListaDescuento extends Model
 
     protected $casts = [
         'monto_requerido' => 'decimal:2',
+        'porcentaje_descuento' => 'decimal:2',
         'activo' => 'boolean',
     ];
 
