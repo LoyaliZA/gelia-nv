@@ -34,7 +34,7 @@ const FilaMontoEscalonamiento = ({ etiqueta, valor, destacado = false, valorClas
     </div>
 );
 
-export default function ModalFormSolicitud({ onClose, onExito, procesos, listas, tiposCliente = [], bancos = [], modoEdicion, solicitudAEditar }) {
+export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCliente = [], bancos = [], modoEdicion, solicitudAEditar }) {
 
     const infoClienteInicial = solicitudAEditar?.cliente || null;
     const [infoCliente, setInfoCliente] = useState(infoClienteInicial);
@@ -227,7 +227,7 @@ export default function ModalFormSolicitud({ onClose, onExito, procesos, listas,
         }
 
         const config = {
-            onSuccess: () => { reset(); onExito?.(); onClose(); },
+            onSuccess: () => { reset(); onClose(); },
             preserveScroll: true,
         };
 

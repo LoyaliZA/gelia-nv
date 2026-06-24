@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { X, Edit2, Info, AlertOctagon, Upload, Send } from 'lucide-react';
 
-export default function ModalRespuestaSolicitud({ onClose, onExito, solicitud, estadoId }) {
+export default function ModalRespuestaSolicitud({ onClose, solicitud, estadoId }) {
     const [previewEvidenciaRespuesta, setPreviewEvidenciaRespuesta] = useState(null);
 
     const { data, setData, post, processing, reset } = useForm({
@@ -53,7 +53,7 @@ export default function ModalRespuestaSolicitud({ onClose, onExito, solicitud, e
     const enviarRespuesta = (e) => {
         e.preventDefault();
         post(route('solicitudes.actualizar_estado', data.solicitud_id), {
-            onSuccess: () => { reset(); setPreviewEvidenciaRespuesta(null); onExito?.(); onClose(); },
+            onSuccess: () => { reset(); setPreviewEvidenciaRespuesta(null); onClose(); },
             forceFormData: true // Garantiza el envío correcto del archivo
         });
     };

@@ -15,11 +15,15 @@ class CrearConsultaSolicitudService
     public function ejecutar(SolicitudTag $solicitud, array $datos): ConsultaSolicitud
     {
         return DB::transaction(function () use ($solicitud, $datos) {
-            if ($solicitud->vendedor_id !== Auth::id()) {
+            $authId = (int) Auth::id();
+            $vendedorId = (int) $solicitud->vendedor_id;
+
+            if ($vendedorId !== $authId) {
                 abort(403, 'Solo la vendedora dueña puede consultar.');
             }
 
-            if ($solicitud->catalogo_estado_solicitud_id !== 2 || $solicitud->pago_confirmado) {
+            $estadosAprobados = [2, 3];
+            if (!in_array((int) $solicitud->catalogo_estado_solicitud_id, $estadosAprobados, true) || $solicitud->pago_confirmado) {
                 abort(403, 'La consulta solo está disponible en solicitudes aprobadas con pago pendiente.');
             }
 
@@ -49,7 +53,7 @@ class CrearConsultaSolicitudService
                 $consultaLista ? 'Lista' : null,
             ]);
 
-            $encargadas = User::permission('solicitudes.responder_consulta')
+            $encargadas = User::permission(['solicitudes.responder_consulta', 'solicitudes.reportar'])
                 ->whereHas('departamentos', fn ($q) => $q->where('departamentos.id', $solicitud->departamento_id))
                 ->get();
 

@@ -3,6 +3,8 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -29,12 +31,38 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
 
+        $exceptions->respond(function (Response $response, \Throwable $exception, \Illuminate\Http\Request $request) {
+            if ($response->getStatusCode() !== 419) {
+                return $response;
+            }
+
+            if ($request->header('X-Inertia')) {
+                return Inertia::location($request->fullUrl());
+            }
+
+            return $response;
+        });
+
         $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException $e, \Illuminate\Http\Request $request) {
             if (! $request->isMethod('GET') && ! $request->isMethod('HEAD')) {
                 return null;
             }
 
-            $destino = $request->headers->get('referer') ?: route('dashboard', absolute: false);
+            $referer = $request->headers->get('referer');
+            $current = $request->fullUrl();
+            $destino = route('dashboard', absolute: false);
+
+            if ($referer && $referer !== $current) {
+                $refererPath = parse_url($referer, PHP_URL_PATH);
+                $currentPath = $request->getPathInfo();
+                if ($refererPath && $refererPath !== $currentPath) {
+                    $destino = $referer;
+                }
+            }
+
+            if (preg_match('#^/solicitudes/\d+/#', $request->getPathInfo())) {
+                $destino = route('solicitudes.index', absolute: false);
+            }
 
             if ($request->header('X-Inertia')) {
                 return redirect($destino);

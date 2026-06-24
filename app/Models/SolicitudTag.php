@@ -52,6 +52,7 @@ class SolicitudTag extends Model
         'monto_final_tentativo' => 'decimal:2',
         'total_proyectado_neto' => 'decimal:2',
         'pago_confirmado' => 'boolean',
+        'vendedor_id' => 'integer',
         'confirmo_informacion_escalonamiento' => 'boolean',
         'rollback_confirmado_at' => 'datetime',
         'fecha_operacion' => 'date',

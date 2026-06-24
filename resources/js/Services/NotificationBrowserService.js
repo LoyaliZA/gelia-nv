@@ -27,13 +27,39 @@ class NotificationBrowserService {
         this._selectedVoice = null;
         this._voicesReady = false;
         this._swPushActivo = false;
+        this._audioUnlocked = false;
 
         if (typeof window !== 'undefined') {
             this._loadAudio(this.currentTonePath);
             if ('speechSynthesis' in window) {
                 this._initVoice();
             }
+            this._bindAudioUnlock();
         }
+    }
+
+    _bindAudioUnlock() {
+        const unlock = () => {
+            if (this._audioUnlocked) return;
+            if (!this.audio) return;
+
+            this._audioUnlocked = true;
+            const playPromise = this.audio.play();
+            if (playPromise !== undefined) {
+                playPromise
+                    .then(() => {
+                        this.audio.pause();
+                        this.audio.currentTime = 0;
+                    })
+                    .catch(() => {
+                        this._audioUnlocked = false;
+                    });
+            }
+        };
+
+        ['click', 'touchstart', 'keydown'].forEach((eventName) => {
+            window.addEventListener(eventName, unlock, { once: true, passive: true, capture: true });
+        });
     }
 
     _loadAudio(path) {
@@ -134,12 +160,16 @@ class NotificationBrowserService {
             const playPromise = this.audio.play();
 
             if (playPromise !== undefined) {
-                playPromise.catch((error) => {
-                    console.warn(
-                        '[NotificationBrowserService] Autoplay bloqueado. El usuario debe interactuar con la página primero.',
-                        error
-                    );
-                });
+                playPromise
+                    .then(() => {
+                        this._audioUnlocked = true;
+                    })
+                    .catch((error) => {
+                        console.warn(
+                            '[NotificationBrowserService] Autoplay bloqueado. El usuario debe interactuar con la página primero.',
+                            error
+                        );
+                    });
             }
         } catch (error) {
             console.error('[NotificationBrowserService] Error al reproducir audio:', error);

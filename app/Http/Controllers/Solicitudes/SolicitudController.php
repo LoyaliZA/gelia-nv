@@ -35,6 +35,37 @@ use Inertia\Response;
 
 class SolicitudController extends Controller
 {
+    private function redirectToSolicitudesList(Request $request, string $message): RedirectResponse
+    {
+        $referer = $request->headers->get('referer');
+        $listPath = parse_url(route('solicitudes.index', absolute: false), PHP_URL_PATH);
+
+        if ($referer && $listPath) {
+            $refererPath = parse_url($referer, PHP_URL_PATH);
+            if ($refererPath === $listPath) {
+                return redirect()->to($referer)->with('success', $message);
+            }
+        }
+
+        return redirect()->route('solicitudes.index')->with('success', $message);
+    }
+
+    private function autorizarEmitirConsulta(): void
+    {
+        $usuario = Auth::user();
+        if (!$usuario->hasAnyPermission(['solicitudes.emitir_consulta', 'solicitudes.consultar'])) {
+            abort(403, 'No tienes permiso para emitir consultas.');
+        }
+    }
+
+    private function autorizarResponderConsulta(): void
+    {
+        $usuario = Auth::user();
+        if (!$usuario->hasAnyPermission(['solicitudes.responder_consulta', 'solicitudes.reportar'])) {
+            abort(403, 'No tienes permiso para responder consultas.');
+        }
+    }
+
     public function index(Request $request, ListarSolicitudesService $listarService): Response
     {
         $solicitudes = $listarService->ejecutar(Auth::user(), $request->all());
@@ -62,7 +93,7 @@ class SolicitudController extends Controller
     {
         $crearSolicitudService->ejecutar($request->validated(), Auth::id());
 
-        return redirect()->back()->with('success', 'Solicitud creada correctamente.');
+        return $this->redirectToSolicitudesList($request, 'Solicitud creada correctamente.');
     }
 
     public function confirmarPago(Request $request, SolicitudTag $solicitud)
@@ -214,7 +245,7 @@ class SolicitudController extends Controller
             }
         });
 
-        return back()->with('success', 'Operación procesada.');
+        return $this->redirectToSolicitudesList($request, 'Operación procesada.');
     }
 
     public function confirmarCambioLista(Request $request, SolicitudTag $solicitud)
@@ -258,7 +289,7 @@ class SolicitudController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Ajuste de lista confirmado. Los registros del cliente han sido actualizados.');
+        return $this->redirectToSolicitudesList($request, 'Ajuste de lista confirmado. Los registros del cliente han sido actualizados.');
     }
 
     public function update(Request $request, SolicitudTag $solicitud)
@@ -322,7 +353,7 @@ class SolicitudController extends Controller
             }
         });
 
-        return back()->with('success', 'Solicitud corregida y enviada a revisión.');
+        return $this->redirectToSolicitudesList($request, 'Solicitud corregida y enviada a revisión.');
     }
 
     public function actualizarEstado(Request $request, SolicitudTag $solicitud)
@@ -423,7 +454,7 @@ class SolicitudController extends Controller
             }
         });
 
-        return back()->with('success', 'El estado ha sido actualizado correctamente.');
+        return $this->redirectToSolicitudesList($request, 'El estado ha sido actualizado correctamente.');
     }
 
     public function exportar(Request $request, ExportarReporteSolicitudesService $exportService)
@@ -485,7 +516,7 @@ class SolicitudController extends Controller
             }
         });
 
-        return back()->with('success', 'Pago rechazado. La vendedora y auxiliares han sido notificados.');
+        return $this->redirectToSolicitudesList($request, 'Pago rechazado. La vendedora y auxiliares han sido notificados.');
     }
 
     private function obtenerDestinatariosDepartamentales(SolicitudTag $solicitud, bool $incluirVendedor = false)
@@ -542,12 +573,14 @@ class SolicitudController extends Controller
             'datos_snapshot' => $solicitud->toArray()
         ]);
 
-        return redirect()->back()->with('success', 'La solicitud ha sido restaurada correctamente.');
+        return $this->redirectToSolicitudesList($request, 'La solicitud ha sido restaurada correctamente.');
     }
 
     public function storeConsulta(Request $request, SolicitudTag $solicitud, CrearConsultaSolicitudService $service): RedirectResponse
     {
-        Gate::authorize('solicitudes.emitir_consulta');
+        $this->autorizarEmitirConsulta();
+
+        $solicitud->refresh();
 
         $request->validate([
             'consulta_tag' => 'nullable|boolean',
@@ -557,12 +590,12 @@ class SolicitudController extends Controller
 
         $service->ejecutar($solicitud, $request->all());
 
-        return back()->with('success', 'Consulta enviada al encargado.');
+        return $this->redirectToSolicitudesList($request, 'Consulta enviada al encargado.');
     }
 
     public function responderConsulta(Request $request, SolicitudTag $solicitud, ConsultaSolicitud $consulta, ResponderConsultaSolicitudService $service): RedirectResponse
     {
-        Gate::authorize('solicitudes.responder_consulta');
+        $this->autorizarResponderConsulta();
 
         $request->validate([
             'respuesta_positiva' => 'required',
@@ -572,16 +605,16 @@ class SolicitudController extends Controller
 
         $service->ejecutar($solicitud, $consulta, $request->all());
 
-        return back()->with('success', 'Consulta respondida correctamente.');
+        return $this->redirectToSolicitudesList($request, 'Consulta respondida correctamente.');
     }
 
-    public function marcarConsultaLeida(SolicitudTag $solicitud, ConsultaSolicitud $consulta): RedirectResponse
+    public function marcarConsultaLeida(Request $request, SolicitudTag $solicitud, ConsultaSolicitud $consulta): RedirectResponse
     {
         if ($consulta->solicitud_id !== $solicitud->id) {
             abort(404);
         }
 
-        if ($solicitud->vendedor_id !== Auth::id()) {
+        if ((int) $solicitud->vendedor_id !== (int) Auth::id()) {
             abort(403, 'Solo la vendedora dueña puede marcar la consulta como leída.');
         }
 
@@ -591,7 +624,7 @@ class SolicitudController extends Controller
 
         $consulta->update(['leido_vendedor_at' => now()]);
 
-        return back()->with('success', 'Respuesta marcada como leída.');
+        return $this->redirectToSolicitudesList($request, 'Respuesta marcada como leída.');
     }
 
     public function solicitarCancelacion(Request $request, SolicitudTag $solicitud, SolicitarCancelacionSolicitudService $service): RedirectResponse
@@ -614,7 +647,7 @@ class SolicitudController extends Controller
             $request->input('catalogo_lista_rebaja_id') ? (int) $request->catalogo_lista_rebaja_id : null,
         );
 
-        return back()->with('success', 'Solicitud de cancelación enviada al área administrativa.');
+        return $this->redirectToSolicitudesList($request, 'Solicitud de cancelación enviada al área administrativa.');
     }
 
     public function cancelar(Request $request, SolicitudTag $solicitud, CancelarSolicitudService $service): RedirectResponse
@@ -632,7 +665,7 @@ class SolicitudController extends Controller
 
         $service->ejecutar($solicitud, $request->motivo_cancelacion);
 
-        return back()->with('success', 'La solicitud ha sido cancelada correctamente.');
+        return $this->redirectToSolicitudesList($request, 'La solicitud ha sido cancelada correctamente.');
     }
 
     public function confirmarRollback(Request $request, SolicitudTag $solicitud): RedirectResponse
@@ -675,7 +708,7 @@ class SolicitudController extends Controller
             }
         });
 
-        return back()->with('success', 'Reversión confirmada. La vendedora ha sido notificada.');
+        return $this->redirectToSolicitudesList($request, 'Reversión confirmada. La vendedora ha sido notificada.');
     }
 
     private function capturarSnapshotCliente(?Cliente $cliente): array

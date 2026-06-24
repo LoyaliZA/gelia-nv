@@ -206,7 +206,8 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('can:solicitudes.solicitar_cancelacion')
         ->name('solicitudes.solicitar_cancelacion');
     Route::put('/solicitudes/{solicitud}/cancelar', [SolicitudController::class, 'cancelar'])->name('solicitudes.cancelar')->middleware('can:solicitudes.cancelar');
-    Route::post('/solicitudes/{solicitud}/consultas', [SolicitudController::class, 'storeConsulta'])->middleware('can:solicitudes.consultar')->name('solicitudes.consultas.store');
+    Route::post('/solicitudes/{solicitud}/consultas', [SolicitudController::class, 'storeConsulta'])
+        ->name('solicitudes.consultas.store');
     Route::put('/solicitudes/{solicitud}/consultas/{consulta}', [SolicitudController::class, 'responderConsulta'])->name('solicitudes.consultas.responder');
     Route::put('/solicitudes/{solicitud}/consultas/{consulta}/leer', [SolicitudController::class, 'marcarConsultaLeida'])->name('solicitudes.consultas.leer');
     Route::delete('/solicitudes/{solicitud}', [SolicitudController::class, 'destroy'])->name('solicitudes.destroy');

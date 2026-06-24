@@ -82,6 +82,16 @@ export function puedePermiso(auth, permiso) {
     return permisosUsuario(auth).includes(permiso);
 }
 
+/** Emite consulta TAG/Lista (compatible con nombre legado solicitudes.consultar). */
+export function puedeEmitirConsultaSolicitud(auth) {
+    return puedePermiso(auth, 'solicitudes.emitir_consulta') || puedePermiso(auth, 'solicitudes.consultar');
+}
+
+/** Responde consultas TAG/Lista (compatible con solicitudes.reportar). */
+export function puedeResponderConsultaSolicitud(auth) {
+    return puedePermiso(auth, 'solicitudes.responder_consulta') || puedePermiso(auth, 'solicitudes.reportar');
+}
+
 export function permisoDePlantilla(permisoName, plantillasActivas, roles) {
     return (roles || [])
         .filter((r) => (plantillasActivas || []).includes(r.name))

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, createContext, useContext, useCallback } from 'react';
+import React, { useEffect, useState, createContext, useContext, useCallback, useRef } from 'react';
 import { Link, usePage, router } from '@inertiajs/react';
 import Sidebar from '../Components/Sidebar';
 import GeliaLogo from '../Components/GeliaLogo';
@@ -141,13 +141,23 @@ export default function AppLayout({ children, fullScreen = false }) {
     }, []);
 
     // REFACTORIZACIÓN DEL ESCUCHADOR DE REVERB
+    const echoChannelRef = useRef(null);
+
     useEffect(() => {
         if (auth?.user && typeof window !== 'undefined' && window.Echo) {
             const channelName = `App.Models.User.${auth.user.id}`;
-            
+
+            if (echoChannelRef.current) {
+                window.Echo.leave(echoChannelRef.current);
+                echoChannelRef.current = null;
+            }
+
             window.Echo.leave(channelName);
 
-            window.Echo.private(channelName)
+            const echoChannel = window.Echo.private(channelName);
+            echoChannelRef.current = channelName;
+
+            echoChannel
                 .notification((notification) => {
                     const payload = normalizeNotificationPayload(notification);
                     const prefs = resolveAlertasPrefs(auth);
@@ -175,7 +185,9 @@ export default function AppLayout({ children, fullScreen = false }) {
 
                     window.dispatchEvent(new CustomEvent('notification-received', { detail: payload }));
 
-                    router.reload({ only: ['auth'], preserveScroll: true, preserveState: true });
+                    window.setTimeout(() => {
+                        router.reload({ only: ['auth'], preserveScroll: true, preserveState: true, showProgress: false });
+                    }, 800);
                 })
                 .listen('.mensaje.leido', (event) => {
                     const mensaje = event?.mensaje;
@@ -219,7 +231,9 @@ export default function AppLayout({ children, fullScreen = false }) {
 
         return () => {
             if (auth?.user && typeof window !== 'undefined' && window.Echo) {
-                window.Echo.leave(`App.Models.User.${auth.user.id}`);
+                const channelName = echoChannelRef.current || `App.Models.User.${auth.user.id}`;
+                window.Echo.leave(channelName);
+                echoChannelRef.current = null;
             }
         };
     }, [auth?.user?.id]);
