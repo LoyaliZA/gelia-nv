@@ -25,6 +25,7 @@ import {
     Calculator,
     LifeBuoy,
     Bug,
+    Landmark,
 } from 'lucide-react';
 
 function routeHref(name, fallback) {
@@ -63,6 +64,17 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             href: () => routeHref('cancelaciones_cotizaciones.index', '/cancelaciones-cotizaciones'),
             active: (url) => url.startsWith('/cancelaciones-cotizaciones'),
         },
+    ].filter(Boolean);
+
+    const finanzasChildren = [
+        can('contabilidad.ver') && {
+            type: 'link',
+            id: 'contabilidad',
+            label: 'Contabilidad',
+            icon: Calculator,
+            href: () => routeHref('contabilidad.index', '/contabilidad'),
+            active: (url) => url.startsWith('/contabilidad'),
+        },
         can('facturas.ver_listado') && {
             type: 'link',
             id: 'facturas',
@@ -70,6 +82,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: Receipt,
             href: () => routeHref('facturas.index', '/facturas'),
             active: (url) => url.startsWith('/facturas'),
+        },
+        can('cobranza.ver') && {
+            type: 'link',
+            id: 'auto_cobranza',
+            label: 'Auto-Cobranza',
+            icon: CreditCard,
+            href: () => routeHref('auto-cobranza.index', '/auto-cobranza'),
+            active: (url) => url.startsWith('/auto-cobranza'),
         },
     ].filter(Boolean);
 
@@ -81,14 +101,6 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: Users,
             href: () => routeHref('mis_clientes.index', '/mis-clientes'),
             active: (url) => url.startsWith('/mis-clientes'),
-        },
-        can('cobranza.ver') && {
-            type: 'link',
-            id: 'auto_cobranza',
-            label: 'Auto-Cobranza',
-            icon: CreditCard,
-            href: () => routeHref('auto-cobranza.index', '/auto-cobranza'),
-            active: (url) => url.startsWith('/auto-cobranza'),
         },
     ].filter(Boolean);
 
@@ -284,6 +296,13 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             label: 'Operaciones',
             icon: Briefcase,
             children: operacionesChildren,
+        },
+        finanzasChildren.length > 0 && {
+            type: 'group',
+            id: 'finanzas',
+            label: 'Finanzas',
+            icon: Landmark,
+            children: finanzasChildren,
         },
         showHerramientas && herramientasChildren.length > 0 && {
             type: 'group',

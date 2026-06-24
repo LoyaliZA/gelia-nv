@@ -173,6 +173,38 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/configuracion', [AutoCobranzaController::class, 'guardarConfiguracion'])->name('configuracion.store');
     });
 
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: CONTABILIDAD BELLAROMA
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:contabilidad.ver'])->prefix('contabilidad')->name('contabilidad.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'index'])->name('index');
+        Route::get('/retiros', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'retiros'])->name('retiros');
+        Route::get('/dashboard-data', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'dashboardData'])->name('dashboard_data');
+        Route::get('/exportar-pdf', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'exportarPdf'])->name('exportar_pdf');
+        Route::get('/exportar-csv', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'exportarCsv'])->name('exportar_csv');
+        Route::post('/procesar-lista', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'procesarLista'])
+            ->middleware('can:contabilidad.importar')
+            ->name('procesar_lista');
+        Route::post('/pedidos', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'store'])
+            ->middleware('can:contabilidad.pedidos.crear')
+            ->name('pedidos.store');
+        Route::put('/pedidos/{pedido}', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'update'])
+            ->middleware('can:contabilidad.pedidos.editar')
+            ->name('pedidos.update');
+        Route::delete('/pedidos/{pedido}', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'destroy'])
+            ->middleware('can:contabilidad.pedidos.eliminar')
+            ->name('pedidos.destroy');
+        Route::post('/pedidos/{pedido}/confirmar-retiro', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'confirmarRetiro'])
+            ->middleware('can:contabilidad.retiros.confirmar')
+            ->name('pedidos.confirmar_retiro');
+        Route::post('/retiros/confirmar-lote', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'confirmarLote'])
+            ->middleware('can:contabilidad.retiros.confirmar')
+            ->name('retiros.confirmar_lote');
+        Route::put('/plataformas/comisiones', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'actualizarComisiones'])
+            ->middleware('can:contabilidad.plataformas.configurar')
+            ->name('plataformas.comisiones');
+    });
+
     Route::middleware(['can:solicitudes.ver_listado'])->group(function () {
         Route::get('/solicitudes', [SolicitudController::class, 'index'])->name('solicitudes.index');
     });

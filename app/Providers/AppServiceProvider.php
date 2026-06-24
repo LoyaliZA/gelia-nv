@@ -21,6 +21,7 @@ use App\Models\CatalogoTipoFalta;
 use App\Models\CatalogoBono;
 use App\Models\CatalogoReglaIncidencia;
 use App\Models\Producto;
+use App\Models\Contabilidad\Pedido as ContabilidadPedido;
 use App\Models\RhHorasExtra;
 use App\Models\RhDeduccion;
 use App\Models\RhPrestamoPagoFijo;
@@ -117,6 +118,7 @@ class AppServiceProvider extends ServiceProvider
         Route::bind('bono', fn (string $value) => CatalogoBono::findOrFail($value));
         Route::bind('reglaIncidencia', fn (string $value) => CatalogoReglaIncidencia::findOrFail($value));
         Route::bind('producto', fn (string $value) => Producto::findOrFail($value));
+        Route::bind('pedido', fn (string $value) => ContabilidadPedido::findOrFail($value));
 
         RateLimiter::for('api-externa', function (Request $request) {
             $aplicacion = $request->user();

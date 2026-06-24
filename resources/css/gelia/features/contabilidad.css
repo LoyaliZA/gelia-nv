@@ -1,0 +1,31 @@
+/* Contabilidad Bellaroma — fondos sólidos sobre wallpaper GELIA */
+
+.contabilidad-page .theme-surface.theme-card {
+    background: var(--theme-surface-bg, var(--color-surface));
+}
+
+html.glass-active .contabilidad-page .theme-surface.theme-card {
+    backdrop-filter: blur(12px);
+}
+
+.contabilidad-page table tbody tr {
+    background: var(--theme-surface-bg, var(--color-surface));
+}
+
+.contabilidad-page table thead tr {
+    background: color-mix(in srgb, var(--theme-surface-bg, var(--color-surface)) 88%, var(--theme-text-muted) 12%);
+}
+
+.contabilidad-page .theme-element {
+    background: color-mix(in srgb, var(--theme-surface-bg, var(--color-surface)) 92%, var(--theme-text-main) 8%);
+}
+
+.contabilidad-page table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.contabilidad-page .animate-page-reveal {
+    animation-fill-mode: both;
+}

@@ -61,6 +61,15 @@ export const DESCRIPCIONES_PERMISOS = {
     'api_externa.gestionar': 'Permite administrar la API externa, aplicaciones, permisos y documentación.',
     'api_externa.ver_auditoria': 'Permite consultar la bitácora de uso de la API externa.',
     'funciones.limpieza_clientes': 'Permite acceder a la herramienta operativa de Limpieza de Clientes.',
+    'contabilidad.ver': 'Permite acceder al módulo de contabilidad Bellaroma.',
+    'contabilidad.pedidos.crear': 'Permite registrar pedidos manualmente en contabilidad.',
+    'contabilidad.pedidos.editar': 'Permite editar pedidos de contabilidad no bloqueados.',
+    'contabilidad.pedidos.eliminar': 'Permite eliminar pedidos de contabilidad no bloqueados.',
+    'contabilidad.retiros.confirmar': 'Permite confirmar retiros bancarios individuales o por lote.',
+    'contabilidad.plataformas.configurar': 'Permite configurar comisiones y frecuencia de pago de plataformas.',
+    'contabilidad.importar': 'Permite importar listas de precios e histórico de pedidos.',
+    'contabilidad.exportar': 'Permite exportar reportes de contabilidad en Excel y PDF.',
+    'contabilidad.historial.editar_emergencia': 'Permite ediciones de emergencia en historial de lotes pagados.',
 };
 
 export function descripcionPermiso(permisoName) {

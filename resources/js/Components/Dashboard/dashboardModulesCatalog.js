@@ -1,8 +1,20 @@
 import {
     Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Calculator
 } from 'lucide-react';
+import { contabilidadRoutes } from '../../Pages/Contabilidad/contabilidadRoutes';
 
 export const DASHBOARD_MODULE_CARDS = [
+    {
+        id: 'card_contabilidad',
+        titulo: 'Contabilidad',
+        subtitulo: 'Pedidos, comisiones y utilidad Bellaroma.',
+        permiso: 'contabilidad.ver',
+        href: () => contabilidadRoutes.index(),
+        icon: Calculator,
+        borderClass: 'border-teal-500/20',
+        iconWrapClass: 'bg-teal-500/10 border-teal-500/20',
+        iconClass: 'text-teal-500',
+    },
     {
         id: 'card_auto_cobranza',
         titulo: 'Auto-Cobranza',
