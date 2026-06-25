@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 
 import {
-    Users, UserPlus, Search, Edit3, Trash2,
+    Users, UserPlus, Search, Edit3, Archive,
     ShieldCheck, X, Briefcase, Check, MapPin,
     Mail, User, Lock, Smartphone, Save, Network, Layers, AtSign,
 } from 'lucide-react';
@@ -78,7 +78,14 @@ function RolesChips({ roles = [], maxVisible = 4 }) {
     );
 }
 
-function TarjetaUsuarioMobile({ usuario, onEditar }) {
+function usuarioEsSuperAdmin(usuario) {
+    return (usuario.roles || []).some((rol) => rol.name === 'Super Admin');
+}
+
+function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, usuarioActualId }) {
+    const mostrarArchivar = puedeArchivar
+        && usuario.id !== usuarioActualId
+        && !usuarioEsSuperAdmin(usuario);
     return (
         <article className="fade-in-user theme-surface border theme-border rounded-[1.75rem] p-4 sm:p-5 space-y-3 transition-shadow hover:shadow-md">
             <div className="flex items-start gap-3">
@@ -120,19 +127,25 @@ function TarjetaUsuarioMobile({ usuario, onEditar }) {
                     <Edit3 className="w-4 h-4 shrink-0" />
                     Editar
                 </button>
-                <button
-                    type="button"
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-muted text-[10px] font-black uppercase tracking-widest transition-colors hover:bg-red-500 hover:text-white hover:border-transparent"
-                >
-                    <Trash2 className="w-4 h-4 shrink-0" />
-                    Eliminar
-                </button>
+                {mostrarArchivar && (
+                    <button
+                        type="button"
+                        onClick={() => onArchivar(usuario)}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-muted text-[10px] font-black uppercase tracking-widest transition-colors hover:bg-amber-500 hover:text-white hover:border-transparent"
+                    >
+                        <Archive className="w-4 h-4 shrink-0" />
+                        Archivar
+                    </button>
+                )}
             </div>
         </article>
     );
 }
 
-function FilaUsuarioDesktop({ usuario, onEditar }) {
+function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usuarioActualId }) {
+    const mostrarArchivar = puedeArchivar
+        && usuario.id !== usuarioActualId
+        && !usuarioEsSuperAdmin(usuario);
     return (
         <tr className="border-b theme-border hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
             <td className="px-4 py-4">
@@ -173,13 +186,16 @@ function FilaUsuarioDesktop({ usuario, onEditar }) {
                     >
                         <Edit3 className="w-4 h-4" />
                     </button>
-                    <button
-                        type="button"
-                        className="p-2.5 rounded-xl theme-element border theme-border theme-text-muted hover:bg-red-500 hover:text-white hover:border-transparent transition-colors"
-                        aria-label="Eliminar usuario"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                    </button>
+                    {mostrarArchivar && (
+                        <button
+                            type="button"
+                            onClick={() => onArchivar(usuario)}
+                            className="p-2.5 rounded-xl theme-element border theme-border theme-text-muted hover:bg-amber-500 hover:text-white hover:border-transparent transition-colors"
+                            aria-label="Archivar usuario"
+                        >
+                            <Archive className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
             </td>
         </tr>
@@ -235,6 +251,26 @@ export default function Usuarios({
     const lista = usuariosState?.data ?? [];
     const busquedaInicial = filtros?.busqueda ?? '';
     const debounceRef = useRef(null);
+
+    const puedeArchivar = esSuperAdmin || (auth?.user?.permissions || []).includes('usuarios.archivar');
+
+    const archivarUsuario = (usuario) => {
+        const motivo = window.prompt(
+            `Archivar a ${nombreCompleto(usuario)}.\n\nIngresa el motivo del archivado (obligatorio):`
+        );
+        if (motivo === null) return;
+        if (motivo.trim().length < 3) {
+            alert('El motivo debe tener al menos 3 caracteres.');
+            return;
+        }
+        if (!window.confirm(`¿Confirmas archivar la cuenta de ${nombreCompleto(usuario)}? Se liberarán correo y teléfono para reasignación.`)) {
+            return;
+        }
+        router.delete(route('admin.usuarios.archivar', usuario.id), {
+            data: { motivo: motivo.trim() },
+            preserveScroll: true,
+        });
+    };
 
     const [busqueda, setBusqueda] = useState(busquedaInicial);
     const [showModal, setShowModal] = useState(false);
@@ -612,7 +648,14 @@ export default function Usuarios({
                         </div>
                     ) : (
                         lista.map((usuario) => (
-                            <TarjetaUsuarioMobile key={usuario.id} usuario={usuario} onEditar={abrirModal} />
+                            <TarjetaUsuarioMobile
+                                key={usuario.id}
+                                usuario={usuario}
+                                onEditar={abrirModal}
+                                onArchivar={archivarUsuario}
+                                puedeArchivar={puedeArchivar}
+                                usuarioActualId={auth?.user?.id}
+                            />
                         ))
                     )}
                     {lista.length > 0 && (
@@ -645,7 +688,14 @@ export default function Usuarios({
                                     </tr>
                                 ) : (
                                     lista.map((usuario) => (
-                                        <FilaUsuarioDesktop key={usuario.id} usuario={usuario} onEditar={abrirModal} />
+                                        <FilaUsuarioDesktop
+                                            key={usuario.id}
+                                            usuario={usuario}
+                                            onEditar={abrirModal}
+                                            onArchivar={archivarUsuario}
+                                            puedeArchivar={puedeArchivar}
+                                            usuarioActualId={auth?.user?.id}
+                                        />
                                     ))
                                 )}
                             </tbody>

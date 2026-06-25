@@ -5,7 +5,7 @@ import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon,
     History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert, Users,
     ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle,
-    FileSpreadsheet, FileText, FolderOpen, Download
+    FileSpreadsheet, FileText, FolderOpen, Download, Calculator
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -15,6 +15,7 @@ import ModalRespuestaSolicitud from './Partials/ModalRespuestaSolicitud';
 import ModalBitacoraSolicitud from './Partials/ModalBitacoraSolicitud';
 import ModalConsultaSolicitud from './Partials/ModalConsultaSolicitud';
 import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
+import ModalEjercicioEscalonamiento from './Partials/ModalEjercicioEscalonamiento';
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { geliaCardClass } from '../../utils/geliaTheme';
@@ -649,6 +650,7 @@ export default function Index({
     const [modalPago, setModalPago] = useState({ abierto: false, solicitud: null });
     const [modalCancelacion, setModalCancelacion] = useState({ abierto: false, solicitud: null });
     const [modalConfirmarCancelacion, setModalConfirmarCancelacion] = useState({ abierto: false, solicitud: null });
+    const [modalEscalonamiento, setModalEscalonamiento] = useState(false);
     const [menuAbierto, setMenuAbierto] = useState(null);
     const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
     const [menuSolicitud, setMenuSolicitud] = useState(null);
@@ -664,6 +666,7 @@ export default function Index({
         || modalPago.abierto
         || modalCancelacion.abierto
         || modalConfirmarCancelacion.abierto
+        || modalEscalonamiento
         || menuAbierto !== null;
 
     const {
@@ -688,6 +691,8 @@ export default function Index({
 
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) ?? false;
     const puedeExportar = can('solicitudes.exportar');
+    const puedeVerEscalonamiento = can('ejercicio_escalonamiento.ver')
+        || (auth?.user?.roles || []).includes('Super Admin');
 
     const eliminarSolicitud = (id) => {
         const motivo = window.prompt("ATENCIÓN: Se eliminará este registro y se creará un respaldo en la auditoría.\n\nIngresa el motivo de la eliminación (Mínimo 10 caracteres):");
@@ -876,6 +881,15 @@ export default function Index({
                                 </Link>
                             </>
                         )}
+                        {puedeVerEscalonamiento && (
+                            <button
+                                type="button"
+                                onClick={() => setModalEscalonamiento(true)}
+                                className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border theme-border theme-element theme-text-main text-[10px] font-black uppercase tracking-widest hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all"
+                            >
+                                <Calculator className="w-4 h-4 shrink-0" /> Escalonamiento
+                            </button>
+                        )}
                         {can('solicitudes.crear') && (
                             <button onClick={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })} className="flex items-center justify-center gap-2 px-8 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-xl hover:scale-105 transition-all w-full md:w-auto" style={{ backgroundColor: 'var(--color-primario)' }}><Plus className="w-5 h-5" /> Nueva Solicitud</button>
                         )}
@@ -1062,6 +1076,12 @@ export default function Index({
             {modalBitacora.abierto && <ModalBitacoraSolicitud onClose={() => setModalBitacora({ ...modalBitacora, abierto: false })} solicitud={modalBitacora.solicitud} listas={listas} tiposCliente={tipos_cliente} />}
             {modalConsulta.abierto && <ModalConsultaSolicitud onClose={() => setModalConsulta({ ...modalConsulta, abierto: false })} solicitud={modalConsulta.solicitud} />}
             {modalRespuestaConsulta.abierto && <ModalRespuestaConsulta onClose={() => setModalRespuestaConsulta({ ...modalRespuestaConsulta, abierto: false })} solicitud={modalRespuestaConsulta.solicitud} consulta={modalRespuestaConsulta.consulta} />}
+            {modalEscalonamiento && (
+                <ModalEjercicioEscalonamiento
+                    onClose={() => setModalEscalonamiento(false)}
+                    listas={listas}
+                />
+            )}
         </AppLayout>
     );
 }

@@ -13,6 +13,7 @@ import {
     resolveAlertasPrefs,
     getTipoAlerta,
     normalizeNotificationPayload,
+    resolveNotificationDestination,
     resolveNotificationVoiceMessage,
     shouldTriggerChannel,
     MENSAJERIA_TIPO_ALERTA,
@@ -70,6 +71,22 @@ export default function AppLayout({ children, fullScreen = false }) {
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 5000);
     };
+
+    const navigateFromNotification = useCallback((notification) => {
+        router.visit(resolveNotificationDestination(notification));
+    }, []);
+
+    const handleToastClick = useCallback((toast) => {
+        if (toast.conversacionId) {
+            abrirConversacionDesdeNotificacion(toast.conversacionId);
+        } else if (toast.notification) {
+            navigateFromNotification(toast.notification);
+        } else {
+            return;
+        }
+
+        setToasts(prev => prev.filter(t => t.id !== toast.id));
+    }, [navigateFromNotification]);
 
     // INICIALIZAR PERMISOS Y PREFERENCIAS DE ALERTAS
     useEffect(() => {
@@ -166,8 +183,13 @@ export default function AppLayout({ children, fullScreen = false }) {
                     if (shouldTriggerChannel(prefs, tipo, 'app')) {
                         const tituloToast = payload.titulo || payload.proceso || 'GELIA ERP';
                         const texto = payload.mensaje_visible || payload.mensaje || 'Nueva actividad';
-                        addToast({ mensaje: `${tituloToast} — ${texto}` });
+                        addToast({
+                            mensaje: `${tituloToast} — ${texto}`,
+                            notification: payload,
+                        });
                     }
+
+                    const onNotificationNavigate = () => navigateFromNotification(payload);
 
                     const sonido = shouldTriggerChannel(prefs, tipo, 'sonido');
                     const voz = shouldTriggerChannel(prefs, tipo, 'voz');
@@ -193,7 +215,8 @@ export default function AppLayout({ children, fullScreen = false }) {
                             NotificationService.showDesktopNotification(
                                 payload.titulo || payload.proceso || 'GELIA ERP',
                                 { body: payload.mensaje_visible || payload.mensaje || 'Nueva notificación operativa.' },
-                                true
+                                true,
+                                onNotificationNavigate
                             );
                         }
                     } else if (sonido || voz || escritorio) {
@@ -201,7 +224,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                             payload.titulo || payload.proceso || 'GELIA ERP',
                             payload.mensaje_visible || payload.mensaje || 'Nueva notificación operativa.',
                             voz ? mensajeVoz : null,
-                            { sonido, voz, escritorio }
+                            { sonido, voz, escritorio, onClick: onNotificationNavigate }
                         );
                     }
 
@@ -258,7 +281,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                 echoChannelRef.current = null;
             }
         };
-    }, [auth?.user?.id]);
+    }, [auth?.user?.id, navigateFromNotification]);
 
     const accentColors = {
         rosa: '#ec4899',
@@ -580,15 +603,15 @@ export default function AppLayout({ children, fullScreen = false }) {
 
                     {/* TOASTS FLOTANTES */}
                     <div className="fixed top-6 right-6 z-[10000] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
-                    {toasts.map((toast) => (
+                    {toasts.map((toast) => {
+                        const esClickeable = !!(toast.conversacionId || toast.notification);
+
+                        return (
                         <div
                             key={toast.id}
-                            className={`pointer-events-auto theme-surface theme-no-blur border theme-border shadow-2xl rounded-2xl p-4 flex items-start gap-4 animate-slide-in-right overflow-hidden relative group ${toast.conversacionId ? 'cursor-pointer hover:border-[var(--color-primario)] transition-colors' : ''}`}
-                            onClick={toast.conversacionId ? () => {
-                                abrirConversacionDesdeNotificacion(toast.conversacionId);
-                                setToasts(prev => prev.filter(t => t.id !== toast.id));
-                            } : undefined}
-                            role={toast.conversacionId ? 'button' : undefined}
+                            className={`pointer-events-auto theme-surface theme-no-blur border theme-border shadow-2xl rounded-2xl p-4 flex items-start gap-4 animate-slide-in-right overflow-hidden relative group ${esClickeable ? 'cursor-pointer hover:border-[var(--color-primario)] transition-colors' : ''}`}
+                            onClick={esClickeable ? () => handleToastClick(toast) : undefined}
+                            role={esClickeable ? 'button' : undefined}
                         >
                             <div className="absolute bottom-0 left-0 h-1 bg-[var(--color-primario)] animate-progress-shrink" />
                             <div className="p-2 rounded-xl" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' }}>
@@ -608,7 +631,8 @@ export default function AppLayout({ children, fullScreen = false }) {
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
-                    ))}
+                        );
+                    })}
                     </div>
 
                     <WooSyncFloatingTracker canView={canViewWooSync} canSync={canSyncWoo} />

@@ -118,6 +118,74 @@ export function normalizeNotificationPayload(notification = {}) {
     return { ...notification, ...nested };
 }
 
+function toAppPath(url) {
+    if (!url || typeof url !== 'string') return null;
+    if (url.startsWith('http')) {
+        try {
+            const parsed = new URL(url);
+            return `${parsed.pathname}${parsed.search}`;
+        } catch {
+            return url;
+        }
+    }
+    return url;
+}
+
+/** Resuelve la ruta interna al hacer clic en una notificación del centro de alertas. */
+export function resolveNotificationDestination(notification = {}) {
+    const payload = normalizeNotificationPayload(notification);
+
+    if (payload.modulo === 'cobranza') {
+        let destino = '/auto-cobranza';
+        if (payload.clientes_busqueda) {
+            destino += `?q=${payload.clientes_busqueda}`;
+        }
+        return destino;
+    }
+
+    if (payload.url) {
+        return toAppPath(payload.url);
+    }
+
+    if (payload.conversacion_id) {
+        return `/mensajeria?conversacion=${payload.conversacion_id}`;
+    }
+
+    if (payload.solicitud_id) {
+        return `/solicitudes?folio=${payload.solicitud_id}`;
+    }
+
+    if (payload.activo_id) {
+        return `/activos/${payload.activo_id}`;
+    }
+
+    if (payload.ticket_id) {
+        return toAppPath(payload.url) || '/soporte/agente/tickets';
+    }
+
+    if (payload.modulo === 'facturas' && payload.folio) {
+        return `/facturas?folio=${payload.folio}`;
+    }
+
+    if (payload.modulo === 'woocommerce') {
+        return '/woocommerce';
+    }
+
+    if (payload.modulo === 'funciones' || payload.tipo === 'plantilla_bellaroma') {
+        return '/plantilla-bellaroma';
+    }
+
+    if (payload.total_activos !== undefined) {
+        return '/activos';
+    }
+
+    if (payload.total_vencidos !== undefined) {
+        return '/solicitudes';
+    }
+
+    return '/dashboard';
+}
+
 export function getTipoAlerta(notification = {}) {
     const payload = normalizeNotificationPayload(notification);
     if (payload?.total_vencidos !== undefined) return 'resumen_vencidos';

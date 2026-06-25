@@ -4,7 +4,7 @@ import { Bell, BellRing, CheckCircle2, AlertCircle, X, MailOpen } from 'lucide-r
 import { usePage, router } from '@inertiajs/react';
 import NotificationBrowserService from '@/Services/NotificationBrowserService';
 import WebPushService from '@/Services/WebPushService';
-import { ALERTAS_TIPOS } from '@/utils/alertasPrefs';
+import { ALERTAS_TIPOS, resolveNotificationDestination } from '@/utils/alertasPrefs';
 
 const ordenarPorFecha = (lista) =>
     [...lista].sort((a, b) => {
@@ -109,20 +109,7 @@ export default function NotificationBell({ notifications: propNotifications = []
     }, []);
 
     const handleNotificationClick = (n) => {
-        let destino = '/solicitudes';
-
-        if (n.data?.modulo === 'cobranza') {
-            destino = '/auto-cobranza';
-            if (n.data?.clientes_busqueda) {
-                destino += `?q=${n.data.clientes_busqueda}`;
-                // Assuming active tab for search is 'clients' or similar if needed. We'll just pass the query.
-            }
-        } else if (n.data?.activo_id) {
-            destino = `/activos/${n.data.activo_id}`;
-        } else if (n.data?.solicitud_id) {
-            destino = `/solicitudes?folio=${n.data.solicitud_id}`;
-        }
-
+        const destino = resolveNotificationDestination(n);
         router.visit(destino);
         setIsOpen(false);
     };
