@@ -19,6 +19,8 @@ class CobranzaFactura extends Model
         'pagada',
         'verificado_manualmente',
         'tiene_abono',
+        'pago_pendiente_confirmacion',
+        'detectado_en_import_at',
     ];
 
     protected $casts = [
@@ -28,6 +30,8 @@ class CobranzaFactura extends Model
         'pagada' => 'boolean',
         'verificado_manualmente' => 'boolean',
         'tiene_abono' => 'boolean',
+        'pago_pendiente_confirmacion' => 'boolean',
+        'detectado_en_import_at' => 'datetime',
     ];
 
     public function cliente(): BelongsTo

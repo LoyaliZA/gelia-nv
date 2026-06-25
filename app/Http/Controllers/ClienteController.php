@@ -6,6 +6,7 @@ use App\Http\Requests\Admin\GuardarClienteRequest;
 use App\Models\Cliente;
 use App\Models\CatalogoListaDescuento;
 use App\Services\Clientes\CorreccionEmergenciaNumeroClienteService;
+use App\Services\Cobranza\RecalcularCreditoClienteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -29,7 +30,7 @@ class ClienteController extends Controller
     /**
      * Actualiza un cliente existente desde el modal.
      */
-    public function update(GuardarClienteRequest $request, Cliente $cliente, CorreccionEmergenciaNumeroClienteService $correccionEmergencia)
+    public function update(GuardarClienteRequest $request, Cliente $cliente, CorreccionEmergenciaNumeroClienteService $correccionEmergencia, RecalcularCreditoClienteService $recalcularCredito)
     {
         $validated = $this->datosClienteDesdeRequest($request);
         $numero = $validated['numero_cliente'];
@@ -69,6 +70,9 @@ class ClienteController extends Controller
                 'descripcion' => 'Ajuste manual de parámetros de crédito. Cambios: ' . implode(', ', $cambios) . '.',
                 'es_alerta' => false,
             ]);
+
+            $cliente->refresh();
+            $recalcularCredito->ejecutar($cliente, Auth::id(), 'edicion_cliente', false);
         }
 
         return redirect()->back()->with('success', 'Cliente actualizado exitosamente.');

@@ -103,17 +103,18 @@ class EvaluarAlertasCobranza extends Command
 
         foreach ($clientesConCredito as $cliente) {
             $limiteFinal = (float) $cliente->monto_credito_autorizado;
-            $montoFinal = (float) $cliente->monto_venta_actual;
             $consolidado = (float) ($cliente->facturaCobranzaActiva?->monto ?? 0);
-            
-            $deudaReal = max($montoFinal, $consolidado);
 
-            if ($limiteFinal > 0 && $deudaReal > $limiteFinal) {
-                $alertaPendiente = \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
-                    ->where('tipo', 'limite_superado')
-                    ->where('estado', 'pendiente')
-                    ->first();
+            if ($limiteFinal <= 0 || $consolidado <= 0) {
+                continue;
+            }
 
+            $alertaPendiente = \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
+                ->where('tipo', 'limite_superado')
+                ->where('estado', 'pendiente')
+                ->first();
+
+            if ($consolidado > $limiteFinal) {
                 if (!$alertaPendiente) {
                     \App\Models\CobranzaAlerta::create([
                         'cliente_id' => $cliente->id,
@@ -124,13 +125,15 @@ class EvaluarAlertasCobranza extends Command
                         'estado' => 'pendiente',
                     ]);
                     $contadorAlertasLimite++;
-                    
+
                     $alertasLimiteExcedidoMasivo[] = [
                         'cliente' => $cliente,
-                        'monto_actual' => $deudaReal,
-                        'limite' => $limiteFinal
+                        'monto_actual' => $consolidado,
+                        'limite' => $limiteFinal,
                     ];
                 }
+            } elseif ($alertaPendiente) {
+                $alertaPendiente->update(['estado' => 'resuelta']);
             }
         }
 

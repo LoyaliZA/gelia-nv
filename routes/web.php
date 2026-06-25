@@ -169,6 +169,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/abonos-hoy', [AutoCobranzaController::class, 'abonosDelDia'])->name('abonos-hoy');
         Route::post('/clientes/{cliente}/resolver-aumento', [AutoCobranzaController::class, 'resolverAumento'])->name('alertas.resolver-aumento');
         Route::put('/clientes/{cliente}/reparar-fecha', [AutoCobranzaController::class, 'repararFechaInicio'])->name('clientes.reparar-fecha');
+        Route::post('/clientes/{cliente}/recalcular-credito', [AutoCobranzaController::class, 'recalcularCredito'])->name('clientes.recalcular-credito');
+        Route::post('/recalcular-creditos', [AutoCobranzaController::class, 'recalcularCreditosMasivo'])->name('recalcular-creditos');
+        Route::post('/facturas/{cobranzaFactura}/confirmar-pago', [AutoCobranzaController::class, 'confirmarPagoCobranza'])->name('facturas.confirmar-pago');
+        Route::post('/facturas/{cobranzaFactura}/descartar-pago', [AutoCobranzaController::class, 'descartarPagoCobranza'])->name('facturas.descartar-pago');
         Route::post('/facturas/{cobranzaFactura}/verificar', [AutoCobranzaController::class, 'verificarPago'])->name('facturas.verificar');
         Route::post('/configuracion', [AutoCobranzaController::class, 'guardarConfiguracion'])->name('configuracion.store');
     });

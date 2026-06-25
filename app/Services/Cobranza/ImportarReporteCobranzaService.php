@@ -4,16 +4,13 @@ namespace App\Services\Cobranza;
 
 use App\Models\Cliente;
 use App\Models\CobranzaFactura;
-use App\Events\AlertaAumentoCreditoEvent;
 use App\Models\CobranzaBitacora;
 use App\Models\User;
-use App\Notifications\AlertaAumentoCreditoNotification;
 use App\Notifications\AlertasAumentoCreditoMasivoNotification;
 use Exception;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class ImportarReporteCobranzaService
 {
@@ -51,10 +48,9 @@ class ImportarReporteCobranzaService
         $contadorActualizados = 0;
         $alertasDetectadas = [];
         $alertasLimiteExcedidoMasivo = [];
-        $clientesLiquidadosAnotificados = [];
         $clientesNuevosCreditosAnotificados = [];
 
-        DB::transaction(function () use ($file, $headers, $delimiter, &$clientesProcesados, &$contadorNuevos, &$contadorActualizados, &$alertasDetectadas, &$alertasLimiteExcedidoMasivo, &$clientesLiquidadosAnotificados, &$clientesNuevosCreditosAnotificados) {
+        DB::transaction(function () use ($file, $headers, $delimiter, &$clientesProcesados, &$contadorNuevos, &$contadorActualizados, &$alertasDetectadas, &$alertasLimiteExcedidoMasivo, &$clientesNuevosCreditosAnotificados) {
             $today = now()->toDateString();
 
             while (($row = fgetcsv($file, 0, $delimiter)) !== false) {
@@ -201,10 +197,9 @@ class ImportarReporteCobranzaService
                         $facturaActiva->update([
                             'monto' => $consolidado,
                             'fecha_vencimiento' => $vencimientoCalculado,
+                            'pago_pendiente_confirmacion' => false,
+                            'detectado_en_import_at' => null,
                         ]);
-                        
-                        // Sincronizar monto_venta_actual del cliente con el último importe activo
-                        $cliente->update(['monto_venta_actual' => $consolidado]);
 
                         // Limpiar facturas duplicadas para evitar fantasmas de pruebas anteriores
                         $facturasExtra = CobranzaFactura::where('cliente_id', $cliente->id)
@@ -312,38 +307,11 @@ class ImportarReporteCobranzaService
                     }
                     $contadorActualizados++;
                 } else {
-                    // Si no tiene saldo activo, marcar facturas activas como pagadas
-                    $facturasActivas = CobranzaFactura::where('cliente_id', $cliente->id)->where('pagada', false)->get();
-                    if ($facturasActivas->isNotEmpty()) {
-                        $montoPagado = $facturasActivas->sum('monto');
-                        CobranzaFactura::where('cliente_id', $cliente->id)
-                            ->where('pagada', false)
-                            ->update(['pagada' => true]);
-
-                        CobranzaBitacora::create([
-                            'cliente_id' => $cliente->id,
-                            'usuario_id' => auth()->id() ?? 1,
-                            'tipo_evento' => 'pago',
-                            'monto_anterior' => $montoPagado,
-                            'monto_nuevo' => 0,
-                            'descripcion' => 'Crédito liquidado (saldo consolidado $0).',
-                        ]);
-
-                        $clientesLiquidadosAnotificados[] = [
-                            'cliente' => $cliente,
-                            'montoPagado' => $montoPagado
-                        ];
-
-                        \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
-                            ->where('estado', 'pendiente')
-                            ->delete();
-                    }
-
-                    // Limpiar fecha de inicio de crédito y alerta
-                    $cliente->update([
-                        'fecha_inicio_credito' => null,
-                        'alerta_aumento_credito' => false,
-                    ]);
+                    $this->marcarPagoPendienteConfirmacion(
+                        $cliente,
+                        'Saldo consolidado $0 detectado en importación.'
+                    );
+                    $contadorActualizados++;
                 }
             }
             
@@ -355,37 +323,10 @@ class ImportarReporteCobranzaService
                 ->get();
 
             foreach ($clientesFaltantes as $clienteFaltante) {
-                $facturasActivas = CobranzaFactura::where('cliente_id', $clienteFaltante->id)->where('pagada', false)->get();
-                if ($facturasActivas->isNotEmpty()) {
-                    $montoPagado = $facturasActivas->sum('monto');
-                    CobranzaFactura::where('cliente_id', $clienteFaltante->id)
-                        ->where('pagada', false)
-                        ->update(['pagada' => true]);
-
-                    CobranzaBitacora::create([
-                        'cliente_id' => $clienteFaltante->id,
-                        'usuario_id' => auth()->id() ?? 1,
-                        'tipo_evento' => 'pago',
-                        'monto_anterior' => $montoPagado,
-                        'monto_nuevo' => 0,
-                        'descripcion' => 'Crédito liquidado (no se detectó deuda en el reporte importado).',
-                    ]);
-
-                    $clientesLiquidadosAnotificados[] = [
-                        'cliente' => $clienteFaltante,
-                        'montoPagado' => $montoPagado
-                    ];
-
-                    \App\Models\CobranzaAlerta::where('cliente_id', $clienteFaltante->id)
-                        ->where('estado', 'pendiente')
-                        ->delete();
-                }
-
-                $clienteFaltante->update([
-                    'fecha_inicio_credito' => null,
-                    'alerta_aumento_credito' => false,
-                ]);
-                
+                $this->marcarPagoPendienteConfirmacion(
+                    $clienteFaltante,
+                    'Cliente ausente en el reporte importado; pago pendiente de confirmación.'
+                );
                 $contadorActualizados++;
             }
         });
@@ -405,7 +346,7 @@ class ImportarReporteCobranzaService
             }
         }
 
-        if (!empty($clientesLiquidadosAnotificados) || !empty($clientesNuevosCreditosAnotificados)) {
+        if (!empty($clientesNuevosCreditosAnotificados)) {
             $configUsersPagos = \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_users_pagos', function () {
                 $config = \App\Models\CobranzaConfiguracion::where('llave', 'notified_users_pagos')->first();
                 return $config && $config->valor ? json_decode($config->valor, true) : [];
@@ -414,12 +355,7 @@ class ImportarReporteCobranzaService
             if (!empty($configUsersPagos)) {
                 $usuariosPago = User::whereIn('id', $configUsersPagos)->get();
                 if ($usuariosPago->isNotEmpty()) {
-                    if (!empty($clientesLiquidadosAnotificados)) {
-                        Notification::send($usuariosPago, new \App\Notifications\AlertaPagoLiquidoNotification($clientesLiquidadosAnotificados));
-                    }
-                    if (!empty($clientesNuevosCreditosAnotificados)) {
-                        Notification::send($usuariosPago, new \App\Notifications\AlertaNuevoCreditoMasivoNotification($clientesNuevosCreditosAnotificados));
-                    }
+                    Notification::send($usuariosPago, new \App\Notifications\AlertaNuevoCreditoMasivoNotification($clientesNuevosCreditosAnotificados));
                 }
             }
         }
@@ -484,5 +420,36 @@ class ImportarReporteCobranzaService
             $montoLimpio = '-' . substr($montoLimpio, 1, -1);
         }
         return is_numeric($montoLimpio) ? (float) $montoLimpio : 0.00;
+    }
+
+    private function marcarPagoPendienteConfirmacion(Cliente $cliente, string $descripcion): void
+    {
+        $facturasActivas = CobranzaFactura::where('cliente_id', $cliente->id)
+            ->where('pagada', false)
+            ->where('monto', '>', 0)
+            ->get();
+
+        if ($facturasActivas->isEmpty()) {
+            return;
+        }
+
+        $montoPendiente = (float) $facturasActivas->sum('monto');
+        $ahora = now();
+
+        CobranzaFactura::where('cliente_id', $cliente->id)
+            ->where('pagada', false)
+            ->update([
+                'pago_pendiente_confirmacion' => true,
+                'detectado_en_import_at' => $ahora,
+            ]);
+
+        CobranzaBitacora::create([
+            'cliente_id' => $cliente->id,
+            'usuario_id' => auth()->id() ?? 1,
+            'tipo_evento' => 'pago_detectado',
+            'monto_anterior' => $montoPendiente,
+            'monto_nuevo' => 0,
+            'descripcion' => $descripcion,
+        ]);
     }
 }

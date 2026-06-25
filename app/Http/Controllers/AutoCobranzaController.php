@@ -6,6 +6,8 @@ use App\Models\Cliente;
 use App\Models\CobranzaAlerta;
 use App\Models\CobranzaFactura;
 use App\Services\Cobranza\ImportarReporteCobranzaService;
+use App\Services\Cobranza\RecalcularCreditoClienteService;
+use App\Services\Cobranza\ConfirmarPagoCobranzaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -29,7 +31,17 @@ class AutoCobranzaController extends Controller
                 $query->where('pagada', false)->where('monto', '>', 0);
             })
             ->orderBy('fecha_alerta', 'desc')
-            ->get();
+            ->get()
+            ->filter(function ($alerta) {
+                if ($alerta->tipo !== 'limite_superado') {
+                    return true;
+                }
+                $limite = (float) ($alerta->cliente?->monto_credito_autorizado ?? 0);
+                $consolidado = (float) ($alerta->factura?->monto ?? 0);
+
+                return $limite > 0 && $consolidado > $limite;
+            })
+            ->values();
 
         // 3. Agrupación administrativa de cartera vencida
         $facturasVencidas = CobranzaFactura::where('pagada', false)->get();
@@ -76,11 +88,18 @@ class AutoCobranzaController extends Controller
             return $config ? $config->valor : ['intervalo_dias' => 3, 'umbral_diario' => 30];
         });
 
+        $pagosPendientesConfirmacion = CobranzaFactura::query()
+            ->where('pagada', false)
+            ->where('pago_pendiente_confirmacion', true)
+            ->where('monto', '>', 0)
+            ->count();
+
         return Inertia::render('AutoCobranza/Index', [
             'clientes' => $clientes,
             'alertas' => $alertas,
             'cartera' => $cartera,
             'aumentosPendientes' => $aumentosPendientes,
+            'pagosPendientesConfirmacion' => $pagosPendientesConfirmacion,
             'configuracionHorarios' => $configuracionHorarios,
             'configuracionAlertas' => $configuracionAlertas,
             'filtros' => [
@@ -146,6 +165,13 @@ class AutoCobranzaController extends Controller
             });
         }
 
+        $pagoPendienteSubquery = CobranzaFactura::query()
+            ->selectRaw('CASE WHEN pago_pendiente_confirmacion = 1 THEN 0 ELSE 1 END')
+            ->whereColumn('cliente_id', 'clientes.id')
+            ->where('pagada', false)
+            ->orderByDesc('monto')
+            ->limit(1);
+
         $saldoSubquery = CobranzaFactura::query()
             ->select('monto')
             ->whereColumn('cliente_id', 'clientes.id')
@@ -169,14 +195,14 @@ class AutoCobranzaController extends Controller
             ->limit(1);
 
         match ($request->input('orden', 'automatico')) {
-            'automatico'         => $query->orderBy($estadoSubquery)->orderByDesc($saldoSubquery),
-            'saldo_asc'          => $query->orderBy($saldoSubquery),
-            'saldo_desc'         => $query->orderByDesc($saldoSubquery),
-            'nombre_asc'         => $query->orderBy('nombre'),
-            'nombre_desc'        => $query->orderByDesc('nombre'),
-            'fecha_credito_desc' => $query->orderByDesc('fecha_inicio_credito'),
-            'numero_asc'         => $query->ordenarPorNumeroCliente('asc'),
-            default              => $query->orderBy($estadoSubquery)->orderByDesc($saldoSubquery),
+            'automatico'         => $query->orderBy($pagoPendienteSubquery)->orderBy($estadoSubquery)->orderByDesc($saldoSubquery),
+            'saldo_asc'          => $query->orderBy($pagoPendienteSubquery)->orderBy($saldoSubquery),
+            'saldo_desc'         => $query->orderBy($pagoPendienteSubquery)->orderByDesc($saldoSubquery),
+            'nombre_asc'         => $query->orderBy($pagoPendienteSubquery)->orderBy('nombre'),
+            'nombre_desc'        => $query->orderBy($pagoPendienteSubquery)->orderByDesc('nombre'),
+            'fecha_credito_desc' => $query->orderBy($pagoPendienteSubquery)->orderByDesc('fecha_inicio_credito'),
+            'numero_asc'         => $query->orderBy($pagoPendienteSubquery)->ordenarPorNumeroCliente('asc'),
+            default              => $query->orderBy($pagoPendienteSubquery)->orderBy($estadoSubquery)->orderByDesc($saldoSubquery),
         };
 
         return $query->paginate(6)->withQueryString();
@@ -335,7 +361,7 @@ class AutoCobranzaController extends Controller
         return redirect()->back()->with('success', 'Alerta resuelta.');
     }
 
-    public function repararFechaInicio(Request $request, Cliente $cliente)
+    public function repararFechaInicio(Request $request, Cliente $cliente, RecalcularCreditoClienteService $recalcular)
     {
         if (!auth()->user()->hasRole('Super Admin') && !auth()->user()->can('cobranza.reparar_fecha')) {
             abort(403, 'No tienes permiso para reparar la fecha de inicio de crédito.');
@@ -350,52 +376,99 @@ class AutoCobranzaController extends Controller
 
         $cliente->update(['fecha_inicio_credito' => $nuevaFecha]);
 
-        $facturaActiva = \App\Models\CobranzaFactura::where('cliente_id', $cliente->id)
-            ->where('pagada', false)
-            ->first();
-
-        if ($facturaActiva) {
-            $diasCredito = ($cliente->dias_credito > 0) ? $cliente->dias_credito : 30;
-            $vencimientoCalculado = $nuevaFecha->copy()->addDays($diasCredito)->startOfDay();
-            $facturaActiva->update([
-                'fecha_vencimiento' => $vencimientoCalculado
-            ]);
-
-            $hoy = now()->startOfDay();
-            $diasAtraso = $vencimientoCalculado->diffInDays($hoy, false);
-
-            if ($diasAtraso >= 1) {
-                $alertaPendiente = \App\Models\CobranzaAlerta::where('factura_id', $facturaActiva->id)
-                    ->where('estado', 'pendiente')
-                    ->first();
-
-                if ($alertaPendiente) {
-                    $alertaPendiente->update(['dias_atraso' => $diasAtraso, 'fecha_alerta' => now()->toDateString()]);
-                } else {
-                    \App\Models\CobranzaAlerta::create([
-                        'cliente_id' => $cliente->id,
-                        'factura_id' => $facturaActiva->id,
-                        'dias_atraso' => $diasAtraso,
-                        'fecha_alerta' => now()->toDateString(),
-                        'estado' => 'pendiente',
-                    ]);
-                }
-            } else {
-                \App\Models\CobranzaAlerta::where('factura_id', $facturaActiva->id)
-                    ->where('estado', 'pendiente')
-                    ->delete();
-            }
-        }
+        $resultado = $recalcular->ejecutar($cliente, auth()->id(), 'reparar_fecha');
 
         \App\Models\CobranzaBitacora::create([
             'cliente_id' => $cliente->id,
             'usuario_id' => auth()->id() ?? 1,
-            'tipo_evento' => 'inicio_credito', // Usamos un evento existente para evitar errores
+            'tipo_evento' => 'inicio_credito',
             'monto_anterior' => 0,
             'monto_nuevo' => 0,
             'descripcion' => "Reparación manual de fecha de inicio de crédito. Anterior: $viejaFecha. Nueva: {$nuevaFecha->toDateString()}",
         ]);
 
+        if (!$resultado['recalculado']) {
+            return redirect()->back()->with('success', 'Fecha de inicio actualizada. No había factura activa para recalcular vencimiento.');
+        }
+
         return redirect()->back()->with('success', 'Fecha de inicio de crédito reparada con éxito. Los cálculos han sido actualizados.');
+    }
+
+    public function recalcularCredito(Cliente $cliente, RecalcularCreditoClienteService $recalcular)
+    {
+        if (!auth()->user()->hasRole('Super Admin') && !auth()->user()->can('cobranza.reparar_fecha')) {
+            abort(403, 'No tienes permiso para recalcular créditos.');
+        }
+
+        $resultado = $recalcular->ejecutar($cliente, auth()->id(), 'manual');
+
+        if (!$resultado['recalculado']) {
+            return response()->json([
+                'message' => match ($resultado['motivo'] ?? '') {
+                    'sin_factura_activa' => 'El cliente no tiene una factura de crédito activa.',
+                    'sin_fecha_inicio' => 'El cliente no tiene fecha de inicio de crédito configurada.',
+                    default => 'No fue posible recalcular el crédito.',
+                },
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Crédito recalculado correctamente.',
+            'fecha_vencimiento' => $resultado['fecha_vencimiento'],
+            'dias_atraso' => $resultado['dias_atraso'],
+        ]);
+    }
+
+    public function confirmarPagoCobranza(CobranzaFactura $cobranzaFactura, ConfirmarPagoCobranzaService $servicio)
+    {
+        $this->authorize('cobranza.confirmar_pago');
+
+        $resultado = $servicio->confirmar($cobranzaFactura, auth()->id());
+
+        if (!$resultado['ok']) {
+            return response()->json([
+                'message' => match ($resultado['motivo'] ?? '') {
+                    'ya_pagada' => 'La factura ya está marcada como pagada.',
+                    'sin_pendiente' => 'Esta factura no tiene un pago pendiente de confirmación.',
+                    default => 'No fue posible confirmar el pago.',
+                },
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Pago confirmado correctamente.',
+            'monto_pagado' => $resultado['monto_pagado'],
+        ]);
+    }
+
+    public function descartarPagoCobranza(CobranzaFactura $cobranzaFactura, ConfirmarPagoCobranzaService $servicio)
+    {
+        $this->authorize('cobranza.confirmar_pago');
+
+        $resultado = $servicio->descartar($cobranzaFactura, auth()->id());
+
+        if (!$resultado['ok']) {
+            return response()->json([
+                'message' => match ($resultado['motivo'] ?? '') {
+                    'ya_pagada' => 'La factura ya está marcada como pagada.',
+                    'sin_pendiente' => 'Esta factura no tiene un pago pendiente de confirmación.',
+                    default => 'No fue posible descartar el pago detectado.',
+                },
+            ], 422);
+        }
+
+        return response()->json(['message' => 'Pago detectado descartado. La deuda permanece activa.']);
+    }
+
+    public function recalcularCreditosMasivo(RecalcularCreditoClienteService $recalcular)
+    {
+        $this->authorize('cobranza.recalcular_creditos');
+
+        $resultado = $recalcular->ejecutarMasivo(auth()->id());
+
+        return redirect()->back()->with(
+            'success',
+            "Recálculo masivo completado. Procesados: {$resultado['procesados']}, recalculados: {$resultado['recalculados']}, omitidos: {$resultado['omitidos']}."
+        );
     }
 }

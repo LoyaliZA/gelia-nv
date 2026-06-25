@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Head, router, useForm } from '@inertiajs/react';
 import {
     CreditCard, Users, Clock, Coins, Search, FileText, ArrowRight, Upload,
-    Volume2, VolumeX, Phone, MessageSquare, Check, X, AlertCircle, BarChart3, Settings
+    Volume2, VolumeX, Phone, MessageSquare, Check, X, AlertCircle, BarChart3, Settings, RefreshCw
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
@@ -25,7 +25,7 @@ const ORDEN_OPCIONES = [
     { value: 'numero_asc', label: 'No. cliente' },
 ];
 
-export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], configuracionHorarios = ['10:00', '12:00'], configuracionAlertas = { intervalo_dias: 3, umbral_diario: 30 }, filtros = {}, users = [], notifiedUsersPagos = [] }) {
+export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], pagosPendientesConfirmacion = 0, configuracionHorarios = ['10:00', '12:00'], configuracionAlertas = { intervalo_dias: 3, umbral_diario: 30 }, filtros = {}, users = [], notifiedUsersPagos = [] }) {
     const puedeVerAdmin = auth?.user?.permissions?.includes('cobranza.ver_admin') || auth?.user?.roles?.includes('Super Admin');
     const puedeEjecutarLlamadas = auth?.user?.permissions?.includes('cobranza.ejecutar_llamadas') || auth?.user?.roles?.includes('Super Admin');
     const puedeImportarReporte = auth?.user?.permissions?.includes('cobranza.importar_reporte') || auth?.user?.roles?.includes('Super Admin');
@@ -33,6 +33,8 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     const puedeRecibirAlertas = auth?.user?.permissions?.includes('cobranza.recibir_alertas') || auth?.user?.roles?.includes('Super Admin');
     const puedeRepararFecha = auth?.user?.permissions?.includes('cobranza.reparar_fecha') || auth?.user?.roles?.includes('Super Admin');
     const puedeConfigurarAlertas = auth?.user?.permissions?.includes('cobranza.configurar_alertas') || auth?.user?.roles?.includes('Super Admin');
+    const puedeConfirmarPago = auth?.user?.permissions?.includes('cobranza.confirmar_pago') || auth?.user?.roles?.includes('Super Admin');
+    const puedeRecalcularCreditos = auth?.user?.permissions?.includes('cobranza.recalcular_creditos') || auth?.user?.roles?.includes('Super Admin');
 
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [filtroOrden, setFiltroOrden] = useState(filtros.orden || 'automatico');
@@ -176,6 +178,45 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
         setRepararFechaModal({ isOpen: true, clienteId, fechaActual: actualFecha || '' });
     };
 
+    const recalcularCreditoCliente = (clienteId) => {
+        if (!confirm('¿Recalcular vencimiento y alertas según los parámetros actuales del cliente?')) return;
+        axios.post(route('auto-cobranza.clientes.recalcular-credito', clienteId))
+            .then(() => {
+                router.reload({ only: ['clientes', 'alertas', 'cartera', 'aumentosPendientes'], preserveScroll: true });
+            })
+            .catch((err) => {
+                alert(err.response?.data?.message || 'Error al recalcular el crédito.');
+            });
+    };
+
+    const recalcularCreditosMasivo = () => {
+        if (!confirm('¿Recalcular vencimientos y alertas de TODOS los clientes con crédito activo? Esto puede tardar unos segundos.')) return;
+        router.post(route('auto-cobranza.recalcular-creditos'), {}, {
+            preserveScroll: true,
+            onSuccess: () => router.reload({ only: ['clientes', 'alertas', 'cartera', 'aumentosPendientes', 'pagosPendientesConfirmacion'] }),
+        });
+    };
+
+    const confirmarPagoCliente = (facturaId) => {
+        if (!confirm('¿Confirmar que este cliente liquidó su crédito? Esta acción no se puede deshacer.')) return;
+        axios.post(route('auto-cobranza.facturas.confirmar-pago', facturaId))
+            .then((res) => {
+                alert(res.data.message);
+                router.reload({ only: ['clientes', 'alertas', 'cartera', 'pagosPendientesConfirmacion'], preserveScroll: true });
+            })
+            .catch((err) => alert(err.response?.data?.message || 'Error al confirmar el pago.'));
+    };
+
+    const descartarPagoCliente = (facturaId) => {
+        if (!confirm('¿Descartar el pago detectado y mantener la deuda activa?')) return;
+        axios.post(route('auto-cobranza.facturas.descartar-pago', facturaId))
+            .then((res) => {
+                alert(res.data.message);
+                router.reload({ only: ['clientes', 'pagosPendientesConfirmacion'], preserveScroll: true });
+            })
+            .catch((err) => alert(err.response?.data?.message || 'Error al descartar el pago.'));
+    };
+
     const cargarHistorial = (page = 1) => {
         setCargandoHistorial(true);
         axios.get(route('auto-cobranza.historial'), { params: { page, q: busqueda } })
@@ -297,7 +338,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
             onSuccess: () => {
                 formImportar.reset();
                 cargarAbonosDelDia();
-                router.reload({ only: ['clientes', 'filtros', 'cartera', 'aumentosPendientes'] });
+                router.reload({ only: ['clientes', 'filtros', 'cartera', 'aumentosPendientes', 'pagosPendientesConfirmacion'] });
             },
             onError: () => { },
             preserveScroll: true,
@@ -339,16 +380,29 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                         </h1>
                         <p className="text-xs font-bold theme-text-muted uppercase tracking-widest mt-1 m-0">
                             Gestión e Inteligencia de Cobros
+                            {pagosPendientesConfirmacion > 0 && (
+                                <span className="ml-2 text-emerald-500">· {pagosPendientesConfirmacion} pago(s) por confirmar</span>
+                            )}
                         </p>
                     </div>
-                    {puedeConfigurarAlertas && (
-                        <div className="relative z-10 flex flex-col md:items-end gap-2">
-                            <button
-                                onClick={() => setConfigModal(true)}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-black/5 dark:bg-white/5 border theme-border hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-colors shadow-sm"
-                            >
-                                <Settings className="w-4 h-4" /> Configurar Alertas
-                            </button>
+                    {(puedeConfigurarAlertas || puedeRecalcularCreditos) && (
+                        <div className="relative z-10 flex flex-wrap items-center gap-2 md:justify-end">
+                            {puedeRecalcularCreditos && (
+                                <button
+                                    onClick={recalcularCreditosMasivo}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-black/5 dark:bg-white/5 border theme-border hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-colors shadow-sm"
+                                >
+                                    <RefreshCw className="w-4 h-4" /> Recalcular Créditos
+                                </button>
+                            )}
+                            {puedeConfigurarAlertas && (
+                                <button
+                                    onClick={() => setConfigModal(true)}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-black/5 dark:bg-white/5 border theme-border hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-colors shadow-sm"
+                                >
+                                    <Settings className="w-4 h-4" /> Configurar Alertas
+                                </button>
+                            )}
                         </div>
                     )}
                 </header>
@@ -615,9 +669,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                                     <div className="flex flex-col">
                                                         <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Monto Vencido</span>
                                                         <span className="text-sm font-black text-red-500">
-                                                            {alerta.tipo === 'limite_superado'
-                                                                ? formatoMoneda(Math.max(Number(alerta.cliente?.monto_venta_actual || 0), Number(alerta.factura?.monto || 0)))
-                                                                : formatoMoneda(alerta.factura?.monto || 0)}
+                                                            {formatoMoneda(alerta.factura?.monto || 0)}
                                                         </span>
                                                     </div>
                                                     <div className="flex gap-2 items-center">
@@ -794,6 +846,50 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                 clientes.data.map((cliente) => {
                                     const autorizado = montoAutorizado(cliente);
                                     const consolidado = saldoConsolidado(cliente);
+                                    const facturaActiva = cliente.factura_cobranza_activa;
+                                    const pagoPendiente = facturaActiva?.pago_pendiente_confirmacion;
+
+                                    if (pagoPendiente) {
+                                        return (
+                                            <div key={cliente.id} className={geliaCardClass('p-6 border flex flex-col border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-500/10 hover:border-emerald-500 transition-all duration-300')}>
+                                                <div className="flex items-center flex-wrap gap-2 mb-2">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)]">
+                                                        No. {cliente.numero_cliente}
+                                                    </span>
+                                                    <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-emerald-500 text-white animate-pulse">
+                                                        Pago detectado
+                                                    </span>
+                                                </div>
+                                                <h3 className="text-sm font-bold theme-text-main leading-tight mb-1">{cliente.nombre}</h3>
+                                                <p className="text-xs theme-text-muted mb-4">
+                                                    El import reportó saldo $0 o el cliente no apareció en el archivo. Confirma si liquidó su crédito.
+                                                </p>
+                                                <div className="mt-auto pt-4 border-t theme-border/60">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Monto a liquidar</p>
+                                                    <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mb-4">
+                                                        {consolidado != null ? formatoMoneda(consolidado) : '—'}
+                                                    </p>
+                                                    {puedeConfirmarPago && facturaActiva?.id && (
+                                                        <div className="flex flex-col sm:flex-row gap-2">
+                                                            <button
+                                                                onClick={() => confirmarPagoCliente(facturaActiva.id)}
+                                                                className="flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm flex items-center justify-center gap-2"
+                                                            >
+                                                                <Check className="w-4 h-4" /> Confirmar Pago
+                                                            </button>
+                                                            <button
+                                                                onClick={() => descartarPagoCliente(facturaActiva.id)}
+                                                                className="flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border hover:border-red-500 hover:text-red-500 transition-colors flex items-center justify-center gap-2"
+                                                            >
+                                                                <X className="w-4 h-4" /> Descartar
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
                                     let hasAlerta = cliente.alerta_aumento_credito;
                                     const limiteSuperado = autorizado > 0 && consolidado > autorizado;
 
@@ -920,13 +1016,22 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                                             {cliente.fecha_inicio_credito || <span className="theme-text-muted">—</span>}
                                                         </span>
                                                         {puedeRepararFecha && (
-                                                            <button
-                                                                onClick={() => repararFecha(cliente.id, cliente.fecha_inicio_credito)}
-                                                                title="Reparar Fecha de Inicio de Crédito"
-                                                                className="p-1 rounded-full text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 transition-colors"
-                                                            >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
-                                                            </button>
+                                                            <>
+                                                                <button
+                                                                    onClick={() => repararFecha(cliente.id, cliente.fecha_inicio_credito)}
+                                                                    title="Reparar Fecha de Inicio de Crédito"
+                                                                    className="p-1 rounded-full text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 transition-colors"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => recalcularCreditoCliente(cliente.id)}
+                                                                    title="Recalcular vencimiento y alertas"
+                                                                    className="p-1 rounded-full text-zinc-400 hover:text-emerald-500 hover:bg-emerald-500/10 transition-colors"
+                                                                >
+                                                                    <RefreshCw className="w-3 h-3" />
+                                                                </button>
+                                                            </>
                                                         )}
                                                     </div>
                                                 </div>
