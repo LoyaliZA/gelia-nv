@@ -11,6 +11,13 @@ import { geliaCardClass, THEME_INPUT, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } f
 import { formatoMoneda } from '../../utils/formatoMoneda';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import NotificationBrowserService from '../../Services/NotificationBrowserService';
+import {
+    COBRANZA_DIAS_SEMANA,
+    diasParaProximaLlamadaCobranza,
+    esDiaDeLlamadaCobranza,
+    esDiaHabilCobranza,
+    normalizarConfigCobranzaAlertas,
+} from '../../utils/cobranzaAlertasReglas';
 import ModalHistorialCliente from './Components/ModalHistorialCliente';
 import ModalAbonosDelDia from './Components/ModalAbonosDelDia';
 import axios from 'axios';
@@ -25,7 +32,8 @@ const ORDEN_OPCIONES = [
     { value: 'numero_asc', label: 'No. cliente' },
 ];
 
-export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], pagosPendientesConfirmacion = 0, configuracionHorarios = ['10:00', '12:00'], configuracionAlertas = { intervalo_dias: 3, umbral_diario: 30 }, filtros = {}, users = [], notifiedUsersPagos = [] }) {
+export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], pagosPendientesConfirmacion = 0, configuracionHorarios = ['10:00', '12:00'], configuracionAlertas: configuracionAlertasProp = {}, filtros = {}, users = [], notifiedUsersPagos = [] }) {
+    const configuracionAlertas = normalizarConfigCobranzaAlertas(configuracionAlertasProp);
     const puedeVerAdmin = auth?.user?.permissions?.includes('cobranza.ver_admin') || auth?.user?.roles?.includes('Super Admin');
     const puedeEjecutarLlamadas = auth?.user?.permissions?.includes('cobranza.ejecutar_llamadas') || auth?.user?.roles?.includes('Super Admin');
     const puedeImportarReporte = auth?.user?.permissions?.includes('cobranza.importar_reporte') || auth?.user?.roles?.includes('Super Admin');
@@ -70,8 +78,10 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     const [configModal, setConfigModal] = useState(false);
     const formConfig = useForm({
         horarios: configuracionHorarios || ['10:00', '12:00'],
-        intervalo_dias: configuracionAlertas?.intervalo_dias ?? 3,
-        umbral_diario: configuracionAlertas?.umbral_diario ?? 30,
+        intervalo_dias: configuracionAlertas.intervalo_dias,
+        umbral_diario: configuracionAlertas.umbral_diario,
+        dias_gracia: configuracionAlertas.dias_gracia,
+        dias_habiles: configuracionAlertas.dias_habiles,
         notified_users_pagos: notifiedUsersPagos || []
     });
 
@@ -353,7 +363,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
             onSuccess: () => {
                 setConfigModal(false);
                 alert('Configuración de horarios actualizada correctamente.');
-                router.reload({ only: ['configuracionHorarios'] });
+                router.reload({ only: ['configuracionHorarios', 'configuracionAlertas'] });
             }
         });
     };
@@ -424,7 +434,10 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                         <div className="space-y-1">
                             <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Alertas Operativas Hoy</p>
                             <h3 className="text-3xl font-black theme-text-main m-0">{totalAlertasHoy}</h3>
-                            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wider">Pendientes de llamada (Cada {configuracionAlertas.intervalo_dias} días o &gt; {configuracionAlertas.umbral_diario})</p>
+                            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wider">
+                                Llamadas: gracia {configuracionAlertas.dias_gracia} d · cada {configuracionAlertas.intervalo_dias} d · diario &gt; {configuracionAlertas.umbral_diario} d
+                                {!esDiaHabilCobranza(new Date(), configuracionAlertas) && ' · Hoy no es día hábil'}
+                            </p>
                         </div>
                         <div className="p-3 rounded-2xl theme-element border theme-border shadow-sm">
                             <Clock className="w-6 h-6 text-amber-500" />
@@ -596,8 +609,11 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                     </div>
                                 ) : (
                                     alertas.map((alerta) => {
-                                        const esDiaDeLlamada = alerta.dias_atraso >= configuracionAlertas.umbral_diario || alerta.dias_atraso % configuracionAlertas.intervalo_dias === 0;
-                                        const diasParaLlamar = configuracionAlertas.intervalo_dias - (alerta.dias_atraso % configuracionAlertas.intervalo_dias);
+                                        const esDiaDeLlamada = alerta.tipo === 'limite_superado'
+                                            || esDiaDeLlamadaCobranza(alerta.dias_atraso, configuracionAlertas);
+                                        const diasParaLlamar = alerta.tipo === 'limite_superado'
+                                            ? 0
+                                            : diasParaProximaLlamadaCobranza(alerta.dias_atraso, configuracionAlertas);
                                         const esPendiente = alerta.estado === 'pendiente';
 
                                         return (
@@ -1371,18 +1387,19 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
             )}
 
             {configModal && createPortal(
-                <div className={THEME_MODAL_OVERLAY} onClick={() => setConfigModal(false)}>
-                    <div className={`${THEME_MODAL_SHELL} max-w-sm w-full p-6`} onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center mb-6">
+                <div className={`${THEME_MODAL_OVERLAY} z-[9999] p-4`} onClick={() => setConfigModal(false)}>
+                    <div className={`${THEME_MODAL_SHELL} max-w-md w-full flex flex-col`} onClick={e => e.stopPropagation()}>
+                        <div className="flex-shrink-0 flex justify-between items-center p-6 pb-4 border-b theme-border">
                             <div>
                                 <h2 className="text-xl font-black uppercase tracking-tighter italic theme-text-main">Horarios_</h2>
                                 <p className="text-[10px] uppercase tracking-widest font-bold theme-text-muted">Configuración del Cron Job</p>
                             </div>
-                            <button onClick={() => setConfigModal(false)} className="p-2 theme-element rounded-xl hover:text-red-500 transition-colors">
+                            <button type="button" onClick={() => setConfigModal(false)} className="p-2 theme-element rounded-xl hover:text-red-500 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <form onSubmit={submitConfig} className="space-y-4">
+                        <form onSubmit={submitConfig} className="flex flex-col flex-1 min-h-0">
+                            <div className="gelia-modal-body px-6 py-4 space-y-4">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Horas de ejecución</label>
                                 {formConfig.data.horarios.map((hora, index) => (
@@ -1421,7 +1438,19 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                             
                             <div className="grid grid-cols-2 gap-4 mt-4">
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Periodo intermedio de llamadas (días)</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Días de gracia tras vencimiento</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={formConfig.data.dias_gracia}
+                                        onChange={e => formConfig.setData('dias_gracia', e.target.value)}
+                                        className={THEME_INPUT + " w-full"}
+                                        required
+                                    />
+                                    <p className="text-[9px] theme-text-muted">Tiempo sin llamadas después del vencimiento.</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Periodo entre llamadas (días)</label>
                                     <input
                                         type="number"
                                         min="1"
@@ -1430,8 +1459,9 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                         className={THEME_INPUT + " w-full"}
                                         required
                                     />
+                                    <p className="text-[9px] theme-text-muted">Tras la primera llamada, se repite cada N días.</p>
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-2 col-span-2">
                                     <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Días de atraso para notificar a diario</label>
                                     <input
                                         type="number"
@@ -1442,6 +1472,40 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                         required
                                     />
                                 </div>
+                            </div>
+
+                            <div className="space-y-2 mt-4">
+                                <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Días hábiles para alertas</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {COBRANZA_DIAS_SEMANA.map(({ iso, label }) => (
+                                        <label
+                                            key={iso}
+                                            className={`px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest cursor-pointer transition-colors ${
+                                                formConfig.data.dias_habiles.includes(iso)
+                                                    ? 'border-[var(--color-primario)] bg-[var(--color-primario)]/10 text-[var(--color-primario)]'
+                                                    : 'theme-border theme-element theme-text-muted'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only"
+                                                checked={formConfig.data.dias_habiles.includes(iso)}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    let dias = [...formConfig.data.dias_habiles];
+                                                    if (checked) {
+                                                        dias.push(iso);
+                                                    } else {
+                                                        dias = dias.filter((d) => d !== iso);
+                                                    }
+                                                    formConfig.setData('dias_habiles', [...new Set(dias)].sort((a, b) => a - b));
+                                                }}
+                                            />
+                                            {label}
+                                        </label>
+                                    ))}
+                                </div>
+                                <p className="text-[9px] theme-text-muted">El sonido y las llamadas solo corren en estos días, a las horas configuradas.</p>
                             </div>
                             
                             <div className="space-y-2 mt-4">
@@ -1472,7 +1536,8 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                     ))}
                                 </div>
                             </div>
-                            <div className="pt-4 flex justify-end gap-3">
+                            </div>
+                            <div className="gelia-modal-footer px-6 py-4 flex justify-end gap-3">
                                 <button type="button" onClick={() => setConfigModal(false)} className="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border">
                                     Cancelar
                                 </button>

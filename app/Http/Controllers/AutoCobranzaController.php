@@ -5,15 +5,19 @@ namespace App\Http\Controllers;
 use App\Models\Cliente;
 use App\Models\CobranzaAlerta;
 use App\Models\CobranzaFactura;
-use App\Services\Cobranza\ImportarReporteCobranzaService;
-use App\Services\Cobranza\RecalcularCreditoClienteService;
 use App\Services\Cobranza\ConfirmarPagoCobranzaService;
+use App\Services\Cobranza\CobranzaAlertasReglasService;
+use App\Services\Cobranza\ImportarReporteCobranzaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class AutoCobranzaController extends Controller
 {
+    public function __construct(
+        private CobranzaAlertasReglasService $reglasAlertas,
+    ) {}
+
     /**
      * Muestra la vista principal de Auto-Cobranza con KPIs, Cartera Vencida y Alertas.
      */
@@ -83,10 +87,12 @@ class AutoCobranzaController extends Controller
             return $config ? $config->valor : ['10:00', '12:00'];
         });
 
-        $configuracionAlertas = \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_alertas', function () {
-            $config = \App\Models\CobranzaConfiguracion::where('llave', 'config_alertas')->first();
-            return $config ? $config->valor : ['intervalo_dias' => 3, 'umbral_diario' => 30];
-        });
+        $configuracionAlertas = $this->reglasAlertas->normalizar(
+            \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_alertas', function () {
+                $config = \App\Models\CobranzaConfiguracion::where('llave', 'config_alertas')->first();
+                return $config?->valor ?? [];
+            })
+        );
 
         $pagosPendientesConfirmacion = CobranzaFactura::query()
             ->where('pagada', false)
@@ -120,23 +126,27 @@ class AutoCobranzaController extends Controller
         $request->validate([
             'horarios' => 'required|array',
             'intervalo_dias' => 'required|integer|min:1',
-            'umbral_diario' => 'required|integer|min:1'
+            'umbral_diario' => 'required|integer|min:1',
+            'dias_gracia' => 'required|integer|min:0',
+            'dias_habiles' => 'required|array|min:1',
+            'dias_habiles.*' => 'integer|min:1|max:7',
+        ]);
+
+        $configAlertasNormalizada = $this->reglasAlertas->normalizar([
+            'intervalo_dias' => (int) $request->intervalo_dias,
+            'umbral_diario' => (int) $request->umbral_diario,
+            'dias_gracia' => (int) $request->dias_gracia,
+            'dias_habiles' => $request->dias_habiles,
         ]);
 
         $configHorarios = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'horarios_alertas']);
         $configHorarios->update(['valor' => $request->horarios]);
 
         $configAlertas = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'config_alertas']);
-        $configAlertas->update(['valor' => [
-            'intervalo_dias' => (int) $request->intervalo_dias,
-            'umbral_diario' => (int) $request->umbral_diario,
-        ]]);
+        $configAlertas->update(['valor' => $configAlertasNormalizada]);
 
         \Illuminate\Support\Facades\Cache::forever('cobranza_horarios', $request->horarios);
-        \Illuminate\Support\Facades\Cache::forever('cobranza_config_alertas', [
-            'intervalo_dias' => (int) $request->intervalo_dias,
-            'umbral_diario' => (int) $request->umbral_diario,
-        ]);
+        \Illuminate\Support\Facades\Cache::forever('cobranza_config_alertas', $configAlertasNormalizada);
 
         if ($request->has('notified_users_pagos')) {
             $configUsersPagos = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'notified_users_pagos']);

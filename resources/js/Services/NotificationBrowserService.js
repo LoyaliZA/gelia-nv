@@ -214,6 +214,38 @@ class NotificationBrowserService {
         }
     }
 
+    speakSequentialTexts(texts = [], force = false) {
+        const mensajes = (Array.isArray(texts) ? texts : []).filter((t) => typeof t === 'string' && t.trim());
+        if (mensajes.length === 0) return;
+        if (!force && this.preferences?.canales?.voz === false) return;
+        if (!('speechSynthesis' in window)) return;
+
+        window.speechSynthesis.cancel();
+
+        let index = 0;
+        const speakNext = () => {
+            if (index >= mensajes.length) return;
+
+            const utterance = this._createUtterance(mensajes[index]);
+            utterance.onend = () => {
+                index += 1;
+                speakNext();
+            };
+            utterance.onerror = () => {
+                index += 1;
+                speakNext();
+            };
+
+            if (!this._voicesReady && index === 0) {
+                setTimeout(() => window.speechSynthesis.speak(utterance), 100);
+            } else {
+                window.speechSynthesis.speak(utterance);
+            }
+        };
+
+        speakNext();
+    }
+
     /**
      * Verifica si hay un Service Worker activo con suscripción push.
      * Si existe, el SW ya mostrará la notificación vía Web Push,

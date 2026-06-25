@@ -173,8 +173,30 @@ export default function AppLayout({ children, fullScreen = false }) {
                     const voz = shouldTriggerChannel(prefs, tipo, 'voz');
                     const escritorio = shouldTriggerChannel(prefs, tipo, 'escritorio');
                     const mensajeVoz = resolveNotificationVoiceMessage(payload, auth?.user, tipo);
+                    const clientesVencidos = Array.isArray(payload.clientes_vencidos) ? payload.clientes_vencidos : [];
 
-                    if (sonido || voz || escritorio) {
+                    if (clientesVencidos.length > 0 && (sonido || voz || escritorio)) {
+                        if (sonido) NotificationService.playAudio(true);
+
+                        if (voz) {
+                            const nombre = (auth?.user?.name || 'Usuario').trim().split(/\s+/)[0];
+                            const mensajesSecuenciales = [
+                                mensajeVoz || `Atención ${nombre}. Reporte de cobranza.`,
+                                ...clientesVencidos.map(
+                                    (c) => `Cliente ${c.nombre} tiene un saldo vencido hace ${c.dias_atraso} días.`
+                                ),
+                            ];
+                            setTimeout(() => NotificationService.speakSequentialTexts(mensajesSecuenciales, true), sonido ? 1000 : 0);
+                        }
+
+                        if (escritorio) {
+                            NotificationService.showDesktopNotification(
+                                payload.titulo || payload.proceso || 'GELIA ERP',
+                                { body: payload.mensaje_visible || payload.mensaje || 'Nueva notificación operativa.' },
+                                true
+                            );
+                        }
+                    } else if (sonido || voz || escritorio) {
                         NotificationService.triggerFullAlert(
                             payload.titulo || payload.proceso || 'GELIA ERP',
                             payload.mensaje_visible || payload.mensaje || 'Nueva notificación operativa.',

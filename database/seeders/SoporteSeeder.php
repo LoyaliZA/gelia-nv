@@ -48,16 +48,78 @@ class SoporteSeeder extends Seeder
             SoporteCatalogoCategoria::updateOrCreate(['nombre' => $categoria['nombre']], $categoria);
         }
 
-        // Módulos iniciales sugeridos
-        $modulos = [
-            ['nombre' => 'Solicitudes', 'permiso_requerido' => 'solicitudes.ver_listado'],
-            ['nombre' => 'Clientes', 'permiso_requerido' => 'clientes.ver'],
-            ['nombre' => 'Usuarios y Permisos', 'permiso_requerido' => 'usuarios.gestionar'],
-            ['nombre' => 'Catálogos y Comisiones', 'permiso_requerido' => 'catalogos.comisiones.ver'],
-            ['nombre' => 'Configuración del Sistema', 'permiso_requerido' => 'configuracion_sistema.gestionar'],
-        ];
-        foreach ($modulos as $modulo) {
-            SoporteCatalogoModulo::updateOrCreate(['nombre' => $modulo['nombre']], $modulo);
+        // Mapeo dinámico de todos los permisos del sistema a módulos de soporte
+        $permisos = \Spatie\Permission\Models\Permission::all();
+
+        foreach ($permisos as $permiso) {
+            $permisoName = $permiso->name;
+            
+            $partes = explode('.', $permisoName);
+            if (count($partes) < 2) {
+                $grupoRaw = 'Sistema';
+                $accionRaw = $permisoName;
+            } else {
+                $accionRaw = end($partes);
+                $grupoRaw = implode('.', array_slice($partes, 0, -1));
+            }
+
+            // Traducir y formatear el grupo
+            $gruposTraducidos = [
+                'activos' => 'Activos',
+                'solicitudes' => 'Solicitudes',
+                'clientes' => 'Clientes',
+                'mis_clientes' => 'Mis Clientes',
+                'configuracion' => 'Configuración',
+                'usuarios' => 'Usuarios',
+                'catalogos.comisiones' => 'Catálogos y Comisiones',
+                'configuracion_sistema' => 'Configuración del Sistema',
+                'soporte' => 'Soporte',
+                'mensajeria' => 'Mensajería'
+            ];
+
+            $grupoClean = $gruposTraducidos[$grupoRaw] ?? ucwords(str_replace(['_', '.'], [' ', ' y '], $grupoRaw));
+
+            // Traducir y formatear la acción
+            $accionesTraducidas = [
+                'ver_listado' => 'Ver Listado',
+                'ver_detail' => 'Ver Detalle',
+                'ver_detalle' => 'Ver Detalle',
+                'crear' => 'Crear',
+                'editar' => 'Editar',
+                'verificar' => 'Verificar',
+                'reportar' => 'Reportar',
+                'emitir_consulta' => 'Emitir Consulta',
+                'responder_consulta' => 'Responder Consulta',
+                'eliminar' => 'Eliminar',
+                'ver' => 'Ver',
+                'carga_masiva' => 'Carga Masiva',
+                'gestionar' => 'Gestionar',
+                'correccion_emergencia' => 'Corrección Emergencia',
+                'ver_auditoria' => 'Ver Auditoría',
+                'generar_permisos' => 'Generar Permisos',
+                'administrar' => 'Administrar',
+                'monitorear' => 'Monitorear',
+                'archivar' => 'Archivar',
+                'asignar' => 'Asignar',
+                'transferir' => 'Transferir',
+                'cambiar_estado' => 'Cambiar Estado',
+                'ver_todos' => 'Ver Todos',
+                'configurar_tipos' => 'Configurar Tipos',
+                'exportar' => 'Exportar'
+            ];
+
+            $accionClean = $accionesTraducidas[$accionRaw] ?? ucwords(str_replace('_', ' ', $accionRaw));
+
+            // Formato de nombre: Grupo/Acción Grupo (ej: Activos/Asignar Activos)
+            $nombreModulo = "{$grupoClean}/{$accionClean} {$grupoClean}";
+
+            SoporteCatalogoModulo::updateOrCreate(
+                ['permiso_requerido' => $permisoName],
+                [
+                    'nombre' => $nombreModulo,
+                    'activo' => true
+                ]
+            );
         }
 
         // Configuración Inicial

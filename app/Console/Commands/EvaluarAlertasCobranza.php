@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Cobranza\CobranzaAlertasReglasService;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -10,6 +11,12 @@ use Illuminate\Console\Command;
 #[Description('Command description')]
 class EvaluarAlertasCobranza extends Command
 {
+    public function __construct(
+        private CobranzaAlertasReglasService $reglas,
+    ) {
+        parent::__construct();
+    }
+
     /**
      * Execute the console command.
      */
@@ -18,13 +25,17 @@ class EvaluarAlertasCobranza extends Command
         $today = now()->toDateString();
         $this->info("Iniciando evaluación de cobranza para la fecha: {$today}");
 
-        $configuracionAlertas = \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_alertas', function () {
-            $config = \App\Models\CobranzaConfiguracion::where('llave', 'config_alertas')->first();
-            return $config ? $config->valor : ['intervalo_dias' => 3, 'umbral_diario' => 30];
-        });
-        
-        $intervaloDias = (int) ($configuracionAlertas['intervalo_dias'] ?? 3);
-        $umbralDiario = (int) ($configuracionAlertas['umbral_diario'] ?? 30);
+        $configuracionAlertas = $this->reglas->normalizar(
+            \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_alertas', function () {
+                $config = \App\Models\CobranzaConfiguracion::where('llave', 'config_alertas')->first();
+                return $config?->valor ?? [];
+            })
+        );
+
+        $esDiaHabil = $this->reglas->esDiaHabil(now(), $configuracionAlertas);
+        if (!$esDiaHabil) {
+            $this->info('Hoy no es día hábil configurado; se omiten notificaciones de vencimiento.');
+        }
 
         $facturasActivas = \App\Models\CobranzaFactura::with('cliente')
             ->where('pagada', false)
@@ -32,6 +43,7 @@ class EvaluarAlertasCobranza extends Command
 
         $contadorAlertasVencimiento = 0;
         $contadorAlertasLimite = 0;
+        $clientesVencidosParaNotificar = [];
 
         foreach ($facturasActivas as $factura) {
             $cliente = $factura->cliente;
@@ -55,10 +67,8 @@ class EvaluarAlertasCobranza extends Command
                     ->where('dias_atraso', $diasAtraso)
                     ->exists();
 
-                $alertaParaNotificar = null;
-
                 if (!$alertaPendiente && !$alertaExistenteMismoDia) {
-                    $alertaParaNotificar = \App\Models\CobranzaAlerta::create([
+                    \App\Models\CobranzaAlerta::create([
                         'cliente_id' => $cliente->id,
                         'factura_id' => $factura->id,
                         'tipo' => 'vencimiento',
@@ -69,27 +79,43 @@ class EvaluarAlertasCobranza extends Command
                     $contadorAlertasVencimiento++;
                 } elseif ($alertaPendiente) {
                     $alertaPendiente->update(['dias_atraso' => $diasAtraso, 'fecha_alerta' => $today]);
-                    $alertaParaNotificar = $alertaPendiente;
                 }
 
-                // Notificar a los administradores / superadmins y al vendedor del cliente según el intervalo configurado
-                $esDiaDeLlamada = ($diasAtraso >= $umbralDiario) || ($diasAtraso % $intervaloDias === 0);
+                if (
+                    $esDiaHabil
+                    && $this->reglas->esDiaDeLlamada($diasAtraso, $configuracionAlertas)
+                ) {
+                    $clientesVencidosParaNotificar[] = [
+                        'cliente' => $cliente,
+                        'dias_atraso' => $diasAtraso,
+                        'monto' => (float) $factura->monto,
+                    ];
+                }
+            }
+        }
 
-                if ($alertaParaNotificar && $esDiaDeLlamada) {
-                    $mensajeVoz = "Cliente {$cliente->nombre} tiene un saldo vencido hace {$diasAtraso} días";
-                    
-                    $usuariosANotificar = \App\Models\User::role(['Super Admin', 'Administrador'])->get();
-                    if ($cliente->vendedor) {
-                        $usuariosANotificar->push($cliente->vendedor);
-                    }
+        if ($esDiaHabil && !empty($clientesVencidosParaNotificar)) {
+            usort($clientesVencidosParaNotificar, fn (array $a, array $b) => $b['dias_atraso'] <=> $a['dias_atraso']);
 
-                    $usuariosANotificar = $usuariosANotificar->unique('id');
+            $slotNotificacion = now()->format('H:i');
+            $notifMasivoCacheKey = "cobranza_notif_vencimiento_masivo:{$today}:{$slotNotificacion}";
 
-                    foreach ($usuariosANotificar as $user) {
-                        // Evitamos duplicados si el sistema permite
-                        $user->notify(new \App\Notifications\AlertaCobranza($alertaParaNotificar, $mensajeVoz));
+            if (!\Illuminate\Support\Facades\Cache::has($notifMasivoCacheKey)) {
+                $usuariosANotificar = \App\Models\User::role(['Super Admin', 'Administrador'])->get();
+                $usuariosConPermiso = \App\Models\User::permission('cobranza.recibir_alertas')->get();
+                $usuariosANotificar = $usuariosANotificar->merge($usuariosConPermiso);
+                foreach ($clientesVencidosParaNotificar as $item) {
+                    if ($item['cliente']->vendedor) {
+                        $usuariosANotificar->push($item['cliente']->vendedor);
                     }
                 }
+                $usuariosANotificar = $usuariosANotificar->unique('id');
+
+                foreach ($usuariosANotificar as $user) {
+                    $user->notify(new \App\Notifications\AlertaCobranzaVencimientoMasivoNotification($clientesVencidosParaNotificar));
+                }
+
+                \Illuminate\Support\Facades\Cache::put($notifMasivoCacheKey, true, now()->endOfDay());
             }
         }
 
@@ -137,7 +163,7 @@ class EvaluarAlertasCobranza extends Command
             }
         }
 
-        if (!empty($alertasLimiteExcedidoMasivo)) {
+        if ($esDiaHabil && !empty($alertasLimiteExcedidoMasivo)) {
             $this->info("Notificando a administradores sobre límites excedidos...");
             $usuariosNotificar = \App\Models\User::permission('cobranza.recibir_alertas')->get();
             $superAdmins = \App\Models\User::role('Super Admin')->get();
@@ -145,7 +171,7 @@ class EvaluarAlertasCobranza extends Command
 
             if ($todosLosUsuarios->isNotEmpty()) {
                 \Illuminate\Support\Facades\Notification::send(
-                    $todosLosUsuarios, 
+                    $todosLosUsuarios,
                     new \App\Notifications\AlertaLimiteCreditoSuperadoMasivoNotification($alertasLimiteExcedidoMasivo)
                 );
             }
