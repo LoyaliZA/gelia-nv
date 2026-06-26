@@ -102,7 +102,33 @@ class CalcularHorasExtraService
         float $horasNormales,
         int $graciaMinutos,
     ): int {
-        if ($colaborador?->hora_salida_oficial) {
+        $turno = $colaborador?->turno;
+        if ($turno && !empty($turno->matriz_horario)) {
+            // Mapping English day names to Spanish keys in JSON
+            $mapaDias = [
+                'Monday' => 'lunes',
+                'Tuesday' => 'martes',
+                'Wednesday' => 'miercoles',
+                'Thursday' => 'jueves',
+                'Friday' => 'viernes',
+                'Saturday' => 'sabado',
+                'Sunday' => 'domingo',
+            ];
+            
+            $diaIngles = $entrada->copy()->format('l');
+            $diaEspanol = $mapaDias[$diaIngles];
+            $configDia = $turno->matriz_horario[$diaEspanol] ?? null;
+
+            if ($configDia && !($configDia['descanso'] ?? false)) {
+                $salidaOficial = $entrada->copy()->setTimeFromTimeString(
+                    $this->parseTime($configDia['salida'])
+                );
+            } else {
+                // If it's a rest day but they came in, we just take expected hours from $horasNormales or consider it all extra?
+                // Usually on a rest day, all hours might be extra, but to keep backwards compatibility:
+                $salidaOficial = $entrada->copy()->addMinutes((int) round($horasNormales * 60));
+            }
+        } elseif ($colaborador?->hora_salida_oficial) {
             $salidaOficial = $entrada->copy()->setTimeFromTimeString(
                 $this->parseTime($colaborador->hora_salida_oficial),
             );

@@ -506,6 +506,12 @@ Route::middleware(['auth'])->group(function () {
             Route::delete('/{puesto}', [CatalogoPuestoController::class, 'destroy'])->name('destroy');
         });
 
+        Route::prefix('catalogos/turnos')->name('catalogos.turnos.')->group(function () {
+            Route::post('/', [\App\Http\Controllers\Rh\CatalogoTurnoController::class, 'store'])->name('store');
+            Route::put('/{turno}', [\App\Http\Controllers\Rh\CatalogoTurnoController::class, 'update'])->name('update');
+            Route::delete('/{turno}', [\App\Http\Controllers\Rh\CatalogoTurnoController::class, 'destroy'])->name('destroy');
+        });
+
         Route::middleware(['can:rh.catalogos.tipos_faltas'])->prefix('catalogos/tipos-faltas')->name('catalogos.tipos_faltas.')->group(function () {
             Route::post('/', [CatalogoTipoFaltaController::class, 'store'])->name('store');
             Route::put('/{tipoFalta}', [CatalogoTipoFaltaController::class, 'update'])->name('update');

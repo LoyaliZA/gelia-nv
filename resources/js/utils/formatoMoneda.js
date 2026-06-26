@@ -4,12 +4,17 @@ export function formatoMoneda(valor, opciones = {}) {
         return '—';
     }
 
+    let customOptions = opciones;
+    if (typeof opciones === 'number') {
+        customOptions = { minimumFractionDigits: opciones, maximumFractionDigits: opciones };
+    }
+
     return new Intl.NumberFormat('es-MX', {
         style: 'currency',
         currency: 'MXN',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-        ...opciones,
+        ...customOptions,
     }).format(monto);
 }
 
@@ -27,7 +32,8 @@ export function formatoDecimal(valor, decimales = 4) {
 
 export function calcularSalariosPreview(datos, configuracion = {}) {
     const dias = Math.max(1, Number(configuracion.dias_periodo_pago) || 30);
-    const horas = Math.max(0.01, Number(datos.horas_laboradas_oficiales) || 8);
+    // Desacoplamiento: el divisor financiero se mantiene estandarizado en 8 horas diarias
+    const horas = 8;
     const decimalesMinuto = Number(configuracion.decimales_salario_minuto) || 8;
 
     const salarioDiario = Number(datos.salario_base) || 0;
@@ -94,7 +100,21 @@ export function calcularHorasExtraPreview(datos, configuracion = {}, colaborador
     const tarifaHora = usarTarifaFija ? tarifaFija : salarioPorHora;
 
     let salidaOficialMin = entradaMin + Math.round(horasNormales * 60);
-    if (colaborador?.hora_salida_oficial) {
+    const turno = colaborador?.turno;
+
+    if (turno && turno.matriz_horario) {
+        const mapaDias = {
+            0: 'domingo', 1: 'lunes', 2: 'martes', 3: 'miercoles',
+            4: 'jueves', 5: 'viernes', 6: 'sabado'
+        };
+        const fechaObj = new Date((datos.fecha_turno || new Date().toISOString().slice(0, 10)) + 'T12:00:00');
+        const diaEspanol = mapaDias[fechaObj.getDay()];
+        const configDia = turno.matriz_horario[diaEspanol];
+
+        if (configDia && !configDia.descanso) {
+            salidaOficialMin = parseTimeToMinutes(configDia.salida);
+        }
+    } else if (colaborador?.hora_salida_oficial) {
         salidaOficialMin = parseTimeToMinutes(colaborador.hora_salida_oficial);
     } else if (colaborador?.hora_entrada_oficial) {
         salidaOficialMin = parseTimeToMinutes(colaborador.hora_entrada_oficial) + Math.round(horasNormales * 60);

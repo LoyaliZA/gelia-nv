@@ -24,6 +24,7 @@ class RhColaborador extends Model
         'apellido_paterno',
         'apellido_materno',
         'catalogo_puesto_id',
+        'catalogo_turno_id',
         'salario_base',
         'bono_productividad',
         'bono_puntualidad',
@@ -84,6 +85,11 @@ class RhColaborador extends Model
     public function puesto(): BelongsTo
     {
         return $this->belongsTo(CatalogoPuesto::class, 'catalogo_puesto_id');
+    }
+
+    public function turno(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoTurno::class, 'catalogo_turno_id');
     }
 
     public function registradoPor(): BelongsTo

@@ -7,10 +7,11 @@ import GeliaLoader from '../../../Components/GeliaLoader';
 import { geliaCardClass, THEME_INPUT } from '../../../utils/geliaTheme';
 import RhSubNav from '../Partials/RhSubNav';
 import TablaPuestos from './Partials/TablaPuestos';
+import TablaTurnos from './Partials/TablaTurnos';
 import TablaBonos from './Partials/TablaBonos';
 import TablaReglasIncidencia from './Partials/TablaReglasIncidencia';
 
-export default function Index({ auth, configuracion, folioPreview: folioPreviewInicial, heFolioPreview: heFolioPreviewInicial, incFolioPreview: incFolioPreviewInicial, preFolioPreview: preFolioPreviewInicial, salFolioPreview: salFolioPreviewInicial, puestos, bonos = [], reglasIncidencia = [], departamentos = [], colaboradores = [] }) {
+export default function Index({ auth, configuracion, folioPreview: folioPreviewInicial, heFolioPreview: heFolioPreviewInicial, incFolioPreview: incFolioPreviewInicial, preFolioPreview: preFolioPreviewInicial, salFolioPreview: salFolioPreviewInicial, puestos, turnos = [], bonos = [], reglasIncidencia = [], departamentos = [], colaboradores = [] }) {
     const [folioPreview, setFolioPreview] = useState(folioPreviewInicial || '');
     const [heFolioPreview, setHeFolioPreview] = useState(heFolioPreviewInicial || '');
     const [incFolioPreview, setIncFolioPreview] = useState(incFolioPreviewInicial || '');
@@ -274,9 +275,14 @@ export default function Index({ auth, configuracion, folioPreview: folioPreviewI
                 </form>
 
                 {auth.user?.permissions?.includes('rh.catalogos.puestos') && (
-                    <div className={geliaCardClass('overflow-hidden')}>
-                        <TablaPuestos datos={puestos} bonosCatalogo={bonos} />
-                    </div>
+                    <>
+                        <div className={geliaCardClass('overflow-hidden mb-6')}>
+                            <TablaPuestos datos={puestos} bonosCatalogo={bonos} />
+                        </div>
+                        <div className={geliaCardClass('overflow-hidden mb-6')}>
+                            <TablaTurnos datos={turnos} />
+                        </div>
+                    </>
                 )}
 
                 {canBonos && (

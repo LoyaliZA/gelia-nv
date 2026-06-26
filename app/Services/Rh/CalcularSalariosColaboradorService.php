@@ -12,7 +12,8 @@ class CalcularSalariosColaboradorService
         $config = $config ?? RhConfiguracion::obtener();
 
         $dias = max(1, (int) $config->dias_periodo_pago);
-        $horas = max(0.01, (float) $colaborador->horas_laboradas_oficiales);
+        // Desacoplamiento: el divisor financiero se mantiene estandarizado en 8 horas diarias
+        $horas = 8;
 
         $salarioBase = (float) $colaborador->salario_base;
         $bonoProd = (float) $colaborador->bono_productividad;
@@ -41,7 +42,8 @@ class CalcularSalariosColaboradorService
         $config = $config ?? RhConfiguracion::obtener();
 
         $dias = max(1, (int) $config->dias_periodo_pago);
-        $horas = max(0.01, (float) ($datos['horas_laboradas_oficiales'] ?? 8));
+        // Desacoplamiento: el divisor financiero se mantiene estandarizado en 8 horas diarias
+        $horas = 8;
 
         $salarioBase = (float) ($datos['salario_base'] ?? 0);
         $bonoProd = (float) ($datos['bono_productividad'] ?? 0);

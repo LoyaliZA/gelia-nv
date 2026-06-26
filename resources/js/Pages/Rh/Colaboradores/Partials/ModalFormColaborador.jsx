@@ -25,6 +25,7 @@ const FORM_INICIAL = {
     apellido_paterno: '',
     apellido_materno: '',
     catalogo_puesto_id: '',
+    catalogo_turno_id: '',
     salario_base: '',
     bono_productividad: '0',
     bono_puntualidad: '0',
@@ -39,6 +40,7 @@ export default function ModalFormColaborador({
     colaborador = null,
     departamentos = [],
     puestos = [],
+    turnos = [],
     usuarios = [],
     configuracion = {},
     puedeVincular = false,
@@ -86,6 +88,7 @@ export default function ModalFormColaborador({
                 apellido_paterno: colaborador.apellido_paterno || '',
                 apellido_materno: colaborador.apellido_materno || '',
                 catalogo_puesto_id: colaborador.catalogo_puesto_id || '',
+                catalogo_turno_id: colaborador.catalogo_turno_id || '',
                 salario_base: (Number(colaborador.salario_base || 0) / diasPeriodo).toFixed(4),
                 bono_productividad: (Number(colaborador.bono_productividad || 0) / diasPeriodo).toFixed(4),
                 bono_puntualidad: (Number(colaborador.bono_puntualidad || 0) / diasPeriodo).toFixed(4),
@@ -197,7 +200,7 @@ export default function ModalFormColaborador({
                         <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-4 flex items-center gap-2 border-b theme-border pb-2">
                             <Building2 className="w-4 h-4 text-purple-500" /> Organización
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <Campo label="Departamento *" error={errors.departamento_id}>
                                 <select
                                     value={data.departamento_id}
@@ -234,6 +237,19 @@ export default function ModalFormColaborador({
                                     <option value="">Selecciona...</option>
                                     {puestos.map((p) => (
                                         <option key={p.id} value={p.id}>{p.nombre}</option>
+                                    ))}
+                                </select>
+                            </Campo>
+                            <Campo label="Turno Laboral *" error={errors.catalogo_turno_id}>
+                                <select
+                                    value={data.catalogo_turno_id}
+                                    onChange={(e) => setData('catalogo_turno_id', e.target.value)}
+                                    required
+                                    className={THEME_SELECT}
+                                >
+                                    <option value="">Selecciona...</option>
+                                    {turnos.map((t) => (
+                                        <option key={t.id} value={t.id}>{t.nombre}</option>
                                     ))}
                                 </select>
                             </Campo>

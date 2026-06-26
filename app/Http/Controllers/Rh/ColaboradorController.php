@@ -37,6 +37,7 @@ class ColaboradorController extends Controller
             'colaboradores' => $listarService->ejecutar($filtros),
             'departamentos' => Departamento::where('activo', true)->with('areas')->orderBy('nombre')->get(),
             'puestos' => CatalogoPuesto::with('bonos')->where('activo', true)->orderBy('nombre')->get(),
+            'turnos' => \App\Models\CatalogoTurno::where('activo', true)->orderBy('nombre')->get(),
             'usuarios' => User::select(['id', 'name', 'email', 'apellido_paterno', 'apellido_materno'])
                 ->orderBy('name')
                 ->get(),
@@ -73,6 +74,7 @@ class ColaboradorController extends Controller
             'puedeVerPrestamos' => Auth::user()->can('rh.prestamos.ver'),
             'departamentos' => Departamento::where('activo', true)->with('areas')->orderBy('nombre')->get(),
             'puestos' => CatalogoPuesto::with('bonos')->where('activo', true)->orderBy('nombre')->get(),
+            'turnos' => \App\Models\CatalogoTurno::where('activo', true)->orderBy('nombre')->get(),
             'usuarios' => User::select(['id', 'name', 'email', 'apellido_paterno', 'apellido_materno'])
                 ->orderBy('name')
                 ->get(),

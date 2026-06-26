@@ -36,7 +36,7 @@ class HorasExtraController extends Controller
             'registros' => $listarService->ejecutar($filtros),
             'metricas' => $listarService->metricas($filtros),
             'colaboradores' => RhColaborador::where('activo', true)
-                ->with(['departamento', 'area'])
+                ->with(['departamento', 'area', 'turno'])
                 ->orderBy('nombre')
                 ->get(),
             'departamentos' => Departamento::where('activo', true)->with('areas')->orderBy('nombre')->get(),
@@ -58,7 +58,7 @@ class HorasExtraController extends Controller
             'registro' => $horasExtra,
             'configuracion' => RhConfiguracion::obtener(),
             'puedeEditar' => Auth::user()->can('rh.horas_extra.editar') && $horasExtra->estado_pago === 'pendiente',
-            'colaboradores' => RhColaborador::where('activo', true)->with(['departamento', 'area'])->orderBy('nombre')->get(),
+            'colaboradores' => RhColaborador::where('activo', true)->with(['departamento', 'area', 'turno'])->orderBy('nombre')->get(),
             'supervisores' => User::select(['id', 'name', 'email', 'apellido_paterno'])->orderBy('name')->get(),
         ]);
     }

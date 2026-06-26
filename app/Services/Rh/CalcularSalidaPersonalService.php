@@ -17,7 +17,10 @@ class CalcularSalidaPersonalService
     public function ejecutar(array $datos, ?RhColaborador $colaborador = null): array
     {
         $colaborador = $colaborador ?? RhColaborador::findOrFail($datos['rh_colaborador_id']);
-        $salarioPorMinuto = (float) ($colaborador->salario_por_minuto ?? 0);
+        
+        // Se calcula el salario por minuto basado en el salario diario y jornada de 8 horas
+        $salarioDiario = (float) ($colaborador->salario_diario ?? 0);
+        $salarioPorMinuto = $salarioDiario > 0 ? ($salarioDiario / 480) : (float) ($colaborador->salario_por_minuto ?? 0);
 
         if (empty($datos['hora_salida']) || empty($datos['hora_regreso'])) {
             return [

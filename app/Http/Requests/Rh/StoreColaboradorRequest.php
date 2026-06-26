@@ -38,6 +38,7 @@ class StoreColaboradorRequest extends FormRequest
             'apellido_paterno' => 'nullable|string|max:255',
             'apellido_materno' => 'nullable|string|max:255',
             'catalogo_puesto_id' => 'required|exists:catalogo_puestos,id',
+            'catalogo_turno_id' => 'required|exists:catalogo_turnos,id',
             'salario_base' => 'required|numeric|min:0',
             'bono_productividad' => 'nullable|numeric|min:0',
             'bono_puntualidad' => 'nullable|numeric|min:0',

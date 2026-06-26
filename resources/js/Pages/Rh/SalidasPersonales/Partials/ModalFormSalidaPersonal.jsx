@@ -100,7 +100,7 @@ export default function ModalFormSalidaPersonal({
             setPreviewCalculos({
                 minutos_ausente: 0,
                 monto_a_deducir: 0,
-                salario_por_minuto_snapshot: colaboradorSel?.salario_por_minuto || 0,
+                salario_por_minuto_snapshot: (colaboradorSel?.salario_diario > 0 ? (colaboradorSel.salario_diario / 480) : colaboradorSel?.salario_por_minuto) || 0,
             });
             return;
         }
@@ -239,7 +239,7 @@ export default function ModalFormSalidaPersonal({
                                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] text-[10px] theme-text-main">
                                         <div><span className="theme-text-muted uppercase font-black">Departamento:</span> {colaboradorSel.departamento?.nombre || '—'}</div>
                                         <div><span className="theme-text-muted uppercase font-black">Área:</span> {colaboradorSel.area?.nombre || '—'}</div>
-                                        <div><span className="theme-text-muted uppercase font-black">Salario/min:</span> {formatoMoneda(colaboradorSel.salario_por_minuto || 0, 4)}</div>
+                                        <div><span className="theme-text-muted uppercase font-black">Salario/min:</span> {formatoMoneda((colaboradorSel?.salario_diario > 0 ? (colaboradorSel.salario_diario / 480) : colaboradorSel?.salario_por_minuto) || 0, 4)}</div>
                                     </div>
                                 )}
                             </>
