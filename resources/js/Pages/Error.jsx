@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import GeliaLogoBroken from '@/Components/GeliaLogoBroken'; // Importamos el logo roto
+import GeliaLogo from '@/Components/GeliaLogo';
 import { Home, RefreshCcw } from 'lucide-react'; // Iconos para los botones
 
 export default function Error({ status, returnUrl = null }) {
@@ -54,7 +54,7 @@ export default function Error({ status, returnUrl = null }) {
                     <div className="flex flex-col items-center text-center space-y-6">
                         
                         {/* 1. La animación del logo roto */}
-                        <GeliaLogoBroken className="w-48 h-48 -mt-10" />
+                        <GeliaLogo variant="shatter" className="w-48 h-48 -mt-10" />
 
                         {/* 2. Título (Código de error) */}
                         <h1 className="text-5xl font-extrabold text-white tracking-tight">

@@ -22,10 +22,6 @@ import {
 } from './Partials/contabilidadStyles';
 import { colorPlataforma, contabilidadRoutes, montoEsperadoBanco } from './contabilidadRoutes';
 
-function retiroEsperadoPedido(pedido) {
-    return montoEsperadoBanco(pedido);
-}
-
 export default function Retiros({ auth, datos_plataformas = [] }) {
     const { flash } = usePage().props;
     const [tabActiva, setTabActiva] = useState(datos_plataformas[0]?.plataforma?.id ?? null);
@@ -77,7 +73,7 @@ export default function Retiros({ auth, datos_plataformas = [] }) {
         idsSeleccionados.forEach((id) => {
             const pedido = Object.values(plataformaActiva.grupos).flat().find((p) => String(p.id) === id);
             if (!pedido) return;
-            const esp = retiroEsperadoPedido(pedido);
+            const esp = montoEsperadoBanco(pedido);
             esperado += esp;
             real += parseFloat(montosReales[id] ?? esp.toFixed(2));
         });
@@ -85,7 +81,7 @@ export default function Retiros({ auth, datos_plataformas = [] }) {
     }, [idsSeleccionados, montosReales, plataformaActiva]);
 
     const togglePedido = (pedido, checked) => {
-        const esp = retiroEsperadoPedido(pedido);
+        const esp = montoEsperadoBanco(pedido);
         setSeleccionados((prev) => ({ ...prev, [pedido.id]: checked }));
         if (checked) {
             setMontosReales((prev) => ({ ...prev, [pedido.id]: prev[pedido.id] ?? esp.toFixed(2) }));
@@ -97,7 +93,7 @@ export default function Retiros({ auth, datos_plataformas = [] }) {
         const nextMontos = { ...montosReales };
         pedidos.forEach((p) => {
             nextSel[p.id] = true;
-            nextMontos[p.id] = nextMontos[p.id] ?? retiroEsperadoPedido(p).toFixed(2);
+            nextMontos[p.id] = nextMontos[p.id] ?? montoEsperadoBanco(p).toFixed(2);
         });
         setSeleccionados(nextSel);
         setMontosReales(nextMontos);

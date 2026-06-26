@@ -20,15 +20,15 @@ export default function DashboardToolbar({
                     <Sparkles className="w-3.5 h-3.5" /> Autoajuste
                 </button>
             )}
-            <button
-                type="button"
-                onClick={onOrganize}
-                disabled={isMobile}
-                title={isMobile ? 'Organiza el panel desde un equipo de escritorio' : undefined}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl theme-surface border theme-border transition-colors text-[9px] font-black uppercase tracking-widest shadow-sm outline-none disabled:opacity-40 disabled:cursor-not-allowed ${editLayoutMode ? 'border-[var(--color-primario)] theme-text-main' : 'theme-text-muted hover:theme-text-main hover:border-[var(--color-primario)]'}`}
-            >
-                <Move className="w-3.5 h-3.5" /> Organizar
-            </button>
+            {!isMobile && (
+                <button
+                    type="button"
+                    onClick={onOrganize}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl theme-surface border theme-border transition-colors text-[9px] font-black uppercase tracking-widest shadow-sm outline-none ${editLayoutMode ? 'border-[var(--color-primario)] theme-text-main' : 'theme-text-muted hover:theme-text-main hover:border-[var(--color-primario)]'}`}
+                >
+                    <Move className="w-3.5 h-3.5" /> Organizar
+                </button>
+            )}
             <button
                 type="button"
                 onClick={onConfigure}

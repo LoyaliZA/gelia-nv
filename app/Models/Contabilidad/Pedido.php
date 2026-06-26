@@ -77,4 +77,48 @@ class Pedido extends Model
     {
         return (int) $this->estatus_pago_id === CatalogoEstatusPago::TRANSFERIDO;
     }
+
+    public function calcularMontoEsperadoBanco(): float
+    {
+        $codigo = strtolower($this->tipoTransaccion?->codigo ?? 'venta');
+        if (str_contains($codigo, 'venta')) {
+            return round((float) $this->venta_total - (float) $this->comision_plataforma, 2);
+        }
+        return round(-abs((float) $this->venta_total + (float) $this->comision_plataforma), 2);
+    }
+
+    public function calcularCostoProductos(): float
+    {
+        $txCode = strtolower($this->tipoTransaccion?->codigo ?? 'venta');
+        $costo = 0.0;
+        foreach ($this->lineas as $linea) {
+            $tipoDevolucion = $linea->tipo_devolucion ?? 'normal';
+            $esCosto = ($txCode === 'reembolso')
+                ? ($tipoDevolucion === 'perdido_danado')
+                : ($tipoDevolucion === 'normal' || $tipoDevolucion === 'perdido_danado');
+
+            if ($esCosto) {
+                $costo += (float) $linea->subtotal;
+            }
+        }
+        return $costo;
+    }
+
+    public function calcularUtilidad(float $costoProductos): float
+    {
+        $txCode = strtolower($this->tipoTransaccion?->codigo ?? 'venta');
+        $gastoEnvioEmpresa = $this->envio_pagado_cliente ? 0.0 : (float) $this->costo_envio;
+
+        if (str_contains($txCode, 'venta')) {
+            $utilidad = (float) $this->venta_total - $costoProductos - $gastoEnvioEmpresa - (float) $this->comision_plataforma;
+        } else {
+            $utilidad = -($costoProductos + $gastoEnvioEmpresa + (float) $this->comision_plataforma);
+        }
+
+        if ($this->estaTransferido()) {
+            $utilidad -= (float) $this->comision_transferencia;
+        }
+
+        return round($utilidad, 2);
+    }
 }

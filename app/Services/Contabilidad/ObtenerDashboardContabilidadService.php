@@ -37,25 +37,7 @@ class ObtenerDashboardContabilidadService
 
         $notasAe = 0.0;
         foreach ($pedidos as $pedido) {
-            $txCode = strtolower($pedido->tipoTransaccion?->codigo ?? 'venta');
-            foreach ($pedido->lineas as $linea) {
-                $tipoDevolucion = $linea->tipo_devolucion ?? 'normal';
-                
-                $esCosto = false;
-                if ($txCode === 'reembolso') {
-                    if ($tipoDevolucion === 'perdido_danado') {
-                        $esCosto = true;
-                    }
-                } else {
-                    if ($tipoDevolucion === 'normal' || $tipoDevolucion === 'perdido_danado') {
-                        $esCosto = true;
-                    }
-                }
-
-                if ($esCosto) {
-                    $notasAe += (float) $linea->precio_unitario * (int) $linea->piezas;
-                }
-            }
+            $notasAe += $pedido->calcularCostoProductos();
         }
 
         $utilidadNeta = (float) $pedidos->sum('utilidad_total');

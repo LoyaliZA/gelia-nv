@@ -7,8 +7,6 @@ export function contabilidadCard(extra = '') {
     return geliaCardClass(extra);
 }
 
-/** @deprecated Usar contabilidadCard() — alias para compatibilidad */
-export const CONTABILIDAD_PANEL = contabilidadCard();
 
 export const CONTABILIDAD_PANEL_HEADER = 'theme-surface theme-element border-b theme-border';
 export const CONTABILIDAD_INNER = 'theme-element border theme-border rounded-2xl';

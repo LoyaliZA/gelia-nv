@@ -12,9 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class ConfirmarRetiroLoteContabilidadService
 {
-    public function __construct(
-        private CalcularMontoEsperadoBancoService $montoEsperadoService,
-    ) {}
+    public function __construct() {}
 
     /**
      * @param  array<int, array{id: int, monto_real: float}>  $pedidosPayload
@@ -50,12 +48,7 @@ class ConfirmarRetiroLoteContabilidadService
                 }
 
                 $montoReal = (float) $item['monto_real'];
-                $codigoTipo = $pedido->tipoTransaccion?->codigo ?? 'venta';
-                $montoEsperado = $this->montoEsperadoService->ejecutar(
-                    $codigoTipo,
-                    (float) $pedido->venta_total,
-                    (float) $pedido->comision_plataforma
-                );
+                $montoEsperado = $pedido->calcularMontoEsperadoBanco();
 
                 $ventasTotal += (float) $pedido->venta_total;
                 $comisionesTotal += (float) $pedido->comision_plataforma;

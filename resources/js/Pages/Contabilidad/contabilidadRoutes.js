@@ -1,27 +1,16 @@
-function contabilidadRoute(name, fallback, params) {
-    if (typeof route === 'function') {
-        try {
-            return route(name, params);
-        } catch {
-            return fallback;
-        }
-    }
-    return fallback;
-}
-
 export const contabilidadRoutes = {
-    index: () => contabilidadRoute('contabilidad.index', '/contabilidad'),
-    retiros: () => contabilidadRoute('contabilidad.retiros', '/contabilidad/retiros'),
-    dashboardData: () => contabilidadRoute('contabilidad.dashboard_data', '/contabilidad/dashboard-data'),
-    procesarLista: () => contabilidadRoute('contabilidad.procesar_lista', '/contabilidad/procesar-lista'),
-    pedidosStore: () => contabilidadRoute('contabilidad.pedidos.store', '/contabilidad/pedidos'),
-    pedidosUpdate: (id) => contabilidadRoute('contabilidad.pedidos.update', `/contabilidad/pedidos/${id}`),
-    pedidosDestroy: (id) => contabilidadRoute('contabilidad.pedidos.destroy', `/contabilidad/pedidos/${id}`),
-    pedidosConfirmarRetiro: (id) => contabilidadRoute('contabilidad.pedidos.confirmar_retiro', `/contabilidad/pedidos/${id}/confirmar-retiro`),
-    retirosConfirmarLote: () => contabilidadRoute('contabilidad.retiros.confirmar_lote', '/contabilidad/retiros/confirmar-lote'),
-    plataformasComisiones: () => contabilidadRoute('contabilidad.plataformas.comisiones', '/contabilidad/plataformas/comisiones'),
-    exportarPdf: (params) => contabilidadRoute('contabilidad.exportar_pdf', '/contabilidad/exportar-pdf', params),
-    exportarCsv: (params) => contabilidadRoute('contabilidad.exportar_csv', '/contabilidad/exportar-csv', params),
+    index: () => route('contabilidad.index'),
+    retiros: () => route('contabilidad.retiros'),
+    dashboardData: () => route('contabilidad.dashboard_data'),
+    procesarLista: () => route('contabilidad.procesar_lista'),
+    pedidosStore: () => route('contabilidad.pedidos.store'),
+    pedidosUpdate: (id) => route('contabilidad.pedidos.update', id),
+    pedidosDestroy: (id) => route('contabilidad.pedidos.destroy', id),
+    pedidosConfirmarRetiro: (id) => route('contabilidad.pedidos.confirmar_retiro', id),
+    retirosConfirmarLote: () => route('contabilidad.retiros.confirmar_lote'),
+    plataformasComisiones: () => route('contabilidad.plataformas.comisiones'),
+    exportarPdf: (params) => route('contabilidad.exportar_pdf', params),
+    exportarCsv: (params) => route('contabilidad.exportar_csv', params),
 };
 
 export function montoEsperadoBanco(pedido) {

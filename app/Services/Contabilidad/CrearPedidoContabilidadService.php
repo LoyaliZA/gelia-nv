@@ -13,7 +13,6 @@ class CrearPedidoContabilidadService
 {
     public function __construct(
         private CalcularComisionPlataformaService $comisionService,
-        private CalcularUtilidadPedidoService $utilidadService,
     ) {}
 
     public function ejecutar(array $datos): Pedido
@@ -24,24 +23,16 @@ class CrearPedidoContabilidadService
             $costoEnvio = (float) ($datos['costo_envio'] ?? 0);
             $envioPagadoCliente = (bool) ($datos['envio_pagado_cliente'] ?? false);
 
-            $tipoId = $this->resolverTipoTransaccionId($datos['tipo_transaccion'] ?? 'venta');
+            $tipoId = CatalogoTipoTransaccion::resolverIdPorCodigo($datos['tipo_transaccion'] ?? 'venta');
             $tipo = CatalogoTipoTransaccion::query()->findOrFail($tipoId);
             $txCode = strtolower($tipo->codigo);
 
             $costoProductos = 0.0;
             foreach ($datos['productos'] as $prod) {
                 $tipoDevolucion = $prod['tipo_devolucion'] ?? 'normal';
-                
-                $esCosto = false;
-                if ($txCode === 'reembolso') {
-                    if ($tipoDevolucion === 'perdido_danado') {
-                        $esCosto = true;
-                    }
-                } else {
-                    if ($tipoDevolucion === 'normal' || $tipoDevolucion === 'perdido_danado') {
-                        $esCosto = true;
-                    }
-                }
+                $esCosto = ($txCode === 'reembolso')
+                    ? ($tipoDevolucion === 'perdido_danado')
+                    : ($tipoDevolucion === 'normal' || $tipoDevolucion === 'perdido_danado');
 
                 if ($esCosto) {
                     $costoProductos += (float) $prod['precio'] * (int) $prod['piezas'];
@@ -59,16 +50,7 @@ class CrearPedidoContabilidadService
                 $desglose['comision_iva'] = round($comisionFinal - $desglose['comision_base'], 2);
             }
 
-            $utilidad = $this->utilidadService->ejecutar(
-                $ventaTotal,
-                $costoProductos,
-                $costoEnvio,
-                $envioPagadoCliente,
-                $comisionFinal,
-                $tipo->codigo,
-            );
-
-            $pedido = Pedido::query()->create([
+            $pedido = new Pedido([
                 'fecha_salida' => $datos['fecha_salida'],
                 'numero_pedido' => $datos['numero_pedido'],
                 'cliente_nombre' => $datos['cliente_nombre'] ?? null,
@@ -82,9 +64,11 @@ class CrearPedidoContabilidadService
                 'tasa_comision_pct' => $plataforma->tasa_comision_pct,
                 'cuota_fija' => $plataforma->cuota_fija,
                 'comision_plataforma' => $comisionFinal,
-                'utilidad_total' => $utilidad,
                 'estatus_pago_id' => CatalogoEstatusPago::PENDIENTE,
             ]);
+            $pedido->setRelation('tipoTransaccion', $tipo);
+            $pedido->utilidad_total = $pedido->calcularUtilidad($costoProductos);
+            $pedido->save();
 
             foreach ($datos['productos'] as $prod) {
                 $piezas = (int) $prod['piezas'];
@@ -104,16 +88,5 @@ class CrearPedidoContabilidadService
 
             return $pedido->load(['plataformaPago', 'estatusPago', 'tipoTransaccion', 'lineas']);
         });
-    }
-
-    private function resolverTipoTransaccionId(string $tipo): int
-    {
-        $codigo = strtolower($tipo);
-
-        return match (true) {
-            str_contains($codigo, 'contracargo') => CatalogoTipoTransaccion::CONTRACARGO,
-            str_contains($codigo, 'reembolso') => CatalogoTipoTransaccion::REEMBOLSO,
-            default => CatalogoTipoTransaccion::VENTA,
-        };
     }
 }

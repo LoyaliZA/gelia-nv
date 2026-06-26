@@ -31,6 +31,9 @@ export default function DashboardModuleCard({
                 >
                     <Icon className={`dashboard-module-card-mobile__icon ${iconClass}`} style={iconStyle} />
                 </div>
+                <span className="text-[9px] font-black uppercase tracking-tight theme-text-main mt-1.5 text-center truncate w-full">
+                    {title}
+                </span>
             </Link>
         );
     }

@@ -157,7 +157,7 @@ export default function ModalFormOperativa({ onClose, onExito, procesos = [], ba
         });
     };
 
-    const tituloProceso = procesoSeleccionado?.nombre || 'Nueva solicitud operativa';
+    const tituloProceso = procesoSeleccionado?.nombre || 'Solicitar Cotizacion Sobre Pedido Cancelado';
 
     return createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>

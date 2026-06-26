@@ -20,6 +20,18 @@ class CatalogoTipoTransaccion extends Model
         'nombre',
     ];
 
+    public static function resolverIdPorCodigo(string $codigo): int
+    {
+        $codigo = strtolower($codigo);
+        if (str_contains($codigo, 'contracargo')) {
+            return self::CONTRACARGO;
+        }
+        if (str_contains($codigo, 'reembolso')) {
+            return self::REEMBOLSO;
+        }
+        return self::VENTA;
+    }
+
     public function pedidos(): HasMany
     {
         return $this->hasMany(Pedido::class, 'tipo_transaccion_id');
