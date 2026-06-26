@@ -180,7 +180,7 @@ export default function ModalAnalisis({ abierto, onCerrar, filtrosIniciales }) {
         {
             id: 'enviosCli',
             label: 'Envíos cliente',
-            valor: `${kpis.enviosClientesCount || 0} ped.`,
+            valor: `${kpis.enviosClientesCount || 0} ped. (${formatoMoneda(kpis.enviosClientesMonto || 0)})`,
             borde: KPI_BORDES.enviosCliente,
             color: 'text-slate-400',
         },

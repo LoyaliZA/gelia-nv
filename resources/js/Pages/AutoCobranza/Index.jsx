@@ -266,22 +266,38 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
             }
 
             setSpeaking(true);
+
+            // Group vencimiento alerts and count them
+            const vencidosAlerts = alertas.filter(a => a.tipo !== 'limite_superado');
+            const limiteAlerts = alertas.filter(a => a.tipo === 'limite_superado');
+            const totalVencidos = vencidosAlerts.length;
+
+            const messages = [];
+            const nombre = (auth?.user?.name || 'Usuario').trim().split(/\s+/)[0];
+
+            if (totalVencidos > 0) {
+                // ponytail: do not read individual debtor names or amounts, only the summary voice message
+                messages.push(`${nombre}, se han vencido ${totalVencidos} créditos, favor de revisarlos.`);
+            }
+
+            limiteAlerts.forEach(alert => {
+                messages.push(`Atención, el cliente ${alert.cliente.nombre} ha superado su límite de crédito autorizado.`);
+            });
+
+            if (messages.length === 0) {
+                setSpeaking(false);
+                return;
+            }
+
             let index = 0;
 
             const speakNext = () => {
-                if (index >= alertas.length) {
+                if (index >= messages.length) {
                     setSpeaking(false);
                     return;
                 }
 
-                const alert = alertas[index];
-                let msg = '';
-                if (alert.tipo === 'limite_superado') {
-                    msg = `Atención, el cliente ${alert.cliente.nombre} ha superado su límite de crédito autorizado.`;
-                } else {
-                    msg = `Cliente ${alert.cliente.nombre} tiene un saldo vencido hace ${alert.dias_atraso} días.`;
-                }
-                const utterance = new SpeechSynthesisUtterance(msg);
+                const utterance = new SpeechSynthesisUtterance(messages[index]);
                 utterance.lang = 'es-MX';
                 utterance.rate = 0.9;
 
@@ -435,7 +451,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                             <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Alertas Operativas Hoy</p>
                             <h3 className="text-3xl font-black theme-text-main m-0">{totalAlertasHoy}</h3>
                             <p className="text-[9px] font-bold text-amber-500 uppercase tracking-wider">
-                                Llamadas: gracia {configuracionAlertas.dias_gracia} d · cada {configuracionAlertas.intervalo_dias} d · diario &gt; {configuracionAlertas.umbral_diario} d
+                                Llamadas: gracia {configuracionAlertas.dias_gracia} d
                                 {!esDiaHabilCobranza(new Date(), configuracionAlertas) && ' · Hoy no es día hábil'}
                             </p>
                         </div>
@@ -1436,7 +1452,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                 </button>
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-4 mt-4">
+                            <div className="grid grid-cols-1 gap-4 mt-4">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Días de gracia tras vencimiento</label>
                                     <input
@@ -1447,30 +1463,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                         className={THEME_INPUT + " w-full"}
                                         required
                                     />
-                                    <p className="text-[9px] theme-text-muted">Tiempo sin llamadas después del vencimiento.</p>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Periodo entre llamadas (días)</label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        value={formConfig.data.intervalo_dias}
-                                        onChange={e => formConfig.setData('intervalo_dias', e.target.value)}
-                                        className={THEME_INPUT + " w-full"}
-                                        required
-                                    />
-                                    <p className="text-[9px] theme-text-muted">Tras la primera llamada, se repite cada N días.</p>
-                                </div>
-                                <div className="space-y-2 col-span-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Días de atraso para notificar a diario</label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        value={formConfig.data.umbral_diario}
-                                        onChange={e => formConfig.setData('umbral_diario', e.target.value)}
-                                        className={THEME_INPUT + " w-full"}
-                                        required
-                                    />
+                                    <p className="text-[9px] theme-text-muted">Tiempo sin llamadas después del vencimiento (3 días post corte).</p>
                                 </div>
                             </div>
 

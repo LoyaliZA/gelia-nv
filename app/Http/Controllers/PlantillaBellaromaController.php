@@ -17,16 +17,18 @@ class PlantillaBellaromaController extends Controller
     {
         Gate::authorize('plantilla_pedidos.ver');
 
-        $hoy = date('Y-m-d');
+        $timezone = config('app.timezone', 'America/Mexico_City');
+        $hoy = now($timezone)->format('Y-m-d');
+        $ahora = now($timezone);
 
         $templatesHoy = BellaromaTemplate::where(function($q) use ($hoy) {
                 $q->whereNull('fecha_entrega')
                   ->whereDate('created_at', $hoy);
             })
-            ->orWhere(function($q) use ($hoy) {
+            ->orWhere(function($q) use ($hoy, $ahora) {
                 $q->whereNotNull('fecha_entrega')
                   ->whereDate('fecha_entrega', $hoy)
-                  ->where('fecha_entrega', '<=', now());
+                  ->where('fecha_entrega', '<=', $ahora);
             })
             ->orderByDesc('id')
             ->get();
@@ -35,10 +37,10 @@ class PlantillaBellaromaController extends Controller
                 $q->whereNull('fecha_entrega')
                   ->whereDate('created_at', '<', $hoy);
             })
-            ->orWhere(function($q) use ($hoy) {
+            ->orWhere(function($q) use ($hoy, $ahora) {
                 $q->whereNotNull('fecha_entrega')
                   ->whereDate('fecha_entrega', '<', $hoy)
-                  ->where('fecha_entrega', '<=', now());
+                  ->where('fecha_entrega', '<=', $ahora);
             })
             ->orderByDesc('id')
             ->limit(100)
@@ -47,7 +49,7 @@ class PlantillaBellaromaController extends Controller
         $templatesProgramados = [];
         if (auth()->user()->can('plantilla_pedidos.ver_programadas')) {
             $templatesProgramados = BellaromaTemplate::whereNotNull('fecha_entrega')
-                ->where('fecha_entrega', '>', now())
+                ->where('fecha_entrega', '>', $ahora)
                 ->orderBy('fecha_entrega', 'asc')
                 ->get();
         }

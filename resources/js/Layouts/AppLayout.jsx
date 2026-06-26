@@ -40,6 +40,14 @@ import { STORAGE_FILTROS_ACTIVOS } from '../Pages/Activos/Partials/navegarListad
 const ModalContext = createContext();
 export const useModal = () => useContext(ModalContext);
 
+// ponytail: move accentColors outside component body to prevent re-allocation
+const accentColors = {
+    rosa: '#ec4899',
+    azul: '#3b82f6',
+    verde: '#10b981',
+    amarillo: '#f59e0b'
+};
+
 export default function AppLayout({ children, fullScreen = false }) {
     const { props: { auth, tonos_alertas = [] }, url } = usePage();
 
@@ -201,14 +209,19 @@ export default function AppLayout({ children, fullScreen = false }) {
                         if (sonido) NotificationService.playAudio(true);
 
                         if (voz) {
-                            const nombre = (auth?.user?.name || 'Usuario').trim().split(/\s+/)[0];
-                            const mensajesSecuenciales = [
-                                mensajeVoz || `Atención ${nombre}. Reporte de cobranza.`,
-                                ...clientesVencidos.map(
-                                    (c) => `Cliente ${c.nombre} tiene un saldo vencido hace ${c.dias_atraso} días.`
-                                ),
-                            ];
-                            setTimeout(() => NotificationService.speakSequentialTexts(mensajesSecuenciales, true), sonido ? 1000 : 0);
+                            if (payload.tipo === 'cobranza_vencimiento_masivo') {
+                                // ponytail: do not read individual debtor names or amounts, only the summary voice message
+                                setTimeout(() => NotificationService.speakText(mensajeVoz, true), sonido ? 1000 : 0);
+                            } else {
+                                const nombre = (auth?.user?.name || 'Usuario').trim().split(/\s+/)[0];
+                                const mensajesSecuenciales = [
+                                    mensajeVoz || `Atención ${nombre}. Reporte de cobranza.`,
+                                    ...clientesVencidos.map(
+                                        (c) => `Cliente ${c.nombre} tiene un saldo vencido hace ${c.dias_atraso} días.`
+                                    ),
+                                ];
+                                setTimeout(() => NotificationService.speakSequentialTexts(mensajesSecuenciales, true), sonido ? 1000 : 0);
+                            }
                         }
 
                         if (escritorio) {
@@ -283,13 +296,6 @@ export default function AppLayout({ children, fullScreen = false }) {
         };
     }, [auth?.user?.id, navigateFromNotification]);
 
-    const accentColors = {
-        rosa: '#ec4899',
-        azul: '#3b82f6',
-        verde: '#10b981',
-        amarillo: '#f59e0b'
-    };
-
     const [isDarkMode, setIsDarkMode] = useState(() => {
         if (typeof window !== 'undefined') {
             const savedTheme = localStorage.getItem('theme');
@@ -343,14 +349,6 @@ export default function AppLayout({ children, fullScreen = false }) {
     const openMobileSidebar = useCallback(() => {
         window.dispatchEvent(new CustomEvent('gelia-sidebar-open-menu'));
     }, []);
-
-    const getMensajeriaMainClass = () => {
-        const base = 'gelia-mensajeria-main box-border w-full max-w-none min-w-0 p-0 overflow-hidden h-dvh max-h-dvh';
-        if (mensajeriaImmersivaMovil) {
-            return `${base} gelia-mensajeria-main--immersive`;
-        }
-        return base;
-    };
 
     const openModal = (content) => {
         setModalContent(content);
@@ -412,23 +410,6 @@ export default function AppLayout({ children, fullScreen = false }) {
             window.removeEventListener('theme-fixed-position-preview', onFixedPositionPreview);
         };
     }, [auth?.tema_visual?.layout_sidebar, auth?.tema_visual?.sidebar_modo, auth?.tema_visual?.sidebar_posicion_fija]);
-
-    useEffect(() => {
-        const layout = localStorage.getItem('theme_layout')
-            || auth?.tema_visual?.layout_sidebar
-            || 'floating_left';
-        setSidebarLayout(layout);
-
-        const mode = localStorage.getItem('theme_sidebar_mode')
-            || auth?.tema_visual?.sidebar_modo
-            || 'collapsed';
-        setSidebarMode(mode);
-
-        const position = localStorage.getItem('theme_fixed_position')
-            || auth?.tema_visual?.sidebar_posicion_fija
-            || 'left';
-        setFixedPosition(position);
-    }, [url, auth?.tema_visual?.layout_sidebar, auth?.tema_visual?.sidebar_modo, auth?.tema_visual?.sidebar_posicion_fija]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -513,7 +494,9 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     const mainClassName = [
         'gelia-app-main transition-all duration-500 bg-transparent',
-        isMensajeriaFull ? `gelia-app-main--fullscreen ${getMensajeriaMainClass()}` : 'gelia-app-main--default',
+        isMensajeriaFull
+            ? `gelia-app-main--fullscreen gelia-mensajeria-main box-border w-full max-w-none min-w-0 p-0 overflow-hidden h-dvh max-h-dvh${mensajeriaImmersivaMovil ? ' gelia-mensajeria-main--immersive' : ''}`
+            : 'gelia-app-main--default',
         mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive-main' : '',
     ].filter(Boolean).join(' ');
 

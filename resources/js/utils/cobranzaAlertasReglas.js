@@ -49,11 +49,10 @@ export function esDiaDeLlamadaCobranza(diasAtraso, configuracion = {}) {
 
     const config = normalizarConfigCobranzaAlertas(configuracion);
 
-    if (diasAtraso >= config.umbral_diario) return true;
+    // ponytail: skip interval/threshold, call daily post grace period (3 days post corte)
     if (diasAtraso <= config.dias_gracia) return false;
 
-    const diasDesdeInicio = diasAtraso - config.dias_gracia;
-    return (diasDesdeInicio - 1) % config.intervalo_dias === 0;
+    return true;
 }
 
 export function diasParaProximaLlamadaCobranza(diasAtraso, configuracion = {}) {
@@ -62,11 +61,7 @@ export function diasParaProximaLlamadaCobranza(diasAtraso, configuracion = {}) {
     const config = normalizarConfigCobranzaAlertas(configuracion);
 
     if (esDiaDeLlamadaCobranza(diasAtraso, config)) return 0;
-    if (diasAtraso <= config.dias_gracia) {
-        return (config.dias_gracia + 1) - diasAtraso;
-    }
 
-    const diasDesdeInicio = diasAtraso - config.dias_gracia;
-    const resto = (diasDesdeInicio - 1) % config.intervalo_dias;
-    return config.intervalo_dias - resto;
+    // ponytail: daily calling after grace, remaining days is grace + 1 - delay
+    return (config.dias_gracia + 1) - diasAtraso;
 }

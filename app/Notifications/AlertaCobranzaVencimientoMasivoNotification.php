@@ -51,7 +51,7 @@ class AlertaCobranzaVencimientoMasivoNotification extends Notification implement
             'titulo' => 'Aviso de Cobranza · Saldos Vencidos',
             'mensaje' => "Se detectaron {$count} clientes con saldo vencido.",
             'mensaje_visible' => "Saldos vencidos: {$count} clientes pendientes de revisión.",
-            'mensaje_voz' => "Atención {$nombreDestinatario}. Reporte de cobranza. Se detectaron {$count} clientes con saldo vencido.",
+            'mensaje_voz' => "{$nombreDestinatario}, se han vencido {$count} créditos, favor de revisarlos.",
             'fecha' => now()->toDateTimeString(),
             'modulo' => 'cobranza',
         ];

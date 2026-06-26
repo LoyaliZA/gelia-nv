@@ -62,17 +62,12 @@ class CobranzaAlertasReglasService
 
         $config = $this->normalizar($configuracion);
 
-        if ($diasAtraso >= $config['umbral_diario']) {
-            return true;
-        }
-
+        // ponytail: skip the umbral_diario and intervalo_dias check, only check if it is post dias_gracia (3 days post corte)
         if ($diasAtraso <= $config['dias_gracia']) {
             return false;
         }
 
-        $diasDesdeInicioLlamadas = $diasAtraso - $config['dias_gracia'];
-
-        return ($diasDesdeInicioLlamadas - 1) % $config['intervalo_dias'] === 0;
+        return true;
     }
 
     public function diasParaProximaLlamada(int $diasAtraso, array $configuracion): int
@@ -87,13 +82,7 @@ class CobranzaAlertasReglasService
             return 0;
         }
 
-        if ($diasAtraso <= $config['dias_gracia']) {
-            return ($config['dias_gracia'] + 1) - $diasAtraso;
-        }
-
-        $diasDesdeInicioLlamadas = $diasAtraso - $config['dias_gracia'];
-        $resto = ($diasDesdeInicioLlamadas - 1) % $config['intervalo_dias'];
-
-        return $config['intervalo_dias'] - $resto;
+        // ponytail: since calls start daily after grace, remaining days is simply grace + 1 - delay
+        return ($config['dias_gracia'] + 1) - $diasAtraso;
     }
 }

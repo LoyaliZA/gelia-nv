@@ -30,18 +30,13 @@ class CobranzaAlertasReglasServiceTest extends TestCase
         $this->assertFalse($this->reglas->esDiaDeLlamada(3, $this->config));
     }
 
-    public function test_primera_llamada_y_ciclo_intervalo(): void
+    public function test_llama_a_diario_despues_de_gracia(): void
     {
         $this->assertTrue($this->reglas->esDiaDeLlamada(4, $this->config));
-        $this->assertFalse($this->reglas->esDiaDeLlamada(5, $this->config));
+        $this->assertTrue($this->reglas->esDiaDeLlamada(5, $this->config));
         $this->assertTrue($this->reglas->esDiaDeLlamada(7, $this->config));
         $this->assertTrue($this->reglas->esDiaDeLlamada(10, $this->config));
-    }
-
-    public function test_umbral_diario_activa_llamada_diaria(): void
-    {
         $this->assertTrue($this->reglas->esDiaDeLlamada(30, $this->config));
-        $this->assertTrue($this->reglas->esDiaDeLlamada(31, $this->config));
     }
 
     public function test_dia_habil_lunes_a_viernes(): void

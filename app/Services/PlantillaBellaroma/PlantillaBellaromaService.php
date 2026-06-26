@@ -19,14 +19,16 @@ class PlantillaBellaromaService
         set_time_limit(0);
         ini_set('memory_limit', '-1');
 
+        $timezone = config('app.timezone', 'America/Mexico_City');
         $fechaEntrega = null;
         if ($tipoEntrega === 'manana') {
-            $fechaEntrega = now()->addDay()->setTime(7, 0, 0);
+            $fechaEntrega = now($timezone)->addDay()->setTime(7, 0, 0);
         } elseif ($tipoEntrega === 'fecha' && $fechaProgramada) {
-            $fechaEntrega = \Carbon\Carbon::parse($fechaProgramada)->setTime(7, 0, 0);
+            $fechaSoloFecha = substr($fechaProgramada, 0, 10);
+            $fechaEntrega = \Carbon\Carbon::createFromFormat('Y-m-d', $fechaSoloFecha, $timezone)->setTime(7, 0, 0);
         }
 
-        $fecha = $fechaEntrega ? $fechaEntrega->format('d-m-y') : date('d-m-y');
+        $fecha = $fechaEntrega ? $fechaEntrega->format('d-m-y') : now($timezone)->format('d-m-y');
         $hashUnico = uniqid();
 
         $nombreVisual = "PLANTILLA-PEDIDOS-{$fecha}.xlsx";

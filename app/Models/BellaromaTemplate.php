@@ -16,4 +16,8 @@ class BellaromaTemplate extends Model
         'enviado_correo',
         'fecha_entrega',
     ];
+
+    protected $casts = [
+        'fecha_entrega' => 'datetime',
+    ];
 }

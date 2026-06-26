@@ -270,23 +270,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
                             <Activity className="w-5 h-5 text-emerald-500" />
                         </div>
                         <div>
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                           
-                             <p className="text-[9px] font-black theme-text-muted uppercase tracking-widest leading-tight">Estado de Servidor_</p>
+                            <p className="text-[9px] font-black theme-text-muted uppercase tracking-widest leading-tight">Estado de Servidor_</p>
                             <p className="text-xs font-black text-emerald-500 italic uppercase leading-tight mt-0.5">Operativo</p>
                         </div>
                     </div>
