@@ -149,6 +149,9 @@ class ListarSolicitudesService
                         if ($idCancelada) {
                             $sub->where('catalogo_estado_solicitud_id', '!=', $idCancelada);
                         }
+                    })
+                    ->orWhereHas('consultas', function (Builder $c) {
+                        $c->where('estado', 'pendiente');
                     });
             }),
             'RESPONDIDAS' => $query->where('catalogo_estado_solicitud_id', 2),
