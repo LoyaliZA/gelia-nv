@@ -13,9 +13,9 @@ Route::prefix('v1')->group(function () {
     });
 
     Route::middleware([
+        'require.json',
         'auth:sanctum',
         'api.app',
-        'require.json',
         'log.api',
         'throttle:api-externa',
     ])->group(function () {

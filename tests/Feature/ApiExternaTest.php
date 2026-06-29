@@ -93,6 +93,14 @@ class ApiExternaTest extends TestCase
         $response->assertForbidden();
     }
 
+    public function test_ruta_protegida_sin_accept_devuelve_json_no_login(): void
+    {
+        $response = $this->get('/api/v1/clientes');
+
+        $response->assertUnauthorized()
+            ->assertJson(['message' => 'No autorizado.']);
+    }
+
     public function test_admin_puede_acceder_panel(): void
     {
         $user = User::factory()->create();

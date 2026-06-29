@@ -107,7 +107,7 @@ class SolicitudTag extends Model
     }
 
     /**
-     * Solicitudes sujetas al plazo de 48 h por falta de pago.
+     * Solicitudes sujetas al plazo de 24 h por falta de pago.
      * Excluye procesos operativos (cancelación remisión/pedido, cotización sobre pedido, etc.):
      * no requieren monto de cotización ni confirmación de pago.
      */

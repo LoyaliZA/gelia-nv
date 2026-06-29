@@ -18,7 +18,7 @@ use App\Notifications\ResumenPagosVencidos;
 class RechazarPagosVencidos extends Command
 {
     protected $signature = 'pagos:rechazar-vencidos';
-    protected $description = 'Rechaza solicitudes sin pago tras 48 horas y envía un reporte consolidado a las encargadas a las 9:00 AM.';
+    protected $description = 'Rechaza solicitudes sin pago tras 24 horas y envía un reporte consolidado a las encargadas a las 9:00 AM.';
 
     public function handle()
     {
@@ -29,7 +29,7 @@ class RechazarPagosVencidos extends Command
 
         $solicitudesVencidas = SolicitudTag::with(['cliente.vendedor', 'cliente.listaDescuento', 'cliente.tipo', 'proceso'])
             ->sujetasAPlazoDePago()
-            ->where('created_at', '<', now()->subHours(48))
+            ->where('created_at', '<', now()->subHours(24))
             ->get();
 
         if ($solicitudesVencidas->isEmpty()) {
@@ -93,7 +93,7 @@ class RechazarPagosVencidos extends Command
                     'usuario_id' => 1,
                     'estado_anterior_id' => $estadoAnteriorId,
                     'estado_nuevo_id' => 4,
-                    'motivo_reporte' => 'SISTEMA AUTOMÁTICO: Plazo de pago expirado (48h).',
+                    'motivo_reporte' => 'SISTEMA AUTOMÁTICO: Plazo de pago expirado (24h).',
                     'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
                 ]);
 
@@ -101,7 +101,7 @@ class RechazarPagosVencidos extends Command
                     $solicitud->vendedor->notify(new AlertaSolicitud(
                         $solicitud,
                         'pago_rechazado',
-                        'El tiempo expiró. Solicitud rebotada por falta de pago (48h). Debes iniciar una nueva solicitud.'
+                        'El tiempo expiró. Solicitud rebotada por falta de pago (24h). Debes iniciar una nueva solicitud.'
                     ));
                 }
 

@@ -31,6 +31,14 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
 
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, \Illuminate\Http\Request $request) {
+            if (! $request->is('api/v1/*')) {
+                return null;
+            }
+
+            return response()->json(['message' => 'No autorizado.'], 401);
+        });
+
         $exceptions->respond(function (Response $response, \Throwable $exception, \Illuminate\Http\Request $request) {
             if ($response->getStatusCode() !== 419) {
                 return $response;

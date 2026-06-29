@@ -23,7 +23,8 @@
     <p><strong>URL base:</strong> <code>{{ $base_url }}</code></p>
 
     <h2>1. Autenticación</h2>
-    <p>Obtenga un token Bearer enviando sus credenciales:</p>
+    <p>Obtenga un token Bearer enviando sus credenciales. El <code>client_secret</code> se guarda cifrado (hash); use el valor en texto plano mostrado al crear o regenerar la aplicación.</p>
+    <p>Deje <strong>IPs permitidas</strong> vacías en el panel para permitir cualquier IP (acceso abierto por IP).</p>
     <pre>POST {{ $base_url }}/auth/token
 Content-Type: application/json
 Accept: application/json
@@ -42,7 +43,44 @@ Accept: application/json
     <pre>Authorization: Bearer {access_token}
 Accept: application/json</pre>
 
-    <h2>2. Endpoints disponibles</h2>
+    <h2>2. Verificación (sin autenticación)</h2>
+    <pre>GET {{ $base_url }}/health</pre>
+    <p>Respuesta esperada: <code>{"status":"ok","version":"v1",...}</code></p>
+
+    <h2>3. Probar con Postman o Thunder Client</h2>
+    @if(!empty($guias_cliente_http))
+        @foreach($guias_cliente_http as $guia)
+            <h3>{{ $guia['nombre'] }}</h3>
+            <ol>
+                @foreach($guia['pasos'] as $paso)
+                    <li>
+                        @if(str_starts_with($paso, '{'))
+                            <pre>{{ $paso }}</pre>
+                        @else
+                            {{ $paso }}
+                        @endif
+                    </li>
+                @endforeach
+            </ol>
+        @endforeach
+    @endif
+
+    <h2>4. Endpoints disponibles</h2>
+    @if(!empty($endpoints_generales))
+        <table>
+            <thead><tr><th>Método</th><th>Ruta</th><th>Auth</th><th>Descripción</th></tr></thead>
+            <tbody>
+                @foreach($endpoints_generales as $endpoint)
+                    <tr>
+                        <td><strong>{{ $endpoint['metodo'] }}</strong></td>
+                        <td><code>{{ $endpoint['ruta'] }}</code></td>
+                        <td>{{ ($endpoint['auth'] ?? true) ? 'Sí' : 'No' }}</td>
+                        <td>{{ $endpoint['descripcion'] }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
     @foreach($recursos as $recurso)
         <h3>{{ $recurso['nombre'] }} ({{ $recurso['slug'] }})</h3>
         <p>
@@ -84,12 +122,12 @@ Accept: application/json</pre>
         @endif
     @endforeach
 
-    <h2>3. Ejemplo: listar clientes</h2>
+    <h2>5. Ejemplo: listar clientes</h2>
     <pre>GET {{ $base_url }}/clientes?page=1&amp;per_page=25&amp;q=busqueda
 Authorization: Bearer {access_token}
 Accept: application/json</pre>
 
-    <h2>4. Códigos de respuesta</h2>
+    <h2>6. Códigos de respuesta</h2>
     <table>
         <thead><tr><th>Código</th><th>Descripción</th></tr></thead>
         <tbody>
@@ -99,8 +137,10 @@ Accept: application/json</pre>
         </tbody>
     </table>
 
-    <h2>5. Buenas prácticas</h2>
+    <h2>7. Buenas prácticas e integración</h2>
     <ul>
+        <li>Use siempre la URL <code>/api/v1</code>. La ruta <code>/api</code> (sin v1) es la API interna del sistema y requiere sesión web.</li>
+        <li>Envíe <code>Accept: application/json</code> en <strong>todas</strong> las peticiones; sin él puede recibir redirección HTML al login.</li>
         <li>Guarde el <code>client_secret</code> de forma segura; no lo exponga en frontend.</li>
         <li>Respete el límite de peticiones por minuto configurado para su aplicación.</li>
         <li>Revise periódicamente la auditoría de uso desde el panel de administración.</li>
