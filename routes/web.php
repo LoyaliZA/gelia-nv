@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\{LoginController,RegistroController};
-use App\Http\Controllers\{DashboardController,AdminController,CatalogoController,ProductoCatalogoController,ClienteController,LimpiezaClientesController,AutoCobranzaController,ProfileController};
+use App\Http\Controllers\{DashboardController,AdminController,CatalogoController,ClienteController,LimpiezaClientesController,AutoCobranzaController,ProfileController};
 use App\Http\Controllers\Solicitudes\SolicitudController;
 use App\Http\Controllers\Reportes\ReporteSolicitudesController;
 use App\Http\Controllers\Api\{CotizacionEntregaController,ClienteApiController};
@@ -13,6 +13,7 @@ use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\{ActivoController,CategoriaActivoController,TipoActivoController};
 use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController,ConsolidadoHorasExtraController,BancoTiempoController};
 use App\Http\Controllers\ProductoController;
+use App\Http\Controllers\Almacenes\{ProductoController as AlmacenProductoController, InventarioController as AlmacenInventarioController, CostoController as AlmacenCostoController, ImportacionAlmacenController};
 use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
 use App\Http\Controllers\Mensajeria\{ConversacionController,MensajeController,AdjuntoMensajeController};
@@ -342,6 +343,45 @@ Route::middleware(['auth'])->group(function () {
 
 
     // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: ALMACENES (Productos · Inventarios · Costos)
+    // ══════════════════════════════════════════════════════════════════════
+    Route::prefix('almacenes')->name('almacenes.')->group(function () {
+        Route::middleware(['role_or_permission:almacenes.productos.ver|catalogos.gestionar'])->prefix('productos')->name('productos.')->group(function () {
+            Route::get('/', [AlmacenProductoController::class, 'index'])->name('index');
+            Route::get('/buscar', [AlmacenProductoController::class, 'buscar'])
+                ->middleware('role_or_permission:almacenes.productos.ver|almacenes.inventarios.ver|almacenes.costos.ver|catalogos.gestionar')
+                ->name('buscar');
+            Route::post('/', [AlmacenProductoController::class, 'store'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('store');
+            Route::put('/{producto}', [AlmacenProductoController::class, 'update'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('update');
+            Route::delete('/{producto}', [AlmacenProductoController::class, 'destroy'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('destroy');
+            Route::get('/plantilla-importacion', [AlmacenProductoController::class, 'descargarPlantillaImportacion'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('plantilla_importacion');
+            Route::post('/import-preview', [AlmacenProductoController::class, 'importPreview'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('import_preview');
+            Route::post('/import-process', [AlmacenProductoController::class, 'importProcess'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('import_process');
+        });
+
+        Route::middleware(['role_or_permission:almacenes.inventarios.ver|catalogos.gestionar'])->prefix('inventarios')->name('inventarios.')->group(function () {
+            Route::get('/', [AlmacenInventarioController::class, 'index'])->name('index');
+            Route::post('/', [AlmacenInventarioController::class, 'store'])->middleware('role_or_permission:almacenes.inventarios.gestionar|catalogos.gestionar')->name('store');
+            Route::put('/{inventario}', [AlmacenInventarioController::class, 'update'])->middleware('role_or_permission:almacenes.inventarios.gestionar|catalogos.gestionar')->name('update');
+            Route::delete('/{inventario}', [AlmacenInventarioController::class, 'destroy'])->middleware('role_or_permission:almacenes.inventarios.gestionar|catalogos.gestionar')->name('destroy');
+            Route::post('/import-preview', [AlmacenInventarioController::class, 'importPreview'])->middleware('role_or_permission:almacenes.inventarios.importar|catalogos.gestionar')->name('import_preview');
+            Route::post('/import-process', [AlmacenInventarioController::class, 'importProcess'])->middleware('role_or_permission:almacenes.inventarios.importar|catalogos.gestionar')->name('import_process');
+            Route::get('/plantilla-importacion', [AlmacenInventarioController::class, 'descargarPlantillaImportacion'])->middleware('role_or_permission:almacenes.inventarios.importar|catalogos.gestionar')->name('plantilla_importacion');
+        });
+
+        Route::middleware(['role_or_permission:almacenes.costos.ver|catalogos.gestionar'])->prefix('costos')->name('costos.')->group(function () {
+            Route::get('/', [AlmacenCostoController::class, 'index'])->name('index');
+            Route::post('/', [AlmacenCostoController::class, 'store'])->middleware('role_or_permission:almacenes.costos.gestionar|catalogos.gestionar')->name('store');
+            Route::put('/{costo}', [AlmacenCostoController::class, 'update'])->middleware('role_or_permission:almacenes.costos.gestionar|catalogos.gestionar')->name('update');
+            Route::delete('/{costo}', [AlmacenCostoController::class, 'destroy'])->middleware('role_or_permission:almacenes.costos.gestionar|catalogos.gestionar')->name('destroy');
+        });
+
+        Route::get('/importaciones/reporte-errores/{token}', [ImportacionAlmacenController::class, 'descargarReporteErrores'])
+            ->middleware('role_or_permission:almacenes.productos.gestionar|almacenes.inventarios.importar|catalogos.gestionar')
+            ->name('importaciones.reporte_errores');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: CONTROL DE ACTIVOS
     // ══════════════════════════════════════════════════════════════════════
     Route::middleware(['can:activos.ver'])->prefix('activos')->name('activos.')->group(function () {
@@ -588,6 +628,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/clientes/toggle-bloqueo-masivo', [ClienteController::class, 'toggleBloqueoMasivo'])->name('clientes.toggle_bloqueo_masivo');
             // -----------------------------------------------
 
+            Route::get('/clientes/auditoria/datos', [\App\Http\Controllers\Admin\AuditoriaMontosClienteController::class, 'datosAuditoria'])->name('clientes.auditoria.datos');
+            Route::get('/clientes/importaciones/{importacion}/archivo', [\App\Http\Controllers\Admin\AuditoriaMontosClienteController::class, 'descargarArchivo'])->name('clientes.importaciones.archivo');
             Route::get('/clientes/{cliente}/historial', [AdminController::class, 'historialCliente'])->name('clientes.historial');
             Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');
             Route::put('/clientes/{cliente}', [ClienteController::class, 'update'])->name('clientes.update');
@@ -597,10 +639,10 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['can:catalogos.gestionar'])->group(function () {
             Route::get('/catalogos', [AdminController::class, 'catalogos'])->name('catalogos');
 
-            // --- Catálogo Maestro Sprint 2.1 ---
-            Route::get('/catalogo-maestro', [ProductoCatalogoController::class, 'index'])->name('catalogo-maestro.index');
-            Route::post('/catalogo-maestro/import-preview', [ProductoCatalogoController::class, 'importPreview'])->name('catalogo-maestro.import_preview');
-            Route::post('/catalogo-maestro/import-process', [ProductoCatalogoController::class, 'importProcess'])->name('catalogo-maestro.import_process');
+            // --- Catálogo Maestro (legacy → Almacenes) ---
+            Route::redirect('/catalogo-maestro', '/almacenes/inventarios')->name('catalogo-maestro.index');
+            Route::redirect('/catalogo-maestro/import-preview', '/almacenes/inventarios');
+            Route::redirect('/catalogo-maestro/import-process', '/almacenes/inventarios');
 
             Route::prefix('catalogos')->name('catalogos.')->group(function () {
                 // Departamentos
@@ -657,11 +699,40 @@ Route::middleware(['auth'])->group(function () {
                 Route::put('/bancos/{id}', [CatalogoController::class, 'updateBanco'])->name('bancos.update');
                 Route::delete('/bancos/{id}', [CatalogoController::class, 'destroyBanco'])->name('bancos.destroy');
 
-                // Productos / Inventario
-                Route::post('/productos', [ProductoController::class, 'store'])->name('productos.store');
-                Route::put('/productos/{producto}', [ProductoController::class, 'update'])->name('productos.update');
-                Route::delete('/productos/{producto}', [ProductoController::class, 'destroy'])->name('productos.destroy');
-                Route::post('/productos/import', [ProductoController::class, 'importar'])->name('productos.import');
+                // Sucursales
+                Route::get('/sucursales/plantilla-importacion', [CatalogoController::class, 'descargarPlantillaImportacion'])->defaults('tipo', 'sucursales')->name('sucursales.plantilla_importacion');
+                Route::post('/sucursales/importar', [CatalogoController::class, 'importarCatalogoAlmacen'])->defaults('tipo', 'sucursales')->name('sucursales.importar');
+                Route::post('/sucursales', [CatalogoController::class, 'storeSucursal'])->name('sucursales.store');
+                Route::put('/sucursales/{id}', [CatalogoController::class, 'updateSucursal'])->name('sucursales.update');
+                Route::delete('/sucursales/{id}', [CatalogoController::class, 'destroySucursal'])->name('sucursales.destroy');
+
+                // Tipos de Almacén
+                Route::get('/tipos-almacen/plantilla-importacion', [CatalogoController::class, 'descargarPlantillaImportacion'])->defaults('tipo', 'tipos_almacen')->name('tipos_almacen.plantilla_importacion');
+                Route::post('/tipos-almacen/importar', [CatalogoController::class, 'importarCatalogoAlmacen'])->defaults('tipo', 'tipos_almacen')->name('tipos_almacen.importar');
+                Route::post('/tipos-almacen', [CatalogoController::class, 'storeTipoAlmacen'])->name('tipos_almacen.store');
+                Route::put('/tipos-almacen/{id}', [CatalogoController::class, 'updateTipoAlmacen'])->name('tipos_almacen.update');
+                Route::delete('/tipos-almacen/{id}', [CatalogoController::class, 'destroyTipoAlmacen'])->name('tipos_almacen.destroy');
+
+                // Marcas de Producto
+                Route::get('/marcas-producto/plantilla-importacion', [CatalogoController::class, 'descargarPlantillaImportacion'])->defaults('tipo', 'marcas_producto')->name('marcas_producto.plantilla_importacion');
+                Route::post('/marcas-producto/importar', [CatalogoController::class, 'importarCatalogoAlmacen'])->defaults('tipo', 'marcas_producto')->name('marcas_producto.importar');
+                Route::post('/marcas-producto', [CatalogoController::class, 'storeMarcaProducto'])->name('marcas_producto.store');
+                Route::put('/marcas-producto/{id}', [CatalogoController::class, 'updateMarcaProducto'])->name('marcas_producto.update');
+                Route::delete('/marcas-producto/{id}', [CatalogoController::class, 'destroyMarcaProducto'])->name('marcas_producto.destroy');
+
+                // Almacenes
+                Route::get('/almacenes/plantilla-importacion', [CatalogoController::class, 'descargarPlantillaImportacion'])->defaults('tipo', 'almacenes')->name('almacenes.plantilla_importacion');
+                Route::post('/almacenes/importar', [CatalogoController::class, 'importarCatalogoAlmacen'])->defaults('tipo', 'almacenes')->name('almacenes.importar');
+                Route::post('/almacenes', [CatalogoController::class, 'storeAlmacen'])->name('almacenes.store');
+                Route::put('/almacenes/{id}', [CatalogoController::class, 'updateAlmacen'])->name('almacenes.update');
+                Route::delete('/almacenes/{id}', [CatalogoController::class, 'destroyAlmacen'])->name('almacenes.destroy');
+
+                // Categorías de Producto
+                Route::get('/categorias-producto/plantilla-importacion', [CatalogoController::class, 'descargarPlantillaImportacion'])->defaults('tipo', 'categorias_producto')->name('categorias_producto.plantilla_importacion');
+                Route::post('/categorias-producto/importar', [CatalogoController::class, 'importarCatalogoAlmacen'])->defaults('tipo', 'categorias_producto')->name('categorias_producto.importar');
+                Route::post('/categorias-producto', [CatalogoController::class, 'storeCategoriaProducto'])->name('categorias_producto.store');
+                Route::put('/categorias-producto/{id}', [CatalogoController::class, 'updateCategoriaProducto'])->name('categorias_producto.update');
+                Route::delete('/categorias-producto/{id}', [CatalogoController::class, 'destroyCategoriaProducto'])->name('categorias_producto.destroy');
 
                 // Tipos de Activo
                 Route::post('/tipos-activo', [TipoActivoController::class, 'store'])->name('tipos_activo.store')->middleware('can:activos.configurar_tipos');

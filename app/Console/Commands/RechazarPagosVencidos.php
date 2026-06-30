@@ -5,10 +5,10 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\SolicitudTag;
 use App\Models\AuditoriaSolicitud;
-use App\Models\HistorialMontoCliente;
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
 use App\Models\User;
+use App\Services\Clientes\RegistrarHistorialMontoClienteService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -66,12 +66,16 @@ class RechazarPagosVencidos extends Command
                         $montoNuevo = max(0, $montoAnterior - $solicitud->monto_cotizado);
                         $nuevaListaId = $this->determinarListaPorMonto($montoNuevo, $listas);
 
-                        HistorialMontoCliente::create([
-                            'cliente_id' => $cliente->id,
-                            'monto_anterior' => $montoAnterior,
-                            'monto_nuevo' => $montoNuevo,
-                            'diferencia_aplicada' => -abs($solicitud->monto_cotizado),
-                        ]);
+                        app(RegistrarHistorialMontoClienteService::class)->registrar(
+                            $cliente,
+                            $montoNuevo,
+                            RegistrarHistorialMontoClienteService::ORIGEN_CRON_RECHAZO_PAGO,
+                            null,
+                            null,
+                            $solicitud->id,
+                            (float) $solicitud->monto_cotizado,
+                            'Plazo de pago expirado (24h) — Solicitante: ' . ($solicitud->vendedor?->name ?? 'N/A'),
+                        );
 
                         $cliente->update([
                             'monto_venta_actual' => $montoNuevo,

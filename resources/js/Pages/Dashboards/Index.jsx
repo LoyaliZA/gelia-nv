@@ -101,7 +101,14 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
     const catalogoFunciones = DASHBOARD_FUNCTION_CARDS;
     const catalogoTarjetas = DASHBOARD_MODULE_CARDS;
 
-    const tarjetasHabilitadas = catalogoTarjetas.filter((tarjeta) => can(tarjeta.permiso));
+    const tarjetaPermitida = (tarjeta) => {
+        if (tarjeta.permisoAny?.length) {
+            return tarjeta.permisoAny.some((permiso) => can(permiso));
+        }
+        return tarjeta.permiso ? can(tarjeta.permiso) : true;
+    };
+
+    const tarjetasHabilitadas = catalogoTarjetas.filter(tarjetaPermitida);
     const tarjetasVisibles = tarjetasHabilitadas.filter((tarjeta) => !dashboardOcultosBD.includes(tarjeta.id));
 
     const funcionesHabilitadas = catalogoFunciones.filter((func) => can(func.permiso));

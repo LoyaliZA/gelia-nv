@@ -8,6 +8,7 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoListaDescuento;
 use App\Models\AuditoriaSolicitud;
 use App\Models\User;
+use App\Services\Clientes\RegistrarHistorialMontoClienteService;
 use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -95,10 +96,31 @@ class CancelarSolicitudService
         $snapshotAntes = $auditoriaAprobacion?->datos_snapshot['antes'] ?? null;
 
         if ($snapshotAntes) {
+            $montoRestaurado = (float) ($snapshotAntes['monto_venta'] ?? $cliente->monto_venta_actual);
+            app(RegistrarHistorialMontoClienteService::class)->registrar(
+                $cliente,
+                $montoRestaurado,
+                RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_REVERSION,
+                Auth::id(),
+                null,
+                $solicitud->id,
+                (float) $solicitud->monto_cotizado,
+                'Cancelación — Solicitante: ' . ($solicitud->vendedor?->name ?? 'N/A'),
+            );
             $this->restaurarClienteDesdeSnapshot($cliente, $snapshotAntes);
         } else {
-            $nuevoMonto = ($cliente->monto_venta_actual ?? 0) - ($solicitud->monto_cotizado ?? 0);
-            $cliente->monto_venta_actual = max(0, $nuevoMonto);
+            $nuevoMonto = max(0, ($cliente->monto_venta_actual ?? 0) - ($solicitud->monto_cotizado ?? 0));
+            app(RegistrarHistorialMontoClienteService::class)->registrar(
+                $cliente,
+                $nuevoMonto,
+                RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_REVERSION,
+                Auth::id(),
+                null,
+                $solicitud->id,
+                (float) $solicitud->monto_cotizado,
+                'Cancelación — Solicitante: ' . ($solicitud->vendedor?->name ?? 'N/A'),
+            );
+            $cliente->monto_venta_actual = $nuevoMonto;
             $this->recalcularListaCliente($cliente);
 
             if ($solicitud->catalogo_tipo_cliente_id) {

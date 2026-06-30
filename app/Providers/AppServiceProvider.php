@@ -118,6 +118,8 @@ class AppServiceProvider extends ServiceProvider
         Route::bind('bono', fn (string $value) => CatalogoBono::findOrFail($value));
         Route::bind('reglaIncidencia', fn (string $value) => CatalogoReglaIncidencia::findOrFail($value));
         Route::bind('producto', fn (string $value) => Producto::findOrFail($value));
+        Route::bind('inventario', fn (string $value) => \App\Models\Inventario::findOrFail($value));
+        Route::bind('costo', fn (string $value) => \App\Models\ProductoCosto::findOrFail($value));
         Route::bind('pedido', fn (string $value) => ContabilidadPedido::findOrFail($value));
 
         RateLimiter::for('api-externa', function (Request $request) {

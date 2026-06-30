@@ -4,7 +4,7 @@ import {
     Users, Upload, Search,
     FileSpreadsheet, TrendingUp,
     CheckCircle, Database, Edit3, ChevronDown, Sparkles,
-    Plus, Shield, X, ChevronRight,
+    Plus, Shield, X, ChevronRight, History,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
@@ -13,6 +13,7 @@ import GeliaLoader from '../../Components/GeliaLoader';
 // --- IMPORTACIÓN DEL PARCIAL ---
 import ModalFormCliente from './Partials/ModalFormCliente';
 import ModalConfiguracionEspecial from './Partials/ModalConfiguracionEspecial';
+import TabAuditoriaClientes from './Partials/TabAuditoriaClientes';
 
 import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
 
@@ -60,10 +61,13 @@ const ModalReporteImportacion = ({ reporte, onClose }) => {
     );
 };
 
-export default function Clientes({ auth, clientes, vendedores = [], tipos_cliente = [], listas = [], filtros = {} }) {
+export default function Clientes({ auth, clientes, vendedores = [], tipos_cliente = [], listas = [], filtros = {}, puedeDescargarImportaciones = false }) {
+
+    const tabActivo = filtros.tab === 'auditoria' ? 'auditoria' : 'clientes';
 
     // --- SECCIÓN: ESTADOS GLOBALES ---
-    const [busqueda, setBusqueda] = useState(filtros.q || '');
+    const [busquedaInput, setBusquedaInput] = useState(filtros.q || '');
+    const [busquedaAplicada, setBusquedaAplicada] = useState(filtros.q || '');
     const [filtroListaId, setFiltroListaId] = useState(filtros.lista_id ? String(filtros.lista_id) : '');
     const [filtroTipo, setFiltroTipo] = useState(filtros.tipo || '');
     const [filtroEstado, setFiltroEstado] = useState(filtros.estado || '');
@@ -81,24 +85,22 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
         archivo: null,
     });
 
-    useEffect(() => {
-        setBusqueda(filtros.q || '');
-        setFiltroListaId(filtros.lista_id ? String(filtros.lista_id) : '');
-        setFiltroTipo(filtros.tipo || '');
-        setFiltroEstado(filtros.estado || '');
-        setFiltroOrden(filtros.orden || 'numero_asc');
-    }, [filtros.q, filtros.lista_id, filtros.tipo, filtros.estado, filtros.orden]);
-
-    const paramsFiltros = useCallback(() => ({
-        q: busqueda.trim() || undefined,
+    const paramsFiltros = useCallback((qOverride) => ({
+        q: (qOverride !== undefined ? qOverride : busquedaAplicada).trim() || undefined,
         lista_id: filtroListaId || undefined,
         tipo: filtroTipo || undefined,
         estado: filtroEstado || undefined,
         orden: filtroOrden || 'numero_asc',
-    }), [busqueda, filtroListaId, filtroTipo, filtroEstado, filtroOrden]);
+        tab: tabActivo === 'auditoria' ? 'auditoria' : undefined,
+    }), [busquedaAplicada, filtroListaId, filtroTipo, filtroEstado, filtroOrden, tabActivo]);
 
     const recargarClientes = useCallback((extra = {}) => {
-        router.get(route('admin.clientes'), { ...paramsFiltros(), ...extra }, {
+        const qFromExtra = Object.prototype.hasOwnProperty.call(extra, 'q') ? extra.q : undefined;
+        const merged = { ...paramsFiltros(qFromExtra), ...extra };
+        if (Object.prototype.hasOwnProperty.call(extra, 'q')) {
+            merged.q = extra.q?.trim() || undefined;
+        }
+        router.get(route('admin.clientes'), merged, {
             only: ['clientes', 'filtros'],
             preserveState: true,
             preserveScroll: true,
@@ -109,25 +111,57 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
         });
     }, [paramsFiltros]);
 
+    const aplicarFiltroDropdown = (campo, valor) => {
+        const params = {
+            page: 1,
+            q: busquedaAplicada.trim() || undefined,
+            lista_id: filtroListaId || undefined,
+            tipo: filtroTipo || undefined,
+            estado: filtroEstado || undefined,
+            orden: filtroOrden || 'numero_asc',
+            tab: tabActivo === 'auditoria' ? 'auditoria' : undefined,
+            [campo]: valor || undefined,
+        };
+        router.get(route('admin.clientes'), params, {
+            only: ['clientes', 'filtros'],
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            showProgress: false,
+            onStart: () => setCargandoLista(true),
+            onFinish: () => setCargandoLista(false),
+        });
+    };
+
+    const ejecutarBusqueda = () => {
+        const q = busquedaInput.trim();
+        setBusquedaAplicada(q);
+        recargarClientes({ page: 1, q });
+    };
+
+    const cambiarTab = (tab) => {
+        router.get(route('admin.clientes'), {
+            tab: tab === 'auditoria' ? 'auditoria' : undefined,
+            q: busquedaAplicada.trim() || undefined,
+            lista_id: filtroListaId || undefined,
+            tipo: filtroTipo || undefined,
+            estado: filtroEstado || undefined,
+            orden: filtroOrden || 'numero_asc',
+        }, {
+            preserveState: true,
+            preserveScroll: false,
+            replace: true,
+        });
+    };
+
     useEffect(() => {
-        const t = setTimeout(() => {
-            const qActual = filtros.q || '';
-            const listaActual = filtros.lista_id ? String(filtros.lista_id) : '';
-            const tipoActual = filtros.tipo || '';
-            const estadoActual = filtros.estado || '';
-            const ordenActual = filtros.orden || 'numero_asc';
-            if (
-                busqueda !== qActual
-                || filtroListaId !== listaActual
-                || filtroTipo !== tipoActual
-                || filtroEstado !== estadoActual
-                || filtroOrden !== ordenActual
-            ) {
-                recargarClientes({ page: 1 });
-            }
-        }, 400);
-        return () => clearTimeout(t);
-    }, [busqueda, filtroListaId, filtroTipo, filtroEstado, filtroOrden, filtros, recargarClientes]);
+        setBusquedaInput(filtros.q || '');
+        setBusquedaAplicada(filtros.q || '');
+        setFiltroListaId(filtros.lista_id ? String(filtros.lista_id) : '');
+        setFiltroTipo(filtros.tipo || '');
+        setFiltroEstado(filtros.estado || '');
+        setFiltroOrden(filtros.orden || 'numero_asc');
+    }, [filtros.q, filtros.lista_id, filtros.tipo, filtros.estado, filtros.orden]);
 
     const irAPagina = (pagina) => {
         if (pagina < 1 || pagina > (clientes?.last_page || 1)) return;
@@ -311,6 +345,31 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                     </div>
                 </header>
 
+                {/* Pestañas Clientes / Auditoría */}
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => cambiarTab('clientes')}
+                        className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border ${tabActivo === 'clientes' ? 'text-white border-transparent shadow-lg' : 'theme-element theme-border theme-text-muted hover:theme-text-main'}`}
+                        style={tabActivo === 'clientes' ? { backgroundColor: 'var(--color-primario)' } : {}}
+                    >
+                        <Users className="w-4 h-4 inline mr-2 -mt-0.5" />
+                        Clientes
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => cambiarTab('auditoria')}
+                        className={`px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all border ${tabActivo === 'auditoria' ? 'text-white border-transparent shadow-lg' : 'theme-element theme-border theme-text-muted hover:theme-text-main'}`}
+                        style={tabActivo === 'auditoria' ? { backgroundColor: 'var(--color-primario)' } : {}}
+                    >
+                        <History className="w-4 h-4 inline mr-2 -mt-0.5" />
+                        Auditoría
+                    </button>
+                </div>
+
+                {tabActivo === 'auditoria' ? (
+                    <TabAuditoriaClientes puedeDescargarImportaciones={puedeDescargarImportaciones} />
+                ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch h-[calc(100vh-240px)] min-h-[600px]">
 
                     {/* --- PANEL LATERAL: CARGA MASIVA --- */}
@@ -425,24 +484,39 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                     <div className="lg:col-span-2 h-full min-h-0">
                         <section className={`${activeCardClass} p-8 h-full flex flex-col`} style={{ animationDelay: '200ms' }}>
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 shrink-0 mb-4">
-                                <div className="md:col-span-12 relative">
+                                <div className="md:col-span-10 relative">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 theme-text-muted z-10 pointer-events-none" />
                                     <input
                                         type="text"
                                         placeholder="Buscar por número o nombre..."
-                                        value={busqueda}
-                                        onChange={e => setBusqueda(e.target.value)}
+                                        value={busquedaInput}
+                                        onChange={e => setBusquedaInput(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); ejecutarBusqueda(); } }}
                                         className="w-full px-12 py-4 theme-element border theme-border rounded-xl theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md theme-placeholder"
                                         style={{ '--tw-ring-color': 'var(--color-primario)' }}
                                         onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
                                         onBlur={e => e.target.style.borderColor = ''}
                                     />
                                 </div>
+                                <div className="md:col-span-2">
+                                    <button
+                                        type="button"
+                                        onClick={ejecutarBusqueda}
+                                        className="w-full h-full py-4 text-white rounded-xl font-black uppercase tracking-widest text-[11px] shadow-lg transition-all hover:scale-[1.02] outline-none flex justify-center items-center gap-2"
+                                        style={{ backgroundColor: 'var(--color-primario)' }}
+                                    >
+                                        <Search className="w-4 h-4" />
+                                        Buscar
+                                    </button>
+                                </div>
 
                                 <div className="md:col-span-3 relative">
                                     <select
                                         value={filtroListaId}
-                                        onChange={e => setFiltroListaId(e.target.value)}
+                                        onChange={e => {
+                                            setFiltroListaId(e.target.value);
+                                            aplicarFiltroDropdown('lista_id', e.target.value);
+                                        }}
                                         className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
                                         style={{ '--tw-ring-color': 'var(--color-primario)' }}
                                         onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
@@ -461,7 +535,10 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                 <div className="md:col-span-3 relative">
                                     <select
                                         value={filtroTipo}
-                                        onChange={e => setFiltroTipo(e.target.value)}
+                                        onChange={e => {
+                                            setFiltroTipo(e.target.value);
+                                            aplicarFiltroDropdown('tipo', e.target.value);
+                                        }}
                                         className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
                                         style={{ '--tw-ring-color': 'var(--color-primario)' }}
                                         onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
@@ -479,7 +556,10 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                 <div className="md:col-span-3 relative">
                                     <select
                                         value={filtroEstado}
-                                        onChange={e => setFiltroEstado(e.target.value)}
+                                        onChange={e => {
+                                            setFiltroEstado(e.target.value);
+                                            aplicarFiltroDropdown('estado', e.target.value);
+                                        }}
                                         className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
                                         style={{ '--tw-ring-color': 'var(--color-primario)' }}
                                     >
@@ -497,7 +577,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                         value={filtroOrden}
                                         onChange={e => {
                                             setFiltroOrden(e.target.value);
-                                            recargarClientes({ page: 1, orden: e.target.value });
+                                            aplicarFiltroDropdown('orden', e.target.value);
                                         }}
                                         className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
                                         style={{ '--tw-ring-color': 'var(--color-primario)' }}
@@ -599,6 +679,7 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                         </section>
                     </div>
                 </div>
+                )}
             </div>
         </AppLayout>
     );

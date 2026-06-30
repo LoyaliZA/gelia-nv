@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { Filter, Search, User, UserX, Wrench, RotateCcw, ChevronDown, ChevronUp, ScanLine, PenTool } from 'lucide-react';
 import { INPUT_CLASS, SELECT_CLASS, LABEL_CLASS, getActivosCardClass } from './activosFormStyles';
-import ModalEscanearCodigo from './ModalEscanearCodigo';
+import ModalEscanearCodigo from '@/Components/Escanner/ModalEscanearCodigo';
 import { resolverCodigoEscaneado } from './resolverCodigoEscaneado';
 import { STORAGE_FILTROS_ACTIVOS } from './navegarListadoActivos';
 

@@ -14,6 +14,7 @@ use App\Models\CatalogoTipoCliente;
 use App\Models\TabuladorComision;
 use Illuminate\Support\Facades\DB;
 use App\Services\Clientes\ImportarClientesWizerpService;
+use App\Services\Clientes\RegistrarImportacionClienteService;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
@@ -27,7 +28,11 @@ use App\Models\CatalogoHorarioEntrega;
 use App\Models\CatalogoBanco;
 use App\Models\CatalogoCategoriaActivo;
 use App\Models\CatalogoTipoActivo;
-use App\Models\Producto;
+use App\Models\Sucursal;
+use App\Models\CatalogoTipoAlmacen;
+use App\Models\CatalogoMarcaProducto;
+use App\Models\Almacen;
+use App\Models\CatalogoCategoriaProducto;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
@@ -99,7 +104,11 @@ class AdminController extends Controller
             'bancos' => CatalogoBanco::orderBy('nombre')->get(),
             'tipos_activo' => CatalogoTipoActivo::orderBy('nombre')->get(),
             'categorias_activo' => CatalogoCategoriaActivo::orderBy('nombre')->get(),
-            'productos' => Producto::orderBy('descripcion')->get(),
+            'sucursales' => Sucursal::orderBy('nombre')->get(),
+            'tipos_almacen' => CatalogoTipoAlmacen::orderBy('nombre')->get(),
+            'marcas_producto' => CatalogoMarcaProducto::orderBy('nombre')->get(),
+            'almacenes' => Almacen::with(['sucursal', 'tipoAlmacen'])->orderBy('nombre')->get(),
+            'categorias_producto' => CatalogoCategoriaProducto::orderBy('nombre')->get(),
         ]);
     }
 
@@ -573,12 +582,16 @@ class AdminController extends Controller
             'vendedores'    => $vendedores,
             'tipos_cliente' => $tipos_cliente,
             'listas'        => $listas,
-            'filtros'       => $request->only(['q', 'lista_id', 'tipo', 'estado', 'orden']),
+            'filtros'       => $request->only(['q', 'lista_id', 'tipo', 'estado', 'orden', 'tab']),
+            'puedeDescargarImportaciones' => $request->user()?->can('clientes.carga_masiva') ?? false,
         ]);
     }
 
-    public function importarClientes(Request $request, ImportarClientesWizerpService $importadorService)
-    {
+    public function importarClientes(
+        Request $request,
+        ImportarClientesWizerpService $importadorService,
+        RegistrarImportacionClienteService $registrarImportacion,
+    ) {
         Gate::authorize('clientes.carga_masiva');
 
         $request->validate(['archivo' => 'required|mimes:csv,txt']);
@@ -586,7 +599,10 @@ class AdminController extends Controller
         @set_time_limit(0);
 
         try {
-            $resultado = $importadorService->ejecutar($request->file('archivo'));
+            $importacion = $registrarImportacion->iniciar($request->file('archivo'));
+            $resultado = $importadorService->ejecutar($request->file('archivo'), $importacion);
+            $registrarImportacion->finalizar($importacion, $resultado['stats'] ?? []);
+
             $inactivos = $resultado['clientes_marcados_inactivos'] ?? 0;
             $mensaje = 'Base de datos de clientes actualizada correctamente.';
             if ($inactivos > 0) {

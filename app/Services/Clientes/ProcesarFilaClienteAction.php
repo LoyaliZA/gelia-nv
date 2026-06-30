@@ -32,7 +32,9 @@ class ProcesarFilaClienteAction
         array &$historialBatch,
         bool $importaCodigoLista,
         int &$marcadosInactivos,
-        array &$alertasLimiteExcedido
+        array &$alertasLimiteExcedido,
+        ?int $importacionClienteId = null,
+        ?int $usuarioId = null,
     ): ?array {
         $numeroCliente = trim($data['numero_cliente'] ?? '');
         if (empty($numeroCliente)) {
@@ -50,7 +52,9 @@ class ProcesarFilaClienteAction
                 $historialBatch,
                 $importaCodigoLista,
                 $marcadosInactivos,
-                $alertasLimiteExcedido
+                $alertasLimiteExcedido,
+                $importacionClienteId,
+                $usuarioId,
             );
         }
 
@@ -141,7 +145,9 @@ class ProcesarFilaClienteAction
         array &$historialBatch,
         bool $importaCodigoLista,
         int &$marcadosInactivos,
-        array &$alertasLimiteExcedido
+        array &$alertasLimiteExcedido,
+        ?int $importacionClienteId = null,
+        ?int $usuarioId = null,
     ): ?array {
         $updateData = [];
         $listaOriginalId = $cliente->lista_actual_id;
@@ -203,7 +209,14 @@ class ProcesarFilaClienteAction
                 }
             }
 
-            $this->agregarHistorialMonto($cliente, $montoExtraido, $historialBatch);
+            $this->agregarHistorialMonto($cliente, $montoExtraido, $historialBatch, $importacionClienteId, $usuarioId);
+
+            $updateData = app(ReactivarClienteInactivoService::class)->cambiosParaImportacion(
+                $cliente,
+                $montoExtraido,
+                $updateData,
+                $listas,
+            );
         }
 
         if (isset($data['monto_credito_autorizado']) && trim($data['monto_credito_autorizado']) !== '') {
@@ -288,17 +301,20 @@ class ProcesarFilaClienteAction
         return $listas->firstWhere('nombre', 'PUBLICO GENERAL')->id;
     }
 
-    private function agregarHistorialMonto(Cliente $cliente, float $montoNuevo, array &$historialBatch): void
-    {
-        $ahora = now();
-        $historialBatch[] = [
-            'cliente_id'          => $cliente->id,
-            'monto_anterior'      => $cliente->monto_venta_actual,
-            'monto_nuevo'         => $montoNuevo,
-            'diferencia_aplicada' => $montoNuevo - $cliente->monto_venta_actual,
-            'created_at'          => $ahora,
-            'updated_at'          => $ahora,
-        ];
+    private function agregarHistorialMonto(
+        Cliente $cliente,
+        float $montoNuevo,
+        array &$historialBatch,
+        ?int $importacionClienteId = null,
+        ?int $usuarioId = null,
+    ): void {
+        $historialBatch[] = app(RegistrarHistorialMontoClienteService::class)->filaBatch(
+            $cliente,
+            $montoNuevo,
+            RegistrarHistorialMontoClienteService::ORIGEN_CARGA_MASIVA,
+            $usuarioId,
+            $importacionClienteId,
+        );
     }
 
     private function evaluarHeredado(?string $valor): bool

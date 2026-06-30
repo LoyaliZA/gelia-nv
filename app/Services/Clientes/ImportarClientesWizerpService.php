@@ -25,11 +25,16 @@ class ImportarClientesWizerpService
         $this->procesador = $procesador;
     }
 
-    public function ejecutar(UploadedFile $archivo): array
+    public function ejecutar(UploadedFile $archivo, ?\App\Models\ImportacionCliente $importacion = null): array
     {
         $inicio = microtime(true);
-        $path = $archivo->getRealPath();
+        $path = $importacion
+            ? \Illuminate\Support\Facades\Storage::disk('local')->path($importacion->ruta_almacenamiento)
+            : $archivo->getRealPath();
         $file = fopen($path, 'r');
+
+        $importacionClienteId = $importacion?->id;
+        $usuarioId = $importacion?->usuario_id;
 
         $headers = $this->procesarCabeceras(fgetcsv($file));
         $importaCodigoLista = in_array('codigo_lista', $headers, true);
@@ -77,7 +82,7 @@ class ImportarClientesWizerpService
 
         try {
             foreach (array_chunk($filas, self::CHUNK_SIZE) as $chunk) {
-                DB::transaction(function () use ($chunk, $listas, $mapaVendedoras, $importaCodigoLista, &$reporteAscensos, &$marcadosInactivos, &$stats, &$alertasLimiteExcedido) {
+                DB::transaction(function () use ($chunk, $listas, $mapaVendedoras, $importaCodigoLista, &$reporteAscensos, &$marcadosInactivos, &$stats, &$alertasLimiteExcedido, $importacionClienteId, $usuarioId) {
                     $historialBatch = [];
                     $numeros = array_values(array_unique(array_map(
                         fn (array $fila) => trim($fila['numero_cliente']),
@@ -99,7 +104,9 @@ class ImportarClientesWizerpService
                                 $historialBatch,
                                 $importaCodigoLista,
                                 $marcadosInactivos,
-                                $alertasLimiteExcedido
+                                $alertasLimiteExcedido,
+                                $importacionClienteId,
+                                $usuarioId,
                             );
                             $stats['procesadas']++;
                             if ($cambio) {
@@ -144,6 +151,11 @@ class ImportarClientesWizerpService
         return [
             'ascensos'                    => $reporteAscensos,
             'clientes_marcados_inactivos' => $marcadosInactivos,
+            'stats'                       => array_merge($stats, [
+                'ascensos'                    => count($reporteAscensos),
+                'clientes_marcados_inactivos' => $marcadosInactivos,
+                'duracion_seg'                => $duracion,
+            ]),
         ];
     }
 

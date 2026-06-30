@@ -41,7 +41,7 @@ class ProductoCatalogoController extends Controller
 
         $file = $request->file('archivo');
         $path = $file->storeAs('temp', 'import_preview.' . $file->getClientOriginalExtension());
-        $fullPath = storage_path('app/' . $path);
+        $fullPath = Storage::path($path);
 
         $headers = [];
         $rows = (new FastExcel)->import($fullPath);
@@ -71,7 +71,7 @@ class ProductoCatalogoController extends Controller
             'mapping.precio_venta' => 'required|string',
         ]);
 
-        $fullPath = storage_path('app/' . $request->file_path);
+        $fullPath = Storage::path($request->file_path);
         if (!file_exists($fullPath)) {
             return back()->with('error', 'Archivo temporal no encontrado.');
         }

@@ -11,6 +11,7 @@ export default function SidebarNavLeafLink({
     onClick,
     icon: Icon,
     label,
+    description,
     paddingClass = 'pl-10',
     extraClassName = '',
     role,
@@ -27,17 +28,26 @@ export default function SidebarNavLeafLink({
                     : 'border-transparent'
             } ${extraClassName}`.trim()}
         >
-            <Icon
-                className={`w-3.5 h-3.5 mr-2.5 shrink-0 ${active ? 'gelia-sidebar-nav-child-icon--active' : 'gelia-sidebar-nav-child-icon'}`}
-                aria-hidden
-            />
-            <span
-                className={`gelia-sidebar-nav-child-text truncate ${
-                    active ? 'gelia-sidebar-nav-child-text--active' : 'gelia-sidebar-nav-child-text--muted'
-                }`}
-            >
-                {label}
-            </span>
+            <div className="flex items-center shrink-0 mt-0.5">
+                <Icon
+                    className={`w-3.5 h-3.5 mr-2.5 ${active ? 'gelia-sidebar-nav-child-icon--active' : 'gelia-sidebar-nav-child-icon'}`}
+                    aria-hidden
+                />
+            </div>
+            <div className="flex flex-col min-w-0">
+                <span
+                    className={`gelia-sidebar-nav-child-text truncate ${
+                        active ? 'gelia-sidebar-nav-child-text--active' : 'gelia-sidebar-nav-child-text--muted'
+                    }`}
+                >
+                    {label}
+                </span>
+                {description && (
+                    <span className="text-xs mt-0.5 text-gray-500 dark:text-gray-400 whitespace-normal line-clamp-2 leading-tight">
+                        {description}
+                    </span>
+                )}
+            </div>
         </Link>
     );
 }

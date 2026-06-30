@@ -1,5 +1,5 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Calculator
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Calculator, Boxes, DollarSign
 } from 'lucide-react';
 import { contabilidadRoutes } from '../../Pages/Contabilidad/contabilidadRoutes';
 
@@ -94,6 +94,39 @@ export const DASHBOARD_MODULE_CARDS = [
         borderClass: 'border-orange-500/20',
         iconWrapClass: 'bg-orange-500/10 border-orange-500/20',
         iconClass: 'text-orange-500',
+    },
+    {
+        id: 'card_almacenes_productos',
+        titulo: 'Productos',
+        subtitulo: 'Catálogo maestro de productos.',
+        permisoAny: ['almacenes.productos.ver', 'catalogos.gestionar'],
+        href: () => route('almacenes.productos.index'),
+        icon: Package,
+        borderClass: 'border-amber-500/20',
+        iconWrapClass: 'bg-amber-500/10 border-amber-500/20',
+        iconClass: 'text-amber-500',
+    },
+    {
+        id: 'card_almacenes_inventarios',
+        titulo: 'Inventarios',
+        subtitulo: 'Existencias y ubicaciones por almacén.',
+        permisoAny: ['almacenes.inventarios.ver', 'catalogos.gestionar'],
+        href: () => route('almacenes.inventarios.index'),
+        icon: Boxes,
+        borderClass: 'border-orange-500/20',
+        iconWrapClass: 'bg-orange-500/10 border-orange-500/20',
+        iconClass: 'text-orange-500',
+    },
+    {
+        id: 'card_almacenes_costos',
+        titulo: 'Costos',
+        subtitulo: 'Costos y precios por almacén.',
+        permisoAny: ['almacenes.costos.ver', 'catalogos.gestionar'],
+        href: () => route('almacenes.costos.index'),
+        icon: DollarSign,
+        borderClass: 'border-yellow-500/20',
+        iconWrapClass: 'bg-yellow-500/10 border-yellow-500/20',
+        iconClass: 'text-yellow-500',
     },
     {
         id: 'card_activos',

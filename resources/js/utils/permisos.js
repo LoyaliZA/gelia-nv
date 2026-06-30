@@ -70,7 +70,34 @@ export const DESCRIPCIONES_PERMISOS = {
     'contabilidad.importar': 'Permite importar listas de precios e histórico de pedidos.',
     'contabilidad.exportar': 'Permite exportar reportes de contabilidad en Excel y PDF.',
     'contabilidad.historial.editar_emergencia': 'Permite ediciones de emergencia en historial de lotes pagados.',
+    'almacenes.ver': 'Permiso legacy del grupo Almacenes. No otorga acceso a Productos, Inventarios ni Costos; use los permisos específicos de cada submódulo.',
+    'almacenes.productos.ver': 'Permite acceder a la vista de catálogo maestro de productos (SKU, descripción, marca, categoría y código de barras).',
+    'almacenes.productos.gestionar': 'Permite crear, editar y eliminar productos en el catálogo maestro.',
+    'almacenes.inventarios.ver': 'Permite consultar existencias, apartados, disponible, tránsitos, mínimos/máximos y ubicación por almacén.',
+    'almacenes.inventarios.gestionar': 'Permite crear, editar y eliminar registros de inventario por producto y almacén.',
+    'almacenes.inventarios.importar': 'Permite importar inventarios de forma masiva mediante el asistente de carga.',
+    'almacenes.costos.ver': 'Permite consultar costo, costo de reposición y precio de venta por producto y almacén.',
+    'almacenes.costos.gestionar': 'Permite crear, editar y eliminar costos y precios por producto y almacén.',
+    'almacenes.costos.importar': 'Permite importar costos y precios de forma masiva (cuando esté habilitada la carga).',
 };
+
+/** Etiqueta corta en la UI de permisos (evita repetir solo «productos» / «inventarios» / «costos»). */
+export const ETIQUETAS_PERMISOS = {
+    'almacenes.ver': 'almacenes · grupo',
+};
+
+export function etiquetaPermiso(permisoName) {
+    if (ETIQUETAS_PERMISOS[permisoName]) {
+        return ETIQUETAS_PERMISOS[permisoName];
+    }
+    const parts = permisoName.split('.');
+    if (parts.length <= 2) {
+        return parts[1]?.replace(/_/g, ' ') || permisoName;
+    }
+    const accion = parts[parts.length - 1].replace(/_/g, ' ');
+    const contexto = parts.slice(1, -1).join(' ').replace(/_/g, ' ');
+    return `${contexto} · ${accion}`;
+}
 
 export function descripcionPermiso(permisoName) {
     return DESCRIPCIONES_PERMISOS[permisoName] || null;

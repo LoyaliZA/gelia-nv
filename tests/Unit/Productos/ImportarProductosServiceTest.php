@@ -14,7 +14,7 @@ class ImportarProductosServiceTest extends TestCase
 
     public function test_importa_y_actualiza_por_sku(): void
     {
-        $csv = "sku,descripcion,existencia,costo,precio_venta\n00099,Perfume Test,5,120.50,199.00\n";
+        $csv = "sku,descripcion\n00099,Perfume Test\n";
         $archivo = UploadedFile::fake()->createWithContent('productos.csv', $csv);
 
         $service = new ImportarProductosService(new GenerarFolioProductoService());
@@ -24,12 +24,12 @@ class ImportarProductosServiceTest extends TestCase
         $this->assertSame(0, $resultado['actualizados']);
         $this->assertDatabaseHas('productos', ['sku' => '99', 'descripcion' => 'Perfume Test']);
 
-        $csv2 = "sku,descripcion,existencia,costo,precio_venta\n00099,Perfume Actualizado,10,130,210\n";
+        $csv2 = "sku,descripcion\n00099,Perfume Actualizado\n";
         $archivo2 = UploadedFile::fake()->createWithContent('productos2.csv', $csv2);
         $resultado2 = $service->ejecutar($archivo2);
 
         $this->assertSame(0, $resultado2['creados']);
         $this->assertSame(1, $resultado2['actualizados']);
-        $this->assertDatabaseHas('productos', ['sku' => '99', 'descripcion' => 'Perfume Actualizado', 'existencia' => 10]);
+        $this->assertDatabaseHas('productos', ['sku' => '99', 'descripcion' => 'Perfume Actualizado']);
     }
 }

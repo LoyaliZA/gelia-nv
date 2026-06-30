@@ -2,7 +2,11 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class Producto extends Model
@@ -10,22 +14,21 @@ class Producto extends Model
     protected $fillable = [
         'uuid',
         'folio',
-        'almacen_id',
         'categoria_id',
+        'marca_id',
         'sku',
         'descripcion',
-        'existencia',
-        'costo',
-        'precio_venta',
+        'codigo_barras',
+        'peso',
+        'imagen_path',
         'activo',
     ];
 
     protected function casts(): array
     {
         return [
-            'existencia' => 'integer',
-            'costo' => 'decimal:2',
-            'precio_venta' => 'decimal:2',
+            'folio' => 'integer',
+            'peso' => 'decimal:3',
             'activo' => 'boolean',
         ];
     }
@@ -36,26 +39,70 @@ class Producto extends Model
             if (empty($producto->uuid)) {
                 $producto->uuid = (string) Str::uuid();
             }
-            if (empty($producto->folio)) {
-                // Generate a random folio if empty, or leave to DB if handled there.
-                // Assuming unique folio needed.
-                $producto->folio = 'PRD-' . strtoupper(Str::random(8));
-            }
         });
     }
 
-    public function almacen()
-    {
-        return $this->belongsTo(Almacen::class, 'almacen_id');
-    }
-
-    public function categoria()
+    public function categoria(): BelongsTo
     {
         return $this->belongsTo(CatalogoCategoriaProducto::class, 'categoria_id');
+    }
+
+    public function marca(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoMarcaProducto::class, 'marca_id');
+    }
+
+    public function inventarios(): HasMany
+    {
+        return $this->hasMany(Inventario::class);
+    }
+
+    public function costos(): HasMany
+    {
+        return $this->hasMany(ProductoCosto::class);
+    }
+
+    public function getCostoAttribute(): float
+    {
+        $costo = $this->relationLoaded('costos')
+            ? $this->costos->first()
+            : $this->costos()->first();
+
+        return (float) ($costo?->costo ?? 0);
+    }
+
+    public function getPrecioVentaAttribute(): ?float
+    {
+        $costo = $this->relationLoaded('costos')
+            ? $this->costos->first()
+            : $this->costos()->first();
+
+        return $costo?->precio_venta !== null ? (float) $costo->precio_venta : null;
     }
 
     public static function normalizarSku(string $sku): string
     {
         return ltrim(trim($sku), '0') ?: '0';
+    }
+
+    public function scopeBuscarPorTexto(Builder $query, string $texto): Builder
+    {
+        $texto = trim($texto);
+        if ($texto === '') {
+            return $query;
+        }
+
+        $sku = self::normalizarSku($texto);
+        $driver = DB::connection()->getDriverName();
+        $castFolio = in_array($driver, ['pgsql', 'sqlite'], true)
+            ? 'CAST(folio AS TEXT)'
+            : 'CAST(folio AS CHAR)';
+
+        return $query->where(function (Builder $q) use ($texto, $sku, $castFolio) {
+            $q->where('sku', 'like', "%{$sku}%")
+                ->orWhere('descripcion', 'like', "%{$texto}%")
+                ->orWhere('codigo_barras', 'like', "%{$texto}%")
+                ->orWhereRaw("{$castFolio} LIKE ?", ["%{$texto}%"]);
+        });
     }
 }

@@ -15,7 +15,16 @@ use App\Models\CatalogoHorarioEntrega;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
 use App\Models\CatalogoBanco;
+use App\Models\Sucursal;
+use App\Models\CatalogoTipoAlmacen;
+use App\Models\CatalogoMarcaProducto;
+use App\Models\Almacen;
+use App\Models\CatalogoCategoriaProducto;
 use Illuminate\Support\Facades\DB;
+use App\Services\Catalogos\ImportarCatalogoAlmacenService;
+use App\Services\Catalogos\PlantillaImportacionCatalogoService;
+use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
+use App\Services\Almacenes\NormalizarTextoImportacionService;
 
 class CatalogoController extends Controller
 {
@@ -265,5 +274,204 @@ class CatalogoController extends Controller
     public function destroyBanco($id) {
         CatalogoBanco::findOrFail($id)->delete();
         return back()->with('success', 'Banco eliminado.');
+    }
+
+    // --- 12. SUCURSALES ---
+    public function storeSucursal(Request $request, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate([
+            'codigo' => 'required|string|max:20|unique:sucursales,codigo',
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean',
+        ]);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $sucursal = Sucursal::create($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('creado', 'sucursal', $sucursal->id, $sucursal->codigo);
+        return back()->with('success', 'Sucursal registrada.');
+    }
+
+    public function updateSucursal(Request $request, $id, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate([
+            'codigo' => 'required|string|max:20|unique:sucursales,codigo,' . $id,
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean',
+        ]);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $sucursal = Sucursal::findOrFail($id);
+        $sucursal->update($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('actualizado', 'sucursal', $sucursal->id, $sucursal->codigo);
+        return back()->with('success', 'Sucursal actualizada.');
+    }
+
+    public function destroySucursal($id) {
+        $sucursal = Sucursal::findOrFail($id);
+        $ref = $sucursal->codigo;
+        $sucursalId = $sucursal->id;
+        $sucursal->delete();
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('eliminado', 'sucursal', $sucursalId, $ref);
+        return back()->with('success', 'Sucursal eliminada.');
+    }
+
+    // --- 13. TIPOS DE ALMACÉN ---
+    public function storeTipoAlmacen(Request $request, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate(['nombre' => 'required|string|max:255|unique:catalogo_tipos_almacen,nombre']);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $tipo = CatalogoTipoAlmacen::create($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('creado', 'tipo_almacen', $tipo->id, $tipo->nombre);
+        return back()->with('success', 'Tipo de almacén registrado.');
+    }
+
+    public function updateTipoAlmacen(Request $request, $id, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate(['nombre' => 'required|string|max:255|unique:catalogo_tipos_almacen,nombre,' . $id]);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $tipo = CatalogoTipoAlmacen::findOrFail($id);
+        $tipo->update($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('actualizado', 'tipo_almacen', $tipo->id, $tipo->nombre);
+        return back()->with('success', 'Tipo de almacén actualizado.');
+    }
+
+    public function destroyTipoAlmacen($id) {
+        $tipo = CatalogoTipoAlmacen::findOrFail($id);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('eliminado', 'tipo_almacen', $tipo->id, $tipo->nombre);
+        $tipo->delete();
+        return back()->with('success', 'Tipo de almacén eliminado.');
+    }
+
+    // --- 14. MARCAS DE PRODUCTO ---
+    public function storeMarcaProducto(Request $request, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_marcas_producto,nombre',
+            'activo' => 'boolean',
+        ]);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $marca = CatalogoMarcaProducto::create($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('creado', 'marca_producto', $marca->id, $marca->nombre);
+        return back()->with('success', 'Marca registrada.');
+    }
+
+    public function updateMarcaProducto(Request $request, $id, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_marcas_producto,nombre,' . $id,
+            'activo' => 'boolean',
+        ]);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $marca = CatalogoMarcaProducto::findOrFail($id);
+        $marca->update($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('actualizado', 'marca_producto', $marca->id, $marca->nombre);
+        return back()->with('success', 'Marca actualizada.');
+    }
+
+    public function destroyMarcaProducto($id) {
+        $marca = CatalogoMarcaProducto::findOrFail($id);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('eliminado', 'marca_producto', $marca->id, $marca->nombre);
+        $marca->delete();
+        return back()->with('success', 'Marca eliminada.');
+    }
+
+    // --- 15. ALMACENES ---
+    public function storeAlmacen(Request $request, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate([
+            'codigo' => 'required|string|max:50|unique:almacenes,codigo',
+            'nombre' => 'required|string|max:255',
+            'sucursal_id' => 'nullable|exists:sucursales,id',
+            'tipo_almacen_id' => 'nullable|exists:catalogo_tipos_almacen,id',
+            'activo' => 'boolean',
+        ]);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $almacen = Almacen::create($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('creado', 'almacen', $almacen->id, $almacen->codigo);
+        return back()->with('success', 'Almacén registrado.');
+    }
+
+    public function updateAlmacen(Request $request, $id, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate([
+            'codigo' => 'required|string|max:50|unique:almacenes,codigo,' . $id,
+            'nombre' => 'required|string|max:255',
+            'sucursal_id' => 'nullable|exists:sucursales,id',
+            'tipo_almacen_id' => 'nullable|exists:catalogo_tipos_almacen,id',
+            'activo' => 'boolean',
+        ]);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $almacen = Almacen::findOrFail($id);
+        $almacen->update($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('actualizado', 'almacen', $almacen->id, $almacen->codigo);
+        return back()->with('success', 'Almacén actualizado.');
+    }
+
+    public function destroyAlmacen($id) {
+        $almacen = Almacen::findOrFail($id);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('eliminado', 'almacen', $almacen->id, $almacen->codigo);
+        $almacen->delete();
+        return back()->with('success', 'Almacén eliminado.');
+    }
+
+    // --- 16. CATEGORÍAS DE PRODUCTO ---
+    public function storeCategoriaProducto(Request $request, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate(['nombre' => 'required|string|max:255|unique:catalogo_categoria_productos,nombre']);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $categoria = CatalogoCategoriaProducto::create($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('creado', 'categoria_producto', $categoria->id, $categoria->nombre);
+        return back()->with('success', 'Categoría registrada.');
+    }
+
+    public function updateCategoriaProducto(Request $request, $id, NormalizarTextoImportacionService $normalizador) {
+        $data = $request->validate(['nombre' => 'required|string|max:255|unique:catalogo_categoria_productos,nombre,' . $id]);
+        $data['nombre'] = $normalizador->texto($data['nombre']);
+        $categoria = CatalogoCategoriaProducto::findOrFail($id);
+        $categoria->update($data);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('actualizado', 'categoria_producto', $categoria->id, $categoria->nombre);
+        return back()->with('success', 'Categoría actualizada.');
+    }
+
+    public function destroyCategoriaProducto($id) {
+        $categoria = CatalogoCategoriaProducto::findOrFail($id);
+        app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('eliminado', 'categoria_producto', $categoria->id, $categoria->nombre);
+        $categoria->delete();
+        return back()->with('success', 'Categoría eliminada.');
+    }
+
+    // --- IMPORTACIÓN MASIVA CATÁLOGOS ALMACÉN ---
+    private const TIPOS_IMPORTACION_ALMACEN = [
+        'sucursales',
+        'tipos_almacen',
+        'marcas_producto',
+        'categorias_producto',
+        'almacenes',
+    ];
+
+    public function descargarPlantillaImportacion(string $tipo, PlantillaImportacionCatalogoService $plantillaService)
+    {
+        if (! in_array($tipo, self::TIPOS_IMPORTACION_ALMACEN, true)) {
+            abort(404);
+        }
+
+        return $plantillaService->descargar($tipo);
+    }
+
+    public function importarCatalogoAlmacen(Request $request, string $tipo, ImportarCatalogoAlmacenService $importador)
+    {
+        if (! in_array($tipo, self::TIPOS_IMPORTACION_ALMACEN, true)) {
+            abort(404);
+        }
+
+        $request->validate([
+            'archivo' => 'required|file|mimes:csv,xlsx,xls,txt',
+        ]);
+
+        $stats = $importador->ejecutar($tipo, $request->file('archivo'));
+
+        $mensaje = sprintf(
+            'Importación completada: %d nuevos, %d actualizados, %d omitidos.',
+            $stats['importados'],
+            $stats['actualizados'],
+            $stats['omitidos'],
+        );
+
+        if (! empty($stats['reporte_url'])) {
+            $mensaje .= ' Descarga el reporte de errores para revisar las filas omitidas.';
+        }
+
+        return back()
+            ->with('success', $mensaje)
+            ->with('reporte_importacion_almacenes', $stats);
     }
 }

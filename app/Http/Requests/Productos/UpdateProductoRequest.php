@@ -4,6 +4,7 @@ namespace App\Http\Requests\Productos;
 
 use App\Models\Producto;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateProductoRequest extends FormRequest
 {
@@ -24,11 +25,8 @@ class UpdateProductoRequest extends FormRequest
         $producto = $this->route('producto');
 
         return [
-            'sku' => 'required|string|max:100|unique:productos,sku,' . $producto->id,
+            'sku' => ['required', 'string', 'max:30', Rule::unique('productos', 'sku')->ignore($producto?->id)],
             'descripcion' => 'required|string|max:255',
-            'existencia' => 'nullable|integer|min:0',
-            'costo' => 'nullable|numeric|min:0',
-            'precio_venta' => 'nullable|numeric|min:0',
             'activo' => 'nullable|boolean',
         ];
     }

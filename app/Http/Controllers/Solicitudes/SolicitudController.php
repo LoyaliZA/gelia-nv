@@ -12,6 +12,8 @@ use App\Services\Solicitudes\ResponderConsultaSolicitudService;
 use App\Services\Solicitudes\CancelarSolicitudService;
 use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use App\Services\Solicitudes\ExportarReporteSolicitudesService;
+use App\Services\Clientes\RegistrarHistorialMontoClienteService;
+use App\Services\Clientes\ReactivarClienteInactivoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use App\Models\SolicitudTag;
@@ -189,11 +191,25 @@ class SolicitudController extends Controller
                     if ($clienteObj) {
                         $antes = $this->capturarSnapshotCliente($clienteObj);
                         $montoObjetivo = max(0, $montoHistoricoBase + (float) $montoFinal);
+                        $this->registrarHistorialMontoSolicitud(
+                            $clienteObj,
+                            $montoObjetivo,
+                            RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_PAGO,
+                            $solicitud,
+                            (float) $montoFinal,
+                            'Pago confirmado',
+                        );
                         $clienteObj->monto_venta_actual = $montoObjetivo;
 
                         if ($esAlertaAscenso && isset($listaCalificada)) {
                             $clienteObj->lista_actual_id = $listaCalificada->id;
                         }
+
+                        app(ReactivarClienteInactivoService::class)->ejecutar(
+                            $clienteObj,
+                            $montoObjetivo,
+                            !($esAlertaAscenso && isset($listaCalificada)),
+                        );
 
                         $clienteObj->save();
                         $clienteObj->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
@@ -743,7 +759,14 @@ class SolicitudController extends Controller
 
         $antes = $this->capturarSnapshotCliente($cliente);
 
-        $cliente->monto_venta_actual = ($cliente->monto_venta_actual ?? 0) + ($solicitud->monto_cotizado ?? 0);
+        $montoNuevo = ($cliente->monto_venta_actual ?? 0) + ($solicitud->monto_cotizado ?? 0);
+        $this->registrarHistorialMontoSolicitud(
+            $cliente,
+            $montoNuevo,
+            RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_APROBACION,
+            $solicitud,
+        );
+        $cliente->monto_venta_actual = $montoNuevo;
 
         if ($solicitud->catalogo_lista_descuento_id) {
             $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
@@ -752,6 +775,12 @@ class SolicitudController extends Controller
         if ($solicitud->catalogo_tipo_cliente_id) {
             $cliente->catalogo_tipo_cliente_id = $solicitud->catalogo_tipo_cliente_id;
         }
+
+        app(ReactivarClienteInactivoService::class)->ejecutar(
+            $cliente,
+            $montoNuevo,
+            !$solicitud->catalogo_lista_descuento_id,
+        );
 
         $cliente->save();
         $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
@@ -775,8 +804,14 @@ class SolicitudController extends Controller
 
         $antes = $this->capturarSnapshotCliente($cliente);
 
-        $nuevoMonto = ($cliente->monto_venta_actual ?? 0) - ($solicitud->monto_cotizado ?? 0);
-        $cliente->monto_venta_actual = max(0, $nuevoMonto);
+        $nuevoMonto = max(0, ($cliente->monto_venta_actual ?? 0) - ($solicitud->monto_cotizado ?? 0));
+        $this->registrarHistorialMontoSolicitud(
+            $cliente,
+            $nuevoMonto,
+            RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_REVERSION,
+            $solicitud,
+        );
+        $cliente->monto_venta_actual = $nuevoMonto;
         $this->recalcularListaCliente($cliente);
         $cliente->save();
         $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
@@ -862,5 +897,31 @@ class SolicitudController extends Controller
 
         return abs($montoClienteActual - $montoDespuesAprobacion) < 0.01
             || $montoClienteActual >= $montoDespuesAprobacion;
+    }
+
+    private function registrarHistorialMontoSolicitud(
+        Cliente $cliente,
+        float $montoNuevo,
+        string $origen,
+        SolicitudTag $solicitud,
+        ?float $montoOperacion = null,
+        ?string $notasExtra = null,
+    ): void {
+        $solicitud->loadMissing('vendedor');
+        $notas = trim(
+            ($notasExtra ? $notasExtra . ' — ' : '')
+            . 'Solicitante: ' . ($solicitud->vendedor?->name ?? 'N/A')
+        );
+
+        app(RegistrarHistorialMontoClienteService::class)->registrar(
+            $cliente,
+            $montoNuevo,
+            $origen,
+            Auth::id(),
+            null,
+            $solicitud->id,
+            $montoOperacion ?? (float) $solicitud->monto_cotizado,
+            $notas,
+        );
     }
 }

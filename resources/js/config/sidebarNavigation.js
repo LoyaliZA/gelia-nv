@@ -26,7 +26,13 @@ import {
     LifeBuoy,
     Bug,
     Landmark,
+    Warehouse,
+    Boxes,
+    DollarSign,
+    Link2,
 } from 'lucide-react';
+
+import { ADMIN_MODULES, isAdminModuleAllowed, adminModuleHref } from './adminModules';
 
 function routeHref(name, fallback) {
     if (typeof route === 'function') {
@@ -174,6 +180,52 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
         },
     ].filter(Boolean);
 
+    const almacenesChildren = [
+        (can('almacenes.productos.ver') || can('catalogos.gestionar')) && {
+            type: 'link',
+            id: 'almacenes_productos',
+            label: 'Productos',
+            icon: Package,
+            href: () => routeHref('almacenes.productos.index', '/almacenes/productos'),
+            active: (url) => url.startsWith('/almacenes/productos'),
+        },
+        (can('almacenes.inventarios.ver') || can('catalogos.gestionar')) && {
+            type: 'link',
+            id: 'almacenes_inventarios',
+            label: 'Inventarios',
+            icon: Boxes,
+            href: () => routeHref('almacenes.inventarios.index', '/almacenes/inventarios'),
+            active: (url) => url.startsWith('/almacenes/inventarios'),
+        },
+        (can('almacenes.costos.ver') || can('catalogos.gestionar')) && {
+            type: 'link',
+            id: 'almacenes_costos',
+            label: 'Costos',
+            icon: DollarSign,
+            href: () => routeHref('almacenes.costos.index', '/almacenes/costos'),
+            active: (url) => url.startsWith('/almacenes/costos'),
+        },
+    ].filter(Boolean);
+
+    const vinculacionesChildren = [
+        can('woocommerce.ver') && {
+            type: 'group',
+            id: 'woocommerce',
+            label: 'WooCommerce',
+            icon: ShoppingBag,
+            children: [
+                {
+                    type: 'link',
+                    id: 'woocommerce_productos',
+                    label: 'Productos (Sincronizar precios)',
+                    icon: Package,
+                    href: () => routeHref('woocommerce.index', '/woocommerce'),
+                    active: (url) => url.startsWith('/woocommerce'),
+                }
+            ]
+        },
+    ].filter(Boolean);
+
     const gestionChildren = [
         can('plantilla_pedidos.ver') && {
             type: 'link',
@@ -182,14 +234,6 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: FileSpreadsheet,
             href: () => routeHref('plantilla_bellaroma.index', '/plantilla-bellaroma'),
             active: (url) => url.startsWith('/plantilla-bellaroma'),
-        },
-        can('woocommerce.ver') && {
-            type: 'link',
-            id: 'woocommerce',
-            label: 'Sincronizar Precios',
-            icon: ShoppingBag,
-            href: () => routeHref('woocommerce.index', '/woocommerce'),
-            active: (url) => url.startsWith('/woocommerce'),
         },
         can('rh.ver') && {
             type: 'link',
@@ -238,20 +282,21 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
 
     const sistemaChildren = [
         showAdminMenu && {
-            type: 'link',
+            type: 'group',
             id: 'admin',
             label: 'Administración',
             icon: Shield,
-            href: () => routeHref('admin.index', '/admin'),
-            active: (url) => url.startsWith('/admin') && !url.startsWith('/admin/catalogo-maestro'),
-        },
-        showAdminMenu && {
-            type: 'link',
-            id: 'catalogo_maestro',
-            label: 'Catálogo Maestro',
-            icon: Database,
-            href: () => routeHref('admin.catalogo-maestro.index', '/admin/catalogo-maestro'),
-            active: (url) => url.startsWith('/admin/catalogo-maestro'),
+            children: ADMIN_MODULES.map((item) => {
+                return isAdminModuleAllowed(item, can) && {
+                    type: 'link',
+                    id: item.id,
+                    label: item.title,
+                    description: item.description,
+                    icon: item.icon,
+                    href: () => adminModuleHref(item),
+                    active: (url) => url.startsWith(item.path),
+                };
+            }).filter(Boolean),
         },
         can('mensajeria.monitorear') && {
             type: 'link',
@@ -311,12 +356,26 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: Wrench,
             children: herramientasChildren,
         },
+        vinculacionesChildren.length > 0 && {
+            type: 'group',
+            id: 'vinculaciones',
+            label: 'Vinculaciones',
+            icon: Link2,
+            children: vinculacionesChildren,
+        },
         gestionChildren.length > 0 && {
             type: 'group',
             id: 'gestion_interna',
             label: 'Gestión Interna',
             icon: Settings,
             children: gestionChildren,
+        },
+        almacenesChildren.length > 0 && {
+            type: 'group',
+            id: 'almacenes',
+            label: 'Almacenes',
+            icon: Warehouse,
+            children: almacenesChildren,
         },
         soporteChildren.length > 0 && {
             type: 'group',

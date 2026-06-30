@@ -22,9 +22,6 @@ class ProductoController extends Controller
             'folio' => $generarFolio->ejecutar(),
             'sku' => $request->sku,
             'descripcion' => trim($request->descripcion),
-            'existencia' => $request->integer('existencia', 0),
-            'costo' => $request->input('costo', 0),
-            'precio_venta' => $request->input('precio_venta'),
             'activo' => $request->boolean('activo', true),
         ]);
 
@@ -36,9 +33,6 @@ class ProductoController extends Controller
         $producto->update([
             'sku' => $request->sku,
             'descripcion' => trim($request->descripcion),
-            'existencia' => $request->integer('existencia', 0),
-            'costo' => $request->input('costo', 0),
-            'precio_venta' => $request->input('precio_venta'),
             'activo' => $request->boolean('activo', true),
         ]);
 

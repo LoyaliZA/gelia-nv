@@ -98,6 +98,7 @@ class HandleInertiaRequests extends Middleware
                 'activo_registrado' => fn () => $request->session()->get('activo_registrado'),
                 // Permite el paso del reporte hacia React
                 'reporte_importacion' => fn () => $request->session()->get('reporte_importacion'),
+                'reporte_importacion_almacenes' => fn () => $request->session()->get('reporte_importacion_almacenes'),
             ],
             'woocommerce_sync_activo' => fn () => ($user && $user->can('woocommerce.ver'))
                 ? WoocommerceSyncLog::activo()

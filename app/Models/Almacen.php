@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Almacen extends Model
 {
@@ -11,5 +13,35 @@ class Almacen extends Model
     protected $fillable = [
         'codigo',
         'nombre',
+        'sucursal_id',
+        'tipo_almacen_id',
+        'activo',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'activo' => 'boolean',
+        ];
+    }
+
+    public function sucursal(): BelongsTo
+    {
+        return $this->belongsTo(Sucursal::class);
+    }
+
+    public function tipoAlmacen(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoTipoAlmacen::class, 'tipo_almacen_id');
+    }
+
+    public function inventarios(): HasMany
+    {
+        return $this->hasMany(Inventario::class);
+    }
+
+    public function costos(): HasMany
+    {
+        return $this->hasMany(ProductoCosto::class);
+    }
 }

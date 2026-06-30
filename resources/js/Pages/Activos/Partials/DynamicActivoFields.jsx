@@ -1,7 +1,7 @@
 import React from 'react';
 import { INPUT_CLASS, SELECT_CLASS, TEXTAREA_CLASS, LABEL_CLASS } from './activosFormStyles';
 import CatalogCombobox from './CatalogCombobox';
-import InputConEscanner from './InputConEscanner';
+import InputConEscanner from '@/Components/Escanner/InputConEscanner';
 
 function esCampoEscaneable(field, readOnly) {
     if (readOnly) return false;

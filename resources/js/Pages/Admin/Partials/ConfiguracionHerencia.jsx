@@ -5,6 +5,7 @@ import {
     Layers, Plus, Save, Pencil, X
 } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
+import { descripcionPermiso, etiquetaPermiso } from '../../../utils/permisos';
 
 const STORAGE_PLANTILLAS_ABIERTO = 'gelia_usuarios_plantillas_abierto';
 
@@ -150,19 +151,27 @@ export default function ConfiguracionHerencia({
                     <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 border-t theme-border">
                         {permisosDeModulo.map((permiso) => {
                             const activo = permisosActivos.includes(permiso.name);
+                            const ayuda = descripcionPermiso(permiso.name);
                             return (
                                 <button
                                     key={permiso.id}
                                     type="button"
                                     onClick={() => togglePermiso(permiso.name, formType)}
-                                    className={`flex justify-between items-center px-3 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all hover:border-blue-400 ${
+                                    className={`flex flex-col items-start gap-1 px-3 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all hover:border-blue-400 ${
                                         activo
                                             ? 'border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400'
                                             : 'theme-border theme-text-muted opacity-60'
                                     }`}
                                 >
-                                    <span>{permiso.name.split('.')[1]?.replace(/_/g, ' ') || permiso.name}</span>
-                                    {activo && <ShieldCheck className="w-3 h-3 shrink-0" />}
+                                    <span className="flex justify-between items-center w-full gap-2">
+                                        <span>{etiquetaPermiso(permiso.name)}</span>
+                                        {activo && <ShieldCheck className="w-3 h-3 shrink-0" />}
+                                    </span>
+                                    {ayuda && (
+                                        <span className="text-[8px] font-medium normal-case tracking-normal opacity-80 leading-snug">
+                                            {ayuda}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}

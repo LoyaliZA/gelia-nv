@@ -6,6 +6,7 @@ import {
     filtrarPermisosAsignables,
     usuarioPuedeAsignarPermiso,
     descripcionPermiso,
+    etiquetaPermiso,
     permisoProtegidoParaEditor,
     permisoNoDelegablePorGerente,
     gerentePuedeMostrarPermisoInactivo,
@@ -215,7 +216,7 @@ export default function PermisosAtomicos({
                                             }`}
                                         >
                                             <span className="flex justify-between items-center w-full gap-2">
-                                                <span>{permiso.name.split('.')[1]?.replace(/_/g, ' ') || permiso.name}</span>
+                                                <span>{etiquetaPermiso(permiso.name)}</span>
                                                 {isAsignado ? (
                                                     <Check className="w-3 h-3 shrink-0" />
                                                 ) : null}
@@ -263,7 +264,7 @@ export default function PermisosAtomicos({
                                             className="flex flex-col items-start gap-1 px-4 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest border border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400"
                                         >
                                             <span className="flex justify-between items-center w-full gap-2">
-                                                <span>{permiso.name.split('.')[1]?.replace(/_/g, ' ') || permiso.name}</span>
+                                                <span>{etiquetaPermiso(permiso.name)}</span>
                                                 <Lock className="w-3 h-3 shrink-0 opacity-70" />
                                             </span>
                                             {ayuda && (

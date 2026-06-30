@@ -52,21 +52,11 @@ class ImportarProductosService
 
                 $sku = Producto::normalizarSku($skuRaw);
                 $descripcion = trim($data['descripcion'] ?? '') ?: $sku;
-                $existencia = (int) ($data['existencia'] ?? 0);
-                $costo = $this->parseDecimal($data['costo'] ?? '0');
-                $precioVenta = isset($data['precio_venta']) && $data['precio_venta'] !== ''
-                    ? $this->parseDecimal($data['precio_venta'])
-                    : null;
 
                 $producto = Producto::where('sku', $sku)->first();
 
                 if ($producto) {
-                    $producto->update([
-                        'descripcion' => $descripcion,
-                        'existencia' => $existencia,
-                        'costo' => $costo,
-                        'precio_venta' => $precioVenta,
-                    ]);
+                    $producto->update(['descripcion' => $descripcion]);
                     $actualizados++;
                 } else {
                     Producto::create([
@@ -74,9 +64,6 @@ class ImportarProductosService
                         'folio' => $this->generarFolio->ejecutar(),
                         'sku' => $sku,
                         'descripcion' => $descripcion,
-                        'existencia' => $existencia,
-                        'costo' => $costo,
-                        'precio_venta' => $precioVenta,
                         'activo' => true,
                     ]);
                     $creados++;
@@ -96,9 +83,6 @@ class ImportarProductosService
             $normalizado = str_replace([' ', '-'], '_', $normalizado);
 
             return match ($normalizado) {
-                'precio', 'precio_venta', 'pg', 'precio_publico' => 'precio_venta',
-                'costo', 'costo_wizerp', 'costo_producto' => 'costo',
-                'existencia', 'stock', 'qty' => 'existencia',
                 'descripcion', 'desc', 'nombre', 'producto' => 'descripcion',
                 default => $normalizado,
             };
@@ -112,12 +96,5 @@ class ImportarProductosService
         }
 
         return array_slice($row, 0, $columnas);
-    }
-
-    private function parseDecimal(mixed $valor): float
-    {
-        $limpio = str_replace(['$', ',', ' '], '', (string) $valor);
-
-        return is_numeric($limpio) ? (float) $limpio : 0.0;
     }
 }
