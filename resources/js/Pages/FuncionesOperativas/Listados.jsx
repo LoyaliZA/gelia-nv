@@ -291,9 +291,6 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
             a.click();
             a.remove();
 
-            setArchivos({ existencias: null, precios: null, costos: null });
-            Object.values(fileRefs).forEach(ref => { if (ref.current) ref.current.value = '' });
-
         } catch (error) {
             let msgLog = error.message;
             if (error.response && error.response.data && error.response.data.type === 'application/json') {
@@ -373,7 +370,10 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
                 <section className={`${activeCardClass} p-8 md:p-10 space-y-8`}>
                     <div className="flex items-center gap-3">
                         <Layers className="w-6 h-6 drop-shadow-sm" style={{ color: 'var(--color-primario)' }} />
-                        <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">Archivos Operativos_</h2>
+                        <div>
+                            <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">Archivos Operativos_</h2>
+                            <p className="text-[10px] theme-text-muted font-bold uppercase tracking-widest mt-1">Los archivos cargados se conservan para generar varios listados sin volver a subirlos.</p>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
