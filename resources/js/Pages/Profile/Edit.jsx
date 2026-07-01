@@ -1360,7 +1360,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                             alertasPrefs,
                                             usuario?.name
                                         );
-                                        if (demo) NotificationBrowserService.speakText(demo, true);
+                                        if (demo) NotificationBrowserService.speakText(demo, true, { immediate: true });
                                     }}
                                     disabled={alertasPrefs.mensajeria_voz === 'desactivado' || alertasPrefs.canales.voz === false}
                                     className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border theme-text-main hover:border-[var(--color-primario)] transition-colors whitespace-nowrap disabled:opacity-40"

@@ -206,32 +206,28 @@ export default function AppLayout({ children, fullScreen = false }) {
                     const clientesVencidos = Array.isArray(payload.clientes_vencidos) ? payload.clientes_vencidos : [];
 
                     if (clientesVencidos.length > 0 && (sonido || voz || escritorio)) {
-                        if (sonido) NotificationService.playAudio(true);
+                        const nombre = (auth?.user?.name || 'Usuario').trim().split(/\s+/)[0];
+                        const voiceMessages = voz && payload.tipo !== 'cobranza_vencimiento_masivo'
+                            ? [
+                                mensajeVoz || `Atención ${nombre}. Reporte de cobranza.`,
+                                ...clientesVencidos.map(
+                                    (c) => `Cliente ${c.nombre} tiene un saldo vencido hace ${c.dias_atraso} días.`
+                                ),
+                            ]
+                            : null;
 
-                        if (voz) {
-                            if (payload.tipo === 'cobranza_vencimiento_masivo') {
-                                // ponytail: do not read individual debtor names or amounts, only the summary voice message
-                                setTimeout(() => NotificationService.speakText(mensajeVoz, true), sonido ? 1000 : 0);
-                            } else {
-                                const nombre = (auth?.user?.name || 'Usuario').trim().split(/\s+/)[0];
-                                const mensajesSecuenciales = [
-                                    mensajeVoz || `Atención ${nombre}. Reporte de cobranza.`,
-                                    ...clientesVencidos.map(
-                                        (c) => `Cliente ${c.nombre} tiene un saldo vencido hace ${c.dias_atraso} días.`
-                                    ),
-                                ];
-                                setTimeout(() => NotificationService.speakSequentialTexts(mensajesSecuenciales, true), sonido ? 1000 : 0);
+                        NotificationService.triggerFullAlert(
+                            payload.titulo || payload.proceso || 'GELIA ERP',
+                            payload.mensaje_visible || payload.mensaje || 'Nueva notificación operativa.',
+                            voz && payload.tipo === 'cobranza_vencimiento_masivo' ? mensajeVoz : null,
+                            {
+                                sonido,
+                                voz,
+                                escritorio,
+                                onClick: onNotificationNavigate,
+                                voiceMessages,
                             }
-                        }
-
-                        if (escritorio) {
-                            NotificationService.showDesktopNotification(
-                                payload.titulo || payload.proceso || 'GELIA ERP',
-                                { body: payload.mensaje_visible || payload.mensaje || 'Nueva notificación operativa.' },
-                                true,
-                                onNotificationNavigate
-                            );
-                        }
+                        );
                     } else if (sonido || voz || escritorio) {
                         NotificationService.triggerFullAlert(
                             payload.titulo || payload.proceso || 'GELIA ERP',

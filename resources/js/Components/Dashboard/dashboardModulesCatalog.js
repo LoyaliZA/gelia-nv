@@ -17,7 +17,7 @@ export const DASHBOARD_MODULE_CARDS = [
     },
     {
         id: 'card_auto_cobranza',
-        titulo: 'Auto-Cobranza',
+        titulo: 'Credibox',
         subtitulo: 'Control de crédito y cobros.',
         permiso: 'cobranza.ver',
         href: () => route('auto-cobranza.index'),

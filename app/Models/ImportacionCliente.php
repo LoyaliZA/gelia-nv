@@ -19,6 +19,7 @@ class ImportacionCliente extends Model
         'filas_omitidas',
         'errores',
         'ascensos',
+        'descensos',
         'clientes_marcados_inactivos',
         'duracion_seg',
     ];
@@ -35,5 +36,15 @@ class ImportacionCliente extends Model
     public function historialMontos(): HasMany
     {
         return $this->hasMany(HistorialMontoCliente::class, 'importacion_cliente_id');
+    }
+
+    public function erroresImportacion(): HasMany
+    {
+        return $this->hasMany(ErroresImportacionCliente::class, 'importacion_cliente_id');
+    }
+
+    public function cambiosLista(): HasMany
+    {
+        return $this->hasMany(CambioListaImportacionCliente::class, 'importacion_cliente_id');
     }
 }

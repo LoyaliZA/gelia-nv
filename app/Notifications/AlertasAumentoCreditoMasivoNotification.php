@@ -65,7 +65,7 @@ class AlertasAumentoCreditoMasivoNotification extends Notification implements Sh
         $table .= '</tbody></table><br>';
 
         $mailMessage->line(new HtmlString($table));
-        $mailMessage->action('Ir al Módulo de Cobranza', url('/auto-cobranza'));
+        $mailMessage->action('Ir a Credibox', url('/auto-cobranza'));
         $mailMessage->line('Por favor revisa estos casos a la brevedad en la pestaña de Alertas Operativas.');
 
         return $mailMessage;
@@ -92,7 +92,7 @@ class AlertasAumentoCreditoMasivoNotification extends Notification implements Sh
             'monto_anterior' => 0,
             'monto_nuevo' => 0,
             'tipo' => 'aumento_credito_masivo',
-            'titulo' => 'Alerta Masiva de Aumentos de Crédito',
+            'titulo' => 'Credibox · Aumentos de Crédito Irregulares',
             'mensaje' => "Se detectaron {$count} aumentos de saldo en clientes vencidos.",
             'mensaje_visible' => "Aumentos de deuda vencida detectados: {$count} clientes afectados.",
             'mensaje_voz' => $mensajeVoz,

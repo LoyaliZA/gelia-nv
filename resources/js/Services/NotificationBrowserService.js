@@ -28,6 +28,9 @@ class NotificationBrowserService {
         this._voicesReady = false;
         this._swPushActivo = false;
         this._audioUnlocked = false;
+        this._alertQueue = [];
+        this._processing = false;
+        this._stopRequested = false;
 
         if (typeof window !== 'undefined') {
             this._loadAudio(this.currentTonePath);
@@ -152,28 +155,12 @@ class NotificationBrowserService {
     }
 
     playAudio(force = false) {
-        if (!force && this.preferences?.canales?.sonido === false) return;
-        if (!this.audio) return;
-
-        try {
-            this.audio.currentTime = 0;
-            const playPromise = this.audio.play();
-
-            if (playPromise !== undefined) {
-                playPromise
-                    .then(() => {
-                        this._audioUnlocked = true;
-                    })
-                    .catch((error) => {
-                        console.warn(
-                            '[NotificationBrowserService] Autoplay bloqueado. El usuario debe interactuar con la página primero.',
-                            error
-                        );
-                    });
-            }
-        } catch (error) {
-            console.error('[NotificationBrowserService] Error al reproducir audio:', error);
-        }
+        this._enqueueAlertSession({
+            force,
+            sonido: true,
+            voz: false,
+            escritorio: false,
+        });
     }
 
     /**
@@ -198,7 +185,7 @@ class NotificationBrowserService {
         return utterance;
     }
 
-    speakText(text, force = false) {
+    _speakTextDirect(text, force = false) {
         if (!text || typeof text !== 'string') return;
         if (!force && this.preferences?.canales?.voz === false) return;
         if (!('speechSynthesis' in window)) return;
@@ -214,7 +201,7 @@ class NotificationBrowserService {
         }
     }
 
-    speakSequentialTexts(texts = [], force = false) {
+    _speakSequentialDirect(texts = [], force = false) {
         const mensajes = (Array.isArray(texts) ? texts : []).filter((t) => typeof t === 'string' && t.trim());
         if (mensajes.length === 0) return;
         if (!force && this.preferences?.canales?.voz === false) return;
@@ -244,6 +231,236 @@ class NotificationBrowserService {
         };
 
         speakNext();
+    }
+
+    speakText(text, force = false, options = {}) {
+        if (options.immediate) {
+            this._speakTextDirect(text, force);
+            return;
+        }
+
+        if (!text || typeof text !== 'string') return;
+
+        this._enqueueAlertSession({
+            force,
+            sonido: false,
+            voz: true,
+            escritorio: false,
+            voiceMessage: text,
+            onComplete: options.onComplete ?? null,
+        });
+    }
+
+    speakSequentialTexts(texts = [], force = false, options = {}) {
+        const mensajes = (Array.isArray(texts) ? texts : []).filter((t) => typeof t === 'string' && t.trim());
+        if (mensajes.length === 0) return;
+
+        if (options.immediate) {
+            this._speakSequentialDirect(mensajes, force);
+            return;
+        }
+
+        this._enqueueAlertSession({
+            force,
+            sonido: false,
+            voz: true,
+            escritorio: false,
+            voiceMessages: mensajes,
+            onComplete: options.onComplete ?? null,
+        });
+    }
+
+    _enqueueAlertSession(session) {
+        this._alertQueue.push(session);
+        void this._processQueue();
+    }
+
+    async _processQueue() {
+        if (this._processing) return;
+        this._processing = true;
+
+        while (this._alertQueue.length > 0 && !this._stopRequested) {
+            const session = this._alertQueue.shift();
+            await this._playAlertSession(session);
+        }
+
+        this._stopRequested = false;
+        this._processing = false;
+
+        if (this._alertQueue.length > 0) {
+            void this._processQueue();
+        }
+    }
+
+    async _playAlertSession(session) {
+        if (this._stopRequested) return;
+
+        const {
+            force = false,
+            sonido = false,
+            voz = false,
+            escritorio = false,
+            title = '',
+            message = '',
+            voiceMessage = null,
+            voiceMessages = null,
+            onClick = null,
+            onComplete = null,
+        } = session;
+
+        if (sonido) {
+            await this._playAudioAndWait(force);
+        }
+
+        if (this._stopRequested) return;
+
+        if (voz) {
+            if (Array.isArray(voiceMessages) && voiceMessages.length > 0) {
+                await this._speakSequentialAndWait(voiceMessages, force);
+            } else if (voiceMessage) {
+                await this._speakTextAndWait(voiceMessage, force);
+            }
+        }
+
+        if (this._stopRequested) return;
+
+        if (escritorio) {
+            this.showDesktopNotification(title, { body: message }, true, onClick);
+        }
+
+        onComplete?.();
+    }
+
+    _playAudioAndWait(force = false) {
+        return new Promise((resolve) => {
+            if (!force && this.preferences?.canales?.sonido === false) {
+                resolve();
+                return;
+            }
+            if (!this.audio) {
+                resolve();
+                return;
+            }
+
+            const cleanup = () => {
+                this.audio.removeEventListener('ended', onEnded);
+                clearTimeout(fallback);
+                resolve();
+            };
+
+            const onEnded = () => cleanup();
+            const fallback = setTimeout(cleanup, 8000);
+
+            this.audio.addEventListener('ended', onEnded);
+
+            try {
+                this.audio.currentTime = 0;
+                const playPromise = this.audio.play();
+
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            this._audioUnlocked = true;
+                        })
+                        .catch((error) => {
+                            console.warn(
+                                '[NotificationBrowserService] Autoplay bloqueado. El usuario debe interactuar con la página primero.',
+                                error
+                            );
+                            cleanup();
+                        });
+                }
+            } catch (error) {
+                console.error('[NotificationBrowserService] Error al reproducir audio:', error);
+                cleanup();
+            }
+        });
+    }
+
+    _speakTextAndWait(text, force = false) {
+        return new Promise((resolve) => {
+            if (!text || typeof text !== 'string') {
+                resolve();
+                return;
+            }
+            if (!force && this.preferences?.canales?.voz === false) {
+                resolve();
+                return;
+            }
+            if (!('speechSynthesis' in window)) {
+                resolve();
+                return;
+            }
+
+            const utterance = this._createUtterance(text);
+            utterance.onend = () => resolve();
+            utterance.onerror = () => resolve();
+
+            if (!this._voicesReady) {
+                setTimeout(() => window.speechSynthesis.speak(utterance), 100);
+            } else {
+                window.speechSynthesis.speak(utterance);
+            }
+        });
+    }
+
+    _speakSequentialAndWait(texts = [], force = false) {
+        const mensajes = (Array.isArray(texts) ? texts : []).filter((t) => typeof t === 'string' && t.trim());
+
+        return new Promise((resolve) => {
+            if (mensajes.length === 0) {
+                resolve();
+                return;
+            }
+            if (!force && this.preferences?.canales?.voz === false) {
+                resolve();
+                return;
+            }
+            if (!('speechSynthesis' in window)) {
+                resolve();
+                return;
+            }
+
+            let index = 0;
+            const speakNext = () => {
+                if (this._stopRequested || index >= mensajes.length) {
+                    resolve();
+                    return;
+                }
+
+                const utterance = this._createUtterance(mensajes[index]);
+                utterance.onend = () => {
+                    index += 1;
+                    speakNext();
+                };
+                utterance.onerror = () => {
+                    index += 1;
+                    speakNext();
+                };
+
+                if (!this._voicesReady && index === 0) {
+                    setTimeout(() => window.speechSynthesis.speak(utterance), 100);
+                } else {
+                    window.speechSynthesis.speak(utterance);
+                }
+            };
+
+            speakNext();
+        });
+    }
+
+    stopCurrentAlert() {
+        this._stopRequested = true;
+        this._alertQueue = [];
+
+        if (this.audio) {
+            this.audio.pause();
+            this.audio.currentTime = 0;
+        }
+
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
     }
 
     /**
@@ -287,15 +504,30 @@ class NotificationBrowserService {
             voz = this.preferences?.canales?.voz !== false,
             escritorio = this.preferences?.canales?.escritorio !== false,
             onClick = null,
+            voiceMessages = null,
+            onComplete = null,
+            immediate = false,
         } = options;
 
-        if (sonido) this.playAudio(true);
-        if (voz && voiceMessage) {
-            setTimeout(() => this.speakText(voiceMessage, true), 1000);
+        const session = {
+            force: true,
+            sonido,
+            voz,
+            escritorio,
+            title,
+            message,
+            voiceMessage: voz ? voiceMessage : null,
+            voiceMessages: voz ? voiceMessages : null,
+            onClick,
+            onComplete,
+        };
+
+        if (immediate) {
+            void this._playAlertSession(session);
+            return;
         }
-        if (escritorio) {
-            this.showDesktopNotification(title, { body: message }, true, onClick);
-        }
+
+        this._enqueueAlertSession(session);
     }
 
     clearCache() {

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import {
-    History, Download, FileSpreadsheet, Search, ChevronDown, Filter,
+    History, Download, FileSpreadsheet, Search, ChevronDown, Filter, Eye,
 } from 'lucide-react';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
+import ModalAuditoriaImportacion from './ModalAuditoriaImportacion';
 
 const formatMoneda = (valor) => new Intl.NumberFormat('es-MX', {
     style: 'currency',
@@ -18,6 +19,10 @@ const ORIGEN_LABELS = {
     solicitud_reversion: 'Reversión',
     cron_rechazo_pago: 'Cron vencimiento',
 };
+
+const FILTRO_ORIGEN_LABELS = Object.fromEntries(
+    Object.entries(ORIGEN_LABELS).filter(([key]) => key !== 'carga_masiva'),
+);
 
 const OrigenBadge = ({ origen }) => {
     const label = ORIGEN_LABELS[origen] || origen || '—';
@@ -42,6 +47,7 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
     const [auditoriaMontos, setAuditoriaMontos] = useState(null);
     const [usuariosFiltro, setUsuariosFiltro] = useState([]);
     const [cargando, setCargando] = useState(false);
+    const [importacionAuditoriaId, setImportacionAuditoriaId] = useState(null);
 
     const [qInput, setQInput] = useState('');
     const [origen, setOrigen] = useState('');
@@ -110,6 +116,13 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
 
     return (
         <div className="space-y-8">
+            {importacionAuditoriaId !== null && (
+                <ModalAuditoriaImportacion
+                    importacionId={importacionAuditoriaId}
+                    onClose={() => setImportacionAuditoriaId(null)}
+                />
+            )}
+
             {/* Historial de cargas masivas */}
             <section className={`${activeCardClass} p-8`}>
                 <div className="flex items-center gap-3 mb-6">
@@ -128,7 +141,7 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                                 <th className="pb-3 pr-4">Archivo</th>
                                 <th className="pb-3 pr-4 text-center">Procesadas</th>
                                 <th className="pb-3 pr-4 text-center">Errores</th>
-                                <th className="pb-3 text-right">Evidencia</th>
+                                <th className="pb-3 text-right">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -157,17 +170,25 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                                             {imp.errores}
                                         </td>
                                         <td className="py-3 text-right">
-                                            {puedeDescargarImportaciones ? (
-                                                <a
-                                                    href={route('admin.clientes.importaciones.archivo', imp.id)}
+                                            <div className="inline-flex items-center gap-2 justify-end">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setImportacionAuditoriaId(imp.id)}
                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest theme-element border theme-border rounded-lg hover:shadow-md transition-all"
                                                 >
-                                                    <Download className="w-3 h-3" />
-                                                    CSV
-                                                </a>
-                                            ) : (
-                                                <span className="text-[9px] font-bold uppercase theme-text-muted">—</span>
-                                            )}
+                                                    <Eye className="w-3 h-3" />
+                                                    Ver Auditoría
+                                                </button>
+                                                {puedeDescargarImportaciones ? (
+                                                    <a
+                                                        href={route('admin.clientes.importaciones.archivo', imp.id)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest theme-element border theme-border rounded-lg hover:shadow-md transition-all"
+                                                    >
+                                                        <Download className="w-3 h-3" />
+                                                        CSV
+                                                    </a>
+                                                ) : null}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -183,14 +204,17 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                 )}
             </section>
 
-            {/* Cambios de montos */}
+            {/* Cambios de montos por solicitudes */}
             <section className={`${activeCardClass} p-8`}>
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center gap-3 mb-2">
                     <History className="w-6 h-6 text-purple-500" />
                     <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0">
                         Auditoría de cambios de montos_
                     </h2>
                 </div>
+                <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted mb-6 ml-9">
+                    Cambios por solicitudes y pagos
+                </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6">
                     <div className="md:col-span-4 relative">
@@ -211,7 +235,7 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                             className="w-full pl-4 pr-8 py-3 theme-element border theme-border rounded-xl text-[10px] font-black uppercase appearance-none cursor-pointer"
                         >
                             <option value="">Todos los orígenes</option>
-                            {Object.entries(ORIGEN_LABELS).map(([key, label]) => (
+                            {Object.entries(FILTRO_ORIGEN_LABELS).map(([key, label]) => (
                                 <option key={key} value={key}>{label}</option>
                             ))}
                         </select>
@@ -302,9 +326,6 @@ export default function TabAuditoriaClientes({ puedeDescargarImportaciones = fal
                                             {nombreUsuario(row.usuario)}
                                         </td>
                                         <td className="py-3 text-[9px] font-bold theme-text-muted max-w-[180px]">
-                                            {row.origen === 'carga_masiva' && row.importacion && (
-                                                <span>Import #{row.importacion.id}: {row.importacion.nombre_archivo_original}</span>
-                                            )}
                                             {row.solicitud_id && (
                                                 <span>
                                                     FOL-{row.solicitud_id}

@@ -2,6 +2,7 @@
 
 namespace App\Services\Clientes;
 
+use App\Models\CambioListaImportacionCliente;
 use App\Models\Cliente;
 use Illuminate\Support\Collection;
 
@@ -263,12 +264,21 @@ class ProcesarFilaClienteAction
                 $listaAnterior = $listas->firstWhere('id', $listaOriginalId);
                 $listaNueva = $listas->firstWhere('id', $listaDefinitivaId);
 
-                if ($listaAnterior && $listaNueva && ($listaNueva->monto_requerido > $listaAnterior->monto_requerido)) {
+                if ($listaAnterior && $listaNueva) {
+                    $tipoCambio = CambioListaImportacionCliente::TIPO_CAMBIO;
+                    if ($listaNueva->monto_requerido > $listaAnterior->monto_requerido) {
+                        $tipoCambio = CambioListaImportacionCliente::TIPO_ASCENSO;
+                    } elseif ($listaNueva->monto_requerido < $listaAnterior->monto_requerido) {
+                        $tipoCambio = CambioListaImportacionCliente::TIPO_DESCENSO;
+                    }
+
                     $cambioReporte = [
                         'numero_cliente' => $cliente->numero_cliente,
-                        'nombre'         => $cliente->nombre,
+                        'nombre'         => $updateData['nombre'] ?? $cliente->nombre,
                         'lista_anterior' => $listaAnterior->nombre,
                         'lista_nueva'    => $listaNueva->nombre,
+                        'tipo_cambio'    => $tipoCambio,
+                        'codigo_lista'   => $importaCodigoLista ? trim((string) ($data['codigo_lista'] ?? '')) : null,
                         'monto_nuevo'    => $updateData['monto_venta_actual'] ?? $cliente->monto_venta_actual,
                     ];
                 }

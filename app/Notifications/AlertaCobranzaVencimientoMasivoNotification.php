@@ -48,7 +48,7 @@ class AlertaCobranzaVencimientoMasivoNotification extends Notification implement
             'clientes_vencidos' => $clientesVoz,
             'total_vencidos_cobranza' => $count,
             'tipo' => 'cobranza_vencimiento_masivo',
-            'titulo' => 'Aviso de Cobranza · Saldos Vencidos',
+            'titulo' => 'Credibox · Saldos Vencidos',
             'mensaje' => "Se detectaron {$count} clientes con saldo vencido.",
             'mensaje_visible' => "Saldos vencidos: {$count} clientes pendientes de revisión.",
             'mensaje_voz' => "{$nombreDestinatario}, se han vencido {$count} créditos, favor de revisarlos.",

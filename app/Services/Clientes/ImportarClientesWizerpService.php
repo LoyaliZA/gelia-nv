@@ -3,7 +3,9 @@
 namespace App\Services\Clientes;
 
 use App\Models\CatalogoListaDescuento;
+use App\Models\CambioListaImportacionCliente;
 use App\Models\Cliente;
+use App\Models\ErroresImportacionCliente;
 use App\Models\HistorialMontoCliente;
 use App\Models\User;
 use Exception;
@@ -28,13 +30,12 @@ class ImportarClientesWizerpService
     public function ejecutar(UploadedFile $archivo, ?\App\Models\ImportacionCliente $importacion = null): array
     {
         $inicio = microtime(true);
+        $importacionClienteId = $importacion?->id;
+        $usuarioId = $importacion?->usuario_id;
         $path = $importacion
             ? \Illuminate\Support\Facades\Storage::disk('local')->path($importacion->ruta_almacenamiento)
             : $archivo->getRealPath();
         $file = fopen($path, 'r');
-
-        $importacionClienteId = $importacion?->id;
-        $usuarioId = $importacion?->usuario_id;
 
         $headers = $this->procesarCabeceras(fgetcsv($file));
         $importaCodigoLista = in_array('codigo_lista', $headers, true);
@@ -45,11 +46,15 @@ class ImportarClientesWizerpService
         $reporteAscensos = [];
         $marcadosInactivos = 0;
         $filas = [];
+        $erroresBatch = [];
+        $cambiosListaBatch = [];
         $stats = [
             'leidas'     => 0,
             'procesadas' => 0,
             'omitidas'   => 0,
             'errores'    => 0,
+            'ascensos'   => 0,
+            'descensos'  => 0,
         ];
 
         $numeroFila = 1;
@@ -71,7 +76,10 @@ class ImportarClientesWizerpService
                 continue;
             }
 
-            $filas[] = $data;
+            $filas[] = [
+                'data' => $data,
+                'numero_fila' => $numeroFila,
+            ];
         }
 
         fclose($file);
@@ -82,10 +90,10 @@ class ImportarClientesWizerpService
 
         try {
             foreach (array_chunk($filas, self::CHUNK_SIZE) as $chunk) {
-                DB::transaction(function () use ($chunk, $listas, $mapaVendedoras, $importaCodigoLista, &$reporteAscensos, &$marcadosInactivos, &$stats, &$alertasLimiteExcedido, $importacionClienteId, $usuarioId) {
+                DB::transaction(function () use ($chunk, $listas, $mapaVendedoras, $importaCodigoLista, &$reporteAscensos, &$marcadosInactivos, &$stats, &$alertasLimiteExcedido, &$erroresBatch, &$cambiosListaBatch, $importacionClienteId, $usuarioId) {
                     $historialBatch = [];
                     $numeros = array_values(array_unique(array_map(
-                        fn (array $fila) => trim($fila['numero_cliente']),
+                        fn (array $fila) => trim($fila['data']['numero_cliente']),
                         $chunk
                     )));
 
@@ -94,7 +102,10 @@ class ImportarClientesWizerpService
                         ->get()
                         ->keyBy('numero_cliente');
 
-                    foreach ($chunk as $data) {
+                    foreach ($chunk as $fila) {
+                        $data = $fila['data'];
+                        $numeroFilaCsv = $fila['numero_fila'];
+
                         try {
                             $cambio = $this->procesador->ejecutar(
                                 $data,
@@ -110,11 +121,44 @@ class ImportarClientesWizerpService
                             );
                             $stats['procesadas']++;
                             if ($cambio) {
-                                $reporteAscensos[] = $cambio;
+                                if (($cambio['tipo_cambio'] ?? null) === CambioListaImportacionCliente::TIPO_ASCENSO) {
+                                    $reporteAscensos[] = $cambio;
+                                    $stats['ascensos']++;
+                                } elseif (($cambio['tipo_cambio'] ?? null) === CambioListaImportacionCliente::TIPO_DESCENSO) {
+                                    $stats['descensos']++;
+                                }
+
+                                if ($importacionClienteId !== null) {
+                                    $ahora = now();
+                                    $cambiosListaBatch[] = [
+                                        'importacion_cliente_id' => $importacionClienteId,
+                                        'numero_cliente' => $cambio['numero_cliente'],
+                                        'nombre_cliente' => $this->sanitizarTextoImportacion($cambio['nombre'] ?? null) ?: null,
+                                        'lista_anterior' => $cambio['lista_anterior'],
+                                        'lista_nueva' => $cambio['lista_nueva'],
+                                        'tipo_cambio' => $cambio['tipo_cambio'],
+                                        'codigo_lista' => $cambio['codigo_lista'] !== '' ? $cambio['codigo_lista'] : null,
+                                        'monto_nuevo' => $cambio['monto_nuevo'] ?? null,
+                                        'created_at' => $ahora,
+                                        'updated_at' => $ahora,
+                                    ];
+                                }
                             }
                         } catch (Exception $e) {
                             $stats['errores']++;
                             Log::error("Importacion Masiva - Error en cliente {$data['numero_cliente']}: " . $e->getMessage());
+
+                            if ($importacionClienteId !== null) {
+                                $ahora = now();
+                                $erroresBatch[] = [
+                                    'importacion_cliente_id' => $importacionClienteId,
+                                    'numero_fila' => $numeroFilaCsv,
+                                    'numero_cliente' => trim($data['numero_cliente'] ?? '') ?: null,
+                                    'mensaje' => $this->sanitizarTextoImportacion($e->getMessage()),
+                                    'created_at' => $ahora,
+                                    'updated_at' => $ahora,
+                                ];
+                            }
                         }
                     }
 
@@ -129,6 +173,34 @@ class ImportarClientesWizerpService
             Cache::forget('import_clientes_en_curso');
         }
 
+        if ($importacionClienteId !== null && ! empty($cambiosListaBatch)) {
+            try {
+                foreach (array_chunk($cambiosListaBatch, 500) as $loteCambiosLista) {
+                    CambioListaImportacionCliente::insert($loteCambiosLista);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('No se pudieron persistir cambios de lista de importación', [
+                    'importacion_cliente_id' => $importacionClienteId,
+                    'cambios_count' => count($cambiosListaBatch),
+                    'error' => $this->sanitizarTextoImportacion($e->getMessage()),
+                ]);
+            }
+        }
+
+        if ($importacionClienteId !== null && ! empty($erroresBatch)) {
+            try {
+                foreach (array_chunk($erroresBatch, 500) as $loteErrores) {
+                    ErroresImportacionCliente::insert($loteErrores);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('No se pudieron persistir detalles de errores de importación', [
+                    'importacion_cliente_id' => $importacionClienteId,
+                    'errores_count' => count($erroresBatch),
+                    'error' => $this->sanitizarTextoImportacion($e->getMessage()),
+                ]);
+            }
+        }
+
         if (!empty($alertasLimiteExcedido)) {
             $usuariosNotificar = User::permission('cobranza.recibir_alertas')->get();
             if ($usuariosNotificar->isNotEmpty()) {
@@ -138,11 +210,12 @@ class ImportarClientesWizerpService
 
         $duracion = round(microtime(true) - $inicio, 2);
         Log::info('Importacion clientes Wizerp finalizada', [
-            'filas_leidas'     => $stats['leidas'],
-            'filas_procesadas' => $stats['procesadas'],
-            'filas_omitidas'   => $stats['omitidas'],
-            'errores'          => $stats['errores'],
-            'ascensos'                    => count($reporteAscensos),
+            'filas_leidas'                => $stats['leidas'],
+            'filas_procesadas'            => $stats['procesadas'],
+            'filas_omitidas'              => $stats['omitidas'],
+            'errores'                     => $stats['errores'],
+            'ascensos'                    => $stats['ascensos'],
+            'descensos'                   => $stats['descensos'],
             'clientes_marcados_inactivos' => $marcadosInactivos,
             'duracion_seg'                => $duracion,
             'memoria_pico_mb'             => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
@@ -152,11 +225,27 @@ class ImportarClientesWizerpService
             'ascensos'                    => $reporteAscensos,
             'clientes_marcados_inactivos' => $marcadosInactivos,
             'stats'                       => array_merge($stats, [
-                'ascensos'                    => count($reporteAscensos),
+                'ascensos'                    => $stats['ascensos'],
+                'descensos'                   => $stats['descensos'],
                 'clientes_marcados_inactivos' => $marcadosInactivos,
                 'duracion_seg'                => $duracion,
             ]),
         ];
+    }
+
+    private function sanitizarTextoImportacion(?string $texto): string
+    {
+        if ($texto === null || $texto === '') {
+            return '';
+        }
+
+        if (function_exists('mb_scrub')) {
+            return mb_substr(mb_scrub($texto, 'UTF-8'), 0, 4000);
+        }
+
+        $limpio = @iconv('UTF-8', 'UTF-8//IGNORE', $texto);
+
+        return mb_substr($limpio !== false ? $limpio : '', 0, 4000);
     }
 
     private function procesarCabeceras(array $headersRaw): array

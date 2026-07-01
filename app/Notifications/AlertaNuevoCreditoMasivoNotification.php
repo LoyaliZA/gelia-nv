@@ -64,7 +64,7 @@ class AlertaNuevoCreditoMasivoNotification extends Notification implements Shoul
         $table .= '</tbody></table><br>';
 
         $mailMessage->line(new HtmlString($table));
-        $mailMessage->action('Ir al Módulo de Cobranza', url('/auto-cobranza'));
+        $mailMessage->action('Ir a Credibox', url('/auto-cobranza'));
         $mailMessage->line('Gracias por usar nuestro sistema automatizado.');
 
         return $mailMessage;
@@ -91,7 +91,7 @@ class AlertaNuevoCreditoMasivoNotification extends Notification implements Shoul
             'monto_anterior' => 0,
             'monto_nuevo' => 0,
             'tipo' => 'nuevo_credito',
-            'titulo' => 'Nuevos Créditos Detectados',
+            'titulo' => 'Credibox · Nuevos Créditos Detectados',
             'mensaje' => "Se detectaron {$count} nuevos inicios de crédito.",
             'mensaje_visible' => "Nuevos saldos: {$count} clientes iniciaron su periodo de crédito.",
             'mensaje_voz' => $mensajeVoz,

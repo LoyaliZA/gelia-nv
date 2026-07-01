@@ -612,8 +612,12 @@ class AdminController extends Controller
             return back()
                 ->with('success', $mensaje)
                 ->with('reporte_importacion', $resultado['ascensos'] ?? []);
-        } catch (\Exception $e) {
-            return back()->withErrors(['archivo' => 'Error procesando archivo. Verifique el formato de las cabeceras. Detalles: ' . $e->getMessage()]);
+        } catch (\Throwable $e) {
+            $mensajeSeguro = is_string($e->getMessage())
+                ? (function_exists('mb_scrub') ? mb_scrub($e->getMessage(), 'UTF-8') : @iconv('UTF-8', 'UTF-8//IGNORE', $e->getMessage()))
+                : 'Error desconocido';
+
+            return back()->withErrors(['archivo' => 'Error procesando archivo. Verifique el formato de las cabeceras. Detalles: ' . ($mensajeSeguro ?: 'Error desconocido')]);
         }
     }
 

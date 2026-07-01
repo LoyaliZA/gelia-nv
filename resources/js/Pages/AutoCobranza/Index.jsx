@@ -107,7 +107,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
             window.Echo.channel('cobranza-alertas')
                 .listen('.AlertaAumentoCreditoEvent', (e) => {
                     NotificationBrowserService.triggerFullAlert(
-                        '¡Alerta de Cobranza!',
+                        'Credibox',
                         `El cliente ${e.nombre} (No. ${e.numero_cliente}) aumentó su saldo de $${e.monto_anterior} a $${e.monto_nuevo} sin pagarlo previamente.`,
                         `Atención. El cliente ${e.nombre} aumentó su saldo de crédito sin pagar el saldo anterior.`,
                         { sonido: true, voz: true, escritorio: true }
@@ -253,80 +253,51 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
 
     // Text to Speech logic
     const reproducirVozReporte = () => {
-        if ('speechSynthesis' in window) {
-            if (speaking) {
-                window.speechSynthesis.cancel();
-                setSpeaking(false);
-                return;
-            }
-
-            if (alertas.length === 0) {
-                NotificationBrowserService.speakText("No hay alertas de cobranza pendientes de reportar por voz hoy.", true);
-                return;
-            }
-
-            setSpeaking(true);
-
-            // Group vencimiento alerts and count them
-            const vencidosAlerts = alertas.filter(a => a.tipo !== 'limite_superado');
-            const limiteAlerts = alertas.filter(a => a.tipo === 'limite_superado');
-            const totalVencidos = vencidosAlerts.length;
-
-            const messages = [];
-            const nombre = (auth?.user?.name || 'Usuario').trim().split(/\s+/)[0];
-
-            if (totalVencidos > 0) {
-                // ponytail: do not read individual debtor names or amounts, only the summary voice message
-                messages.push(`${nombre}, se han vencido ${totalVencidos} créditos, favor de revisarlos.`);
-            }
-
-            limiteAlerts.forEach(alert => {
-                messages.push(`Atención, el cliente ${alert.cliente.nombre} ha superado su límite de crédito autorizado.`);
-            });
-
-            if (messages.length === 0) {
-                setSpeaking(false);
-                return;
-            }
-
-            let index = 0;
-
-            const speakNext = () => {
-                if (index >= messages.length) {
-                    setSpeaking(false);
-                    return;
-                }
-
-                const utterance = new SpeechSynthesisUtterance(messages[index]);
-                utterance.lang = 'es-MX';
-                utterance.rate = 0.9;
-
-                // Utilizar la voz premium/natural seleccionada por el servicio
-                if (NotificationBrowserService._selectedVoice) {
-                    utterance.voice = NotificationBrowserService._selectedVoice;
-                }
-                utterance.onend = () => {
-                    index++;
-                    speakNext();
-                };
-                utterance.onerror = () => {
-                    setSpeaking(false);
-                };
-                window.speechSynthesis.speak(utterance);
-            };
-
-            speakNext();
-        } else {
+        if (!('speechSynthesis' in window)) {
             alert('Su navegador no soporta reproducción de voz.');
+            return;
         }
+
+        if (speaking) {
+            NotificationBrowserService.stopCurrentAlert();
+            setSpeaking(false);
+            return;
+        }
+
+        if (alertas.length === 0) {
+            NotificationBrowserService.speakText('No hay alertas de cobranza pendientes de reportar por voz hoy.', true);
+            return;
+        }
+
+        const vencidosAlerts = alertas.filter((a) => a.tipo !== 'limite_superado');
+        const limiteAlerts = alertas.filter((a) => a.tipo === 'limite_superado');
+        const totalVencidos = vencidosAlerts.length;
+
+        const messages = [];
+        const nombre = (auth?.user?.name || 'Usuario').trim().split(/\s+/)[0];
+
+        if (totalVencidos > 0) {
+            messages.push(`${nombre}, se han vencido ${totalVencidos} créditos, favor de revisarlos.`);
+        }
+
+        limiteAlerts.forEach((alert) => {
+            messages.push(`Atención, el cliente ${alert.cliente.nombre} ha superado su límite de crédito autorizado.`);
+        });
+
+        if (messages.length === 0) {
+            return;
+        }
+
+        setSpeaking(true);
+        NotificationBrowserService.speakSequentialTexts(messages, true, {
+            onComplete: () => setSpeaking(false),
+        });
     };
 
     // Limpieza al desmontar
     useEffect(() => {
         return () => {
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-            }
+            NotificationBrowserService.stopCurrentAlert();
         };
     }, []);
 
@@ -390,7 +361,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Módulo de Auto-Cobranza | GELIA" />
+            <Head title="Credibox | GELIA" />
             <GeliaPageShell className="space-y-6">
 
                 {/* Header */}
@@ -402,7 +373,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                             <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>Creditos y Cobranza</p>
                         </div>
                         <h1 className="text-3xl md:text-4xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                            Auto-Cobranza
+                            Credibox
                         </h1>
                         <p className="text-xs font-bold theme-text-muted uppercase tracking-widest mt-1 m-0">
                             Gestión e Inteligencia de Cobros

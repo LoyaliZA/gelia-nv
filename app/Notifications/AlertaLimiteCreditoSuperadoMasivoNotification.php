@@ -66,7 +66,7 @@ class AlertaLimiteCreditoSuperadoMasivoNotification extends Notification impleme
         $table .= '</tbody></table><br>';
 
         $mailMessage->line(new HtmlString($table));
-        $mailMessage->action('Ir al Módulo de Cobranza', url('/auto-cobranza'));
+        $mailMessage->action('Ir a Credibox', url('/auto-cobranza'));
         $mailMessage->line('Por favor verifica esta situación con los ejecutivos responsables a la brevedad.');
 
         return $mailMessage;
@@ -93,7 +93,7 @@ class AlertaLimiteCreditoSuperadoMasivoNotification extends Notification impleme
             'monto_anterior' => 0,
             'monto_nuevo' => 0,
             'tipo' => 'limite_credito_superado',
-            'titulo' => 'Alerta: Exceso de Límite Autorizado',
+            'titulo' => 'Credibox · Exceso de Límite Autorizado',
             'mensaje' => "Se detectaron {$count} clientes con deuda superior a su límite de crédito.",
             'mensaje_visible' => "Límites de crédito superados: {$count} clientes detectados.",
             'mensaje_voz' => $mensajeVoz,

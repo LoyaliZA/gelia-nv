@@ -34,6 +34,7 @@ class RegistrarImportacionClienteService
             'filas_omitidas' => $stats['omitidas'] ?? 0,
             'errores' => $stats['errores'] ?? 0,
             'ascensos' => $stats['ascensos'] ?? 0,
+            'descensos' => $stats['descensos'] ?? 0,
             'clientes_marcados_inactivos' => $stats['clientes_marcados_inactivos'] ?? 0,
             'duracion_seg' => $stats['duracion_seg'] ?? null,
         ]);

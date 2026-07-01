@@ -92,7 +92,7 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
         can('cobranza.ver') && {
             type: 'link',
             id: 'auto_cobranza',
-            label: 'Auto-Cobranza',
+            label: 'Credibox',
             icon: CreditCard,
             href: () => routeHref('auto-cobranza.index', '/auto-cobranza'),
             active: (url) => url.startsWith('/auto-cobranza'),

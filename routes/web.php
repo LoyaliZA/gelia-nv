@@ -629,6 +629,7 @@ Route::middleware(['auth'])->group(function () {
             // -----------------------------------------------
 
             Route::get('/clientes/auditoria/datos', [\App\Http\Controllers\Admin\AuditoriaMontosClienteController::class, 'datosAuditoria'])->name('clientes.auditoria.datos');
+            Route::get('/clientes/importaciones/{importacion}/auditoria', [\App\Http\Controllers\Admin\AuditoriaMontosClienteController::class, 'auditoriaImportacion'])->name('clientes.importaciones.auditoria');
             Route::get('/clientes/importaciones/{importacion}/archivo', [\App\Http\Controllers\Admin\AuditoriaMontosClienteController::class, 'descargarArchivo'])->name('clientes.importaciones.archivo');
             Route::get('/clientes/{cliente}/historial', [AdminController::class, 'historialCliente'])->name('clientes.historial');
             Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');

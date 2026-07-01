@@ -73,7 +73,7 @@ class AlertaPagoLiquidoNotification extends Notification implements ShouldQueue,
 
         return $mail
             ->line(new HtmlString($table))
-            ->action('Ver Módulo de Auto-Cobranza', route('auto-cobranza.index'))
+            ->action('Ir a Credibox', route('auto-cobranza.index'))
             ->line('Gracias por usar nuestro sistema automatizado.');
     }
 
@@ -98,7 +98,7 @@ class AlertaPagoLiquidoNotification extends Notification implements ShouldQueue,
             'monto_anterior' => 0,
             'monto_nuevo' => 0,
             'tipo' => 'pago_liquidado',
-            'titulo' => 'Liquidación de Créditos Detectada',
+            'titulo' => 'Credibox · Liquidación de Créditos Detectada',
             'mensaje' => "Se detectaron {$count} liquidaciones de deuda de clientes.",
             'mensaje_visible' => "Pagos detectados: {$count} clientes liquidaron su saldo.",
             'mensaje_voz' => $mensajeVoz,
