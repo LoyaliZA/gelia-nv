@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, router, useForm } from '@inertiajs/react';
 import {
@@ -22,6 +22,10 @@ import ModalHistorialCliente from './Components/ModalHistorialCliente';
 import ModalAbonosDelDia from './Components/ModalAbonosDelDia';
 import ModalAjustesInicialesCredito from './Components/ModalAjustesInicialesCredito';
 import axios from 'axios';
+import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
+import useCobranzaRealtime from '../../hooks/useCobranzaRealtime';
+
+const PROPS_COBRANZA = ['clientes', 'alertas', 'cartera', 'aumentosPendientes', 'filtros'];
 
 const ORDEN_OPCIONES = [
     { value: 'automatico', label: 'Orden Automático (Recomendado)' },
@@ -39,7 +43,6 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     const puedeEjecutarLlamadas = auth?.user?.permissions?.includes('cobranza.ejecutar_llamadas') || auth?.user?.roles?.includes('Super Admin');
     const puedeImportarReporte = auth?.user?.permissions?.includes('cobranza.importar_reporte') || auth?.user?.roles?.includes('Super Admin');
     const puedeVerBitacora = auth?.user?.permissions?.includes('cobranza.ver_bitacora') || auth?.user?.roles?.includes('Super Admin');
-    const puedeRecibirAlertas = auth?.user?.permissions?.includes('cobranza.recibir_alertas') || auth?.user?.roles?.includes('Super Admin');
     const puedeRepararFecha = auth?.user?.permissions?.includes('cobranza.reparar_fecha') || auth?.user?.roles?.includes('Super Admin');
     const puedeConfigurarAlertas = auth?.user?.permissions?.includes('cobranza.configurar_alertas') || auth?.user?.roles?.includes('Super Admin');
     const puedeRecalcularCreditos = auth?.user?.permissions?.includes('cobranza.recalcular_creditos') || auth?.user?.roles?.includes('Super Admin');
@@ -104,29 +107,62 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     const resolverAumento = (clienteId) => {
         if (!confirm('¿Marcar este aumento de crédito como atendido?')) return;
         router.post(route('auto-cobranza.alertas.resolver-aumento', clienteId), {}, {
-            preserveScroll: true
+            preserveScroll: true,
+            onSuccess: () => recargarModuloInertia(['aumentosPendientes', 'alertas', 'clientes', 'cartera']),
         });
     };
 
+    const selectedBitacoraClienteRef = useRef(null);
     useEffect(() => {
-        if (puedeRecibirAlertas && window.Echo) {
-            window.Echo.channel('cobranza-alertas')
-                .listen('.AlertaAumentoCreditoEvent', (e) => {
-                    NotificationBrowserService.triggerFullAlert(
-                        'Credibox',
-                        `El cliente ${e.nombre} (No. ${e.numero_cliente}) aumentó su saldo de $${e.monto_anterior} a $${e.monto_nuevo} sin pagarlo previamente.`,
-                        `Atención. El cliente ${e.nombre} aumentó su saldo de crédito sin pagar el saldo anterior.`,
-                        { sonido: true, voz: true, escritorio: true }
-                    );
-                    router.reload({ only: ['clientes'] });
-                });
-        }
-        return () => {
-            if (puedeRecibirAlertas && window.Echo) {
-                window.Echo.leave('cobranza-alertas');
-            }
+        selectedBitacoraClienteRef.current = selectedBitacoraCliente;
+    }, [selectedBitacoraCliente]);
+
+    const recargarCredibox = useCallback(() => {
+        recargarModuloInertia(PROPS_COBRANZA);
+    }, []);
+
+    const refrescarBitacoraAbierta = useCallback(() => {
+        const cliente = selectedBitacoraClienteRef.current;
+        if (!cliente?.id) return;
+        axios.get(route('auto-cobranza.bitacora', { clienteId: cliente.id }))
+            .then((res) => setBitacoraData(res.data))
+            .catch(() => {});
+    }, []);
+
+    const recargarTimerRef = useRef(null);
+    const programarRecargaCredibox = useCallback(() => {
+        if (recargarTimerRef.current) clearTimeout(recargarTimerRef.current);
+        recargarTimerRef.current = setTimeout(() => {
+            recargarCredibox();
+            cargarAbonosDelDia();
+            refrescarBitacoraAbierta();
+        }, 500);
+    }, [recargarCredibox, refrescarBitacoraAbierta]);
+
+    const esNotificacionCobranza = (payload) => {
+        if (payload?.modulo === 'cobranza') return true;
+        const tipo = payload?.tipo;
+        if (typeof tipo !== 'string') return false;
+        return tipo.includes('cobranza')
+            || tipo.includes('aumento_credito')
+            || tipo === 'nuevo_credito'
+            || tipo === 'pago_liquidado';
+    };
+
+    useCobranzaRealtime(programarRecargaCredibox);
+
+    useEffect(() => {
+        const onNotification = (event) => {
+            const payload = event?.detail || {};
+            if (!esNotificacionCobranza(payload)) return;
+            programarRecargaCredibox();
         };
-    }, [puedeRecibirAlertas]);
+        window.addEventListener('notification-received', onNotification);
+        return () => {
+            window.removeEventListener('notification-received', onNotification);
+            if (recargarTimerRef.current) clearTimeout(recargarTimerRef.current);
+        };
+    }, [programarRecargaCredibox]);
 
     const abrirBitacora = (cliente) => {
         setSelectedBitacoraCliente(cliente);
@@ -301,6 +337,8 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
             onSuccess: () => {
                 setSelectedAlerta(null);
                 formAlerta.reset();
+                recargarModuloInertia(['alertas', 'clientes', 'cartera']);
+                refrescarBitacoraAbierta();
             },
             preserveScroll: true,
         });
@@ -328,7 +366,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                 formImportar.reset();
                 setAjustesModal({ isOpen: false, creditos: [], archivoPendiente: null });
                 cargarAbonosDelDia();
-                router.reload({ only: ['clientes', 'filtros', 'cartera', 'aumentosPendientes'] });
+                router.reload({ only: PROPS_COBRANZA });
             },
             onError: () => {},
             onFinish: () => setImportando(false),

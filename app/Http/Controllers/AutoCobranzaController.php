@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\CobranzaEjecucionActualizada;
 use App\Models\Cliente;
 use App\Models\CobranzaAlerta;
 use App\Models\CobranzaFactura;
@@ -18,6 +19,16 @@ class AutoCobranzaController extends Controller
     public function __construct(
         private CobranzaAlertasReglasService $reglasAlertas,
     ) {}
+
+    private function broadcastEjecucionActualizada(string $accion, ?int $clienteId = null, ?int $alertaId = null): void
+    {
+        event(new CobranzaEjecucionActualizada(
+            $accion,
+            auth()->id() ?? 0,
+            $clienteId,
+            $alertaId,
+        ));
+    }
 
     /**
      * Muestra la vista principal de Auto-Cobranza con KPIs, Cartera Vencida y Alertas.
@@ -268,6 +279,8 @@ class AutoCobranzaController extends Controller
 
             $resultado = $importador->ejecutar($request->file('archivo'), $fechasInicioPorClave);
 
+            $this->broadcastEjecucionActualizada('importacion');
+
             return redirect()->back()->with('success', "Reporte procesado exitosamente. Clientes procesados: {$resultado['procesados']}, creados: {$resultado['nuevos']}, créditos nuevos: {$resultado['creditos_nuevos']}, actualizados: {$resultado['actualizados']}.");
         } catch (\Exception $e) {
             return redirect()->back()->withErrors(['archivo' => 'Error al importar: ' . $e->getMessage()]);
@@ -296,6 +309,8 @@ class AutoCobranzaController extends Controller
             'monto_nuevo' => 0,
             'descripcion' => "Registro de contacto: " . ucfirst(str_replace('_', ' ', $validated['estado'])) . ". " . ($validated['observaciones'] ? "Observaciones: " . $validated['observaciones'] : ""),
         ]);
+
+        $this->broadcastEjecucionActualizada('alerta_actualizada', $alerta->cliente_id, $alerta->id);
 
         return redirect()->back()->with('success', 'Bitácora de llamada registrada y alerta actualizada.');
     }
@@ -406,6 +421,8 @@ class AutoCobranzaController extends Controller
             'descripcion' => 'Alerta de aumento de saldo marcada como atendida por el administrador.',
         ]);
 
+        $this->broadcastEjecucionActualizada('aumento_resuelto', $cliente->id);
+
         return redirect()->back()->with('success', 'Alerta resuelta.');
     }
 
@@ -436,8 +453,12 @@ class AutoCobranzaController extends Controller
         ]);
 
         if (!$resultado['recalculado']) {
+            $this->broadcastEjecucionActualizada('fecha_reparada', $cliente->id);
+
             return redirect()->back()->with('success', 'Fecha de inicio actualizada. No había factura activa para recalcular vencimiento.');
         }
+
+        $this->broadcastEjecucionActualizada('fecha_reparada', $cliente->id);
 
         return redirect()->back()->with('success', 'Fecha de inicio de crédito reparada con éxito. Los cálculos han sido actualizados.');
     }
@@ -459,6 +480,8 @@ class AutoCobranzaController extends Controller
                 },
             ], 422);
         }
+
+        $this->broadcastEjecucionActualizada('credito_recalculado', $cliente->id);
 
         return response()->json([
             'message' => 'Crédito recalculado correctamente.',
@@ -483,6 +506,8 @@ class AutoCobranzaController extends Controller
             ], 422);
         }
 
+        $this->broadcastEjecucionActualizada('pago_confirmado', $cobranzaFactura->cliente_id);
+
         return response()->json([
             'message' => 'Pago confirmado correctamente.',
             'monto_pagado' => $resultado['monto_pagado'],
@@ -505,6 +530,8 @@ class AutoCobranzaController extends Controller
             ], 422);
         }
 
+        $this->broadcastEjecucionActualizada('pago_descartado', $cobranzaFactura->cliente_id);
+
         return response()->json(['message' => 'Pago detectado descartado. La deuda permanece activa.']);
     }
 
@@ -513,6 +540,8 @@ class AutoCobranzaController extends Controller
         $this->authorize('cobranza.recalcular_creditos');
 
         $resultado = $recalcular->ejecutarMasivo(auth()->id());
+
+        $this->broadcastEjecucionActualizada('recalculo_masivo');
 
         return redirect()->back()->with(
             'success',

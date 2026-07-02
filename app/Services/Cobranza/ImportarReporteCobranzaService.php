@@ -17,6 +17,7 @@ class ImportarReporteCobranzaService
 {
     public function __construct(
         private ConfirmarPagoCobranzaService $confirmarPago,
+        private RecalcularCreditoClienteService $recalcularCredito,
     ) {}
 
     public function analizarCreditosNuevos(UploadedFile $archivo): array
@@ -296,6 +297,13 @@ class ImportarReporteCobranzaService
                                 ]);
                             }
                         }
+
+                        $this->recalcularCredito->ejecutar(
+                            $cliente->fresh(),
+                            auth()->id(),
+                            'importacion',
+                            false
+                        );
                     }
                     $contadorActualizados++;
                 } else {

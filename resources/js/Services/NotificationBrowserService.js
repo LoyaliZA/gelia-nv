@@ -140,6 +140,80 @@ class NotificationBrowserService {
         return null;
     }
 
+    _prepareSpeechSynthesis() {
+        if (!('speechSynthesis' in window)) return;
+
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            this._selectedVoice = this._pickBestVoice(voices);
+            this._voicesReady = true;
+        }
+
+        if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+        }
+    }
+
+    _speakUtterance(utterance, { onEnd, useVoice = true, allowInstantRetry = true } = {}) {
+        this._prepareSpeechSynthesis();
+
+        if (!useVoice) {
+            utterance.voice = null;
+        } else if (this._selectedVoice) {
+            utterance.voice = this._selectedVoice;
+        }
+
+        let settled = false;
+        let watchdog = null;
+        const startedAt = Date.now();
+        const finish = (reason) => {
+            if (settled) return;
+            settled = true;
+            if (watchdog) clearTimeout(watchdog);
+            onEnd?.();
+        };
+
+        utterance.onend = () => {
+            const elapsed = Date.now() - startedAt;
+            if (allowInstantRetry && useVoice && elapsed < 400) {
+                if (watchdog) clearTimeout(watchdog);
+                settled = true;
+                const retry = this._createUtterance(utterance.text);
+                window.speechSynthesis.cancel();
+                setTimeout(() => {
+                    this._speakUtterance(retry, { onEnd, useVoice: false, allowInstantRetry: false });
+                }, 100);
+                return;
+            }
+            finish('onend');
+        };
+        utterance.onerror = () => {
+            if (watchdog) clearTimeout(watchdog);
+            if (useVoice) {
+                settled = true;
+                const retry = this._createUtterance(utterance.text);
+                setTimeout(() => {
+                    this._speakUtterance(retry, { onEnd, useVoice: false, allowInstantRetry: false });
+                }, 100);
+                return;
+            }
+            finish('onerror');
+        };
+
+        watchdog = setTimeout(() => finish('timeout'), 30000);
+
+        const speak = () => {
+            this._prepareSpeechSynthesis();
+            window.speechSynthesis.speak(utterance);
+        };
+
+        if (!this._voicesReady) {
+            setTimeout(speak, 150);
+        } else {
+            setTimeout(speak, 0);
+        }
+    }
+
     async requestDesktopPermissions() {
         if (!('Notification' in window)) {
             console.warn('[NotificationBrowserService] El navegador no soporta notificaciones de escritorio.');
@@ -191,14 +265,10 @@ class NotificationBrowserService {
         if (!('speechSynthesis' in window)) return;
 
         window.speechSynthesis.cancel();
+        this._prepareSpeechSynthesis();
 
         const utterance = this._createUtterance(text);
-
-        if (!this._voicesReady) {
-            setTimeout(() => window.speechSynthesis.speak(utterance), 100);
-        } else {
-            window.speechSynthesis.speak(utterance);
-        }
+        this._speakUtterance(utterance);
     }
 
     _speakSequentialDirect(texts = [], force = false) {
@@ -208,26 +278,19 @@ class NotificationBrowserService {
         if (!('speechSynthesis' in window)) return;
 
         window.speechSynthesis.cancel();
+        this._prepareSpeechSynthesis();
 
         let index = 0;
         const speakNext = () => {
             if (index >= mensajes.length) return;
 
             const utterance = this._createUtterance(mensajes[index]);
-            utterance.onend = () => {
-                index += 1;
-                speakNext();
-            };
-            utterance.onerror = () => {
-                index += 1;
-                speakNext();
-            };
-
-            if (!this._voicesReady && index === 0) {
-                setTimeout(() => window.speechSynthesis.speak(utterance), 100);
-            } else {
-                window.speechSynthesis.speak(utterance);
-            }
+            this._speakUtterance(utterance, {
+                onEnd: () => {
+                    index += 1;
+                    speakNext();
+                },
+            });
         };
 
         speakNext();
@@ -392,15 +455,12 @@ class NotificationBrowserService {
                 return;
             }
 
-            const utterance = this._createUtterance(text);
-            utterance.onend = () => resolve();
-            utterance.onerror = () => resolve();
+            window.speechSynthesis.cancel();
+            this._prepareSpeechSynthesis();
 
-            if (!this._voicesReady) {
-                setTimeout(() => window.speechSynthesis.speak(utterance), 100);
-            } else {
-                window.speechSynthesis.speak(utterance);
-            }
+            const utterance = this._createUtterance(text);
+
+            this._speakUtterance(utterance, { onEnd: () => resolve() });
         });
     }
 
@@ -421,6 +481,9 @@ class NotificationBrowserService {
                 return;
             }
 
+            window.speechSynthesis.cancel();
+            this._prepareSpeechSynthesis();
+
             let index = 0;
             const speakNext = () => {
                 if (this._stopRequested || index >= mensajes.length) {
@@ -429,20 +492,12 @@ class NotificationBrowserService {
                 }
 
                 const utterance = this._createUtterance(mensajes[index]);
-                utterance.onend = () => {
-                    index += 1;
-                    speakNext();
-                };
-                utterance.onerror = () => {
-                    index += 1;
-                    speakNext();
-                };
-
-                if (!this._voicesReady && index === 0) {
-                    setTimeout(() => window.speechSynthesis.speak(utterance), 100);
-                } else {
-                    window.speechSynthesis.speak(utterance);
-                }
+                this._speakUtterance(utterance, {
+                    onEnd: () => {
+                        index += 1;
+                        speakNext();
+                    },
+                });
             };
 
             speakNext();

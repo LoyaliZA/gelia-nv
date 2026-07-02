@@ -178,5 +178,9 @@ class EvaluarAlertasCobranza extends Command
         }
 
         $this->info("Evaluación finalizada. Alertas Vencimiento: {$contadorAlertasVencimiento}, Alertas Límite: {$contadorAlertasLimite}");
+
+        if ($contadorAlertasVencimiento > 0 || $contadorAlertasLimite > 0) {
+            event(new \App\Events\CobranzaEjecucionActualizada('evaluacion_cron', 0));
+        }
     }
 }
