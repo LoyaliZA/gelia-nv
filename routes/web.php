@@ -163,6 +163,7 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('auto-cobranza')->name('auto-cobranza.')->group(function () {
         Route::get('/', [AutoCobranzaController::class, 'index'])->name('index');
+        Route::post('/importar/preview', [AutoCobranzaController::class, 'previsualizarImporte'])->name('importar.preview');
         Route::post('/importar', [AutoCobranzaController::class, 'importarReporte'])->name('importar');
         Route::put('/alertas/{alerta}', [AutoCobranzaController::class, 'actualizarAlerta'])->name('alertas.update');
         Route::get('/clientes/{clienteId}/bitacora', [AutoCobranzaController::class, 'bitacora'])->name('bitacora');

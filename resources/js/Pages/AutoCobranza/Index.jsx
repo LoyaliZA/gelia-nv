@@ -20,6 +20,7 @@ import {
 } from '../../utils/cobranzaAlertasReglas';
 import ModalHistorialCliente from './Components/ModalHistorialCliente';
 import ModalAbonosDelDia from './Components/ModalAbonosDelDia';
+import ModalAjustesInicialesCredito from './Components/ModalAjustesInicialesCredito';
 import axios from 'axios';
 
 const ORDEN_OPCIONES = [
@@ -32,7 +33,7 @@ const ORDEN_OPCIONES = [
     { value: 'numero_asc', label: 'No. cliente' },
 ];
 
-export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], pagosPendientesConfirmacion = 0, configuracionHorarios = ['10:00', '12:00'], configuracionAlertas: configuracionAlertasProp = {}, filtros = {}, users = [], notifiedUsersPagos = [] }) {
+export default function Index({ auth, clientes, alertas = [], cartera = {}, aumentosPendientes = [], configuracionHorarios = ['10:00', '12:00'], configuracionAlertas: configuracionAlertasProp = {}, filtros = {}, users = [], notifiedUsersPagos = [], notifiedUsersCarga = [] }) {
     const configuracionAlertas = normalizarConfigCobranzaAlertas(configuracionAlertasProp);
     const puedeVerAdmin = auth?.user?.permissions?.includes('cobranza.ver_admin') || auth?.user?.roles?.includes('Super Admin');
     const puedeEjecutarLlamadas = auth?.user?.permissions?.includes('cobranza.ejecutar_llamadas') || auth?.user?.roles?.includes('Super Admin');
@@ -41,7 +42,6 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     const puedeRecibirAlertas = auth?.user?.permissions?.includes('cobranza.recibir_alertas') || auth?.user?.roles?.includes('Super Admin');
     const puedeRepararFecha = auth?.user?.permissions?.includes('cobranza.reparar_fecha') || auth?.user?.roles?.includes('Super Admin');
     const puedeConfigurarAlertas = auth?.user?.permissions?.includes('cobranza.configurar_alertas') || auth?.user?.roles?.includes('Super Admin');
-    const puedeConfirmarPago = auth?.user?.permissions?.includes('cobranza.confirmar_pago') || auth?.user?.roles?.includes('Super Admin');
     const puedeRecalcularCreditos = auth?.user?.permissions?.includes('cobranza.recalcular_creditos') || auth?.user?.roles?.includes('Super Admin');
 
     const [busqueda, setBusqueda] = useState(filtros.q || '');
@@ -74,6 +74,11 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     // Modal Reparar Fecha
     const [repararFechaModal, setRepararFechaModal] = useState({ isOpen: false, clienteId: null, fechaActual: '' });
 
+    // Modal Ajustes Iniciales Pre-Carga
+    const [ajustesModal, setAjustesModal] = useState({ isOpen: false, creditos: [], archivoPendiente: null });
+    const [previewCargando, setPreviewCargando] = useState(false);
+    const [importando, setImportando] = useState(false);
+
     // Configuración Alertas
     const [configModal, setConfigModal] = useState(false);
     const formConfig = useForm({
@@ -82,7 +87,8 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
         umbral_diario: configuracionAlertas.umbral_diario,
         dias_gracia: configuracionAlertas.dias_gracia,
         dias_habiles: configuracionAlertas.dias_habiles,
-        notified_users_pagos: notifiedUsersPagos || []
+        notified_users_pagos: notifiedUsersPagos || [],
+        notified_users_carga: notifiedUsersCarga || [],
     });
 
     useEffect(() => {
@@ -203,28 +209,8 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
         if (!confirm('¿Recalcular vencimientos y alertas de TODOS los clientes con crédito activo? Esto puede tardar unos segundos.')) return;
         router.post(route('auto-cobranza.recalcular-creditos'), {}, {
             preserveScroll: true,
-            onSuccess: () => router.reload({ only: ['clientes', 'alertas', 'cartera', 'aumentosPendientes', 'pagosPendientesConfirmacion'] }),
+            onSuccess: () => router.reload({ only: ['clientes', 'alertas', 'cartera', 'aumentosPendientes'] }),
         });
-    };
-
-    const confirmarPagoCliente = (facturaId) => {
-        if (!confirm('¿Confirmar que este cliente liquidó su crédito? Esta acción no se puede deshacer.')) return;
-        axios.post(route('auto-cobranza.facturas.confirmar-pago', facturaId))
-            .then((res) => {
-                alert(res.data.message);
-                router.reload({ only: ['clientes', 'alertas', 'cartera', 'pagosPendientesConfirmacion'], preserveScroll: true });
-            })
-            .catch((err) => alert(err.response?.data?.message || 'Error al confirmar el pago.'));
-    };
-
-    const descartarPagoCliente = (facturaId) => {
-        if (!confirm('¿Descartar el pago detectado y mantener la deuda activa?')) return;
-        axios.post(route('auto-cobranza.facturas.descartar-pago', facturaId))
-            .then((res) => {
-                alert(res.data.message);
-                router.reload({ only: ['clientes', 'pagosPendientesConfirmacion'], preserveScroll: true });
-            })
-            .catch((err) => alert(err.response?.data?.message || 'Error al descartar el pago.'));
     };
 
     const cargarHistorial = (page = 1) => {
@@ -327,19 +313,64 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
         }
     };
 
-    const submitImportar = (e) => {
+    const ejecutarImportacion = (archivo, ajustesFechas = []) => {
+        const formData = new FormData();
+        formData.append('archivo', archivo);
+        ajustesFechas.forEach((ajuste, index) => {
+            formData.append(`ajustes_fechas[${index}][clave]`, ajuste.clave);
+            formData.append(`ajustes_fechas[${index}][fecha_inicio_credito]`, ajuste.fecha_inicio_credito);
+        });
+
+        setImportando(true);
+        router.post(route('auto-cobranza.importar'), formData, {
+            forceFormData: true,
+            onSuccess: () => {
+                formImportar.reset();
+                setAjustesModal({ isOpen: false, creditos: [], archivoPendiente: null });
+                cargarAbonosDelDia();
+                router.reload({ only: ['clientes', 'filtros', 'cartera', 'aumentosPendientes'] });
+            },
+            onError: () => {},
+            onFinish: () => setImportando(false),
+            preserveScroll: true,
+        });
+    };
+
+    const submitImportar = async (e) => {
         e.preventDefault();
         if (!formImportar.data.archivo) return;
 
-        formImportar.post(route('auto-cobranza.importar'), {
-            onSuccess: () => {
-                formImportar.reset();
-                cargarAbonosDelDia();
-                router.reload({ only: ['clientes', 'filtros', 'cartera', 'aumentosPendientes', 'pagosPendientesConfirmacion'] });
-            },
-            onError: () => { },
-            preserveScroll: true,
-        });
+        setPreviewCargando(true);
+        const previewData = new FormData();
+        previewData.append('archivo', formImportar.data.archivo);
+
+        try {
+            const response = await axios.post(route('auto-cobranza.importar.preview'), previewData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+
+            const creditosNuevos = response.data.creditos_nuevos || [];
+
+            if (creditosNuevos.length > 0) {
+                setAjustesModal({
+                    isOpen: true,
+                    creditos: creditosNuevos,
+                    archivoPendiente: formImportar.data.archivo,
+                });
+            } else {
+                ejecutarImportacion(formImportar.data.archivo);
+            }
+        } catch (err) {
+            const mensaje = err.response?.data?.message || err.response?.data?.errors?.archivo?.[0] || 'Error al analizar el archivo.';
+            alert(mensaje);
+        } finally {
+            setPreviewCargando(false);
+        }
+    };
+
+    const confirmarAjustesYCargar = (ajustesFechas) => {
+        if (!ajustesModal.archivoPendiente) return;
+        ejecutarImportacion(ajustesModal.archivoPendiente, ajustesFechas);
     };
 
     const submitConfig = (e) => {
@@ -377,9 +408,6 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                         </h1>
                         <p className="text-xs font-bold theme-text-muted uppercase tracking-widest mt-1 m-0">
                             Gestión e Inteligencia de Cobros
-                            {pagosPendientesConfirmacion > 0 && (
-                                <span className="ml-2 text-emerald-500">· {pagosPendientesConfirmacion} pago(s) por confirmar</span>
-                            )}
                         </p>
                     </div>
                     {(puedeConfigurarAlertas || puedeRecalcularCreditos) && (
@@ -515,7 +543,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                             : 'bg-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5'
                             }`}
                     >
-                        Historial Global
+                        Historial · Crédito Activo
                     </button>
                 </div>
 
@@ -786,11 +814,11 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
 
                                     <button
                                         type="submit"
-                                        disabled={formImportar.processing || !formImportar.data.archivo}
+                                        disabled={previewCargando || importando || !formImportar.data.archivo}
                                         className="w-full py-3.5 rounded-2xl text-white font-black uppercase tracking-widest text-[11px] shadow-md flex justify-center items-center gap-2 outline-none disabled:opacity-50"
                                         style={{ backgroundColor: 'var(--color-primario)' }}
                                     >
-                                        <Check className="w-4 h-4" /> {formImportar.processing ? 'Importando...' : 'Actualizar Cartera y Crédito'}
+                                        <Check className="w-4 h-4" /> {previewCargando || importando ? 'Procesando...' : 'Actualizar Cartera y Crédito'}
                                     </button>
                                 </form>
                             </div>
@@ -850,48 +878,6 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                     const autorizado = montoAutorizado(cliente);
                                     const consolidado = saldoConsolidado(cliente);
                                     const facturaActiva = cliente.factura_cobranza_activa;
-                                    const pagoPendiente = facturaActiva?.pago_pendiente_confirmacion;
-
-                                    if (pagoPendiente) {
-                                        return (
-                                            <div key={cliente.id} className={geliaCardClass('p-6 border flex flex-col border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-500/10 hover:border-emerald-500 transition-all duration-300')}>
-                                                <div className="flex items-center flex-wrap gap-2 mb-2">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)]">
-                                                        No. {cliente.numero_cliente}
-                                                    </span>
-                                                    <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-emerald-500 text-white animate-pulse">
-                                                        Pago detectado
-                                                    </span>
-                                                </div>
-                                                <h3 className="text-sm font-bold theme-text-main leading-tight mb-1">{cliente.nombre}</h3>
-                                                <p className="text-xs theme-text-muted mb-4">
-                                                    El import reportó saldo $0 o el cliente no apareció en el archivo. Confirma si liquidó su crédito.
-                                                </p>
-                                                <div className="mt-auto pt-4 border-t theme-border/60">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Monto a liquidar</p>
-                                                    <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mb-4">
-                                                        {consolidado != null ? formatoMoneda(consolidado) : '—'}
-                                                    </p>
-                                                    {puedeConfirmarPago && facturaActiva?.id && (
-                                                        <div className="flex flex-col sm:flex-row gap-2">
-                                                            <button
-                                                                onClick={() => confirmarPagoCliente(facturaActiva.id)}
-                                                                className="flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm flex items-center justify-center gap-2"
-                                                            >
-                                                                <Check className="w-4 h-4" /> Confirmar Pago
-                                                            </button>
-                                                            <button
-                                                                onClick={() => descartarPagoCliente(facturaActiva.id)}
-                                                                className="flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border hover:border-red-500 hover:text-red-500 transition-colors flex items-center justify-center gap-2"
-                                                            >
-                                                                <X className="w-4 h-4" /> Descartar
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    }
 
                                     let hasAlerta = cliente.alerta_aumento_credito;
                                     const limiteSuperado = autorizado > 0 && consolidado > autorizado;
@@ -1057,7 +1043,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
                                 <input
                                     type="text"
-                                    placeholder="Buscar en historial por nombre o número..."
+                                    placeholder="Buscar clientes con crédito activo..."
                                     value={busqueda}
                                     onChange={(e) => {
                                         setBusqueda(e.target.value);
@@ -1069,19 +1055,20 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                         </div>
                         {cargandoHistorial && (
                             <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted text-center">
-                                Cargando historial global...
+                                Cargando clientes con crédito activo...
                             </p>
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {(historialClientes?.data?.length ?? 0) === 0 ? (
                                 <div className="col-span-full py-16 text-center text-xs theme-text-muted uppercase tracking-wider font-bold">
-                                    No se encontró historial de crédito.
+                                    No se encontraron clientes con crédito activo.
                                 </div>
                             ) : (
                                 historialClientes.data.map((cliente) => {
-                                    const totalFacturas = cliente.facturas_cobranza?.length || 0;
-                                    const pagadas = cliente.facturas_cobranza?.filter(f => f.pagada).length || 0;
+                                    const facturaActiva = cliente.factura_cobranza_activa;
+                                    const saldo = facturaActiva?.monto != null ? Number(facturaActiva.monto) : null;
+                                    const vencimiento = facturaActiva?.fecha_vencimiento;
 
                                     return (
                                         <div
@@ -1107,15 +1094,17 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
 
                                             <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t theme-border/60">
                                                 <div>
-                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Créditos Totales</p>
+                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Saldo Activo</p>
                                                     <p className="text-sm font-black theme-text-main">
-                                                        {totalFacturas}
+                                                        {saldo != null ? formatoMoneda(saldo) : '—'}
                                                     </p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Liquidados</p>
-                                                    <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                                                        {pagadas}
+                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Vencimiento</p>
+                                                    <p className="text-sm font-black theme-text-main">
+                                                        {vencimiento
+                                                            ? new Date(vencimiento.split('T')[0] + 'T12:00:00').toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: '2-digit' })
+                                                            : '—'}
                                                     </p>
                                                 </div>
                                             </div>
@@ -1500,6 +1489,35 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                     ))}
                                 </div>
                             </div>
+
+                            <div className="space-y-2 mt-4">
+                                <label className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Usuarios que reciben alerta de carga</label>
+                                <div className="max-h-40 overflow-y-auto border theme-border rounded-xl p-2 space-y-1">
+                                    {users.map(user => (
+                                        <label key={`carga-${user.id}`} className="flex items-center gap-2 p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={formConfig.data.notified_users_carga.includes(user.id)}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    let newUsers = [...formConfig.data.notified_users_carga];
+                                                    if (checked) {
+                                                        newUsers.push(user.id);
+                                                    } else {
+                                                        newUsers = newUsers.filter(id => id !== user.id);
+                                                    }
+                                                    formConfig.setData('notified_users_carga', newUsers);
+                                                }}
+                                                className="rounded border-zinc-300 text-[var(--color-primario)] focus:ring-[var(--color-primario)]"
+                                            />
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-bold theme-text-main">{user.name}</span>
+                                                <span className="text-[9px] theme-text-muted">{user.email}</span>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                             </div>
                             <div className="gelia-modal-footer px-6 py-4 flex justify-end gap-3">
                                 <button type="button" onClick={() => setConfigModal(false)} className="px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest theme-element border theme-border">
@@ -1514,6 +1532,14 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                 </div>,
                 document.body
             )}
+
+            <ModalAjustesInicialesCredito
+                isOpen={ajustesModal.isOpen}
+                creditos={ajustesModal.creditos}
+                onClose={() => setAjustesModal({ isOpen: false, creditos: [], archivoPendiente: null })}
+                onConfirm={confirmarAjustesYCargar}
+                processing={importando}
+            />
 
         </AppLayout>
     );

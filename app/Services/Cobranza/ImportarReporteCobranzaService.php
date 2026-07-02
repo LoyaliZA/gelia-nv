@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\CobranzaFactura;
 use App\Models\CobranzaBitacora;
 use App\Models\User;
+use App\Notifications\AlertaCargaReporteCobranzaNotification;
 use App\Notifications\AlertasAumentoCreditoMasivoNotification;
 use Exception;
 use Illuminate\Support\Facades\Notification;
@@ -14,92 +15,90 @@ use Illuminate\Support\Facades\DB;
 
 class ImportarReporteCobranzaService
 {
-    public function ejecutar(UploadedFile $archivo): array
+    public function __construct(
+        private ConfirmarPagoCobranzaService $confirmarPago,
+    ) {}
+
+    public function analizarCreditosNuevos(UploadedFile $archivo): array
     {
         ini_set('auto_detect_line_endings', true);
-        
-        $path = $archivo->getRealPath();
-        $delimiter = $this->detectarDelimitador($path);
-        $file = fopen($path, 'r');
 
-        // Buscar fila de cabeceras
-        $headersRaw = null;
-        while (($row = fgetcsv($file, 0, $delimiter)) !== false) {
-            if (empty(array_filter($row))) {
-                continue;
-            }
-            // Limpiar el primer elemento de posibles BOM
-            $firstCol = preg_replace('/^\xEF\xBB\xBF/', '', trim($row[0]));
-            if (strtolower($firstCol) === 'cliente') {
-                $headersRaw = $row;
-                break;
-            }
-        }
+        [$file, $headers, $delimiter] = $this->abrirArchivoCsv($archivo);
+        $today = now()->toDateString();
+        $creditosNuevos = [];
 
-        if (!$headersRaw) {
+        try {
+            while (($row = fgetcsv($file, 0, $delimiter)) !== false) {
+                $parsed = $this->parsearFila($row, $headers);
+                if ($parsed === null) {
+                    continue;
+                }
+
+                ['data' => $data, 'clientNum' => $clientNum, 'nombreCliente' => $nombreCliente] = $parsed;
+                $consolidado = $this->limpiarMonto($data['consolidado'] ?? '0');
+
+                if ($consolidado <= 0) {
+                    continue;
+                }
+
+                $cliente = $this->resolverCliente($clientNum, $nombreCliente);
+
+                if ($cliente) {
+                    $facturaActiva = CobranzaFactura::where('cliente_id', $cliente->id)
+                        ->where('pagada', false)
+                        ->exists();
+
+                    if ($facturaActiva) {
+                        continue;
+                    }
+                }
+
+                $clave = $this->generarClave($clientNum, $nombreCliente, $cliente);
+
+                $creditosNuevos[] = [
+                    'clave' => $clave,
+                    'numero_cliente' => $cliente?->numero_cliente ?? ($clientNum ?? $clave),
+                    'nombre' => $cliente?->nombre ?? ($nombreCliente ?: 'Cliente Importado'),
+                    'monto' => $consolidado,
+                    'fecha_inicio_sugerida' => $today,
+                    'es_cliente_nuevo' => $cliente === null,
+                    'cliente_id' => $cliente?->id,
+                ];
+            }
+        } finally {
             fclose($file);
-            throw new Exception("No se encontró la cabecera 'Cliente' en el archivo.");
         }
 
-        $headers = $this->procesarCabeceras($headersRaw);
+        return $creditosNuevos;
+    }
+
+    public function ejecutar(UploadedFile $archivo, array $fechasInicioPorClave = []): array
+    {
+        ini_set('auto_detect_line_endings', true);
+
+        [$file, $headers, $delimiter] = $this->abrirArchivoCsv($archivo);
 
         $clientesProcesados = [];
         $contadorNuevos = 0;
         $contadorActualizados = 0;
+        $contadorCreditosNuevos = 0;
         $alertasDetectadas = [];
         $alertasLimiteExcedidoMasivo = [];
         $clientesNuevosCreditosAnotificados = [];
 
-        DB::transaction(function () use ($file, $headers, $delimiter, &$clientesProcesados, &$contadorNuevos, &$contadorActualizados, &$alertasDetectadas, &$alertasLimiteExcedidoMasivo, &$clientesNuevosCreditosAnotificados) {
+        DB::transaction(function () use ($file, $headers, $delimiter, $fechasInicioPorClave, &$clientesProcesados, &$contadorNuevos, &$contadorActualizados, &$contadorCreditosNuevos, &$alertasDetectadas, &$alertasLimiteExcedidoMasivo, &$clientesNuevosCreditosAnotificados) {
             $today = now()->toDateString();
 
             while (($row = fgetcsv($file, 0, $delimiter)) !== false) {
-                if (empty(array_filter($row))) {
+                $parsed = $this->parsearFila($row, $headers);
+                if ($parsed === null) {
                     continue;
                 }
 
-                // Mapear cabeceras con robustez
-                $data = [];
-                foreach ($headers as $index => $header) {
-                    $data[$header] = $row[$index] ?? '';
-                }
-
-                // Si no hay columna "cliente", omitir
-                if (!isset($data['cliente'])) {
-                    continue;
-                }
-
-                $clienteVal = trim($data['cliente']);
-
-                // Ignorar la fila "Total" o vacías
-                if (stripos($clienteVal, 'total') === 0 || empty($clienteVal)) {
-                    continue;
-                }
-
-                // Extraer número de cliente (primer bloque de dígitos)
-                preg_match('/^\d+/', $clienteVal, $matches);
-                $clientNum = $matches[0] ?? null;
-
-                if (!$clientNum) {
-                    // Si no tiene número al inicio, usar el string completo como nombre
-                    $nombreCliente = $clienteVal;
-                    // Buscar por nombre
-                    $cliente = Cliente::where('nombre', $nombreCliente)->first();
-                } else {
-                    $cliente = Cliente::where('numero_cliente', $clientNum)->first();
-                    $nombreCliente = trim(preg_replace('/^\d+\s*[-_]?\s*/', '', $clienteVal));
-                }
-
-                // Limpiar montos
+                ['data' => $data, 'clientNum' => $clientNum, 'nombreCliente' => $nombreCliente] = $parsed;
                 $consolidado = $this->limpiarMonto($data['consolidado'] ?? '0');
-                $porVencer = $this->limpiarMonto($data['por_vencer'] ?? '0');
-                $de1a30 = $this->limpiarMonto($data['de_1_a_30_dias'] ?? '0');
-                $de31a60 = $this->limpiarMonto($data['de_31_a_60_dias'] ?? '0');
-                $de61a90 = $this->limpiarMonto($data['de_61_a_90_dias'] ?? '0');
-                $de91a120 = $this->limpiarMonto($data['de_91_a_120_dias'] ?? '0');
-                $masDe120 = $this->limpiarMonto($data['mas_de_120_dias'] ?? '0');
-
-                $totalOverdue = $de1a30 + $de31a60 + $de61a90 + $de91a120 + $masDe120;
+                $cliente = $this->resolverCliente($clientNum, $nombreCliente);
+                $clave = $this->generarClave($clientNum, $nombreCliente, $cliente);
 
                 if (!$cliente) {
                     $listaId = \App\Models\CatalogoListaDescuento::where('nombre', 'PUBLICO GENERAL')->first()?->id;
@@ -111,11 +110,14 @@ class ImportarReporteCobranzaService
                         $listaId = $lista->id;
                     }
 
-                    // Crear cliente nuevo
+                    $fechaInicioNuevo = $consolidado > 0
+                        ? ($fechasInicioPorClave[$clave] ?? $today)
+                        : null;
+
                     $cliente = Cliente::create([
                         'numero_cliente' => $clientNum ?? ('TEMP-' . uniqid()),
                         'nombre' => $nombreCliente ?: 'Cliente Importado',
-                        'fecha_inicio_credito' => $consolidado > 0 ? $today : null,
+                        'fecha_inicio_credito' => $fechaInicioNuevo,
                         'lista_actual_id' => $listaId,
                     ]);
                     $contadorNuevos++;
@@ -123,25 +125,25 @@ class ImportarReporteCobranzaService
 
                 $clientesProcesados[] = $cliente->id;
 
-                // Lógica de Inicio de Crédito y Factura
                 if ($consolidado > 0) {
-                    // Apertura de crédito: el CSV solo trae montos, no días ni límite autorizado
-                    if (null === $cliente->fecha_inicio_credito) {
-                        $cliente->update(['fecha_inicio_credito' => $today]);
-                    }
-
-                    // Plazo basado en configuración o 30 por defecto
-                    $diasCredito = ($cliente->dias_credito > 0) ? $cliente->dias_credito : 30;
-                    $fechaInicioCredito = $cliente->fecha_inicio_credito ? $cliente->fecha_inicio_credito->toDateString() : $today;
-                    $vencimientoCalculado = \Carbon\Carbon::parse($fechaInicioCredito)->addDays($diasCredito)->toDateString();
-
-                    // Buscar factura de cobranza activa (impaga)
                     $facturaActiva = CobranzaFactura::where('cliente_id', $cliente->id)
                         ->where('pagada', false)
                         ->first();
 
                     if (!$facturaActiva) {
-                        // Creación de crédito, la fecha_emision es cuando inició, y el vencimiento es estricto a los días
+                        $fechaInicioCredito = $fechasInicioPorClave[$clave] ?? $today;
+                        $cliente->update(['fecha_inicio_credito' => $fechaInicioCredito]);
+                        $cliente->refresh();
+                    } elseif (null === $cliente->fecha_inicio_credito) {
+                        $cliente->update(['fecha_inicio_credito' => $today]);
+                        $cliente->refresh();
+                    }
+
+                    $diasCredito = ($cliente->dias_credito > 0) ? $cliente->dias_credito : 30;
+                    $fechaInicioCredito = $cliente->fecha_inicio_credito ? $cliente->fecha_inicio_credito->toDateString() : $today;
+                    $vencimientoCalculado = \Carbon\Carbon::parse($fechaInicioCredito)->addDays($diasCredito)->toDateString();
+
+                    if (!$facturaActiva) {
                         $facturaActiva = CobranzaFactura::create([
                             'cliente_id' => $cliente->id,
                             'folio' => 'COB-' . $cliente->numero_cliente . '-' . date('Ymd'),
@@ -157,15 +159,16 @@ class ImportarReporteCobranzaService
                             'tipo_evento' => 'inicio_credito',
                             'monto_anterior' => 0,
                             'monto_nuevo' => $consolidado,
-                            'descripcion' => 'Inicio de nuevo crédito detectado por importación.',
+                            'descripcion' => 'Inicio de nuevo crédito detectado por importación. Fecha inicio: ' . $fechaInicioCredito . '.',
                         ]);
 
                         $clientesNuevosCreditosAnotificados[] = [
                             'cliente' => $cliente,
-                            'monto' => $consolidado
+                            'monto' => $consolidado,
                         ];
-                        
-                        // Validar si inicia ya excedido
+
+                        $contadorCreditosNuevos++;
+
                         $limiteFinal = (float) $cliente->monto_credito_autorizado;
                         if ($limiteFinal > 0 && $consolidado > $limiteFinal) {
                             $alertaPendiente = \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
@@ -185,15 +188,13 @@ class ImportarReporteCobranzaService
                                 $alertasLimiteExcedidoMasivo[] = [
                                     'cliente' => $cliente,
                                     'monto_actual' => $consolidado,
-                                    'limite' => $limiteFinal
+                                    'limite' => $limiteFinal,
                                 ];
                             }
                         }
-
                     } else {
                         $montoAnterior = $facturaActiva->monto;
 
-                        // Actualizamos monto y fecha de vencimiento (por si el usuario cambió los días de crédito)
                         $facturaActiva->update([
                             'monto' => $consolidado,
                             'fecha_vencimiento' => $vencimientoCalculado,
@@ -201,7 +202,6 @@ class ImportarReporteCobranzaService
                             'detectado_en_import_at' => null,
                         ]);
 
-                        // Limpiar facturas duplicadas para evitar fantasmas de pruebas anteriores
                         $facturasExtra = CobranzaFactura::where('cliente_id', $cliente->id)
                             ->where('pagada', false)
                             ->where('id', '!=', $facturaActiva->id)
@@ -212,7 +212,6 @@ class ImportarReporteCobranzaService
 
                         if ($consolidado < $montoAnterior) {
                             $facturaActiva->update(['tiene_abono' => true]);
-                            // Detección de ABONO parcial
                             CobranzaBitacora::create([
                                 'cliente_id' => $cliente->id,
                                 'usuario_id' => auth()->id() ?? 1,
@@ -222,8 +221,7 @@ class ImportarReporteCobranzaService
                                 'descripcion' => 'Abono parcial detectado.',
                                 'es_alerta' => false,
                             ]);
-                            
-                            // Si baja del límite autorizado, resolver cualquier alerta de límite superado pendiente
+
                             $limiteFinal = (float) $cliente->monto_credito_autorizado;
                             if ($limiteFinal > 0 && $consolidado <= $limiteFinal) {
                                 \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
@@ -232,13 +230,11 @@ class ImportarReporteCobranzaService
                                     ->update(['estado' => 'resuelta']);
                             }
                         } elseif ($consolidado > $montoAnterior) {
-                            // Detección de AUMENTO
                             $vencido = \Carbon\Carbon::parse($today)->greaterThan(\Carbon\Carbon::parse($facturaActiva->fecha_vencimiento));
                             $limiteFinal = (float) $cliente->monto_credito_autorizado;
                             $limiteSuperado = ($limiteFinal > 0 && $consolidado > $limiteFinal);
-                            
+
                             if ($vencido) {
-                                // Aumento IRREGULAR (después de fecha vencimiento)
                                 CobranzaBitacora::create([
                                     'cliente_id' => $cliente->id,
                                     'usuario_id' => auth()->id() ?? 1,
@@ -251,14 +247,12 @@ class ImportarReporteCobranzaService
 
                                 $cliente->update(['alerta_aumento_credito' => true]);
 
-                                // Agrupar para correo masivo y notificaciones web
                                 $alertasDetectadas[] = [
                                     'cliente' => $cliente,
                                     'montoAnterior' => $montoAnterior,
                                     'montoNuevo' => $consolidado,
                                 ];
                             } elseif ($limiteSuperado) {
-                                // Aumento con Límite Superado
                                 CobranzaBitacora::create([
                                     'cliente_id' => $cliente->id,
                                     'usuario_id' => auth()->id() ?? 1,
@@ -269,7 +263,6 @@ class ImportarReporteCobranzaService
                                     'es_alerta' => true,
                                 ]);
 
-                                // Crear alerta pendiente si no existe
                                 $alertaPendiente = \App\Models\CobranzaAlerta::where('cliente_id', $cliente->id)
                                     ->where('tipo', 'limite_superado')
                                     ->where('estado', '!=', 'resuelta')
@@ -284,15 +277,14 @@ class ImportarReporteCobranzaService
                                         'fecha_alerta' => $today,
                                         'estado' => 'pendiente',
                                     ]);
-                                    
+
                                     $alertasLimiteExcedidoMasivo[] = [
                                         'cliente' => $cliente,
                                         'monto_actual' => $consolidado,
-                                        'limite' => $limiteFinal
+                                        'limite' => $limiteFinal,
                                     ];
                                 }
                             } else {
-                                // Aumento NORMAL (dentro de días de crédito y no excede límite)
                                 CobranzaBitacora::create([
                                     'cliente_id' => $cliente->id,
                                     'usuario_id' => auth()->id() ?? 1,
@@ -307,25 +299,24 @@ class ImportarReporteCobranzaService
                     }
                     $contadorActualizados++;
                 } else {
-                    $this->marcarPagoPendienteConfirmacion(
+                    $this->liquidarCreditoDesdeImport(
                         $cliente,
                         'Saldo consolidado $0 detectado en importación.'
                     );
                     $contadorActualizados++;
                 }
             }
-            
-            // POST-PROCESSING: Clientes con deuda activa que NO aparecieron en el archivo
-            $clientesFaltantes = Cliente::whereHas('facturasCobranza', function($q) {
-                    $q->where('pagada', false);
-                })
+
+            $clientesFaltantes = Cliente::whereHas('facturasCobranza', function ($q) {
+                $q->where('pagada', false);
+            })
                 ->whereNotIn('id', $clientesProcesados)
                 ->get();
 
             foreach ($clientesFaltantes as $clienteFaltante) {
-                $this->marcarPagoPendienteConfirmacion(
+                $this->liquidarCreditoDesdeImport(
                     $clienteFaltante,
-                    'Cliente ausente en el reporte importado; pago pendiente de confirmación.'
+                    'Cliente ausente en el reporte importado; pago liquidado automáticamente.'
                 );
                 $contadorActualizados++;
             }
@@ -351,7 +342,7 @@ class ImportarReporteCobranzaService
                 $config = \App\Models\CobranzaConfiguracion::where('llave', 'notified_users_pagos')->first();
                 return $config && $config->valor ? json_decode($config->valor, true) : [];
             });
-            
+
             if (!empty($configUsersPagos)) {
                 $usuariosPago = User::whereIn('id', $configUsersPagos)->get();
                 if ($usuariosPago->isNotEmpty()) {
@@ -360,13 +351,126 @@ class ImportarReporteCobranzaService
             }
         }
 
-        fclose($file);
-
-        return [
+        $resultado = [
             'procesados' => count($clientesProcesados),
             'nuevos' => $contadorNuevos,
             'actualizados' => $contadorActualizados,
+            'creditos_nuevos' => $contadorCreditosNuevos,
+            'creditos_nuevos_detalle' => $clientesNuevosCreditosAnotificados,
         ];
+
+        $this->enviarAlertaCarga($resultado);
+
+        fclose($file);
+
+        return $resultado;
+    }
+
+    private function enviarAlertaCarga(array $resultado): void
+    {
+        $configUsersCarga = \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_users_carga', function () {
+            $config = \App\Models\CobranzaConfiguracion::where('llave', 'notified_users_carga')->first();
+            return $config && $config->valor ? json_decode($config->valor, true) : [];
+        });
+
+        if (empty($configUsersCarga)) {
+            return;
+        }
+
+        $usuariosCarga = User::whereIn('id', $configUsersCarga)->get();
+        if ($usuariosCarga->isEmpty()) {
+            return;
+        }
+
+        Notification::send($usuariosCarga, new AlertaCargaReporteCobranzaNotification(
+            $resultado,
+            auth()->user(),
+        ));
+    }
+
+    /**
+     * @return array{0: resource, 1: array, 2: string}
+     */
+    private function abrirArchivoCsv(UploadedFile $archivo): array
+    {
+        $path = $archivo->getRealPath();
+        $delimiter = $this->detectarDelimitador($path);
+        $file = fopen($path, 'r');
+
+        $headersRaw = null;
+        while (($row = fgetcsv($file, 0, $delimiter)) !== false) {
+            if (empty(array_filter($row))) {
+                continue;
+            }
+            $firstCol = preg_replace('/^\xEF\xBB\xBF/', '', trim($row[0]));
+            if (strtolower($firstCol) === 'cliente') {
+                $headersRaw = $row;
+                break;
+            }
+        }
+
+        if (!$headersRaw) {
+            fclose($file);
+            throw new Exception("No se encontró la cabecera 'Cliente' en el archivo.");
+        }
+
+        return [$file, $this->procesarCabeceras($headersRaw), $delimiter];
+    }
+
+    private function parsearFila(array $row, array $headers): ?array
+    {
+        if (empty(array_filter($row))) {
+            return null;
+        }
+
+        $data = [];
+        foreach ($headers as $index => $header) {
+            $data[$header] = $row[$index] ?? '';
+        }
+
+        if (!isset($data['cliente'])) {
+            return null;
+        }
+
+        $clienteVal = trim($data['cliente']);
+
+        if (stripos($clienteVal, 'total') === 0 || empty($clienteVal)) {
+            return null;
+        }
+
+        preg_match('/^\d+/', $clienteVal, $matches);
+        $clientNum = $matches[0] ?? null;
+        $nombreCliente = $clientNum
+            ? trim(preg_replace('/^\d+\s*[-_]?\s*/', '', $clienteVal))
+            : $clienteVal;
+
+        return [
+            'data' => $data,
+            'clientNum' => $clientNum,
+            'nombreCliente' => $nombreCliente,
+        ];
+    }
+
+    private function resolverCliente(?string $clientNum, string $nombreCliente): ?Cliente
+    {
+        if (!$clientNum) {
+            return Cliente::where('nombre', $nombreCliente)->first();
+        }
+
+        return Cliente::where('numero_cliente', $clientNum)->first();
+    }
+
+    private function generarClave(?string $clientNum, string $nombreCliente, ?Cliente $cliente): string
+    {
+        if ($cliente) {
+            return (string) $cliente->numero_cliente;
+        }
+
+        if ($clientNum) {
+            return $clientNum;
+        }
+
+        return 'nombre:' . md5(mb_strtolower(trim($nombreCliente)));
     }
 
     private function detectarDelimitador(string $path): string
@@ -375,8 +479,8 @@ class ImportarReporteCobranzaService
         if (!$file) {
             return ',';
         }
-        $line = fgets($file); // Primera línea
-        $line2 = fgets($file); // Segunda línea
+        $line = fgets($file);
+        $line2 = fgets($file);
         fclose($file);
 
         $texto = $line . ($line2 ?: '');
@@ -399,7 +503,6 @@ class ImportarReporteCobranzaService
 
         return array_map(function ($header) {
             $h = strtolower(trim($header));
-            // Remover acentos y espacios
             $h = str_replace(
                 ['á', 'é', 'í', 'ó', 'ú', ' ', 'ñ'],
                 ['a', 'e', 'i', 'o', 'u', '_', 'n'],
@@ -415,41 +518,18 @@ class ImportarReporteCobranzaService
         if ($montoLimpio === '-' || $montoLimpio === '') {
             return 0.00;
         }
-        // Soporte para formato de contabilidad negativo: (123.45) -> -123.45
         if (str_starts_with($montoLimpio, '(') && str_ends_with($montoLimpio, ')')) {
             $montoLimpio = '-' . substr($montoLimpio, 1, -1);
         }
         return is_numeric($montoLimpio) ? (float) $montoLimpio : 0.00;
     }
 
-    private function marcarPagoPendienteConfirmacion(Cliente $cliente, string $descripcion): void
+    private function liquidarCreditoDesdeImport(Cliente $cliente, string $motivo): void
     {
-        $facturasActivas = CobranzaFactura::where('cliente_id', $cliente->id)
-            ->where('pagada', false)
-            ->where('monto', '>', 0)
-            ->get();
-
-        if ($facturasActivas->isEmpty()) {
-            return;
-        }
-
-        $montoPendiente = (float) $facturasActivas->sum('monto');
-        $ahora = now();
-
-        CobranzaFactura::where('cliente_id', $cliente->id)
-            ->where('pagada', false)
-            ->update([
-                'pago_pendiente_confirmacion' => true,
-                'detectado_en_import_at' => $ahora,
-            ]);
-
-        CobranzaBitacora::create([
-            'cliente_id' => $cliente->id,
-            'usuario_id' => auth()->id() ?? 1,
-            'tipo_evento' => 'pago_detectado',
-            'monto_anterior' => $montoPendiente,
-            'monto_nuevo' => 0,
-            'descripcion' => $descripcion,
-        ]);
+        $this->confirmarPago->liquidarDesdeImport(
+            $cliente,
+            'Pago liquidado automáticamente por importación. ' . $motivo,
+            auth()->id(),
+        );
     }
 }

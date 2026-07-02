@@ -95,18 +95,11 @@ class AutoCobranzaController extends Controller
             })
         );
 
-        $pagosPendientesConfirmacion = CobranzaFactura::query()
-            ->where('pagada', false)
-            ->where('pago_pendiente_confirmacion', true)
-            ->where('monto', '>', 0)
-            ->count();
-
         return Inertia::render('AutoCobranza/Index', [
             'clientes' => $clientes,
             'alertas' => $alertas,
             'cartera' => $cartera,
             'aumentosPendientes' => $aumentosPendientes,
-            'pagosPendientesConfirmacion' => $pagosPendientesConfirmacion,
             'configuracionHorarios' => $configuracionHorarios,
             'configuracionAlertas' => $configuracionAlertas,
             'filtros' => [
@@ -116,6 +109,10 @@ class AutoCobranzaController extends Controller
             'users' => \App\Models\User::select('id', 'name', 'email')->get(),
             'notifiedUsersPagos' => \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_users_pagos', function () {
                 $config = \App\Models\CobranzaConfiguracion::where('llave', 'notified_users_pagos')->first();
+                return $config && $config->valor ? json_decode($config->valor, true) : [];
+            }),
+            'notifiedUsersCarga' => \Illuminate\Support\Facades\Cache::rememberForever('cobranza_config_users_carga', function () {
+                $config = \App\Models\CobranzaConfiguracion::where('llave', 'notified_users_carga')->first();
                 return $config && $config->valor ? json_decode($config->valor, true) : [];
             }),
         ]);
@@ -153,6 +150,12 @@ class AutoCobranzaController extends Controller
             $configUsersPagos = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'notified_users_pagos']);
             $configUsersPagos->update(['valor' => json_encode($request->notified_users_pagos)]);
             \Illuminate\Support\Facades\Cache::forever('cobranza_config_users_pagos', $request->notified_users_pagos);
+        }
+
+        if ($request->has('notified_users_carga')) {
+            $configUsersCarga = \App\Models\CobranzaConfiguracion::firstOrCreate(['llave' => 'notified_users_carga']);
+            $configUsersCarga->update(['valor' => json_encode($request->notified_users_carga)]);
+            \Illuminate\Support\Facades\Cache::forever('cobranza_config_users_carga', $request->notified_users_carga);
         }
 
         return redirect()->back()->with('success', 'Configuración actualizada exitosamente.');
@@ -220,6 +223,30 @@ class AutoCobranzaController extends Controller
     }
 
     /**
+     * Previsualiza créditos nuevos detectados en el CSV antes de procesar la carga.
+     */
+    public function previsualizarImporte(Request $request, ImportarReporteCobranzaService $importador)
+    {
+        $this->authorize('cobranza.importar_reporte');
+
+        $request->validate([
+            'archivo' => 'required|file|mimes:csv,txt',
+        ]);
+
+        try {
+            $creditosNuevos = $importador->analizarCreditosNuevos($request->file('archivo'));
+
+            return response()->json([
+                'creditos_nuevos' => $creditosNuevos,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error al analizar el archivo: ' . $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
      * Procesa la subida del reporte de cobranza en CSV.
      */
     public function importarReporte(Request $request, ImportarReporteCobranzaService $importador)
@@ -227,13 +254,21 @@ class AutoCobranzaController extends Controller
         $this->authorize('cobranza.importar_reporte');
 
         $request->validate([
-            'archivo' => 'required|file|mimes:csv,txt'
+            'archivo' => 'required|file|mimes:csv,txt',
+            'ajustes_fechas' => 'nullable|array',
+            'ajustes_fechas.*.clave' => 'required_with:ajustes_fechas|string',
+            'ajustes_fechas.*.fecha_inicio_credito' => 'required_with:ajustes_fechas|date',
         ]);
 
         try {
-            $resultado = $importador->ejecutar($request->file('archivo'));
+            $fechasInicioPorClave = [];
+            foreach ($request->input('ajustes_fechas', []) as $ajuste) {
+                $fechasInicioPorClave[$ajuste['clave']] = $ajuste['fecha_inicio_credito'];
+            }
 
-            return redirect()->back()->with('success', "Reporte procesado exitosamente. Clientes procesados: {$resultado['procesados']}, creados: {$resultado['nuevos']}, con deuda vencida: {$resultado['actualizados']}.");
+            $resultado = $importador->ejecutar($request->file('archivo'), $fechasInicioPorClave);
+
+            return redirect()->back()->with('success', "Reporte procesado exitosamente. Clientes procesados: {$resultado['procesados']}, creados: {$resultado['nuevos']}, créditos nuevos: {$resultado['creditos_nuevos']}, actualizados: {$resultado['actualizados']}.");
         } catch (\Exception $e) {
             return redirect()->back()->withErrors(['archivo' => 'Error al importar: ' . $e->getMessage()]);
         }
@@ -281,14 +316,16 @@ class AutoCobranzaController extends Controller
     }
 
     /**
-     * Devuelve los clientes con historial de crédito (paginado) para la pestaña de Historial.
+     * Devuelve clientes con crédito activo (paginado) para la pestaña de Historial.
      */
     public function historial(Request $request)
     {
         $this->authorize('cobranza.ver');
 
-        $query = Cliente::with(['facturasCobranza'])
-            ->whereHas('facturasCobranza');
+        $query = Cliente::with(['facturaCobranzaActiva'])
+            ->whereHas('facturasCobranza', function ($q) {
+                $q->where('pagada', false)->where('monto', '>', 0);
+            });
 
         if ($request->filled('q')) {
             $terminos = array_filter(array_map('trim', explode(',', $request->q)));

@@ -25,14 +25,43 @@ class ConfirmarPagoCobranzaService
             return ['ok' => false, 'motivo' => 'sin_pendiente'];
         }
 
-        $cliente = $factura->cliente;
+        return $this->liquidarCliente($factura->cliente, $factura, $usuarioId, 'Pago confirmado manualmente (factura {folio}).');
+    }
+
+    public function liquidarDesdeImport(Cliente $cliente, string $descripcion, ?int $usuarioId = null): array
+    {
+        $factura = CobranzaFactura::query()
+            ->where('cliente_id', $cliente->id)
+            ->where('pagada', false)
+            ->where('monto', '>', 0)
+            ->orderByDesc('monto')
+            ->first();
+
+        if (!$factura) {
+            return ['ok' => false, 'motivo' => 'sin_factura_activa'];
+        }
+
+        return $this->liquidarCliente($cliente, $factura, $usuarioId, $descripcion, esAutomatico: true);
+    }
+
+    private function liquidarCliente(
+        ?Cliente $cliente,
+        CobranzaFactura $facturaReferencia,
+        ?int $usuarioId,
+        string $descripcionPlantilla,
+        bool $esAutomatico = false,
+    ): array {
         if (!$cliente) {
             return ['ok' => false, 'motivo' => 'sin_cliente'];
         }
 
+        if ($facturaReferencia->pagada) {
+            return ['ok' => false, 'motivo' => 'ya_pagada'];
+        }
+
         $montoPagado = 0.0;
 
-        DB::transaction(function () use ($factura, $cliente, $usuarioId, &$montoPagado) {
+        DB::transaction(function () use ($cliente, $facturaReferencia, $usuarioId, $descripcionPlantilla, $esAutomatico, &$montoPagado) {
             $facturasActivas = CobranzaFactura::query()
                 ->where('cliente_id', $cliente->id)
                 ->where('pagada', false)
@@ -59,13 +88,15 @@ class ConfirmarPagoCobranzaService
                 'alerta_aumento_credito' => false,
             ]);
 
+            $descripcion = str_replace('{folio}', $facturaReferencia->folio, $descripcionPlantilla);
+
             CobranzaBitacora::create([
                 'cliente_id' => $cliente->id,
                 'usuario_id' => $usuarioId ?? auth()->id(),
-                'tipo_evento' => 'pago',
+                'tipo_evento' => $esAutomatico ? 'pago' : 'pago',
                 'monto_anterior' => $montoPagado,
                 'monto_nuevo' => 0,
-                'descripcion' => "Pago confirmado manualmente (factura {$factura->folio}).",
+                'descripcion' => $descripcion,
             ]);
         });
 

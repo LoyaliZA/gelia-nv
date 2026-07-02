@@ -178,7 +178,6 @@ export const PERMISOS_NO_DELEGABLES_POR_GERENTE = new Set([
     'configuracion.ver_auditoria',
     'usuarios.gestionar',
     'usuarios.generar_permisos',
-    'solicitudes.confirmar_pago',
     'personalizacion.gestionar',
     'api_externa.gestionar',
     'api_externa.ver_auditoria',
