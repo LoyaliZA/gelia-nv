@@ -51,7 +51,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
     const showListados = can('listados.ver');
     const showLimpieza = can('funciones.limpieza_clientes');
     const showEjercicioEscalonamiento = can('ejercicio_escalonamiento.ver');
-    const showHerramientas = showReportes || showListados || showLimpieza || showEjercicioEscalonamiento;
+    
+    const showAsistencia = can('funciones.asistencia');
+    const showAvisos = can('funciones.avisos');
+    const showGastos = can('funciones.gastos');
+    const showLimpiezaArchivos = can('funciones.limpieza_archivos');
+    const showTransacciones = can('funciones.transacciones');
+
+    const showHerramientas = showReportes || showListados || showLimpieza || showEjercicioEscalonamiento || showAsistencia || showAvisos || showGastos || showLimpiezaArchivos || showTransacciones;
 
     const solicitudesChildren = [
         can('solicitudes.ver_listado') && {
@@ -177,6 +184,46 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: Calculator,
             href: () => routeHref('ejercicio_escalonamiento.index', '/funciones/ejercicio-escalonamiento'),
             active: (url) => url.startsWith('/funciones/ejercicio-escalonamiento'),
+        },
+        showAsistencia && {
+            type: 'link',
+            id: 'asistencia',
+            label: 'Asistencia',
+            icon: Users,
+            href: () => routeHref('funciones.asistencia.index', '/funciones/asistencia'),
+            active: (url) => url.startsWith('/funciones/asistencia'),
+        },
+        showAvisos && {
+            type: 'link',
+            id: 'avisos',
+            label: 'Avisos Mercancía',
+            icon: FileSpreadsheet,
+            href: () => routeHref('funciones.avisos.index', '/funciones/avisos'),
+            active: (url) => url.startsWith('/funciones/avisos'),
+        },
+        showGastos && {
+            type: 'link',
+            id: 'gastos',
+            label: 'Depuración Gastos',
+            icon: DollarSign,
+            href: () => routeHref('funciones.gastos.index', '/funciones/gastos'),
+            active: (url) => url.startsWith('/funciones/gastos'),
+        },
+        showLimpiezaArchivos && {
+            type: 'link',
+            id: 'limpieza_archivos',
+            label: 'Limpieza Archivos',
+            icon: Database,
+            href: () => routeHref('funciones.limpieza_archivos.index', '/funciones/limpieza-archivos'),
+            active: (url) => url.startsWith('/funciones/limpieza-archivos'),
+        },
+        showTransacciones && {
+            type: 'link',
+            id: 'transacciones',
+            label: 'Depuración Transacciones',
+            icon: Receipt,
+            href: () => routeHref('funciones.transacciones.index', '/funciones/transacciones'),
+            active: (url) => url.startsWith('/funciones/transacciones'),
         },
     ].filter(Boolean);
 

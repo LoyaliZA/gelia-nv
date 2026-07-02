@@ -118,6 +118,34 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ══════════════════════════════════════════════════════════════════════
+    // MÓDULOS: FUNCIONES OPERATIVAS ADICIONALES
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:funciones.asistencia'])->group(function () {
+        Route::get('/funciones/asistencia', [\App\Http\Controllers\FuncionesOperativas\AsistenciaController::class, 'index'])->name('funciones.asistencia.index');
+        Route::post('/funciones/asistencia/procesar', [\App\Http\Controllers\FuncionesOperativas\AsistenciaController::class, 'procesar'])->name('funciones.asistencia.procesar');
+    });
+
+    Route::middleware(['can:funciones.avisos'])->group(function () {
+        Route::get('/funciones/avisos', [\App\Http\Controllers\FuncionesOperativas\AvisosController::class, 'index'])->name('funciones.avisos.index');
+        Route::post('/funciones/avisos/procesar', [\App\Http\Controllers\FuncionesOperativas\AvisosController::class, 'procesar'])->name('funciones.avisos.procesar');
+    });
+
+    Route::middleware(['can:funciones.gastos'])->group(function () {
+        Route::get('/funciones/gastos', [\App\Http\Controllers\FuncionesOperativas\GastosController::class, 'index'])->name('funciones.gastos.index');
+        Route::post('/funciones/gastos/procesar', [\App\Http\Controllers\FuncionesOperativas\GastosController::class, 'procesar'])->name('funciones.gastos.procesar');
+    });
+
+    Route::middleware(['can:funciones.limpieza_archivos'])->group(function () {
+        Route::get('/funciones/limpieza-archivos', [\App\Http\Controllers\FuncionesOperativas\LimpiezaArchivosController::class, 'index'])->name('funciones.limpieza_archivos.index');
+        Route::post('/funciones/limpieza-archivos/procesar', [\App\Http\Controllers\FuncionesOperativas\LimpiezaArchivosController::class, 'procesar'])->name('funciones.limpieza_archivos.procesar');
+    });
+
+    Route::middleware(['can:funciones.transacciones'])->group(function () {
+        Route::get('/funciones/transacciones', [\App\Http\Controllers\FuncionesOperativas\TransaccionesController::class, 'index'])->name('funciones.transacciones.index');
+        Route::post('/funciones/transacciones/procesar', [\App\Http\Controllers\FuncionesOperativas\TransaccionesController::class, 'procesar'])->name('funciones.transacciones.procesar');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: PLANTILLA BELLAROMA
     // ══════════════════════════════════════════════════════════════════════
     Route::middleware(['can:plantilla_pedidos.ver'])->prefix('plantilla-bellaroma')->name('plantilla_bellaroma.')->group(function () {
