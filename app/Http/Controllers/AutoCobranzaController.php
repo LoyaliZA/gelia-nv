@@ -10,6 +10,7 @@ use App\Services\Cobranza\ConfirmarPagoCobranzaService;
 use App\Services\Cobranza\CobranzaAlertasReglasService;
 use App\Services\Cobranza\ImportarReporteCobranzaService;
 use App\Services\Cobranza\RecalcularCreditoClienteService;
+use App\Services\Cobranza\SincronizarAlertasOperativasService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,6 +19,7 @@ class AutoCobranzaController extends Controller
 {
     public function __construct(
         private CobranzaAlertasReglasService $reglasAlertas,
+        private SincronizarAlertasOperativasService $sincronizarAlertas,
     ) {}
 
     private function broadcastEjecucionActualizada(string $accion, ?int $clienteId = null, ?int $alertaId = null): void
@@ -37,11 +39,13 @@ class AutoCobranzaController extends Controller
     {
         $this->authorize('cobranza.ver');
 
+        $this->sincronizarAlertas->ejecutar();
+
         // 1. Clientes con saldo activo: búsqueda y orden en servidor
         $clientes = $this->queryClientesConCredito($request);
 
         // 2. Alertas operativas (filtradas por facturas activas y que no estén resueltas)
-        $alertas = CobranzaAlerta::with(['cliente', 'factura'])
+        $alertas = CobranzaAlerta::with(['cliente.facturasCobranzaActivas', 'factura'])
             ->where('estado', '!=', 'resuelta')
             ->whereHas('factura', function ($query) {
                 $query->where('pagada', false)->where('monto', '>', 0);
@@ -53,14 +57,14 @@ class AutoCobranzaController extends Controller
                     return true;
                 }
                 $limite = (float) ($alerta->cliente?->monto_credito_autorizado ?? 0);
-                $consolidado = (float) ($alerta->factura?->monto ?? 0);
+                $consolidado = (float) ($alerta->cliente?->saldo_total_pendiente ?? $alerta->factura?->monto ?? 0);
 
                 return $limite > 0 && $consolidado > $limite;
             })
             ->values();
 
         // 3. Agrupación administrativa de cartera vencida
-        $facturasVencidas = CobranzaFactura::where('pagada', false)->get();
+        $facturasVencidas = CobranzaFactura::where('pagada', false)->where('monto', '>', 0)->get();
         $cartera = [
             'rango_1_30' => ['cantidad' => 0, 'total' => 0.00],
             'rango_31_60' => ['cantidad' => 0, 'total' => 0.00],
@@ -90,7 +94,7 @@ class AutoCobranzaController extends Controller
             }
         }
 
-        $aumentosPendientes = Cliente::with('facturasActivas')
+        $aumentosPendientes = Cliente::with('facturasCobranzaActivas')
             ->where('alerta_aumento_credito', true)
             ->get();
 
@@ -174,7 +178,7 @@ class AutoCobranzaController extends Controller
 
     private function queryClientesConCredito(Request $request)
     {
-        $query = Cliente::with(['vendedor', 'listaDescuento', 'facturaCobranzaActiva'])
+        $query = Cliente::with(['vendedor', 'listaDescuento', 'facturasCobranzaActivas'])
             ->whereHas('facturasCobranza', function ($q) {
                 $q->where('pagada', false)->where('monto', '>', 0);
             });
@@ -191,18 +195,16 @@ class AutoCobranzaController extends Controller
         }
 
         $pagoPendienteSubquery = CobranzaFactura::query()
-            ->selectRaw('CASE WHEN pago_pendiente_confirmacion = 1 THEN 0 ELSE 1 END')
+            ->selectRaw('MIN(CASE WHEN pago_pendiente_confirmacion = 1 THEN 0 ELSE 1 END)')
             ->whereColumn('cliente_id', 'clientes.id')
             ->where('pagada', false)
-            ->orderByDesc('monto')
-            ->limit(1);
+            ->where('monto', '>', 0);
 
         $saldoSubquery = CobranzaFactura::query()
-            ->select('monto')
+            ->selectRaw('COALESCE(SUM(monto), 0)')
             ->whereColumn('cliente_id', 'clientes.id')
             ->where('pagada', false)
-            ->orderByDesc('monto')
-            ->limit(1);
+            ->where('monto', '>', 0);
 
         $estadoSubquery = CobranzaFactura::query()
             ->selectRaw("
@@ -216,7 +218,9 @@ class AutoCobranzaController extends Controller
             ")
             ->whereColumn('cliente_id', 'clientes.id')
             ->where('pagada', false)
-            ->orderByDesc('monto')
+            ->where('monto', '>', 0)
+            ->orderByRaw('CASE WHEN fecha_vencimiento < CURDATE() THEN 0 ELSE 1 END')
+            ->orderBy('fecha_vencimiento')
             ->limit(1);
 
         match ($request->input('orden', 'automatico')) {
@@ -331,20 +335,34 @@ class AutoCobranzaController extends Controller
     }
 
     /**
-     * Devuelve clientes con crédito activo (paginado) para la pestaña de Historial.
+     * Devuelve el historial completo de folios de un cliente (activos y liquidados).
+     */
+    public function foliosCliente(Cliente $cliente)
+    {
+        $this->authorize('cobranza.ver');
+
+        $cliente->load(['facturasCobranza' => function ($query) {
+            $query->orderByDesc('updated_at');
+        }]);
+
+        return response()->json($cliente);
+    }
+
+    /**
+     * Devuelve clientes con historial de crédito (activo o liquidado) para la pestaña de Historial.
      */
     public function historial(Request $request)
     {
         $this->authorize('cobranza.ver');
 
-        $query = Cliente::with(['facturaCobranzaActiva'])
-            ->whereHas('facturasCobranza', function ($q) {
-                $q->where('pagada', false)->where('monto', '>', 0);
-            });
+        $query = Cliente::with(['facturasCobranza' => function ($q) {
+            $q->orderByDesc('updated_at');
+        }])
+            ->whereHas('facturasCobranza');
 
         if ($request->filled('q')) {
             $terminos = array_filter(array_map('trim', explode(',', $request->q)));
-            
+
             $query->where(function ($sub) use ($terminos) {
                 foreach ($terminos as $termino) {
                     $sub->orWhere(function ($sub2) use ($termino) {
@@ -357,7 +375,15 @@ class AutoCobranzaController extends Controller
             });
         }
 
-        $clientes = $query->orderByDesc('id')->paginate(10);
+        $clientes = $query
+            ->orderByRaw('(
+                SELECT COUNT(*) FROM cobranza_facturas
+                WHERE cobranza_facturas.cliente_id = clientes.id
+                AND cobranza_facturas.pagada = 0
+                AND cobranza_facturas.monto > 0
+            ) DESC')
+            ->orderByDesc('updated_at')
+            ->paginate(10);
 
         return response()->json($clientes);
     }

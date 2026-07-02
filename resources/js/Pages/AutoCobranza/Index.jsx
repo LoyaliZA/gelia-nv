@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, router, useForm } from '@inertiajs/react';
 import {
-    CreditCard, Users, Clock, Coins, Search, FileText, ArrowRight, Upload,
+    Users, Clock, Coins, Search, FileText, ArrowRight, Upload,
     Volume2, VolumeX, Phone, MessageSquare, Check, X, AlertCircle, BarChart3, Settings, RefreshCw
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -19,11 +19,19 @@ import {
     normalizarConfigCobranzaAlertas,
 } from '../../utils/cobranzaAlertasReglas';
 import ModalHistorialCliente from './Components/ModalHistorialCliente';
+import TarjetaClienteCredito from './Components/TarjetaClienteCredito';
 import ModalAbonosDelDia from './Components/ModalAbonosDelDia';
 import ModalAjustesInicialesCredito from './Components/ModalAjustesInicialesCredito';
 import axios from 'axios';
 import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
 import useCobranzaRealtime from '../../hooks/useCobranzaRealtime';
+import {
+    facturaCriticaCliente,
+    facturasActivasCliente,
+    cantidadFoliosHistorialCliente,
+    saldoTotalCliente,
+    saldoVencidoCliente,
+} from '../../utils/cobranzaCliente';
 
 const PROPS_COBRANZA = ['clientes', 'alertas', 'cartera', 'aumentosPendientes', 'filtros'];
 
@@ -130,14 +138,14 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     }, []);
 
     const recargarTimerRef = useRef(null);
-    const programarRecargaCredibox = useCallback(() => {
+    const programarRecargaCredibox = useCallback((origen = 'desconocido') => {
         if (recargarTimerRef.current) clearTimeout(recargarTimerRef.current);
         recargarTimerRef.current = setTimeout(() => {
             recargarCredibox();
             cargarAbonosDelDia();
             refrescarBitacoraAbierta();
         }, 500);
-    }, [recargarCredibox, refrescarBitacoraAbierta]);
+    }, [recargarCredibox, refrescarBitacoraAbierta, alertas?.length]);
 
     const esNotificacionCobranza = (payload) => {
         if (payload?.modulo === 'cobranza') return true;
@@ -149,13 +157,13 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
             || tipo === 'pago_liquidado';
     };
 
-    useCobranzaRealtime(programarRecargaCredibox);
+    useCobranzaRealtime(() => programarRecargaCredibox('echo'));
 
     useEffect(() => {
         const onNotification = (event) => {
             const payload = event?.detail || {};
             if (!esNotificacionCobranza(payload)) return;
-            programarRecargaCredibox();
+            programarRecargaCredibox('notification');
         };
         window.addEventListener('notification-received', onNotification);
         return () => {
@@ -268,10 +276,11 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
         return monto != null && Number(monto) > 0 ? Number(monto) : null;
     };
 
-    const saldoConsolidado = (cliente) => {
-        const saldo = cliente.factura_cobranza_activa?.monto;
-        return saldo != null && Number(saldo) > 0 ? Number(saldo) : null;
-    };
+    const saldoConsolidado = (cliente) => saldoTotalCliente(cliente);
+
+    const facturaCritica = (cliente) => facturaCriticaCliente(cliente);
+
+    const abrirDesgloseFolios = (cliente) => setSelectedHistorialCliente(cliente);
 
     // Text to Speech logic
     const reproducirVozReporte = () => {
@@ -426,7 +435,32 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
 
     // Montos totales para KPIs
     const totalCarteraVencida = Object.values(cartera).reduce((acc, curr) => acc + curr.total, 0);
-    const totalAlertasHoy = alertas.length;
+    const alertasPorCliente = useMemo(() => {
+        const porCliente = new Map();
+
+        alertas.forEach((alerta) => {
+            const clienteId = alerta.cliente?.id ?? alerta.cliente_id;
+            if (!clienteId) return;
+
+            const existente = porCliente.get(clienteId);
+            if (!existente) {
+                porCliente.set(clienteId, alerta);
+                return;
+            }
+
+            if (alerta.tipo === 'limite_superado' && existente.tipo !== 'limite_superado') {
+                porCliente.set(clienteId, alerta);
+                return;
+            }
+
+            if ((alerta.dias_atraso ?? 0) > (existente.dias_atraso ?? 0)) {
+                porCliente.set(clienteId, alerta);
+            }
+        });
+
+        return [...porCliente.values()];
+    }, [alertas]);
+    const totalAlertasHoy = alertasPorCliente.length;
 
     return (
         <AppLayout auth={auth}>
@@ -656,12 +690,12 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                             </p>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-                                {alertas.length === 0 ? (
+                                {alertasPorCliente.length === 0 ? (
                                     <div className="col-span-full py-12 text-center text-xs theme-text-muted uppercase tracking-wider font-bold">
                                         No hay llamadas programadas ni clientes pendientes de contactar.
                                     </div>
                                 ) : (
-                                    alertas.map((alerta) => {
+                                    alertasPorCliente.map((alerta) => {
                                         const esDiaDeLlamada = alerta.tipo === 'limite_superado'
                                             || esDiaDeLlamadaCobranza(alerta.dias_atraso, configuracionAlertas);
                                         const diasParaLlamar = alerta.tipo === 'limite_superado'
@@ -670,96 +704,19 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                         const esPendiente = alerta.estado === 'pendiente';
 
                                         return (
-                                            <div key={alerta.id} className={geliaCardClass('p-6 border flex flex-col hover:shadow-md transition-all duration-300 theme-border hover:border-[var(--color-primario)]/50')}>
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center flex-wrap gap-2 mb-1">
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)]">
-                                                                No. {alerta.cliente.numero_cliente}
-                                                            </span>
-                                                            {alerta.tipo === 'limite_superado' ? (
-                                                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-purple-500 text-white animate-pulse">
-                                                                    Límite Superado
-                                                                </span>
-                                                            ) : (
-                                                                !esDiaDeLlamada ? (
-                                                                    <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-amber-500 text-white">
-                                                                        {diasParaLlamar} {diasParaLlamar === 1 ? 'día' : 'días'} p/ llamar
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-500 text-white animate-pulse">
-                                                                        Vencido ({alerta.dias_atraso} días)
-                                                                    </span>
-                                                                )
-                                                            )}
-                                                            {!esPendiente && (
-                                                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-blue-500 text-white">
-                                                                    {alerta.estado.replace('_', ' ')}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <h3 className="text-sm font-bold theme-text-main leading-tight">
-                                                            {alerta.cliente.nombre}
-                                                        </h3>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t theme-border/60">
-                                                    <div>
-                                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Teléfono</p>
-                                                        <p className="text-xs font-bold theme-text-main truncate">
-                                                            {alerta.cliente.telefono || <span className="theme-text-muted font-normal italic">Sin teléfono</span>}
-                                                        </p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Correo</p>
-                                                        <p className="text-xs font-bold theme-text-main truncate" title={alerta.cliente.correo_electronico}>
-                                                            {alerta.cliente.correo_electronico || <span className="theme-text-muted font-normal italic">Sin correo</span>}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t theme-border/60">
-                                                    <div>
-                                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Inicio Crédito</p>
-                                                        <p className="text-xs font-bold theme-text-main">
-                                                            {alerta.cliente.fecha_inicio_credito || <span className="theme-text-muted font-normal italic">N/A</span>}
-                                                        </p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Vencimiento</p>
-                                                        <p className="text-xs font-bold theme-text-main">
-                                                            {alerta.factura?.fecha_vencimiento ? new Date(alerta.factura.fecha_vencimiento).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).replace('.', '') : <span className="theme-text-muted font-normal italic">N/A</span>}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-4 pt-4 border-t theme-border/60 gap-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Monto Vencido</span>
-                                                        <span className="text-sm font-black text-red-500">
-                                                            {formatoMoneda(alerta.factura?.monto || 0)}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex gap-2 items-center">
-                                                        {puedeVerBitacora && (
-                                                            <button
-                                                                onClick={() => abrirBitacora(alerta.cliente)}
-                                                                className="p-2 rounded-xl text-[10px] font-black uppercase theme-element border border-transparent hover:border-[var(--color-primario)]/30 text-zinc-500 hover:text-[var(--color-primario)] transition-colors"
-                                                                title="Ver Bitácora"
-                                                            >
-                                                                <FileText className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => abrirModalLlamada(alerta)}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase theme-element border theme-border hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-all"
-                                                        >
-                                                            <MessageSquare className="w-3.5 h-3.5" /> Bitácora
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            <TarjetaClienteCredito
+                                                key={alerta.cliente?.id ?? alerta.id}
+                                                cliente={alerta.cliente}
+                                                modo="operacional"
+                                                alerta={alerta}
+                                                esDiaDeLlamada={esDiaDeLlamada}
+                                                diasParaLlamar={diasParaLlamar}
+                                                esPendiente={esPendiente}
+                                                puedeVerBitacora={puedeVerBitacora}
+                                                onVerFolios={() => abrirDesgloseFolios(alerta.cliente)}
+                                                onBitacora={() => abrirBitacora(alerta.cliente)}
+                                                onRegistrarLlamada={() => abrirModalLlamada(alerta)}
+                                            />
                                         );
                                     })
                                 )}
@@ -818,7 +775,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                     <h2 className="text-lg font-black uppercase italic tracking-tighter theme-text-main m-0">Subir Reporte de Cobranza_</h2>
                                 </div>
                                 <p className="text-xs theme-text-muted">
-                                    Sube el archivo CSV de cobranza consolidada para actualizar automáticamente el inicio de crédito de los clientes y recalcular la antigüedad de los saldos.
+                                    Sube el archivo CSV CXC detallado (Folio, Fecha emisión, Saldo Pendiente) o el reporte consolidado legacy para actualizar automáticamente los saldos y vencimientos de los clientes.
                                 </p>
 
                                 <form onSubmit={submitImportar} className="space-y-4">
@@ -840,7 +797,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                                     Seleccionar o arrastrar archivo
                                                 </p>
                                                 <p className="text-[10px] theme-text-muted mt-1">
-                                                    CSV estructurado (Cliente, Consolidado, De 1 a 30 días, etc.)
+                                                    CSV CXC detallado o consolidado legacy (Cliente, Consolidado, etc.)
                                                 </p>
                                             </div>
                                         )}
@@ -915,8 +872,6 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                 clientes.data.map((cliente) => {
                                     const autorizado = montoAutorizado(cliente);
                                     const consolidado = saldoConsolidado(cliente);
-                                    const facturaActiva = cliente.factura_cobranza_activa;
-
                                     let hasAlerta = cliente.alerta_aumento_credito;
                                     const limiteSuperado = autorizado > 0 && consolidado > autorizado;
 
@@ -924,146 +879,20 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                         hasAlerta = true;
                                     }
 
-                                    const fechaVencimiento = cliente.factura_cobranza_activa?.fecha_vencimiento;
-                                    let diasRestantes = null;
-                                    let colorBadge = '';
-                                    let textoBadge = '';
-                                    let fechaFormateada = '';
-
-                                    if (fechaVencimiento) {
-                                        // Asegurarnos de tomar solo YYYY-MM-DD en caso de que venga con formato ISO
-                                        const datePart = fechaVencimiento.split('T')[0];
-                                        const [y, m, d] = datePart.split('-');
-                                        const vDate = new Date(y, m - 1, d);
-                                        const today = new Date();
-                                        today.setHours(0, 0, 0, 0);
-
-                                        fechaFormateada = vDate.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: '2-digit' });
-
-                                        const diffTime = vDate.getTime() - today.getTime();
-                                        diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                                        if (diasRestantes > 7) {
-                                            colorBadge = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-                                            textoBadge = `Vence en ${diasRestantes} días`;
-                                        } else if (diasRestantes > 0 && diasRestantes <= 7) {
-                                            colorBadge = 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-                                            textoBadge = `Vence en ${diasRestantes} días`;
-                                        } else if (diasRestantes === 0) {
-                                            colorBadge = 'bg-red-500/10 text-red-500 border-red-500/20 animate-pulse';
-                                            textoBadge = 'Vence HOY';
-                                        } else {
-                                            colorBadge = 'bg-red-500/10 text-red-500 border-red-500/20 font-black';
-                                            textoBadge = `Vencido hace ${Math.abs(diasRestantes)} días`;
-                                        }
-                                    }
-
                                     return (
-                                        <div key={cliente.id} className={geliaCardClass(`p-6 border flex flex-col hover:shadow-md transition-all duration-300 ${hasAlerta ? 'border-red-500/50 bg-red-500/5 dark:bg-red-500/10 hover:border-red-500' : 'theme-border hover:border-[var(--color-primario)]/50'}`)}>
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center flex-wrap gap-2 mb-1">
-                                                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)]">
-                                                            No. {cliente.numero_cliente}
-                                                        </span>
-                                                        {cliente.alerta_aumento_credito && (
-                                                            <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-500 text-white animate-pulse">
-                                                                Alerta
-                                                            </span>
-                                                        )}
-                                                        {limiteSuperado && (
-                                                            <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-purple-500 text-white animate-pulse">
-                                                                Límite Excedido
-                                                            </span>
-                                                        )}
-                                                        {cliente.factura_cobranza_activa?.tiene_abono && (
-                                                            <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                                                                Abonado
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <h3 className="text-sm font-bold theme-text-main leading-tight flex items-center gap-1.5">
-                                                        {cliente.nombre}
-                                                    </h3>
-                                                    <p className="text-[10px] theme-text-muted mt-1.5">{cliente.rfc || 'Sin RFC'}</p>
-                                                </div>
-                                                {puedeVerBitacora && (
-                                                    <button onClick={() => abrirBitacora(cliente)} className="p-1.5 rounded-xl theme-element border border-transparent hover:border-[var(--color-primario)]/30 text-zinc-400 hover:text-[var(--color-primario)] transition-colors" title="Ver Bitácora">
-                                                        <FileText className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t theme-border/60">
-                                                <div>
-                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Autorizado</p>
-                                                    <p className="text-sm font-black theme-text-main">
-                                                        {autorizado != null ? formatoMoneda(autorizado) : <span className="text-xs font-semibold theme-text-muted">N/A</span>}
-                                                    </p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Consolidado</p>
-                                                    <p className="text-sm font-black text-amber-600 dark:text-amber-400">
-                                                        {consolidado != null ? formatoMoneda(consolidado) : <span className="text-xs font-semibold theme-text-muted">S/S</span>}
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex flex-col lg:flex-row lg:items-center justify-between mt-4 pt-4 border-t theme-border/60 gap-4">
-                                                <div className="flex flex-wrap items-center gap-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Plazo</span>
-                                                        {cliente.dias_credito > 0 ? (
-                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[13px] font-black bg-blue-500/10 text-blue-500 border border-blue-500/20 w-fit">
-                                                                {cliente.dias_credito} días
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-[13px] font-bold theme-text-muted">—</span>
-                                                        )}
-                                                    </div>
-
-                                                    {textoBadge && (
-                                                        <div className="flex flex-col border-l theme-border/50 pl-4">
-                                                            <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">
-                                                                Vence el
-                                                            </span>
-                                                            <span className="text-[12px] font-black uppercase tracking-widest theme-text-main mb-1.5 leading-none">
-                                                                {fechaFormateada}
-                                                            </span>
-                                                            <span className={`inline-flex items-center px-3 py-1 rounded-md text-[13px] font-black border ${colorBadge} w-fit`}>
-                                                                {textoBadge}
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Inicio de Crédito</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[11px] font-bold theme-text-main">
-                                                            {cliente.fecha_inicio_credito || <span className="theme-text-muted">—</span>}
-                                                        </span>
-                                                        {puedeRepararFecha && (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => repararFecha(cliente.id, cliente.fecha_inicio_credito)}
-                                                                    title="Reparar Fecha de Inicio de Crédito"
-                                                                    className="p-1 rounded-full text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 transition-colors"
-                                                                >
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => recalcularCreditoCliente(cliente.id)}
-                                                                    title="Recalcular vencimiento y alertas"
-                                                                    className="p-1 rounded-full text-zinc-400 hover:text-emerald-500 hover:bg-emerald-500/10 transition-colors"
-                                                                >
-                                                                    <RefreshCw className="w-3 h-3" />
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <TarjetaClienteCredito
+                                            key={cliente.id}
+                                            cliente={cliente}
+                                            modo="credito"
+                                            hasAlerta={hasAlerta}
+                                            limiteSuperado={limiteSuperado}
+                                            puedeVerBitacora={puedeVerBitacora}
+                                            puedeRepararFecha={puedeRepararFecha}
+                                            onVerFolios={() => abrirDesgloseFolios(cliente)}
+                                            onBitacora={() => abrirBitacora(cliente)}
+                                            onRepararFecha={repararFecha}
+                                            onRecalcular={recalcularCreditoCliente}
+                                        />
                                     );
                                 })
                             )}
@@ -1081,7 +910,7 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
                                 <input
                                     type="text"
-                                    placeholder="Buscar clientes con crédito activo..."
+                                    placeholder="Buscar en historial de créditos..."
                                     value={busqueda}
                                     onChange={(e) => {
                                         setBusqueda(e.target.value);
@@ -1093,20 +922,24 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                         </div>
                         {cargandoHistorial && (
                             <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted text-center">
-                                Cargando clientes con crédito activo...
+                                Cargando historial de créditos...
                             </p>
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {(historialClientes?.data?.length ?? 0) === 0 ? (
                                 <div className="col-span-full py-16 text-center text-xs theme-text-muted uppercase tracking-wider font-bold">
-                                    No se encontraron clientes con crédito activo.
+                                    No se encontraron clientes en el historial de créditos.
                                 </div>
                             ) : (
                                 historialClientes.data.map((cliente) => {
-                                    const facturaActiva = cliente.factura_cobranza_activa;
-                                    const saldo = facturaActiva?.monto != null ? Number(facturaActiva.monto) : null;
-                                    const vencimiento = facturaActiva?.fecha_vencimiento;
+                                    const saldo = saldoConsolidado(cliente);
+                                    const vencido = saldoVencidoCliente(cliente);
+                                    const foliosActivos = cliente.cantidad_folios_activos
+                                        ?? facturasActivasCliente(cliente).length;
+                                    const totalFolios = cantidadFoliosHistorialCliente(cliente);
+                                    const foliosLiquidados = Math.max(0, totalFolios - foliosActivos);
+                                    const tieneSaldoActivo = saldo != null && saldo > 0;
 
                                     return (
                                         <div
@@ -1116,34 +949,52 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                         >
                                             <div className="flex justify-between items-start mb-4">
                                                 <div className="flex-1">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primario)]">
+                                                    <div className="flex items-center flex-wrap gap-2 mb-1">
+                                                        <span className="text-xs font-black uppercase tracking-widest text-[var(--color-primario)]">
                                                             No. {cliente.numero_cliente}
                                                         </span>
+                                                        {tieneSaldoActivo ? (
+                                                            <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                                Crédito activo
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                                                                Liquidado
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    <h3 className="text-sm font-bold theme-text-main leading-tight flex items-center gap-1.5">
+                                                    <h3 className="text-base font-bold theme-text-main leading-snug flex items-center gap-1.5">
                                                         {cliente.nombre}
                                                     </h3>
+                                                    {totalFolios > 0 && (
+                                                        <p className="text-xs theme-text-muted mt-1.5 font-bold">
+                                                            {foliosActivos > 0
+                                                                ? `${foliosActivos} folio${foliosActivos === 1 ? '' : 's'} activo${foliosActivos === 1 ? '' : 's'}`
+                                                                : `${foliosLiquidados} folio${foliosLiquidados === 1 ? '' : 's'} liquidado${foliosLiquidados === 1 ? '' : 's'}`}
+                                                        </p>
+                                                    )}
                                                 </div>
                                                 <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
                                                     <FileText className="w-5 h-5" />
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-4 mt-auto pt-4 border-t theme-border/60">
+                                            <div className="grid grid-cols-3 gap-3 mt-auto pt-4 border-t theme-border/60">
                                                 <div>
-                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Saldo Activo</p>
-                                                    <p className="text-sm font-black theme-text-main">
-                                                        {saldo != null ? formatoMoneda(saldo) : '—'}
+                                                    <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted mb-1">Saldo Activo</p>
+                                                    <p className="text-base font-black theme-text-main">
+                                                        {tieneSaldoActivo ? formatoMoneda(saldo) : '—'}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted mb-1">Vencido</p>
+                                                    <p className={`text-base font-black ${vencido > 0 ? 'text-red-500' : 'theme-text-muted'}`}>
+                                                        {vencido > 0 ? formatoMoneda(vencido) : '—'}
                                                     </p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Vencimiento</p>
-                                                    <p className="text-sm font-black theme-text-main">
-                                                        {vencimiento
-                                                            ? new Date(vencimiento.split('T')[0] + 'T12:00:00').toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: '2-digit' })
-                                                            : '—'}
-                                                    </p>
+                                                    <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted mb-1">Total Folios</p>
+                                                    <p className="text-base font-black theme-text-main">{totalFolios || '—'}</p>
                                                 </div>
                                             </div>
                                         </div>

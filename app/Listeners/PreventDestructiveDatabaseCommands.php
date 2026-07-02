@@ -28,6 +28,15 @@ class PreventDestructiveDatabaseCommands
             );
         }
 
+        if (config('app.env') === 'testing') {
+            $dbConnection = config('database.default');
+            $dbName = (string) config("database.connections.{$dbConnection}.database");
+
+            if ($dbName === ':memory:' || str_contains(strtolower($dbName), 'test')) {
+                return;
+            }
+        }
+
         $dbConnection = config('database.default');
         $dbName = config("database.connections.{$dbConnection}.database");
 

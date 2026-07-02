@@ -195,6 +195,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/importar', [AutoCobranzaController::class, 'importarReporte'])->name('importar');
         Route::put('/alertas/{alerta}', [AutoCobranzaController::class, 'actualizarAlerta'])->name('alertas.update');
         Route::get('/clientes/{clienteId}/bitacora', [AutoCobranzaController::class, 'bitacora'])->name('bitacora');
+        Route::get('/clientes/{cliente}/folios', [AutoCobranzaController::class, 'foliosCliente'])->name('clientes.folios');
         Route::get('/historial', [AutoCobranzaController::class, 'historial'])->name('historial');
         Route::get('/abonos-hoy', [AutoCobranzaController::class, 'abonosDelDia'])->name('abonos-hoy');
         Route::post('/clientes/{cliente}/resolver-aumento', [AutoCobranzaController::class, 'resolverAumento'])->name('alertas.resolver-aumento');

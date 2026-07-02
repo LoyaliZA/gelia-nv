@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 class Cliente extends Model
 {
@@ -63,6 +64,13 @@ class Cliente extends Model
         'dias_cheque_postfechado' => 'integer',
     ];
 
+    protected $appends = [
+        'saldo_total_pendiente',
+        'saldo_vencido',
+        'cantidad_folios_activos',
+        'factura_cobranza_activa',
+    ];
+
     /**
      * Relación: La vendedora que atiende actualmente al cliente.
      */
@@ -115,11 +123,87 @@ class Cliente extends Model
         return $this->hasMany(CobranzaFactura::class, 'cliente_id')->where('pagada', false);
     }
 
+    public function facturasCobranzaActivas(): HasMany
+    {
+        return $this->hasMany(CobranzaFactura::class, 'cliente_id')
+            ->where('pagada', false)
+            ->where('monto', '>', 0)
+            ->orderBy('fecha_vencimiento');
+    }
+
     public function facturaCobranzaActiva(): HasOne
     {
         return $this->hasOne(CobranzaFactura::class, 'cliente_id')
             ->where('pagada', false)
+            ->where('monto', '>', 0)
             ->latestOfMany();
+    }
+
+    public function getFacturaCobranzaActivaAttribute(): ?CobranzaFactura
+    {
+        return $this->factura_cobranza_critica;
+    }
+
+    public function getFacturaCobranzaCriticaAttribute(): ?CobranzaFactura
+    {
+        $facturas = $this->relationLoaded('facturasCobranzaActivas')
+            ? $this->facturasCobranzaActivas
+            : $this->facturasCobranzaActivas()->get();
+
+        if ($facturas->isEmpty()) {
+            return null;
+        }
+
+        $hoy = now()->startOfDay();
+
+        $vencidas = $facturas->filter(
+            fn (CobranzaFactura $f) => Carbon::parse($f->fecha_vencimiento)->startOfDay()->lt($hoy)
+        )->sortBy('fecha_vencimiento');
+
+        if ($vencidas->isNotEmpty()) {
+            return $vencidas->first();
+        }
+
+        return $facturas->sortBy('fecha_vencimiento')->first();
+    }
+
+    public function getSaldoTotalPendienteAttribute(): float
+    {
+        if ($this->relationLoaded('facturasCobranzaActivas')) {
+            return (float) $this->facturasCobranzaActivas->sum('monto');
+        }
+
+        if ($this->relationLoaded('facturasActivas')) {
+            return (float) $this->facturasActivas
+                ->where('monto', '>', 0)
+                ->sum('monto');
+        }
+
+        return (float) $this->facturasCobranzaActivas()->sum('monto');
+    }
+
+    public function getSaldoVencidoAttribute(): float
+    {
+        $hoy = now()->toDateString();
+
+        if ($this->relationLoaded('facturasCobranzaActivas')) {
+            return (float) $this->facturasCobranzaActivas
+                ->filter(fn (CobranzaFactura $f) => Carbon::parse($f->fecha_vencimiento)->toDateString() < $hoy)
+                ->sum('monto');
+        }
+
+        return (float) $this->facturasCobranzaActivas()
+            ->where('fecha_vencimiento', '<', $hoy)
+            ->sum('monto');
+    }
+
+    public function getCantidadFoliosActivosAttribute(): int
+    {
+        if ($this->relationLoaded('facturasCobranzaActivas')) {
+            return $this->facturasCobranzaActivas->count();
+        }
+
+        return (int) $this->facturasCobranzaActivas()->count();
     }
 
     public function alertasCobranza(): HasMany

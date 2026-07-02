@@ -23,8 +23,18 @@ class RecalcularCreditoClienteService
             ->where('cliente_id', $cliente->id)
             ->where('pagada', false)
             ->where('monto', '>', 0)
+            ->where('folio', 'like', 'COB-%')
             ->orderByDesc('monto')
             ->first();
+
+        if (!$facturaActiva) {
+            $facturaActiva = CobranzaFactura::query()
+                ->where('cliente_id', $cliente->id)
+                ->where('pagada', false)
+                ->where('monto', '>', 0)
+                ->orderByDesc('monto')
+                ->first();
+        }
 
         if (!$facturaActiva) {
             return ['recalculado' => false, 'motivo' => 'sin_factura_activa'];
@@ -32,6 +42,18 @@ class RecalcularCreditoClienteService
 
         if (!$cliente->fecha_inicio_credito) {
             return ['recalculado' => false, 'motivo' => 'sin_fecha_inicio'];
+        }
+
+        $esLegacy = str_starts_with($facturaActiva->folio, 'COB-');
+
+        if (!$esLegacy) {
+            $this->sincronizarAlertasLimite($cliente, $facturaActiva);
+
+            return [
+                'recalculado' => true,
+                'fecha_vencimiento' => Carbon::parse($facturaActiva->fecha_vencimiento)->toDateString(),
+                'dias_atraso' => max(0, (int) Carbon::parse($facturaActiva->fecha_vencimiento)->startOfDay()->diffInDays(now()->startOfDay(), false)),
+            ];
         }
 
         $diasCredito = ($cliente->dias_credito > 0) ? (int) $cliente->dias_credito : 30;
@@ -143,7 +165,11 @@ class RecalcularCreditoClienteService
     private function sincronizarAlertasLimite(Cliente $cliente, CobranzaFactura $factura): void
     {
         $limiteFinal = (float) $cliente->monto_credito_autorizado;
-        $consolidado = (float) $factura->monto;
+        $consolidado = (float) CobranzaFactura::query()
+            ->where('cliente_id', $cliente->id)
+            ->where('pagada', false)
+            ->where('monto', '>', 0)
+            ->sum('monto');
 
         if ($limiteFinal <= 0) {
             CobranzaAlerta::query()

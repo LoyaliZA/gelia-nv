@@ -8,6 +8,7 @@ use App\Models\CobranzaConfiguracion;
 use App\Models\CobranzaFactura;
 use App\Models\User;
 use App\Notifications\AlertaCargaReporteCobranzaNotification;
+use App\Notifications\AlertaPagoLiquidoNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
@@ -49,6 +50,36 @@ class ImportarReporteCobranzaTest extends TestCase
         $body = implode("\n", $filas) . "\n";
 
         return UploadedFile::fake()->createWithContent('reporte_cobranza.csv', $header . $body);
+    }
+
+    private function csvCxc(array $filas): UploadedFile
+    {
+        $header = "Cuentas por Cobrar,,,,,,,,,\n";
+        $header .= "Cliente,Titulo,Folio,No. Venta,Sucursal,Fecha emisión,Fecha Vencimiento,Importe Original,Saldo Pendiente,Vigencia\n";
+        $body = implode("\n", $filas) . "\n";
+
+        return UploadedFile::fake()->createWithContent('reporte_cxc.csv', $header . $body);
+    }
+
+    private function filaCxc(
+        string $cliente,
+        string $folio,
+        string $fechaEmision,
+        string $fechaVencimiento,
+        string $importeOriginal,
+        string $saldoPendiente,
+        string $vigencia = 'Vigente',
+    ): string {
+        return sprintf(
+            '"%s","","%s","54447 (R)","Matríz","%s","%s","%s","%s","%s"',
+            $cliente,
+            $folio,
+            $fechaEmision,
+            $fechaVencimiento,
+            $importeOriginal,
+            $saldoPendiente,
+            $vigencia
+        );
     }
 
     public function test_preview_detecta_credito_nuevo_sin_factura_activa(): void
@@ -243,7 +274,7 @@ class ImportarReporteCobranzaTest extends TestCase
         ]);
     }
 
-    public function test_historial_solo_incluye_clientes_con_credito_activo(): void
+    public function test_historial_incluye_clientes_con_credito_activo_y_liquidado(): void
     {
         $this->sincronizarListas();
         $user = $this->usuarioConPermisos(['cobranza.ver']);
@@ -281,7 +312,324 @@ class ImportarReporteCobranzaTest extends TestCase
         $response = $this->actingAs($user)->getJson(route('auto-cobranza.historial'));
 
         $response->assertOk();
+        $response->assertJsonCount(2, 'data');
         $response->assertJsonPath('data.0.numero_cliente', '8101');
-        $response->assertJsonCount(1, 'data');
+        $numeros = collect($response->json('data'))->pluck('numero_cliente')->all();
+        $this->assertContains('8102', $numeros);
+    }
+
+    public function test_import_cxc_vacio_liquida_folios_y_envia_una_notificacion_masiva_de_pagos(): void
+    {
+        Notification::fake();
+        $this->sincronizarListas();
+        $user = $this->usuarioConPermisos(['cobranza.ver', 'cobranza.importar_reporte']);
+        $destinatario = User::factory()->create();
+
+        CobranzaConfiguracion::create([
+            'llave' => 'notified_users_pagos',
+            'valor' => json_encode([$destinatario->id]),
+        ]);
+        \Illuminate\Support\Facades\Cache::forget('cobranza_config_users_pagos');
+
+        $clienteUno = Cliente::create([
+            'numero_cliente' => '9201',
+            'nombre' => 'CLIENTE UNO',
+            'lista_actual_id' => CatalogoListaDescuento::first()->id,
+            'fecha_inicio_credito' => now()->subDays(10)->toDateString(),
+        ]);
+
+        $clienteDos = Cliente::create([
+            'numero_cliente' => '9202',
+            'nombre' => 'CLIENTE DOS',
+            'lista_actual_id' => CatalogoListaDescuento::first()->id,
+            'fecha_inicio_credito' => now()->subDays(8)->toDateString(),
+        ]);
+
+        CobranzaFactura::create([
+            'cliente_id' => $clienteUno->id,
+            'folio' => '9201-A',
+            'monto' => 1000,
+            'fecha_emision' => now()->subDays(10)->toDateString(),
+            'fecha_vencimiento' => now()->subDays(2)->toDateString(),
+            'pagada' => false,
+        ]);
+
+        CobranzaFactura::create([
+            'cliente_id' => $clienteUno->id,
+            'folio' => '9201-B',
+            'monto' => 500,
+            'fecha_emision' => now()->subDays(9)->toDateString(),
+            'fecha_vencimiento' => now()->subDays(1)->toDateString(),
+            'pagada' => false,
+        ]);
+
+        CobranzaFactura::create([
+            'cliente_id' => $clienteDos->id,
+            'folio' => '9202-A',
+            'monto' => 750,
+            'fecha_emision' => now()->subDays(8)->toDateString(),
+            'fecha_vencimiento' => now()->toDateString(),
+            'pagada' => false,
+        ]);
+
+        $archivo = $this->csvCxc([]);
+
+        $response = $this->actingAs($user)->post(route('auto-cobranza.importar'), [
+            'archivo' => $archivo,
+        ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('cobranza_facturas', ['folio' => '9201-A', 'pagada' => true]);
+        $this->assertDatabaseHas('cobranza_facturas', ['folio' => '9201-B', 'pagada' => true]);
+        $this->assertDatabaseHas('cobranza_facturas', ['folio' => '9202-A', 'pagada' => true]);
+
+        Notification::assertSentTo(
+            $destinatario,
+            AlertaPagoLiquidoNotification::class,
+            function (AlertaPagoLiquidoNotification $notification) {
+                return count($notification->clientesPagados) === 2
+                    && collect($notification->clientesPagados)->sum('montoPagado') === 2250.0;
+            }
+        );
+
+        Notification::assertSentToTimes($destinatario, AlertaPagoLiquidoNotification::class, 1);
+
+        $historial = $this->actingAs($user)->getJson(route('auto-cobranza.historial'));
+        $historial->assertOk();
+        $historial->assertJsonCount(2, 'data');
+    }
+
+    public function test_import_cxc_crea_multiples_facturas_por_folio(): void
+    {
+        $this->sincronizarListas();
+        $user = $this->usuarioConPermisos(['cobranza.ver', 'cobranza.importar_reporte']);
+
+        Cliente::create([
+            'numero_cliente' => '9001',
+            'nombre' => 'MATUS FELIX RODNEY',
+            'lista_actual_id' => CatalogoListaDescuento::first()->id,
+        ]);
+
+        $archivo = $this->csvCxc([
+            $this->filaCxc('MATUS FELIX RODNEY', '4414', '2026-07-01', '2026-07-15', '$532.94', '$532.94'),
+            $this->filaCxc('MATUS FELIX RODNEY', '4413', '2026-07-01', '2026-07-20', '$729.14', '$729.14'),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('auto-cobranza.importar'), [
+            'archivo' => $archivo,
+        ]);
+
+        $response->assertRedirect();
+
+        $cliente = Cliente::where('nombre', 'MATUS FELIX RODNEY')->first();
+        $this->assertNotNull($cliente);
+
+        $facturas = CobranzaFactura::where('cliente_id', $cliente->id)->where('pagada', false)->get();
+        $this->assertCount(2, $facturas);
+        $this->assertEqualsCanonicalizing(['4413', '4414'], $facturas->pluck('folio')->all());
+        $this->assertSame('2026-07-01', $cliente->fresh()->fecha_inicio_credito->toDateString());
+        $this->assertSame(1262.08, round((float) $cliente->fresh()->saldo_total_pendiente, 2));
+    }
+
+    public function test_import_cxc_marca_pagada_factura_con_saldo_a_favor(): void
+    {
+        $this->sincronizarListas();
+        $user = $this->usuarioConPermisos(['cobranza.ver', 'cobranza.importar_reporte']);
+
+        $cliente = Cliente::create([
+            'numero_cliente' => '9002',
+            'nombre' => 'FIGUEROA GARCIA XOCHITL',
+            'lista_actual_id' => CatalogoListaDescuento::first()->id,
+            'fecha_inicio_credito' => now()->subDays(30)->toDateString(),
+        ]);
+
+        CobranzaFactura::create([
+            'cliente_id' => $cliente->id,
+            'folio' => '4250',
+            'monto' => 100,
+            'fecha_emision' => now()->subDays(30)->toDateString(),
+            'fecha_vencimiento' => now()->subDays(5)->toDateString(),
+            'pagada' => false,
+        ]);
+
+        $archivo = $this->csvCxc([
+            $this->filaCxc('FIGUEROA GARCIA XOCHITL', '4250', '2026-06-11', '2026-06-30', '$4,252.53', '$-1.42', 'Vigente (Saldo a Favor)'),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('auto-cobranza.importar'), [
+            'archivo' => $archivo,
+        ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('cobranza_facturas', [
+            'folio' => '4250',
+            'pagada' => true,
+        ]);
+    }
+
+    public function test_import_cxc_liquida_folio_ausente_manteniendo_otros_activos(): void
+    {
+        $this->sincronizarListas();
+        $user = $this->usuarioConPermisos(['cobranza.ver', 'cobranza.importar_reporte']);
+
+        $cliente = Cliente::create([
+            'numero_cliente' => '9003',
+            'nombre' => 'PALMA REYES ARELI',
+            'lista_actual_id' => CatalogoListaDescuento::first()->id,
+            'fecha_inicio_credito' => now()->subDays(10)->toDateString(),
+        ]);
+
+        CobranzaFactura::create([
+            'cliente_id' => $cliente->id,
+            'folio' => '4367',
+            'monto' => 1225.72,
+            'fecha_emision' => '2026-06-24',
+            'fecha_vencimiento' => '2026-08-07',
+            'pagada' => false,
+        ]);
+
+        CobranzaFactura::create([
+            'cliente_id' => $cliente->id,
+            'folio' => '4368',
+            'monto' => 500,
+            'fecha_emision' => '2026-06-24',
+            'fecha_vencimiento' => '2026-08-08',
+            'pagada' => false,
+        ]);
+
+        $archivo = $this->csvCxc([
+            $this->filaCxc('PALMA REYES ARELI', '4367', '2026-06-24', '2026-08-07', '$1,225.72', '$1,225.72'),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('auto-cobranza.importar'), [
+            'archivo' => $archivo,
+        ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('cobranza_facturas', [
+            'folio' => '4367',
+            'pagada' => false,
+        ]);
+
+        $this->assertDatabaseHas('cobranza_facturas', [
+            'folio' => '4368',
+            'pagada' => true,
+        ]);
+
+        $this->assertNotNull($cliente->fresh()->fecha_inicio_credito);
+    }
+
+    public function test_import_cxc_detecta_abono_parcial(): void
+    {
+        $this->sincronizarListas();
+        $user = $this->usuarioConPermisos(['cobranza.ver', 'cobranza.importar_reporte']);
+
+        $cliente = Cliente::create([
+            'numero_cliente' => '9004',
+            'nombre' => 'MATUS FELIX RODNEY',
+            'lista_actual_id' => CatalogoListaDescuento::first()->id,
+            'fecha_inicio_credito' => now()->subDays(5)->toDateString(),
+        ]);
+
+        CobranzaFactura::create([
+            'cliente_id' => $cliente->id,
+            'folio' => '4406',
+            'monto' => 1049.15,
+            'fecha_emision' => '2026-06-30',
+            'fecha_vencimiento' => '2026-07-14',
+            'pagada' => false,
+        ]);
+
+        $archivo = $this->csvCxc([
+            $this->filaCxc('MATUS FELIX RODNEY', '4406', '2026-06-30', '2026-07-14', '$1,049.15', '$626.40'),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('auto-cobranza.importar'), [
+            'archivo' => $archivo,
+        ]);
+
+        $response->assertRedirect();
+
+        $factura = CobranzaFactura::where('folio', '4406')->first();
+        $this->assertTrue($factura->tiene_abono);
+        $this->assertSame(626.40, (float) $factura->monto);
+    }
+
+    public function test_preview_cxc_detecta_credito_nuevo_sin_factura_activa(): void
+    {
+        $this->sincronizarListas();
+        $user = $this->usuarioConPermisos(['cobranza.ver', 'cobranza.importar_reporte']);
+
+        Cliente::create([
+            'numero_cliente' => '9005',
+            'nombre' => 'DENIS GARCIA NERI BENITA',
+            'lista_actual_id' => CatalogoListaDescuento::first()->id,
+        ]);
+
+        $archivo = $this->csvCxc([
+            $this->filaCxc('DENIS GARCIA NERI BENITA', '4412', '2026-07-01', '2026-07-15', '$4,590.26', '$4,590.26'),
+        ]);
+
+        $response = $this->actingAs($user)->postJson(route('auto-cobranza.importar.preview'), [
+            'archivo' => $archivo,
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonCount(1, 'creditos_nuevos');
+        $response->assertJsonPath('creditos_nuevos.0.monto', 4590.26);
+    }
+
+    public function test_import_cxc_migra_consolidado_legacy_sin_doble_saldo_ni_abono_falso(): void
+    {
+        $this->sincronizarListas();
+        $user = $this->usuarioConPermisos(['cobranza.ver', 'cobranza.importar_reporte']);
+
+        $cliente = Cliente::create([
+            'numero_cliente' => '9010',
+            'nombre' => 'CLIENTE MIGRACION LEGACY',
+            'lista_actual_id' => CatalogoListaDescuento::first()->id,
+            'fecha_inicio_credito' => now()->subDays(20)->toDateString(),
+        ]);
+
+        CobranzaFactura::create([
+            'cliente_id' => $cliente->id,
+            'folio' => 'COB-9010-TEST',
+            'monto' => 5000,
+            'fecha_emision' => now()->subDays(20)->toDateString(),
+            'fecha_vencimiento' => now()->subDays(5)->toDateString(),
+            'pagada' => false,
+        ]);
+
+        $archivo = $this->csvCxc([
+            $this->filaCxc('CLIENTE MIGRACION LEGACY', '4501', '2026-06-01', '2026-06-15', '$1,500.00', '$1,500.00'),
+            $this->filaCxc('CLIENTE MIGRACION LEGACY', '4502', '2026-06-02', '2026-06-16', '$532.94', '$532.94'),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('auto-cobranza.importar'), [
+            'archivo' => $archivo,
+        ]);
+
+        $response->assertRedirect();
+
+        $cliente->refresh();
+
+        $this->assertDatabaseHas('cobranza_facturas', [
+            'folio' => 'COB-9010-TEST',
+            'pagada' => true,
+        ]);
+
+        $activas = CobranzaFactura::where('cliente_id', $cliente->id)
+            ->where('pagada', false)
+            ->where('monto', '>', 0)
+            ->get();
+
+        $this->assertCount(2, $activas);
+        $this->assertEqualsCanonicalizing(['4501', '4502'], $activas->pluck('folio')->all());
+        $this->assertSame(2032.94, round((float) $cliente->saldo_total_pendiente, 2));
+        $this->assertFalse($activas->firstWhere('folio', '4501')->tiene_abono);
+        $this->assertFalse($activas->firstWhere('folio', '4502')->tiene_abono);
     }
 }

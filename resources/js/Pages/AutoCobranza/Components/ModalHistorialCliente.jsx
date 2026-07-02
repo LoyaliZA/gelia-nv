@@ -1,36 +1,55 @@
-import React, { useState } from 'react';
-import { X, Check, AlertTriangle, FileText } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, FileText } from 'lucide-react';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 import { formatoMoneda } from '../../../utils/formatoMoneda';
 import { createPortal } from 'react-dom';
+import DesgloseFoliosCliente from './DesgloseFoliosCliente';
+import {
+    cantidadFoliosHistorialCliente,
+    facturasActivasCliente,
+    parseFechaCobranza,
+    saldoTotalCliente,
+    saldoVencidoCliente,
+    todasFacturasCliente,
+} from '../../../utils/cobranzaCliente';
 import axios from 'axios';
 
-export default function ModalHistorialCliente({ cliente, onClose, onVerificado }) {
+export default function ModalHistorialCliente({ cliente, onClose }) {
+    const [clienteDetalle, setClienteDetalle] = useState(cliente);
+    const [cargando, setCargando] = useState(false);
+
+    useEffect(() => {
+        if (!cliente?.id) {
+            setClienteDetalle(null);
+            return;
+        }
+
+        setClienteDetalle(cliente);
+        setCargando(true);
+
+        axios.get(route('auto-cobranza.clientes.folios', cliente.id))
+            .then((response) => {
+                setClienteDetalle(response.data);
+            })
+            .catch(() => {
+                setClienteDetalle(cliente);
+            })
+            .finally(() => setCargando(false));
+    }, [cliente]);
+
     if (!cliente) return null;
 
-    const [verificando, setVerificando] = useState(false);
-    const facturaActiva = cliente.factura_cobranza_activa;
+    const datos = clienteDetalle ?? cliente;
+    const saldoTotal = saldoTotalCliente(datos);
+    const saldoVencido = saldoVencidoCliente(datos);
+    const foliosActivos = facturasActivasCliente(datos).length;
+    const totalFolios = cantidadFoliosHistorialCliente(datos);
+    const foliosLiquidados = Math.max(0, totalFolios - foliosActivos);
 
     const formatearFecha = (fechaIso) => {
-        if (!fechaIso) return 'N/A';
-        const d = new Date(fechaIso);
-        return d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' });
-    };
-
-    const handleVerificar = (facturaId) => {
-        setVerificando(true);
-        axios.post(route('auto-cobranza.facturas.verificar', facturaId))
-            .then((res) => {
-                alert(res.data.message);
-                if (onVerificado) onVerificado();
-            })
-            .catch((err) => {
-                console.error(err);
-                alert(err.response?.data?.message || 'Error al verificar la factura.');
-            })
-            .finally(() => {
-                setVerificando(false);
-            });
+        const fecha = parseFechaCobranza(fechaIso);
+        if (!fecha) return 'N/A';
+        return fecha.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' });
     };
 
     if (typeof document === 'undefined') return null;
@@ -42,10 +61,10 @@ export default function ModalHistorialCliente({ cliente, onClose, onVerificado }
                     <div>
                         <h3 className="text-lg font-black uppercase italic tracking-tighter theme-text-main flex items-center gap-2">
                             <FileText className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
-                            Crédito Activo
+                            Historial de Créditos
                         </h3>
                         <p className="text-xs theme-text-muted mt-1 font-bold">
-                            Cliente: <span className="theme-text-main">{cliente.nombre}</span> (No. {cliente.numero_cliente})
+                            Cliente: <span className="theme-text-main">{datos.nombre}</span> (No. {datos.numero_cliente})
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2 rounded-full theme-element theme-text-muted hover:theme-text-main">
@@ -54,69 +73,54 @@ export default function ModalHistorialCliente({ cliente, onClose, onVerificado }
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                    {!facturaActiva ? (
+                    {cargando && totalFolios === 0 ? (
                         <p className="text-center text-xs theme-text-muted uppercase tracking-widest font-bold py-12">
-                            Este cliente no tiene un crédito activo en este momento.
+                            Cargando historial de folios...
+                        </p>
+                    ) : totalFolios === 0 ? (
+                        <p className="text-center text-xs theme-text-muted uppercase tracking-widest font-bold py-12">
+                            Este cliente no tiene historial de crédito registrado.
                         </p>
                     ) : (
-                        <div className="p-4 border theme-border rounded-xl flex flex-col gap-4 bg-white/50 dark:bg-black/20">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-xs font-black theme-text-main uppercase">{facturaActiva.folio}</span>
-                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-500">
-                                    Crédito activo
-                                </span>
-                                {new Date() > new Date(facturaActiva.fecha_vencimiento) && (
-                                    <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-red-500/10 text-red-500 flex items-center gap-1">
-                                        <AlertTriangle className="w-3 h-3" /> Vencido
+                        <div className="flex flex-col gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="p-4 border theme-border rounded-xl bg-white/50 dark:bg-black/20">
+                                    <span className="block text-[11px] uppercase tracking-widest theme-text-muted font-black mb-1">Saldo activo</span>
+                                    <span className="text-xl font-black text-amber-600 dark:text-amber-400">
+                                        {saldoTotal != null ? formatoMoneda(saldoTotal) : '—'}
                                     </span>
-                                )}
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <span className="block text-[10px] uppercase tracking-widest theme-text-muted font-black mb-1">Emisión</span>
-                                    <span className="text-sm font-bold theme-text-main">{formatearFecha(facturaActiva.fecha_emision)}</span>
                                 </div>
-                                <div>
-                                    <span className="block text-[10px] uppercase tracking-widest theme-text-muted font-black mb-1">Vencimiento</span>
-                                    <span className="text-sm font-bold theme-text-main">{formatearFecha(facturaActiva.fecha_vencimiento)}</span>
+                                <div className="p-4 border border-red-500/20 rounded-xl bg-red-500/5">
+                                    <span className="block text-[11px] uppercase tracking-widest text-red-500 font-black mb-1">Saldo vencido</span>
+                                    <span className="text-xl font-black text-red-500">
+                                        {saldoVencido > 0 ? formatoMoneda(saldoVencido) : '—'}
+                                    </span>
                                 </div>
-                                <div>
-                                    <span className="block text-[10px] uppercase tracking-widest theme-text-muted font-black mb-1">Inicio de crédito</span>
-                                    <span className="text-sm font-bold theme-text-main">{formatearFecha(cliente.fecha_inicio_credito)}</span>
-                                </div>
-                                <div>
-                                    <span className="block text-[10px] uppercase tracking-widest theme-text-muted font-black mb-1">Saldo consolidado</span>
-                                    <span className="text-lg font-black theme-text-main">{formatoMoneda(facturaActiva.monto)}</span>
+                                <div className="p-4 border theme-border rounded-xl bg-white/50 dark:bg-black/20">
+                                    <span className="block text-[11px] uppercase tracking-widest theme-text-muted font-black mb-1">Folios</span>
+                                    <span className="text-xl font-black theme-text-main">
+                                        {foliosActivos > 0 ? `${foliosActivos} activos` : '0 activos'}
+                                    </span>
+                                    {foliosLiquidados > 0 && (
+                                        <span className="block text-[11px] font-bold text-emerald-500 mt-1">
+                                            {foliosLiquidados} liquidado{foliosLiquidados === 1 ? '' : 's'}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 
-                            {facturaActiva.pagada && !facturaActiva.verificado_manualmente && (
-                                <div className="pt-4 border-t theme-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                    <p className="text-[10px] theme-text-muted m-0">
-                                        La verificación humana es opcional y solo sirve como respaldo de auditoría.
-                                    </p>
-                                    <button
-                                        onClick={() => handleVerificar(facturaActiva.id)}
-                                        disabled={verificando}
-                                        className="px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest theme-text-main theme-element border theme-border hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 flex items-center gap-1 shrink-0"
-                                    >
-                                        <Check className="w-3 h-3" />
-                                        {verificando ? 'Verificando...' : 'Verificar (opcional)'}
-                                    </button>
-                                </div>
+                            {datos.fecha_inicio_credito && (
+                                <p className="text-xs theme-text-muted font-bold">
+                                    Inicio de crédito: {formatearFecha(datos.fecha_inicio_credito)}
+                                </p>
                             )}
 
-                            {facturaActiva.pagada && facturaActiva.verificado_manualmente && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 text-[9px] font-black uppercase text-emerald-600 dark:text-emerald-400">
-                                    <Check className="w-3 h-3" /> Verificado por Admin
-                                </span>
-                            )}
+                            <DesgloseFoliosCliente cliente={datos} modoHistorial />
                         </div>
                     )}
                 </div>
             </div>
         </div>,
-        document.body
+        document.body,
     );
 }

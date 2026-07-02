@@ -57,17 +57,12 @@ class EvaluarAlertasCobranza extends Command
             $diasAtraso = $vencimiento->diffInDays($hoy, false);
 
             if ($diasAtraso >= 1) {
-                $alertaPendiente = \App\Models\CobranzaAlerta::where('factura_id', $factura->id)
+                $alertaActiva = \App\Models\CobranzaAlerta::where('factura_id', $factura->id)
                     ->where('tipo', 'vencimiento')
-                    ->where('estado', 'pendiente')
+                    ->where('estado', '!=', 'resuelta')
                     ->first();
 
-                $alertaExistenteMismoDia = \App\Models\CobranzaAlerta::where('factura_id', $factura->id)
-                    ->where('tipo', 'vencimiento')
-                    ->where('dias_atraso', $diasAtraso)
-                    ->exists();
-
-                if (!$alertaPendiente && !$alertaExistenteMismoDia) {
+                if (!$alertaActiva) {
                     \App\Models\CobranzaAlerta::create([
                         'cliente_id' => $cliente->id,
                         'factura_id' => $factura->id,
@@ -77,8 +72,8 @@ class EvaluarAlertasCobranza extends Command
                         'estado' => 'pendiente',
                     ]);
                     $contadorAlertasVencimiento++;
-                } elseif ($alertaPendiente) {
-                    $alertaPendiente->update(['dias_atraso' => $diasAtraso, 'fecha_alerta' => $today]);
+                } else {
+                    $alertaActiva->update(['dias_atraso' => $diasAtraso, 'fecha_alerta' => $today]);
                 }
 
                 if (
@@ -120,7 +115,7 @@ class EvaluarAlertasCobranza extends Command
         }
 
         $this->info("Evaluando límites de crédito...");
-        $clientesConCredito = \App\Models\Cliente::with('facturaCobranzaActiva')
+        $clientesConCredito = \App\Models\Cliente::with('facturasCobranzaActivas')
             ->whereNotNull('monto_credito_autorizado')
             ->where('monto_credito_autorizado', '>', 0)
             ->get();
@@ -129,7 +124,7 @@ class EvaluarAlertasCobranza extends Command
 
         foreach ($clientesConCredito as $cliente) {
             $limiteFinal = (float) $cliente->monto_credito_autorizado;
-            $consolidado = (float) ($cliente->facturaCobranzaActiva?->monto ?? 0);
+            $consolidado = (float) $cliente->saldo_total_pendiente;
 
             if ($limiteFinal <= 0 || $consolidado <= 0) {
                 continue;
@@ -144,7 +139,7 @@ class EvaluarAlertasCobranza extends Command
                 if (!$alertaPendiente) {
                     \App\Models\CobranzaAlerta::create([
                         'cliente_id' => $cliente->id,
-                        'factura_id' => $cliente->facturaCobranzaActiva?->id,
+                        'factura_id' => $cliente->factura_cobranza_critica?->id ?? $cliente->facturasCobranzaActivas->first()?->id,
                         'tipo' => 'limite_superado',
                         'dias_atraso' => null,
                         'fecha_alerta' => $today,
