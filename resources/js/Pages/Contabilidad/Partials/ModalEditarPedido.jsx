@@ -12,6 +12,7 @@ export default function ModalEditarPedido({ pedido, plataformas, tiposTransaccio
     );
 
     const { data, setData, put, processing, errors } = useForm({
+        fecha_salida: pedido?.fecha_salida || '',
         tipo_transaccion: pedido?.tipo_transaccion?.codigo || 'venta',
         plataforma_pago_id: String(pedido?.plataforma_pago_id || ''),
         cliente_nombre: pedido?.cliente_nombre || '',
@@ -62,7 +63,11 @@ export default function ModalEditarPedido({ pedido, plataformas, tiposTransaccio
                     </button>
                 </div>
                 <form onSubmit={enviar} className="overflow-y-auto custom-scrollbar p-6 space-y-4 flex-1">
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className={THEME_LABEL}>Fecha</label>
+                            <input type="date" className={`${THEME_INPUT} w-full mt-1`} value={data.fecha_salida} onChange={(e) => setData('fecha_salida', e.target.value)} required />
+                        </div>
                         <div>
                             <label className={THEME_LABEL}>Transacción</label>
                             <select className={`${THEME_INPUT} w-full mt-1`} value={data.tipo_transaccion} onChange={(e) => setData('tipo_transaccion', e.target.value)}>

@@ -14,6 +14,7 @@ class UpdatePedidoContabilidadRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'fecha_salida' => ['sometimes', 'date'],
             'tipo_transaccion' => ['required', 'string', 'max:50'],
             'plataforma_pago_id' => ['required', 'integer', 'exists:contabilidad_plataformas_pago,id'],
             'cliente_nombre' => ['nullable', 'string', 'max:255'],

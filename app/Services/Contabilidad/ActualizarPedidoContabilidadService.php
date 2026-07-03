@@ -48,6 +48,7 @@ class ActualizarPedidoContabilidadService
             $envioPagadoCliente = (bool) ($datos['envio_pagado_cliente'] ?? false);
 
             $pedido->fill([
+                'fecha_salida' => $datos['fecha_salida'] ?? $pedido->fecha_salida,
                 'tipo_transaccion_id' => $tipoId,
                 'plataforma_pago_id' => $datos['plataforma_pago_id'],
                 'cliente_nombre' => $datos['cliente_nombre'] ?? null,
