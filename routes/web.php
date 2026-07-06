@@ -18,6 +18,7 @@ use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesContr
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
 use App\Http\Controllers\Mensajeria\{ConversacionController,MensajeController,AdjuntoMensajeController};
 use App\Http\Controllers\WebPushController;
+use App\Http\Controllers\GestionInterna\DirectorioController;
 
 // ══════════════════════════════════════════════════════════════════════
 // 1. REDIRECCIÓN INICIAL
@@ -834,6 +835,25 @@ Route::middleware(['auth'])->group(function () {
                 Route::get('/documentacion/pdf', [\App\Http\Controllers\Admin\ApiExternaController::class, 'descargarDocumentacion'])->name('documentacion.pdf');
             });
         });
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // GESTIÓN INTERNA
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:gestion_interna.directorio.ver'])->prefix('gestion-interna')->name('gestion_interna.')->group(function () {
+        Route::get('/directorio', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'index'])->name('directorio.index');
+        
+        Route::post('/directorio/correos', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'storeCorreo'])->name('directorio.correos.store');
+        Route::put('/directorio/correos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'updateCorreo'])->name('directorio.correos.update');
+        Route::delete('/directorio/correos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'destroyCorreo'])->name('directorio.correos.destroy');
+        
+        Route::post('/directorio/telefonos', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'storeTelefono'])->name('directorio.telefonos.store');
+        Route::put('/directorio/telefonos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'updateTelefono'])->name('directorio.telefonos.update');
+        Route::delete('/directorio/telefonos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'destroyTelefono'])->name('directorio.telefonos.destroy');
+        
+        Route::post('/directorio/extensiones', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'storeExtension'])->name('directorio.extensiones.store');
+        Route::put('/directorio/extensiones/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'updateExtension'])->name('directorio.extensiones.update');
+        Route::delete('/directorio/extensiones/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'destroyExtension'])->name('directorio.extensiones.destroy');
     });
 
     // ══════════════════════════════════════════════════════════════════════

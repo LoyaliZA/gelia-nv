@@ -298,6 +298,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             href: () => routeHref('activos.index', '/activos'),
             active: (url) => url.startsWith('/activos'),
         },
+        can('gestion_interna.directorio.ver') && {
+            type: 'link',
+            id: 'directorio',
+            label: 'Directorio Interno',
+            icon: Users,
+            href: () => routeHref('gestion_interna.directorio.index', '/gestion-interna/directorio'),
+            active: (url) => url.startsWith('/gestion-interna/directorio'),
+        },
     ].filter(Boolean);
 
     const soporteChildren = [
