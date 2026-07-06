@@ -32,6 +32,10 @@ class RhConfiguracion extends Model
         'bdt_folio_padding',
         'periodo_actual_inicio',
         'periodo_actual_fin',
+        'periodo_cerrado_en',
+        'periodo_cerrado_por_id',
+        'periodo_cerrado_inicio',
+        'periodo_cerrado_fin',
     ];
 
     protected function casts(): array
@@ -53,6 +57,9 @@ class RhConfiguracion extends Model
             'bdt_folio_padding' => 'integer',
             'periodo_actual_inicio' => 'date',
             'periodo_actual_fin' => 'date',
+            'periodo_cerrado_en' => 'datetime',
+            'periodo_cerrado_inicio' => 'date',
+            'periodo_cerrado_fin' => 'date',
         ];
     }
 

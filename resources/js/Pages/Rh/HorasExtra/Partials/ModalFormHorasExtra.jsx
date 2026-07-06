@@ -17,13 +17,14 @@ import {
 import {
     calcularHorasExtraPreview, formatoMoneda, formatearHora, nombreCompletoColaborador,
 } from '../../../../utils/formatoMoneda';
+import { horarioTurnoParaFecha, nombreDiaDesdeFecha } from '../../../../utils/matrizHorarioTurno';
 import { RH_ESTADO_FLUJO_BADGE, rhBadgeClass } from '../../rhModuleStyles';
 
 const FORM_INICIAL = {
     rh_colaborador_id: '',
     fecha_turno: new Date().toISOString().slice(0, 10),
-    hora_entrada: '08:00',
-    hora_salida: '17:00',
+    hora_entrada: '09:00',
+    hora_salida: '18:00',
     salida_dia_siguiente: false,
     motivo: '',
     supervisor_user_id: '',
@@ -51,6 +52,15 @@ export default function ModalFormHorasExtra({
         [data, configuracion, colaboradorSel],
     );
 
+    const horarioTurno = useMemo(() => {
+        if (!colaboradorSel || !data.fecha_turno) return null;
+        return horarioTurnoParaFecha(
+            colaboradorSel.turno,
+            data.fecha_turno,
+            colaboradorSel.horas_laboradas_oficiales,
+        );
+    }, [colaboradorSel, data.fecha_turno]);
+
     useEffect(() => {
         if (!abierto) return;
 
@@ -75,6 +85,27 @@ export default function ModalFormHorasExtra({
         if (!abierto || registro) return;
         setData('salida_dia_siguiente', preview.salida_dia_siguiente);
     }, [preview.salida_dia_siguiente, abierto, registro]);
+
+    useEffect(() => {
+        if (!abierto || registro || !colaboradorSel || !data.fecha_turno) return;
+
+        const horario = horarioTurnoParaFecha(
+            colaboradorSel.turno,
+            data.fecha_turno,
+            colaboradorSel.horas_laboradas_oficiales,
+        );
+
+        const entrada = horario.entrada
+            || colaboradorSel.hora_entrada_oficial
+            || '09:00';
+        const salida = horario.descanso
+            ? entrada
+            : (horario.salida || colaboradorSel.hora_salida_oficial || '18:00');
+
+        setData('hora_entrada', formatearHora(entrada));
+        setData('hora_salida', formatearHora(salida));
+        setData('salida_dia_siguiente', false);
+    }, [abierto, registro, colaboradorSel?.id, colaboradorSel?.turno?.matriz_horario, data.fecha_turno]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -141,10 +172,23 @@ export default function ModalFormHorasExtra({
                         </select>
                         {errors.rh_colaborador_id && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.rh_colaborador_id}</p>}
                         {colaboradorSel && (
-                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] text-[10px] theme-text-main">
-                                <div><span className="theme-text-muted uppercase font-black">Área:</span> {colaboradorSel.area?.nombre || '—'}</div>
-                                <div><span className="theme-text-muted uppercase font-black">Horas normales:</span> {colaboradorSel.horas_laboradas_oficiales} h</div>
-                                <div><span className="theme-text-muted uppercase font-black">Salario/hr:</span> {formatoMoneda(colaboradorSel.salario_por_hora)}</div>
+                            <div className="mt-3 space-y-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border theme-border bg-black/[0.02] dark:bg-white/[0.02] text-[10px] theme-text-main">
+                                    <div><span className="theme-text-muted uppercase font-black">Área:</span> {colaboradorSel.area?.nombre || '—'}</div>
+                                    <div><span className="theme-text-muted uppercase font-black">Horas normales:</span> {preview.horas_normales_snapshot} h</div>
+                                    <div><span className="theme-text-muted uppercase font-black">Salario/hr:</span> {formatoMoneda(colaboradorSel.salario_por_hora)}</div>
+                                </div>
+                                {horarioTurno?.tieneTurno && (
+                                    <p className="text-[9px] theme-text-muted m-0 px-1">
+                                        Turno: <span className="font-bold theme-text-main">{horarioTurno.turnoNombre || '—'}</span>
+                                        {' · '}
+                                        {nombreDiaDesdeFecha(data.fecha_turno)}:
+                                        {' '}
+                                        {horarioTurno.descanso
+                                            ? 'día de descanso'
+                                            : `${formatearHora(horarioTurno.entrada)} – ${formatearHora(horarioTurno.salida)} (${horarioTurno.horas} h)`}
+                                    </p>
+                                )}
                             </div>
                         )}
                     </section>

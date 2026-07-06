@@ -20,27 +20,21 @@ class RhReciboAssets
     {
         $depto = Str::lower(trim($departamentoNombre ?? ''));
 
-        $mostrarAromas = in_array($depto, ['aromas', 'cedis', 'ti'], true);
-        $mostrarBellaroma = in_array($depto, ['bellaroma', 'ti'], true);
-
-        if (!$mostrarAromas && !$mostrarBellaroma) {
-            $mostrarAromas = true;
-        }
+        // Un solo logo según departamento (nunca ambos a la vez).
+        $marca = match (true) {
+            $depto === 'bellaroma' || str_contains($depto, 'bellaroma') => 'bellaroma',
+            in_array($depto, ['aromas', 'cedis', 'ti'], true)
+                || str_contains($depto, 'aromas')
+                || str_contains($depto, 'cedis') => 'aromas',
+            default => 'aromas',
+        };
 
         $suffix = $variante === 'blanco' ? 'blanco' : 'negro';
-        $logos = [];
-
-        if ($mostrarAromas) {
-            $logos[] = self::logoMeta('aromas', $suffix);
-        }
-        if ($mostrarBellaroma) {
-            $logos[] = self::logoMeta('bellaroma', $suffix);
-        }
 
         return [
-            'mostrar_aromas' => $mostrarAromas,
-            'mostrar_bellaroma' => $mostrarBellaroma,
-            'logos' => $logos,
+            'mostrar_aromas' => $marca === 'aromas',
+            'mostrar_bellaroma' => $marca === 'bellaroma',
+            'logos' => [self::logoMeta($marca, $suffix)],
         ];
     }
 

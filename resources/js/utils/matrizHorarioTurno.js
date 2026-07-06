@@ -100,3 +100,40 @@ export function diaEspanolDesdeFecha(fechaIso) {
     const fecha = new Date(`${fechaIso}T12:00:00`);
     return mapa[fecha.getDay()];
 }
+
+export function nombreDiaDesdeFecha(fechaIso) {
+    const dia = diaEspanolDesdeFecha(fechaIso);
+    return DIAS_TURNO.find((d) => d.clave === dia)?.nombre ?? dia;
+}
+
+/**
+ * Horario del catálogo de turno para una fecha (día de la semana).
+ */
+export function horarioTurnoParaFecha(turno, fechaIso, fallbackHoras = 8) {
+    const diaEspanol = diaEspanolDesdeFecha(fechaIso || new Date().toISOString().slice(0, 10));
+    const matriz = turno?.matriz_horario ? normalizarMatrizHorario(turno.matriz_horario) : null;
+
+    if (!matriz) {
+        return {
+            entrada: null,
+            salida: null,
+            horas: Number(fallbackHoras) || 8,
+            descanso: false,
+            diaEspanol,
+            tieneTurno: false,
+            turnoNombre: turno?.nombre ?? null,
+        };
+    }
+
+    const configDia = matriz[diaEspanol];
+
+    return {
+        entrada: configDia.entrada,
+        salida: configDia.salida,
+        horas: configDia.descanso ? 0 : Number(configDia.horas) || Number(fallbackHoras) || 8,
+        descanso: !!configDia.descanso,
+        diaEspanol,
+        tieneTurno: true,
+        turnoNombre: turno?.nombre ?? null,
+    };
+}

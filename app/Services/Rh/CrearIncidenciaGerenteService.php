@@ -41,8 +41,6 @@ class CrearIncidenciaGerenteService
             'factor_multiplicador' => $datos['factor_multiplicador'] ?? 1,
         ]);
 
-        unset($payload['firma_gerente_data'], $payload['firma_colaborador_data']);
-
         return $this->crearDeduccion->ejecutar($gerente, $payload);
     }
 }

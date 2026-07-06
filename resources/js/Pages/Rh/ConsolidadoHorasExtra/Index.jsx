@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { Calendar, ArrowLeft, Printer, Clock, Coins, Users, CheckCircle } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
@@ -6,37 +6,49 @@ import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass, THEME_INPUT } from '../../../utils/geliaTheme';
 import { RhFieldLabel, RhSelect } from '../Partials/rhFilterFields';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
+import { ESTADO_PAGO_LABELS } from '../HorasExtra/Partials/horasExtraStyles';
 import RhSubNav from '../Partials/RhSubNav';
 
 export default function Index({ auth, resumen, colaboradores, configuracion, filtros, puedeLiquidar }) {
     const [localFiltros, setLocalFiltros] = useState({
-        fecha_inicio: filtros.fecha_inicio || '',
-        fecha_fin: filtros.fecha_fin || '',
+        fecha_inicio: filtros.fecha_inicio || configuracion.periodo_actual_inicio || '',
+        fecha_fin: filtros.fecha_fin || configuracion.periodo_actual_fin || '',
         rh_colaborador_id: filtros.rh_colaborador_id || '',
     });
+
+    useEffect(() => {
+        setLocalFiltros({
+            fecha_inicio: filtros.fecha_inicio || configuracion.periodo_actual_inicio || '',
+            fecha_fin: filtros.fecha_fin || configuracion.periodo_actual_fin || '',
+            rh_colaborador_id: filtros.rh_colaborador_id || '',
+        });
+    }, [filtros.fecha_inicio, filtros.fecha_fin, filtros.rh_colaborador_id, configuracion.periodo_actual_inicio, configuracion.periodo_actual_fin]);
 
     const aplicar = () => {
         router.get(route('rh.consolidado_horas_extra.index'), localFiltros, { preserveState: true, preserveScroll: true });
     };
 
-    // KPIs globales basados en los datos visibles
-    const kpiTotalHoras = resumen.filas.reduce((acc, f) => acc + f.horas_extra_acumuladas, 0);
-    const kpiTotalMonto = resumen.filas.reduce((acc, f) => acc + f.total_economico_acumulado, 0);
-    const kpiColaboradoresConHe = resumen.filas.filter(f => f.horas_extra_acumuladas > 0).length;
+    const filasConRegistros = resumen.filas.filter((f) => (f.detalle?.length || 0) > 0);
+
+    const kpiTotalHoras = filasConRegistros.reduce((acc, f) => acc + (f.horas_extra_acumuladas || 0), 0);
+    const kpiTotalMonto = filasConRegistros.reduce((acc, f) => acc + (f.total_economico_acumulado || 0), 0);
+    const kpiHorasPeriodo = filasConRegistros.reduce((acc, f) => acc + (f.horas_periodo_total || 0), 0);
+    const kpiMontoPeriodo = filasConRegistros.reduce((acc, f) => acc + (f.total_periodo || 0), 0);
+    const kpiColaboradoresConHe = filasConRegistros.length;
 
     const liquidarPago = () => {
-        const mensaje = filtros.rh_colaborador_id
+        const mensaje = localFiltros.rh_colaborador_id
             ? '¿Confirmas que deseas procesar y liquidar el pago de las horas extra pendientes para este colaborador en el periodo visible?'
             : '¿Confirmas que deseas procesar y liquidar el pago de las horas extra pendientes para TODOS los colaboradores en el periodo visible?';
 
         if (!window.confirm(mensaje)) return;
 
         router.post(route('rh.consolidado_horas_extra.liquidar'), {
-            fecha_inicio: localFiltros.fecha_inicio,
-            fecha_fin: localFiltros.fecha_fin,
-            rh_colaborador_id: localFiltros.rh_colaborador_id,
+            fecha_inicio: resumen.fecha_inicio,
+            fecha_fin: resumen.fecha_fin,
+            rh_colaborador_id: localFiltros.rh_colaborador_id || undefined,
         }, {
-            preserveScroll: true
+            preserveScroll: true,
         });
     };
 
@@ -53,6 +65,7 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                         <ArrowLeft className="w-4 h-4" /> Dashboard RH
                     </Link>
                     <button
+                        type="button"
                         onClick={handleImprimir}
                         className="px-4 py-2 rounded-xl text-[10px] font-black uppercase theme-element theme-border border flex items-center gap-2 hover:theme-text-main"
                     >
@@ -65,7 +78,12 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                         <p className="text-[10px] font-black uppercase tracking-[0.3em] m-0 mb-2" style={{ color: 'var(--color-primario)' }}>Percepciones Adicionales</p>
                         <h1 className="text-2xl md:text-4xl font-black italic uppercase tracking-tighter theme-text-main m-0">Consolidado Horas Extra</h1>
                         <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
-                            Pendientes de cobro al: {resumen.fecha_fin}
+                            Periodo de análisis: {resumen.fecha_inicio} al {resumen.fecha_fin}
+                            {configuracion?.periodo_actual_inicio && (
+                                <span className="block mt-1 normal-case tracking-normal">
+                                    Periodo global configurado: {String(configuracion.periodo_actual_inicio).slice(0, 10)} al {String(configuracion.periodo_actual_fin).slice(0, 10)}
+                                </span>
+                            )}
                         </p>
                     </div>
                     {puedeLiquidar && kpiTotalHoras > 0 && (
@@ -84,12 +102,14 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                     <RhSubNav />
                 </div>
 
-                {/* Grid de KPIs */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className={geliaCardClass('p-6 flex items-center justify-between')}>
                         <div>
-                            <p className="gelia-rh-field-label m-0 ml-0">Horas Extra Pendientes</p>
+                            <p className="gelia-rh-field-label m-0 ml-0">Horas Extra Pendientes de Liquidar</p>
                             <h3 className="text-2xl font-black theme-text-main m-0 mt-1">{kpiTotalHoras} hrs</h3>
+                            {kpiHorasPeriodo > kpiTotalHoras && (
+                                <p className="text-[10px] theme-text-muted m-0 mt-1">{kpiHorasPeriodo} hrs en periodo (incl. programadas)</p>
+                            )}
                         </div>
                         <div className="p-3 rounded-2xl theme-element border theme-border">
                             <Clock className="w-6 h-6 text-amber-500" />
@@ -97,8 +117,11 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                     </div>
                     <div className={geliaCardClass('p-6 flex items-center justify-between')}>
                         <div>
-                            <p className="gelia-rh-field-label m-0 ml-0">Monto Económico Acumulado</p>
+                            <p className="gelia-rh-field-label m-0 ml-0">Monto Pendiente de Liquidar</p>
                             <h3 className="text-2xl font-black theme-text-main m-0 mt-1">{formatoMoneda(kpiTotalMonto)}</h3>
+                            {kpiMontoPeriodo > kpiTotalMonto && (
+                                <p className="text-[10px] theme-text-muted m-0 mt-1">{formatoMoneda(kpiMontoPeriodo)} en periodo (incl. programadas)</p>
+                            )}
                         </div>
                         <div className="p-3 rounded-2xl theme-element border theme-border">
                             <Coins className="w-6 h-6 text-emerald-500" />
@@ -115,7 +138,6 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                     </div>
                 </div>
 
-                {/* Filtros */}
                 <div className={geliaCardClass('p-6 grid grid-cols-1 md:grid-cols-4 gap-4 no-print')}>
                     <div>
                         <RhFieldLabel>Fecha inicio</RhFieldLabel>
@@ -141,7 +163,6 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                     </div>
                 </div>
 
-                {/* Tabla de Horas Extra */}
                 <div className={geliaCardClass('overflow-hidden')}>
                     <div className="overflow-x-auto">
                         <table className="w-full border-collapse">
@@ -154,30 +175,46 @@ export default function Index({ auth, resumen, colaboradores, configuracion, fil
                                 </tr>
                             </thead>
                             <tbody>
-                                {resumen.filas.length === 0 ? (
+                                {filasConRegistros.length === 0 ? (
                                     <tr>
                                         <td colSpan="4" className="px-4 py-8 text-center text-xs theme-text-muted">
                                             No se encontraron horas extra pendientes para el periodo de corte seleccionado.
                                         </td>
                                     </tr>
                                 ) : (
-                                    resumen.filas.map((fila) => (
-                                        <tr key={fila.colaborador.id} className="border-b theme-border last:border-0 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                                            <td className="px-4 py-4">
-                                                <div className="text-sm font-bold theme-text-main">{nombreCompletoColaborador(fila.colaborador)}</div>
-                                                <div className="text-[10px] theme-text-muted font-mono">{fila.colaborador.folio}</div>
-                                            </td>
-                                            <td className="px-4 py-4">
-                                                <div className="text-xs font-bold theme-text-main">{fila.colaborador.departamento?.nombre || '—'}</div>
-                                                <div className="text-[10px] theme-text-muted">{fila.colaborador.area?.nombre || '—'}</div>
-                                            </td>
-                                            <td className="px-4 py-4 text-right text-xs font-black theme-text-main">
-                                                {fila.horas_extra_acumuladas > 0 ? `${fila.horas_extra_acumuladas} hrs` : '—'}
-                                            </td>
-                                            <td className="px-4 py-4 text-right text-sm font-black text-emerald-500">
-                                                {fila.total_economico_acumulado > 0 ? formatoMoneda(fila.total_economico_acumulado) : '—'}
-                                            </td>
-                                        </tr>
+                                    filasConRegistros.map((fila) => (
+                                        <React.Fragment key={fila.colaborador.id}>
+                                            <tr className="border-b theme-border hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                                                <td className="px-4 py-4">
+                                                    <div className="text-sm font-bold theme-text-main">{nombreCompletoColaborador(fila.colaborador)}</div>
+                                                    <div className="text-[10px] theme-text-muted font-mono">{fila.colaborador.folio}</div>
+                                                </td>
+                                                <td className="px-4 py-4">
+                                                    <div className="text-xs font-bold theme-text-main">{fila.colaborador.departamento?.nombre || '—'}</div>
+                                                    <div className="text-[10px] theme-text-muted">{fila.colaborador.area?.nombre || '—'}</div>
+                                                </td>
+                                                <td className="px-4 py-4 text-right text-xs font-black theme-text-main">
+                                                    {fila.horas_extra_acumuladas > 0 ? `${fila.horas_extra_acumuladas} hrs` : `${fila.horas_periodo_total || 0} hrs`}
+                                                </td>
+                                                <td className="px-4 py-4 text-right text-sm font-black text-emerald-500">
+                                                    {formatoMoneda(fila.total_economico_acumulado > 0 ? fila.total_economico_acumulado : fila.total_periodo)}
+                                                </td>
+                                            </tr>
+                                            {(fila.detalle || []).map((registro) => (
+                                                <tr key={`${fila.colaborador.id}-${registro.id}`} className="border-b theme-border bg-black/[0.02] dark:bg-white/[0.02]">
+                                                    <td className="px-4 py-2 pl-8 text-[10px] theme-text-muted font-mono" colSpan={2}>
+                                                        {registro.folio} · {registro.fecha_turno}
+                                                        <span className="ml-2 uppercase font-bold">{ESTADO_PAGO_LABELS[registro.estado_pago] || registro.estado_pago}</span>
+                                                    </td>
+                                                    <td className="px-4 py-2 text-right text-[10px] theme-text-muted">
+                                                        {registro.horas_extra_a_pagar} hrs
+                                                    </td>
+                                                    <td className="px-4 py-2 text-right text-[10px] font-semibold theme-text-main">
+                                                        {formatoMoneda(registro.monto)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
                                     ))
                                 )}
                             </tbody>

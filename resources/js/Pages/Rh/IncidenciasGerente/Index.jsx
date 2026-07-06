@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { AlertTriangle, Plus, Eye, Printer } from 'lucide-react';
+import { AlertTriangle, Plus, Eye, Printer, PenLine } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
@@ -9,9 +9,31 @@ import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formato
 import RhSubNav from '../Partials/RhSubNav';
 import RhPageHeader from '../Partials/RhPageHeader';
 import ModalVistaPreviaRecibo from '../Partials/ModalVistaPreviaRecibo';
+import ModalFirmarReciboDeduccion from '../Partials/ModalFirmarReciboDeduccion';
 
 export default function Index({ auth, registros, colaboradores, filtros, puedeCrear, puedeRecibos }) {
     const [previewRecibo, setPreviewRecibo] = useState(null);
+    const [modalFirmarRecibo, setModalFirmarRecibo] = useState(null);
+
+    const reciboFirmado = (reg) => !!reg?.firma_colaborador_path;
+
+    const urlsRecibo = (reg) => {
+        const nombre = nombreCompletoColaborador(reg.colaborador);
+        return {
+            previewUrl: route('rh.incidencias_gerente.deducciones.recibo.vista_previa', reg.id),
+            downloadUrl: route('rh.incidencias_gerente.deducciones.recibo', reg.id),
+            titulo: `Recibo — ${nombre}`,
+            nombreArchivo: `Recibo_${nombre.replace(/\s+/g, '_')}_${reg.folio}.pdf`,
+        };
+    };
+
+    const abrirRecibo = (reg) => {
+        if (!reciboFirmado(reg)) {
+            setModalFirmarRecibo(reg);
+            return;
+        }
+        setPreviewRecibo(urlsRecibo(reg));
+    };
 
     const irAPagina = (pagina) => {
         if (pagina < 1 || pagina > registros.last_page) return;
@@ -56,12 +78,12 @@ export default function Index({ auth, registros, colaboradores, filtros, puedeCr
                                                 <Eye className="w-3.5 h-3.5" /> Ver
                                             </Link>
                                             {puedeRecibos && (
-                                                <button type="button" onClick={() => setPreviewRecibo({
-                                                    previewUrl: route('rh.incidencias_gerente.deducciones.recibo.vista_previa', reg.id),
-                                                    downloadUrl: route('rh.incidencias_gerente.deducciones.recibo', reg.id),
-                                                    titulo: `Recibo — ${reg.folio}`,
-                                                })} className="text-[10px] font-black uppercase inline-flex items-center gap-1 theme-text-muted">
-                                                    <Printer className="w-3.5 h-3.5" /> Recibo
+                                                <button type="button" onClick={() => abrirRecibo(reg)} className="text-[10px] font-black uppercase inline-flex items-center gap-1 theme-text-muted">
+                                                    {reciboFirmado(reg) ? (
+                                                        <><Printer className="w-3.5 h-3.5" /> Recibo</>
+                                                    ) : (
+                                                        <><PenLine className="w-3.5 h-3.5" /> Firmar</>
+                                                    )}
                                                 </button>
                                             )}
                                         </div>
@@ -80,6 +102,15 @@ export default function Index({ auth, registros, colaboradores, filtros, puedeCr
                 previewUrl={previewRecibo?.previewUrl}
                 downloadUrl={previewRecibo?.downloadUrl}
                 titulo={previewRecibo?.titulo}
+                nombreArchivo={previewRecibo?.nombreArchivo}
+            />
+            <ModalFirmarReciboDeduccion
+                abierto={!!modalFirmarRecibo}
+                onCerrar={() => setModalFirmarRecibo(null)}
+                registro={modalFirmarRecibo}
+                firmarUrl={modalFirmarRecibo ? route('rh.incidencias_gerente.deducciones.recibo.firmar', modalFirmarRecibo.id) : null}
+                requiereFirmaGerente
+                onFirmado={(registro) => setPreviewRecibo(urlsRecibo({ ...registro, firma_colaborador_path: registro.firma_colaborador_path || 'ok' }))}
             />
         </AppLayout>
     );

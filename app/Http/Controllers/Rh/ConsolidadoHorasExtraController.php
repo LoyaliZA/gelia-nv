@@ -21,7 +21,6 @@ class ConsolidadoHorasExtraController extends Controller
         abort_unless(Auth::user()->can('rh.periodo_pago.ver') || Auth::user()->can('rh.ver'), 403);
 
         $config = RhConfiguracion::obtener();
-        $diasPeriodo = max(1, (int) $config->dias_periodo_pago);
 
         $fechaInicioGlobal = $config->periodo_actual_inicio ? Carbon::parse($config->periodo_actual_inicio) : now()->startOfMonth();
         $fechaFinGlobal = $config->periodo_actual_fin ? Carbon::parse($config->periodo_actual_fin) : now()->endOfMonth();
@@ -67,7 +66,7 @@ class ConsolidadoHorasExtraController extends Controller
         $fechaPago = now()->toDateString();
 
         $query = RhHorasExtra::query()
-            ->whereNull('fecha_programada_pago')
+            ->where('estado_pago', 'pendiente')
             ->whereBetween('fecha_turno', [$fechaInicio, $fechaFin]);
 
         if ($colaboradorId) {

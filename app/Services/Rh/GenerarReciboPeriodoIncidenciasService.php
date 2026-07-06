@@ -44,7 +44,7 @@ class GenerarReciboPeriodoIncidenciasService
             'totalIncidencias' => round($totalIncidencias, 2),
             'totalSalidas' => round($totalSalidas, 2),
             'totalGeneral' => round($totalIncidencias + $totalSalidas, 2),
-            'encabezado' => RhReciboAssets::encabezadoParaDepartamento($colaborador->departamento?->nombre),
+            'encabezado' => RhReciboAssets::encabezadoParaDepartamento($colaborador->departamento?->nombre, 'negro'),
         ])->setPaper('letter', 'portrait');
     }
 }

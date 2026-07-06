@@ -284,11 +284,11 @@ export default function TablaReglasIncidencia({ datos = [], bonos = [], departam
                             {(data.tipo_comportamiento === 'deduccion_nomina' || data.categoria === 'falta' || data.categoria === 'retardo') && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl border theme-border">
                                     <div>
-                                        <label className={THEME_LABEL}>Factor bono puntualidad (0.5=mitad, 1=completo)</label>
+                                        <label className={THEME_LABEL}>Factor bono puntualidad (0.5= medio dia, 1=dia completo)</label>
                                         <input type="number" min="0" step="0.01" value={data.factor_penalizacion_puntualidad} onChange={(e) => setData('factor_penalizacion_puntualidad', e.target.value)} className={THEME_INPUT} />
                                     </div>
                                     <div>
-                                        <label className={THEME_LABEL}>Factor bono productividad</label>
+                                        <label className={THEME_LABEL}>Factor bono productividad (0.5 = medio dia, 1 =dia completo)</label>
                                         <input type="number" min="0" step="0.01" value={data.factor_penalizacion_productividad} onChange={(e) => setData('factor_penalizacion_productividad', e.target.value)} className={THEME_INPUT} />
                                     </div>
                                     <label className="flex items-center gap-2 md:col-span-2 cursor-pointer">

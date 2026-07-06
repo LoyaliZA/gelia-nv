@@ -49,7 +49,7 @@ class CalcularHorasExtraService
         $totalMinutos = max(0, $entrada->diffInMinutes($salida));
         $totalHoras = round($totalMinutos / 60, 2);
 
-        $horasNormales = (float) ($datos['horas_normales_snapshot'] ?? 8);
+        $horasNormales = $this->resolverHorasNormales($datos, $colaborador, $fechaTurno);
         $graciaMinutos = max(0, (int) ($config->he_gracia_minutos_despues_salida ?? 30));
         $minutosMinimos = max(1, (int) $config->he_minutos_minimos);
 
@@ -59,6 +59,7 @@ class CalcularHorasExtraService
             $colaborador,
             $horasNormales,
             $graciaMinutos,
+            $totalMinutos,
         );
 
         $tiempoExtraCrudo = round($tiempoExtraMinutos / 60, 2);
@@ -102,53 +103,54 @@ class CalcularHorasExtraService
         ?RhColaborador $colaborador,
         float $horasNormales,
         int $graciaMinutos,
+        int $totalMinutos,
     ): int {
+        if ($this->esDiaDescanso($entrada, $colaborador)) {
+            return max(0, $totalMinutos);
+        }
+
+        $minutosNormales = (int) round($horasNormales * 60);
+        $extraBruto = max(0, $totalMinutos - $minutosNormales);
+
+        return $extraBruto >= $graciaMinutos ? $extraBruto : 0;
+    }
+
+    private function resolverHorasNormales(array $datos, ?RhColaborador $colaborador, Carbon $fechaTurno): float
+    {
+        $fallback = (float) ($colaborador?->horas_laboradas_oficiales ?? $datos['horas_normales_snapshot'] ?? 8);
+        $matriz = $colaborador?->turno?->matriz_horario;
+        $horarioDia = MatrizHorarioTurno::horarioParaFecha($matriz, $fechaTurno, $fallback);
+
+        if (!$horarioDia['tiene_turno'] || $horarioDia['descanso']) {
+            return $fallback;
+        }
+
+        return (float) ($horarioDia['horas'] ?: $fallback);
+    }
+
+    private function esDiaDescanso(Carbon $entrada, ?RhColaborador $colaborador): bool
+    {
         $turno = $colaborador?->turno;
         $matrizHorario = $turno ? MatrizHorarioTurno::normalizar($turno->matriz_horario) : null;
 
-        if (!empty($matrizHorario)) {
-            $mapaDias = [
-                'Monday' => 'lunes',
-                'Tuesday' => 'martes',
-                'Wednesday' => 'miercoles',
-                'Thursday' => 'jueves',
-                'Friday' => 'viernes',
-                'Saturday' => 'sabado',
-                'Sunday' => 'domingo',
-            ];
-
-            $diaIngles = $entrada->copy()->format('l');
-            $diaEspanol = $mapaDias[$diaIngles];
-            $configDia = $matrizHorario[$diaEspanol] ?? null;
-
-            if ($configDia && !($configDia['descanso'] ?? false)) {
-                $salidaOficial = $entrada->copy()->setTimeFromTimeString(
-                    $this->parseTime($configDia['salida'])
-                );
-            } else {
-                // If it's a rest day but they came in, we just take expected hours from $horasNormales or consider it all extra?
-                // Usually on a rest day, all hours might be extra, but to keep backwards compatibility:
-                $salidaOficial = $entrada->copy()->addMinutes((int) round($horasNormales * 60));
-            }
-        } elseif ($colaborador?->hora_salida_oficial) {
-            $salidaOficial = $entrada->copy()->setTimeFromTimeString(
-                $this->parseTime($colaborador->hora_salida_oficial),
-            );
-        } elseif ($colaborador?->hora_entrada_oficial) {
-            $salidaOficial = $entrada->copy()->setTimeFromTimeString(
-                $this->parseTime($colaborador->hora_entrada_oficial),
-            )->addMinutes((int) round($horasNormales * 60));
-        } else {
-            $salidaOficial = $entrada->copy()->addMinutes((int) round($horasNormales * 60));
+        if (empty($matrizHorario)) {
+            return false;
         }
 
-        $inicioExtra = $salidaOficial->copy()->addMinutes($graciaMinutos);
+        $mapaDias = [
+            'Monday' => 'lunes',
+            'Tuesday' => 'martes',
+            'Wednesday' => 'miercoles',
+            'Thursday' => 'jueves',
+            'Friday' => 'viernes',
+            'Saturday' => 'sabado',
+            'Sunday' => 'domingo',
+        ];
 
-        if ($salida->lte($inicioExtra)) {
-            return 0;
-        }
+        $diaEspanol = $mapaDias[$entrada->copy()->format('l')] ?? null;
+        $configDia = $diaEspanol ? ($matrizHorario[$diaEspanol] ?? null) : null;
 
-        return max(0, (int) $inicioExtra->diffInMinutes($salida));
+        return (bool) ($configDia['descanso'] ?? false);
     }
 
     public function calcularHorasAPagar(int $minutosExtra, int $minutosMinimos): int
@@ -157,7 +159,9 @@ class CalcularHorasExtraService
             return 0;
         }
 
-        return (int) (floor(($minutosExtra - $minutosMinimos) / $minutosMinimos) + 1);
+        $minutosBloqueHora = 60;
+
+        return (int) (floor(($minutosExtra - $minutosMinimos) / $minutosBloqueHora) + 1);
     }
 
     private function parseTime(string $time): string

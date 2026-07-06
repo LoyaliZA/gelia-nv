@@ -96,9 +96,10 @@ class HorasExtraController extends Controller
         ]);
 
         $config = RhConfiguracion::obtener();
+        $colaborador = null;
 
         if (!empty($datos['rh_colaborador_id'])) {
-            $colaborador = RhColaborador::with('area')->find($datos['rh_colaborador_id']);
+            $colaborador = RhColaborador::with(['area', 'turno'])->find($datos['rh_colaborador_id']);
             if ($colaborador) {
                 $datos['horas_normales_snapshot'] = $colaborador->horas_laboradas_oficiales;
                 $datos['salario_por_hora_snapshot'] = $colaborador->salario_por_hora;
@@ -111,6 +112,6 @@ class HorasExtraController extends Controller
         $datos['hora_entrada'] = $datos['hora_entrada'] ?? '08:00';
         $datos['hora_salida'] = $datos['hora_salida'] ?? '17:00';
 
-        return response()->json($calcularService->ejecutar($datos, $config));
+        return response()->json($calcularService->ejecutar($datos, $config, $colaborador ?? null));
     }
 }

@@ -523,6 +523,8 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['can:rh.recibos.generar'])->group(function () {
             Route::get('/deducciones/{deduccion}/recibo', [ReciboRhController::class, 'incidenciaDescargar'])
                 ->name('deducciones.recibo');
+            Route::post('/deducciones/{deduccion}/recibo/firmar', [ReciboRhController::class, 'incidenciaFirmar'])
+                ->name('deducciones.recibo.firmar');
         });
 
         Route::get('/incidencias', [DeduccionController::class, 'index'])->name('incidencias.index');
@@ -569,6 +571,20 @@ Route::middleware(['auth'])->group(function () {
 
         Route::middleware(['can:rh.ver'])->group(function () {
             Route::get('/periodo-pago', [PeriodoPagoController::class, 'index'])->name('periodo_pago.index');
+            Route::post('/periodo-pago/cerrar', [PeriodoPagoController::class, 'cerrar'])
+                ->name('periodo_pago.cerrar');
+            Route::get('/periodo-pago/{colaborador}/recibo-nomina/desglose', [ReciboRhController::class, 'nominaDesglose'])
+                ->middleware('can:rh.recibos.ver')
+                ->name('periodo_pago.recibo_nomina.desglose');
+            Route::get('/periodo-pago/{colaborador}/recibo-nomina/vista-previa', [ReciboRhController::class, 'nominaVistaPrevia'])
+                ->middleware('can:rh.recibos.ver')
+                ->name('periodo_pago.recibo_nomina.vista_previa');
+            Route::get('/periodo-pago/{colaborador}/recibo-nomina', [ReciboRhController::class, 'nominaDescargar'])
+                ->middleware('can:rh.recibos.generar')
+                ->name('periodo_pago.recibo_nomina');
+            Route::post('/periodo-pago/{colaborador}/recibo-nomina/firmar', [ReciboRhController::class, 'nominaFirmar'])
+                ->middleware('can:rh.recibos.generar')
+                ->name('periodo_pago.recibo_nomina.firmar');
             Route::get('/periodo-pago/{colaborador}/recibo-incidencias/vista-previa', [ReciboRhController::class, 'periodoVistaPrevia'])
                 ->middleware('can:rh.recibos.ver')
                 ->name('periodo_pago.recibo_incidencias.vista_previa');
@@ -641,6 +657,8 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['can:rh.recibos.generar'])->group(function () {
             Route::get('/incidencias-gerente/deducciones/{deduccion}/recibo', [ReciboRhController::class, 'incidenciaDescargar'])
                 ->name('incidencias_gerente.deducciones.recibo');
+            Route::post('/incidencias-gerente/deducciones/{deduccion}/recibo/firmar', [ReciboRhController::class, 'incidenciaFirmar'])
+                ->name('incidencias_gerente.deducciones.recibo.firmar');
         });
     });
 

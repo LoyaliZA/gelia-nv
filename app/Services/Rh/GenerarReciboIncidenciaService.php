@@ -29,7 +29,7 @@ class GenerarReciboIncidenciaService
             'deduccion' => $deduccion,
             'colaborador' => $deduccion->colaborador,
             'fecha' => $deduccion->fecha_ocurrencia?->format('d/m/Y') ?? now()->format('d/m/Y'),
-            'encabezado' => RhReciboAssets::encabezadoParaDepartamento($deptoNombre),
+            'encabezado' => RhReciboAssets::encabezadoParaDepartamento($deptoNombre, 'negro'),
         ])->setPaper('letter', 'portrait');
     }
 }

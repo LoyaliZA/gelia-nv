@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { AlertTriangle, Plus, Eye, Pencil, Printer } from 'lucide-react';
+import { AlertTriangle, Plus, Eye, Pencil, Printer, PenLine } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
@@ -11,6 +11,7 @@ import RhPageHeader from '../Partials/RhPageHeader';
 import FiltrosDeducciones from './Partials/FiltrosDeducciones';
 import ModalFormDeduccion from './Partials/ModalFormDeduccion';
 import ModalVistaPreviaRecibo from '../Partials/ModalVistaPreviaRecibo';
+import ModalFirmarReciboDeduccion from '../Partials/ModalFirmarReciboDeduccion';
 import { ESTADO_DEDUCCION_BADGE, ESTADO_DEDUCCION_LABELS, ORIGEN_DEDUCCION_LABELS } from './Partials/deduccionesStyles';
 
 function tabFromFiltros(filtros) {
@@ -27,15 +28,19 @@ function rutaListado(rama) {
         : route('rh.deducciones.incidencias.index');
 }
 
-function FilaAcciones({ reg, puedeEditar, puedeRecibos, onEditar, onRecibo }) {
+function FilaAcciones({ reg, puedeEditar, puedeRecibos, onEditar, onRecibo, reciboFirmado }) {
     return (
         <div className="flex flex-wrap gap-3 mt-3">
             <Link href={route('rh.deducciones.show', reg.id)} className="inline-flex items-center gap-1 text-[10px] font-black uppercase" style={{ color: 'var(--color-primario)' }}>
                 <Eye className="w-3.5 h-3.5" /> Ver expediente
             </Link>
             {puedeRecibos && reg.catalogo_regla_incidencia_id && (
-                <button type="button" onClick={() => onRecibo(reg)} className="inline-flex items-center gap-1 text-[10px] font-black uppercase theme-text-muted">
-                    <Printer className="w-3.5 h-3.5" /> Recibo
+                <button type="button" onClick={() => onRecibo(reg)} className={`inline-flex items-center gap-1 text-[10px] font-black uppercase ${reciboFirmado(reg) ? 'theme-text-muted' : 'text-amber-600'}`}>
+                    {reciboFirmado(reg) ? (
+                        <><Printer className="w-3.5 h-3.5" /> Recibo</>
+                    ) : (
+                        <><PenLine className="w-3.5 h-3.5" /> Firmar</>
+                    )}
                 </button>
             )}
             {puedeEditar && reg.estado_deduccion !== 'aplicado' && (
@@ -67,6 +72,19 @@ export default function Index({
     const [registroEditando, setRegistroEditando] = useState(null);
     const [tabActiva, setTabActiva] = useState(() => tabFromFiltros(filtros));
     const [previewRecibo, setPreviewRecibo] = useState(null);
+    const [modalFirmarRecibo, setModalFirmarRecibo] = useState(null);
+
+    const reciboFirmado = (registro) => !!registro?.firma_colaborador_path;
+
+    const urlsRecibo = (registro) => {
+        const nombre = nombreCompletoColaborador(registro.colaborador || {});
+        return {
+            previewUrl: route('rh.deducciones.recibo.vista_previa', registro.id),
+            downloadUrl: route('rh.deducciones.recibo', registro.id),
+            titulo: `Recibo — ${nombre}`,
+            nombreArchivo: `Recibo_${nombre.replace(/\s+/g, '_')}_${registro.folio}.pdf`,
+        };
+    };
 
     const abrirNuevo = () => {
         setRegistroEditando(null);
@@ -80,11 +98,11 @@ export default function Index({
     };
 
     const abrirRecibo = (registro) => {
-        setPreviewRecibo({
-            previewUrl: route('rh.deducciones.recibo.vista_previa', registro.id),
-            downloadUrl: route('rh.deducciones.recibo', registro.id),
-            titulo: `Recibo — ${registro.folio}`,
-        });
+        if (!reciboFirmado(registro)) {
+            setModalFirmarRecibo(registro);
+            return;
+        }
+        setPreviewRecibo(urlsRecibo(registro));
     };
 
     const irAPagina = (pagina) => {
@@ -182,7 +200,7 @@ export default function Index({
                                             <div><span className="theme-text-muted uppercase font-black">Origen:</span> {ORIGEN_DEDUCCION_LABELS[reg.origen_deduccion] || reg.origen_deduccion}</div>
                                             <div><span className="theme-text-muted uppercase font-black">Auditor:</span> {reg.registrado_por?.name || '—'}</div>
                                         </div>
-                                        <FilaAcciones reg={reg} puedeEditar={puedeEditar} puedeRecibos={puedeRecibos} onEditar={abrirEditar} onRecibo={abrirRecibo} />
+                                        <FilaAcciones reg={reg} puedeEditar={puedeEditar} puedeRecibos={puedeRecibos} onEditar={abrirEditar} onRecibo={abrirRecibo} reciboFirmado={reciboFirmado} />
                                     </div>
                                 ))}
                             </div>
@@ -212,7 +230,7 @@ export default function Index({
                                                 </td>
                                                 <td className="px-4 py-4 text-xs">{reg.registrado_por?.name || '—'}</td>
                                                 <td className="px-4 py-4 text-right whitespace-nowrap">
-                                                    <FilaAcciones reg={reg} puedeEditar={puedeEditar} puedeRecibos={puedeRecibos} onEditar={abrirEditar} onRecibo={abrirRecibo} />
+                                                    <FilaAcciones reg={reg} puedeEditar={puedeEditar} puedeRecibos={puedeRecibos} onEditar={abrirEditar} onRecibo={abrirRecibo} reciboFirmado={reciboFirmado} />
                                                 </td>
                                             </tr>
                                         ))}
@@ -243,6 +261,15 @@ export default function Index({
                 previewUrl={previewRecibo?.previewUrl}
                 downloadUrl={previewRecibo?.downloadUrl}
                 titulo={previewRecibo?.titulo}
+                nombreArchivo={previewRecibo?.nombreArchivo}
+            />
+            <ModalFirmarReciboDeduccion
+                abierto={!!modalFirmarRecibo}
+                onCerrar={() => setModalFirmarRecibo(null)}
+                registro={modalFirmarRecibo}
+                firmarUrl={modalFirmarRecibo ? route('rh.deducciones.recibo.firmar', modalFirmarRecibo.id) : null}
+                requiereFirmaGerente={!!modalFirmarRecibo?.catalogo_regla_incidencia_id}
+                onFirmado={(registro) => setPreviewRecibo(urlsRecibo({ ...registro, firma_colaborador_path: registro.firma_colaborador_path || 'ok' }))}
             />
         </AppLayout>
     );

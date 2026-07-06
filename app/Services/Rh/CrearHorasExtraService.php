@@ -19,7 +19,7 @@ class CrearHorasExtraService
 
     public function ejecutar(User $registrador, array $datos): RhHorasExtra
     {
-        $colaborador = RhColaborador::with('area')->findOrFail($datos['rh_colaborador_id']);
+        $colaborador = RhColaborador::with(['area', 'turno'])->findOrFail($datos['rh_colaborador_id']);
 
         if (!$colaborador->activo) {
             throw ValidationException::withMessages([

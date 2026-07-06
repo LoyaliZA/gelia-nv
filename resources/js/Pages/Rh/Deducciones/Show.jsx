@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { ArrowLeft, AlertTriangle, Pencil, CheckCircle, FileText, Eye, Printer } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Pencil, CheckCircle, FileText, Eye, Printer, PenLine } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
@@ -8,6 +8,7 @@ import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formato
 import RhSubNav from '../Partials/RhSubNav';
 import ModalFormDeduccion from './Partials/ModalFormDeduccion';
 import ModalVistaPreviaRecibo from '../Partials/ModalVistaPreviaRecibo';
+import ModalFirmarReciboDeduccion from '../Partials/ModalFirmarReciboDeduccion';
 import { ESTADO_DEDUCCION_BADGE, ESTADO_DEDUCCION_LABELS, ORIGEN_DEDUCCION_LABELS } from './Partials/deduccionesStyles';
 
 export default function Show({
@@ -23,6 +24,9 @@ export default function Show({
 }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [previewRecibo, setPreviewRecibo] = useState(null);
+    const [modalFirmarRecibo, setModalFirmarRecibo] = useState(false);
+
+    const reciboFirmado = !!registro?.firma_colaborador_path;
 
     const reciboPreviewRoute = esVistaGerente
         ? 'rh.incidencias_gerente.deducciones.recibo.vista_previa'
@@ -33,6 +37,28 @@ export default function Show({
     const volverRoute = esVistaGerente
         ? route('rh.incidencias_gerente.index')
         : route('rh.deducciones.incidencias.index');
+
+    const urlsRecibo = () => {
+        const nombre = nombreCompletoColaborador(registro.colaborador);
+        return {
+            previewUrl: route(reciboPreviewRoute, registro.id),
+            downloadUrl: route(reciboDownloadRoute, registro.id),
+            titulo: `Recibo — ${nombre}`,
+            nombreArchivo: `Recibo_${nombre.replace(/\s+/g, '_')}_${registro.folio}.pdf`,
+        };
+    };
+
+    const firmarUrl = esVistaGerente
+        ? route('rh.incidencias_gerente.deducciones.recibo.firmar', registro.id)
+        : route('rh.deducciones.recibo.firmar', registro.id);
+
+    const abrirRecibo = () => {
+        if (!reciboFirmado) {
+            setModalFirmarRecibo(true);
+            return;
+        }
+        setPreviewRecibo(urlsRecibo());
+    };
 
     const marcarAplicada = () => {
         if (!window.confirm(`¿Marcar la deducción ${registro.folio} como aplicada?`)) return;
@@ -50,24 +76,33 @@ export default function Show({
                     <div className="flex flex-wrap gap-2">
                         {puedeRecibos && registro.catalogo_regla_incidencia_id && (
                             <>
-                                <button
-                                    type="button"
-                                    onClick={() => setPreviewRecibo({
-                                        previewUrl: route(reciboPreviewRoute, registro.id),
-                                        downloadUrl: route(reciboDownloadRoute, registro.id),
-                                        titulo: `Recibo — ${registro.folio}`,
-                                    })}
-                                    className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border flex items-center gap-2"
-                                >
-                                    <Eye className="w-4 h-4" /> Vista previa recibo
-                                </button>
-                                <a
-                                    href={route(reciboDownloadRoute, registro.id)}
-                                    className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2"
-                                    style={{ backgroundColor: 'var(--color-primario)' }}
-                                >
-                                    <Printer className="w-4 h-4" /> Descargar recibo
-                                </a>
+                                {reciboFirmado ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={abrirRecibo}
+                                            className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border flex items-center gap-2"
+                                        >
+                                            <Eye className="w-4 h-4" /> Ver recibo
+                                        </button>
+                                        <a
+                                            href={route(reciboDownloadRoute, registro.id)}
+                                            className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2"
+                                            style={{ backgroundColor: 'var(--color-primario)' }}
+                                        >
+                                            <Printer className="w-4 h-4" /> Descargar recibo
+                                        </a>
+                                    </>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={abrirRecibo}
+                                        className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2"
+                                        style={{ backgroundColor: 'var(--color-primario)' }}
+                                    >
+                                        <PenLine className="w-4 h-4" /> Firmar recibo
+                                    </button>
+                                )}
                             </>
                         )}
                         {puedeAplicar && (
@@ -182,6 +217,15 @@ export default function Show({
                 previewUrl={previewRecibo?.previewUrl}
                 downloadUrl={previewRecibo?.downloadUrl}
                 titulo={previewRecibo?.titulo}
+                nombreArchivo={previewRecibo?.nombreArchivo}
+            />
+            <ModalFirmarReciboDeduccion
+                abierto={modalFirmarRecibo}
+                onCerrar={() => setModalFirmarRecibo(false)}
+                registro={registro}
+                firmarUrl={firmarUrl}
+                requiereFirmaGerente={esVistaGerente || !!registro.catalogo_regla_incidencia_id}
+                onFirmado={() => setPreviewRecibo(urlsRecibo())}
             />
         </AppLayout>
     );

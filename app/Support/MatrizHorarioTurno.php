@@ -140,4 +140,35 @@ class MatrizHorarioTurno
 
         return round($minutos / 60, 2);
     }
+
+    /**
+     * @return array{entrada: ?string, salida: ?string, horas: float, descanso: bool, dia: string, tiene_turno: bool}
+     */
+    public static function horarioParaFecha(?array $matriz, \Carbon\Carbon|string $fecha, float $fallbackHoras = 8): array
+    {
+        $fechaCarbon = $fecha instanceof \Carbon\Carbon ? $fecha : \Carbon\Carbon::parse($fecha);
+
+        $mapaDias = [
+            'Monday' => 'lunes',
+            'Tuesday' => 'martes',
+            'Wednesday' => 'miercoles',
+            'Thursday' => 'jueves',
+            'Friday' => 'viernes',
+            'Saturday' => 'sabado',
+            'Sunday' => 'domingo',
+        ];
+
+        $dia = $mapaDias[$fechaCarbon->format('l')] ?? 'lunes';
+        $matrizNormalizada = self::normalizar($matriz);
+        $configDia = $matrizNormalizada[$dia] ?? self::defecto()[$dia];
+
+        return [
+            'entrada' => $configDia['entrada'],
+            'salida' => $configDia['salida'],
+            'horas' => ($configDia['descanso'] ?? false) ? 0.0 : (float) $configDia['horas'],
+            'descanso' => (bool) ($configDia['descanso'] ?? false),
+            'dia' => $dia,
+            'tiene_turno' => !empty($matriz),
+        ];
+    }
 }

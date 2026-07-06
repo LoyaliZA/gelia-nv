@@ -23,7 +23,7 @@ const TABS = [
     { id: 'prestamos', label: 'Préstamos', route: 'rh.prestamos.index', icon: Wallet, permiso: 'rh.prestamos.ver', group: 'nomina' },
     { id: 'salidas_personales', label: 'Salidas', route: 'rh.salidas_personales.index', icon: LogOut, permiso: 'rh.salidas_personales.ver', group: 'nomina' },
     { id: 'banco_tiempo', label: 'Banco Tiempo', route: 'rh.banco_tiempo.index', icon: TimerReset, permiso: 'rh.banco_tiempo.ver', group: 'nomina' },
-    { id: 'consolidado_deducciones', label: 'Pre-Nómina', route: 'rh.consolidado_deducciones.index', icon: FileSpreadsheet, permiso: 'rh.ver', group: 'nomina' },
+    { id: 'consolidado_deducciones', label: 'Consolidado Deducciones', route: 'rh.consolidado_deducciones.index', icon: FileSpreadsheet, permiso: 'rh.ver', group: 'nomina' },
     { id: 'consolidado_horas_extra', label: 'Consolidado HE', route: 'rh.consolidado_horas_extra.index', icon: Coins, permiso: 'rh.ver', group: 'nomina' },
     { id: 'periodo_pago', label: 'Periodo Pago', route: 'rh.periodo_pago.index', icon: CalendarDays, permiso: 'rh.ver', group: 'nomina' },
     { id: 'configuracion', label: 'Configuración', route: 'rh.configuracion', icon: Settings, permiso: 'rh.configurar', group: 'ajustes' },

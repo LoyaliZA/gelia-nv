@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AlertTriangle, ArrowLeft, Save } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
@@ -8,7 +8,7 @@ import { calcularDeduccionPreview, formatoMoneda, nombreCompletoColaborador } fr
 import RhSubNav from '../Partials/RhSubNav';
 
 export default function Crear({ auth, colaboradores, reglasIncidencia }) {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, processing, errors } = useForm({
         fecha_ocurrencia: new Date().toISOString().slice(0, 10),
         rh_colaborador_id: '',
         catalogo_regla_incidencia_id: '',
@@ -55,7 +55,7 @@ export default function Crear({ auth, colaboradores, reglasIncidencia }) {
 
     const enviar = (e) => {
         e.preventDefault();
-        post(route('rh.incidencias_gerente.store'));
+        router.post(route('rh.incidencias_gerente.store'), data);
     };
 
     return (
@@ -71,6 +71,10 @@ export default function Crear({ auth, colaboradores, reglasIncidencia }) {
                     <h1 className="text-xl font-black italic uppercase m-0 flex items-center gap-2">
                         <AlertTriangle className="w-5 h-5" style={{ color: 'var(--color-primario)' }} /> Registrar incidencia
                     </h1>
+
+                    <p className="text-xs theme-text-muted m-0">
+                        Las firmas del gerente y colaborador se capturan al firmar el recibo de incidencia, desde el listado o el expediente.
+                    </p>
 
                     <div>
                         <label className={THEME_LABEL}>Colaborador</label>
@@ -115,7 +119,7 @@ export default function Crear({ auth, colaboradores, reglasIncidencia }) {
                     <div className="flex justify-end gap-3 pt-2">
                         <Link href={route('rh.incidencias_gerente.index')} className={THEME_BTN_SECONDARY}>Cancelar</Link>
                         <button type="submit" disabled={processing} className={THEME_BTN_PRIMARY}>
-                            <Save className="w-4 h-4" /> Registrar sin firma
+                            <Save className="w-4 h-4" /> Registrar incidencia
                         </button>
                     </div>
                 </form>

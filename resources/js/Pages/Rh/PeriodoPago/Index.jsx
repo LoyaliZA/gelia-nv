@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Calendar, ArrowLeft, Zap, Settings, Printer } from 'lucide-react';
+import { Calendar, ArrowLeft, Zap, Settings, Lock, PenLine, Eye } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass, THEME_INPUT } from '../../../utils/geliaTheme';
@@ -8,9 +8,17 @@ import { RhFieldLabel, RhSelect } from '../Partials/rhFilterFields';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
 import ModalVistaPreviaRecibo from '../Partials/ModalVistaPreviaRecibo';
+import ModalFirmarReciboNomina from '../Partials/ModalFirmarReciboNomina';
 
-export default function Index({ auth, resumen, comisionesAuditor, colaboradores, configuracion, filtros, puedeGenerarCuotas, puedeSellarSalidas, puedeGenerarRecibos = false }) {
+export default function Index({ auth, resumen, comisionesAuditor, colaboradores, configuracion, filtros, puedeGenerarCuotas, puedeSellarSalidas, puedeGenerarRecibos = false, puedeCerrarPeriodo = false, periodoCerrado = false, periodoCerradoEn = null }) {
+    const [orientacionRecibo, setOrientacionRecibo] = useState('portrait');
     const [previewRecibo, setPreviewRecibo] = useState(null);
+    const [modalFirmarNomina, setModalFirmarNomina] = useState(null);
+    const [showCierreModal, setShowCierreModal] = useState(false);
+    const [cierreData, setCierreData] = useState({
+        fecha_pago: filtros.fecha_fin || configuracion.periodo_actual_fin || '',
+        forzar: false,
+    });
     const [localFiltros, setLocalFiltros] = useState({
         fecha_inicio: filtros.fecha_inicio || configuracion.periodo_actual_inicio || '',
         fecha_fin: filtros.fecha_fin || configuracion.periodo_actual_fin || '',
@@ -157,6 +165,33 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
         });
     };
 
+    const abrirPreviewNomina = (fila) => {
+        const nombre = nombreCompletoColaborador(fila.colaborador);
+        setPreviewRecibo({
+            previewUrl: `${route('rh.periodo_pago.recibo_nomina.vista_previa', fila.colaborador.id)}?fecha_inicio=${localFiltros.fecha_inicio}&fecha_fin=${localFiltros.fecha_fin}&orientacion=${orientacionRecibo}`,
+            downloadUrl: `${route('rh.periodo_pago.recibo_nomina', fila.colaborador.id)}?fecha_inicio=${localFiltros.fecha_inicio}&fecha_fin=${localFiltros.fecha_fin}&orientacion=${orientacionRecibo}`,
+            titulo: `Recibo nómina — ${nombre}`,
+            nombreArchivo: `Recibo_Nomina_${nombre.replace(/\s+/g, '_')}.pdf`,
+        });
+    };
+
+    const ejecutarCierrePeriodo = (e) => {
+        e.preventDefault();
+        const msg = periodoCerrado
+            ? 'Este periodo ya fue cerrado. ¿Desea re-ejecutar el cierre de periodo?'
+            : `¿Cerrar el periodo ${localFiltros.fecha_inicio} al ${localFiltros.fecha_fin}? Se marcarán como pagados los elementos pendientes del periodo (excluyendo fechas de pago posteriores).`;
+        if (!window.confirm(msg)) return;
+        router.post(route('rh.periodo_pago.cerrar'), {
+            fecha_inicio: localFiltros.fecha_inicio,
+            fecha_fin: localFiltros.fecha_fin,
+            fecha_pago: cierreData.fecha_pago,
+            forzar: periodoCerrado || cierreData.forzar,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => setShowCierreModal(false),
+        });
+    };
+
     return (
         <AppLayout auth={auth}>
             <Head title="Periodo de Pago | RH" />
@@ -171,6 +206,11 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                         <h1 className="text-2xl md:text-4xl font-black italic uppercase tracking-tighter theme-text-main m-0">Periodo de pago</h1>
                         <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-2 m-0">
                             Periodo en cálculo: {filtros.dias_periodo || configuracion.dias_periodo_pago} días · {resumen.fecha_inicio} al {resumen.fecha_fin}
+                            {periodoCerrado && periodoCerradoEn && (
+                                <span className="block mt-1 text-emerald-600 normal-case tracking-normal">
+                                    Periodo cerrado el {new Date(periodoCerradoEn).toLocaleString('es-MX')}
+                                </span>
+                            )}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -179,6 +219,18 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                                 <Settings className="w-4 h-4" /> Configurar Periodo de Pago actual
                             </button>
                         ) : null}
+                        {puedeCerrarPeriodo && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setCierreData((prev) => ({ ...prev, fecha_pago: localFiltros.fecha_fin }));
+                                    setShowCierreModal(true);
+                                }}
+                                className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center gap-2 bg-black"
+                            >
+                                <Lock className="w-4 h-4" /> Cerrar periodo
+                            </button>
+                        )}
                         {puedeGenerarCuotas && (
                             <button type="button" onClick={generarCuotas} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-element theme-border border flex items-center gap-2">
                                 <Zap className="w-4 h-4" /> Generar cuotas del periodo
@@ -194,7 +246,7 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
 
                 <RhSubNav />
 
-                <div className={geliaCardClass('p-6 grid grid-cols-1 md:grid-cols-5 gap-4')}>
+                <div className={geliaCardClass(`p-6 grid grid-cols-1 gap-4 ${puedeGenerarRecibos ? 'md:grid-cols-6' : 'md:grid-cols-5'}`)}>
                     <div>
                         <RhFieldLabel>Fecha inicio</RhFieldLabel>
                         <input type="date" value={localFiltros.fecha_inicio} onChange={handleFechaInicioChange} className={`${THEME_INPUT} w-full px-4 py-3 rounded-2xl text-[11px] font-bold`} />
@@ -216,6 +268,15 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                             ))}
                         </RhSelect>
                     </div>
+                    {puedeGenerarRecibos && (
+                        <div>
+                            <RhFieldLabel>Orientación recibo</RhFieldLabel>
+                            <RhSelect value={orientacionRecibo} onChange={(e) => setOrientacionRecibo(e.target.value)}>
+                                <option value="portrait">Vertical (carta)</option>
+                                <option value="landscape">Horizontal (carta)</option>
+                            </RhSelect>
+                        </div>
+                    )}
                     <div className="flex items-end">
                         <button type="button" onClick={aplicar} className="w-full px-4 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
                             <Calendar className="w-4 h-4" /> Actualizar
@@ -254,17 +315,25 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                                         <td className="px-4 py-4 text-sm font-bold">{formatoMoneda(fila.neto_estimado)}</td>
                                         {puedeGenerarRecibos && (
                                             <td className="px-4 py-4">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setPreviewRecibo({
-                                                        previewUrl: `${route('rh.periodo_pago.recibo_incidencias.vista_previa', fila.colaborador.id)}?fecha_inicio=${localFiltros.fecha_inicio}&fecha_fin=${localFiltros.fecha_fin}`,
-                                                        downloadUrl: `${route('rh.periodo_pago.recibo_incidencias', fila.colaborador.id)}?fecha_inicio=${localFiltros.fecha_inicio}&fecha_fin=${localFiltros.fecha_fin}`,
-                                                        titulo: `Recibo periodo — ${nombreCompletoColaborador(fila.colaborador)}`,
-                                                    })}
-                                                    className="text-[10px] font-black uppercase inline-flex items-center gap-1 theme-text-muted"
-                                                >
-                                                    <Printer className="w-3.5 h-3.5" /> Periodo
-                                                </button>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {fila.recibo_nomina_firmado ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => abrirPreviewNomina(fila)}
+                                                            className="text-[10px] font-black uppercase inline-flex items-center gap-1 theme-text-muted"
+                                                        >
+                                                            <Eye className="w-3.5 h-3.5" /> Ver recibo
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setModalFirmarNomina(fila)}
+                                                            className="text-[10px] font-black uppercase inline-flex items-center gap-1 text-amber-600"
+                                                        >
+                                                            <PenLine className="w-3.5 h-3.5" /> Firmar
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         )}
                                     </tr>
@@ -313,12 +382,51 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                     </form>
                 </div>
             )}
+            {showCierreModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+                    <form onSubmit={ejecutarCierrePeriodo} className={`${geliaCardClass('p-6 md:p-8 w-full max-w-md')} shadow-2xl`}>
+                        <h2 className="text-xl font-black italic uppercase tracking-tighter theme-text-main m-0 mb-4">Cierre de periodo</h2>
+                        <p className="text-xs theme-text-muted mb-4">
+                            Marca como pagados todos los elementos pendientes del periodo {localFiltros.fecha_inicio} al {localFiltros.fecha_fin}.
+                            Se excluyen elementos con fecha de pago posterior al fin del periodo.
+                        </p>
+                        {periodoCerrado && (
+                            <p className="text-xs text-amber-600 font-bold mb-4">Este periodo ya fue cerrado previamente.</p>
+                        )}
+                        <div>
+                            <RhFieldLabel>Fecha de pago</RhFieldLabel>
+                            <input
+                                type="date"
+                                required
+                                max={localFiltros.fecha_fin}
+                                value={cierreData.fecha_pago}
+                                onChange={(e) => setCierreData((prev) => ({ ...prev, fecha_pago: e.target.value }))}
+                                className={`${THEME_INPUT} w-full px-4 py-3 rounded-2xl text-xs font-bold`}
+                            />
+                        </div>
+                        <div className="mt-6 flex gap-3 justify-end">
+                            <button type="button" onClick={() => setShowCierreModal(false)} className="px-5 py-3 rounded-2xl text-xs font-bold uppercase theme-element">Cancelar</button>
+                            <button type="submit" className="px-5 py-3 rounded-2xl text-xs font-black text-white uppercase bg-black">Confirmar cierre</button>
+                        </div>
+                    </form>
+                </div>
+            )}
             <ModalVistaPreviaRecibo
                 abierto={!!previewRecibo}
                 onCerrar={() => setPreviewRecibo(null)}
                 previewUrl={previewRecibo?.previewUrl}
                 downloadUrl={previewRecibo?.downloadUrl}
                 titulo={previewRecibo?.titulo}
+                nombreArchivo={previewRecibo?.nombreArchivo}
+            />
+            <ModalFirmarReciboNomina
+                abierto={!!modalFirmarNomina}
+                onCerrar={() => setModalFirmarNomina(null)}
+                fila={modalFirmarNomina}
+                fechaInicio={localFiltros.fecha_inicio}
+                fechaFin={localFiltros.fecha_fin}
+                orientacion={orientacionRecibo}
+                onFirmado={(fila) => abrirPreviewNomina({ ...fila, recibo_nomina_firmado: true })}
             />
         </AppLayout>
     );

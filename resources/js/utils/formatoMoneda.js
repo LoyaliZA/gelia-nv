@@ -1,4 +1,4 @@
-import { diaEspanolDesdeFecha, normalizarMatrizHorario } from './matrizHorarioTurno';
+import { horarioTurnoParaFecha } from './matrizHorarioTurno';
 
 export function formatoMoneda(valor, opciones = {}) {
     const monto = Number(valor);
@@ -74,7 +74,8 @@ function parseTimeToMinutes(time) {
 
 function calcularHorasAPagar(minutosExtra, minutosMinimos = 30) {
     if (minutosExtra < minutosMinimos) return 0;
-    return Math.floor((minutosExtra - minutosMinimos) / minutosMinimos) + 1;
+    const minutosBloqueHora = 60;
+    return Math.floor((minutosExtra - minutosMinimos) / minutosBloqueHora) + 1;
 }
 
 export function calcularHorasExtraPreview(datos, configuracion = {}, colaborador = null) {
@@ -97,33 +98,20 @@ export function calcularHorasExtraPreview(datos, configuracion = {}, colaborador
         : Math.max(0, salidaMin - entradaMin);
 
     const totalHoras = Math.round((totalMinutos / 60) * 100) / 100;
-    const horasNormales = Number(colaborador?.horas_laboradas_oficiales ?? datos.horas_normales_snapshot ?? 8);
+    const fallbackHoras = Number(colaborador?.horas_laboradas_oficiales ?? datos.horas_normales_snapshot ?? 8);
+    const horarioDia = horarioTurnoParaFecha(colaborador?.turno, datos.fecha_turno, fallbackHoras);
+    const horasNormales = horarioDia.tieneTurno && !horarioDia.descanso
+        ? Number(horarioDia.horas) || fallbackHoras
+        : fallbackHoras;
+    const esDiaDescanso = horarioDia.descanso;
     const salarioPorHora = Number(colaborador?.salario_por_hora ?? datos.salario_por_hora_snapshot ?? 0);
     const tarifaHora = usarTarifaFija ? tarifaFija : salarioPorHora;
 
-    let salidaOficialMin = entradaMin + Math.round(horasNormales * 60);
-    const turno = colaborador?.turno;
-    const matrizHorario = turno?.matriz_horario ? normalizarMatrizHorario(turno.matriz_horario) : null;
-
-    if (matrizHorario) {
-        const diaEspanol = diaEspanolDesdeFecha(datos.fecha_turno || new Date().toISOString().slice(0, 10));
-        const configDia = matrizHorario[diaEspanol];
-
-        if (configDia && !configDia.descanso) {
-            salidaOficialMin = parseTimeToMinutes(configDia.salida);
-        }
-    } else if (colaborador?.hora_salida_oficial) {
-        salidaOficialMin = parseTimeToMinutes(colaborador.hora_salida_oficial);
-    } else if (colaborador?.hora_entrada_oficial) {
-        salidaOficialMin = parseTimeToMinutes(colaborador.hora_entrada_oficial) + Math.round(horasNormales * 60);
-    }
-
-    const inicioExtraMin = salidaOficialMin + graciaMinutos;
-    const tiempoExtraMinutos = salidaMin > inicioExtraMin && !salidaDiaSiguiente
-        ? salidaMin - inicioExtraMin
-        : salidaDiaSiguiente
-            ? Math.max(0, (24 * 60 - inicioExtraMin) + salidaMin)
-            : 0;
+    const minutosNormales = Math.round(horasNormales * 60);
+    const extraBruto = esDiaDescanso
+        ? totalMinutos
+        : Math.max(0, totalMinutos - minutosNormales);
+    const tiempoExtraMinutos = extraBruto >= graciaMinutos ? extraBruto : 0;
 
     const tiempoExtraCrudo = Math.round((tiempoExtraMinutos / 60) * 100) / 100;
     const horasExtraAPagar = calcularHorasAPagar(tiempoExtraMinutos, minutosMinimos);
