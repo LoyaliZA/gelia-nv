@@ -33,11 +33,11 @@ class ListarDeduccionesService
                 RhDeduccion::ESTADO_PENDIENTE_NOMINA,
                 RhDeduccion::ESTADO_PENDIENTE_COMISION,
             ])->count(),
-            'total_deduccion_periodo' => (int) (clone $base)->sum('total_deduccion'),
-            'monto_pendiente' => (int) (clone $base)->whereIn('estado_deduccion', [
+            'total_deduccion_periodo' => round((float) (clone $base)->sum('total_deduccion'), 2),
+            'monto_pendiente' => round((float) (clone $base)->whereIn('estado_deduccion', [
                 RhDeduccion::ESTADO_PENDIENTE_NOMINA,
                 RhDeduccion::ESTADO_PENDIENTE_COMISION,
-            ])->sum('total_deduccion'),
+            ])->sum('total_deduccion'), 2),
         ];
     }
 
@@ -61,6 +61,10 @@ class ListarDeduccionesService
 
         if (!empty($filtros['rh_colaborador_id'])) {
             $query->where('rh_colaborador_id', $filtros['rh_colaborador_id']);
+        }
+
+        if (!empty($filtros['rh_colaborador_ids']) && is_array($filtros['rh_colaborador_ids'])) {
+            $query->whereIn('rh_colaborador_id', $filtros['rh_colaborador_ids']);
         }
 
         if (!empty($filtros['catalogo_regla_incidencia_id'])) {
@@ -88,11 +92,37 @@ class ListarDeduccionesService
         }
 
         if (!empty($filtros['estado_deduccion']) && $filtros['estado_deduccion'] !== 'TODAS') {
-            $query->where('estado_deduccion', strtolower($filtros['estado_deduccion']));
+            $estado = strtolower($filtros['estado_deduccion']);
+            if ($estado === 'pendiente') {
+                $query->whereIn('estado_deduccion', [
+                    RhDeduccion::ESTADO_PENDIENTE_NOMINA,
+                    RhDeduccion::ESTADO_PENDIENTE_COMISION,
+                ]);
+            } elseif ($estado === 'programado') {
+                $query->where('estado_deduccion', RhDeduccion::ESTADO_PENDIENTE_NOMINA);
+            } else {
+                $query->where('estado_deduccion', $estado);
+            }
         }
 
         if (!empty($filtros['origen_deduccion']) && $filtros['origen_deduccion'] !== 'TODAS') {
             $query->where('origen_deduccion', strtolower($filtros['origen_deduccion']));
+        }
+
+        if (!empty($filtros['rama'])) {
+            $rama = strtolower($filtros['rama']);
+            if ($rama === 'incidencias') {
+                $query->whereNotNull('catalogo_regla_incidencia_id')
+                    ->whereNull('rh_prestamo_pago_fijo_id');
+            } elseif ($rama === 'pagos_pendientes') {
+                $query->where(function ($q) {
+                    $q->whereNotNull('rh_prestamo_pago_fijo_id')
+                        ->orWhereIn('estado_deduccion', [
+                            RhDeduccion::ESTADO_PENDIENTE_NOMINA,
+                            RhDeduccion::ESTADO_PENDIENTE_COMISION,
+                        ]);
+                });
+            }
         }
     }
 }

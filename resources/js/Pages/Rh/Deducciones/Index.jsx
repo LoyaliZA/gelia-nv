@@ -1,30 +1,43 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { AlertTriangle, Plus, Eye, Pencil } from 'lucide-react';
+import { AlertTriangle, Plus, Eye, Pencil, Printer } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
-import { formatoDeduccionEntera, formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
+import { formatoDeduccionDecimal, formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
 import RhPageHeader from '../Partials/RhPageHeader';
 import FiltrosDeducciones from './Partials/FiltrosDeducciones';
 import ModalFormDeduccion from './Partials/ModalFormDeduccion';
+import ModalVistaPreviaRecibo from '../Partials/ModalVistaPreviaRecibo';
 import { ESTADO_DEDUCCION_BADGE, ESTADO_DEDUCCION_LABELS, ORIGEN_DEDUCCION_LABELS } from './Partials/deduccionesStyles';
 
 function tabFromFiltros(filtros) {
-    if (filtros.estado_deduccion === 'pendiente_nomina') return 'PENDIENTE_NOMINA';
+    if (filtros.estado_deduccion === 'pendiente_nomina' || filtros.estado_deduccion === 'pendiente') return 'PENDIENTE_NOMINA';
     if (filtros.estado_deduccion === 'pendiente_comision') return 'PENDIENTE_COMISION';
     if (filtros.estado_deduccion === 'aplicado') return 'APLICADAS';
+    if (filtros.estado_deduccion === 'programado') return 'PENDIENTE_NOMINA';
     return 'TODAS';
 }
 
-function FilaAcciones({ reg, puedeEditar, onEditar }) {
+function rutaListado(rama) {
+    return rama === 'pagos_pendientes'
+        ? route('rh.deducciones.pagos_pendientes.index')
+        : route('rh.deducciones.incidencias.index');
+}
+
+function FilaAcciones({ reg, puedeEditar, puedeRecibos, onEditar, onRecibo }) {
     return (
         <div className="flex flex-wrap gap-3 mt-3">
             <Link href={route('rh.deducciones.show', reg.id)} className="inline-flex items-center gap-1 text-[10px] font-black uppercase" style={{ color: 'var(--color-primario)' }}>
                 <Eye className="w-3.5 h-3.5" /> Ver expediente
             </Link>
+            {puedeRecibos && reg.catalogo_regla_incidencia_id && (
+                <button type="button" onClick={() => onRecibo(reg)} className="inline-flex items-center gap-1 text-[10px] font-black uppercase theme-text-muted">
+                    <Printer className="w-3.5 h-3.5" /> Recibo
+                </button>
+            )}
             {puedeEditar && reg.estado_deduccion !== 'aplicado' && (
                 <button type="button" onClick={() => onEditar(reg)} className="inline-flex items-center gap-1 text-[10px] font-black uppercase theme-text-muted">
                     <Pencil className="w-3.5 h-3.5" /> Editar
@@ -36,6 +49,9 @@ function FilaAcciones({ reg, puedeEditar, onEditar }) {
 
 export default function Index({
     auth,
+    rama = 'incidencias',
+    tituloHighlight = 'Incidencias',
+    descripcion = 'Registro de incidencias y deducciones operativas',
     registros,
     metricas,
     colaboradores,
@@ -45,10 +61,12 @@ export default function Index({
     usuarioActual,
     puedeCrear,
     puedeEditar,
+    puedeRecibos = false,
 }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [registroEditando, setRegistroEditando] = useState(null);
     const [tabActiva, setTabActiva] = useState(() => tabFromFiltros(filtros));
+    const [previewRecibo, setPreviewRecibo] = useState(null);
 
     const abrirNuevo = () => {
         setRegistroEditando(null);
@@ -61,37 +79,62 @@ export default function Index({
         setModalAbierto(true);
     };
 
+    const abrirRecibo = (registro) => {
+        setPreviewRecibo({
+            previewUrl: route('rh.deducciones.recibo.vista_previa', registro.id),
+            downloadUrl: route('rh.deducciones.recibo', registro.id),
+            titulo: `Recibo — ${registro.folio}`,
+        });
+    };
+
     const irAPagina = (pagina) => {
         if (pagina < 1 || pagina > registros.last_page) return;
-        router.get(route('rh.deducciones.index'), { ...filtros, page: pagina }, { preserveState: true, preserveScroll: true });
+        router.get(rutaListado(rama), { ...filtros, page: pagina }, { preserveState: true, preserveScroll: true });
     };
 
     const kpis = [
         { label: 'Deducciones hoy', value: metricas.registros_hoy, accent: true },
         { label: 'Pendientes', value: metricas.pendientes_deduccion, color: '#f59e0b' },
-        { label: 'Total periodo', value: formatoDeduccionEntera(metricas.total_deduccion_periodo), color: '#ef4444' },
-        { label: 'Monto pendiente', value: formatoDeduccionEntera(metricas.monto_pendiente), color: '#3b82f6' },
+        { label: 'Total periodo', value: formatoDeduccionDecimal(metricas.total_deduccion_periodo), color: '#ef4444' },
+        { label: 'Monto pendiente', value: formatoDeduccionDecimal(metricas.monto_pendiente), color: '#3b82f6' },
     ];
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Deducciones | RH" />
+            <Head title={`${tituloHighlight} | RH`} />
             <GeliaPageShell className="space-y-8 relative">
                 <RhPageHeader
                     title="Reporte integral de"
-                    titleHighlight="Deducciones"
-                    description={`${registros.total.toLocaleString('es-MX')} expedientes digitales`}
+                    titleHighlight={tituloHighlight}
+                    description={descripcion}
                     icon={AlertTriangle}
                     aside={
                         puedeCrear ? (
                             <button type="button" onClick={abrirNuevo} className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2" style={{ backgroundColor: 'var(--color-primario)' }}>
-                                <Plus className="w-4 h-4" /> Nueva deducción
+                                <Plus className="w-4 h-4" /> Nueva incidencia
                             </button>
                         ) : null
                     }
                 />
 
                 <RhSubNav />
+
+                <div className="flex flex-wrap gap-2">
+                    <Link
+                        href={route('rh.deducciones.incidencias.index')}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase ${rama === 'incidencias' ? 'text-white' : 'theme-text-muted theme-element border theme-border'}`}
+                        style={rama === 'incidencias' ? { backgroundColor: 'var(--color-primario)' } : {}}
+                    >
+                        Incidencias
+                    </Link>
+                    <Link
+                        href={route('rh.deducciones.pagos_pendientes.index')}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase ${rama === 'pagos_pendientes' ? 'text-white' : 'theme-text-muted theme-element border theme-border'}`}
+                        style={rama === 'pagos_pendientes' ? { backgroundColor: 'var(--color-primario)' } : {}}
+                    >
+                        Pagos y pendientes
+                    </Link>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {kpis.map(({ label, value, color, accent }) => (
@@ -110,12 +153,13 @@ export default function Index({
                         departamentos={departamentos}
                         tabActiva={tabActiva}
                         onCambiarTab={setTabActiva}
+                        rama={rama}
                     />
 
                     {registros.data.length === 0 ? (
                         <div className="py-16 text-center">
                             <AlertTriangle className="w-10 h-10 mx-auto mb-3 opacity-40 theme-text-muted" />
-                            <p className="theme-text-muted italic text-sm m-0">No hay deducciones con estos filtros.</p>
+                            <p className="theme-text-muted italic text-sm m-0">No hay registros con estos filtros.</p>
                         </div>
                     ) : (
                         <>
@@ -138,7 +182,7 @@ export default function Index({
                                             <div><span className="theme-text-muted uppercase font-black">Origen:</span> {ORIGEN_DEDUCCION_LABELS[reg.origen_deduccion] || reg.origen_deduccion}</div>
                                             <div><span className="theme-text-muted uppercase font-black">Auditor:</span> {reg.registrado_por?.name || '—'}</div>
                                         </div>
-                                        <FilaAcciones reg={reg} puedeEditar={puedeEditar} onEditar={abrirEditar} />
+                                        <FilaAcciones reg={reg} puedeEditar={puedeEditar} puedeRecibos={puedeRecibos} onEditar={abrirEditar} onRecibo={abrirRecibo} />
                                     </div>
                                 ))}
                             </div>
@@ -168,7 +212,7 @@ export default function Index({
                                                 </td>
                                                 <td className="px-4 py-4 text-xs">{reg.registrado_por?.name || '—'}</td>
                                                 <td className="px-4 py-4 text-right whitespace-nowrap">
-                                                    <FilaAcciones reg={reg} puedeEditar={puedeEditar} onEditar={abrirEditar} />
+                                                    <FilaAcciones reg={reg} puedeEditar={puedeEditar} puedeRecibos={puedeRecibos} onEditar={abrirEditar} onRecibo={abrirRecibo} />
                                                 </td>
                                             </tr>
                                         ))}
@@ -191,6 +235,14 @@ export default function Index({
                 colaboradores={colaboradores}
                 reglasIncidencia={reglasIncidencia}
                 usuarioActual={usuarioActual}
+            />
+
+            <ModalVistaPreviaRecibo
+                abierto={!!previewRecibo}
+                onCerrar={() => setPreviewRecibo(null)}
+                previewUrl={previewRecibo?.previewUrl}
+                downloadUrl={previewRecibo?.downloadUrl}
+                titulo={previewRecibo?.titulo}
             />
         </AppLayout>
     );

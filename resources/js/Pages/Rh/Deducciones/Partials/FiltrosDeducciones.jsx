@@ -13,6 +13,7 @@ export default function FiltrosDeducciones({
     departamentos = [],
     tabActiva = 'TODAS',
     onCambiarTab,
+    rama = 'incidencias',
 }) {
     const [busqueda, setBusqueda] = useState(filtros.busqueda || '');
 
@@ -26,8 +27,12 @@ export default function FiltrosDeducciones({
         return depto?.areas || [];
     }, [departamentos, filtros.departamento_id]);
 
+    const listadoRoute = rama === 'pagos_pendientes'
+        ? route('rh.deducciones.pagos_pendientes.index')
+        : route('rh.deducciones.incidencias.index');
+
     const aplicar = (cambios) => {
-        router.get(route('rh.deducciones.index'), { ...filtros, ...cambios, page: 1 }, {
+        router.get(listadoRoute, { ...filtros, ...cambios, page: 1 }, {
             preserveState: true,
             preserveScroll: true,
         });
@@ -40,7 +45,7 @@ export default function FiltrosDeducciones({
     const limpiar = () => {
         setBusqueda('');
         onCambiarTab?.('TODAS');
-        router.get(route('rh.deducciones.index'), {}, { preserveState: true, preserveScroll: true });
+        router.get(listadoRoute, {}, { preserveState: true, preserveScroll: true });
     };
 
     const hayFiltros = filtros.busqueda || filtros.rh_colaborador_id || filtros.catalogo_regla_incidencia_id

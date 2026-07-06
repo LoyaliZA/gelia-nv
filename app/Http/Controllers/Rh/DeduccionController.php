@@ -13,6 +13,7 @@ use App\Models\RhDeduccion;
 use App\Services\Rh\ActualizarDeduccionService;
 use App\Services\Rh\CalcularDeduccionReglaService;
 use App\Services\Rh\CrearDeduccionService;
+use App\Services\Rh\FiltrarColaboradoresGerenteService;
 use App\Services\Rh\FiltrarReglasIncidenciaService;
 use App\Services\Rh\ListarDeduccionesService;
 use App\Services\Rh\MarcarDeduccionAplicadaService;
@@ -25,19 +26,58 @@ use Inertia\Response;
 
 class DeduccionController extends Controller
 {
-    public function index(Request $request, ListarDeduccionesService $listarService): Response
+    public function index(Request $request): \Illuminate\Http\RedirectResponse
     {
+        $query = $request->query();
+        $estado = strtolower((string) ($query['estado_deduccion'] ?? ''));
+
+        if (in_array($estado, ['pendiente', 'programado', 'pendiente_nomina', 'pendiente_comision'], true)) {
+            if (in_array($estado, ['pendiente', 'programado'], true)) {
+                unset($query['estado_deduccion']);
+            }
+
+            return redirect()->route('rh.deducciones.pagos_pendientes.index', $query);
+        }
+
+        return redirect()->route('rh.deducciones.incidencias.index', $query);
+    }
+
+    public function incidencias(Request $request, ListarDeduccionesService $listarService): Response
+    {
+        return $this->renderListado($request, $listarService, 'incidencias', 'Incidencias', 'Registro de incidencias y deducciones operativas');
+    }
+
+    public function pagosPendientes(Request $request, ListarDeduccionesService $listarService): Response
+    {
+        return $this->renderListado($request, $listarService, 'pagos_pendientes', 'Pagos y pendientes', 'Préstamos, cuotas y deducciones pendientes de aplicar');
+    }
+
+    private function renderListado(
+        Request $request,
+        ListarDeduccionesService $listarService,
+        string $rama,
+        string $tituloHighlight,
+        string $descripcion,
+    ): Response {
         abort_unless(Auth::user()->can('rh.deducciones.ver') || Auth::user()->can('rh.incidencias.ver'), 403);
 
-        $filtros = $request->only([
-            'busqueda', 'rh_colaborador_id', 'catalogo_regla_incidencia_id', 'departamento_id', 'area_id',
-            'fecha_inicio', 'fecha_fin', 'solo_hoy', 'estado_deduccion', 'origen_deduccion',
-        ]);
+        $filtros = array_merge(
+            $request->only([
+                'busqueda', 'rh_colaborador_id', 'catalogo_regla_incidencia_id', 'departamento_id', 'area_id',
+                'fecha_inicio', 'fecha_fin', 'solo_hoy', 'estado_deduccion', 'origen_deduccion',
+            ]),
+            ['rama' => $rama],
+        );
 
         $filtrarReglas = app(FiltrarReglasIncidenciaService::class);
 
+        $registros = $listarService->ejecutar($filtros);
+
         return Inertia::render('Rh/Deducciones/Index', [
-            'registros' => $listarService->ejecutar($filtros),
+            'rama' => $rama,
+            'tituloHighlight' => $tituloHighlight,
+            'descripcion' => $descripcion,
+            'registros' => $registros,
             'metricas' => $listarService->metricas($filtros),
             'colaboradores' => RhColaborador::where('activo', true)
                 ->with(['departamento', 'area'])
@@ -48,15 +88,23 @@ class DeduccionController extends Controller
             'configuracion' => RhConfiguracion::obtener(),
             'filtros' => $filtros,
             'usuarioActual' => Auth::user()->only(['id', 'name']),
-            'puedeCrear' => Auth::user()->can('rh.deducciones.crear') || Auth::user()->can('rh.incidencias.crear'),
+            'puedeCrear' => $rama === 'incidencias' && (
+                Auth::user()->can('rh.deducciones.crear') || Auth::user()->can('rh.incidencias.crear')
+            ),
             'puedeEditar' => Auth::user()->can('rh.deducciones.editar') || Auth::user()->can('rh.incidencias.editar'),
             'puedeAplicar' => Auth::user()->can('rh.deducciones.aplicar') || Auth::user()->can('rh.incidencias.aplicar'),
+            'puedeRecibos' => Auth::user()->can('rh.recibos.ver') || Auth::user()->can('rh.recibos.generar'),
         ]);
     }
 
-    public function show(RhDeduccion $deduccion): Response
+    public function show(Request $request, RhDeduccion $deduccion): Response
     {
-        abort_unless(Auth::user()->can('rh.deducciones.ver') || Auth::user()->can('rh.incidencias.ver'), 403);
+        abort_unless(
+            Auth::user()->can('rh.deducciones.ver')
+            || Auth::user()->can('rh.incidencias.ver')
+            || Auth::user()->can('rh.incidencias.gerente.ver'),
+            403,
+        );
 
         $deduccion->load([
             'colaborador.departamento',
@@ -70,13 +118,25 @@ class DeduccionController extends Controller
             'prestamoPagoFijo',
         ]);
 
+        if (Auth::user()->can('rh.incidencias.gerente.ver')
+            && !Auth::user()->can('rh.deducciones.ver')
+            && !Auth::user()->can('rh.incidencias.ver')
+            && $deduccion->colaborador) {
+            app(FiltrarColaboradoresGerenteService::class)->validarAcceso(Auth::user(), $deduccion->colaborador);
+        }
+
         return Inertia::render('Rh/Deducciones/Show', [
             'registro' => $deduccion,
             'configuracion' => RhConfiguracion::obtener(),
-            'puedeEditar' => (Auth::user()->can('rh.deducciones.editar') || Auth::user()->can('rh.incidencias.editar'))
-                && $deduccion->estado_deduccion !== RhDeduccion::ESTADO_APLICADO,
-            'puedeAplicar' => (Auth::user()->can('rh.deducciones.aplicar') || Auth::user()->can('rh.incidencias.aplicar'))
-                && $deduccion->estado_deduccion !== RhDeduccion::ESTADO_APLICADO,
+            'esVistaGerente' => $request->routeIs('rh.incidencias_gerente.*'),
+            'puedeEditar' => !$request->routeIs('rh.incidencias_gerente.*') && (
+                (Auth::user()->can('rh.deducciones.editar') || Auth::user()->can('rh.incidencias.editar'))
+                && $deduccion->estado_deduccion !== RhDeduccion::ESTADO_APLICADO
+            ),
+            'puedeAplicar' => !$request->routeIs('rh.incidencias_gerente.*') && (
+                (Auth::user()->can('rh.deducciones.aplicar') || Auth::user()->can('rh.incidencias.aplicar'))
+                && $deduccion->estado_deduccion !== RhDeduccion::ESTADO_APLICADO
+            ),
             'colaboradores' => RhColaborador::where('activo', true)->with(['departamento', 'area'])->orderBy('nombre')->get(),
             'reglasIncidencia' => app(FiltrarReglasIncidenciaService::class)->ejecutar(
                 Auth::user(),
@@ -84,6 +144,7 @@ class DeduccionController extends Controller
                 $deduccion->catalogo_regla_incidencia_id,
             ),
             'usuarioActual' => Auth::user()->only(['id', 'name']),
+            'puedeRecibos' => Auth::user()->can('rh.recibos.ver') || Auth::user()->can('rh.recibos.generar'),
         ]);
     }
 
@@ -159,7 +220,13 @@ class DeduccionController extends Controller
 
     public function reglasDisponibles(Request $request, FiltrarReglasIncidenciaService $filtrarService): JsonResponse
     {
-        abort_unless(Auth::user()->can('rh.deducciones.ver') || Auth::user()->can('rh.incidencias.ver'), 403);
+        abort_unless(
+            Auth::user()->can('rh.deducciones.ver')
+            || Auth::user()->can('rh.incidencias.ver')
+            || Auth::user()->can('rh.incidencias.gerente.ver')
+            || Auth::user()->can('rh.incidencias.gerente.crear'),
+            403,
+        );
 
         $datos = $request->validate([
             'rh_colaborador_id' => 'nullable|exists:rh_colaboradores,id',

@@ -290,6 +290,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             href: () => routeHref('rh.index', '/rh'),
             active: (url) => url.startsWith('/rh'),
         },
+        can('rh.incidencias.gerente.ver') && !can('rh.ver') && {
+            type: 'link',
+            id: 'rh_incidencias_gerente',
+            label: 'Incidencias RH',
+            icon: Users,
+            href: () => routeHref('rh.incidencias_gerente.index', '/rh/incidencias-gerente'),
+            active: (url) => url.startsWith('/rh/incidencias-gerente'),
+        },
         can('activos.ver') && {
             type: 'link',
             id: 'activos',

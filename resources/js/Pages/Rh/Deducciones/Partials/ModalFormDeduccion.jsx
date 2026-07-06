@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { AlertTriangle, User, FileText, DollarSign, X, Save, Calculator, Package } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
-import FirmaCanvas from '../../../../Components/Rh/FirmaCanvas';
 import {
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
@@ -46,15 +45,11 @@ export default function ModalFormDeduccion({
 
     transform((formData) => ({
         ...formData,
-        factor_multiplicador: 1, // Siempre 1 tras esta actualización
-        firma_gerente_data: firmaGerenteRef.current?.getDataUrl() || undefined,
-        firma_colaborador_data: firmaColaboradorRef.current?.getDataUrl() || undefined,
+        factor_multiplicador: 1,
     }));
     const [reglasFiltradas, setReglasFiltradas] = useState(reglasIncidencia);
     const [productosSku, setProductosSku] = useState([]);
     const [productoSel, setProductoSel] = useState(null);
-    const firmaGerenteRef = useRef(null);
-    const firmaColaboradorRef = useRef(null);
 
     const colaboradorSel = useMemo(
         () => colaboradores.find((c) => String(c.id) === String(data.rh_colaborador_id)),
@@ -330,13 +325,6 @@ export default function ModalFormDeduccion({
                             <input type="date" value={data.fecha_deduccion_nomina} onChange={(e) => setData('fecha_deduccion_nomina', e.target.value)} className={THEME_INPUT} />
                         </div>
                     </section>
-
-                    {!registro && (
-                        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FirmaCanvas ref={firmaGerenteRef} label="Firma gerente autorizado" />
-                            <FirmaCanvas ref={firmaColaboradorRef} label="Firma colaborador" />
-                        </section>
-                    )}
 
                     <div className="flex justify-end gap-3 pt-4 border-t theme-border">
                         <button type="button" onClick={onCerrar} className={THEME_BTN_SECONDARY}>Cancelar</button>

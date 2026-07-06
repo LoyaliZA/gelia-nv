@@ -37,7 +37,7 @@ class RhSalidaPersonal extends Model
             'fecha_deduccion_nomina' => 'date',
             'minutos_ausente' => 'integer',
             'salario_por_minuto_snapshot' => 'decimal:8',
-            'monto_a_deducir' => 'integer',
+            'monto_a_deducir' => 'decimal:2',
         ];
     }
 

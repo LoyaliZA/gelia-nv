@@ -46,8 +46,7 @@ class CalcularSalidaPersonalService
 
         $minutosAusente = (int) max(0, $salida->diffInMinutes($regreso));
         
-        // El resultado final se redondea a una cantidad entera cerrada
-        $montoADeducir = (int) round($minutosAusente * $salarioPorMinuto);
+        $montoADeducir = round($minutosAusente * $salarioPorMinuto, 2);
 
         return [
             'minutos_ausente' => $minutosAusente,

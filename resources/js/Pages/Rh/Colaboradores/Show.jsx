@@ -19,7 +19,9 @@ export default function Show({
     puedeVerPrestamos,
     departamentos,
     puestos,
+    turnos = [],
     usuarios,
+    gerentes = [],
     configuracion,
     puedeEditar,
     puedeVincular,
@@ -211,7 +213,9 @@ export default function Show({
                 colaborador={colaborador}
                 departamentos={departamentos}
                 puestos={puestos}
+                turnos={turnos}
                 usuarios={usuarios}
+                gerentes={gerentes}
                 configuracion={configuracion}
                 puedeVincular={puedeVincular}
             />

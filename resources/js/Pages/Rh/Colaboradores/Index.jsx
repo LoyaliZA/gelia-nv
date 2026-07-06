@@ -16,6 +16,7 @@ export default function Index({
     colaboradores,
     departamentos,
     puestos,
+    turnos = [],
     usuarios,
     configuracion,
     filtros,
@@ -190,6 +191,7 @@ export default function Index({
                 colaborador={colaboradorEditando}
                 departamentos={departamentos}
                 puestos={puestos}
+                turnos={turnos}
                 usuarios={usuarios}
                 configuracion={configuracion}
                 puedeVincular={puedeVincular}

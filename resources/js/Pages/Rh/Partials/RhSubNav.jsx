@@ -18,7 +18,8 @@ const TABS = [
     { id: 'dashboard', label: 'Dashboard', route: 'rh.index', icon: LayoutDashboard, permiso: 'rh.ver', group: 'principal' },
     { id: 'colaboradores', label: 'Colaboradores', route: 'rh.colaboradores.index', icon: Users, permiso: 'rh.ver', group: 'principal' },
     { id: 'horas_extra', label: 'Horas Extra', route: 'rh.horas_extra.index', icon: Clock, permiso: 'rh.horas_extra.ver', group: 'principal' },
-    { id: 'deducciones', label: 'Deducciones', route: 'rh.deducciones.index', icon: AlertTriangle, permiso: 'rh.incidencias.ver', group: 'principal' },
+    { id: 'deducciones', label: 'Deducciones', route: 'rh.deducciones.incidencias.index', icon: AlertTriangle, permiso: 'rh.incidencias.ver', group: 'principal' },
+    { id: 'incidencias_gerente', label: 'Mis Incidencias', route: 'rh.incidencias_gerente.index', icon: AlertTriangle, permiso: 'rh.incidencias.gerente.ver', group: 'principal' },
     { id: 'prestamos', label: 'Préstamos', route: 'rh.prestamos.index', icon: Wallet, permiso: 'rh.prestamos.ver', group: 'nomina' },
     { id: 'salidas_personales', label: 'Salidas', route: 'rh.salidas_personales.index', icon: LogOut, permiso: 'rh.salidas_personales.ver', group: 'nomina' },
     { id: 'banco_tiempo', label: 'Banco Tiempo', route: 'rh.banco_tiempo.index', icon: TimerReset, permiso: 'rh.banco_tiempo.ver', group: 'nomina' },
@@ -45,7 +46,10 @@ function tabActiva(currentUrl, tab) {
         return currentUrl.startsWith('/rh/horas-extra');
     }
     if (tab.id === 'deducciones') {
-        return currentUrl.startsWith('/rh/deducciones') || currentUrl.startsWith('/rh/incidencias');
+        return currentUrl.startsWith('/rh/deducciones');
+    }
+    if (tab.id === 'incidencias_gerente') {
+        return currentUrl.startsWith('/rh/incidencias-gerente');
     }
     if (tab.id === 'prestamos') {
         return currentUrl.startsWith('/rh/prestamos-pagos-fijos');

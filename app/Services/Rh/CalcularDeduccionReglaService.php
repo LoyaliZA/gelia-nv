@@ -156,7 +156,7 @@ class CalcularDeduccionReglaService
             'deduccion_salario_base' => 0,
             'deduccion_bono_puntualidad' => 0,
             'deduccion_bono_productividad' => 0,
-            'total_deduccion' => (int) round($totalFinal),
+            'total_deduccion' => round($totalFinal, 2),
             'origen_deduccion' => $origenDeduccion,
             'estado_deduccion' => $estado,
             'salario_diario_snapshot' => $colaborador->salario_diario,

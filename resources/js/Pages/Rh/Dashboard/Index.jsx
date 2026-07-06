@@ -127,13 +127,21 @@ export default function Index({
                                     Últimas incidencias
                                 </h2>
                                 {puedeIncidencias && (
-                                    <Link
-                                        href={route('rh.incidencias.index')}
-                                        className="text-[10px] font-black uppercase shrink-0"
-                                        style={{ color: 'var(--color-primario)' }}
-                                    >
-                                        Ver todas
-                                    </Link>
+                                    <div className="flex flex-wrap gap-3 shrink-0">
+                                        <Link
+                                            href={route('rh.deducciones.incidencias.index')}
+                                            className="text-[10px] font-black uppercase"
+                                            style={{ color: 'var(--color-primario)' }}
+                                        >
+                                            Ver todas
+                                        </Link>
+                                        <Link
+                                            href={route('rh.deducciones.pagos_pendientes.index')}
+                                            className="text-[10px] font-black uppercase theme-text-muted hover:theme-text-main"
+                                        >
+                                            Ver pendientes
+                                        </Link>
+                                    </div>
                                 )}
                             </div>
                             {ultimasIncidencias.length === 0 ? (

@@ -49,6 +49,8 @@ class UpdateColaboradorRequest extends FormRequest
             'bonos' => 'nullable|array',
             'bonos.*.catalogo_bono_id' => 'required|exists:catalogo_bonos,id',
             'bonos.*.monto' => 'nullable|numeric|min:0',
+            'gerente_user_ids' => 'nullable|array',
+            'gerente_user_ids.*' => 'exists:users,id',
         ];
     }
 

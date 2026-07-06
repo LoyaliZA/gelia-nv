@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Calendar, ArrowLeft, Zap, Settings } from 'lucide-react';
+import { Calendar, ArrowLeft, Zap, Settings, Printer } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass, THEME_INPUT } from '../../../utils/geliaTheme';
 import { RhFieldLabel, RhSelect } from '../Partials/rhFilterFields';
 import { formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
 import RhSubNav from '../Partials/RhSubNav';
+import ModalVistaPreviaRecibo from '../Partials/ModalVistaPreviaRecibo';
 
-export default function Index({ auth, resumen, comisionesAuditor, colaboradores, configuracion, filtros, puedeGenerarCuotas, puedeSellarSalidas }) {
+export default function Index({ auth, resumen, comisionesAuditor, colaboradores, configuracion, filtros, puedeGenerarCuotas, puedeSellarSalidas, puedeGenerarRecibos = false }) {
+    const [previewRecibo, setPreviewRecibo] = useState(null);
     const [localFiltros, setLocalFiltros] = useState({
         fecha_inicio: filtros.fecha_inicio || configuracion.periodo_actual_inicio || '',
         fecha_fin: filtros.fecha_fin || configuracion.periodo_actual_fin || '',
@@ -226,7 +228,7 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                         <table className="w-full border-collapse">
                             <thead>
                                 <tr className="border-b theme-border">
-                                    {['Colaborador', 'Salario mensual', 'Salario diario', 'Estimado rango', 'HE', 'Deducciones', 'Salidas Pers.', 'Préstamos activos', 'Neto estimado'].map((h) => (
+                                    {['Colaborador', 'Salario mensual', 'Salario diario', 'Estimado rango', 'HE', 'Deducciones', 'Salidas Pers.', 'Préstamos activos', 'Neto estimado', puedeGenerarRecibos ? 'Recibo' : null].filter(Boolean).map((h) => (
                                         <th key={h} className="px-4 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">{h}</th>
                                     ))}
                                 </tr>
@@ -250,6 +252,21 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                                         </td>
                                         <td className="px-4 py-4 text-xs text-amber-600">{formatoMoneda(fila.prestamos_activos_cuota || 0)}</td>
                                         <td className="px-4 py-4 text-sm font-bold">{formatoMoneda(fila.neto_estimado)}</td>
+                                        {puedeGenerarRecibos && (
+                                            <td className="px-4 py-4">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPreviewRecibo({
+                                                        previewUrl: `${route('rh.periodo_pago.recibo_incidencias.vista_previa', fila.colaborador.id)}?fecha_inicio=${localFiltros.fecha_inicio}&fecha_fin=${localFiltros.fecha_fin}`,
+                                                        downloadUrl: `${route('rh.periodo_pago.recibo_incidencias', fila.colaborador.id)}?fecha_inicio=${localFiltros.fecha_inicio}&fecha_fin=${localFiltros.fecha_fin}`,
+                                                        titulo: `Recibo periodo — ${nombreCompletoColaborador(fila.colaborador)}`,
+                                                    })}
+                                                    className="text-[10px] font-black uppercase inline-flex items-center gap-1 theme-text-muted"
+                                                >
+                                                    <Printer className="w-3.5 h-3.5" /> Periodo
+                                                </button>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -296,6 +313,13 @@ export default function Index({ auth, resumen, comisionesAuditor, colaboradores,
                     </form>
                 </div>
             )}
+            <ModalVistaPreviaRecibo
+                abierto={!!previewRecibo}
+                onCerrar={() => setPreviewRecibo(null)}
+                previewUrl={previewRecibo?.previewUrl}
+                downloadUrl={previewRecibo?.downloadUrl}
+                titulo={previewRecibo?.titulo}
+            />
         </AppLayout>
     );
 }

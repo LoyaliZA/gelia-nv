@@ -74,7 +74,7 @@ class RhDeduccion extends Model
             'deduccion_salario_base' => 'decimal:2',
             'deduccion_bono_puntualidad' => 'decimal:2',
             'deduccion_bono_productividad' => 'decimal:2',
-            'total_deduccion' => 'integer',
+            'total_deduccion' => 'decimal:2',
             'salario_diario_snapshot' => 'decimal:2',
             'bono_puntualidad_diario_snapshot' => 'decimal:2',
             'bono_productividad_diario_snapshot' => 'decimal:2',

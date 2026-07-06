@@ -87,6 +87,12 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(User::class, 'gerente_colaborador', 'gerente_id', 'colaborador_id');
     }
+
+    public function colaboradoresRhAsignados(): BelongsToMany
+    {
+        return $this->belongsToMany(RhColaborador::class, 'gerente_rh_colaborador', 'gerente_user_id', 'rh_colaborador_id')
+            ->withTimestamps();
+    }
     // Listas creadas por el usuario
     public function customLists()
     {

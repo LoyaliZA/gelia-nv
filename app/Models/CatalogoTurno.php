@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\MatrizHorarioCast;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -18,7 +19,7 @@ class CatalogoTurno extends Model
     protected function casts(): array
     {
         return [
-            'matriz_horario' => 'array',
+            'matriz_horario' => MatrizHorarioCast::class,
             'activo' => 'boolean',
         ];
     }

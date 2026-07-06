@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Rh;
 
 use App\Http\Controllers\Controller;
 use App\Models\CatalogoTurno;
+use App\Support\MatrizHorarioTurno;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -17,6 +18,8 @@ class CatalogoTurnoController extends Controller
             'matriz_horario' => 'required|array',
         ]);
 
+        $datos['matriz_horario'] = MatrizHorarioTurno::normalizar($datos['matriz_horario']);
+
         CatalogoTurno::create($datos);
 
         return back()->with('success', 'Turno creado correctamente.');
@@ -29,6 +32,8 @@ class CatalogoTurnoController extends Controller
             'activo' => 'required|boolean',
             'matriz_horario' => 'required|array',
         ]);
+
+        $datos['matriz_horario'] = MatrizHorarioTurno::normalizar($datos['matriz_horario']);
 
         $turno->update($datos);
 

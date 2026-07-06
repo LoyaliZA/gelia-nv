@@ -51,7 +51,7 @@ class ColaboradorController extends Controller
 
     public function show(RhColaborador $colaborador): Response
     {
-        $colaborador->load(['departamento', 'area', 'puesto.bonos', 'usuario', 'registradoPor', 'bonos']);
+        $colaborador->load(['departamento', 'area', 'puesto.bonos', 'usuario', 'registradoPor', 'bonos', 'gerentesAsignados']);
 
         $deducciones = RhDeduccion::with('reglaIncidencia')
             ->where('rh_colaborador_id', $colaborador->id)
@@ -76,6 +76,10 @@ class ColaboradorController extends Controller
             'puestos' => CatalogoPuesto::with('bonos')->where('activo', true)->orderBy('nombre')->get(),
             'turnos' => \App\Models\CatalogoTurno::where('activo', true)->orderBy('nombre')->get(),
             'usuarios' => User::select(['id', 'name', 'email', 'apellido_paterno', 'apellido_materno'])
+                ->orderBy('name')
+                ->get(),
+            'gerentes' => User::role(['Gerente', 'Administrador', 'Super Admin'])
+                ->select(['id', 'name', 'email', 'apellido_paterno'])
                 ->orderBy('name')
                 ->get(),
             'configuracion' => RhConfiguracion::obtener(),

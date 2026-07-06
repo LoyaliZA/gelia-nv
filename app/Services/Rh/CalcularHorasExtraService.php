@@ -5,6 +5,7 @@ namespace App\Services\Rh;
 use App\Models\RhColaborador;
 use App\Models\RhConfiguracion;
 use App\Models\RhHorasExtra;
+use App\Support\MatrizHorarioTurno;
 use Carbon\Carbon;
 
 class CalcularHorasExtraService
@@ -103,8 +104,9 @@ class CalcularHorasExtraService
         int $graciaMinutos,
     ): int {
         $turno = $colaborador?->turno;
-        if ($turno && !empty($turno->matriz_horario)) {
-            // Mapping English day names to Spanish keys in JSON
+        $matrizHorario = $turno ? MatrizHorarioTurno::normalizar($turno->matriz_horario) : null;
+
+        if (!empty($matrizHorario)) {
             $mapaDias = [
                 'Monday' => 'lunes',
                 'Tuesday' => 'martes',
@@ -114,10 +116,10 @@ class CalcularHorasExtraService
                 'Saturday' => 'sabado',
                 'Sunday' => 'domingo',
             ];
-            
+
             $diaIngles = $entrada->copy()->format('l');
             $diaEspanol = $mapaDias[$diaIngles];
-            $configDia = $turno->matriz_horario[$diaEspanol] ?? null;
+            $configDia = $matrizHorario[$diaEspanol] ?? null;
 
             if ($configDia && !($configDia['descanso'] ?? false)) {
                 $salidaOficial = $entrada->copy()->setTimeFromTimeString(

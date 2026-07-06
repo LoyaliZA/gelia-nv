@@ -13,31 +13,14 @@ import {
     THEME_BTN_ICON,
 } from '../../../../utils/geliaTheme';
 import { rhChipClass } from '../../rhModuleStyles';
-
-const DIAS = [
-    { clave: '1', nombre: 'Lunes' },
-    { clave: '2', nombre: 'Martes' },
-    { clave: '3', nombre: 'Miércoles' },
-    { clave: '4', nombre: 'Jueves' },
-    { clave: '5', nombre: 'Viernes' },
-    { clave: '6', nombre: 'Sábado' },
-    { clave: '0', nombre: 'Domingo' },
-];
+import { DIAS_TURNO, matrizHorarioDefecto, normalizarMatrizHorario } from '../../../../utils/matrizHorarioTurno';
 
 export default function TablaTurnos({ datos = [] }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalEliminar, setModalEliminar] = useState(false);
     const [itemActual, setItemActual] = useState(null);
 
-    const matrizDefecto = {
-        '1': { entrada: '09:00', salida: '18:00', descanso: false },
-        '2': { entrada: '09:00', salida: '18:00', descanso: false },
-        '3': { entrada: '09:00', salida: '18:00', descanso: false },
-        '4': { entrada: '09:00', salida: '18:00', descanso: false },
-        '5': { entrada: '09:00', salida: '18:00', descanso: false },
-        '6': { entrada: '09:00', salida: '14:00', descanso: false },
-        '0': { entrada: '00:00', salida: '00:00', descanso: true },
-    };
+    const matrizDefecto = matrizHorarioDefecto();
 
     const { data, setData, post, put, processing, reset, errors } = useForm({
         nombre: '',
@@ -56,7 +39,7 @@ export default function TablaTurnos({ datos = [] }) {
         setData({
             nombre: item.nombre,
             activo: item.activo,
-            matriz_horario: item.matriz_horario || matrizDefecto,
+            matriz_horario: normalizarMatrizHorario(item.matriz_horario),
         });
         setModalAbierto(true);
     };
@@ -179,7 +162,7 @@ export default function TablaTurnos({ datos = [] }) {
                                         <div>Entrada</div>
                                         <div>Salida</div>
                                     </div>
-                                    {DIAS.map((dia) => {
+                                    {DIAS_TURNO.map((dia) => {
                                         const conf = data.matriz_horario[dia.clave] || { entrada: '', salida: '', descanso: false };
                                         return (
                                             <div key={dia.clave} className={`grid grid-cols-4 gap-2 items-center p-2 rounded-xl border ${conf.descanso ? 'border-transparent opacity-50 bg-black/[0.02] dark:bg-white/[0.02]' : 'theme-border'}`}>

@@ -9,6 +9,7 @@ use App\Services\Rh\ResumenDashboardRhService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Support\RhManualAssets;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class DashboardRhController extends Controller
@@ -34,7 +35,11 @@ class DashboardRhController extends Controller
 
     public function descargarManual()
     {
-        $pdf = Pdf::loadView('rh.manual_pdf');
+        $pdf = Pdf::loadView('rh.manual_pdf', [
+            'logos' => RhManualAssets::logosPortada(),
+            'fechaGeneracion' => now()->format('d/m/Y H:i'),
+        ]);
+
         return $pdf->download('Manual_RH.pdf');
     }
 }

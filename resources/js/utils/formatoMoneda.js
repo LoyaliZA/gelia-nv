@@ -1,3 +1,5 @@
+import { diaEspanolDesdeFecha, normalizarMatrizHorario } from './matrizHorarioTurno';
+
 export function formatoMoneda(valor, opciones = {}) {
     const monto = Number(valor);
     if (Number.isNaN(monto)) {
@@ -101,15 +103,11 @@ export function calcularHorasExtraPreview(datos, configuracion = {}, colaborador
 
     let salidaOficialMin = entradaMin + Math.round(horasNormales * 60);
     const turno = colaborador?.turno;
+    const matrizHorario = turno?.matriz_horario ? normalizarMatrizHorario(turno.matriz_horario) : null;
 
-    if (turno && turno.matriz_horario) {
-        const mapaDias = {
-            0: 'domingo', 1: 'lunes', 2: 'martes', 3: 'miercoles',
-            4: 'jueves', 5: 'viernes', 6: 'sabado'
-        };
-        const fechaObj = new Date((datos.fecha_turno || new Date().toISOString().slice(0, 10)) + 'T12:00:00');
-        const diaEspanol = mapaDias[fechaObj.getDay()];
-        const configDia = turno.matriz_horario[diaEspanol];
+    if (matrizHorario) {
+        const diaEspanol = diaEspanolDesdeFecha(datos.fecha_turno || new Date().toISOString().slice(0, 10));
+        const configDia = matrizHorario[diaEspanol];
 
         if (configDia && !configDia.descanso) {
             salidaOficialMin = parseTimeToMinutes(configDia.salida);
@@ -191,7 +189,7 @@ export function calcularDeduccionPreview(datos, colaborador = null, regla = null
             deduccion_salario_base: dedSalario,
             deduccion_bono_puntualidad: dedPunt,
             deduccion_bono_productividad: dedProd,
-            total_deduccion: Math.round(totalFinal),
+            total_deduccion: Math.round(totalFinal * 100) / 100,
             estado_deduccion: datos.origen_deduccion === 'comisiones' ? 'pendiente_comision' : 'pendiente_nomina',
         };
     }
@@ -236,13 +234,17 @@ export function calcularIncidenciaPreview(datos, colaborador = null, tipoFalta =
 }
 
 export function formatoDeduccionEntera(valor) {
+    return formatoDeduccionDecimal(valor);
+}
+
+export function formatoDeduccionDecimal(valor) {
     const monto = Number(valor);
     if (Number.isNaN(monto)) return '—';
     return new Intl.NumberFormat('es-MX', {
         style: 'currency',
         currency: 'MXN',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
     }).format(monto);
 }
 

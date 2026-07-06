@@ -11,7 +11,7 @@ use App\Http\Controllers\MapaLogisticoController;
 use App\Http\Controllers\Admin\{AuditoriaListaDescuentoController,PersonalizacionController,ConfiguracionSistemaController,MonitoreoMensajeriaController};
 use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\{ActivoController,CategoriaActivoController,TipoActivoController};
-use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController,ConsolidadoHorasExtraController,BancoTiempoController};
+use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,IncidenciaGerenteController,ReciboRhController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController,ConsolidadoHorasExtraController,BancoTiempoController};
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Almacenes\{ProductoController as AlmacenProductoController, InventarioController as AlmacenInventarioController, CostoController as AlmacenCostoController, ImportacionAlmacenController};
 use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
@@ -498,6 +498,8 @@ Route::middleware(['auth'])->group(function () {
 
         Route::middleware(['can:rh.incidencias.ver'])->group(function () {
             Route::get('/deducciones', [DeduccionController::class, 'index'])->name('deducciones.index');
+            Route::get('/deducciones/incidencias', [DeduccionController::class, 'incidencias'])->name('deducciones.incidencias.index');
+            Route::get('/deducciones/pagos-pendientes', [DeduccionController::class, 'pagosPendientes'])->name('deducciones.pagos_pendientes.index');
             Route::get('/deducciones/reglas-disponibles', [DeduccionController::class, 'reglasDisponibles'])->name('deducciones.reglas_disponibles');
             Route::get('/deducciones/buscar-sku', [DeduccionController::class, 'buscarSku'])->name('deducciones.buscar_sku');
             Route::post('/deducciones/preview-calculos', [DeduccionController::class, 'previewCalculos'])->name('deducciones.preview_calculos');
@@ -513,7 +515,17 @@ Route::middleware(['auth'])->group(function () {
                 ->name('deducciones.aplicar');
         });
 
-        Route::redirect('/incidencias', '/rh/deducciones')->name('incidencias.index');
+        Route::middleware(['can:rh.recibos.ver'])->group(function () {
+            Route::get('/deducciones/{deduccion}/recibo/vista-previa', [ReciboRhController::class, 'incidenciaVistaPrevia'])
+                ->name('deducciones.recibo.vista_previa');
+        });
+
+        Route::middleware(['can:rh.recibos.generar'])->group(function () {
+            Route::get('/deducciones/{deduccion}/recibo', [ReciboRhController::class, 'incidenciaDescargar'])
+                ->name('deducciones.recibo');
+        });
+
+        Route::get('/incidencias', [DeduccionController::class, 'index'])->name('incidencias.index');
         Route::get('/incidencias/{deduccion}', fn ($deduccion) => redirect()->route('rh.deducciones.show', $deduccion))->name('incidencias.show');
 
         Route::middleware(['can:rh.prestamos.ver'])->group(function () {
@@ -557,6 +569,12 @@ Route::middleware(['auth'])->group(function () {
 
         Route::middleware(['can:rh.ver'])->group(function () {
             Route::get('/periodo-pago', [PeriodoPagoController::class, 'index'])->name('periodo_pago.index');
+            Route::get('/periodo-pago/{colaborador}/recibo-incidencias/vista-previa', [ReciboRhController::class, 'periodoVistaPrevia'])
+                ->middleware('can:rh.recibos.ver')
+                ->name('periodo_pago.recibo_incidencias.vista_previa');
+            Route::get('/periodo-pago/{colaborador}/recibo-incidencias', [ReciboRhController::class, 'periodoDescargar'])
+                ->middleware('can:rh.recibos.generar')
+                ->name('periodo_pago.recibo_incidencias');
             Route::get('/consolidado-deducciones', [ConsolidadoDeduccionesController::class, 'index'])->name('consolidado_deducciones.index');
             Route::post('/consolidado-deducciones/sellar', [ConsolidadoDeduccionesController::class, 'sellarPeriodo'])->name('consolidado_deducciones.sellar');
             Route::get('/consolidado-horas-extra', [ConsolidadoHorasExtraController::class, 'index'])->name('consolidado_horas_extra.index');
@@ -599,6 +617,30 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/', [CatalogoReglaIncidenciaController::class, 'store'])->name('store');
             Route::put('/{reglaIncidencia}', [CatalogoReglaIncidenciaController::class, 'update'])->name('update');
             Route::delete('/{reglaIncidencia}', [CatalogoReglaIncidenciaController::class, 'destroy'])->name('destroy');
+        });
+    });
+
+    Route::middleware(['auth'])->prefix('rh')->name('rh.')->group(function () {
+        Route::middleware(['can:rh.incidencias.gerente.ver'])->prefix('incidencias-gerente')->name('incidencias_gerente.')->group(function () {
+            Route::get('/', [IncidenciaGerenteController::class, 'index'])->name('index');
+            Route::get('/reglas-disponibles', [DeduccionController::class, 'reglasDisponibles'])->name('reglas_disponibles');
+            Route::get('/crear', [IncidenciaGerenteController::class, 'create'])
+                ->middleware('can:rh.incidencias.gerente.crear')
+                ->name('create');
+            Route::post('/', [IncidenciaGerenteController::class, 'store'])
+                ->middleware('can:rh.incidencias.gerente.crear')
+                ->name('store');
+            Route::get('/deducciones/{deduccion}', [DeduccionController::class, 'show'])->name('deducciones.show');
+        });
+
+        Route::middleware(['can:rh.recibos.ver'])->group(function () {
+            Route::get('/incidencias-gerente/deducciones/{deduccion}/recibo/vista-previa', [ReciboRhController::class, 'incidenciaVistaPrevia'])
+                ->name('incidencias_gerente.deducciones.recibo.vista_previa');
+        });
+
+        Route::middleware(['can:rh.recibos.generar'])->group(function () {
+            Route::get('/incidencias-gerente/deducciones/{deduccion}/recibo', [ReciboRhController::class, 'incidenciaDescargar'])
+                ->name('incidencias_gerente.deducciones.recibo');
         });
     });
 

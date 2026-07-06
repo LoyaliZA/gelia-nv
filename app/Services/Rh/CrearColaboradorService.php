@@ -34,6 +34,7 @@ class CrearColaboradorService
                 'apellido_paterno' => $datos['apellido_paterno'] ?? null,
                 'apellido_materno' => $datos['apellido_materno'] ?? null,
                 'catalogo_puesto_id' => $datos['catalogo_puesto_id'],
+                'catalogo_turno_id' => $datos['catalogo_turno_id'],
                 'salario_base' => $datos['salario_base'] ?? 0,
                 'bono_productividad' => $datos['bono_productividad'] ?? 0,
                 'bono_puntualidad' => $datos['bono_puntualidad'] ?? 0,

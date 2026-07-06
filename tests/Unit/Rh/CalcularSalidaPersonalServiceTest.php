@@ -41,7 +41,7 @@ class CalcularSalidaPersonalServiceTest extends TestCase
         ], $colaborador);
 
         $this->assertSame(75, $resultado['minutos_ausente']);
-        $this->assertSame(94, $resultado['monto_a_deducir']); // 75 * 1.25 = 93.75 -> round() = 94
+        $this->assertSame(93.75, $resultado['monto_a_deducir']);
         $this->assertEquals(1.25, $resultado['salario_por_minuto_snapshot']);
     }
 
@@ -57,6 +57,21 @@ class CalcularSalidaPersonalServiceTest extends TestCase
 
         $this->assertSame(105, $resultado['minutos_ausente']);
         $this->assertSame(105, $resultado['monto_a_deducir']);
+    }
+
+    public function test_calcula_tarifa_por_minuto_con_centavos(): void
+    {
+        $colaborador = new RhColaborador();
+        $colaborador->forceFill(['salario_diario' => 315.04]);
+
+        $resultado = $this->service->ejecutar([
+            'fecha_evento' => '2026-06-02',
+            'hora_salida' => '10:00',
+            'hora_regreso' => '10:01',
+        ], $colaborador);
+
+        $this->assertSame(1, $resultado['minutos_ausente']);
+        $this->assertEqualsWithDelta(0.66, $resultado['monto_a_deducir'], 0.001);
     }
 
     private function colaborador(float $salarioPorMinuto): RhColaborador

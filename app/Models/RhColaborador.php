@@ -129,4 +129,10 @@ class RhColaborador extends Model
             ->withPivot('monto')
             ->withTimestamps();
     }
+
+    public function gerentesAsignados(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'gerente_rh_colaborador', 'rh_colaborador_id', 'gerente_user_id')
+            ->withTimestamps();
+    }
 }

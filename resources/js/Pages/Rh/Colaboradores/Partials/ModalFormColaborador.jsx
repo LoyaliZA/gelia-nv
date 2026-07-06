@@ -32,6 +32,7 @@ const FORM_INICIAL = {
     horas_laboradas_oficiales: '8',
     activo: true,
     bonos: [],
+    gerente_user_ids: [],
 };
 
 export default function ModalFormColaborador({
@@ -42,10 +43,25 @@ export default function ModalFormColaborador({
     puestos = [],
     turnos = [],
     usuarios = [],
+    gerentes = [],
     configuracion = {},
     puedeVincular = false,
 }) {
     const { data, setData, post, put, processing, errors, reset, clearErrors, transform } = useForm({ ...FORM_INICIAL });
+
+    transform((formData) => {
+        const diasPeriodo = configuracion.dias_periodo_pago || 30;
+        return {
+            ...formData,
+            departamento_id: formData.departamento_id ? Number(formData.departamento_id) : formData.departamento_id,
+            area_id: formData.area_id ? Number(formData.area_id) : null,
+            catalogo_puesto_id: formData.catalogo_puesto_id ? Number(formData.catalogo_puesto_id) : formData.catalogo_puesto_id,
+            catalogo_turno_id: formData.catalogo_turno_id ? Number(formData.catalogo_turno_id) : formData.catalogo_turno_id,
+            salario_base: Number(formData.salario_base) * diasPeriodo,
+            bono_productividad: Number(formData.bono_productividad) * diasPeriodo,
+            bono_puntualidad: Number(formData.bono_puntualidad) * diasPeriodo,
+        };
+    });
 
     const areasDisponibles = useMemo(() => {
         if (!data.departamento_id) return [];
@@ -87,8 +103,8 @@ export default function ModalFormColaborador({
                 nombre: colaborador.nombre || '',
                 apellido_paterno: colaborador.apellido_paterno || '',
                 apellido_materno: colaborador.apellido_materno || '',
-                catalogo_puesto_id: colaborador.catalogo_puesto_id || '',
-                catalogo_turno_id: colaborador.catalogo_turno_id || '',
+                catalogo_puesto_id: colaborador.catalogo_puesto_id ? String(colaborador.catalogo_puesto_id) : '',
+                catalogo_turno_id: colaborador.catalogo_turno_id ? String(colaborador.catalogo_turno_id) : '',
                 salario_base: (Number(colaborador.salario_base || 0) / diasPeriodo).toFixed(4),
                 bono_productividad: (Number(colaborador.bono_productividad || 0) / diasPeriodo).toFixed(4),
                 bono_puntualidad: (Number(colaborador.bono_puntualidad || 0) / diasPeriodo).toFixed(4),
@@ -98,6 +114,7 @@ export default function ModalFormColaborador({
                     catalogo_bono_id: b.id,
                     monto: b.pivot?.monto ?? b.monto ?? 0,
                 })),
+                gerente_user_ids: (colaborador.gerentes_asignados || []).map((g) => g.id),
             });
         } else {
             reset();
@@ -125,20 +142,11 @@ export default function ModalFormColaborador({
 
     const handleSubmit = (e) => {
         e.preventDefault();
+
         const accion = colaborador ? put : post;
         const ruta = colaborador
             ? route('rh.colaboradores.update', colaborador.id)
             : route('rh.colaboradores.store');
-
-        transform((formData) => {
-            const diasPeriodo = configuracion.dias_periodo_pago || 30;
-            return {
-                ...formData,
-                salario_base: Number(formData.salario_base) * diasPeriodo,
-                bono_productividad: Number(formData.bono_productividad) * diasPeriodo,
-                bono_puntualidad: Number(formData.bono_puntualidad) * diasPeriodo,
-            };
-        });
 
         accion(ruta, {
             preserveScroll: true,
@@ -177,6 +185,25 @@ export default function ModalFormColaborador({
                                 <p className="text-xs font-mono theme-text-muted m-0 break-all">{colaborador.uuid}</p>
                             </div>
                         </div>
+                    )}
+
+                    {colaborador && gerentes.length > 0 && (
+                        <section>
+                            <h3 className="text-sm font-black uppercase tracking-widest theme-text-main mb-4 flex items-center gap-2 border-b theme-border pb-2">
+                                <Link2 className="w-4 h-4" style={{ color: 'var(--color-primario)' }} /> Gerentes responsables
+                            </h3>
+                            <select
+                                multiple
+                                value={(data.gerente_user_ids || []).map(String)}
+                                onChange={(e) => setData('gerente_user_ids', Array.from(e.target.selectedOptions, (o) => Number(o.value)))}
+                                className={`${THEME_SELECT} min-h-[120px]`}
+                            >
+                                {gerentes.map((g) => (
+                                    <option key={g.id} value={g.id}>{g.name} {g.apellido_paterno || ''}</option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] theme-text-muted mt-2 m-0">Mantén Ctrl/Cmd para seleccionar varios gerentes.</p>
+                        </section>
                     )}
 
                     <section>
@@ -242,14 +269,14 @@ export default function ModalFormColaborador({
                             </Campo>
                             <Campo label="Turno Laboral *" error={errors.catalogo_turno_id}>
                                 <select
-                                    value={data.catalogo_turno_id}
+                                    value={String(data.catalogo_turno_id ?? '')}
                                     onChange={(e) => setData('catalogo_turno_id', e.target.value)}
                                     required
                                     className={THEME_SELECT}
                                 >
                                     <option value="">Selecciona...</option>
                                     {turnos.map((t) => (
-                                        <option key={t.id} value={t.id}>{t.nombre}</option>
+                                        <option key={t.id} value={String(t.id)}>{t.nombre}</option>
                                     ))}
                                 </select>
                             </Campo>
