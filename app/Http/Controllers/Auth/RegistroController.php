@@ -20,6 +20,16 @@ use Carbon\Carbon;
 
 class RegistroController extends Controller
 {
+    /**
+     * Genera una ruta firmada relativa y la devuelve con el dominio de APP_URL.
+     */
+    private function enlaceFirmadoAbsoluto(string $routeName, $expiration, array $parameters = []): string
+    {
+        $relativeUrl = URL::temporarySignedRoute($routeName, $expiration, $parameters, absolute: false);
+
+        return rtrim((string) config('app.url'), '/') . $relativeUrl;
+    }
+
     public function generarEnlaceInvitacion(Request $request)
     {
         $request->validate([
@@ -65,7 +75,7 @@ class RegistroController extends Controller
             $routeParams['permisos'] = $permisosCompletos;
         }
 
-        $url = URL::temporarySignedRoute(
+        $url = $this->enlaceFirmadoAbsoluto(
             'registro.formulario',
             now()->addHours(48),
             $routeParams
@@ -76,7 +86,7 @@ class RegistroController extends Controller
 
     public function mostrarFormulario(Request $request)
     {
-        if (!$request->hasValidSignature()) {
+        if (!$request->hasValidRelativeSignature()) {
             abort(403, 'El enlace de registro de GELIA es inválido o ha expirado.');
         }
 
@@ -95,15 +105,14 @@ class RegistroController extends Controller
             ? Carbon::createFromTimestamp((int) $request->query('expires'))
             : now()->addHours(48);
 
-        $registroAction = URL::temporarySignedRoute(
+        $registroAction = $this->enlaceFirmadoAbsoluto(
             'registro.store',
             $expiresAt,
             array_filter([
                 'rol' => $rolAsignado,
                 'plantilla' => $plantillaOrigen,
                 'supervisor_id' => $supervisorId,
-                'permisos' => $permisosAsignados ?: null,
-            ], fn ($v) => $v !== null && $v !== [])
+            ], fn ($v) => $v !== null && $v !== '')
         );
 
         session([

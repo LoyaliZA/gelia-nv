@@ -43,11 +43,11 @@ Route::middleware('guest')->group(function () {
     // Registro Seguro (Vía enlace firmado) - CORRECCIÓN APLICADA AQUÍ
     Route::get('/registro/colaborador', [RegistroController::class, 'mostrarFormulario'])
         ->name('registro.formulario')
-        ->middleware('signed');
+        ->middleware('signed:relative');
 
     Route::post('/registro/colaborador', [RegistroController::class, 'almacenar'])
         ->name('registro.store')
-        ->middleware('signed');
+        ->middleware('signed:relative');
 });
 
 // ══════════════════════════════════════════════════════════════════════
