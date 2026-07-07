@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ConfiguracionSistema;
+use App\Services\Auditoria\RegistrarAuditoriaConfiguracionService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Cache;
@@ -11,6 +12,14 @@ use Illuminate\Support\Facades\Mail;
 
 class ConfiguracionSistemaController extends Controller
 {
+    private const CLAVES_SESION = [
+        'session.lifetime',
+        'session.expire_on_close',
+        'sesiones.jornada_cierre_activo',
+        'sesiones.jornada_hora_fin',
+        'sesiones.jornada_zona_horaria',
+    ];
+
     /**
      * Display a listing of the resource.
      */
@@ -22,7 +31,8 @@ class ConfiguracionSistemaController extends Controller
 
         return Inertia::render('Admin/ConfiguracionSistema/Index', [
             'configuracionesGrupos' => $grupos,
-            'configuracionesRaw' => $configuraciones
+            'configuracionesRaw' => $configuraciones,
+            'sessionDriver' => config('session.driver'),
         ]);
     }
 
@@ -58,7 +68,21 @@ class ConfiguracionSistemaController extends Controller
             'grupo' => 'nullable|string',
         ]);
 
+        $valorAnterior = $configuracion->valor;
+
         $configuracion->update($validated);
+
+        if (in_array($configuracion->clave, self::CLAVES_SESION, true)) {
+            RegistrarAuditoriaConfiguracionService::ejecutar(
+                'Sesiones',
+                'Actualización de política de sesión',
+                [
+                    'clave' => $configuracion->clave,
+                    'valor_anterior' => $valorAnterior,
+                    'valor_nuevo' => $validated['valor'],
+                ]
+            );
+        }
 
         Cache::forget('configuraciones_sistema_globales');
 

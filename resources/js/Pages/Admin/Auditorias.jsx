@@ -3,14 +3,27 @@ import { Head, router } from '@inertiajs/react';
 import {
     History, ChevronDown, Calendar,
     ArrowRight, User, Terminal, Globe, Tag,
-    Settings, Code, FileJson
+    Settings, Code, FileJson, LogIn, MapPin, Monitor, Clock
 } from 'lucide-react';
 
 // Se ajusta la ruta relativa basándonos en tu estructura
 import AppLayout from '../../Layouts/AppLayout';
 import { geliaCardClass } from '../../utils/geliaTheme';
 
-export default function Auditorias({ auth, auditorias, auditoriasConfiguracion, listas, filtros, tabActivo = 'catalogos', isSuperAdmin = false, usuariosFiltro = [] }) {
+export default function Auditorias({
+    auth,
+    auditorias,
+    auditoriasConfiguracion,
+    auditoriasAccesos = {},
+    resumenAccesos = {},
+    listas,
+    filtros,
+    tabActivo = 'catalogos',
+    isSuperAdmin = false,
+    puedeVerAccesos = false,
+    puedeVerCatalogos = true,
+    usuariosFiltro = [],
+}) {
     
     // Estados para mantener los selectores sincronizados con la URL
     const [filtroLista, setFiltroLista] = useState(filtros.lista_id || '');
@@ -42,6 +55,59 @@ export default function Auditorias({ auth, auditorias, auditoriasConfiguracion, 
             year: 'numeric', month: 'short', day: 'numeric',
             hour: '2-digit', minute: '2-digit', second: '2-digit'
         });
+    };
+
+    const formatDuration = (seconds) => {
+        if (!seconds || seconds <= 0) return '—';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        if (h > 0) return `${h}h ${m}m`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+    };
+
+    const motivoCierreLabel = (motivo) => {
+        const map = {
+            logout: 'Cierre manual',
+            expiracion: 'Expiración',
+            jornada: 'Fin de jornada',
+            usuario_revocacion: 'Revocación',
+        };
+        return map[motivo] || motivo || 'Activa';
+    };
+
+    const getDuracionActiva = (log) => {
+        if (log.duracion_activa_segundos) {
+            return formatDuration(log.duracion_activa_segundos);
+        }
+        if (!log.cierre_sesion_at && log.inicio_sesion_at) {
+            const segundos = Math.floor((Date.now() - new Date(log.inicio_sesion_at).getTime()) / 1000);
+            return formatDuration(segundos);
+        }
+        return '—';
+    };
+
+    const getDuracionInactiva = (log) => {
+        if (log.duracion_inactiva_segundos) {
+            return formatDuration(log.duracion_inactiva_segundos);
+        }
+        if (!log.cierre_sesion_at && log.ultima_actividad_at) {
+            const segundos = Math.floor((Date.now() - new Date(log.ultima_actividad_at).getTime()) / 1000);
+            return formatDuration(segundos);
+        }
+        return '—';
+    };
+
+    const motivoCierreColor = (log) => {
+        if (!log.cierre_sesion_at) return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+        const map = {
+            logout: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+            expiracion: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+            jornada: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
+            usuario_revocacion: 'bg-rose-500/10 text-rose-600 border-rose-500/20',
+        };
+        return map[log.motivo_cierre] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
     };
 
     // Clase base compartida que extrajimos de Clientes.jsx
@@ -112,30 +178,47 @@ export default function Auditorias({ auth, auditorias, auditoriasConfiguracion, 
                 </header>
 
                 {/* --- TABS --- */}
-                {isSuperAdmin && (
-                    <div className="flex space-x-2 bg-black/5 dark:bg-white/5 p-1.5 rounded-2xl w-full max-w-md mx-auto sm:mx-0">
-                        <button
-                            onClick={() => handleTabChange('catalogos')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                tabActivo === 'catalogos'
-                                    ? 'bg-white dark:bg-zinc-800 shadow-md theme-text-main'
-                                    : 'theme-text-muted hover:bg-black/5 dark:hover:bg-white/5'
-                            }`}
-                        >
-                            <Tag className="w-4 h-4" />
-                            Catálogos
-                        </button>
-                        <button
-                            onClick={() => handleTabChange('configuracion')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                tabActivo === 'configuracion'
-                                    ? 'bg-white dark:bg-zinc-800 shadow-md theme-text-main'
-                                    : 'theme-text-muted hover:bg-black/5 dark:hover:bg-white/5'
-                            }`}
-                        >
-                            <Settings className="w-4 h-4" />
-                            Configuración
-                        </button>
+                {(isSuperAdmin || puedeVerAccesos) && (
+                    <div className="flex flex-wrap gap-2 bg-black/5 dark:bg-white/5 p-1.5 rounded-2xl w-full max-w-2xl mx-auto sm:mx-0">
+                        {puedeVerCatalogos && (
+                            <button
+                                onClick={() => handleTabChange('catalogos')}
+                                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                    tabActivo === 'catalogos'
+                                        ? 'bg-white dark:bg-zinc-800 shadow-md theme-text-main'
+                                        : 'theme-text-muted hover:bg-black/5 dark:hover:bg-white/5'
+                                }`}
+                            >
+                                <Tag className="w-4 h-4" />
+                                Catálogos
+                            </button>
+                        )}
+                        {isSuperAdmin && (
+                            <button
+                                onClick={() => handleTabChange('configuracion')}
+                                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                    tabActivo === 'configuracion'
+                                        ? 'bg-white dark:bg-zinc-800 shadow-md theme-text-main'
+                                        : 'theme-text-muted hover:bg-black/5 dark:hover:bg-white/5'
+                                }`}
+                            >
+                                <Settings className="w-4 h-4" />
+                                Configuración
+                            </button>
+                        )}
+                        {puedeVerAccesos && (
+                            <button
+                                onClick={() => handleTabChange('accesos')}
+                                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                    tabActivo === 'accesos'
+                                        ? 'bg-white dark:bg-zinc-800 shadow-md theme-text-main'
+                                        : 'theme-text-muted hover:bg-black/5 dark:hover:bg-white/5'
+                                }`}
+                            >
+                                <LogIn className="w-4 h-4" />
+                                Accesos
+                            </button>
+                        )}
                     </div>
                 )}
                 
@@ -457,6 +540,177 @@ export default function Auditorias({ auth, auditorias, auditoriasConfiguracion, 
                                     ))
                                 )}
                                 <Paginador data={auditoriasConfiguracion} />
+                            </div>
+                        </>
+                    )}
+
+                    {tabActivo === 'accesos' && puedeVerAccesos && (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div className="theme-element border theme-border p-5 rounded-2xl">
+                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-1">Sesiones activas</p>
+                                    <p className="text-3xl font-black theme-text-main">{resumenAccesos?.sesiones_activas ?? 0}</p>
+                                </div>
+                                <div className="theme-element border theme-border p-5 rounded-2xl">
+                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-1">Duración promedio hoy</p>
+                                    <p className="text-3xl font-black theme-text-main">{formatDuration(resumenAccesos?.promedio_duracion_segundos)}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                <div className="relative">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1 block ml-1">Fecha Inicio</label>
+                                    <input
+                                        type="date"
+                                        value={filtros.fecha_inicio || ''}
+                                        onChange={(e) => handleNavigation({ fecha_inicio: e.target.value })}
+                                        className="w-full px-5 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    />
+                                </div>
+                                <div className="relative">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1 block ml-1">Fecha Fin</label>
+                                    <input
+                                        type="date"
+                                        value={filtros.fecha_fin || ''}
+                                        onChange={(e) => handleNavigation({ fecha_fin: e.target.value })}
+                                        className="w-full px-5 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    />
+                                </div>
+                                <div className="relative">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1 block ml-1">Usuario</label>
+                                    <select
+                                        value={filtros.user_id || ''}
+                                        onChange={(e) => handleNavigation({ user_id: e.target.value })}
+                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    >
+                                        <option value="">TODOS</option>
+                                        {usuariosFiltro?.map(u => (
+                                            <option key={u.id} value={u.id}>{u.name} {u.apellido_paterno}</option>
+                                        ))}
+                                    </select>
+                                    <div className="pointer-events-none absolute bottom-4 right-4 flex items-center">
+                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                    </div>
+                                </div>
+                                <div className="relative">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1 block ml-1">Estado</label>
+                                    <select
+                                        value={filtros.motivo_cierre || ''}
+                                        onChange={(e) => handleNavigation({ motivo_cierre: e.target.value })}
+                                        className="w-full pl-5 pr-10 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold uppercase tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md appearance-none cursor-pointer"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    >
+                                        <option value="">TODOS</option>
+                                        <option value="activa">Activas</option>
+                                        <option value="logout">Cierre manual</option>
+                                        <option value="expiracion">Expiración</option>
+                                        <option value="jornada">Fin de jornada</option>
+                                        <option value="usuario_revocacion">Revocación</option>
+                                    </select>
+                                    <div className="pointer-events-none absolute bottom-4 right-4 flex items-center">
+                                        <ChevronDown className="w-4 h-4 theme-text-muted" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1 block ml-1">IP</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Filtrar por IP..."
+                                        defaultValue={filtros.ip || ''}
+                                        onBlur={(e) => handleNavigation({ ip: e.target.value })}
+                                        className="w-full px-5 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1 block ml-1">Ubicación</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Ciudad, región o país..."
+                                        defaultValue={filtros.ubicacion || ''}
+                                        onBlur={(e) => handleNavigation({ ubicacion: e.target.value })}
+                                        className="w-full px-5 py-4 theme-element border theme-border rounded-xl theme-text-main text-xs font-bold tracking-widest outline-none focus:ring-2 transition-all shadow-sm hover:shadow-md"
+                                        style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                {auditoriasAccesos?.data?.length === 0 ? (
+                                    <div className="text-center py-16 theme-element border-2 border-dashed theme-border rounded-[2rem]">
+                                        <LogIn className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
+                                        <h3 className="text-lg font-black italic uppercase theme-text-main">Sin registros de acceso</h3>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted mt-2">Aún no hay inicios de sesión registrados.</p>
+                                    </div>
+                                ) : (
+                                    auditoriasAccesos?.data?.map((log) => (
+                                        <div key={log.id} className="theme-element border theme-border p-5 rounded-2xl flex flex-col xl:flex-row items-start justify-between gap-6 transition-all duration-150 hover:shadow-md hover:ring-2 hover:ring-[var(--color-primario)]/40 group">
+                                            <div className="flex items-start gap-4 flex-1">
+                                                <div className="w-14 h-14 theme-surface border theme-border rounded-2xl flex items-center justify-center shrink-0"
+                                                    style={{ color: 'var(--color-primario)' }}>
+                                                    <Monitor className="w-6 h-6" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                        <h3 className="text-[15px] font-black theme-text-main uppercase">
+                                                            {log.usuario?.name} {log.usuario?.apellido_paterno || ''}
+                                                        </h3>
+                                                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border ${motivoCierreColor(log)}`}>
+                                                            {!log.cierre_sesion_at ? 'Activa' : motivoCierreLabel(log.motivo_cierre)}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs theme-text-muted mb-2">
+                                                        {log.navegador} · {log.plataforma} · {log.dispositivo}
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-4 text-[10px] font-bold uppercase tracking-widest theme-text-muted">
+                                                        <span className="flex items-center gap-1">
+                                                            <Calendar className="w-3 h-3" />
+                                                            Inicio: {formatDate(log.inicio_sesion_at)}
+                                                        </span>
+                                                        <span className="flex items-center gap-1">
+                                                            <Globe className="w-3 h-3" />
+                                                            IP: {log.ip_address || '—'}
+                                                        </span>
+                                                        {(log.ubicacion_ciudad || log.ubicacion_pais) && (
+                                                            <span className="flex items-center gap-1">
+                                                                <MapPin className="w-3 h-3" />
+                                                                {[log.ubicacion_ciudad, log.ubicacion_region, log.ubicacion_pais].filter(Boolean).join(', ')}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2 text-right shrink-0 border-t xl:border-t-0 xl:border-l theme-border pt-4 xl:pt-0 xl:pl-6">
+                                                <div>
+                                                    <p className="text-[8px] font-black theme-text-muted uppercase tracking-widest">Última actividad</p>
+                                                    <p className="text-[11px] font-black theme-text-main">{formatDate(log.ultima_actividad_at)}</p>
+                                                </div>
+                                                <div className="flex gap-4 justify-end">
+                                                    <div>
+                                                        <p className="text-[8px] font-black theme-text-muted uppercase tracking-widest flex items-center gap-1 justify-end"><Clock className="w-3 h-3" /> Activa</p>
+                                                        <p className="text-[11px] font-black text-emerald-600">{getDuracionActiva(log)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black theme-text-muted uppercase tracking-widest">Inactiva</p>
+                                                        <p className="text-[11px] font-black text-amber-600">{getDuracionInactiva(log)}</p>
+                                                    </div>
+                                                </div>
+                                                {log.cierre_sesion_at && (
+                                                    <p className="text-[9px] font-bold theme-text-muted uppercase">
+                                                        Cierre: {formatDate(log.cierre_sesion_at)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                                <Paginador data={auditoriasAccesos} />
                             </div>
                         </>
                     )}

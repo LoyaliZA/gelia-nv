@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             CatalogosSeeder::class,
             OrganizacionSeeder::class,
             ApiExternaSeeder::class,
+            SesionConfiguracionSeeder::class,
         ]);
     }
 }

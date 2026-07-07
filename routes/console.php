@@ -37,3 +37,6 @@ try {
 foreach ($horariosCobranza as $hora) {
     Schedule::command('cobranza:evaluar-alertas')->dailyAt($hora);
 }
+
+Schedule::command('sesiones:cerrar-jornada')->everyFiveMinutes();
+Schedule::command('sesiones:sincronizar-expiradas')->everyFifteenMinutes();

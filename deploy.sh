@@ -46,7 +46,7 @@ docker exec -it gelianv_app chmod -R 775 /var/www/html/storage
 echo "Construyendo estructura de base de datos..."
 backup_db_antes_de_migrar
 docker exec -it gelianv_app php artisan migrate --force
-docker exec -it gelianv_app php artisan db:seed --force
+docker exec -it gelianv_app php artisan db:seed --class=SesionConfiguracionSeeder --force
 
 # 7. Optimización de memoria caché para producción
 echo "Optimizando rutas y configuraciones..."
