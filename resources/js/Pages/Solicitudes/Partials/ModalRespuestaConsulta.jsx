@@ -91,14 +91,18 @@ export default function ModalRespuestaConsulta({ onClose, solicitud, consulta })
                     <MessageSquare className="w-8 h-8 text-emerald-500" />
                     <div>
                         <h2 className="text-2xl font-black italic theme-text-main uppercase tracking-tighter m-0">Responder Consulta_</h2>
-                        <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1">FOL-{solicitud?.id} · {temas.join(' + ')}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[11px] font-bold theme-text-muted uppercase tracking-widest">FOL-{solicitud?.id}</span>
+                            {consulta?.consulta_tag && <span className="px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs font-black uppercase text-amber-500">TAG</span>}
+                            {consulta?.consulta_lista && <span className="px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs font-black uppercase text-amber-500">Lista</span>}
+                        </div>
                     </div>
                 </div>
 
                 {consulta?.comentario_vendedor && (
-                    <div className="mb-5 p-4 rounded-2xl bg-black/5 dark:bg-white/5 border theme-border">
-                        <p className="text-[10px] font-black uppercase theme-text-muted mb-1">Pregunta de la vendedora</p>
-                        <p className="text-sm font-bold theme-text-main">{consulta.comentario_vendedor}</p>
+                    <div className="mb-6 p-5 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-600/80 mb-2">Pregunta de la vendedora</p>
+                        <p className="text-xl font-black text-amber-600 leading-tight">{consulta.comentario_vendedor}</p>
                     </div>
                 )}
 

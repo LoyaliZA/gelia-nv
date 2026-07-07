@@ -956,6 +956,20 @@ export default function Index({
                                     <div className="bg-black/5 dark:bg-white/5 p-3 rounded-2xl border theme-border flex flex-col gap-2">
                                         <span className="text-[10px] font-black uppercase tracking-widest theme-text-main block">{nombreProceso}</span>
                                         <EtiquetasOperacion solicitud={solicitud} listas={listas} />
+                                        {(solicitud.consultas || []).filter(c => c.estado === 'pendiente').map(c => (
+                                            <div key={c.id} className="flex flex-wrap gap-2 mt-1">
+                                                {c.consulta_tag && (
+                                                    <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-black uppercase px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                        <MessageSquare className="w-3.5 h-3.5" /> Consulta TAG
+                                                    </span>
+                                                )}
+                                                {c.consulta_lista && (
+                                                    <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-black uppercase px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                        <MessageSquare className="w-3.5 h-3.5" /> Consulta Lista
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
                                     <RespuestaConsultaEncargada
                                         solicitud={solicitud}
@@ -1026,11 +1040,20 @@ export default function Index({
                                             <td className="p-6 align-top">
                                                 <div className="inline-block px-3 py-1 rounded-lg theme-element border theme-border text-[9px] font-black uppercase tracking-widest theme-text-main mb-2">{nombreProceso}</div>
                                                 <EtiquetasOperacion solicitud={solicitud} listas={listas} />
-                                                {(solicitud.consultas || []).some(c => c.estado === 'pendiente') && (
-                                                    <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/20 mt-1">
-                                                        <MessageSquare className="w-3 h-3" /> Consulta pendiente
-                                                    </span>
-                                                )}
+                                                {(solicitud.consultas || []).filter(c => c.estado === 'pendiente').map(c => (
+                                                    <React.Fragment key={c.id}>
+                                                        {c.consulta_tag && (
+                                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 mt-1 mr-1">
+                                                                <MessageSquare className="w-3.5 h-3.5" /> Consulta TAG
+                                                            </span>
+                                                        )}
+                                                        {c.consulta_lista && (
+                                                            <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20 mt-1 mr-1">
+                                                                <MessageSquare className="w-3.5 h-3.5" /> Consulta Lista
+                                                            </span>
+                                                        )}
+                                                    </React.Fragment>
+                                                ))}
                                                 {solicitud.motivo_incorrecta && (
                                                     <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-md bg-red-500/10 text-red-500 border border-red-500/20 mt-1">
                                                         <AlertOctagon className="w-3 h-3" /> {
