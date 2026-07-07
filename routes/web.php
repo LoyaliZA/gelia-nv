@@ -170,6 +170,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/templates/{id}/descargar', [\App\Http\Controllers\WooCommerceController::class, 'descargar'])->name('descargar');
         Route::put('/configuracion', [\App\Http\Controllers\WooCommerceController::class, 'guardarConfiguracion'])->name('configuracion.update')->middleware('can:woocommerce.configurar');
         Route::post('/configuracion/probar-conexion', [\App\Http\Controllers\WooCommerceController::class, 'probarConexionApi'])->name('configuracion.probar_conexion')->middleware('can:woocommerce.configurar');
+        Route::post('/import-preview', [\App\Http\Controllers\WooCommerceController::class, 'importPreview'])->name('import_preview')->middleware('can:woocommerce.sincronizar');
+        Route::post('/previsualizar-mapeo', [\App\Http\Controllers\WooCommerceController::class, 'previsualizarMapeo'])->name('previsualizar_mapeo')->middleware('can:woocommerce.sincronizar');
         Route::post('/previsualizar', [\App\Http\Controllers\WooCommerceController::class, 'previsualizar'])->name('previsualizar')->middleware('can:woocommerce.sincronizar');
         Route::post('/procesar', [\App\Http\Controllers\WooCommerceController::class, 'procesar'])->name('procesar')->middleware('can:woocommerce.sincronizar');
         Route::post('/sincronizar', [\App\Http\Controllers\WooCommerceController::class, 'sincronizar'])->name('sincronizar')->middleware('can:woocommerce.sincronizar');

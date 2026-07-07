@@ -11,6 +11,10 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
         consumer_key: '',
         consumer_secret: '',
         notified_users: configuracion?.notified_user_ids || [],
+        mapeo_precios: {
+            sku: configuracion?.mapeo_precios?.sku || 'SKU',
+            precio_base: configuracion?.mapeo_precios?.precio_base || 'Plataformas',
+        },
         margenes: margenes.reduce((acc, m) => ({
             ...acc,
             [m.id]: { rebaja: m.multiplicador_rebaja, normal: m.multiplicador_normal },
@@ -136,6 +140,35 @@ export default function ModalConfiguracion({ configuracion, margenes, users, onC
                         <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2">IVA Divisor</label>
                         <input type="number" step="0.01" value={data.iva} onChange={(e) => setData('iva', parseFloat(e.target.value))}
                             className="w-full theme-element border theme-border rounded-xl px-4 py-3 text-sm theme-text-main" />
+                    </div>
+
+                    <div className="md:col-span-2">
+                        <h3 className="text-xs font-black uppercase theme-text-main mb-3">Mapeo de precios (Excel)</h3>
+                        <p className="text-[10px] theme-text-muted font-bold mb-3">
+                            Nombres de columna predeterminados para auto-mapear en la sincronización de precios.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2">Columna SKU</label>
+                                <input
+                                    type="text"
+                                    value={data.mapeo_precios.sku}
+                                    onChange={(e) => setData('mapeo_precios', { ...data.mapeo_precios, sku: e.target.value })}
+                                    placeholder="SKU"
+                                    className="w-full theme-element border theme-border rounded-xl px-4 py-3 text-sm theme-text-main"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2">Columna Precio base</label>
+                                <input
+                                    type="text"
+                                    value={data.mapeo_precios.precio_base}
+                                    onChange={(e) => setData('mapeo_precios', { ...data.mapeo_precios, precio_base: e.target.value })}
+                                    placeholder="Plataformas"
+                                    className="w-full theme-element border theme-border rounded-xl px-4 py-3 text-sm theme-text-main"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <div className="md:col-span-2">

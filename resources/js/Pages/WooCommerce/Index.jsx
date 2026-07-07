@@ -77,7 +77,7 @@ export default function Index({
 
                 {tab === 'precios' && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <GeneradorSync permisos={permisos} configuracion={configuracion} />
+                        <GeneradorSync permisos={permisos} configuracion={configuracion} margenes={margenes} />
                         <HistorialTemplates templatesHoy={templatesHoy} templatesHistorial={templatesHistorial} permisos={permisos} />
                     </div>
                 )}

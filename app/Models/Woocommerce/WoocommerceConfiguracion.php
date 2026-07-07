@@ -15,11 +15,18 @@ class WoocommerceConfiguracion extends Model
         'consumer_secret',
         'iva',
         'notified_users',
+        'mapeo_precios',
     ];
 
     protected $casts = [
         'iva' => 'float',
         'notified_users' => 'array',
+        'mapeo_precios' => 'array',
+    ];
+
+    public const MAPEO_PRECIOS_DEFAULT = [
+        'sku' => 'SKU',
+        'precio_base' => 'Plataformas',
     ];
 
     public static function obtener(): self
@@ -27,7 +34,22 @@ class WoocommerceConfiguracion extends Model
         return static::firstOrCreate([], [
             'iva' => 1.16,
             'notified_users' => [],
+            'mapeo_precios' => self::MAPEO_PRECIOS_DEFAULT,
         ]);
+    }
+
+    public function mapeoPreciosEfectivo(): array
+    {
+        $mapeo = $this->mapeo_precios;
+
+        if (! is_array($mapeo) || empty($mapeo['sku']) || empty($mapeo['precio_base'])) {
+            return self::MAPEO_PRECIOS_DEFAULT;
+        }
+
+        return [
+            'sku' => (string) $mapeo['sku'],
+            'precio_base' => (string) $mapeo['precio_base'],
+        ];
     }
 
     public function getStoreUrlAttribute(?string $value): ?string

@@ -9,7 +9,7 @@ use Rap2hpoutre\FastExcel\FastExcel;
 
 class WooCommercePreciosService
 {
-    /** Columnas de precio base (prioridad). Plataformas = columna F legacy / Lista de Resurtido. PG y Bronce son informativos. */
+    /** Columnas de precio base (prioridad legacy). Plataformas = columna F legacy / Lista de Resurtido. */
     private const COLUMNAS_PRECIO_BASE = ['plataformas', 'pg', 'costocalculado', 'costowizerp'];
 
     public function obtenerIva(): float
@@ -18,42 +18,129 @@ class WooCommercePreciosService
     }
 
     /**
-     * Extrae SKU → precio base desde Excel.
+     * Lee cabeceras del Excel. Si no hay fila de cabecera reconocible, genera etiquetas sintéticas.
      *
-     * Formatos soportados:
-     * 1) Lista de Resurtido (cabeceras): Folio, SKU, Descripcion, Existencia, PG, Plataformas, Bronce
-     *    → usa Plataformas como precio base; PG/Bronce se ignoran (precios de listado, no Woo)
-     * 2) Export Wizerp sin cabecera: col. B = SKU, col. F = Plataformas (índice 5, igual que legacy)
+     * @return array{headers: string[], sin_cabecera: bool}
      */
-    public function extraerPreciosDesdeExcel(string $rutaArchivo): array
+    public function leerCabeceras(string $rutaArchivo): array
     {
-        $precios = [];
+        $filas = (new FastExcel)->import($rutaArchivo);
+        $primeraFila = $filas[0] ?? null;
 
-        (new FastExcel)->import($rutaArchivo, function ($linea) use (&$precios) {
-            $normalizada = $this->normalizarFila($linea);
-            $sku = $this->extraerSku($normalizada);
-            $precio = $this->extraerPrecioBase($normalizada);
-
-            if ($sku !== '' && $precio > 0) {
-                $precios[$sku] = $precio;
+        if ($primeraFila === null) {
+            $filasSinCabecera = (new FastExcel)->withoutHeaders()->import($rutaArchivo);
+            $primeraFila = $filasSinCabecera[0] ?? null;
+            if ($primeraFila === null) {
+                return ['headers' => [], 'sin_cabecera' => true];
             }
-        });
 
-        if (!empty($precios)) {
-            return $precios;
+            $maxCols = max(count($primeraFila), 10);
+            $sinteticos = [];
+            for ($i = 0; $i < $maxCols; $i++) {
+                $sinteticos[] = $this->etiquetaColumnaSintetica($i);
+            }
+
+            return ['headers' => $sinteticos, 'sin_cabecera' => true];
         }
 
-        // Fallback: export crudo Wizerp (sin fila de cabecera)
-        (new FastExcel)->withoutHeaders()->import($rutaArchivo, function ($linea) use (&$precios) {
-            $sku = trim((string) ($linea[1] ?? ''));
-            $precio = $this->parsePrecioNumerico($linea[5] ?? 0);
+        $headers = array_map(fn ($h) => trim((string) $h), array_keys($primeraFila));
 
-            if ($sku !== '' && $precio > 0) {
-                $precios[$sku] = $precio;
+        if ($this->pareceFilaDeDatos($headers, $primeraFila)) {
+            $maxCols = max(count($primeraFila), 10);
+            $sinteticos = [];
+            for ($i = 0; $i < $maxCols; $i++) {
+                $sinteticos[] = $this->etiquetaColumnaSintetica($i);
             }
-        });
 
-        return $precios;
+            return ['headers' => $sinteticos, 'sin_cabecera' => true];
+        }
+
+        return ['headers' => $headers, 'sin_cabecera' => false];
+    }
+
+    /**
+     * Sugiere mapeo a partir de cabeceras y configuración guardada.
+     */
+    public function sugerirMapeo(array $headers, ?array $mapeoGuardado = null): array
+    {
+        $mapeoGuardado = $mapeoGuardado ?? WoocommerceConfiguracion::obtener()->mapeoPreciosEfectivo();
+        $sugerido = [
+            'sku' => '',
+            'precio_base' => '',
+        ];
+
+        if (in_array($mapeoGuardado['sku'], $headers, true)) {
+            $sugerido['sku'] = $mapeoGuardado['sku'];
+        }
+        if (in_array($mapeoGuardado['precio_base'], $headers, true)) {
+            $sugerido['precio_base'] = $mapeoGuardado['precio_base'];
+        }
+
+        foreach ($headers as $header) {
+            $lower = mb_strtolower(trim((string) $header));
+            if ($sugerido['sku'] === '' && (str_contains($lower, 'sku') || (str_contains($lower, 'codigo') && ! str_contains($lower, 'barras')))) {
+                $sugerido['sku'] = $header;
+            }
+            if ($sugerido['precio_base'] === '' && (str_contains($lower, 'plataforma') || str_contains($lower, 'precio') || str_contains($lower, 'costo'))) {
+                $sugerido['precio_base'] = $header;
+            }
+        }
+
+        return $sugerido;
+    }
+
+    /**
+     * Extrae SKU → precio base desde Excel.
+     *
+     * @param  array{sku: string, precio_base: string}|null  $mapping
+     */
+    public function extraerPreciosDesdeExcel(string $rutaArchivo, ?array $mapping = null): array
+    {
+        if ($mapping !== null && ! empty($mapping['sku']) && ! empty($mapping['precio_base'])) {
+            return $this->extraerPreciosConMapeo($rutaArchivo, $mapping);
+        }
+
+        return $this->extraerPreciosLegacy($rutaArchivo);
+    }
+
+    /**
+     * Previsualiza las primeras filas mapeadas.
+     *
+     * @param  array{sku: string, precio_base: string}  $mapping
+     * @return array<int, array{sku: string, precio_base: float|null, advertencia: string|null}>
+     */
+    public function previsualizarMapeo(string $rutaArchivo, array $mapping, int $limite = 5): array
+    {
+        $cabeceras = $this->leerCabeceras($rutaArchivo);
+        $filas = $cabeceras['sin_cabecera']
+            ? (new FastExcel)->withoutHeaders()->import($rutaArchivo)
+            : (new FastExcel)->import($rutaArchivo);
+
+        $muestra = [];
+        foreach (collect($filas)->take($limite) as $linea) {
+            $fila = $cabeceras['sin_cabecera']
+                ? $this->filaNumericaAAsociativa($linea)
+                : $linea;
+
+            $sku = trim((string) $this->valorColumnaMapeada($fila, $mapping['sku']));
+            $precioRaw = $this->valorColumnaMapeada($fila, $mapping['precio_base']);
+            $precio = $this->parsePrecioNumerico($precioRaw);
+
+            $advertencia = null;
+            if ($sku === '') {
+                $advertencia = 'SKU vacío';
+            } elseif ($precio <= 0) {
+                $advertencia = 'Precio base inválido o vacío';
+            }
+
+            $muestra[] = [
+                'sku' => $sku,
+                'precio_base' => $precio > 0 ? $precio : null,
+                'advertencia' => $advertencia,
+            ];
+        }
+
+        return $muestra;
     }
 
     public function calcular(float $base, string $tipo, $margenes, float $iva): float
@@ -125,6 +212,150 @@ class WooCommercePreciosService
         }
 
         return null;
+    }
+
+    /**
+     * @param  array{sku: string, precio_base: string}  $mapping
+     */
+    private function extraerPreciosConMapeo(string $rutaArchivo, array $mapping): array
+    {
+        $precios = [];
+        $cabeceras = $this->leerCabeceras($rutaArchivo);
+        $filas = $cabeceras['sin_cabecera']
+            ? (new FastExcel)->withoutHeaders()->import($rutaArchivo)
+            : (new FastExcel)->import($rutaArchivo);
+
+        foreach ($filas as $linea) {
+            $fila = $cabeceras['sin_cabecera']
+                ? $this->filaNumericaAAsociativa($linea)
+                : $linea;
+
+            $sku = trim((string) $this->valorColumnaMapeada($fila, $mapping['sku']));
+            $precio = $this->parsePrecioNumerico($this->valorColumnaMapeada($fila, $mapping['precio_base']));
+
+            if ($sku !== '' && $precio > 0) {
+                $precios[$sku] = $precio;
+            }
+        }
+
+        return $precios;
+    }
+
+    private function extraerPreciosLegacy(string $rutaArchivo): array
+    {
+        $precios = [];
+
+        (new FastExcel)->import($rutaArchivo, function ($linea) use (&$precios) {
+            $normalizada = $this->normalizarFila($linea);
+            $sku = $this->extraerSku($normalizada);
+            $precio = $this->extraerPrecioBase($normalizada);
+
+            if ($sku !== '' && $precio > 0) {
+                $precios[$sku] = $precio;
+            }
+        });
+
+        if (! empty($precios)) {
+            return $precios;
+        }
+
+        (new FastExcel)->withoutHeaders()->import($rutaArchivo, function ($linea) use (&$precios) {
+            $sku = trim((string) ($linea[1] ?? ''));
+            $precio = $this->parsePrecioNumerico($linea[5] ?? 0);
+
+            if ($sku !== '' && $precio > 0) {
+                $precios[$sku] = $precio;
+            }
+        });
+
+        return $precios;
+    }
+
+    private function pareceFilaDeDatos(array $headers, array $fila): bool
+    {
+        $headersNormalizados = array_map(fn ($h) => $this->normalizarClaveColumna((string) $h), $headers);
+        $tieneCabeceraConocida = count(array_intersect($headersNormalizados, ['sku', 'folio', 'descripcion', 'plataformas', 'pg'])) > 0;
+
+        if ($tieneCabeceraConocida) {
+            return false;
+        }
+
+        $primerHeader = $headers[0] ?? '';
+        if (is_numeric($primerHeader)) {
+            return true;
+        }
+
+        $valores = array_values($fila);
+        $numericos = 0;
+        foreach ($valores as $valor) {
+            if (is_numeric($valor) || $this->parsePrecioNumerico($valor) > 0) {
+                $numericos++;
+            }
+        }
+
+        return $numericos >= max(1, (int) floor(count($valores) / 2));
+    }
+
+    private function etiquetaColumnaSintetica(int $indice): string
+    {
+        $letra = '';
+        $n = $indice;
+        do {
+            $letra = chr(65 + ($n % 26)) . $letra;
+            $n = intdiv($n, 26) - 1;
+        } while ($n >= 0);
+
+        return 'Columna ' . $letra;
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $fila
+     */
+    private function filaNumericaAAsociativa(array $fila): array
+    {
+        $asociativa = [];
+        $indice = 0;
+        foreach ($fila as $valor) {
+            $asociativa[$this->etiquetaColumnaSintetica($indice)] = $valor;
+            $indice++;
+        }
+
+        return $asociativa;
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $fila
+     */
+    private function valorColumnaMapeada(array $fila, string $columna): mixed
+    {
+        if (array_key_exists($columna, $fila)) {
+            return $fila[$columna];
+        }
+
+        if (preg_match('/^Columna ([A-Z]+)$/i', $columna, $matches)) {
+            $indice = $this->indiceDesdeLetraColumna(strtoupper($matches[1]));
+
+            return $fila[$indice] ?? $fila[$this->etiquetaColumnaSintetica($indice)] ?? null;
+        }
+
+        foreach ($fila as $clave => $valor) {
+            if ($this->normalizarClaveColumna((string) $clave) === $this->normalizarClaveColumna($columna)) {
+                return $valor;
+            }
+        }
+
+        return null;
+    }
+
+    private function indiceDesdeLetraColumna(string $letra): int
+    {
+        $indice = 0;
+        $len = strlen($letra);
+        for ($i = 0; $i < $len; $i++) {
+            $indice = $indice * 26 + (ord($letra[$i]) - 64);
+        }
+
+        return $indice - 1;
     }
 
     private function normalizarFila(array $linea): array

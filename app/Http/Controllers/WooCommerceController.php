@@ -68,6 +68,7 @@ class WooCommerceController extends Controller
                 'iva' => $config->iva,
                 'credenciales_configuradas' => $config->credencialesConfiguradas(),
                 'notified_user_ids' => $config->notified_users ?? [],
+                'mapeo_precios' => $config->mapeoPreciosEfectivo(),
             ],
             'margenes' => $margenes,
             'productos' => $productos,
@@ -101,10 +102,20 @@ class WooCommerceController extends Controller
             'notified_users.*' => 'integer|exists:users,id',
             'consumer_key' => 'nullable|string',
             'consumer_secret' => 'nullable|string',
+            'mapeo_precios' => 'nullable|array',
+            'mapeo_precios.sku' => 'required_with:mapeo_precios|string',
+            'mapeo_precios.precio_base' => 'required_with:mapeo_precios|string',
         ]);
 
         $config = WoocommerceConfiguracion::obtener();
         $datos = $request->only(['store_url', 'iva', 'notified_users']);
+
+        if ($request->has('mapeo_precios')) {
+            $datos['mapeo_precios'] = [
+                'sku' => (string) $request->input('mapeo_precios.sku'),
+                'precio_base' => (string) $request->input('mapeo_precios.precio_base'),
+            ];
+        }
 
         if ($request->filled('consumer_key')) {
             $datos['consumer_key'] = Crypt::encryptString($request->consumer_key);
@@ -203,13 +214,59 @@ class WooCommerceController extends Controller
         return response()->json(['success' => true, 'message' => 'Catálogo sincronizado con éxito.']);
     }
 
+    public function importPreview(Request $request): JsonResponse
+    {
+        Gate::authorize('woocommerce.sincronizar');
+
+        $request->validate([
+            'listado_aromas' => 'required|file|mimes:xlsx,xls,csv',
+        ]);
+
+        $file = $request->file('listado_aromas');
+        $path = $file->storeAs('temp', 'woo_precios_preview_' . uniqid() . '.' . $file->getClientOriginalExtension());
+        $fullPath = Storage::path($path);
+
+        $cabeceras = $this->service->leerCabeceras($fullPath);
+        $config = WoocommerceConfiguracion::obtener();
+
+        return response()->json([
+            'success' => true,
+            'headers' => $cabeceras['headers'],
+            'sin_cabecera' => $cabeceras['sin_cabecera'],
+            'file_path' => $path,
+            'mapeo_sugerido' => $this->service->sugerirMapeo(
+                $cabeceras['headers'],
+                $config->mapeoPreciosEfectivo()
+            ),
+        ]);
+    }
+
+    public function previsualizarMapeo(Request $request): JsonResponse
+    {
+        Gate::authorize('woocommerce.sincronizar');
+
+        $request->validate([
+            'file_path' => 'required|string',
+            'mapping' => 'required|array',
+            'mapping.sku' => 'required|string',
+            'mapping.precio_base' => 'required|string',
+        ]);
+
+        $fullPath = $this->resolverRutaArchivoTemporal($request->input('file_path'));
+        $mapping = $this->normalizarMapping($request->input('mapping'));
+
+        return response()->json([
+            'success' => true,
+            'muestra' => $this->service->previsualizarMapeo($fullPath, $mapping),
+        ]);
+    }
+
     public function previsualizar(Request $request): JsonResponse
     {
         Gate::authorize('woocommerce.sincronizar');
 
-        $request->validate(['listado_aromas' => 'required|file']);
-
-        $preciosWizerp = $this->service->extraerPreciosDesdeExcel($request->file('listado_aromas')->getRealPath());
+        [$fullPath, $mapping] = $this->resolverArchivoYMapeo($request);
+        $preciosWizerp = $this->service->extraerPreciosDesdeExcel($fullPath, $mapping);
         $cambios = $this->service->generarAnalisisDeCambios($preciosWizerp);
 
         return response()->json([
@@ -223,11 +280,11 @@ class WooCommerceController extends Controller
     {
         Gate::authorize('woocommerce.sincronizar');
 
-        $request->validate(['listado_aromas' => 'required|file']);
+        [$fullPath, $mapping] = $this->resolverArchivoYMapeo($request);
 
         $iva = $this->service->obtenerIva();
         $margenes = WoocommerceMargin::orderBy('precio_min')->get();
-        $preciosWizerp = $this->service->extraerPreciosDesdeExcel($request->file('listado_aromas')->getRealPath());
+        $preciosWizerp = $this->service->extraerPreciosDesdeExcel($fullPath, $mapping);
 
         $fileName = 'WOOCOMMERCE-SYNC-' . date('d-m-Y_H-i-s') . '.csv';
         $ruta = 'woocommerce/' . $fileName;
@@ -257,6 +314,8 @@ class WooCommerceController extends Controller
             'tamano_kb' => $size,
         ]);
 
+        $this->limpiarArchivoTemporal($request->input('file_path'));
+
         return response()->json([
             'success' => true,
             'download_url' => route('woocommerce.descargar', $template->id),
@@ -267,13 +326,12 @@ class WooCommerceController extends Controller
     {
         Gate::authorize('woocommerce.sincronizar');
 
-        $request->validate(['listado_aromas' => 'required|file']);
-
         if (!WoocommerceConfiguracion::obtener()->credencialesConfiguradas()) {
             return response()->json(['success' => false, 'message' => 'Configura las credenciales de WooCommerce antes de sincronizar.'], 422);
         }
 
-        $preciosWizerp = $this->service->extraerPreciosDesdeExcel($request->file('listado_aromas')->getRealPath());
+        [$fullPath, $mapping] = $this->resolverArchivoYMapeo($request);
+        $preciosWizerp = $this->service->extraerPreciosDesdeExcel($fullPath, $mapping);
         $cambios = $this->service->generarAnalisisDeCambios($preciosWizerp);
 
         $preciosFiltrados = [];
@@ -299,7 +357,66 @@ class WooCommerceController extends Controller
 
         UpdateWooCommercePricesJob::dispatch($log->id, 0);
 
+        $this->limpiarArchivoTemporal($request->input('file_path'));
+
         return response()->json(['success' => true, 'log_id' => $log->id]);
+    }
+
+    /**
+     * @return array{0: string, 1: array{sku: string, precio_base: string}|null}
+     */
+    private function resolverArchivoYMapeo(Request $request): array
+    {
+        if ($request->filled('file_path') && $request->has('mapping')) {
+            $request->validate([
+                'file_path' => 'required|string',
+                'mapping' => 'required|array',
+                'mapping.sku' => 'required|string',
+                'mapping.precio_base' => 'required|string',
+            ]);
+
+            return [
+                $this->resolverRutaArchivoTemporal($request->input('file_path')),
+                $this->normalizarMapping($request->input('mapping')),
+            ];
+        }
+
+        $request->validate(['listado_aromas' => 'required|file|mimes:xlsx,xls,csv']);
+
+        return [$request->file('listado_aromas')->getRealPath(), null];
+    }
+
+    private function resolverRutaArchivoTemporal(string $filePath): string
+    {
+        if (! str_starts_with($filePath, 'temp/')) {
+            abort(422, 'Ruta de archivo temporal inválida.');
+        }
+
+        $fullPath = Storage::path($filePath);
+        if (! file_exists($fullPath)) {
+            abort(422, 'Archivo temporal no encontrado. Vuelve a subir el Excel.');
+        }
+
+        return $fullPath;
+    }
+
+    /**
+     * @param  array<string, mixed>  $mapping
+     * @return array{sku: string, precio_base: string}
+     */
+    private function normalizarMapping(array $mapping): array
+    {
+        return [
+            'sku' => trim((string) ($mapping['sku'] ?? '')),
+            'precio_base' => trim((string) ($mapping['precio_base'] ?? '')),
+        ];
+    }
+
+    private function limpiarArchivoTemporal(?string $filePath): void
+    {
+        if ($filePath && str_starts_with($filePath, 'temp/') && Storage::exists($filePath)) {
+            Storage::delete($filePath);
+        }
     }
 
     public function progreso(int $id): JsonResponse
