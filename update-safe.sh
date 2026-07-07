@@ -24,7 +24,8 @@ cd "$SCRIPT_DIR"
 source "${SCRIPT_DIR}/scripts/backup-db.sh"
 
 COMPOSE_FILE="docker-compose.prod.yaml"
-COMPOSE=(docker-compose -f "$COMPOSE_FILE")
+COMPOSE=()
+COMPOSE_BIN_DISPLAY=""
 
 APP_CONTAINER="${DOCKER_APP_CONTAINER:-gelianv_app}"
 WEB_CONTAINER="${DOCKER_WEB_CONTAINER:-gelianv_web}"
@@ -71,6 +72,26 @@ parse_args() {
 
 require_command() {
     command -v "$1" >/dev/null 2>&1 || fail "Comando requerido no encontrado: $1"
+}
+
+detect_docker_compose() {
+    if docker compose version >/dev/null 2>&1; then
+        COMPOSE=(docker compose -f "$COMPOSE_FILE")
+        COMPOSE_BIN_DISPLAY="docker compose"
+    elif command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then
+        COMPOSE=(docker-compose -f "$COMPOSE_FILE")
+        COMPOSE_BIN_DISPLAY="docker-compose"
+    else
+        fail "No se encontró Docker Compose. Requiere 'docker compose' (plugin v2) o 'docker-compose'."
+    fi
+
+    # #region agent log
+    local debug_log="${SCRIPT_DIR}/.cursor/debug-8c8146.log"
+    mkdir -p "${SCRIPT_DIR}/.cursor"
+    printf '%s\n' "{\"sessionId\":\"8c8146\",\"runId\":\"post-fix\",\"hypothesisId\":\"A\",\"location\":\"update-safe.sh:detect_docker_compose\",\"message\":\"compose command detected\",\"data\":{\"compose_bin\":\"${COMPOSE_BIN_DISPLAY}\"},\"timestamp\":$(($(date +%s)*1000))}" >> "$debug_log"
+    # #endregion
+
+    ok "Docker Compose detectado: ${COMPOSE_BIN_DISPLAY}"
 }
 
 container_running() {
@@ -187,14 +208,14 @@ main() {
     parse_args "$@"
 
     require_command docker
-    require_command docker-compose
     require_command git
+    detect_docker_compose
 
     log "=== Actualización segura GeliaNV ==="
 
     # 0. Pre-flight
     if ! container_running "$APP_CONTAINER"; then
-        fail "El contenedor ${APP_CONTAINER} no está corriendo. Ejecute primero: docker-compose -f ${COMPOSE_FILE} up -d"
+        fail "El contenedor ${APP_CONTAINER} no está corriendo. Ejecute primero: ${COMPOSE_BIN_DISPLAY} -f ${COMPOSE_FILE} up -d"
     fi
 
     # 1. Código fuente
