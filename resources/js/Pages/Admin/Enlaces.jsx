@@ -10,8 +10,6 @@ import {
     Clock,
     ChevronDown,
     Briefcase,
-    Key,
-    Check,
     Layers,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -83,11 +81,6 @@ export default function Enlaces({
             });
         }
     };
-
-    const permisosPlantillaGrupo = useMemo(() => {
-        if (!grupoSeleccionado) return [];
-        return permisosDePlantilla([grupoSeleccionado], roles);
-    }, [grupoSeleccionado, roles]);
 
     const handleGrupoChange = (nuevoGrupo) => {
         const grupoAnterior = grupoSeleccionado;
@@ -252,25 +245,6 @@ export default function Enlaces({
                                     </div>
                                 </div>
 
-                                {permisosPlantillaGrupo.length > 0 && (
-                                    <div className="p-5 rounded-2xl bg-purple-500/5 border border-purple-500/20">
-                                        <h4 className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-3 flex items-center gap-1.5">
-                                            <Layers className="w-3.5 h-3.5" />
-                                            Sugeridos de plantilla: {grupoSeleccionado}
-                                        </h4>
-                                        <p className="text-[9px] theme-text-muted mb-2 italic">
-                                            Pre-rellenados en permisos — puedes ajustarlos antes de generar el enlace.
-                                        </p>
-                                        <ul className="space-y-1">
-                                            {permisosPlantillaGrupo.map((permiso) => (
-                                                <li key={permiso} className="text-[10px] font-bold theme-text-main flex items-center gap-2">
-                                                    <Check className="w-3 h-3 text-purple-500 shrink-0" /> {permiso}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
                                 <PermisosAtomicos
                                     data={permisosData}
                                     setData={setPermisosData}
@@ -279,28 +253,8 @@ export default function Enlaces({
                                     permisosUsuario={permisosUsuario}
                                     esSuperAdmin={esSuperAdmin}
                                     onPlantillaPorPermisoChange={setPlantillaPorPermiso}
+                                    plantillaActiva={grupoSeleccionado}
                                 />
-
-                                {permisosIndividuales.length > 0 && (
-                                    <div className="p-5 rounded-2xl bg-orange-500/5 border border-orange-500/20">
-                                        <h4 className="text-[9px] font-black uppercase tracking-widest text-orange-600 mb-3">
-                                            Permisos explícitos del enlace ({permisosIndividuales.length})
-                                        </h4>
-                                        <ul className="space-y-1">
-                                            {permisosIndividuales.map((permiso) => (
-                                                <li key={permiso} className="text-[10px] font-bold theme-text-main flex items-center gap-2">
-                                                    <Key className="w-3 h-3 text-orange-500 shrink-0" />
-                                                    {permiso}
-                                                    {plantillaPorPermiso[permiso] && (
-                                                        <span className="text-[8px] font-bold text-purple-500 italic normal-case">
-                                                            plantilla: {plantillaPorPermiso[permiso]}
-                                                        </span>
-                                                    )}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
 
                                 <button
                                     onClick={generarEnlace}

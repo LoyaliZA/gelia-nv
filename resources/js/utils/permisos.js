@@ -226,3 +226,156 @@ export function construirPlantillaPorPermiso(permisos, plantillaNombre, roles) {
     });
     return map;
 }
+
+export const COLUMNAS_ACCION_MATRIZ = [
+    {
+        key: 'ver',
+        label: 'Ver',
+        aliases: ['ver', 'ver_listado', 'ver_detalle', 'ver_todos', 'verificar'],
+    },
+    {
+        key: 'crear',
+        label: 'Crear',
+        aliases: ['crear', 'carga_masiva', 'importar'],
+    },
+    {
+        key: 'editar',
+        label: 'Editar',
+        aliases: [
+            'editar', 'gestionar', 'asignar', 'transferir', 'cambiar_estado', 'configurar',
+            'responder', 'reportar', 'emitir_consulta', 'responder_consulta', 'confirmar_pago',
+            'solicitar_cancelacion', 'cancelar', 'confirmar_cambio_lista', 'confirmar',
+            'reparar_fecha', 'editar_emergencia', 'gestionar_datos_fiscales', 'exportar',
+            'generar_permisos', 'limpieza_clientes',
+        ],
+    },
+    {
+        key: 'eliminar',
+        label: 'Eliminar',
+        aliases: ['eliminar', 'archivar'],
+    },
+    { key: 'otros', label: 'Otros', aliases: [] },
+];
+
+export function parsePermisoEstructura(permisoName) {
+    const parts = (permisoName || '').split('.');
+    if (parts.length <= 1) {
+        return { entidad: parts[0] || permisoName, accion: parts[0] || permisoName };
+    }
+    if (parts.length === 2) {
+        return { entidad: parts[0], accion: parts[1] };
+    }
+    return {
+        entidad: parts.slice(1, -1).join('.'),
+        accion: parts[parts.length - 1],
+    };
+}
+
+export function mapearAccionAColumna(accion) {
+    for (const col of COLUMNAS_ACCION_MATRIZ) {
+        if (col.key === 'otros') continue;
+        if (col.aliases.includes(accion)) return col.key;
+    }
+    return 'otros';
+}
+
+export function etiquetaEntidadPermiso(entidad) {
+    return entidad.replace(/_/g, ' ');
+}
+
+function crearFilaMatriz(entidad) {
+    return {
+        entidad,
+        entidadLabel: etiquetaEntidadPermiso(entidad),
+        celdas: { ver: null, crear: null, editar: null, eliminar: null, otros: [] },
+    };
+}
+
+/** Agrupa permisos de un módulo en filas entidad × columnas de acción. */
+export function agruparPermisosEnMatriz(permisosDeModulo) {
+    const filasMap = new Map();
+
+    (permisosDeModulo || []).forEach((permiso) => {
+        const { entidad, accion } = parsePermisoEstructura(permiso.name);
+        const columna = mapearAccionAColumna(accion);
+
+        if (!filasMap.has(entidad)) {
+            filasMap.set(entidad, crearFilaMatriz(entidad));
+        }
+        const fila = filasMap.get(entidad);
+
+        if (columna === 'otros') {
+            fila.celdas.otros.push(permiso);
+        } else if (!fila.celdas[columna]) {
+            fila.celdas[columna] = permiso;
+        } else {
+            fila.celdas.otros.push(permiso);
+        }
+    });
+
+    return {
+        columnas: COLUMNAS_ACCION_MATRIZ,
+        filas: [...filasMap.values()].sort((a, b) => a.entidadLabel.localeCompare(b.entidadLabel, 'es')),
+    };
+}
+
+export function permisoCoincideBusqueda(permisoName, query) {
+    if (!query?.trim()) return true;
+    const q = query.trim().toLowerCase();
+    const label = etiquetaPermiso(permisoName).toLowerCase();
+    const desc = (descripcionPermiso(permisoName) || '').toLowerCase();
+    return (
+        permisoName.toLowerCase().includes(q)
+        || label.includes(q)
+        || desc.includes(q)
+    );
+}
+
+export function filtrarPermisosPorBusqueda(permisos, query) {
+    if (!query?.trim()) return permisos || [];
+    return (permisos || []).filter((p) => permisoCoincideBusqueda(p.name, query));
+}
+
+export function calcularDiffPlantilla(activos, plantillaNombre, roles) {
+    if (!plantillaNombre) {
+        return {
+            heredados: [],
+            agregados: [],
+            removidos: [],
+            personalizados: [],
+            tienePlantilla: false,
+        };
+    }
+
+    const heredados = permisosDePlantilla([plantillaNombre], roles);
+    const activosSet = new Set(activos || []);
+    const agregados = (activos || []).filter((p) => !heredados.includes(p));
+    const removidos = heredados.filter((p) => !activosSet.has(p));
+    const personalizados = [...new Set([...agregados, ...removidos])];
+
+    return { heredados, agregados, removidos, personalizados, tienePlantilla: true };
+}
+
+export function resolverOrigenPermiso(meta, isDePlantilla, plantillaNombre, usuarioActualId) {
+    if (!meta || meta?.plantilla_origen === 'sistema:migracion') {
+        return { tipo: 'sistema', tooltip: 'Heredado por actualización del sistema' };
+    }
+    if (
+        meta?.asignado_por?.id != null
+        && usuarioActualId != null
+        && Number(meta.asignado_por.id) === Number(usuarioActualId)
+    ) {
+        return { tipo: 'custom', tooltip: 'Asignado por ti' };
+    }
+    if (meta?.asignado_por?.nombre) {
+        return { tipo: 'otro', tooltip: `Asignado por: ${meta.asignado_por.nombre}` };
+    }
+    if (isDePlantilla || meta?.plantilla_origen) {
+        const nombre = meta?.plantilla_origen || plantillaNombre;
+        return {
+            tipo: 'plantilla',
+            tooltip: nombre ? `Heredado de plantilla: ${nombre}` : 'Heredado de plantilla',
+        };
+    }
+    return { tipo: 'custom', tooltip: 'Asignado manualmente' };
+}
