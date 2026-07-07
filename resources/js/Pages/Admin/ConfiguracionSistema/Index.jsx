@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, useForm } from '@inertiajs/react';
-import { Settings, Plus, Edit2, Trash2, Mail, Check, X, AlertCircle } from 'lucide-react';
+import { Settings, Plus, Edit2, Trash2, Mail, Check, X, AlertCircle, Shield } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import { geliaCardClass, THEME_INPUT, THEME_SELECT, THEME_TEXTAREA, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 
@@ -19,7 +19,7 @@ const SimpleModal = ({ show, onClose, title, children }) => {
     );
 };
 
-export default function ConfiguracionSistema({ auth, configuracionesGrupos, configuracionesRaw }) {
+export default function ConfiguracionSistema({ auth, configuracionesGrupos, configuracionesRaw, sessionDriver = 'database' }) {
     const activeCardClass = geliaCardClass('relative z-10');
     
     const [modalConfig, setModalConfig] = useState(false);
@@ -98,6 +98,17 @@ export default function ConfiguracionSistema({ auth, configuracionesGrupos, conf
         });
     };
 
+    const etiquetaSesion = (clave) => {
+        const map = {
+            'session.lifetime': 'Tiempo de inactividad (minutos)',
+            'session.expire_on_close': 'Expirar al cerrar navegador',
+            'sesiones.jornada_cierre_activo': 'Cierre automático al fin de jornada',
+            'sesiones.jornada_hora_fin': 'Hora de fin de jornada',
+            'sesiones.jornada_zona_horaria': 'Zona horaria de jornada',
+        };
+        return map[clave] || clave;
+    };
+
     return (
         <AppLayout auth={auth}>
             <Head title="Configuración del Sistema | GELIANV" />
@@ -130,6 +141,22 @@ export default function ConfiguracionSistema({ auth, configuracionesGrupos, conf
                     </div>
                 </header>
 
+                <div className={`${activeCardClass} p-6 flex items-start gap-4 border border-amber-500/20 bg-amber-500/5`}>
+                    <Shield className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                        <h3 className="text-sm font-black uppercase tracking-widest theme-text-main">Driver de sesiones (solo lectura)</h3>
+                        <p className="text-sm theme-text-muted mt-1">
+                            El almacenamiento de sesiones se define en <code className="text-xs">SESSION_DRIVER</code> del archivo <code className="text-xs">.env</code>.
+                            Valor actual: <strong className="font-mono">{sessionDriver}</strong>.
+                            {sessionDriver !== 'database' && (
+                                <span className="block mt-1 text-amber-600 font-bold">
+                                    Para habilitar el listado de sesiones y la auditoría de accesos, configure SESSION_DRIVER=database en producción.
+                                </span>
+                            )}
+                        </p>
+                    </div>
+                </div>
+
                 <div className="space-y-8">
                     {Object.keys(configuracionesGrupos).length === 0 ? (
                         <div className={`${activeCardClass} p-12 text-center text-gray-500`}>
@@ -153,7 +180,7 @@ export default function ConfiguracionSistema({ auth, configuracionesGrupos, conf
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-3 mb-1">
                                                     <span className="text-lg font-bold font-mono text-gray-800 dark:text-gray-200 truncate">
-                                                        {config.clave}
+                                                        {grupoName === 'Sesiones' ? etiquetaSesion(config.clave) : config.clave}
                                                     </span>
                                                     <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold uppercase tracking-wider">
                                                         {config.tipo}

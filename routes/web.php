@@ -863,8 +863,7 @@ Route::middleware(['auth'])->group(function () {
         });
 
         // --- 5. Auditorías del Sistema ---
-        Route::middleware(['can:sistema.auditorias.ver'])->group(function () {
-            // Corrección: Cambiar el llamado de 'auditorias' a 'index'
+        Route::middleware(['permission:sistema.auditorias.ver|sistema.auditorias.accesos.ver'])->group(function () {
             Route::get('/auditorias-sistema', [AuditoriaListaDescuentoController::class, 'index'])
                 ->name('auditorias_sistema.index');
         });

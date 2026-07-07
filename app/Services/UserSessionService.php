@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Auditoria\RegistrarAuditoriaAccesoService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -41,9 +42,20 @@ class UserSessionService
 
         $table = Config::get('session.table', 'sessions');
 
-        return DB::table($table)
+        $sessionIds = DB::table($table)
             ->where('user_id', $userId)
             ->where('id', '!=', $currentSessionId)
+            ->pluck('id')
+            ->all();
+
+        if ($sessionIds === []) {
+            return 0;
+        }
+
+        app(RegistrarAuditoriaAccesoService::class)->registrarCierrePorIds($sessionIds, 'usuario_revocacion');
+
+        return DB::table($table)
+            ->whereIn('id', $sessionIds)
             ->delete();
     }
 

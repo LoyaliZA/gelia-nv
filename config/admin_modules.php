@@ -12,6 +12,7 @@ return [
     'comisiones.gestionar',
     'usuarios.gestionar',
     'sistema.auditorias.ver',
+    'sistema.auditorias.accesos.ver',
     'api_externa.gestionar',
     'api_externa.ver_auditoria',
     'entregas.configurar_zonas',

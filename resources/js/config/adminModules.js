@@ -76,7 +76,7 @@ export const ADMIN_MODULES = [
         path: '/admin/auditorias-sistema',
         routeName: 'admin.auditorias_sistema.index',
         icon: History,
-        permission: 'sistema.auditorias.ver',
+        permissionAny: ['sistema.auditorias.ver', 'sistema.auditorias.accesos.ver'],
     },
     {
         id: 'api_externa',

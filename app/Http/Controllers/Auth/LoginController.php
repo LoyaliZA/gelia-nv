@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\Auditoria\RegistrarAuditoriaAccesoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
@@ -17,22 +18,23 @@ class LoginController extends Controller
         return Inertia::render('Auth/Login');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, RegistrarAuditoriaAccesoService $auditoriaAcceso): RedirectResponse
     {
         $request->validate([
             'login'    => ['required', 'string'],
             'password' => ['required'],
         ]);
 
-        // Buscamos al usuario que coincida con el email, username o name exacto
         $user = User::where('email', $request->login)
                     ->orWhere('username', $request->login)
                     ->orWhere('name', $request->login)
                     ->first();
 
-        // Validamos si el usuario existe y la contraseña es correcta
         if ($user && Auth::attempt(['email' => $user->email, 'password' => $request->password], $request->boolean('remember'))) {
             $request->session()->regenerate();
+
+            $auditoriaAcceso->registrarLogin($user, $request, $request->session()->getId());
+
             return redirect()->intended(route('dashboard'));
         }
 
@@ -41,8 +43,12 @@ class LoginController extends Controller
         ])->onlyInput('login');
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request, RegistrarAuditoriaAccesoService $auditoriaAcceso): RedirectResponse
     {
+        $sessionId = $request->session()->getId();
+
+        $auditoriaAcceso->registrarCierre($sessionId, 'logout');
+
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
