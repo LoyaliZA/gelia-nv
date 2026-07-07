@@ -101,6 +101,7 @@ class UpdateWooCommercePricesJob implements ShouldQueue
                         'SKU no encontrado en catálogo local.'
                     );
                     $procesadosEnLote++;
+                    $this->avanzarProgreso($log);
                     continue;
                 }
 
@@ -113,12 +114,14 @@ class UpdateWooCommercePricesJob implements ShouldQueue
                 if (empty($normal) || $normal <= 0) {
                     $this->registrarDetalleAuditoria($log->id, $sku, $anteriorNormal, $anteriorRebajado, $normal, $rebaja, 'error', 'Precio calculado inválido.');
                     $procesadosEnLote++;
+                    $this->avanzarProgreso($log);
                     continue;
                 }
 
                 if ($prod->precio_normal == $normal && $prod->precio_rebajado == $rebaja) {
                     $this->registrarDetalleAuditoria($log->id, $sku, $anteriorNormal, $anteriorRebajado, $normal, $rebaja, 'exito', 'Omitido: Sin cambios.');
                     $procesadosEnLote++;
+                    $this->avanzarProgreso($log);
                     continue;
                 }
 
@@ -137,15 +140,12 @@ class UpdateWooCommercePricesJob implements ShouldQueue
                 $this->registrarDetalleAuditoria($log->id, $sku, $anteriorNormal, $anteriorRebajado, $normal, $rebaja, 'exito', 'Enviado en lote a Woo');
                 $prod->update(['precio_normal' => $normal, 'precio_rebajado' => $rebaja]);
                 $procesadosEnLote++;
+                $this->avanzarProgreso($log);
             }
 
             $this->enviarLotesWooCommerce($loteSimples, $loteVariaciones);
 
             $nuevoSliceOffset = $this->offset + $procesadosEnLote;
-            $log->update(['procesados' => min(
-                (int) $log->procesados + $procesadosEnLote,
-                $log->total_productos
-            )]);
 
             if ($log->fresh()->estado === 'cancelado') {
                 return;
@@ -215,6 +215,14 @@ class UpdateWooCommercePricesJob implements ShouldQueue
         }
 
         $this->aplicarLatenciaSegura();
+    }
+
+    private function avanzarProgreso(WoocommerceSyncLog $log): void
+    {
+        WoocommerceSyncLog::query()
+            ->where('id', $log->id)
+            ->whereColumn('procesados', '<', 'total_productos')
+            ->increment('procesados');
     }
 
     private function registrarDetalleAuditoria(

@@ -9,9 +9,9 @@ import {
     ESTADOS_REANUDABLES,
     etiquetaTipoSync,
     getStoredWooSyncLogId,
-    startWooSyncTracking,
     WOO_SYNC_DISMISSED_EVENT,
     WOO_SYNC_STARTED_EVENT,
+    WOO_SYNC_STORAGE_KEY,
 } from '../utils/woocommerceSyncTracker';
 
 function emitToast(mensaje, tipo = 'error') {
@@ -74,7 +74,9 @@ export default function WooSyncFloatingTracker({ canView = false, canSync = fals
     const conectarLog = useCallback((id, dataInicial = null) => {
         if (!id) return;
         setLogId(id);
-        startWooSyncTracking(id);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(WOO_SYNC_STORAGE_KEY, String(id));
+        }
         if (dataInicial) setLog(dataInicial);
     }, []);
 

@@ -64,9 +64,7 @@ class FetchWooCommercePricesJob implements ShouldQueue
 
             $this->procesarPaginaLocal($productosWoo, $log);
 
-            $procesados = (int) $log->fresh()->procesados + count($productosWoo);
             $log->update([
-                'procesados' => min($procesados, $log->total_productos),
                 'payload' => ['page' => $this->page + 1],
             ]);
 
@@ -141,9 +139,19 @@ class FetchWooCommercePricesJob implements ShouldQueue
                     'precio_normal' => $nuevoNormal,
                     'precio_rebajado' => $nuevoRebajado,
                 ]);
+
+                $this->avanzarProgreso($log);
             }
         }
 
         $this->aplicarLatenciaSegura();
+    }
+
+    private function avanzarProgreso(WoocommerceSyncLog $log): void
+    {
+        WoocommerceSyncLog::query()
+            ->where('id', $log->id)
+            ->whereColumn('procesados', '<', 'total_productos')
+            ->increment('procesados');
     }
 }
