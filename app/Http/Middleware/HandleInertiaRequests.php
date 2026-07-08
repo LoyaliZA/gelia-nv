@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Middleware;
 use App\Models\ConfiguracionUsuario;
 use App\Models\Woocommerce\WoocommerceSyncLog;
+use App\Models\Almacenes\ImportacionAlmacenLog;
 use App\Services\PersonalizacionCatalogoService;
 use App\Services\Mensajeria\ListarConversacionesService;
 use App\Services\Presencia\PresenciaUsuarioService;
@@ -102,6 +103,14 @@ class HandleInertiaRequests extends Middleware
             ],
             'woocommerce_sync_activo' => fn () => ($user && $user->can('woocommerce.ver'))
                 ? WoocommerceSyncLog::activo()
+                : null,
+            'importacion_almacen_activa' => fn () => ($user && (
+                $user->can('catalogos.gestionar')
+                || $user->can('almacenes.productos.gestionar')
+                || $user->can('almacenes.inventarios.importar')
+                || $user->can('almacenes.costos.importar')
+            ))
+                ? ImportacionAlmacenLog::activo()
                 : null,
         ];
     }

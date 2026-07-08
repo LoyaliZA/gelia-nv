@@ -9,6 +9,7 @@ import { Bell, X, Menu } from 'lucide-react';
 import NotificationService from '../Services/NotificationBrowserService';
 import GeliaLoader from '../Components/GeliaLoader';
 import WooSyncFloatingTracker from '../Components/WooSyncFloatingTracker';
+import ImportacionAlmacenFloatingTracker from '../Components/Almacenes/ImportacionAlmacenFloatingTracker';
 import {
     resolveAlertasPrefs,
     getTipoAlerta,
@@ -133,6 +134,14 @@ export default function AppLayout({ children, fullScreen = false }) {
     const esSuperAdmin = rolesWoo.includes('Super Admin') || rolesWoo.includes('Administrador');
     const canViewWooSync = esSuperAdmin || permisosWoo.includes('woocommerce.ver') || permisosWoo.includes('woocommerce.sincronizar');
     const canSyncWoo = esSuperAdmin || permisosWoo.includes('woocommerce.sincronizar');
+
+    const permisosAlmacen = auth?.user?.permissions ?? [];
+    const canViewImportacionAlmacen = esSuperAdmin
+        || permisosAlmacen.includes('almacenes.productos.gestionar')
+        || permisosAlmacen.includes('almacenes.inventarios.importar')
+        || permisosAlmacen.includes('almacenes.costos.importar')
+        || permisosAlmacen.includes('catalogos.gestionar');
+    const canManageImportacionAlmacen = canViewImportacionAlmacen;
 
     // --- ESCUCHADORES DE EVENTOS GLOBALES DE INERTIA ---
     useEffect(() => {
@@ -615,6 +624,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                     </div>
 
                     <WooSyncFloatingTracker canView={canViewWooSync} canSync={canSyncWoo} />
+                    <ImportacionAlmacenFloatingTracker canView={canViewImportacionAlmacen} canManage={canManageImportacionAlmacen} />
                 </div>
 
             </div>

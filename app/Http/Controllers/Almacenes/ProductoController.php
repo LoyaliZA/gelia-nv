@@ -9,10 +9,8 @@ use App\Models\CatalogoCategoriaProducto;
 use App\Models\CatalogoMarcaProducto;
 use App\Models\Producto;
 use App\Support\Almacenes\OrdenamientoListadoAlmacen;
-use App\Services\Almacenes\FinalizarImportacionAlmacenService;
-use App\Services\Almacenes\ProcesarFilaProductoImportacionService;
+use App\Services\Almacenes\IniciarImportacionAlmacenService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
-use App\Services\Almacenes\ReporteErroresImportacionService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
 use App\Services\Productos\GenerarFolioProductoService;
 use Illuminate\Http\JsonResponse;
@@ -151,48 +149,10 @@ class ProductoController extends Controller
         ]);
     }
 
-    public function importProcess(
-        Request $request,
-        ProcesarFilaProductoImportacionService $procesador,
-        ReporteErroresImportacionService $reporte,
-        FinalizarImportacionAlmacenService $finalizar,
-    ) {
-        $request->validate([
-            'file_path' => 'required|string',
-            'mapping' => 'required|array',
-            'mapping.sku' => 'required|string',
-            'mapping.descripcion' => 'required|string',
-        ]);
+    public function importIniciar(Request $request, IniciarImportacionAlmacenService $iniciar): JsonResponse
+    {
+        $resultado = $iniciar->ejecutar($request, 'productos');
 
-        $fullPath = Storage::path($request->file_path);
-        if (! file_exists($fullPath)) {
-            return back()->with('error', 'Archivo temporal no encontrado.');
-        }
-
-        $mapping = $request->mapping;
-        $stats = ['importados' => 0, 'actualizados' => 0, 'omitidos' => 0];
-        $rows = (new FastExcel)->import($fullPath);
-
-        foreach ($rows as $index => $row) {
-            $numeroFila = $index + 2;
-            $referencia = trim((string) ($row[$mapping['sku']] ?? ''));
-
-            try {
-                $resultado = $procesador->ejecutar($row, $mapping);
-                $stats[$resultado['accion'] === 'importado' ? 'importados' : 'actualizados']++;
-            } catch (\Throwable $e) {
-                $stats['omitidos']++;
-                $reporte->agregarExcepcion($numeroFila, $referencia ?: '—', 'general', $e);
-            }
-        }
-
-        @unlink($fullPath);
-
-        return $finalizar->respuesta(
-            redirect()->route('almacenes.productos.index'),
-            'productos',
-            $stats,
-            $reporte,
-        );
+        return response()->json(array_merge(['success' => true], $resultado));
     }
 }

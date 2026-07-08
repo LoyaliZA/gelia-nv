@@ -1,22 +1,28 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, router, useForm } from '@inertiajs/react';
-import { DollarSign, Plus, Edit2, Trash2, Save, Search } from 'lucide-react';
+import { DollarSign, Plus, Edit2, Trash2, Save, Search, UploadCloud } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
 import GeliaLoader from '@/Components/GeliaLoader';
 import EncabezadoOrdenable from '@/Components/Almacenes/EncabezadoOrdenable';
 import SelectorProducto from '@/Components/Almacenes/SelectorProducto';
+import WizardImportacionCatalogo from '@/Components/Almacenes/WizardImportacionCatalogo';
+import { IMPORTACION_CATALOGOS } from '@/config/importacionCatalogos';
 import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
 
 export default function Index({ auth, costos, sucursales, almacenes, filtros }) {
     const [modalAbierto, setModalAbierto] = useState(false);
+    const [wizardImportacion, setWizardImportacion] = useState(false);
     const [itemActual, setItemActual] = useState(null);
     const [sucursalId, setSucursalId] = useState(filtros?.sucursal_id || '');
     const [almacenId, setAlmacenId] = useState(filtros?.almacen_id || '');
     const [busqueda, setBusqueda] = useState(filtros?.q || '');
     const lista = costos?.data || [];
     const puedeGestionar = auth?.user?.permissions?.includes('almacenes.costos.gestionar') || auth?.user?.roles?.includes('Super Admin');
+    const puedeImportar = auth?.user?.permissions?.includes('almacenes.costos.importar')
+        || auth?.user?.permissions?.includes('catalogos.gestionar')
+        || auth?.user?.roles?.includes('Super Admin');
 
     const almacenesFiltrados = useMemo(() => {
         if (!sucursalId) return almacenes;
@@ -103,10 +109,19 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                                 Costos por Almacén
                             </h1>
                         </div>
-                        {puedeGestionar && (
-                            <button onClick={abrirNuevo} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
-                                <Plus className="w-4 h-4" /> Nuevo Costo
-                            </button>
+                        {(puedeGestionar || puedeImportar) && (
+                            <div className="flex flex-wrap gap-2">
+                                {puedeImportar && (
+                                    <button onClick={() => setWizardImportacion(true)} className="px-4 py-2 text-[10px] font-black uppercase theme-element border theme-border rounded-xl flex items-center gap-2 theme-text-main">
+                                        <UploadCloud className="w-4 h-4" /> Importar
+                                    </button>
+                                )}
+                                {puedeGestionar && (
+                                    <button onClick={abrirNuevo} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact`}>
+                                        <Plus className="w-4 h-4" /> Nuevo Costo
+                                    </button>
+                                )}
+                            </div>
                         )}
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -168,6 +183,14 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                     {lista.length > 0 && <GeliaPaginacion paginator={costos} onIrAPagina={(p) => aplicarFiltros({ page: p })} embedded />}
                 </div>
             </div>
+
+            {wizardImportacion && (
+                <WizardImportacionCatalogo
+                    config={IMPORTACION_CATALOGOS.costos}
+                    almacenes={almacenes}
+                    onClose={() => setWizardImportacion(false)}
+                />
+            )}
 
             {modalAbierto && createPortal(
                 <div className={THEME_MODAL_OVERLAY} onClick={() => setModalAbierto(false)}>

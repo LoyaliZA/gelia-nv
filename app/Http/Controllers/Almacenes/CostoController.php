@@ -9,11 +9,16 @@ use App\Models\Almacen;
 use App\Models\ProductoCosto;
 use App\Models\Sucursal;
 use App\Support\Almacenes\OrdenamientoListadoAlmacen;
+use App\Services\Almacenes\IniciarImportacionAlmacenService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
+use App\Services\Catalogos\PlantillaImportacionCatalogoService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Rap2hpoutre\FastExcel\FastExcel;
 
 class CostoController extends Controller
 {
@@ -92,5 +97,42 @@ class CostoController extends Controller
         $this->auditoria->costoEliminado($id, $referencia);
 
         return back()->with('success', 'Costo eliminado correctamente.');
+    }
+
+    public function descargarPlantillaImportacion(PlantillaImportacionCatalogoService $plantillaService)
+    {
+        return $plantillaService->descargar('costos');
+    }
+
+    public function importPreview(Request $request): JsonResponse
+    {
+        $request->validate([
+            'archivo' => 'required|file|mimes:csv,xlsx,xls',
+            'almacen_id' => 'required|exists:almacenes,id',
+        ]);
+
+        $file = $request->file('archivo');
+        $extension = $file->getClientOriginalExtension();
+        $path = $file->storeAs('temp', 'import_costos_preview.' . $extension);
+
+        $headers = [];
+        $rows = (new FastExcel)->import(Storage::path($path));
+        foreach ($rows as $row) {
+            $headers = array_keys($row);
+            break;
+        }
+
+        return response()->json([
+            'headers' => $headers,
+            'file_path' => $path,
+            'almacen_id' => $request->almacen_id,
+        ]);
+    }
+
+    public function importIniciar(Request $request, IniciarImportacionAlmacenService $iniciar): JsonResponse
+    {
+        $resultado = $iniciar->ejecutar($request, 'costos');
+
+        return response()->json(array_merge(['success' => true], $resultado));
     }
 }

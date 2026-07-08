@@ -7,14 +7,12 @@ use App\Http\Requests\Almacenes\StoreInventarioRequest;
 use App\Http\Requests\Almacenes\UpdateInventarioRequest;
 use App\Models\Almacen;
 use App\Models\Inventario;
-use App\Models\ProductoCosto;
 use App\Models\Sucursal;
 use App\Support\Almacenes\OrdenamientoListadoAlmacen;
-use App\Services\Almacenes\FinalizarImportacionAlmacenService;
-use App\Services\Almacenes\ProcesarFilaProductoImportacionService;
+use App\Services\Almacenes\IniciarImportacionAlmacenService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
-use App\Services\Almacenes\ReporteErroresImportacionService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -122,80 +120,11 @@ class InventarioController extends Controller
         ]);
     }
 
-    public function importProcess(
-        Request $request,
-        ProcesarFilaProductoImportacionService $procesador,
-        ReporteErroresImportacionService $reporte,
-        FinalizarImportacionAlmacenService $finalizar,
-    ) {
-        $request->validate([
-            'file_path' => 'required|string',
-            'almacen_id' => 'required|exists:almacenes,id',
-            'mapping' => 'required|array',
-            'mapping.sku' => 'required|string',
-            'mapping.descripcion' => 'required|string',
-            'mapping.existencia' => 'required|string',
-        ]);
+    public function importIniciar(Request $request, IniciarImportacionAlmacenService $iniciar): JsonResponse
+    {
+        $resultado = $iniciar->ejecutar($request, 'inventarios');
 
-        $fullPath = Storage::path($request->file_path);
-        if (! file_exists($fullPath)) {
-            return back()->with('error', 'Archivo temporal no encontrado.');
-        }
-
-        $mapping = $request->mapping;
-        $almacenId = (int) $request->almacen_id;
-        $stats = ['importados' => 0, 'actualizados' => 0, 'omitidos' => 0];
-        $rows = (new FastExcel)->import($fullPath);
-
-        foreach ($rows as $index => $row) {
-            $numeroFila = $index + 2;
-            $referencia = trim((string) ($row[$mapping['sku']] ?? ''));
-
-            try {
-                if (! isset($row[$mapping['existencia']]) || $row[$mapping['existencia']] === '') {
-                    throw new \RuntimeException('Existencia obligatoria.');
-                }
-
-                $existencia = (float) $row[$mapping['existencia']];
-                $costo = isset($mapping['costo'], $row[$mapping['costo']]) ? (float) $row[$mapping['costo']] : 0;
-                $precioVenta = isset($mapping['precio_venta'], $row[$mapping['precio_venta']]) ? (float) $row[$mapping['precio_venta']] : null;
-                $costoReposicion = isset($mapping['costo_reposicion'], $row[$mapping['costo_reposicion']]) ? (float) $row[$mapping['costo_reposicion']] : null;
-
-                $resultado = $procesador->ejecutar($row, $mapping);
-                $producto = $resultado['producto'];
-                $stats[$resultado['accion'] === 'importado' ? 'importados' : 'actualizados']++;
-
-                Inventario::updateOrCreate(
-                    ['producto_id' => $producto->id, 'almacen_id' => $almacenId],
-                    ['existencia' => $existencia]
-                );
-
-                if (! empty($mapping['costo'])) {
-                    ProductoCosto::updateOrCreate(
-                        ['producto_id' => $producto->id, 'almacen_id' => $almacenId],
-                        [
-                            'costo' => $costo,
-                            'costo_reposicion' => $costoReposicion,
-                            'precio_venta' => $precioVenta,
-                        ]
-                    );
-                }
-
-                $producto->update(['activo' => true]);
-            } catch (\Throwable $e) {
-                $stats['omitidos']++;
-                $reporte->agregarExcepcion($numeroFila, $referencia ?: '—', 'general', $e);
-            }
-        }
-
-        @unlink($fullPath);
-
-        return $finalizar->respuesta(
-            redirect()->route('almacenes.inventarios.index', ['almacen_id' => $almacenId]),
-            'inventarios',
-            $stats,
-            $reporte,
-        );
+        return response()->json(array_merge(['success' => true], $resultado));
     }
 
     public function descargarPlantillaImportacion(PlantillaImportacionCatalogoService $plantillaService)
