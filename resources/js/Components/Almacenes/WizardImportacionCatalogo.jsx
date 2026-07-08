@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { router, usePage } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
 import axios from 'axios';
+import { startImportacionAlmacenTracking } from '@/utils/importacionAlmacenTracker';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_PRIMARY } from '@/utils/geliaTheme';
 import InstruccionesImportacion from '@/Components/Catalogos/InstruccionesImportacion';
 import ImportacionResumenModal from '@/Components/Almacenes/ImportacionResumenModal';
@@ -88,21 +89,31 @@ export default function WizardImportacionCatalogo({ config, almacenes = [], onCl
         setStep(3);
     };
 
-    const processImport = () => {
+    const processImport = async () => {
         const missing = required.filter((k) => !mapping[k]);
         if (missing.length) {
             setError(`Mapea las columnas obligatorias: ${missing.join(', ')}.`);
             return;
         }
         setLoading(true);
+        setError('');
         const payload = { file_path: filePath, mapping };
         if (config.requiereAlmacen) {
             payload.almacen_id = almacenId;
         }
-        router.post(route(config.rutaProcess), payload, {
-            onSuccess: () => setLoading(false),
-            onError: () => { setError('Error en la importación.'); setLoading(false); },
-        });
+        try {
+            const response = await axios.post(route(config.rutaIniciar), payload);
+            if (response.data?.log_id) {
+                startImportacionAlmacenTracking(response.data.log_id);
+                onClose();
+            } else {
+                setError('No se pudo iniciar la importación.');
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Error al iniciar la importación.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const cerrarResumen = () => {
@@ -210,7 +221,7 @@ export default function WizardImportacionCatalogo({ config, almacenes = [], onCl
                     )}
                     {step === 3 && (
                         <button type="button" onClick={processImport} disabled={loading} className={`${THEME_BTN_PRIMARY} w-full py-3 flex justify-center items-center gap-2`}>
-                            {loading ? 'Procesando...' : <><ArrowRight className="w-4 h-4" /> Procesar importación</>}
+                            {loading ? 'Iniciando...' : <><ArrowRight className="w-4 h-4" /> Procesar en segundo plano</>}
                         </button>
                     )}
                 </div>

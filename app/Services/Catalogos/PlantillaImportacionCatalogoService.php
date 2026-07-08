@@ -42,6 +42,11 @@ class PlantillaImportacionCatalogoService
             'headers' => ['folio', 'sku', 'descripcion', 'categoria', 'marca', 'existencia', 'costo', 'costo_reposicion', 'precio_venta'],
             'ejemplo' => ['100125', '12345', 'Producto demo', 'Aromas', 'Marca X', '100', '50.00', '55.00', '89.99'],
         ],
+        'costos' => [
+            'filename' => 'plantilla_costos.csv',
+            'headers' => ['sku', 'costo', 'costo_reposicion', 'precio_venta'],
+            'ejemplo' => ['12345', '50.00', '55.00', '89.99'],
+        ],
     ];
 
     public function tiposValidos(): array

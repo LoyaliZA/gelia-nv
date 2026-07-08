@@ -60,7 +60,7 @@ export const IMPORTACION_CATALOGOS = {
         rutaPlantilla: 'almacenes.productos.plantilla_importacion',
         rutaImportar: null,
         rutaPreview: 'almacenes.productos.import_preview',
-        rutaProcess: 'almacenes.productos.import_process',
+        rutaIniciar: 'almacenes.productos.import_iniciar',
         wizard: true,
         requiereAlmacen: false,
         columnas: [
@@ -101,7 +101,7 @@ export const IMPORTACION_CATALOGOS = {
         rutaPlantilla: 'almacenes.inventarios.plantilla_importacion',
         rutaImportar: null,
         rutaPreview: 'almacenes.inventarios.import_preview',
-        rutaProcess: 'almacenes.inventarios.import_process',
+        rutaIniciar: 'almacenes.inventarios.import_iniciar',
         wizard: true,
         requiereAlmacen: true,
         columnas: [
@@ -138,6 +138,38 @@ export const IMPORTACION_CATALOGOS = {
             'Código de barras vacío → se usa el SKU.',
             'Errores por fila se reportan en CSV descargable.',
             'Se importan productos, existencias y costos (si se mapean).',
+        ],
+    },
+    costos: {
+        titulo: 'Importar Costos y Precios',
+        rutaPlantilla: 'almacenes.costos.plantilla_importacion',
+        rutaImportar: null,
+        rutaPreview: 'almacenes.costos.import_preview',
+        rutaIniciar: 'almacenes.costos.import_iniciar',
+        wizard: true,
+        requiereAlmacen: true,
+        columnas: [
+            { key: 'sku', label: 'SKU', requerido: true },
+            { key: 'costo', label: 'Costo', requerido: false },
+            { key: 'costo_reposicion', label: 'Costo reposición', requerido: false },
+            { key: 'precio_venta', label: 'Precio venta', requerido: false },
+        ],
+        mapping: {
+            sku: '', costo: '', costo_reposicion: '', precio_venta: '',
+        },
+        labels: {
+            sku: 'SKU *',
+            costo: 'Costo',
+            costo_reposicion: 'Costo Reposición',
+            precio_venta: 'Precio Venta',
+        },
+        required: ['sku'],
+        notas: [
+            'Selecciona el almacén destino antes de subir el archivo.',
+            'El SKU debe existir previamente en el catálogo de productos.',
+            'Indica al menos uno: costo, costo de reposición o precio de venta.',
+            'No modifica existencias de inventario.',
+            'Errores por fila se reportan en CSV descargable.',
         ],
     },
 };
