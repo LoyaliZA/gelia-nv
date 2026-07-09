@@ -143,6 +143,145 @@ class WooCommercePreciosService
         return $muestra;
     }
 
+    /**
+     * Sugiere mapeo para Contabilidad (SKU, descripción, precio base con prioridad Bronce).
+     *
+     * @param  array{sku?: string, precio_base?: string, descripcion?: string}  $mapeoGuardado
+     * @return array{sku: string, precio_base: string, descripcion: string}
+     */
+    public function sugerirMapeoContabilidad(array $headers, array $mapeoGuardado): array
+    {
+        $sugerido = [
+            'sku' => '',
+            'precio_base' => '',
+            'descripcion' => '',
+        ];
+
+        foreach (['sku', 'precio_base', 'descripcion'] as $campo) {
+            $valorGuardado = $mapeoGuardado[$campo] ?? '';
+            if ($valorGuardado !== '' && in_array($valorGuardado, $headers, true)) {
+                $sugerido[$campo] = $valorGuardado;
+            }
+        }
+
+        foreach ($headers as $header) {
+            $lower = mb_strtolower(trim((string) $header));
+            if ($sugerido['sku'] === '' && (str_contains($lower, 'sku') || (str_contains($lower, 'codigo') && ! str_contains($lower, 'barras')))) {
+                $sugerido['sku'] = $header;
+            }
+            if ($sugerido['descripcion'] === '' && (str_contains($lower, 'descripcion') || str_contains($lower, 'descrip') || str_contains($lower, 'nombre') || str_contains($lower, 'producto'))) {
+                $sugerido['descripcion'] = $header;
+            }
+        }
+
+        if ($sugerido['precio_base'] === '') {
+            foreach ($headers as $header) {
+                if ($this->normalizarClaveColumna((string) $header) === 'bronce') {
+                    $sugerido['precio_base'] = $header;
+                    break;
+                }
+            }
+        }
+
+        if ($sugerido['precio_base'] === '') {
+            foreach ($headers as $header) {
+                $lower = mb_strtolower(trim((string) $header));
+                if (str_contains($lower, 'plataforma') || str_contains($lower, 'precio') || str_contains($lower, 'costo') || str_contains($lower, 'bronce')) {
+                    $sugerido['precio_base'] = $header;
+                    break;
+                }
+            }
+        }
+
+        return $sugerido;
+    }
+
+    /**
+     * @param  array{sku: string, precio_base: string, descripcion?: string}  $mapping
+     * @return array<int, array{sku: string, descripcion: string|null, precio_base: float|null, advertencia: string|null}>
+     */
+    public function previsualizarMapeoContabilidad(string $rutaArchivo, array $mapping, int $limite = 5): array
+    {
+        $cabeceras = $this->leerCabeceras($rutaArchivo);
+        $filas = $cabeceras['sin_cabecera']
+            ? (new FastExcel)->withoutHeaders()->import($rutaArchivo)
+            : (new FastExcel)->import($rutaArchivo);
+
+        $columnaDescripcion = $mapping['descripcion'] ?? '';
+        $muestra = [];
+
+        foreach (collect($filas)->take($limite) as $linea) {
+            $fila = $cabeceras['sin_cabecera']
+                ? $this->filaNumericaAAsociativa($linea)
+                : $linea;
+
+            $sku = trim((string) $this->valorColumnaMapeada($fila, $mapping['sku']));
+            $precio = $this->parsePrecioNumerico($this->valorColumnaMapeada($fila, $mapping['precio_base']));
+            $descripcion = $columnaDescripcion !== ''
+                ? trim((string) $this->valorColumnaMapeada($fila, $columnaDescripcion))
+                : '';
+
+            $advertencia = null;
+            if ($sku === '') {
+                $advertencia = 'SKU vacío';
+            } elseif ($precio <= 0) {
+                $advertencia = 'Precio base inválido o vacío';
+            }
+
+            $muestra[] = [
+                'sku' => $sku,
+                'descripcion' => $descripcion !== '' ? $descripcion : null,
+                'precio_base' => $precio > 0 ? $precio : null,
+                'advertencia' => $advertencia,
+            ];
+        }
+
+        return $muestra;
+    }
+
+    /**
+     * @param  array{sku: string, precio_base: string, descripcion?: string}  $mapping
+     * @return array<string, array{nombre: string, precio: float}>
+     */
+    public function extraerDiccionarioContabilidad(string $rutaArchivo, array $mapping): array
+    {
+        $diccionario = [];
+        $cabeceras = $this->leerCabeceras($rutaArchivo);
+        $filas = $cabeceras['sin_cabecera']
+            ? (new FastExcel)->withoutHeaders()->import($rutaArchivo)
+            : (new FastExcel)->import($rutaArchivo);
+
+        $columnaDescripcion = $mapping['descripcion'] ?? '';
+
+        foreach ($filas as $linea) {
+            $fila = $cabeceras['sin_cabecera']
+                ? $this->filaNumericaAAsociativa($linea)
+                : $linea;
+
+            $sku = trim((string) $this->valorColumnaMapeada($fila, $mapping['sku']));
+            $precio = $this->parsePrecioNumerico($this->valorColumnaMapeada($fila, $mapping['precio_base']));
+
+            if ($sku === '' || $precio <= 0) {
+                continue;
+            }
+
+            $nombre = 'Producto Desconocido';
+            if ($columnaDescripcion !== '') {
+                $nombreRaw = trim((string) $this->valorColumnaMapeada($fila, $columnaDescripcion));
+                if ($nombreRaw !== '') {
+                    $nombre = $nombreRaw;
+                }
+            }
+
+            $diccionario[$sku] = [
+                'nombre' => $nombre,
+                'precio' => $precio,
+            ];
+        }
+
+        return $diccionario;
+    }
+
     public function calcular(float $base, string $tipo, $margenes, float $iva): float
     {
         $mult = 1.0;
@@ -274,7 +413,7 @@ class WooCommercePreciosService
     private function pareceFilaDeDatos(array $headers, array $fila): bool
     {
         $headersNormalizados = array_map(fn ($h) => $this->normalizarClaveColumna((string) $h), $headers);
-        $tieneCabeceraConocida = count(array_intersect($headersNormalizados, ['sku', 'folio', 'descripcion', 'plataformas', 'pg'])) > 0;
+        $tieneCabeceraConocida = count(array_intersect($headersNormalizados, ['sku', 'folio', 'descripcion', 'plataformas', 'pg', 'bronce'])) > 0;
 
         if ($tieneCabeceraConocida) {
             return false;

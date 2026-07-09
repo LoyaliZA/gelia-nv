@@ -85,6 +85,7 @@ function readStoredTheme(temaVisual = {}) {
             scale: clampFontScale(temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT),
             glass: temaVisual?.efecto_cristal !== false,
             layout: temaVisual?.layout_sidebar || 'floating_left',
+            mobileLayout: temaVisual?.layout_sidebar_mobile || 'mobile_bottom',
             sidebarMode: temaVisual?.sidebar_modo || 'collapsed',
             fixedPosition: temaVisual?.sidebar_posicion_fija || 'left',
             contentDensity: normalizeDensityMode(temaVisual?.densidad_contenido ?? CONTENT_DENSITY_DEFAULT),
@@ -105,6 +106,7 @@ function readStoredTheme(temaVisual = {}) {
         ),
         glass: savedGlass !== null ? savedGlass === 'true' : temaVisual?.efecto_cristal !== false,
         layout: localStorage.getItem('theme_layout') || temaVisual?.layout_sidebar || 'floating_left',
+        mobileLayout: localStorage.getItem('theme_layout_mobile') || temaVisual?.layout_sidebar_mobile || 'mobile_bottom',
         sidebarMode: localStorage.getItem('theme_sidebar_mode') || temaVisual?.sidebar_modo || 'collapsed',
         fixedPosition: localStorage.getItem('theme_fixed_position') || temaVisual?.sidebar_posicion_fija || 'left',
         contentDensity: normalizeDensityMode(
@@ -129,6 +131,7 @@ function captureThemeSnapshot() {
         [FONT_SCALE_STORAGE_KEY]: localStorage.getItem(FONT_SCALE_STORAGE_KEY),
         theme_glass: localStorage.getItem('theme_glass'),
         theme_layout: localStorage.getItem('theme_layout'),
+        theme_layout_mobile: localStorage.getItem('theme_layout_mobile'),
         theme_sidebar_mode: localStorage.getItem('theme_sidebar_mode'),
         theme_fixed_position: localStorage.getItem('theme_fixed_position'),
         [CONTENT_DENSITY_STORAGE_KEY]: localStorage.getItem(CONTENT_DENSITY_STORAGE_KEY),
@@ -413,6 +416,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
     const [fontScale,     setFontScale]     = useState(initialTheme.scale);
     const [glassEffect,   setGlassEffect]   = useState(initialTheme.glass);
     const [sidebarLayout, setSidebarLayout] = useState(initialTheme.layout);
+    const [mobileSidebarLayout, setMobileSidebarLayout] = useState(initialTheme.mobileLayout);
     const [sidebarMode, setSidebarMode] = useState(initialTheme.sidebarMode);
     const [fixedPosition, setFixedPosition] = useState(initialTheme.fixedPosition);
     const [contentDensity, setContentDensity] = useState(initialTheme.contentDensity);
@@ -603,6 +607,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             scale:  overrides.scale  ?? fontScale,
             glass:  overrides.glass  ?? glassEffect,
             layout: overrides.layout ?? sidebarLayout,
+            mobileLayout: overrides.mobileLayout ?? mobileSidebarLayout,
             sidebarMode: overrides.sidebarMode ?? sidebarMode,
             fixedPosition: overrides.fixedPosition ?? fixedPosition,
             contentDensity: overrides.contentDensity ?? contentDensity,
@@ -617,6 +622,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         localStorage.setItem(FONT_SCALE_STORAGE_KEY, String(clampFontScale(theme.scale)));
         localStorage.setItem('theme_glass', String(theme.glass));
         localStorage.setItem('theme_layout', theme.layout);
+        localStorage.setItem('theme_layout_mobile', theme.mobileLayout);
         localStorage.setItem('theme_sidebar_mode', theme.sidebarMode);
         localStorage.setItem('theme_fixed_position', theme.fixedPosition);
         persistContentDensityToStorage({
@@ -630,7 +636,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             contenido_padding_rem: theme.contentPaddingRem,
         });
         window.dispatchEvent(new Event('theme-changed'));
-    }, [isDarkMode, selectedColor, selectedBg, typography, fontScale, glassEffect, sidebarLayout, sidebarMode, fixedPosition, contentDensity, contentMaxRem, contentPaddingRem]);
+    }, [isDarkMode, selectedColor, selectedBg, typography, fontScale, glassEffect, sidebarLayout, mobileSidebarLayout, sidebarMode, fixedPosition, contentDensity, contentMaxRem, contentPaddingRem]);
 
     // --- SUBMIT: Blindado con JSON.stringify ---
     const submitProfile = (e) => {
@@ -644,6 +650,7 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             fuente_principal: typography,
             escala_fuente:    fontScale,
             layout_sidebar:   sidebarLayout,
+            layout_sidebar_mobile: mobileSidebarLayout,
             sidebar_modo:    sidebarMode,
             sidebar_posicion_fija: fixedPosition,
             efecto_cristal:   glassEffect,
@@ -721,6 +728,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
 
             const savedLayout = localStorage.getItem('theme_layout');
             if (savedLayout) setSidebarLayout(savedLayout);
+
+            const savedMobileLayout = localStorage.getItem('theme_layout_mobile');
+            if (savedMobileLayout) setMobileSidebarLayout(savedMobileLayout);
         };
         window.addEventListener('theme-changed', syncThemeState);
         return () => window.removeEventListener('theme-changed', syncThemeState);
@@ -815,6 +825,13 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         setSidebarLayout(layout);
         localStorage.setItem('theme_layout', layout);
         window.dispatchEvent(new CustomEvent('theme-layout-preview', { detail: { layout } }));
+        window.dispatchEvent(new Event('theme-changed'));
+    };
+
+    const handleMobileLayoutChange = (layout) => {
+        setMobileSidebarLayout(layout);
+        localStorage.setItem('theme_layout_mobile', layout);
+        window.dispatchEvent(new CustomEvent('theme-mobile-layout-preview', { detail: { layout } }));
         window.dispatchEvent(new Event('theme-changed'));
     };
 
@@ -1448,6 +1465,17 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                                 </button>
                                 <button type="button" onClick={() => handleLayoutChange('floating_right')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'floating_right'}>
                                     Flot. Der
+                                </button>
+                            </div>
+                        </SettingsRow>
+
+                        <SettingsRow icon={PanelLeft} title="Sidebar en móvil" subtitle="Barra inferior flotante o barra superior con menú lateral" stackOnMobile={true}>
+                            <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
+                                <button type="button" onClick={() => handleMobileLayoutChange('mobile_bottom')} className="gelia-segment-btn px-4 sm:px-5" data-active={mobileSidebarLayout === 'mobile_bottom'}>
+                                    Barra inferior
+                                </button>
+                                <button type="button" onClick={() => handleMobileLayoutChange('mobile_topbar')} className="gelia-segment-btn px-4 sm:px-5" data-active={mobileSidebarLayout === 'mobile_topbar'}>
+                                    Barra superior
                                 </button>
                             </div>
                         </SettingsRow>

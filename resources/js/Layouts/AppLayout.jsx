@@ -49,6 +49,9 @@ const accentColors = {
     amarillo: '#f59e0b'
 };
 
+const MOBILE_SIDEBAR_LAYOUT_BOTTOM = 'mobile_bottom';
+const MOBILE_SIDEBAR_LAYOUT_TOPBAR = 'mobile_topbar';
+
 export default function AppLayout({ children, fullScreen = false }) {
     const { props: { auth, tonos_alertas = [] }, url } = usePage();
 
@@ -324,6 +327,15 @@ export default function AppLayout({ children, fullScreen = false }) {
         return 'left';
     });
 
+    const [mobileSidebarLayout, setMobileSidebarLayout] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('theme_layout_mobile')
+                || auth?.tema_visual?.layout_sidebar_mobile
+                || MOBILE_SIDEBAR_LAYOUT_BOTTOM;
+        }
+        return MOBILE_SIDEBAR_LAYOUT_BOTTOM;
+    });
+
     const isMensajeriaFull = fullScreen || url.startsWith('/mensajeria');
 
     const [isMobileViewport, setIsMobileViewport] = useState(() => {
@@ -338,9 +350,10 @@ export default function AppLayout({ children, fullScreen = false }) {
     }, []);
 
     const mensajeriaImmersivaMovil = isMensajeriaFull && isMobileViewport;
+    const useMobileTopBar = isMobileViewport && mobileSidebarLayout === MOBILE_SIDEBAR_LAYOUT_TOPBAR;
 
     const shellSidebarLayout = isMobileViewport
-        ? 'mobile'
+        ? (useMobileTopBar ? 'mobile-topbar' : 'mobile-bottom')
         : sidebarLayout === 'fixed'
             ? 'fixed'
             : sidebarLayout === 'floating_right'
@@ -390,10 +403,19 @@ export default function AppLayout({ children, fullScreen = false }) {
                 || auth?.tema_visual?.sidebar_posicion_fija
                 || 'left';
             setFixedPosition(savedFixedPosition);
+
+            const savedMobileLayout = localStorage.getItem('theme_layout_mobile')
+                || auth?.tema_visual?.layout_sidebar_mobile
+                || MOBILE_SIDEBAR_LAYOUT_BOTTOM;
+            setMobileSidebarLayout(savedMobileLayout);
         };
 
         const onLayoutPreview = (event) => {
             if (event.detail?.layout) setSidebarLayout(event.detail.layout);
+        };
+
+        const onMobileLayoutPreview = (event) => {
+            if (event.detail?.layout) setMobileSidebarLayout(event.detail.layout);
         };
 
         const onSidebarModePreview = (event) => {
@@ -406,15 +428,17 @@ export default function AppLayout({ children, fullScreen = false }) {
 
         window.addEventListener('theme-changed', syncThemeState);
         window.addEventListener('theme-layout-preview', onLayoutPreview);
+        window.addEventListener('theme-mobile-layout-preview', onMobileLayoutPreview);
         window.addEventListener('theme-sidebar-mode-preview', onSidebarModePreview);
         window.addEventListener('theme-fixed-position-preview', onFixedPositionPreview);
         return () => {
             window.removeEventListener('theme-changed', syncThemeState);
             window.removeEventListener('theme-layout-preview', onLayoutPreview);
+            window.removeEventListener('theme-mobile-layout-preview', onMobileLayoutPreview);
             window.removeEventListener('theme-sidebar-mode-preview', onSidebarModePreview);
             window.removeEventListener('theme-fixed-position-preview', onFixedPositionPreview);
         };
-    }, [auth?.tema_visual?.layout_sidebar, auth?.tema_visual?.sidebar_modo, auth?.tema_visual?.sidebar_posicion_fija]);
+    }, [auth?.tema_visual?.layout_sidebar, auth?.tema_visual?.layout_sidebar_mobile, auth?.tema_visual?.sidebar_modo, auth?.tema_visual?.sidebar_posicion_fija]);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -529,7 +553,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                     message="Procesando_"
                 />
 
-                {isMobileViewport && (
+                {useMobileTopBar && (
                     <header className="gelia-mobile-topbar md:hidden" role="banner">
                         <button
                             type="button"
@@ -549,6 +573,23 @@ export default function AppLayout({ children, fullScreen = false }) {
                         <div className="gelia-mobile-topbar__actions">
                             <NotificationBell iconButtonClassName="gelia-mobile-topbar__icon-btn" />
                             <MensajeriaWidget iconButtonClassName="gelia-mobile-topbar__icon-btn" />
+                            <Link
+                                href={typeof route === 'function' ? route('profile.index') : '/perfil'}
+                                className="gelia-mobile-topbar__icon-btn overflow-hidden"
+                                aria-label="Perfil"
+                            >
+                                {auth?.user?.foto_perfil ? (
+                                    <img
+                                        src={`/storage/${auth.user.foto_perfil}`}
+                                        alt="Perfil"
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <span className="text-xs font-black" style={{ color: 'var(--color-primario)' }}>
+                                        {auth?.user?.name ? auth.user.name.charAt(0).toUpperCase() : 'U'}
+                                    </span>
+                                )}
+                            </Link>
                         </div>
                     </header>
                 )}
@@ -561,7 +602,8 @@ export default function AppLayout({ children, fullScreen = false }) {
                     layout={sidebarLayout}
                     sidebarMode={sidebarMode}
                     fixedPosition={fixedPosition}
-                    useMobileTopBar={isMobileViewport}
+                    useMobileTopBar={useMobileTopBar}
+                    isMobileViewport={isMobileViewport}
                 />
 
                 <div className={`gelia-app-body gelia-ui-scale ${GELIA_PREVENT_OVERFLOW_X} ${isMensajeriaFull ? 'h-dvh overflow-hidden' : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>

@@ -2,6 +2,8 @@ export const contabilidadRoutes = {
     index: () => route('contabilidad.index'),
     retiros: () => route('contabilidad.retiros'),
     dashboardData: () => route('contabilidad.dashboard_data'),
+    listaPreview: () => route('contabilidad.lista_preview'),
+    previsualizarMapeo: () => route('contabilidad.previsualizar_mapeo'),
     procesarLista: () => route('contabilidad.procesar_lista'),
     pedidosStore: () => route('contabilidad.pedidos.store'),
     pedidosUpdate: (id) => route('contabilidad.pedidos.update', id),
@@ -9,6 +11,7 @@ export const contabilidadRoutes = {
     pedidosConfirmarRetiro: (id) => route('contabilidad.pedidos.confirmar_retiro', id),
     retirosConfirmarLote: () => route('contabilidad.retiros.confirmar_lote'),
     plataformasComisiones: () => route('contabilidad.plataformas.comisiones'),
+    configuracionUpdate: () => route('contabilidad.configuracion.update'),
     exportarPdf: (params) => route('contabilidad.exportar_pdf', params),
     exportarCsv: (params) => route('contabilidad.exportar_csv', params),
 };

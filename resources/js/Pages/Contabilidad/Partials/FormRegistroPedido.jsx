@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useForm } from '@inertiajs/react';
 import { Lock, Plus, Trash2, Upload, X } from 'lucide-react';
-import axios from 'axios';
 import { THEME_INPUT, THEME_LABEL } from '../../../utils/geliaTheme';
 import {
     BADGE_SUCCESS,
@@ -10,21 +9,25 @@ import {
     BTN_PRIMARY_STYLE,
     CONTABILIDAD_INNER,
     SECTION_TITLE,
+    STORAGE_LISTA_MAPEO,
     STORAGE_LISTA_NOMBRE,
     STORAGE_LISTA_PRECIOS,
     contabilidadCard,
 } from './contabilidadStyles';
 import { contabilidadRoutes } from '../contabilidadRoutes';
+import ModalMapeoListaPrecios from './ModalMapeoListaPrecios';
 
 function productoVacio() {
     return { sku: '', nombre: '', piezas: 1, precio: '', tipo_devolucion: 'normal' };
 }
 
-export default function FormRegistroPedido({ plataformas, tiposTransaccion, puedeCrear }) {
+export default function FormRegistroPedido({ plataformas, tiposTransaccion, puedeCrear, configuracion, puedeConfigurar }) {
     const [listaCargada, setListaCargada] = useState(false);
     const [nombreLista, setNombreLista] = useState('');
+    const [columnaPrecio, setColumnaPrecio] = useState('');
     const [diccionarioSku, setDiccionarioSku] = useState({});
-    const [subiendoLista, setSubiendoLista] = useState(false);
+    const [archivoPendiente, setArchivoPendiente] = useState(null);
+    const [modalMapeoAbierto, setModalMapeoAbierto] = useState(false);
     const [errorLista, setErrorLista] = useState('');
 
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -44,12 +47,17 @@ export default function FormRegistroPedido({ plataformas, tiposTransaccion, pued
         try {
             const raw = sessionStorage.getItem(STORAGE_LISTA_PRECIOS);
             const nombre = sessionStorage.getItem(STORAGE_LISTA_NOMBRE);
+            const mapeoRaw = sessionStorage.getItem(STORAGE_LISTA_MAPEO);
             if (raw) {
                 const parsed = JSON.parse(raw);
                 if (parsed && Object.keys(parsed).length > 0) {
                     setDiccionarioSku(parsed);
                     setListaCargada(true);
                     setNombreLista(nombre || 'Lista en memoria');
+                    if (mapeoRaw) {
+                        const mapeo = JSON.parse(mapeoRaw);
+                        setColumnaPrecio(mapeo.precio_base || '');
+                    }
                 }
             }
         } catch {
@@ -57,40 +65,33 @@ export default function FormRegistroPedido({ plataformas, tiposTransaccion, pued
         }
     }, []);
 
-    const subirLista = async (file) => {
+    const abrirMapeo = (file) => {
         if (!file) return;
-        setSubiendoLista(true);
         setErrorLista('');
-        const formData = new FormData();
-        formData.append('lista_resurtido', file);
+        setArchivoPendiente(file);
+        setModalMapeoAbierto(true);
+    };
 
-        try {
-            const res = await axios.post(contabilidadRoutes.procesarLista(), formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-            if (res.data?.success) {
-                const dict = res.data.data || {};
-                setDiccionarioSku(dict);
-                setListaCargada(true);
-                setNombreLista(file.name);
-                sessionStorage.setItem(STORAGE_LISTA_PRECIOS, JSON.stringify(dict));
-                sessionStorage.setItem(STORAGE_LISTA_NOMBRE, file.name);
-            } else {
-                setErrorLista(res.data?.message || 'No se pudo procesar el archivo.');
-            }
-        } catch (e) {
-            setErrorLista(e.response?.data?.message || 'Error al subir la lista de precios.');
-        } finally {
-            setSubiendoLista(false);
-        }
+    const confirmarLista = ({ diccionario, mapping, nombreArchivo }) => {
+        setDiccionarioSku(diccionario);
+        setListaCargada(true);
+        setNombreLista(nombreArchivo);
+        setColumnaPrecio(mapping.precio_base || '');
+        sessionStorage.setItem(STORAGE_LISTA_PRECIOS, JSON.stringify(diccionario));
+        sessionStorage.setItem(STORAGE_LISTA_NOMBRE, nombreArchivo);
+        sessionStorage.setItem(STORAGE_LISTA_MAPEO, JSON.stringify(mapping));
+        setModalMapeoAbierto(false);
+        setArchivoPendiente(null);
     };
 
     const limpiarLista = () => {
         sessionStorage.removeItem(STORAGE_LISTA_PRECIOS);
         sessionStorage.removeItem(STORAGE_LISTA_NOMBRE);
+        sessionStorage.removeItem(STORAGE_LISTA_MAPEO);
         setListaCargada(false);
         setDiccionarioSku({});
         setNombreLista('');
+        setColumnaPrecio('');
     };
 
     const actualizarProducto = (index, campo, valor) => {
@@ -139,19 +140,22 @@ export default function FormRegistroPedido({ plataformas, tiposTransaccion, pued
                             1. Lista de precios del día
                         </h2>
                         <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted mt-2">
-                            Sube el Excel de resurtido para autocompletar SKU y precios al registrar pedidos.
+                            Sube el Excel de resurtido y confirma el mapeo de columnas antes de registrar pedidos.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                         <label className={BTN_ACCION.upload}>
                             <Upload className="w-4 h-4 shrink-0" />
-                            {subiendoLista ? 'Procesando...' : 'Seleccionar Excel'}
+                            Seleccionar Excel
                             <input
                                 type="file"
                                 accept=".xlsx,.csv,.xls"
                                 className="hidden"
-                                disabled={subiendoLista}
-                                onChange={(e) => subirLista(e.target.files?.[0])}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = '';
+                                    abrirMapeo(file);
+                                }}
                             />
                         </label>
                         {listaCargada && (
@@ -167,7 +171,9 @@ export default function FormRegistroPedido({ plataformas, tiposTransaccion, pued
                             </>
                         )}
                         <span className="text-[10px] font-bold theme-text-muted italic uppercase tracking-widest">
-                            {listaCargada ? nombreLista : 'Sin archivo cargado'}
+                            {listaCargada
+                                ? `${nombreLista}${columnaPrecio ? ` · ${columnaPrecio}` : ''}`
+                                : 'Sin archivo cargado'}
                         </span>
                     </div>
                 </div>
@@ -180,7 +186,7 @@ export default function FormRegistroPedido({ plataformas, tiposTransaccion, pued
                         <Lock className="w-10 h-10 text-[var(--color-primario)]" />
                         <p className="font-black italic uppercase theme-text-main text-sm">Carga la lista primero</p>
                         <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted text-center px-6">
-                            El formulario se habilita tras subir el Excel de precios.
+                            El formulario se habilita tras mapear y confirmar el Excel de precios.
                         </p>
                     </div>
                 )}
@@ -404,6 +410,19 @@ export default function FormRegistroPedido({ plataformas, tiposTransaccion, pued
                     </div>
                 </form>
             </div>
+
+            {modalMapeoAbierto && archivoPendiente && (
+                <ModalMapeoListaPrecios
+                    archivo={archivoPendiente}
+                    configuracion={configuracion}
+                    puedeConfigurar={puedeConfigurar}
+                    onCerrar={() => {
+                        setModalMapeoAbierto(false);
+                        setArchivoPendiente(null);
+                    }}
+                    onConfirmar={confirmarLista}
+                />
+            )}
         </div>
     );
 }

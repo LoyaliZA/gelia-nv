@@ -59,6 +59,7 @@ export default function Index({
     estatus_pago,
     datos_grafica,
     filtros,
+    configuracion,
 }) {
     const { flash } = usePage().props;
     const [modalAnalisis, setModalAnalisis] = useState(false);
@@ -194,6 +195,8 @@ export default function Index({
                     plataformas={plataformas}
                     tiposTransaccion={tipos_transaccion}
                     puedeCrear={puedeCrear}
+                    configuracion={configuracion}
+                    puedeConfigurar={puedeConfig}
                 />
 
                 <HistorialPedidos
@@ -237,6 +240,7 @@ export default function Index({
             <ModalConfigComisiones
                 abierto={modalConfig}
                 plataformas={plataformas}
+                configuracion={configuracion}
                 onCerrar={() => setModalConfig(false)}
             />
         </AppLayout>

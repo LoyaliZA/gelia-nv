@@ -175,18 +175,22 @@ body {
     flex-shrink: 0;
 }
 
-/* Móvil: contenido bajo topbar; sidebar flotante inferior oculto */
+/* Móvil: barra inferior flotante (default) o topbar + drawer lateral */
 @media (max-width: 767px) {
-    .gelia-app-shell[data-sidebar-layout='mobile'] .gelia-app-main--default {
+    .gelia-app-shell[data-sidebar-layout='mobile-bottom'] .gelia-app-main--default {
+        padding-bottom: max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem));
+    }
+
+    .gelia-app-shell[data-sidebar-layout='mobile-topbar'] .gelia-app-main--default {
         padding-top: calc(var(--gelia-mobile-topbar-height) + 0.75rem);
         padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
     }
 
-    .gelia-app-shell[data-sidebar-layout='mobile'] .gelia-sidebar-widget--mobile-hidden {
+    .gelia-app-shell[data-sidebar-layout='mobile-topbar'] .gelia-sidebar-widget--mobile-hidden {
         display: none !important;
     }
 
-    .gelia-app-shell[data-sidebar-layout='mobile'] .sidebar-mount.gelia-sidebar-mount--mobile {
+    .gelia-app-shell[data-sidebar-layout='mobile-topbar'] .sidebar-mount.gelia-sidebar-mount--mobile {
         top: var(--gelia-mobile-topbar-height);
         bottom: 0;
         left: 0;
@@ -206,7 +210,7 @@ body {
         padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    .gelia-app-shell[data-page-fullscreen='true'][data-sidebar-layout='mobile'] .gelia-mensajeria-main--immersive {
+    .gelia-app-shell[data-page-fullscreen='true'][data-sidebar-layout='mobile-topbar'] .gelia-mensajeria-main--immersive {
         padding-top: var(--gelia-mobile-topbar-height);
         box-sizing: border-box;
     }

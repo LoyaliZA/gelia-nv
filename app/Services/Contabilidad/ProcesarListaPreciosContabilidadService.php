@@ -2,45 +2,42 @@
 
 namespace App\Services\Contabilidad;
 
-use Illuminate\Http\UploadedFile;
+use App\Services\WooCommerce\WooCommercePreciosService;
 use Illuminate\Support\Facades\Log;
-use Rap2hpoutre\FastExcel\FastExcel;
 
 class ProcesarListaPreciosContabilidadService
 {
+    public function __construct(
+        private WooCommercePreciosService $preciosService,
+    ) {}
+
     /**
+     * @param  array{sku: string, precio_base: string, descripcion?: string}  $mapping
      * @return array<string, array{nombre: string, precio: float}>
      */
-    public function ejecutar(UploadedFile $archivo): array
+    public function ejecutar(string $rutaArchivo, array $mapping): array
     {
-        $nombreTemp = 'temp_conta_'.uniqid().'.'.$archivo->getClientOriginalExtension();
-        $rutaCompleta = sys_get_temp_dir().'/'.$nombreTemp;
-        $archivo->move(sys_get_temp_dir(), $nombreTemp);
+        if (empty($mapping['sku']) || empty($mapping['precio_base'])) {
+            throw new \RuntimeException('Debes mapear SKU y columna de precio.');
+        }
 
-        $diccionario = [];
+        if (! file_exists($rutaArchivo)) {
+            throw new \RuntimeException('No se encontró el archivo de lista de precios.');
+        }
 
         try {
-            (new FastExcel)->import($rutaCompleta, function ($linea) use (&$diccionario) {
-                $sku = trim((string) ($linea['SKU'] ?? ''));
-                if ($sku === '') {
-                    return;
-                }
+            $diccionario = $this->preciosService->extraerDiccionarioContabilidad($rutaArchivo, $mapping);
 
-                $precioBase = $linea['Plataformas'] ?? $linea['Lista3'] ?? $linea['PG'] ?? 0;
-                $diccionario[$sku] = [
-                    'nombre' => $linea['Descripcion'] ?? 'Producto Desconocido',
-                    'precio' => (float) $precioBase,
-                ];
-            });
+            if (empty($diccionario)) {
+                throw new \RuntimeException('No se encontraron productos válidos con el mapeo seleccionado.');
+            }
 
             return $diccionario;
+        } catch (\RuntimeException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             Log::error('GELIA (Conta) - Error procesando Excel: '.$e->getMessage());
             throw new \RuntimeException('No se pudo leer el archivo de lista de precios.');
-        } finally {
-            if (file_exists($rutaCompleta)) {
-                unlink($rutaCompleta);
-            }
         }
     }
 }

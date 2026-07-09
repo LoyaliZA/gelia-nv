@@ -220,6 +220,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/dashboard-data', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'dashboardData'])->name('dashboard_data');
         Route::get('/exportar-pdf', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'exportarPdf'])->name('exportar_pdf');
         Route::get('/exportar-csv', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'exportarCsv'])->name('exportar_csv');
+        Route::post('/lista-preview', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'listaPreview'])
+            ->middleware('can:contabilidad.importar')
+            ->name('lista_preview');
+        Route::post('/previsualizar-mapeo', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'previsualizarMapeo'])
+            ->middleware('can:contabilidad.importar')
+            ->name('previsualizar_mapeo');
         Route::post('/procesar-lista', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'procesarLista'])
             ->middleware('can:contabilidad.importar')
             ->name('procesar_lista');
@@ -241,6 +247,9 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/plataformas/comisiones', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'actualizarComisiones'])
             ->middleware('can:contabilidad.plataformas.configurar')
             ->name('plataformas.comisiones');
+        Route::put('/configuracion', [\App\Http\Controllers\Contabilidad\ContabilidadController::class, 'actualizarConfiguracion'])
+            ->middleware('can:contabilidad.plataformas.configurar')
+            ->name('configuracion.update');
     });
 
     Route::middleware(['can:solicitudes.ver_listado'])->group(function () {

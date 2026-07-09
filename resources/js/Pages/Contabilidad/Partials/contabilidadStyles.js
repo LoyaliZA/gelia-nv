@@ -69,3 +69,4 @@ export const KPI_BORDES = {
 
 export const STORAGE_LISTA_PRECIOS = 'contabilidad_lista_precios_v1';
 export const STORAGE_LISTA_NOMBRE = 'contabilidad_lista_nombre_v1';
+export const STORAGE_LISTA_MAPEO = 'contabilidad_lista_mapeo_v1';
