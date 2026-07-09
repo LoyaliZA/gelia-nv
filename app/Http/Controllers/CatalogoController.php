@@ -25,6 +25,13 @@ use App\Services\Catalogos\ImportarCatalogoAlmacenService;
 use App\Services\Catalogos\PlantillaImportacionCatalogoService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Almacenes\NormalizarTextoImportacionService;
+use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\CatalogoAlmacenSalida;
+use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
+use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
+use App\Models\ControlPedidos\CatalogoTipoGuiaPedido;
+use App\Models\ControlPedidos\CatalogoEnvioTienda;
+use App\Models\ControlPedidos\PedidoBma;
 
 class CatalogoController extends Controller
 {
@@ -473,5 +480,249 @@ class CatalogoController extends Controller
         return back()
             ->with('success', $mensaje)
             ->with('reporte_importacion_almacenes', $stats);
+    }
+
+    // --- CONTROL PEDIDOS: ESTATUS ---
+    public function storeEstatusPedido(Request $request)
+    {
+        CatalogoEstatusPedido::create($request->validate([
+            'codigo_interno' => 'required|string|max:50|unique:catalogo_estatus_pedidos,codigo_interno',
+            'nombre_visual' => 'required|string|max:255',
+            'color_hex' => 'required|string|max:7',
+            'fase_ciclo' => 'required|string|max:50',
+            'orden' => 'nullable|integer|min:0',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Estatus de pedido registrado.');
+    }
+
+    public function updateEstatusPedido(Request $request, $id)
+    {
+        $estatus = CatalogoEstatusPedido::findOrFail($id);
+        $enUso = PedidoBma::where('catalogo_estatus_pedido_id', $id)->exists();
+
+        $reglas = [
+            'nombre_visual' => 'required|string|max:255',
+            'color_hex' => 'required|string|max:7',
+            'fase_ciclo' => 'required|string|max:50',
+            'orden' => 'nullable|integer|min:0',
+            'activo' => 'boolean',
+        ];
+
+        if (!$enUso) {
+            $reglas['codigo_interno'] = 'required|string|max:50|unique:catalogo_estatus_pedidos,codigo_interno,' . $id;
+        }
+
+        $estatus->update($request->validate($reglas));
+
+        return back()->with('success', 'Estatus de pedido actualizado.');
+    }
+
+    public function destroyEstatusPedido($id)
+    {
+        $estatus = CatalogoEstatusPedido::findOrFail($id);
+        if (PedidoBma::where('catalogo_estatus_pedido_id', $id)->exists()) {
+            return back()->with('error', 'No se puede eliminar un estatus en uso.');
+        }
+        $estatus->delete();
+
+        return back()->with('success', 'Estatus de pedido eliminado.');
+    }
+
+    // --- CONTROL PEDIDOS: ALMACENES SALIDA ---
+    public function storeAlmacenSalida(Request $request)
+    {
+        CatalogoAlmacenSalida::create($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_almacenes_salida,nombre',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Almacén de salida registrado.');
+    }
+
+    public function updateAlmacenSalida(Request $request, $id)
+    {
+        CatalogoAlmacenSalida::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_almacenes_salida,nombre,' . $id,
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Almacén de salida actualizado.');
+    }
+
+    public function destroyAlmacenSalida($id)
+    {
+        if (PedidoBma::where('catalogo_almacen_salida_id', $id)->exists()) {
+            return back()->with('error', 'No se puede eliminar un almacén en uso.');
+        }
+        CatalogoAlmacenSalida::findOrFail($id)->delete();
+
+        return back()->with('success', 'Almacén de salida eliminado.');
+    }
+
+    // --- CONTROL PEDIDOS: PAQUETERÍAS ---
+    public function storePaqueteriaPedido(Request $request)
+    {
+        CatalogoPaqueteriaPedido::create($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre',
+            'costo_seguro_default' => 'nullable|numeric|min:0',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Paquetería registrada.');
+    }
+
+    public function updatePaqueteriaPedido(Request $request, $id)
+    {
+        CatalogoPaqueteriaPedido::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre,' . $id,
+            'costo_seguro_default' => 'nullable|numeric|min:0',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Paquetería actualizada.');
+    }
+
+    public function destroyPaqueteriaPedido($id)
+    {
+        if (PedidoBma::where('catalogo_paqueteria_id', $id)->exists()) {
+            return back()->with('error', 'No se puede eliminar una paquetería en uso.');
+        }
+        CatalogoPaqueteriaPedido::findOrFail($id)->delete();
+
+        return back()->with('success', 'Paquetería eliminada.');
+    }
+
+    // --- CONTROL PEDIDOS: TIPOS DE CAJA ---
+    public function storeTipoCajaPedido(Request $request)
+    {
+        CatalogoTipoCajaPedido::create($request->validate([
+            'nombre' => 'required|string|max:255',
+            'peso_volumetrico' => 'nullable|numeric|min:0',
+            'medidas' => 'nullable|string|max:255',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Tipo de caja registrado.');
+    }
+
+    public function updateTipoCajaPedido(Request $request, $id)
+    {
+        CatalogoTipoCajaPedido::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255',
+            'peso_volumetrico' => 'nullable|numeric|min:0',
+            'medidas' => 'nullable|string|max:255',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Tipo de caja actualizado.');
+    }
+
+    public function destroyTipoCajaPedido($id)
+    {
+        if (PedidoBma::where('catalogo_tipo_caja_id', $id)->exists()) {
+            return back()->with('error', 'No se puede eliminar un tipo de caja en uso.');
+        }
+        CatalogoTipoCajaPedido::findOrFail($id)->delete();
+
+        return back()->with('success', 'Tipo de caja eliminado.');
+    }
+
+    // --- CONTROL PEDIDOS: TIPOS DE GUÍA ---
+    public function storeTipoGuiaPedido(Request $request)
+    {
+        CatalogoTipoGuiaPedido::create($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_tipos_guia_pedido,nombre',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Tipo de guía registrado.');
+    }
+
+    public function updateTipoGuiaPedido(Request $request, $id)
+    {
+        CatalogoTipoGuiaPedido::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_tipos_guia_pedido,nombre,' . $id,
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Tipo de guía actualizado.');
+    }
+
+    public function destroyTipoGuiaPedido($id)
+    {
+        if (PedidoBma::where('catalogo_tipo_guia_id', $id)->exists()) {
+            return back()->with('error', 'No se puede eliminar un tipo de guía en uso.');
+        }
+        CatalogoTipoGuiaPedido::findOrFail($id)->delete();
+
+        return back()->with('success', 'Tipo de guía eliminado.');
+    }
+
+    // --- CONTROL PEDIDOS: ZONAS ---
+    public function storeZonaPedido(Request $request)
+    {
+        CatalogoZonaPedido::create($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_zonas_pedido,nombre',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Zona de pedido registrada.');
+    }
+
+    public function updateZonaPedido(Request $request, $id)
+    {
+        CatalogoZonaPedido::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_zonas_pedido,nombre,' . $id,
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Zona de pedido actualizada.');
+    }
+
+    public function destroyZonaPedido($id)
+    {
+        if (PedidoBma::where('catalogo_zona_id', $id)->exists()) {
+            return back()->with('error', 'No se puede eliminar una zona en uso.');
+        }
+        CatalogoZonaPedido::findOrFail($id)->delete();
+
+        return back()->with('success', 'Zona de pedido eliminada.');
+    }
+
+    // --- CONTROL PEDIDOS: ENVÍOS / TIENDA ---
+    public function storeEnvioTienda(Request $request)
+    {
+        CatalogoEnvioTienda::create($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_envios_tienda,nombre',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Envío / tienda registrado.');
+    }
+
+    public function updateEnvioTienda(Request $request, $id)
+    {
+        CatalogoEnvioTienda::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_envios_tienda,nombre,' . $id,
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Envío / tienda actualizado.');
+    }
+
+    public function destroyEnvioTienda($id)
+    {
+        $item = CatalogoEnvioTienda::findOrFail($id);
+        if ($item->es_otro) {
+            return back()->with('error', 'No se puede eliminar la opción «Otro».');
+        }
+        if (PedidoBma::where('catalogo_envio_tienda_id', $id)->exists()) {
+            return back()->with('error', 'No se puede eliminar un envío / tienda en uso.');
+        }
+        $item->delete();
+
+        return back()->with('success', 'Envío / tienda eliminado.');
     }
 }

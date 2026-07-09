@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useForm } from '@inertiajs/react';
+import { useForm, Link } from '@inertiajs/react';
 import {
     Settings2, X, Key, Map,
     DollarSign, Route, CheckCircle2, Layers
@@ -68,6 +68,26 @@ export default function ModalConfiguracionLogistica({ configuracion, onClose }) 
                     <h2 className="text-xl md:text-2xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">
                         Parámetros del Motor_
                     </h2>
+                </div>
+
+                <div className="mb-6 p-4 theme-element border theme-border rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-sm font-bold theme-text-main flex items-center gap-2">
+                            <Layers className="w-4 h-4 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                            Editor de zonas (GeoJSON)
+                        </p>
+                        <p className="text-xs theme-text-muted mt-1">
+                            Crear, dibujar e importar polígonos está en el Mapa Logístico.
+                        </p>
+                    </div>
+                    <Link
+                        href={route('admin.mapa_logistico.index')}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] transition-transform outline-none shrink-0"
+                        style={{ backgroundColor: 'var(--color-primario)' }}
+                    >
+                        <Map className="w-4 h-4" />
+                        Abrir Mapa Logístico
+                    </Link>
                 </div>
 
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 relative z-10">

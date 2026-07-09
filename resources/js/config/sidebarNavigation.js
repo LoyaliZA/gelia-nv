@@ -9,6 +9,7 @@ import {
     Truck,
     ClipboardList,
     Map,
+    Layers,
     CreditCard,
     Receipt,
     Settings,
@@ -29,6 +30,7 @@ import {
     Warehouse,
     Boxes,
     DollarSign,
+    ClipboardCheck,
     Link2,
 } from 'lucide-react';
 
@@ -79,6 +81,37 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
         },
     ].filter(Boolean);
 
+    const gestionPedidosChildren = [
+        can('control_pedidos.ver_listado') && {
+            type: 'link',
+            id: 'control_pedidos_registrar',
+            label: 'Registrar Pedidos',
+            icon: Package,
+            href: () => routeHref('control_pedidos.index', '/control-pedidos'),
+            active: (url) => url.startsWith('/control-pedidos'),
+        },
+        can('control_pedidos.ver_listado') && {
+            type: 'link',
+            id: 'control_pedidos_auditar',
+            label: 'Auditar Pedidos',
+            icon: ClipboardCheck,
+            disabled: true,
+            badge: 'Próximamente',
+            href: () => '#',
+            active: () => false,
+        },
+        can('control_pedidos.ver_listado') && {
+            type: 'link',
+            id: 'control_pedidos_cedis',
+            label: 'Control Pedidos',
+            icon: Warehouse,
+            disabled: true,
+            badge: 'Próximamente',
+            href: () => '#',
+            active: () => false,
+        },
+    ].filter(Boolean);
+
     const finanzasChildren = [
         can('contabilidad.ver') && {
             type: 'link',
@@ -124,7 +157,22 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             label: 'Cotizar Entregas',
             icon: Map,
             href: () => routeHref('entregas.index', '/entregas/cotizador'),
-            active: (url) => url.startsWith('/entregas'),
+            active: (url) => url.startsWith('/entregas') && !url.startsWith('/admin/mapa-logistico'),
+        },
+        can('entregas.configurar_zonas') && {
+            type: 'link',
+            id: 'mapa_logistico',
+            label: 'Mapa Logístico',
+            icon: Layers,
+            href: () => routeHref('admin.mapa_logistico.index', '/admin/mapa-logistico'),
+            active: (url) => url.startsWith('/admin/mapa-logistico'),
+        },
+        gestionPedidosChildren.length > 0 && {
+            type: 'group',
+            id: 'gestion_pedidos',
+            label: 'Gestión de pedidos',
+            icon: Package,
+            children: gestionPedidosChildren,
         },
     ].filter(Boolean);
 

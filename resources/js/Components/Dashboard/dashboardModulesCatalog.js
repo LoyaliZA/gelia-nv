@@ -96,6 +96,17 @@ export const DASHBOARD_MODULE_CARDS = [
         iconClass: 'text-orange-500',
     },
     {
+        id: 'card_control_pedidos',
+        titulo: 'Registrar pedidos',
+        subtitulo: 'Captura y seguimiento de pedidos BMA.',
+        permiso: 'control_pedidos.ver_listado',
+        href: () => route('control_pedidos.index'),
+        icon: Package,
+        borderClass: 'border-blue-500/20',
+        iconWrapClass: 'bg-blue-500/10 border-blue-500/20',
+        iconClass: 'text-blue-500',
+    },
+    {
         id: 'card_almacenes_productos',
         titulo: 'Productos',
         subtitulo: 'Catálogo maestro de productos.',

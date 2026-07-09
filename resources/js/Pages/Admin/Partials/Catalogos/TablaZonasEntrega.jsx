@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useForm, router } from '@inertiajs/react';
-import { Map, Edit2, Trash2, Check, X, DollarSign, Activity } from 'lucide-react';
+import { useForm, router, Link } from '@inertiajs/react';
+import { Map, Edit2, Trash2, Check, X, DollarSign, Activity, Layers } from 'lucide-react';
 
 export default function TablaZonasEntrega({ datos = [], auth }) {
     // ----------------------------------------------------------------------
@@ -63,12 +63,29 @@ export default function TablaZonasEntrega({ datos = [], auth }) {
     // ----------------------------------------------------------------------
     return (
         <div className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-                <Map className="w-5 h-5 theme-text-muted" />
-                <h2 className="text-lg font-black uppercase tracking-widest theme-text-main">
-                    Tarifas por Zona Logística
-                </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                <div className="flex items-center gap-3">
+                    <Map className="w-5 h-5 theme-text-muted" />
+                    <h2 className="text-lg font-black uppercase tracking-widest theme-text-main">
+                        Tarifas por Zona Logística
+                    </h2>
+                </div>
+                {puedeEditar && (
+                    <Link
+                        href={route('admin.mapa_logistico.index')}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] transition-transform outline-none"
+                        style={{ backgroundColor: 'var(--color-primario)' }}
+                    >
+                        <Layers className="w-4 h-4" />
+                        Mapa Logístico (GeoJSON)
+                    </Link>
+                )}
             </div>
+            {puedeEditar && (
+                <p className="text-xs theme-text-muted font-medium mb-4 ml-1">
+                    Aquí solo se editan tarifas y estado. Para crear zonas, dibujar polígonos o importar GeoJSON usa el Mapa Logístico.
+                </p>
+            )}
 
             <div className="overflow-x-auto rounded-2xl border theme-border">
                 <table className="w-full text-left border-collapse">

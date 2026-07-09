@@ -16,6 +16,7 @@ use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Almacenes\{ProductoController as AlmacenProductoController, InventarioController as AlmacenInventarioController, CostoController as AlmacenCostoController, ImportacionAlmacenController};
 use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
+use App\Http\Controllers\ControlPedidos\PedidoBmaController;
 use App\Http\Controllers\Mensajeria\{ConversacionController,MensajeController,AdjuntoMensajeController};
 use App\Http\Controllers\WebPushController;
 use App\Http\Controllers\GestionInterna\DirectorioController;
@@ -351,6 +352,27 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['can:cancelaciones_cotizaciones.eliminar'])->prefix('cancelaciones-cotizaciones')->name('cancelaciones_cotizaciones.')->group(function () {
         Route::delete('/{solicitud}', [SolicitudOperativaController::class, 'destroy'])->name('destroy');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: CONTROL DE PEDIDOS (PedidosBMA)
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:control_pedidos.ver_listado'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::get('/', [PedidoBmaController::class, 'index'])->name('index');
+        Route::get('/exportar', [PedidoBmaController::class, 'exportar'])->middleware('can:control_pedidos.exportar')->name('exportar');
+    });
+
+    Route::middleware(['can:control_pedidos.crear'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::post('/', [PedidoBmaController::class, 'store'])->name('store');
+        Route::put('/{pedidoBma}/enviar', [PedidoBmaController::class, 'enviar'])->name('enviar');
+    });
+
+    Route::middleware(['can:control_pedidos.editar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::put('/{pedidoBma}', [PedidoBmaController::class, 'update'])->name('update');
+    });
+
+    Route::middleware(['can:control_pedidos.eliminar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::delete('/{pedidoBma}', [PedidoBmaController::class, 'destroy'])->name('destroy');
     });
 
     // --- Nuevo Módulo: Interfaz de Entregas ---
@@ -820,6 +842,37 @@ Route::middleware(['auth'])->group(function () {
                 Route::put('/bancos/{id}', [CatalogoController::class, 'updateBanco'])->name('bancos.update');
                 Route::delete('/bancos/{id}', [CatalogoController::class, 'destroyBanco'])->name('bancos.destroy');
 
+                // Control Pedidos — catálogos
+                Route::middleware(['can:control_pedidos.configurar_catalogos'])->group(function () {
+                    Route::post('/estatus-pedidos', [CatalogoController::class, 'storeEstatusPedido'])->name('estatus_pedidos.store');
+                    Route::put('/estatus-pedidos/{id}', [CatalogoController::class, 'updateEstatusPedido'])->name('estatus_pedidos.update');
+                    Route::delete('/estatus-pedidos/{id}', [CatalogoController::class, 'destroyEstatusPedido'])->name('estatus_pedidos.destroy');
+
+                    Route::post('/almacenes-salida', [CatalogoController::class, 'storeAlmacenSalida'])->name('almacenes_salida.store');
+                    Route::put('/almacenes-salida/{id}', [CatalogoController::class, 'updateAlmacenSalida'])->name('almacenes_salida.update');
+                    Route::delete('/almacenes-salida/{id}', [CatalogoController::class, 'destroyAlmacenSalida'])->name('almacenes_salida.destroy');
+
+                    Route::post('/paqueterias-pedido', [CatalogoController::class, 'storePaqueteriaPedido'])->name('paqueterias_pedido.store');
+                    Route::put('/paqueterias-pedido/{id}', [CatalogoController::class, 'updatePaqueteriaPedido'])->name('paqueterias_pedido.update');
+                    Route::delete('/paqueterias-pedido/{id}', [CatalogoController::class, 'destroyPaqueteriaPedido'])->name('paqueterias_pedido.destroy');
+
+                    Route::post('/tipos-caja-pedido', [CatalogoController::class, 'storeTipoCajaPedido'])->name('tipos_caja_pedido.store');
+                    Route::put('/tipos-caja-pedido/{id}', [CatalogoController::class, 'updateTipoCajaPedido'])->name('tipos_caja_pedido.update');
+                    Route::delete('/tipos-caja-pedido/{id}', [CatalogoController::class, 'destroyTipoCajaPedido'])->name('tipos_caja_pedido.destroy');
+
+                    Route::post('/tipos-guia-pedido', [CatalogoController::class, 'storeTipoGuiaPedido'])->name('tipos_guia_pedido.store');
+                    Route::put('/tipos-guia-pedido/{id}', [CatalogoController::class, 'updateTipoGuiaPedido'])->name('tipos_guia_pedido.update');
+                    Route::delete('/tipos-guia-pedido/{id}', [CatalogoController::class, 'destroyTipoGuiaPedido'])->name('tipos_guia_pedido.destroy');
+
+                    Route::post('/zonas-pedido', [CatalogoController::class, 'storeZonaPedido'])->name('zonas_pedido.store');
+                    Route::put('/zonas-pedido/{id}', [CatalogoController::class, 'updateZonaPedido'])->name('zonas_pedido.update');
+                    Route::delete('/zonas-pedido/{id}', [CatalogoController::class, 'destroyZonaPedido'])->name('zonas_pedido.destroy');
+
+                    Route::post('/envios-tienda', [CatalogoController::class, 'storeEnvioTienda'])->name('envios_tienda.store');
+                    Route::put('/envios-tienda/{id}', [CatalogoController::class, 'updateEnvioTienda'])->name('envios_tienda.update');
+                    Route::delete('/envios-tienda/{id}', [CatalogoController::class, 'destroyEnvioTienda'])->name('envios_tienda.destroy');
+                });
+
                 // Sucursales
                 Route::get('/sucursales/plantilla-importacion', [CatalogoController::class, 'descargarPlantillaImportacion'])->defaults('tipo', 'sucursales')->name('sucursales.plantilla_importacion');
                 Route::post('/sucursales/importar', [CatalogoController::class, 'importarCatalogoAlmacen'])->defaults('tipo', 'sucursales')->name('sucursales.importar');
@@ -949,6 +1002,7 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('api')->name('api.')->group(function () {
         Route::get('/clientes', [ClienteApiController::class, 'index'])->name('clientes.index');
+        Route::get('/clientes/id/{id}/direccion-envio', [ClienteApiController::class, 'direccionEnvio'])->name('clientes.direccion_envio');
         Route::get('/clientes/{numero}', [ClienteApiController::class, 'show'])->name('clientes.show');
         Route::get('/activos/usuarios', [ActivoController::class, 'buscarUsuarios'])->name('activos.usuarios');
         Route::get('/activos/buscar', [ActivoController::class, 'buscarActivos'])->name('activos.buscar');

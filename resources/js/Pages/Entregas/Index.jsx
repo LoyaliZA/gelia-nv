@@ -1,10 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import axios from 'axios';
 import { useGoogleMapsLoader } from '@/hooks/useGoogleMapsLoader';
 import {
     MapPin, Navigation, CheckCircle2,
-    AlertTriangle, Settings2, Clock, CheckSquare
+    AlertTriangle, Settings2, Clock, CheckSquare, Map
 } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import MapaGoogle from '@/Components/Entregas/MapaGoogle';
@@ -132,14 +132,22 @@ export default function Index({ auth, configuracion, googleApiKey, zonas, zonas_
                         </h1>
                     </div>
                     {canConfigurar && (
-                        <button
-                            type="button"
-                            onClick={() => setModalConfigAbierto(true)}
-                            className="flex items-center justify-center gap-2 px-8 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-xl hover:scale-105 transition-all w-full md:w-auto outline-none"
-                            style={{ backgroundColor: 'var(--color-primario)' }}
-                        >
-                            <Settings2 className="w-5 h-5" /> Configurar Zonas
-                        </button>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                            <Link
+                                href={route('admin.mapa_logistico.index')}
+                                className="flex items-center justify-center gap-2 px-8 py-4 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-xl hover:scale-105 transition-all outline-none"
+                                style={{ backgroundColor: 'var(--color-primario)' }}
+                            >
+                                <Map className="w-5 h-5" /> Configurar Zonas
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={() => setModalConfigAbierto(true)}
+                                className="flex items-center justify-center gap-2 px-6 py-4 theme-element border theme-border rounded-2xl font-black uppercase tracking-widest text-[11px] theme-text-main hover:scale-105 transition-all outline-none"
+                            >
+                                <Settings2 className="w-5 h-5" /> Parámetros
+                            </button>
+                        </div>
                     )}
                 </header>
 

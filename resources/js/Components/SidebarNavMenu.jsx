@@ -4,8 +4,14 @@ import { buildSidebarNavigation, collectOpenGroupIdsForUrl } from '../config/sid
 import SidebarNavLeafLink from './SidebarNavLeafLink';
 
 /** Sangría: raíz (caja), nivel 2, nivel 3 */
-const PADDING_LINK = { 1: 'pl-10', 2: 'pl-14' };
-const PADDING_SUBGROUP = 'pl-10';
+const PADDING_LINK = { 1: 'pl-10', 2: 'pl-14', 3: 'pl-16' };
+const PADDING_SUBGROUP = { 1: 'pl-10', 2: 'pl-14' };
+
+function resolveHref(item) {
+    if (typeof item?.href === 'function') return item.href();
+    if (typeof item?.href === 'string') return item.href;
+    return '#';
+}
 
 function groupHasActiveDescendant(node, url) {
     if (node.type === 'link') return node.active?.(url) ?? false;
@@ -72,7 +78,7 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) 
                                 {group.children.map((child) =>
                                     child.type === 'link'
                                         ? renderChildLink(child, 1)
-                                        : renderSubGroup(child)
+                                        : renderSubGroup(child, 1)
                                 )}
                             </div>
                         )}
@@ -82,10 +88,12 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) 
         );
     };
 
-    /** Nivel 2: sub-grupos (Comercial, Herramientas…) — texto plano, sin caja ni chevron */
-    const renderSubGroup = (group) => {
+    /** Sub-grupos anidados (Logística → Gestión de pedidos, etc.) */
+    const renderSubGroup = (group, depth = 1) => {
         const isOpen = openGroups[group.id] ?? groupHasActiveDescendant(group, url);
         const Icon = group.icon;
+        const pad = PADDING_SUBGROUP[depth] ?? 'pl-14';
+        const childLinkDepth = depth + 1;
 
         return (
             <div key={group.id} className="flex flex-col gap-0.5 min-w-0">
@@ -93,7 +101,7 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) 
                     type="button"
                     onClick={() => toggleGroup(group.id)}
                     aria-expanded={isOpen}
-                    className={`gelia-sidebar-nav-subgroup-btn flex items-center w-full py-2 pr-3 ${PADDING_SUBGROUP} rounded-lg transition-colors outline-none border-0 bg-transparent`}
+                    className={`gelia-sidebar-nav-subgroup-btn flex items-center w-full py-2 pr-3 ${pad} rounded-lg transition-colors outline-none border-0 bg-transparent`}
                 >
                     <Icon className="w-3.5 h-3.5 mr-2.5 shrink-0 gelia-sidebar-nav-child-icon" aria-hidden />
                     <span className="gelia-sidebar-nav-subgroup-label truncate text-left flex-1">
@@ -105,7 +113,11 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) 
                     <div className="sidebar-collapsible-inner">
                         {group.children?.length > 0 && (
                             <div className="flex flex-col gap-0.5 min-w-0">
-                                {group.children.map((child) => renderChildLink(child, 2))}
+                                {group.children.map((child) =>
+                                    child.type === 'group'
+                                        ? renderSubGroup(child, depth + 1)
+                                        : renderChildLink(child, childLinkDepth)
+                                )}
                             </div>
                         )}
                     </div>
@@ -122,12 +134,14 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) 
         return (
             <SidebarNavLeafLink
                 key={item.id}
-                href={item.href()}
+                href={resolveHref(item)}
                 active={active}
                 onClick={onNavigate}
                 icon={Icon}
                 label={item.label}
                 paddingClass={pad}
+                disabled={item.disabled}
+                badge={item.badge}
             />
         );
     };
