@@ -19,7 +19,7 @@
 }
 
 @media (max-width: 767px) {
-    .gelia-sidebar-drawer.sidebar-menu-shell {
+    .gelia-sidebar-drawer.sidebar-hamburger-menu.sidebar-menu-shell:not(.sidebar-hamburger-menu--open) {
         position: fixed !important;
         top: var(--gelia-mobile-topbar-height) !important;
         left: 0 !important;
@@ -29,14 +29,30 @@
         height: auto !important;
         margin: 0 !important;
         border-radius: 0 1.5rem 0 0 !important;
-        transform: translate3d(-105%, 0, 0);
-        opacity: 1;
+        transform: translate3d(-105%, 0, 0) !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
         grid-template-rows: 1fr !important;
-        transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+        transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, visibility 0.3s ease;
     }
 
-    .gelia-sidebar-drawer.sidebar-hamburger-menu--open {
-        transform: translate3d(0, 0, 0);
+    .gelia-sidebar-drawer.sidebar-hamburger-menu.sidebar-menu-shell.sidebar-hamburger-menu--open {
+        position: fixed !important;
+        top: var(--gelia-mobile-topbar-height) !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        width: min(20rem, 92vw) !important;
+        max-width: 92vw !important;
+        height: auto !important;
+        margin: 0 !important;
+        border-radius: 0 1.5rem 0 0 !important;
+        transform: translate3d(0, 0, 0) !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        grid-template-rows: 1fr !important;
+        transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, visibility 0.3s ease;
     }
 
     .gelia-sidebar-drawer .sidebar-menu-content {
@@ -64,6 +80,88 @@
     }
 }
 
+/* Barra inferior móvil: paneles centrados que despliegan hacia arriba con scroll */
+@media (max-width: 767px) {
+    .gelia-sidebar-mount--mobile-bottom {
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column-reverse !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        pointer-events: none;
+    }
+
+    .gelia-sidebar-mount--mobile-bottom .gelia-sidebar-hover-cluster {
+        width: 100% !important;
+        max-width: 100% !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.sidebar-menu-float {
+        display: flex !important;
+        flex-direction: column !important;
+        grid-template-rows: unset !important;
+        transform-origin: bottom center;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.sidebar-hamburger-menu.sidebar-menu-float:not(.gelia-sidebar-mobile-bottom-panel--open) {
+        transform: translate3d(0, 14px, 0) scale(0.94);
+        opacity: 0;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-access-shell.sidebar-menu-float.sidebar-menu-float--open:not(.gelia-sidebar-mobile-bottom-panel--open),
+    .gelia-sidebar-mobile-bottom-panel.sidebar-profile-menu.sidebar-menu-float:not(.gelia-sidebar-mobile-bottom-panel--open) {
+        opacity: 0;
+        pointer-events: none !important;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-access-shell.sidebar-menu-float--open .sidebar-menu-grid-inner,
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-access-shell.sidebar-menu-float--open .gelia-sidebar-access-panel,
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-access-shell.sidebar-menu-float--open .sidebar-menu-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-access-shell.sidebar-menu-float--open .sidebar-menu-grid-inner,
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-access-shell.sidebar-menu-float--open .gelia-sidebar-access-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: 100%;
+        height: auto;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-access-shell.sidebar-menu-float--open .gelia-sidebar-access-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: min(56dvh, calc(100dvh - 14rem));
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.sidebar-profile-menu.sidebar-menu-float:not(.gelia-sidebar-mobile-bottom-panel--open) {
+        transform: translate3d(0, 14px, 0) scale(0.94);
+        opacity: 0;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel .sidebar-menu-content {
+        transform: translate3d(0, 8px, 0);
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.sidebar-hamburger-menu--open .sidebar-menu-content,
+    .gelia-sidebar-mobile-bottom-panel.sidebar-profile-menu--open .sidebar-menu-content {
+        transform: translate3d(0, 0, 0);
+    }
+}
+
 /* Cluster widget + menús flotantes — separación exterior única */
 .gelia-sidebar-hover-cluster {
     gap: var(--gelia-sidebar-panel-exterior-gap);
@@ -86,8 +184,8 @@
 }
 
 /* Cerrado: solo el shell (0px en layout). El árbol interior no se modifica. */
-.sidebar-menu-float:not(.sidebar-menu-float--open),
-.gelia-sidebar-access-shell.sidebar-menu-float:not(.sidebar-menu-float--open) {
+.sidebar-menu-float:not(.sidebar-menu-float--open):not(.gelia-sidebar-mobile-bottom-panel--open),
+.gelia-sidebar-access-shell.sidebar-menu-float:not(.sidebar-menu-float--open):not(.gelia-sidebar-mobile-bottom-panel--open) {
     width: 0 !important;
     max-width: 0 !important;
     min-width: 0 !important;
@@ -751,4 +849,82 @@
 
 .sidebar-collapsible-inner {
     min-height: 0;
+}
+
+/* Overrides finales — barra inferior móvil centrada (después de reglas globales del float) */
+@media (max-width: 767px) {
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-mobile-bottom-panel--open.gelia-sidebar-access-shell,
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-mobile-bottom-panel--open.sidebar-profile-menu {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 5.75rem) !important;
+        top: auto !important;
+        width: min(20rem, 92vw) !important;
+        max-width: min(20rem, 92vw) !important;
+        min-width: min(20rem, 92vw) !important;
+        max-height: min(72dvh, calc(100dvh - 9rem)) !important;
+        height: auto !important;
+        margin: 0 !important;
+        transform: translateX(-50%) translateY(0) scale(1) !important;
+        opacity: 1 !important;
+        align-self: center !important;
+        border-radius: 1.75rem !important;
+        z-index: 210 !important;
+        pointer-events: auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        grid-template-rows: unset !important;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-mobile-bottom-panel--open.sidebar-profile-menu {
+        max-height: min(40dvh, calc(100dvh - 12rem)) !important;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-mobile-bottom-panel--open.gelia-sidebar-access-shell .gelia-sidebar-access-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: min(56dvh, calc(100dvh - 14rem));
+        overflow-y: auto;
+        overflow-x: hidden;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-mobile-bottom-panel--open.gelia-sidebar-access-shell .sidebar-menu-grid-inner,
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-mobile-bottom-panel--open.gelia-sidebar-access-shell .gelia-sidebar-access-panel,
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-mobile-bottom-panel--open.gelia-sidebar-access-shell .sidebar-menu-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .sidebar-hamburger-menu.gelia-sidebar-mobile-bottom-panel.gelia-sidebar-mobile-bottom-panel--open.gelia-sidebar-access-shell.sidebar-menu-float--open {
+        align-self: center !important;
+        width: min(20rem, 92vw) !important;
+        min-width: min(20rem, 92vw) !important;
+        max-width: min(20rem, 92vw) !important;
+        max-height: min(72dvh, calc(100dvh - 9rem)) !important;
+        transform: translateX(-50%) translateY(0) scale(1) !important;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel--positioned.gelia-sidebar-mobile-bottom-panel--open.gelia-sidebar-access-shell,
+    .gelia-sidebar-mobile-bottom-panel--positioned.gelia-sidebar-mobile-bottom-panel--open.sidebar-profile-menu {
+        width: min(20rem, 92vw) !important;
+        min-width: min(20rem, 92vw) !important;
+        max-width: min(20rem, 92vw) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        grid-template-rows: unset !important;
+        overflow: hidden !important;
+    }
+
+    .gelia-sidebar-mobile-bottom-panel.gelia-sidebar-mobile-bottom-panel--open[style] {
+        transition-property: opacity, width, max-width, min-width, height, max-height !important;
+    }
 }

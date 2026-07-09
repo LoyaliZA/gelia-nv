@@ -4,6 +4,7 @@ namespace App\Services\Contabilidad;
 
 use App\Models\Contabilidad\CatalogoEstatusPago;
 use App\Models\Contabilidad\CatalogoTipoTransaccion;
+use App\Models\Contabilidad\ContabilidadConfiguracion;
 use App\Models\Contabilidad\Pedido;
 use App\Models\Contabilidad\PlataformaPago;
 use Carbon\Carbon;
@@ -21,7 +22,8 @@ class ObtenerIndiceContabilidadService
      *     tipos_transaccion: \Illuminate\Support\Collection,
      *     estatus_pago: \Illuminate\Support\Collection,
      *     datos_grafica: array<string, array{utilidad: float, venta: float}>,
-     *     filtros: array<string, mixed>
+     *     filtros: array<string, mixed>,
+     *     configuracion: array{mapeo_precios: array{sku: string, precio_base: string, descripcion: string}}
      * }
      */
     public function ejecutar(array $filtros): array
@@ -112,6 +114,9 @@ class ObtenerIndiceContabilidadService
                 'plataforma_id' => $plataformaId,
                 'estatus_pago_id' => $estatusId,
                 'tipo_transaccion_id' => $tipoId,
+            ],
+            'configuracion' => [
+                'mapeo_precios' => ContabilidadConfiguracion::obtener()->mapeoPreciosEfectivo(),
             ],
         ];
     }
