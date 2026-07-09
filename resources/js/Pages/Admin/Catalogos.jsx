@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head } from '@inertiajs/react';
-import { Building2, MapPin, ListTree, Tags, Activity, UserCheck, Map, Clock, Percent, TrendingUp, Landmark, Package, Warehouse, Boxes } from 'lucide-react';
+import { Building2, MapPin, ListTree, Tags, Activity, UserCheck, Map, Clock, Percent, TrendingUp, Landmark, Package, Warehouse, Boxes, Truck, Box } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import { geliaCardClass } from '../../utils/geliaTheme';
 
@@ -22,6 +22,10 @@ import TablaTiposAlmacen from './Partials/Catalogos/TablaTiposAlmacen';
 import TablaMarcasProducto from './Partials/Catalogos/TablaMarcasProducto';
 import TablaAlmacenes from './Partials/Catalogos/TablaAlmacenes';
 import TablaCategoriasProducto from './Partials/Catalogos/TablaCategoriasProducto';
+import TablaEstatusPedidos from './Partials/Catalogos/TablaEstatusPedidos';
+import TablaCatalogoPedidoGenerico from './Partials/Catalogos/TablaCatalogoPedidoGenerico';
+import TablaTiposCajaPedido from './Partials/Catalogos/TablaTiposCajaPedido';
+import TablaPaqueteriasPedido from './Partials/Catalogos/TablaPaqueteriasPedido';
 
 
 export default function Catalogos({
@@ -29,6 +33,8 @@ export default function Catalogos({
     zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [],
     bancos = [], tipos_activo = [], categorias_activo = [],
     sucursales = [], tipos_almacen = [], marcas_producto = [], almacenes = [], categorias_producto = [],
+    estatus_pedidos = [], almacenes_salida = [], paqueterias_pedido = [], tipos_caja_pedido = [],
+    tipos_guia_pedido = [], zonas_pedido = [], envios_tienda = [],
 }) {
     const [tabActiva, setTabActiva] = useState('departamentos');
     const activeCardClass = geliaCardClass('relative z-10');
@@ -52,6 +58,13 @@ export default function Catalogos({
         { id: 'categorias_activo', label: 'Categorías Activo', icon: Tags },
         { id: 'zonas_entrega', label: 'Zonas Logísticas', icon: Map },
         { id: 'horarios_entrega', label: 'Horarios Entrega', icon: Clock },
+        { id: 'envios_tienda', label: 'Envíos / Tienda', icon: Truck },
+        { id: 'estatus_pedidos', label: 'Estatus Pedidos', icon: Activity },
+        { id: 'almacenes_salida', label: 'Almacenes Salida', icon: Warehouse },
+        { id: 'paqueterias_pedido', label: 'Paqueterías', icon: Truck },
+        { id: 'tipos_caja_pedido', label: 'Tipos Caja', icon: Box },
+        { id: 'tipos_guia_pedido', label: 'Tipos Guía', icon: Map },
+        { id: 'zonas_pedido', label: 'Zonas Pedido', icon: MapPin },
     ];
 
     return (
@@ -103,6 +116,23 @@ export default function Catalogos({
                     {tabActiva === 'tipos_cliente' && <TablaTipoClientes datos={tipos_cliente} />}
                     {tabActiva === 'zonas_entrega' && <TablaZonasEntrega datos={zonas_entrega} auth={auth} />}
                     {tabActiva === 'horarios_entrega' && <TablaHorariosEntrega datos={horarios_entrega} zonas_entrega={zonas_entrega} auth={auth} />}
+                    {tabActiva === 'estatus_pedidos' && <TablaEstatusPedidos datos={estatus_pedidos} />}
+                    {tabActiva === 'almacenes_salida' && (
+                        <TablaCatalogoPedidoGenerico datos={almacenes_salida} titulo="Almacenes Salida_" icon={Warehouse} routePrefix="almacenes_salida" loaderMessage="Guardando Almacén_" />
+                    )}
+                    {tabActiva === 'envios_tienda' && (
+                        <TablaCatalogoPedidoGenerico datos={envios_tienda} titulo="Envíos / Tienda_" icon={Truck} routePrefix="envios_tienda" loaderMessage="Guardando Envío_" />
+                    )}
+                    {tabActiva === 'paqueterias_pedido' && (
+                        <TablaPaqueteriasPedido datos={paqueterias_pedido} />
+                    )}
+                    {tabActiva === 'tipos_caja_pedido' && <TablaTiposCajaPedido datos={tipos_caja_pedido} />}
+                    {tabActiva === 'tipos_guia_pedido' && (
+                        <TablaCatalogoPedidoGenerico datos={tipos_guia_pedido} titulo="Tipos de Guía_" icon={Map} routePrefix="tipos_guia_pedido" loaderMessage="Guardando Guía_" />
+                    )}
+                    {tabActiva === 'zonas_pedido' && (
+                        <TablaCatalogoPedidoGenerico datos={zonas_pedido} titulo="Zonas Pedido_" icon={MapPin} routePrefix="zonas_pedido" loaderMessage="Guardando Zona_" />
+                    )}
                 </section>
             </div>
         </AppLayout>

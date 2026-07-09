@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cliente;
+use App\Support\ControlPedidos\FormatearDomicilioCliente;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -80,6 +81,41 @@ class ClienteApiController extends Controller
             'lista_actual_id' => $cliente->lista_actual_id,
             'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
             'monto_venta_actual' => (float) $cliente->monto_venta_actual,
+        ]);
+    }
+
+    public function direccionEnvio(int $id): JsonResponse
+    {
+        $cliente = Cliente::query()
+            ->select([
+                'id',
+                'numero_cliente',
+                'nombre',
+                'direccion_contacto',
+                'colonia_contacto',
+                'municipio_contacto',
+                'estado_contacto',
+                'pais_contacto',
+                'cp_contacto',
+                'codigo_postal',
+            ])
+            ->find($id);
+
+        if (!$cliente) {
+            return response()->json(['encontrado' => false], 404);
+        }
+
+        $domicilio = FormatearDomicilioCliente::ejecutar($cliente);
+        $cp = FormatearDomicilioCliente::codigoPostal($cliente);
+
+        return response()->json([
+            'encontrado' => true,
+            'id' => $cliente->id,
+            'numero_cliente' => $cliente->numero_cliente,
+            'nombre' => $cliente->nombre,
+            'domicilio_entrega' => $domicilio,
+            'codigo_postal' => $cp,
+            'tiene_direccion' => filled($domicilio) || filled($cp),
         ]);
     }
 
