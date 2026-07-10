@@ -74,6 +74,7 @@ class ActualizarPedidoBmaService
             $ruta = $archivo->store("pedidos_bma/comprobantes/{$pedido->id}", 'public');
 
             $pedido->documentos()->create([
+                'tipo' => PedidoBmaDocumento::TIPO_COMPROBANTE,
                 'ruta_archivo' => $ruta,
                 'nombre_original' => $archivo->getClientOriginalName(),
                 'mime_type' => $archivo->getMimeType(),

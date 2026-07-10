@@ -87,7 +87,7 @@
     --gelia-sidebar-width-expanded: 5.25rem;
     /* Espacio exterior barra lateral ↔ panel desplegado (0.5rem = mitad del 1rem previo) */
     --gelia-sidebar-panel-exterior-gap: 0.5rem;
-    --gelia-sidebar-menu-width: clamp(20rem, 25vw, 24rem);
+    --gelia-sidebar-menu-width: 24rem;
     --gelia-sidebar-menu-max-height: min(85vh, calc(100dvh - 3rem));
     --gelia-mobile-topbar-height: calc(3.25rem + env(safe-area-inset-top, 0px));
     --gelia-content-max: 87.5rem;

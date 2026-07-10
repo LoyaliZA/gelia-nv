@@ -4,7 +4,9 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaDocumento;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class EnviarPedidoBmaService
 {
@@ -32,7 +34,11 @@ class EnviarPedidoBmaService
             $pedido->update([
                 'catalogo_estatus_pedido_id' => $estatusNuevo->id,
                 'motivo_rechazo' => null,
+                'pago_validado_at' => null,
+                'pago_validado_por_id' => null,
             ]);
+
+            $this->eliminarRemisiones($pedido);
 
             $this->historialService->registrarTransicion(
                 $pedido->id,
@@ -86,6 +92,16 @@ class EnviarPedidoBmaService
 
         if (!empty($faltantes)) {
             throw new \InvalidArgumentException('Complete los campos requeridos: ' . implode(', ', $faltantes) . '.');
+        }
+    }
+
+    private function eliminarRemisiones(PedidoBma $pedido): void
+    {
+        $remisiones = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_REMISION)->get();
+
+        foreach ($remisiones as $doc) {
+            Storage::disk('public')->delete($doc->ruta_archivo);
+            $doc->delete();
         }
     }
 }

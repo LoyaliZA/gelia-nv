@@ -30,7 +30,10 @@ const SIDEBAR_PANEL_EXTERIOR_GAP = 'gap-2';
 /** Ancho del shell flotante: 0 en layout cuando está cerrado (el árbol interior no se toca) */
 function floatShellLayoutWidth(shellExpanded, { mobile = false } = {}) {
     if (shellExpanded) {
-        return mobile ? 'w-[90vw] max-w-[320px] min-w-0' : 'w-[var(--gelia-sidebar-menu-width)] max-w-[var(--gelia-sidebar-menu-width)] min-w-0';
+        const capped = 'min(var(--gelia-sidebar-menu-width),calc(100vw-2rem))';
+        return mobile
+            ? `w-[${capped}] max-w-[${capped}] min-w-[${capped}] shrink-0`
+            : `w-[var(--gelia-sidebar-menu-width)] max-w-[${capped}] min-w-[var(--gelia-sidebar-menu-width)] shrink-0`;
     }
     return 'w-0 min-w-0 max-w-0 shrink-0';
 }
@@ -80,9 +83,9 @@ function mobileBottomPanelOpenStyle(maxHeight) {
         right: 'auto',
         top: 'auto',
         bottom: MOBILE_BOTTOM_PANEL_BOTTOM_OFFSET,
-        width: 'min(20rem, 92vw)',
-        maxWidth: 'min(20rem, 92vw)',
-        minWidth: 'min(20rem, 92vw)',
+        width: 'min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem))',
+        maxWidth: 'min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem))',
+        minWidth: 'min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem))',
         maxHeight,
         height: 'auto',
         margin: 0,
@@ -97,7 +100,7 @@ function mobileBottomPanelOpenStyle(maxHeight) {
 
 function applyMobileBottomPanelImportantStyles(el, maxHeight) {
     if (!el) return;
-    const width = 'min(20rem, 92vw)';
+    const width = 'min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem))';
     const entries = [
         ['position', 'fixed'],
         ['left', '50%'],
@@ -588,13 +591,17 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
 
     return (
         <>
-            {(mobileDrawerMode || mobileBottomPanelVisible) && (
+            {(mobileDrawerMode || mobileBottomPanelVisible || (!isMobileMode && isMenuVisible)) && (
                 <button
                     type="button"
                     aria-label="Cerrar menú"
-                    className={`gelia-sidebar-backdrop ${(mobileDrawerMode ? isMenuVisible : mobileBottomPanelVisible) ? 'gelia-sidebar-backdrop--visible' : ''}`}
-                    onClick={mobileDrawerMode ? closeMobileMenu : closeMobileBottomPanels}
-                    tabIndex={(mobileDrawerMode ? isMenuVisible : mobileBottomPanelVisible) ? 0 : -1}
+                    className={`gelia-sidebar-backdrop ${
+                        (mobileDrawerMode ? isMenuVisible : mobileBottomPanelVisible || (!isMobileMode && isMenuVisible))
+                            ? 'gelia-sidebar-backdrop--visible'
+                            : ''
+                    }`}
+                    onClick={mobileDrawerMode ? closeMobileMenu : (isMobileMode ? closeMobileBottomPanels : closeMenu)}
+                    tabIndex={(mobileDrawerMode ? isMenuVisible : mobileBottomPanelVisible || (!isMobileMode && isMenuVisible)) ? 0 : -1}
                 />
             )}
             <nav className={navClasses}>
@@ -677,7 +684,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     >
                         <div className="sidebar-menu-grid-inner overflow-hidden min-h-0 h-auto shrink-0">
                             <div
-                                className={`sidebar-menu-content gelia-sidebar-profile-panel p-5 flex flex-col min-h-0 h-auto shrink-0 overflow-visible ${isMobileMode && !mobileDrawerMode ? 'w-full max-w-full' : 'w-[var(--gelia-sidebar-menu-width)]'}`}
+                                className={`sidebar-menu-content gelia-sidebar-profile-panel p-5 flex flex-col min-h-0 h-auto shrink-0 overflow-visible w-full max-w-full`}
                             >
                                 <span className="gelia-sidebar-nav-header px-4 mb-1">
                                     PERFIL_
@@ -711,7 +718,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                     >
                         <div className="sidebar-menu-grid-inner overflow-hidden min-h-0 h-auto">
                             <div
-                                className={`sidebar-menu-content gelia-sidebar-access-panel p-5 flex flex-col min-h-0 max-h-full overflow-hidden h-auto ${isMobileMode && !mobileDrawerMode ? 'w-full max-w-full' : 'w-[var(--gelia-sidebar-menu-width)]'} ${isFixedVertical ? 'pt-10' : ''}`}
+                                className={`sidebar-menu-content gelia-sidebar-access-panel p-5 flex flex-col min-h-0 max-h-full overflow-hidden h-auto w-full max-w-full ${isFixedVertical ? 'pt-10' : ''}`}
                             >
                                 <div className="gelia-sidebar-access-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar">
                                     <SidebarNavMenu

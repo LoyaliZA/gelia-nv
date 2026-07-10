@@ -16,27 +16,14 @@ import {
     THEME_LABEL,
     BTN_PRIMARY,
     BTN_SECONDARY,
+    validarCamposEnvioPedido,
 } from './pedidosBmaStyles';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-8 last:border-0';
 
-export default function ModalFormPedido({ abierto, onClose, pedido = null, catalogos = {} }) {
-    const modoEdicion = Boolean(pedido?.id);
-    const [listaClientes, setListaClientes] = useState([]);
-    const [mostrarDropdown, setMostrarDropdown] = useState(false);
-    const [buscandoCliente, setBuscandoCliente] = useState(false);
-    const [infoCliente, setInfoCliente] = useState(pedido?.cliente || null);
-    const [alertaDireccion, setAlertaDireccion] = useState(false);
-    const [msgDireccion, setMsgDireccion] = useState('');
-    const [cargandoDireccion, setCargandoDireccion] = useState(false);
-    const [previews, setPreviews] = useState([]);
-    const [docsEliminar, setDocsEliminar] = useState([]);
-    const [pesoVolumetrico, setPesoVolumetrico] = useState(pedido?.peso_volumetrico_kg ?? '');
-    const temporizadorBusqueda = useRef(null);
-    const abortBusqueda = useRef(null);
-
-    const { data, setData, post, processing, reset, errors, transform } = useForm({
+function formDefaults(pedido = null) {
+    return {
         cliente_id: pedido?.cliente_id || '',
         numero_cliente: pedido?.cliente?.numero_cliente || '',
         fecha: pedido?.fecha?.slice?.(0, 10) || new Date().toISOString().slice(0, 10),
@@ -67,7 +54,26 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         comprobantes: [],
         documentos_eliminar: [],
         enviar: false,
-    });
+    };
+}
+
+export default function ModalFormPedido({ abierto, onClose, pedido = null, catalogos = {} }) {
+    const modoEdicion = Boolean(pedido?.id);
+    const [listaClientes, setListaClientes] = useState([]);
+    const [mostrarDropdown, setMostrarDropdown] = useState(false);
+    const [buscandoCliente, setBuscandoCliente] = useState(false);
+    const [infoCliente, setInfoCliente] = useState(pedido?.cliente || null);
+    const [alertaDireccion, setAlertaDireccion] = useState(false);
+    const [msgDireccion, setMsgDireccion] = useState('');
+    const [cargandoDireccion, setCargandoDireccion] = useState(false);
+    const [previews, setPreviews] = useState([]);
+    const [docsEliminar, setDocsEliminar] = useState([]);
+    const [pesoVolumetrico, setPesoVolumetrico] = useState(pedido?.peso_volumetrico_kg ?? '');
+    const [alertaEnvio, setAlertaEnvio] = useState('');
+    const temporizadorBusqueda = useRef(null);
+    const abortBusqueda = useRef(null);
+
+    const { data, setData, post, processing, reset, errors, transform } = useForm(formDefaults(pedido));
 
     const envioTiendaOtro = (catalogos.envios_tienda || []).find(
         (e) => String(e.id) === String(data.catalogo_envio_tienda_id)
@@ -81,20 +87,23 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     useEffect(() => {
         if (!abierto) return;
         if (pedido) {
+            setData(formDefaults(pedido));
             setInfoCliente(pedido.cliente || null);
             setPesoVolumetrico(pedido.peso_volumetrico_kg ?? '');
             setAlertaDireccion(false);
             setMsgDireccion('');
             setDocsEliminar([]);
             setPreviews([]);
+            setAlertaEnvio('');
         } else {
-            reset();
+            setData(formDefaults());
             setInfoCliente(null);
             setPesoVolumetrico('');
             setAlertaDireccion(false);
             setMsgDireccion('');
             setPreviews([]);
             setDocsEliminar([]);
+            setAlertaEnvio('');
         }
     }, [abierto, pedido?.id]);
 
@@ -239,13 +248,37 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         });
     };
 
-    const guardar = (enviar = false) => {
-        const config = { forceFormData: true, preserveScroll: true, onSuccess: () => { onClose(); reset(); } };
+    const guardar = (enviarPedido = false) => {
+        setAlertaEnvio('');
+
+        if (enviarPedido) {
+            const comprobantesExistentes = modoEdicion
+                ? (pedido?.documentos || []).filter((d) => !docsEliminar.includes(d.id)).length
+                : 0;
+            const { valido, mensaje } = validarCamposEnvioPedido(data, { comprobantesExistentes });
+            if (!valido) {
+                setAlertaEnvio(mensaje);
+                return;
+            }
+        }
+
+        const config = {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: (page) => {
+                if (page?.props?.flash?.error) {
+                    setAlertaEnvio(page.props.flash.error);
+                    return;
+                }
+                onClose();
+                reset();
+            },
+        };
         if (modoEdicion) {
-            transform((d) => ({ ...d, _method: 'put', enviar, saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0 }));
+            transform((d) => ({ ...d, _method: 'put', enviar: enviarPedido, saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0 }));
             post(route('control_pedidos.update', pedido.id), config);
         } else {
-            transform((d) => ({ ...d, enviar, saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0 }));
+            transform((d) => ({ ...d, enviar: enviarPedido, saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0 }));
             post(route('control_pedidos.store'), config);
         }
     };
@@ -552,7 +585,14 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                         </div>
                     </section>
 
-                    <section className="gelia-modal-footer flex flex-wrap gap-3 p-5 md:p-6 -mx-5 md:-mx-8 -mb-5 md:-mb-8">
+                    <section className="gelia-modal-footer flex flex-col gap-3 p-5 md:p-6 -mx-5 md:-mx-8 -mb-5 md:-mb-8">
+                        {alertaEnvio && (
+                            <div className="w-full p-4 rounded-xl border border-red-500/40 bg-red-500/10 flex items-start gap-3">
+                                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                <p className="text-xs font-bold theme-text-main m-0">{alertaEnvio}</p>
+                            </div>
+                        )}
+                        <div className="flex flex-wrap gap-3">
                         <button type="button" onClick={() => guardar(true)} disabled={processing} className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}>
                             <Send className="w-4 h-4" /> Enviar pedido
                         </button>
@@ -564,9 +604,10 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <MessageCircle className="w-4 h-4" /> WhatsApp
                             </button>
                         )}
-                        <button type="button" onClick={() => { reset(); setPreviews([]); setInfoCliente(null); setAlertaDireccion(false); setMsgDireccion(''); }} className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none`}>
+                        <button type="button" onClick={() => { setData(formDefaults(pedido)); setPreviews([]); setInfoCliente(pedido?.cliente || null); setAlertaDireccion(false); setMsgDireccion(''); setDocsEliminar([]); setAlertaEnvio(''); }} className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none`}>
                             <RotateCcw className="w-4 h-4" /> Limpiar
                         </button>
+                        </div>
                     </section>
                     {Object.keys(errors).length > 0 && (
                         <p className="text-xs text-red-500 font-bold">Revise los campos del formulario.</p>

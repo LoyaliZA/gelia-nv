@@ -12,6 +12,15 @@
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
+/* En desktop el backdrop es más sutil: menos opacidad y blur más suave */
+@media (min-width: 768px) {
+    .gelia-sidebar-backdrop {
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+    }
+}
+
 .gelia-sidebar-backdrop--visible {
     opacity: 1;
     visibility: visible;
@@ -24,8 +33,9 @@
         top: var(--gelia-mobile-topbar-height) !important;
         left: 0 !important;
         bottom: 0 !important;
-        width: min(20rem, 92vw) !important;
-        max-width: 92vw !important;
+        width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
+        max-width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
+        min-width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
         height: auto !important;
         margin: 0 !important;
         border-radius: 0 1.5rem 0 0 !important;
@@ -42,8 +52,9 @@
         top: var(--gelia-mobile-topbar-height) !important;
         left: 0 !important;
         bottom: 0 !important;
-        width: min(20rem, 92vw) !important;
-        max-width: 92vw !important;
+        width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
+        max-width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
+        min-width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
         height: auto !important;
         margin: 0 !important;
         border-radius: 0 1.5rem 0 0 !important;
@@ -207,8 +218,8 @@
     flex-shrink: 0 !important;
     align-self: flex-start !important;
     width: var(--gelia-sidebar-menu-width) !important;
-    max-width: var(--gelia-sidebar-menu-width) !important;
-    min-width: var(--gelia-sidebar-menu-width) !important;
+    max-width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
+    min-width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
     flex: 0 1 auto !important;
     height: max-content !important;
     max-height: var(--gelia-sidebar-menu-max-height) !important;
@@ -225,8 +236,8 @@
     flex: 0 0 auto !important;
     align-self: flex-start !important;
     width: var(--gelia-sidebar-menu-width) !important;
-    max-width: var(--gelia-sidebar-menu-width) !important;
-    min-width: var(--gelia-sidebar-menu-width) !important;
+    max-width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
+    min-width: min(var(--gelia-sidebar-menu-width), calc(100vw - 2rem)) !important;
     flex-shrink: 0 !important;
     height: max-content !important;
     max-height: none !important;
@@ -301,6 +312,8 @@
     display: flex;
     flex-direction: column;
     flex: 0 1 auto;
+    width: 100%;
+    min-width: 0;
     min-height: 0;
     height: auto;
     max-height: 100%;
@@ -420,11 +433,41 @@
 .gelia-sidebar-root .gelia-sidebar-nav-tree {
     width: 100%;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     font-family: var(--font-principal);
     font-style: normal;
     font-weight: normal;
     text-transform: none;
     letter-spacing: normal;
+}
+
+
+/* Contenedores del árbol: limitan el ancho */
+.gelia-sidebar-root .gelia-sidebar-nav-root-block,
+.gelia-sidebar-root .gelia-sidebar-nav-children {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* Botones: overflow:hidden contiene el flex para que el label trunca y el chevron quede dentro */
+.gelia-sidebar-root .gelia-sidebar-nav-root-btn,
+.gelia-sidebar-root .gelia-sidebar-nav-subgroup-btn {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* Solo el label/texto trunca, no el botón entero */
+.gelia-sidebar-root .gelia-sidebar-nav-root-label,
+.gelia-sidebar-root .gelia-sidebar-nav-subgroup-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .gelia-sidebar-root .gelia-sidebar-nav-header {
@@ -516,9 +559,10 @@
 
 .gelia-sidebar-root .gelia-sidebar-nav-root-label {
     flex: 1 1 auto;
-    overflow: visible;
-    white-space: normal;
-    word-break: break-word;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     line-height: 1.25;
     font-family: var(--font-principal);
     font-size: var(--gelia-sidebar-size-heading);
@@ -813,8 +857,8 @@
     flex-shrink: 0;
     align-self: flex-start;
     width: 300px;
-    min-width: 300px;
-    max-width: 300px;
+    min-width: min(300px, calc(100vw - 2rem));
+    max-width: min(300px, calc(100vw - 2rem));
     height: max-content;
     max-height: min(85vh, calc(100dvh - 3rem));
     min-height: 0;
@@ -824,6 +868,8 @@
 
 .sidebar-hamburger-menu.gelia-sidebar-access-shell.sidebar-menu-float--open .sidebar-menu-grid-inner {
     flex: 0 1 auto;
+    width: 100%;
+    min-width: 0;
     min-height: 0;
     height: auto;
     max-height: 100%;

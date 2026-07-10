@@ -1,0 +1,112 @@
+<?php
+
+namespace App\Services\ControlPedidos;
+
+use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\PedidoBma;
+use Illuminate\Database\Eloquent\Builder;
+
+class ListarPedidosAuditoriaService
+{
+    private const FASES_AUDITORIA = [
+        CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
+        CatalogoEstatusPedido::FASE_EN_CEDIS,
+        CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
+        CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
+        CatalogoEstatusPedido::FASE_EN_RUTA,
+    ];
+
+    public function ejecutar(array $filtros = [], bool $paginar = true)
+    {
+        $query = $this->queryBase();
+        $this->aplicarFiltros($query, $filtros);
+
+        return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
+    }
+
+    public function metricas(): array
+    {
+        $base = $this->queryBase();
+        $idsPorFase = $this->idsPorFase();
+
+        $pendientes = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)->count();
+        $aprobados = (clone $base)->whereIn('catalogo_estatus_pedido_id', array_filter([
+            $idsPorFase['EN_CEDIS'] ?? null,
+            $idsPorFase['INCIDENCIA_CEDIS'] ?? null,
+            $idsPorFase['EN_RUTA'] ?? null,
+        ]))->count();
+        $rechazados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0)->count();
+
+        return [
+            'pendientes' => $pendientes,
+            'aprobados' => $aprobados,
+            'rechazados' => $rechazados,
+            'total' => $pendientes + $aprobados + $rechazados,
+        ];
+    }
+
+    private function queryBase(): Builder
+    {
+        $idsPorFase = $this->idsPorFase();
+        $idsVisibles = array_values(array_filter(array_map(
+            fn (string $fase) => $idsPorFase[$fase] ?? null,
+            self::FASES_AUDITORIA
+        )));
+
+        return PedidoBma::with([
+            'cliente',
+            'vendedor',
+            'estatus',
+            'envioTienda',
+            'almacenSalida',
+            'banco',
+            'tipoCaja',
+            'paqueteria',
+            'tipoGuia',
+            'zona',
+            'documentos',
+            'pagoValidadoPor',
+            'historial.usuario',
+            'historial.estatusAnterior',
+            'historial.estatusNuevo',
+        ])
+            ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
+            ->orderByDesc('created_at');
+    }
+
+    private function aplicarFiltros(Builder $query, array $filtros): void
+    {
+        if (!empty($filtros['q'])) {
+            $termino = trim($filtros['q']);
+            $query->where(function (Builder $q) use ($termino) {
+                $q->where('folio', 'like', "%{$termino}%")
+                    ->orWhereHas('cliente', function (Builder $c) use ($termino) {
+                        $c->where('nombre', 'like', "%{$termino}%")
+                            ->orWhere('numero_cliente', 'like', "%{$termino}%");
+                    });
+            });
+        }
+
+        $tab = strtoupper($filtros['tab'] ?? 'TODAS');
+        $idsPorFase = $this->idsPorFase();
+
+        match ($tab) {
+            'PENDIENTES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0),
+            'APROBADOS' => $query->whereIn('catalogo_estatus_pedido_id', array_filter([
+                $idsPorFase['EN_CEDIS'] ?? null,
+                $idsPorFase['INCIDENCIA_CEDIS'] ?? null,
+                $idsPorFase['EN_RUTA'] ?? null,
+            ])),
+            'RECHAZADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0),
+            default => null,
+        };
+    }
+
+    private function idsPorFase(): array
+    {
+        return CatalogoEstatusPedido::query()
+            ->whereIn('fase_ciclo', self::FASES_AUDITORIA)
+            ->pluck('id', 'fase_ciclo')
+            ->all();
+    }
+}

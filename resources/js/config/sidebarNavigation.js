@@ -88,27 +88,26 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             label: 'Registrar Pedidos',
             icon: Package,
             href: () => routeHref('control_pedidos.index', '/control-pedidos'),
-            active: (url) => url.startsWith('/control-pedidos'),
+            active: (url) => {
+                const path = url.split('?')[0].replace(/\/$/, '');
+                return path === '/control-pedidos';
+            },
         },
-        can('control_pedidos.ver_listado') && {
+        can('control_pedidos.auditar') && {
             type: 'link',
             id: 'control_pedidos_auditar',
             label: 'Auditar Pedidos',
             icon: ClipboardCheck,
-            disabled: true,
-            badge: 'Próximamente',
-            href: () => '#',
-            active: () => false,
+            href: () => routeHref('control_pedidos.auditar.index', '/control-pedidos/auditar'),
+            active: (url) => url.startsWith('/control-pedidos/auditar'),
         },
-        can('control_pedidos.ver_listado') && {
+        can('control_pedidos.cedis') && {
             type: 'link',
             id: 'control_pedidos_cedis',
             label: 'Control Pedidos',
             icon: Warehouse,
-            disabled: true,
-            badge: 'Próximamente',
-            href: () => '#',
-            active: () => false,
+            href: () => routeHref('control_pedidos.cedis.index', '/control-pedidos/cedis'),
+            active: (url) => url.startsWith('/control-pedidos/cedis'),
         },
     ].filter(Boolean);
 

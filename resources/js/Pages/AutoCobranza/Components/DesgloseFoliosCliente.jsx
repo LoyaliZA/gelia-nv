@@ -79,8 +79,8 @@ export default function DesgloseFoliosCliente({
                                             </span>
                                         )}
                                         {!liquidada && factura.tiene_abono && (
-                                            <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-500">
-                                                Abonado
+                                            <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-500" title="Pago parcial detectado; aún hay saldo pendiente">
+                                                Abono parcial
                                             </span>
                                         )}
                                     </div>

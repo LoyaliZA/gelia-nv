@@ -158,8 +158,8 @@ export default function TarjetaClienteCredito({
                                     </span>
                                 )}
                                 {tieneAbonoActivo(cliente) && (
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                                        Abonado
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" title="Tiene folios con abono parcial; aún hay saldo pendiente">
+                                        Abono parcial
                                     </span>
                                 )}
                             </>
