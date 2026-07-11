@@ -4,6 +4,11 @@ import { X, ArrowDownRight, Clock } from 'lucide-react';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 import { formatoMoneda } from '../../../utils/formatoMoneda';
 
+function extraerFolioAbono(descripcion) {
+    const match = descripcion?.match(/folio\s+([^\s(]+)/i);
+    return match ? match[1] : null;
+}
+
 export default function ModalAbonosDelDia({ abonos, onClose }) {
     if (typeof document === 'undefined') return null;
 
@@ -33,7 +38,8 @@ export default function ModalAbonosDelDia({ abonos, onClose }) {
                     ) : (
                         <div className="space-y-4">
                             {abonos.map((abono) => {
-                                const montoAbonado = abono.monto_anterior - abono.monto_nuevo;
+                                const montoAbonado = Number(abono.monto_anterior) - Number(abono.monto_nuevo);
+                                const folio = extraerFolioAbono(abono.descripcion);
                                 return (
                                     <div key={abono.id} className="p-4 rounded-2xl border theme-border bg-white dark:bg-zinc-900 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition-transform hover:scale-[1.01]">
                                         <div className="flex items-center gap-4">
@@ -44,7 +50,15 @@ export default function ModalAbonosDelDia({ abonos, onClose }) {
                                                 <h4 className="font-bold theme-text-main text-sm">
                                                     {abono.cliente?.nombre || 'Cliente Desconocido'}
                                                 </h4>
-                                                <div className="flex items-center gap-2 mt-1">
+                                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                    {folio && (
+                                                        <>
+                                                            <span className="text-[10px] uppercase font-black tracking-widest theme-text-muted">
+                                                                Folio {folio}
+                                                            </span>
+                                                            <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                                                        </>
+                                                    )}
                                                     <span className="text-[10px] uppercase font-black tracking-widest text-emerald-600 dark:text-emerald-400">
                                                         Abonó {formatoMoneda(montoAbonado)}
                                                     </span>

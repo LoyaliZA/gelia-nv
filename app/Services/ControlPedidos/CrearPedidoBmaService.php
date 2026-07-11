@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\Cliente;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaDocumento;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -74,6 +75,7 @@ class CrearPedidoBmaService
             $ruta = $archivo->store("pedidos_bma/comprobantes/{$pedido->id}", 'public');
 
             $pedido->documentos()->create([
+                'tipo' => PedidoBmaDocumento::TIPO_COMPROBANTE,
                 'ruta_archivo' => $ruta,
                 'nombre_original' => $archivo->getClientOriginalName(),
                 'mime_type' => $archivo->getMimeType(),

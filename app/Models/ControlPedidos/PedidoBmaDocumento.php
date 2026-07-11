@@ -8,10 +8,14 @@ use Illuminate\Support\Facades\Storage;
 
 class PedidoBmaDocumento extends Model
 {
+    public const TIPO_COMPROBANTE = 'comprobante';
+    public const TIPO_REMISION = 'remision';
+
     protected $table = 'pedido_bma_documentos';
 
     protected $fillable = [
         'pedido_bma_id',
+        'tipo',
         'ruta_archivo',
         'nombre_original',
         'mime_type',

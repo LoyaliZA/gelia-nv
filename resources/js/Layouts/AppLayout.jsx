@@ -10,6 +10,7 @@ import NotificationService from '../Services/NotificationBrowserService';
 import GeliaLoader from '../Components/GeliaLoader';
 import WooSyncFloatingTracker from '../Components/WooSyncFloatingTracker';
 import ImportacionAlmacenFloatingTracker from '../Components/Almacenes/ImportacionAlmacenFloatingTracker';
+import CobranzaReporteFloatingTracker from '../Components/CobranzaReporteFloatingTracker';
 import {
     resolveAlertasPrefs,
     getTipoAlerta,
@@ -145,6 +146,9 @@ export default function AppLayout({ children, fullScreen = false }) {
         || permisosAlmacen.includes('almacenes.costos.importar')
         || permisosAlmacen.includes('catalogos.gestionar');
     const canManageImportacionAlmacen = canViewImportacionAlmacen;
+
+    const permisosCobranza = auth?.user?.permissions ?? [];
+    const canViewCobranzaReportes = esSuperAdmin || permisosCobranza.includes('cobranza.reportes');
 
     // --- ESCUCHADORES DE EVENTOS GLOBALES DE INERTIA ---
     useEffect(() => {
@@ -667,6 +671,7 @@ export default function AppLayout({ children, fullScreen = false }) {
 
                     <WooSyncFloatingTracker canView={canViewWooSync} canSync={canSyncWoo} />
                     <ImportacionAlmacenFloatingTracker canView={canViewImportacionAlmacen} canManage={canManageImportacionAlmacen} />
+                    <CobranzaReporteFloatingTracker canView={canViewCobranzaReportes} />
                 </div>
 
             </div>

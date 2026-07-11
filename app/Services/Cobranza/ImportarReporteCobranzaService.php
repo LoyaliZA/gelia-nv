@@ -251,7 +251,7 @@ class ImportarReporteCobranzaService
                             ->where('id', '!=', $facturaActiva->id)
                             ->get();
                         foreach ($facturasExtra as $extra) {
-                            $extra->update(['pagada' => true, 'tiene_abono' => true]);
+                            $extra->update(['pagada' => true]);
                         }
 
                         if ($consolidado < $montoAnterior) {
@@ -413,6 +413,7 @@ class ImportarReporteCobranzaService
                 $esNuevoFolio = $facturaExistente === null;
                 $tieneAbonoPorMontoAnterior = !$esNuevoFolio && $montoAnterior > 0 && $saldo < $montoAnterior;
 
+                $nuevoTieneAbono = $importeOriginal > $saldo;
                 $factura = CobranzaFactura::updateOrCreate(
                     ['folio' => $folio],
                     [
@@ -423,7 +424,7 @@ class ImportarReporteCobranzaService
                         'pagada' => false,
                         'pago_pendiente_confirmacion' => false,
                         'detectado_en_import_at' => null,
-                        'tiene_abono' => $importeOriginal > $saldo,
+                        'tiene_abono' => $nuevoTieneAbono,
                     ]
                 );
 
@@ -445,12 +446,15 @@ class ImportarReporteCobranzaService
                         'monto' => $saldo,
                     ];
                     $contadorCreditosNuevos++;
-                } elseif ($tieneAbonoPorMontoAnterior) {
+                }
+
+                $abonoDesdeImporteOriginal = $esNuevoFolio && $importeOriginal > $saldo;
+                if ($tieneAbonoPorMontoAnterior || $abonoDesdeImporteOriginal) {
                     CobranzaBitacora::create([
                         'cliente_id' => $cliente->id,
                         'usuario_id' => auth()->id() ?? 1,
                         'tipo_evento' => 'abono',
-                        'monto_anterior' => $montoAnterior,
+                        'monto_anterior' => $tieneAbonoPorMontoAnterior ? $montoAnterior : $importeOriginal,
                         'monto_nuevo' => $saldo,
                         'descripcion' => 'Abono parcial detectado en folio ' . $folio . ($noVenta ? " (venta {$noVenta})." : '.'),
                         'es_alerta' => false,
@@ -531,6 +535,10 @@ class ImportarReporteCobranzaService
         array $alertasLimiteExcedidoMasivo,
         array $pagosDetectados = [],
     ): array {
+        $this->sincronizarAlertas->ejecutar();
+
+        $alertasLimiteExcedidoMasivo = $this->filtrarAlertasLimiteVigentes($alertasLimiteExcedidoMasivo);
+
         if (!empty($alertasDetectadas) || !empty($alertasLimiteExcedidoMasivo)) {
             $usuariosParaNotificar = User::permission('cobranza.recibir_alertas')->get();
             $superAdmins = User::role('Super Admin')->get();
@@ -572,9 +580,41 @@ class ImportarReporteCobranzaService
         ];
 
         $this->enviarAlertaCarga($resultado);
-        $this->sincronizarAlertas->ejecutar();
 
         return $resultado;
+    }
+
+    /**
+     * Elimina del lote de notificación clientes que ya no superan su límite
+     * (p. ej. detectados antes de registrar un abono en la misma importación).
+     *
+     * @param  array<int, array{cliente: Cliente, monto_actual: float, limite: float}>  $alertasLimiteExcedidoMasivo
+     * @return array<int, array{cliente: Cliente, monto_actual: float, limite: float}>
+     */
+    private function filtrarAlertasLimiteVigentes(array $alertasLimiteExcedidoMasivo): array
+    {
+        return array_values(array_filter(array_map(function (array $alerta) {
+            $cliente = $alerta['cliente'] instanceof Cliente
+                ? $alerta['cliente']->fresh()
+                : Cliente::find($alerta['cliente']->id ?? null);
+
+            if (!$cliente) {
+                return null;
+            }
+
+            $limite = (float) $cliente->monto_credito_autorizado;
+            $consolidado = $this->saldoTotalCliente($cliente->id);
+
+            if ($limite <= 0 || $consolidado <= $limite) {
+                return null;
+            }
+
+            return [
+                'cliente' => $cliente,
+                'monto_actual' => $consolidado,
+                'limite' => $limite,
+            ];
+        }, $alertasLimiteExcedidoMasivo)));
     }
 
     private function procesarAumentoLegacy(

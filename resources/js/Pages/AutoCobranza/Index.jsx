@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Head, router, useForm } from '@inertiajs/react';
 import {
     Users, Clock, Coins, Search, FileText, ArrowRight, Upload,
-    Volume2, VolumeX, Phone, MessageSquare, Check, X, AlertCircle, BarChart3, Settings, RefreshCw
+    Volume2, VolumeX, Phone, MessageSquare, Check, X, AlertCircle, BarChart3, Settings, RefreshCw, FileSpreadsheet
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
@@ -22,7 +22,9 @@ import ModalHistorialCliente from './Components/ModalHistorialCliente';
 import TarjetaClienteCredito from './Components/TarjetaClienteCredito';
 import ModalAbonosDelDia from './Components/ModalAbonosDelDia';
 import ModalAjustesInicialesCredito from './Components/ModalAjustesInicialesCredito';
+import ModalReportesCobranza from './Components/ModalReportesCobranza';
 import axios from 'axios';
+import { startCobranzaReporteTracking } from '../../utils/cobranzaReporteTracker';
 import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
 import useCobranzaRealtime from '../../hooks/useCobranzaRealtime';
 import {
@@ -54,12 +56,14 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
     const puedeRepararFecha = auth?.user?.permissions?.includes('cobranza.reparar_fecha') || auth?.user?.roles?.includes('Super Admin');
     const puedeConfigurarAlertas = auth?.user?.permissions?.includes('cobranza.configurar_alertas') || auth?.user?.roles?.includes('Super Admin');
     const puedeRecalcularCreditos = auth?.user?.permissions?.includes('cobranza.recalcular_creditos') || auth?.user?.roles?.includes('Super Admin');
+    const puedeGenerarReportes = auth?.user?.permissions?.includes('cobranza.reportes') || auth?.user?.roles?.includes('Super Admin');
 
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [filtroOrden, setFiltroOrden] = useState(filtros.orden || 'automatico');
     const [cargandoLista, setCargandoLista] = useState(false);
     const [speaking, setSpeaking] = useState(false);
     const [activeTab, setActiveTab] = useState(filtros.q ? 'clients' : (puedeEjecutarLlamadas ? 'operational' : 'admin')); // 'operational' | 'admin' | 'clients'
+    const [filtroAlertaOperativa, setFiltroAlertaOperativa] = useState('todas'); // 'todas' | 'vencimiento' | 'limite_superado'
 
     // Modal para actualizar resultado de llamada
     const [selectedAlerta, setSelectedAlerta] = useState(null);
@@ -102,6 +106,9 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
         notified_users_carga: notifiedUsersCarga || [],
     });
 
+    // Reportes
+    const [reportesModal, setReportesModal] = useState(false);
+
     useEffect(() => {
         cargarAbonosDelDia();
     }, []);
@@ -110,6 +117,17 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
         axios.get(route('auto-cobranza.abonos-hoy'))
             .then(res => setAbonosDelDia(res.data))
             .catch(err => console.error("Error cargando abonos:", err));
+    };
+
+    const handleGenerarReporte = async (filtros) => {
+        try {
+            const resp = await axios.post(route('auto-cobranza.reportes.generar'), filtros);
+            if (resp.data.job_id) {
+                startCobranzaReporteTracking(resp.data.job_id);
+            }
+        } catch (error) {
+            alert('Error al encolar el reporte: ' + (error.response?.data?.message || error.message));
+        }
     };
 
     const resolverAumento = (clienteId) => {
@@ -460,7 +478,38 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
 
         return [...porCliente.values()];
     }, [alertas]);
-    const totalAlertasHoy = alertasPorCliente.length;
+
+    const alertaSuperaLimiteReal = useCallback((alerta) => {
+        if (alerta.tipo !== 'limite_superado') return true;
+        const limite = Number(alerta.cliente?.monto_credito_autorizado ?? 0);
+        const consolidado = saldoTotalCliente(alerta.cliente);
+        return limite > 0 && consolidado > limite;
+    }, []);
+
+    const alertasOperativasVisibles = useMemo(() => {
+        return alertasPorCliente
+            .filter(alertaSuperaLimiteReal)
+            .filter((alerta) => {
+                if (filtroAlertaOperativa === 'limite_superado') {
+                    return alerta.tipo === 'limite_superado';
+                }
+                if (filtroAlertaOperativa === 'vencimiento') {
+                    return alerta.tipo !== 'limite_superado';
+                }
+                return true;
+            });
+    }, [alertasPorCliente, filtroAlertaOperativa, alertaSuperaLimiteReal]);
+
+    const conteoAlertasOperativas = useMemo(() => {
+        const validas = alertasPorCliente.filter(alertaSuperaLimiteReal);
+        return {
+            todas: validas.length,
+            vencimiento: validas.filter((a) => a.tipo !== 'limite_superado').length,
+            limite_superado: validas.filter((a) => a.tipo === 'limite_superado').length,
+        };
+    }, [alertasPorCliente, alertaSuperaLimiteReal]);
+
+    const totalAlertasHoy = conteoAlertasOperativas.todas;
 
     return (
         <AppLayout auth={auth}>
@@ -482,8 +531,16 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                             Gestión e Inteligencia de Cobros
                         </p>
                     </div>
-                    {(puedeConfigurarAlertas || puedeRecalcularCreditos) && (
+                    {(puedeConfigurarAlertas || puedeRecalcularCreditos || puedeGenerarReportes) && (
                         <div className="relative z-10 flex flex-wrap items-center gap-2 md:justify-end">
+                            {puedeGenerarReportes && (
+                                <button
+                                    onClick={() => setReportesModal(true)}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-[var(--color-primario)] text-white hover:opacity-90 transition-opacity shadow-sm"
+                                >
+                                    <FileText className="w-4 h-4" /> Generar Reportes
+                                </button>
+                            )}
                             {puedeRecalcularCreditos && (
                                 <button
                                     onClick={recalcularCreditosMasivo}
@@ -689,13 +746,38 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                                 A continuación se muestran los clientes vencidos. Se mostrará en amarillo el tiempo de espera y en rojo cuando ya es momento de contactarlos. Las notificaciones automáticas y evaluación del Cron Job están programadas a las: <span className="font-bold text-[var(--color-primario)]">{configuracionHorarios.join(', ')}</span>.
                             </p>
 
+                            <div className="flex flex-wrap items-center gap-2 pt-2">
+                                {[
+                                    { value: 'todas', label: 'Todas', count: conteoAlertasOperativas.todas },
+                                    { value: 'vencimiento', label: 'Vencimiento', count: conteoAlertasOperativas.vencimiento },
+                                    { value: 'limite_superado', label: 'Límite superado', count: conteoAlertasOperativas.limite_superado },
+                                ].map((opcion) => (
+                                    <button
+                                        key={opcion.value}
+                                        type="button"
+                                        onClick={() => setFiltroAlertaOperativa(opcion.value)}
+                                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-colors ${
+                                            filtroAlertaOperativa === opcion.value
+                                                ? 'bg-[var(--color-primario)] text-white border-[var(--color-primario)]'
+                                                : 'theme-element theme-border theme-text-muted hover:theme-text-main'
+                                        }`}
+                                    >
+                                        {opcion.label} ({opcion.count})
+                                    </button>
+                                ))}
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-                                {alertasPorCliente.length === 0 ? (
+                                {alertasOperativasVisibles.length === 0 ? (
                                     <div className="col-span-full py-12 text-center text-xs theme-text-muted uppercase tracking-wider font-bold">
-                                        No hay llamadas programadas ni clientes pendientes de contactar.
+                                        {filtroAlertaOperativa === 'limite_superado'
+                                            ? 'No hay clientes que superen su límite de crédito en este momento.'
+                                            : filtroAlertaOperativa === 'vencimiento'
+                                                ? 'No hay clientes con alertas de vencimiento pendientes.'
+                                                : 'No hay llamadas programadas ni clientes pendientes de contactar.'}
                                     </div>
                                 ) : (
-                                    alertasPorCliente.map((alerta) => {
+                                    alertasOperativasVisibles.map((alerta) => {
                                         const esDiaDeLlamada = alerta.tipo === 'limite_superado'
                                             || esDiaDeLlamadaCobranza(alerta.dias_atraso, configuracionAlertas);
                                         const diasParaLlamar = alerta.tipo === 'limite_superado'
@@ -1430,6 +1512,12 @@ export default function Index({ auth, clientes, alertas = [], cartera = {}, aume
                 processing={importando}
             />
 
+            <ModalReportesCobranza
+                isOpen={reportesModal}
+                onClose={() => setReportesModal(false)}
+                clientes={clientes}
+                onGenerar={handleGenerarReporte}
+            />
         </AppLayout>
     );
 }

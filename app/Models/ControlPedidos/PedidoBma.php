@@ -49,9 +49,19 @@ class PedidoBma extends Model
         'comentarios_drive',
         'numero_rastreo',
         'motivo_rechazo',
+        'pago_validado_at',
+        'pago_validado_por_id',
+        'empacado_at',
+        'empacado_por_id',
+        'detalle_incidencia_empaque',
+        'incidencia_empaque_at',
+        'incidencia_empaque_por_id',
     ];
 
     protected $casts = [
+        'pago_validado_at' => 'datetime',
+        'empacado_at' => 'datetime',
+        'incidencia_empaque_at' => 'datetime',
         'fecha' => 'date',
         'requiere_factura' => 'boolean',
         'aplica_seguro' => 'boolean',
@@ -128,6 +138,50 @@ class PedidoBma extends Model
         return $this->hasMany(PedidoBmaHistorialEstado::class, 'pedido_bma_id')->orderByDesc('created_at');
     }
 
+    public function pagoValidadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'pago_validado_por_id');
+    }
+
+    public function empacadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'empacado_por_id');
+    }
+
+    public function incidenciaEmpaquePor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'incidencia_empaque_por_id');
+    }
+
+    public function comprobantes(): HasMany
+    {
+        return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
+            ->where('tipo', PedidoBmaDocumento::TIPO_COMPROBANTE)
+            ->orderBy('orden');
+    }
+
+    public function remision(): HasMany
+    {
+        return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
+            ->where('tipo', PedidoBmaDocumento::TIPO_REMISION)
+            ->orderBy('orden');
+    }
+
+    public function tienePagoValidado(): bool
+    {
+        return $this->pago_validado_at !== null;
+    }
+
+    public function tieneRemision(): bool
+    {
+        return $this->remision()->exists();
+    }
+
+    public function esAuditablePorAuxiliar(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR;
+    }
+
     public function esEditablePorVendedora(): bool
     {
         $fase = $this->estatus?->fase_ciclo;
@@ -141,6 +195,33 @@ class PedidoBma extends Model
     public function esBorrador(): bool
     {
         return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_BORRADOR;
+    }
+
+    public function esGestionablePorCedis(): bool
+    {
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
+            CatalogoEstatusPedido::FASE_EN_RUTA,
+        ], true);
+    }
+
+    public function puedeMarcarEmpacado(): bool
+    {
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
+        ], true);
+    }
+
+    public function puedeRevertirEmpacado(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_EN_RUTA;
+    }
+
+    public function puedeReportarIncidencia(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_EN_CEDIS;
     }
 
     public static function calcularTotal(float $mercancia, float $envio, bool $seguro, float $costoSeguro, float $saldoFavor): float

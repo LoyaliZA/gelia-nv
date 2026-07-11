@@ -17,6 +17,8 @@ use App\Http\Controllers\Almacenes\{ProductoController as AlmacenProductoControl
 use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaController;
+use App\Http\Controllers\ControlPedidos\PedidoBmaAuditoriaController;
+use App\Http\Controllers\ControlPedidos\PedidoBmaCedisController;
 use App\Http\Controllers\Mensajeria\{ConversacionController,MensajeController,AdjuntoMensajeController};
 use App\Http\Controllers\WebPushController;
 use App\Http\Controllers\GestionInterna\DirectorioController;
@@ -210,6 +212,12 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/facturas/{cobranzaFactura}/descartar-pago', [AutoCobranzaController::class, 'descartarPagoCobranza'])->name('facturas.descartar-pago');
         Route::post('/facturas/{cobranzaFactura}/verificar', [AutoCobranzaController::class, 'verificarPago'])->name('facturas.verificar');
         Route::post('/configuracion', [AutoCobranzaController::class, 'guardarConfiguracion'])->name('configuracion.store');
+        
+        Route::middleware(['can:cobranza.reportes'])->prefix('reportes')->name('reportes.')->group(function () {
+            Route::post('/generar', [\App\Http\Controllers\Reportes\ReporteCobranzaController::class, 'generar'])->name('generar');
+            Route::get('/estado/{jobId}', [\App\Http\Controllers\Reportes\ReporteCobranzaController::class, 'estado'])->name('estado');
+            Route::get('/descargar/{jobId}', [\App\Http\Controllers\Reportes\ReporteCobranzaController::class, 'descargar'])->name('descargar');
+        });
     });
 
     // ══════════════════════════════════════════════════════════════════════
@@ -373,6 +381,22 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['can:control_pedidos.eliminar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::delete('/{pedidoBma}', [PedidoBmaController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::middleware(['can:control_pedidos.auditar'])->prefix('control-pedidos/auditar')->name('control_pedidos.auditar.')->group(function () {
+        Route::get('/', [PedidoBmaAuditoriaController::class, 'index'])->name('index');
+        Route::post('/{pedidoBma}/validar-pago', [PedidoBmaAuditoriaController::class, 'validarPago'])->name('validar_pago');
+        Route::post('/{pedidoBma}/remision', [PedidoBmaAuditoriaController::class, 'subirRemision'])->name('remision.store');
+        Route::delete('/{pedidoBma}/remision', [PedidoBmaAuditoriaController::class, 'eliminarRemision'])->name('remision.destroy');
+        Route::post('/{pedidoBma}/aprobar', [PedidoBmaAuditoriaController::class, 'aprobar'])->name('aprobar');
+        Route::post('/{pedidoBma}/rechazar', [PedidoBmaAuditoriaController::class, 'rechazar'])->name('rechazar');
+    });
+
+    Route::middleware(['can:control_pedidos.cedis'])->prefix('control-pedidos/cedis')->name('control_pedidos.cedis.')->group(function () {
+        Route::get('/', [PedidoBmaCedisController::class, 'index'])->name('index');
+        Route::post('/{pedidoBma}/marcar-empacado', [PedidoBmaCedisController::class, 'marcarEmpacado'])->name('marcar_empacado');
+        Route::post('/{pedidoBma}/revertir-empacado', [PedidoBmaCedisController::class, 'revertirEmpacado'])->name('revertir_empacado');
+        Route::post('/{pedidoBma}/reportar-incidencia', [PedidoBmaCedisController::class, 'reportarIncidencia'])->name('reportar_incidencia');
     });
 
     // --- Nuevo Módulo: Interfaz de Entregas ---

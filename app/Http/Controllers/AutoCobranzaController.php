@@ -184,13 +184,18 @@ class AutoCobranzaController extends Controller
             });
 
         if ($request->filled('q')) {
-            $termino = trim($request->q);
-            $query->where(function ($sub) use ($termino) {
-                if (preg_match('/^\d/', $termino)) {
-                    $sub->where('numero_cliente', 'like', "{$termino}%");
+            $terminos = array_filter(array_map('trim', explode(',', $request->q)));
+
+            $query->where(function ($sub) use ($terminos) {
+                foreach ($terminos as $termino) {
+                    $sub->orWhere(function ($sub2) use ($termino) {
+                        if (preg_match('/^\d/', $termino)) {
+                            $sub2->where('numero_cliente', 'like', "{$termino}%");
+                        }
+                        $sub2->orWhere('nombre', 'like', "{$termino}%")
+                            ->orWhere('nombre', 'like', "%{$termino}%");
+                    });
                 }
-                $sub->orWhere('nombre', 'like', "{$termino}%")
-                    ->orWhere('nombre', 'like', "%{$termino}%");
             });
         }
 

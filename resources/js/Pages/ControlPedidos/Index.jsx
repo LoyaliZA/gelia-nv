@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Plus, FileSpreadsheet, Package } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
@@ -14,6 +14,7 @@ import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/pedidosBmaStyles';
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
 
 export default function Index({ auth, pedidos, metricas = {}, filtros = {}, catalogos = {} }) {
+    const { flash } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (permiso) => permisos.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
 
@@ -87,6 +88,17 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     </div>
                 </header>
 
+                {flash?.success && (
+                    <div className={`${geliaCardClass()} border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-2xl px-4 py-3 text-sm font-bold`}>
+                        {flash.success}
+                    </div>
+                )}
+                {flash?.error && (
+                    <div className={`${geliaCardClass()} border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300 rounded-2xl px-4 py-3 text-sm font-bold`}>
+                        {flash.error}
+                    </div>
+                )}
+
                 <div className={`${geliaCardClass()} p-5`}>
                     <FiltrosPedidos
                         filtros={filtros}
@@ -108,6 +120,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             </GeliaPageShell>
 
             <ModalFormPedido
+                key={modalForm.pedido?.id ?? 'new'}
                 abierto={modalForm.abierto}
                 pedido={modalForm.pedido}
                 catalogos={catalogos}
