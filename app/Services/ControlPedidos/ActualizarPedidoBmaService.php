@@ -46,7 +46,7 @@ class ActualizarPedidoBmaService
                 $this->agregarDocumentos($pedido, $datos['comprobantes']);
             }
 
-            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacenSalida', 'banco']);
+            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco']);
         });
     }
 

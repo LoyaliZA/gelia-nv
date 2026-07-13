@@ -1,46 +1,58 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import {
-    Eye, CheckCircle2, AlertTriangle, FileText, RotateCcw,
+    Eye, CheckCircle2, AlertTriangle, FileText, Truck,
 } from 'lucide-react';
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
     badgeClaseEstatusPedido,
     badgeEmpaqueSemantico,
+    esPedidoEmpacadoCedis,
+    etiquetaAlmacen,
+    formatearFechaNegocio,
+    formatearFechaHoraAuditoria,
     BTN_PRIMARY,
     BTN_SECONDARY,
+    tieneGuiaPdfDisponible,
 } from '../../Partials/pedidosBmaStyles';
+import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
+import ModalVistaPreviaDocumento from '../../Partials/ModalVistaPreviaDocumento';
+import BotonGuiaPdf from '../../Partials/BotonGuiaPdf';
 
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 
-function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia }) {
+function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia, onSolicitarConfirmacion, onVerDocumento }) {
     const fase = pedido.estatus?.fase_ciclo;
     const badgeEstatus = badgeClaseEstatusPedido(pedido.estatus);
     const badgeEmpaque = badgeEmpaqueSemantico(fase);
     const remision = remisionDe(pedido);
     const esIncidencia = fase === 'INCIDENCIA_CEDIS';
-    const esEmpacado = fase === 'EN_RUTA';
+    const esEmpacado = esPedidoEmpacadoCedis(fase);
     const puedeEmpacar = fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS';
-
-    const marcarEmpacado = () => {
-        if (!window.confirm('¿Confirmar que el pedido fue empacado?')) return;
-        router.post(route('control_pedidos.cedis.marcar_empacado', pedido.id), {}, { preserveScroll: true });
-    };
-
-    const revertirEmpacado = () => {
-        if (!window.confirm('¿Revertir el empaque de este pedido?')) return;
-        router.post(route('control_pedidos.cedis.revertir_empacado', pedido.id), {}, { preserveScroll: true });
-    };
+    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
+    const tieneGuiaPdf = tieneGuiaPdfDisponible(pedido);
+    const requiereLogistica = pedido.origen?.requiere_logistica ?? true;
 
     return (
         <div className={`${geliaCardClass()} p-4 space-y-3 ${esIncidencia ? 'ring-1 ring-orange-500/40' : ''}`}>
+            {pedido.origen?.nombre && (
+                <p className="text-sm font-black uppercase tracking-widest text-center py-2 px-3 rounded-xl bg-[var(--color-primario)]/10 m-0" style={{ color: 'var(--color-primario)' }}>
+                    ORIGEN: {pedido.origen.nombre}
+                </p>
+            )}
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="text-sm font-black theme-text-main uppercase italic m-0">{pedido.folio}</p>
+                    <EncabezadoFolioPedido pedido={pedido} size="sm" />
                     <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                        {pedido.fecha ? new Date(pedido.fecha).toLocaleDateString('es-MX') : '—'}
+                        {formatearFechaNegocio(pedido.fecha)}
                     </p>
+                    {pedido.vendedor?.name && (
+                        <p className="text-[9px] theme-text-muted font-bold mt-1 m-0">
+                            Capturado por: {pedido.vendedor.name}
+                        </p>
+                    )}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <span className={badgeEstatus.className} style={badgeEstatus.style}>
@@ -59,8 +71,10 @@ function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia }) {
                 </div>
                 <div>
                     <p className="text-[9px] font-black m-0 opacity-70">Almacén</p>
-                    <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{pedido.almacen_salida?.nombre || '—'}</p>
+                    <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{etiquetaAlmacen(pedido.almacen)}</p>
                 </div>
+                {requiereLogistica && (
+                <>
                 <div>
                     <p className="text-[9px] font-black m-0 opacity-70">Paquetería</p>
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{pedido.paqueteria?.nombre || '—'}</p>
@@ -71,6 +85,8 @@ function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia }) {
                         {pedido.numero_cajas ?? '—'} · {pedido.tipo_guia?.nombre || '—'}
                     </p>
                 </div>
+                </>
+                )}
             </div>
 
             {esIncidencia && pedido.detalle_incidencia_empaque && (
@@ -80,35 +96,52 @@ function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia }) {
                     </p>
                     <p className="text-xs font-bold theme-text-main m-0">{pedido.detalle_incidencia_empaque}</p>
                     {pedido.incidencia_empaque_at && (
-                        <p className="text-[9px] theme-text-muted font-bold m-0">
+                        <p className="text-[9px] theme-text-muted font-bold m-0 font-mono">
                             {(pedido.incidencia_empaque_por?.name || pedido.incidenciaEmpaquePor?.name) && `${pedido.incidencia_empaque_por?.name || pedido.incidenciaEmpaquePor?.name} · `}
-                            {new Date(pedido.incidencia_empaque_at).toLocaleString('es-MX')}
+                            {formatearFechaHoraAuditoria(pedido.incidencia_empaque_at)}
                         </p>
                     )}
                 </div>
             )}
 
             {esEmpacado && pedido.empacado_at && (
-                <p className="text-[10px] text-emerald-600 font-bold m-0">
-                    Empacado por {(pedido.empacado_por?.name || pedido.empacadoPor?.name) || '—'} el {new Date(pedido.empacado_at).toLocaleString('es-MX')}
+                <p className="text-[10px] text-emerald-600 font-bold m-0 font-mono">
+                    Empacado por {(pedido.empacado_por?.name || pedido.empacadoPor?.name) || '—'} el {formatearFechaHoraAuditoria(pedido.empacado_at)}
+                </p>
+            )}
+
+            {fase === 'PENDIENTE_DE_ENVIO' && pedido.numero_rastreo && (
+                <p className="text-xs font-black font-mono theme-text-main m-0">
+                    Guía: {pedido.numero_rastreo}
                 </p>
             )}
 
             <div className="flex flex-wrap gap-2 pt-1">
                 {remision && (
-                    <a
-                        href={remision.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] outline-none no-underline`}
+                    <button
+                        type="button"
+                        onClick={() => onVerDocumento(remision)}
+                        className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] outline-none`}
                     >
                         <FileText className="w-3.5 h-3.5" /> Remisión
-                    </a>
+                    </button>
+                )}
+                {esEmpacado && tieneGuiaPdf && (
+                    <BotonGuiaPdf pedido={pedido} onVerPdf={onVerDocumento} compact />
+                )}
+                {puedeMarcarEnviado && (
+                    <button
+                        type="button"
+                        onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })}
+                        className={`${BTN_PRIMARY} flex items-center gap-1.5 text-[10px] outline-none`}
+                    >
+                        <Truck className="w-3.5 h-3.5" /> Marcar enviado
+                    </button>
                 )}
                 {puedeEmpacar && (
                     <button
                         type="button"
-                        onClick={marcarEmpacado}
+                        onClick={() => onSolicitarConfirmacion({ accion: 'empacar', pedido })}
                         className={`${BTN_PRIMARY} flex items-center gap-1.5 text-[10px] outline-none`}
                     >
                         <CheckCircle2 className="w-3.5 h-3.5" /> Marcar empacado
@@ -120,16 +153,7 @@ function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia }) {
                         onClick={() => onReportarIncidencia(pedido)}
                         className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] border border-orange-500/40 text-orange-600 outline-none`}
                     >
-                        <AlertTriangle className="w-3.5 h-3.5" /> Pendiente de empaque
-                    </button>
-                )}
-                {esEmpacado && (
-                    <button
-                        type="button"
-                        onClick={revertirEmpacado}
-                        className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] outline-none`}
-                    >
-                        <RotateCcw className="w-3.5 h-3.5" /> Revertir
+                        <AlertTriangle className="w-3.5 h-3.5" /> Reportar Error
                     </button>
                 )}
                 <button
@@ -145,7 +169,28 @@ function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia }) {
 }
 
 export default function TarjetasCedis({ pedidos, onVerDetalle, onReportarIncidencia }) {
+    const [confirmacion, setConfirmacion] = useState(null);
+    const [docPreview, setDocPreview] = useState(null);
+
     const items = pedidos?.data || [];
+
+    const ejecutarConfirmacion = () => {
+        const { accion, pedido } = confirmacion || {};
+        setConfirmacion(null);
+        if (!pedido) return;
+
+        if (accion === 'empacar') {
+            router.post(route('control_pedidos.cedis.marcar_empacado', pedido.id), {}, { preserveScroll: true });
+        } else if (accion === 'enviar') {
+            router.post(route('control_pedidos.cedis.marcar_enviado', pedido.id), {}, { preserveScroll: true });
+        }
+    };
+
+    const cfgConfirm = confirmacion?.accion === 'empacar'
+        ? { titulo: 'Confirmar empaque', mensaje: '¿Confirmar que el pedido fue empacado?', etiquetaConfirmar: 'Marcar empacado', variante: 'primary' }
+        : confirmacion?.accion === 'enviar'
+            ? { titulo: 'Confirmar envío', mensaje: '¿Confirmar que el pedido salió de almacén?', etiquetaConfirmar: 'Marcar enviado', variante: 'primary' }
+            : null;
 
     if (items.length === 0) {
         return (
@@ -164,10 +209,22 @@ export default function TarjetasCedis({ pedidos, onVerDetalle, onReportarInciden
                         pedido={pedido}
                         onVerDetalle={onVerDetalle}
                         onReportarIncidencia={onReportarIncidencia}
+                        onSolicitarConfirmacion={setConfirmacion}
+                        onVerDocumento={setDocPreview}
                     />
                 ))}
             </div>
             {pedidos?.links && <GeliaPaginacion paginator={pedidos} />}
+            <ModalConfirmarAccion
+                abierto={Boolean(cfgConfirm)}
+                titulo={cfgConfirm?.titulo}
+                mensaje={cfgConfirm?.mensaje}
+                etiquetaConfirmar={cfgConfirm?.etiquetaConfirmar}
+                variante={cfgConfirm?.variante}
+                onClose={() => setConfirmacion(null)}
+                onConfirm={ejecutarConfirmacion}
+            />
+            <ModalVistaPreviaDocumento abierto={Boolean(docPreview)} documento={docPreview} onClose={() => setDocPreview(null)} />
         </div>
     );
 }

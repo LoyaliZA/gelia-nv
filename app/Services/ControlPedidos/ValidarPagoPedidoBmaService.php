@@ -36,7 +36,7 @@ class ValidarPagoPedidoBmaService
             );
 
             return $pedido->fresh([
-                'cliente', 'estatus', 'documentos', 'banco', 'almacenSalida',
+                'cliente', 'estatus', 'documentos', 'banco', 'almacen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'envioTienda', 'pagoValidadoPor',
             ]);
         });

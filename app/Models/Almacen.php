@@ -16,12 +16,14 @@ class Almacen extends Model
         'sucursal_id',
         'tipo_almacen_id',
         'activo',
+        'visible_en_pedidos',
     ];
 
     protected function casts(): array
     {
         return [
             'activo' => 'boolean',
+            'visible_en_pedidos' => 'boolean',
         ];
     }
 

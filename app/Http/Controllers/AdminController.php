@@ -34,10 +34,10 @@ use App\Models\CatalogoMarcaProducto;
 use App\Models\Almacen;
 use App\Models\CatalogoCategoriaProducto;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
-use App\Models\ControlPedidos\CatalogoAlmacenSalida;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\CatalogoTipoGuiaPedido;
+use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\CatalogoEnvioTienda;
 use App\Models\ControlPedidos\CatalogoZonaPedido;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
@@ -117,12 +117,12 @@ class AdminController extends Controller
             'almacenes' => Almacen::with(['sucursal', 'tipoAlmacen'])->orderBy('nombre')->get(),
             'categorias_producto' => CatalogoCategoriaProducto::orderBy('nombre')->get(),
             'estatus_pedidos' => CatalogoEstatusPedido::orderBy('orden')->get(),
-            'almacenes_salida' => CatalogoAlmacenSalida::orderBy('nombre')->get(),
             'paqueterias_pedido' => CatalogoPaqueteriaPedido::orderBy('nombre')->get(),
             'tipos_caja_pedido' => CatalogoTipoCajaPedido::orderBy('nombre')->get(),
             'tipos_guia_pedido' => CatalogoTipoGuiaPedido::orderBy('nombre')->get(),
             'zonas_pedido' => CatalogoZonaPedido::orderBy('nombre')->get(),
             'envios_tienda' => CatalogoEnvioTienda::orderBy('nombre')->get(),
+            'origenes_pedido' => CatalogoOrigenPedido::orderBy('nombre')->get(),
         ]);
     }
 

@@ -1,13 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Eye, Edit2, Trash2, AlertTriangle, History } from 'lucide-react';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
-import { badgeClaseEstatusPedido, formatearMoneda } from './pedidosBmaStyles';
+import { badgeClaseEstatusPedido, formatearMoneda, etiquetaAlmacen, formatearFechaNegocio, tieneGuiaLista, badgeGuiaLista, tieneGuiaPdfDisponible } from './pedidosBmaStyles';
+import EncabezadoFolioPedido from './EncabezadoFolioPedido';
+import BotonGuiaPdf from './BotonGuiaPdf';
+import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 
-function AccionesPedido({ pedido, can, onVer, onEditar, onEliminar, onBitacora, puedeEditar, puedeEliminar, compact = false }) {
+function AccionesPedido({ pedido, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, puedeEditar, puedeEliminar, compact = false }) {
     const btnClass = compact ? 'p-2.5' : 'p-2';
     return (
         <div className={`flex ${compact ? 'flex-wrap' : 'justify-end'} gap-1.5`}>
+            {tieneGuiaPdfDisponible(pedido) && onVerGuia && (
+                <BotonGuiaPdf pedido={pedido} onVerPdf={onVerGuia} compact className="!px-3 !py-2" />
+            )}
             {can('control_pedidos.ver_detalle') && (
                 <button type="button" onClick={() => onVer(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-[var(--color-primario)]`} title="Ver">
                     <Eye className="w-4 h-4 theme-text-main" />
@@ -32,28 +38,44 @@ function AccionesPedido({ pedido, can, onVer, onEditar, onEliminar, onBitacora, 
     );
 }
 
-function CardPedido({ pedido, badge, esRechazado, can, onVer, onEditar, onEliminar, onBitacora, puedeEditar, puedeEliminar }) {
+function CardPedido({ pedido, badge, esRechazado, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, puedeEditar, puedeEliminar }) {
+    const guiaLista = tieneGuiaLista(pedido);
+    const badgeGuia = badgeGuiaLista();
+
     return (
         <div className={`${geliaCardClass()} p-4 space-y-3 ${esRechazado ? 'ring-1 ring-red-500/30' : ''}`}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="text-sm font-black theme-text-main uppercase italic m-0">{pedido.folio}</p>
+                    <EncabezadoFolioPedido pedido={pedido} size="sm" />
                     <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                        {pedido.fecha ? new Date(pedido.fecha).toLocaleDateString('es-MX') : '—'}
+                        {formatearFechaNegocio(pedido.fecha)}
                     </p>
+                    {pedido.vendedor?.name && (
+                        <p className="text-[9px] theme-text-muted font-bold mt-1 m-0">{pedido.vendedor.name}</p>
+                    )}
                 </div>
-                <span className={badge.className} style={badge.style}>{pedido.estatus?.nombre_visual}</span>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className={badge.className} style={badge.style}>{pedido.estatus?.nombre_visual}</span>
+                    {guiaLista && (
+                        <span className={badgeGuia.className}>{badgeGuia.label}</span>
+                    )}
+                </div>
             </div>
             <div>
                 <p className="text-xs font-black theme-text-main uppercase m-0">{pedido.cliente?.nombre || '—'}</p>
                 <p className="text-[9px] theme-text-muted m-0">{pedido.cliente?.numero_cliente}</p>
             </div>
             <div className="flex flex-wrap gap-2 text-[10px] font-bold theme-text-muted uppercase">
-                <span>{pedido.almacen_salida?.nombre || '—'}</span>
+                <span>{etiquetaAlmacen(pedido.almacen)}</span>
                 <span>·</span>
                 <span>{pedido.banco?.nombre || '—'}</span>
             </div>
             <p className="text-lg font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(pedido.total_a_cobrar)}</p>
+            {guiaLista && pedido.numero_rastreo && (
+                <p className="text-xs font-black font-mono theme-text-main m-0">
+                    Guía: {pedido.numero_rastreo}
+                </p>
+            )}
             {esRechazado && pedido.motivo_rechazo && (
                 <p className="text-[10px] text-red-500 font-bold m-0 flex items-start gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {pedido.motivo_rechazo}
@@ -66,6 +88,7 @@ function CardPedido({ pedido, badge, esRechazado, can, onVer, onEditar, onElimin
                 onEditar={onEditar}
                 onEliminar={onEliminar}
                 onBitacora={onBitacora}
+                onVerGuia={onVerGuia}
                 puedeEditar={puedeEditar}
                 puedeEliminar={puedeEliminar}
                 compact
@@ -82,6 +105,7 @@ export default function TablaPedidos({
     onEliminar,
     onBitacora,
 }) {
+    const [docPreview, setDocPreview] = useState(null);
     const items = pedidos?.data || [];
 
     const puedeEditar = (pedido) => {
@@ -114,6 +138,7 @@ export default function TablaPedidos({
                         onEditar={onEditar}
                         onEliminar={onEliminar}
                         onBitacora={onBitacora}
+                        onVerGuia={setDocPreview}
                         puedeEditar={puedeEditar}
                         puedeEliminar={puedeEliminar}
                     />
@@ -139,10 +164,12 @@ export default function TablaPedidos({
                         {items.map((pedido) => {
                             const badge = badgeClaseEstatusPedido(pedido.estatus);
                             const esRechazado = pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA';
+                            const guiaLista = tieneGuiaLista(pedido);
+                            const badgeGuia = badgeGuiaLista();
                             return (
                                 <tr key={pedido.id} className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${esRechazado ? 'bg-red-500/5' : ''}`}>
                                     <td className="px-5 py-4">
-                                        <p className="text-sm font-black theme-text-main uppercase italic m-0">{pedido.folio}</p>
+                                        <EncabezadoFolioPedido pedido={pedido} size="sm" />
                                         {esRechazado && pedido.motivo_rechazo && (
                                             <p className="text-[9px] text-red-500 font-bold mt-1 flex items-center gap-1">
                                                 <AlertTriangle className="w-3 h-3" /> {pedido.motivo_rechazo}
@@ -150,13 +177,13 @@ export default function TablaPedidos({
                                         )}
                                     </td>
                                     <td className="px-5 py-4 text-xs font-bold theme-text-muted">
-                                        {pedido.fecha ? new Date(pedido.fecha).toLocaleDateString('es-MX') : '—'}
+                                        {formatearFechaNegocio(pedido.fecha)}
                                     </td>
                                     <td className="px-5 py-4">
                                         <p className="text-xs font-black theme-text-main uppercase m-0">{pedido.cliente?.nombre}</p>
                                         <p className="text-[9px] theme-text-muted m-0">{pedido.cliente?.numero_cliente}</p>
                                     </td>
-                                    <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase">{pedido.almacen_salida?.nombre || '—'}</td>
+                                    <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase">{etiquetaAlmacen(pedido.almacen)}</td>
                                     <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase">{pedido.banco?.nombre || '—'}</td>
                                     <td className="px-5 py-4 text-sm font-black" style={{ color: 'var(--color-primario)' }}>
                                         {formatearMoneda(pedido.total_a_cobrar)}
@@ -165,6 +192,14 @@ export default function TablaPedidos({
                                         <span className={badge.className} style={badge.style}>
                                             {pedido.estatus?.nombre_visual}
                                         </span>
+                                        {guiaLista && (
+                                            <span className={`${badgeGuia.className} mt-1.5 block w-fit`}>{badgeGuia.label}</span>
+                                        )}
+                                        {guiaLista && pedido.numero_rastreo && (
+                                            <p className="text-[9px] font-bold font-mono theme-text-main mt-1 m-0">
+                                                Guía: {pedido.numero_rastreo}
+                                            </p>
+                                        )}
                                         <p className="text-[8px] font-bold theme-text-muted uppercase mt-1 m-0">{pedido.estatus?.fase_ciclo}</p>
                                     </td>
                                     <td className="px-5 py-4">
@@ -175,6 +210,7 @@ export default function TablaPedidos({
                                             onEditar={onEditar}
                                             onEliminar={onEliminar}
                                             onBitacora={onBitacora}
+                                            onVerGuia={setDocPreview}
                                             puedeEditar={puedeEditar}
                                             puedeEliminar={puedeEliminar}
                                         />
@@ -186,6 +222,7 @@ export default function TablaPedidos({
                 </table>
             </div>
             {pedidos?.links && <GeliaPaginacion paginacion={pedidos} />}
+            <ModalVistaPreviaDocumento abierto={Boolean(docPreview)} documento={docPreview} onClose={() => setDocPreview(null)} />
         </div>
     );
 }

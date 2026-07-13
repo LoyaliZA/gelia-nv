@@ -26,6 +26,7 @@ import TablaEstatusPedidos from './Partials/Catalogos/TablaEstatusPedidos';
 import TablaCatalogoPedidoGenerico from './Partials/Catalogos/TablaCatalogoPedidoGenerico';
 import TablaTiposCajaPedido from './Partials/Catalogos/TablaTiposCajaPedido';
 import TablaPaqueteriasPedido from './Partials/Catalogos/TablaPaqueteriasPedido';
+import TablaOrigenesPedido from './Partials/Catalogos/TablaOrigenesPedido';
 
 
 export default function Catalogos({
@@ -33,8 +34,8 @@ export default function Catalogos({
     zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [],
     bancos = [], tipos_activo = [], categorias_activo = [],
     sucursales = [], tipos_almacen = [], marcas_producto = [], almacenes = [], categorias_producto = [],
-    estatus_pedidos = [], almacenes_salida = [], paqueterias_pedido = [], tipos_caja_pedido = [],
-    tipos_guia_pedido = [], zonas_pedido = [], envios_tienda = [],
+    estatus_pedidos = [], paqueterias_pedido = [], tipos_caja_pedido = [],
+    tipos_guia_pedido = [], zonas_pedido = [], envios_tienda = [], origenes_pedido = [],
 }) {
     const [tabActiva, setTabActiva] = useState('departamentos');
     const activeCardClass = geliaCardClass('relative z-10');
@@ -58,9 +59,9 @@ export default function Catalogos({
         { id: 'categorias_activo', label: 'Categorías Activo', icon: Tags },
         { id: 'zonas_entrega', label: 'Zonas Logísticas', icon: Map },
         { id: 'horarios_entrega', label: 'Horarios Entrega', icon: Clock },
+        { id: 'origenes_pedido', label: 'Orígenes Pedido', icon: Tags },
         { id: 'envios_tienda', label: 'Envíos / Tienda', icon: Truck },
         { id: 'estatus_pedidos', label: 'Estatus Pedidos', icon: Activity },
-        { id: 'almacenes_salida', label: 'Almacenes Salida', icon: Warehouse },
         { id: 'paqueterias_pedido', label: 'Paqueterías', icon: Truck },
         { id: 'tipos_caja_pedido', label: 'Tipos Caja', icon: Box },
         { id: 'tipos_guia_pedido', label: 'Tipos Guía', icon: Map },
@@ -117,8 +118,8 @@ export default function Catalogos({
                     {tabActiva === 'zonas_entrega' && <TablaZonasEntrega datos={zonas_entrega} auth={auth} />}
                     {tabActiva === 'horarios_entrega' && <TablaHorariosEntrega datos={horarios_entrega} zonas_entrega={zonas_entrega} auth={auth} />}
                     {tabActiva === 'estatus_pedidos' && <TablaEstatusPedidos datos={estatus_pedidos} />}
-                    {tabActiva === 'almacenes_salida' && (
-                        <TablaCatalogoPedidoGenerico datos={almacenes_salida} titulo="Almacenes Salida_" icon={Warehouse} routePrefix="almacenes_salida" loaderMessage="Guardando Almacén_" />
+                    {tabActiva === 'origenes_pedido' && (
+                        <TablaOrigenesPedido datos={origenes_pedido} />
                     )}
                     {tabActiva === 'envios_tienda' && (
                         <TablaCatalogoPedidoGenerico datos={envios_tienda} titulo="Envíos / Tienda_" icon={Truck} routePrefix="envios_tienda" loaderMessage="Guardando Envío_" />

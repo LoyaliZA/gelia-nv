@@ -8,10 +8,16 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListarPedidosCedisService
 {
-    private const FASES_CEDIS = [
+    private const FASES_PENDIENTES = [
         CatalogoEstatusPedido::FASE_EN_CEDIS,
         CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
-        CatalogoEstatusPedido::FASE_EN_RUTA,
+    ];
+
+    private const FASES_EMPACADOS = [
+        CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+        CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+        CatalogoEstatusPedido::FASE_ENTREGADO,
+        CatalogoEstatusPedido::FASE_ENVIADO,
     ];
 
     public function ejecutar(array $filtros = [], bool $paginar = true)
@@ -27,31 +33,36 @@ class ListarPedidosCedisService
         $base = $this->queryBase();
         $idsPorFase = $this->idsPorFase();
 
-        $pendientes = (clone $base)->whereIn('catalogo_estatus_pedido_id', array_filter([
-            $idsPorFase['EN_CEDIS'] ?? null,
-            $idsPorFase['INCIDENCIA_CEDIS'] ?? null,
-        ]))->count();
-        $empacados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['EN_RUTA'] ?? 0)->count();
+        $pendientes = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0)->count();
+        $incidencias = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0)->count();
+        $empacados = (clone $base)->whereIn('catalogo_estatus_pedido_id', array_values(array_filter(array_map(
+            fn (string $fase) => $idsPorFase[$fase] ?? null,
+            self::FASES_EMPACADOS
+        ))))->whereNotNull('empacado_at')->count();
 
         return [
             'pendientes' => $pendientes,
+            'incidencias' => $incidencias,
             'empacados' => $empacados,
-            'total' => $pendientes + $empacados,
+            'total' => $pendientes + $incidencias + $empacados,
         ];
     }
 
     private function queryBase(): Builder
     {
         $idsPorFase = $this->idsPorFase();
+        $fasesVisibles = array_merge(self::FASES_PENDIENTES, self::FASES_EMPACADOS);
         $idsVisibles = array_values(array_filter(array_map(
             fn (string $fase) => $idsPorFase[$fase] ?? null,
-            self::FASES_CEDIS
+            $fasesVisibles
         )));
 
         return PedidoBma::with([
             'cliente',
+            'vendedor',
             'estatus',
-            'almacenSalida',
+            'origen',
+            'almacen',
             'paqueteria',
             'tipoGuia',
             'tipoCaja',
@@ -60,6 +71,7 @@ class ListarPedidosCedisService
             'incidenciaEmpaquePor',
         ])
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
+            ->where('es_resguardo', false)
             ->whereNotNull('pago_validado_at')
             ->whereHas('remision')
             ->orderByDesc('created_at');
@@ -71,6 +83,7 @@ class ListarPedidosCedisService
             $termino = trim($filtros['q']);
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
+                    ->orWhere('folio_remision', 'like', "%{$termino}%")
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
@@ -81,12 +94,16 @@ class ListarPedidosCedisService
         $tab = strtoupper($filtros['tab'] ?? 'PENDIENTES');
         $idsPorFase = $this->idsPorFase();
 
+        $idsEmpacados = array_values(array_filter(array_map(
+            fn (string $fase) => $idsPorFase[$fase] ?? null,
+            self::FASES_EMPACADOS
+        )));
+
         match ($tab) {
-            'PENDIENTES' => $query->whereIn('catalogo_estatus_pedido_id', array_filter([
-                $idsPorFase['EN_CEDIS'] ?? null,
-                $idsPorFase['INCIDENCIA_CEDIS'] ?? null,
-            ])),
-            'EMPACADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['EN_RUTA'] ?? 0),
+            'PENDIENTES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0),
+            'INCIDENCIAS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0),
+            'EMPACADOS' => $query->whereIn('catalogo_estatus_pedido_id', $idsEmpacados ?: [0])
+                ->whereNotNull('empacado_at'),
             default => null,
         };
     }
@@ -94,7 +111,7 @@ class ListarPedidosCedisService
     private function idsPorFase(): array
     {
         return CatalogoEstatusPedido::query()
-            ->whereIn('fase_ciclo', self::FASES_CEDIS)
+            ->whereIn('fase_ciclo', array_merge(self::FASES_PENDIENTES, self::FASES_EMPACADOS))
             ->pluck('id', 'fase_ciclo')
             ->all();
     }

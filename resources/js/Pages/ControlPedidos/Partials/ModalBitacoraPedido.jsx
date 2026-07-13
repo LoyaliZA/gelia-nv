@@ -1,7 +1,13 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { X, History } from 'lucide-react';
-import { badgeClaseEstatusPedido, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from './pedidosBmaStyles';
+import {
+    badgeClaseEstatusPedido,
+    formatearFechaHoraAuditoria,
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+} from './pedidosBmaStyles';
+import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 
 export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
     if (!abierto || !pedido) return null;
@@ -18,7 +24,10 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
                 <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                     <div className="flex items-center gap-2 min-w-0">
                         <History className="w-5 h-5 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                        <h2 className="text-lg font-black italic uppercase theme-text-main m-0 truncate">Bitácora — {pedido.folio}</h2>
+                        <div className="min-w-0">
+                            <h2 className="text-lg font-black italic uppercase theme-text-main m-0">Bitácora</h2>
+                            <EncabezadoFolioPedido pedido={pedido} size="sm" className="mt-1" />
+                        </div>
                     </div>
                     <button
                         type="button"
@@ -40,8 +49,8 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
                                     <div key={h.id} className="p-4 rounded-xl border theme-border theme-element">
                                         <div className="flex justify-between items-start gap-2">
                                             <span className={badge.className} style={badge.style}>{(h.estatus_nuevo || h.estatusNuevo)?.nombre_visual}</span>
-                                            <span className="text-[9px] theme-text-muted font-bold shrink-0">
-                                                {h.created_at ? new Date(h.created_at).toLocaleString('es-MX') : ''}
+                                            <span className="text-[9px] theme-text-muted font-bold shrink-0 font-mono">
+                                                {formatearFechaHoraAuditoria(h.created_at)}
                                             </span>
                                         </div>
                                         <p className="text-[10px] font-bold theme-text-muted mt-2 m-0">{h.usuario?.name}</p>

@@ -43,7 +43,7 @@ class ReportarIncidenciaEmpaqueService
             );
 
             return $pedido->fresh([
-                'cliente', 'estatus', 'documentos', 'almacenSalida',
+                'cliente', 'estatus', 'documentos', 'almacen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'incidenciaEmpaquePor',
             ]);
         });

@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Storage;
 
 class EnviarPedidoBmaService
 {
+    use ValidacionCamposPedidoBma;
+
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
     ) {}
@@ -48,51 +50,8 @@ class EnviarPedidoBmaService
                 'Pedido enviado a revisión del auxiliar.'
             );
 
-            return $pedido->fresh(['cliente', 'estatus', 'documentos', 'almacenSalida', 'banco']);
+            return $pedido->fresh(['cliente', 'estatus', 'documentos', 'almacen', 'banco']);
         });
-    }
-
-    private function validarCamposRequeridos(PedidoBma $pedido): void
-    {
-        $faltantes = [];
-
-        if (!$pedido->cliente_id) {
-            $faltantes[] = 'cliente';
-        }
-        if (!$pedido->catalogo_almacen_salida_id) {
-            $faltantes[] = 'almacén de salida';
-        }
-        if (!$pedido->catalogo_banco_id) {
-            $faltantes[] = 'banco';
-        }
-        if (!$pedido->catalogo_tipo_caja_id) {
-            $faltantes[] = 'tipo de caja';
-        }
-        if (!$pedido->catalogo_paqueteria_id) {
-            $faltantes[] = 'paquetería';
-        }
-        if (!$pedido->catalogo_tipo_guia_id) {
-            $faltantes[] = 'tipo de guía';
-        }
-        if (!$pedido->catalogo_zona_id) {
-            $faltantes[] = 'zona';
-        }
-        if (empty($pedido->codigo_postal)) {
-            $faltantes[] = 'código postal';
-        }
-        if (empty($pedido->domicilio_entrega)) {
-            $faltantes[] = 'domicilio de entrega';
-        }
-        if ($pedido->total_mercancia <= 0) {
-            $faltantes[] = 'total de mercancía';
-        }
-        if ($pedido->documentos()->count() === 0) {
-            $faltantes[] = 'comprobante de pago';
-        }
-
-        if (!empty($faltantes)) {
-            throw new \InvalidArgumentException('Complete los campos requeridos: ' . implode(', ', $faltantes) . '.');
-        }
     }
 
     private function eliminarRemisiones(PedidoBma $pedido): void

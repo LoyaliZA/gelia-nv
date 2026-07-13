@@ -8,6 +8,7 @@ use App\Http\Requests\ControlPedidos\SubirRemisionPedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\AprobarPedidoBmaService;
 use App\Services\ControlPedidos\GestionarRemisionPedidoBmaService;
+use App\Services\ControlPedidos\LiberarResguardoPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosAuditoriaService;
 use App\Services\ControlPedidos\RechazarPedidoBmaService;
 use App\Services\ControlPedidos\ValidarPagoPedidoBmaService;
@@ -96,5 +97,18 @@ class PedidoBmaAuditoriaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Pedido rechazado y devuelto a la vendedora.');
+    }
+
+    public function liberarResguardo(PedidoBma $pedidoBma, LiberarResguardoPedidoBmaService $service): RedirectResponse
+    {
+        Gate::authorize('control_pedidos.auditar');
+
+        try {
+            $service->ejecutar($pedidoBma, Auth::id());
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Resguardo liberado correctamente.');
     }
 }

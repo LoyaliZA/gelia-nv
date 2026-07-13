@@ -7,9 +7,13 @@ import {
 } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
+import InputMoneda from './InputMoneda';
 import {
     calcularTotalCobrar,
+    calcCostoSeguro,
+    paqueteriaTieneCobertura,
     formatearMoneda,
+    etiquetaAlmacen,
     textoWhatsAppPedido,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
@@ -18,34 +22,37 @@ import {
     BTN_SECONDARY,
     validarCamposEnvioPedido,
 } from './pedidosBmaStyles';
+import ModalAlertaPedido from './ModalAlertaPedido';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-8 last:border-0';
 
 function formDefaults(pedido = null) {
     return {
+        origen_id: pedido?.origen_id || '',
         cliente_id: pedido?.cliente_id || '',
         numero_cliente: pedido?.cliente?.numero_cliente || '',
+        folio_remision: pedido?.folio_remision || '',
         fecha: pedido?.fecha?.slice?.(0, 10) || new Date().toISOString().slice(0, 10),
         catalogo_banco_id: pedido?.catalogo_banco_id || '',
         requiere_factura: pedido?.requiere_factura || false,
-        catalogo_almacen_salida_id: pedido?.catalogo_almacen_salida_id || '',
+        almacen_id: pedido?.almacen_id || '',
         catalogo_tipo_caja_id: pedido?.catalogo_tipo_caja_id || '',
-        numero_cajas: pedido?.numero_cajas ?? 1,
+        numero_cajas: pedido?.numero_cajas ?? '',
         peso_real_kg: pedido?.peso_real_kg ?? '',
         peso_con_productos_kg: pedido?.peso_con_productos_kg ?? '',
         catalogo_tipo_guia_id: pedido?.catalogo_tipo_guia_id || '',
         codigo_postal: pedido?.codigo_postal || '',
         domicilio_entrega: pedido?.domicilio_entrega || '',
-        total_mercancia: pedido?.total_mercancia ?? 0,
+        total_mercancia: pedido?.total_mercancia ?? '',
         catalogo_envio_tienda_id: pedido?.catalogo_envio_tienda_id || '',
         envio_tienda_otro: pedido?.envio_tienda_otro || '',
         catalogo_paqueteria_id: pedido?.catalogo_paqueteria_id || '',
-        costo_envio: pedido?.costo_envio ?? 0,
+        costo_envio: pedido?.costo_envio ?? '',
         aplica_saldo_favor: Number(pedido?.saldo_a_favor || 0) > 0,
-        saldo_a_favor: pedido?.saldo_a_favor ?? 0,
+        saldo_a_favor: pedido?.saldo_a_favor ?? '',
         aplica_seguro: pedido?.aplica_seguro || false,
-        costo_seguro: pedido?.costo_seguro ?? 0,
+        costo_seguro: pedido?.costo_seguro ?? '',
         envia_a_otra_persona: pedido?.envia_a_otra_persona || false,
         envia_otra_persona: pedido?.envia_otra_persona || '',
         es_resguardo: pedido?.es_resguardo || false,
@@ -69,7 +76,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const [previews, setPreviews] = useState([]);
     const [docsEliminar, setDocsEliminar] = useState([]);
     const [pesoVolumetrico, setPesoVolumetrico] = useState(pedido?.peso_volumetrico_kg ?? '');
-    const [alertaEnvio, setAlertaEnvio] = useState('');
+    const [alertaEnvio, setAlertaEnvio] = useState({ abierto: false, mensaje: '' });
     const temporizadorBusqueda = useRef(null);
     const abortBusqueda = useRef(null);
 
@@ -78,6 +85,15 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const envioTiendaOtro = (catalogos.envios_tienda || []).find(
         (e) => String(e.id) === String(data.catalogo_envio_tienda_id)
     )?.es_otro;
+
+    const paqueteriaSeleccionada = (catalogos.paqueterias || []).find(
+        (p) => String(p.id) === String(data.catalogo_paqueteria_id)
+    );
+    const origenSeleccionado = (catalogos.origenes || []).find(
+        (o) => String(o.id) === String(data.origen_id)
+    );
+    const requiereLogistica = origenSeleccionado?.requiere_logistica ?? false;
+    const tieneCoberturaSeguro = paqueteriaTieneCobertura(paqueteriaSeleccionada?.nombre);
 
     const totalCobrar = calcularTotalCobrar(
         data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
@@ -115,6 +131,22 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         const caja = (catalogos.tipos_caja || []).find((c) => String(c.id) === String(data.catalogo_tipo_caja_id));
         setPesoVolumetrico(caja?.peso_volumetrico ?? '');
     }, [data.catalogo_tipo_caja_id, catalogos.tipos_caja]);
+
+    useEffect(() => {
+        if (!data.catalogo_paqueteria_id) {
+            setData('costo_seguro', 0);
+            setData('aplica_seguro', false);
+            return;
+        }
+
+        const paq = (catalogos.paqueterias || []).find((p) => String(p.id) === String(data.catalogo_paqueteria_id));
+        const costo = calcCostoSeguro(paq?.nombre, data.costo_envio, data.total_mercancia);
+        setData('costo_seguro', costo);
+
+        if (!paqueteriaTieneCobertura(paq?.nombre)) {
+            setData('aplica_seguro', false);
+        }
+    }, [data.catalogo_paqueteria_id, data.costo_envio, data.total_mercancia, catalogos.paqueterias]);
 
     const fetchClientes = async (term) => {
         const limpio = term.trim();
@@ -198,8 +230,8 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const manejarPaqueteria = (id) => {
         setData('catalogo_paqueteria_id', id);
         const paq = (catalogos.paqueterias || []).find((p) => String(p.id) === String(id));
-        if (paq?.costo_seguro_default != null) {
-            setData('costo_seguro', paq.costo_seguro_default);
+        if (!paqueteriaTieneCobertura(paq?.nombre)) {
+            setData('aplica_seguro', false);
         }
     };
 
@@ -249,15 +281,15 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     };
 
     const guardar = (enviarPedido = false) => {
-        setAlertaEnvio('');
+        setAlertaEnvio({ abierto: false, mensaje: '' });
 
         if (enviarPedido) {
             const comprobantesExistentes = modoEdicion
                 ? (pedido?.documentos || []).filter((d) => !docsEliminar.includes(d.id)).length
                 : 0;
-            const { valido, mensaje } = validarCamposEnvioPedido(data, { comprobantesExistentes });
+            const { valido, mensaje } = validarCamposEnvioPedido(data, { comprobantesExistentes, requiereLogistica });
             if (!valido) {
-                setAlertaEnvio(mensaje);
+                setAlertaEnvio({ abierto: true, mensaje });
                 return;
             }
         }
@@ -267,7 +299,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             preserveScroll: true,
             onSuccess: (page) => {
                 if (page?.props?.flash?.error) {
-                    setAlertaEnvio(page.props.flash.error);
+                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
                     return;
                 }
                 onClose();
@@ -292,11 +324,11 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
 
     const docsExistentes = (pedido?.documentos || []).filter((d) => !docsEliminar.includes(d.id));
 
-    return createPortal(
+    const modal = createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
             <div
-                className={`${THEME_MODAL_SHELL} max-w-4xl w-full flex flex-col text-left`}
-                style={{ maxHeight: 'calc(100dvh - 2rem)' }}
+                className={`${THEME_MODAL_SHELL} max-w-4xl w-full flex flex-col text-left ${data.es_resguardo ? 'ring-2 ring-blue-500/50' : ''}`}
+                style={{ maxHeight: 'calc(100dvh - 2rem)', ...(data.es_resguardo ? { backgroundColor: 'color-mix(in srgb, #3B82F6 6%, var(--color-surface))' } : {}) }}
                 onClick={(e) => e.stopPropagation()}
                 onPaste={handlePaste}
             >
@@ -311,6 +343,33 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 </div>
 
                 <div className="gelia-modal-body p-5 md:p-8 space-y-8">
+                    {/* 0. Origen y resguardo */}
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>Origen del pedido</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className={SECCION}>Origen</label>
+                                <select value={data.origen_id} onChange={(e) => setData('origen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                    <option value="">Seleccionar...</option>
+                                    {(catalogos.origenes || []).map((o) => (
+                                        <option key={o.id} value={o.id}>{o.nombre}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex items-end">
+                                <label className="flex items-center gap-3 cursor-pointer theme-text-main p-3 rounded-xl border theme-border w-full">
+                                    <input
+                                        type="checkbox"
+                                        checked={data.es_resguardo}
+                                        onChange={(e) => setData('es_resguardo', e.target.checked)}
+                                        className="w-4 h-4"
+                                    />
+                                    <span className="text-sm font-bold">¿Dejar en resguardo?</span>
+                                </label>
+                            </div>
+                        </div>
+                    </section>
+
                     {/* 1. Datos generales y cliente */}
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>1. Datos generales y cliente</p>
@@ -332,8 +391,18 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 )}
                             </div>
                             <div>
-                                <label className={SECCION}>Folio</label>
-                                <input type="text" readOnly value={pedido?.folio || 'Auto-generado'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
+                                <label className={SECCION}>Folio de remisión *</label>
+                                <input
+                                    type="text"
+                                    value={data.folio_remision}
+                                    onChange={(e) => setData('folio_remision', e.target.value)}
+                                    placeholder="Número de remisión manual..."
+                                    className={`${THEME_INPUT} w-full py-3`}
+                                />
+                            </div>
+                            <div>
+                                <label className={SECCION}>Folio interno</label>
+                                <input type="text" readOnly value={pedido?.folio || 'Se asignará al guardar'} className={`${THEME_INPUT} w-full py-3 text-[11px] opacity-50`} />
                             </div>
                             <div>
                                 <label className={SECCION}>Status</label>
@@ -359,9 +428,24 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <input type="checkbox" checked={data.requiere_factura} onChange={(e) => setData('requiere_factura', e.target.checked)} />
                                 <span className="text-sm font-bold">Requiere factura</span>
                             </label>
+                            <div>
+                                <label className={SECCION}>Peso real (kg)</label>
+                                <input type="number" step="0.0001" min="0" placeholder="0.0000" value={data.peso_real_kg} onChange={(e) => setData('peso_real_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                            </div>
+                            <div>
+                                <label className={SECCION}>Almacén de salida</label>
+                                <select value={data.almacen_id} onChange={(e) => setData('almacen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                    <option value="">Seleccionar...</option>
+                                    {(catalogos.almacenes || []).map((a) => (
+                                        <option key={a.id} value={a.id}>{etiquetaAlmacen(a)}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     </section>
 
+                    {requiereLogistica && (
+                    <>
                     {/* 2. Peso y cajas */}
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>2. Peso y cajas</p>
@@ -378,10 +462,6 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <input type="text" readOnly value={pesoVolumetrico !== '' ? pesoVolumetrico : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
                             </div>
                             <div>
-                                <label className={SECCION}>Peso real (kg)</label>
-                                <input type="number" step="0.0001" min="0" placeholder="0.0000" value={data.peso_real_kg} onChange={(e) => setData('peso_real_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
-                            </div>
-                            <div>
                                 <label className={SECCION}>Tipo de guía</label>
                                 <select value={data.catalogo_tipo_guia_id} onChange={(e) => setData('catalogo_tipo_guia_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
                                     <option value="">Seleccionar...</option>
@@ -390,7 +470,13 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                             </div>
                             <div>
                                 <label className={SECCION}>Número de cajas</label>
-                                <input type="number" min="1" placeholder="1" value={data.numero_cajas} onChange={(e) => setData('numero_cajas', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                                <select value={data.numero_cajas === '' || data.numero_cajas == null ? '' : String(data.numero_cajas)} onChange={(e) => setData('numero_cajas', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="0">N/A</option>
+                                    {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                                        <option key={n} value={String(n)}>{n}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div>
                                 <label className={SECCION}>Peso con productos (kg)</label>
@@ -438,15 +524,11 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                         </div>
                     </section>
 
-                    {/* 4. Envío y costos */}
+                    {/* 4. Envío y costos (logística) */}
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>4. Envío y costos</p>
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className={SECCION}>Total mercancía</label>
-                                    <input type="number" step="0.01" min="0" placeholder="0.00" value={data.total_mercancia} onChange={(e) => setData('total_mercancia', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
-                                </div>
                                 <div>
                                     <label className={SECCION}>Envío / Tienda</label>
                                     <select value={data.catalogo_envio_tienda_id} onChange={(e) => setData('catalogo_envio_tienda_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
@@ -461,29 +543,23 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                     </div>
                                 )}
                                 <div>
-                                    <label className={SECCION}>Almacén de salida</label>
-                                    <select value={data.catalogo_almacen_salida_id} onChange={(e) => setData('catalogo_almacen_salida_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
-                                        <option value="">Seleccionar...</option>
-                                        {(catalogos.almacenes_salida || []).map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-                                    </select>
-                                </div>
-                                <div>
                                     <label className={SECCION}>Paquetería</label>
                                     <select value={data.catalogo_paqueteria_id} onChange={(e) => manejarPaqueteria(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
                                         <option value="">Seleccionar...</option>
                                         {(catalogos.paqueterias || []).map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                                     </select>
                                 </div>
+                                {!tieneCoberturaSeguro && data.catalogo_paqueteria_id && (
+                                    <div id="seg-warn" className="md:col-span-2 flex items-start gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
+                                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                        <p className="text-xs font-bold text-amber-700 dark:text-amber-400 m-0">
+                                            Este transporte no cuenta con cobertura de seguro.
+                                        </p>
+                                    </div>
+                                )}
                                 <div>
                                     <label className={SECCION}>Costo de envío</label>
-                                    <input type="number" step="0.01" min="0" placeholder="0.00" value={data.costo_envio} onChange={(e) => setData('costo_envio', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
-                                </div>
-                                <div>
-                                    <label className={SECCION}>Tipo de resguardo</label>
-                                    <select value={data.es_resguardo ? '1' : '0'} onChange={(e) => setData('es_resguardo', e.target.value === '1')} className={`${THEME_SELECT} w-full py-3`}>
-                                        <option value="0">Sin resguardo</option>
-                                        <option value="1">Con resguardo</option>
-                                    </select>
+                                    <InputMoneda value={data.costo_envio} onChange={(v) => setData('costo_envio', v)} className="w-full py-3" placeholder="" />
                                 </div>
                                 <div>
                                     <label className={SECCION}>Reexpedición</label>
@@ -499,28 +575,34 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                     <input type="checkbox" checked={data.aplica_saldo_favor} onChange={(e) => setData('aplica_saldo_favor', e.target.checked)} />
                                     <span className="text-sm font-bold">Saldo a favor</span>
                                 </label>
-                                <label className="flex items-center gap-2 theme-text-main cursor-pointer">
-                                    <input type="checkbox" checked={data.aplica_seguro} onChange={(e) => setData('aplica_seguro', e.target.checked)} />
-                                    <span className="text-sm font-bold">Con seguro</span>
-                                </label>
+                                {tieneCoberturaSeguro && (
+                                    <label className="flex items-center gap-2 theme-text-main cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={data.aplica_seguro}
+                                            onChange={(e) => setData('aplica_seguro', e.target.checked)}
+                                        />
+                                        <span className="text-sm font-bold">Con seguro</span>
+                                    </label>
+                                )}
                                 <label className="flex items-center gap-2 theme-text-main cursor-pointer">
                                     <input type="checkbox" checked={data.envia_a_otra_persona} onChange={(e) => setData('envia_a_otra_persona', e.target.checked)} />
                                     <span className="text-sm font-bold">Enviar a otra persona</span>
                                 </label>
                             </div>
 
-                            {(data.aplica_saldo_favor || data.aplica_seguro || data.envia_a_otra_persona) && (
+                            {(data.aplica_saldo_favor || data.aplica_seguro || data.envia_a_otra_persona || tieneCoberturaSeguro) && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {data.aplica_saldo_favor && (
                                         <div>
                                             <label className={SECCION}>Monto saldo a favor</label>
-                                            <input type="number" step="0.01" min="0" placeholder="0.00" value={data.saldo_a_favor} onChange={(e) => setData('saldo_a_favor', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                                            <InputMoneda value={data.saldo_a_favor} onChange={(v) => setData('saldo_a_favor', v)} className="w-full py-3" />
                                         </div>
                                     )}
-                                    {data.aplica_seguro && (
+                                    {tieneCoberturaSeguro && (
                                         <div>
-                                            <label className={SECCION}>Costo de seguro</label>
-                                            <input type="number" step="0.01" min="0" placeholder="0.00" value={data.costo_seguro} onChange={(e) => setData('costo_seguro', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                                            <label className={SECCION}>Costo de seguro (calculado)</label>
+                                            <InputMoneda value={data.costo_seguro} onChange={() => {}} readOnly className="w-full py-3 opacity-80" />
                                         </div>
                                     )}
                                     {data.envia_a_otra_persona && (
@@ -531,7 +613,21 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                     )}
                                 </div>
                             )}
+                        </div>
+                    </section>
+                    </>
+                    )}
 
+                    {/* Montos y evidencias */}
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{requiereLogistica ? '5. Montos y evidencias' : '2. Montos y evidencias'}</p>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className={SECCION}>Total mercancía</label>
+                                    <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
+                                </div>
+                            </div>
                             <div>
                                 <label className={SECCION}>Evidencias / Comprobantes</label>
                                 <p className="text-[10px] theme-text-muted font-bold mb-3 -mt-1">Adjunte archivos o use Ctrl+V para pegar capturas.</p>
@@ -566,9 +662,9 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                         </div>
                     </section>
 
-                    {/* 5. Desglose de montos */}
+                    {/* Desglose de montos */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>5. Desglose de montos</p>
+                        <p className={SECCION}>{requiereLogistica ? '6. Desglose de montos' : '3. Desglose de montos'}</p>
                         <div className="space-y-2 text-sm">
                             <div className="flex justify-between theme-text-muted font-bold"><span>Total mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
                             <div className="flex justify-between theme-text-muted font-bold"><span>Envío</span><span>{formatearMoneda(data.costo_envio)}</span></div>
@@ -586,12 +682,6 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                     </section>
 
                     <section className="gelia-modal-footer flex flex-col gap-3 p-5 md:p-6 -mx-5 md:-mx-8 -mb-5 md:-mb-8">
-                        {alertaEnvio && (
-                            <div className="w-full p-4 rounded-xl border border-red-500/40 bg-red-500/10 flex items-start gap-3">
-                                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                                <p className="text-xs font-bold theme-text-main m-0">{alertaEnvio}</p>
-                            </div>
-                        )}
                         <div className="flex flex-wrap gap-3">
                         <button type="button" onClick={() => guardar(true)} disabled={processing} className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}>
                             <Send className="w-4 h-4" /> Enviar pedido
@@ -604,7 +694,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <MessageCircle className="w-4 h-4" /> WhatsApp
                             </button>
                         )}
-                        <button type="button" onClick={() => { setData(formDefaults(pedido)); setPreviews([]); setInfoCliente(pedido?.cliente || null); setAlertaDireccion(false); setMsgDireccion(''); setDocsEliminar([]); setAlertaEnvio(''); }} className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none`}>
+                        <button type="button" onClick={() => { setData(formDefaults(pedido)); setPreviews([]); setInfoCliente(pedido?.cliente || null); setAlertaDireccion(false); setMsgDireccion(''); setDocsEliminar([]); setAlertaEnvio({ abierto: false, mensaje: '' }); }} className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none`}>
                             <RotateCcw className="w-4 h-4" /> Limpiar
                         </button>
                         </div>
@@ -616,5 +706,18 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             </div>
         </div>,
         document.body
+    );
+
+    return (
+        <>
+            {modal}
+            <ModalAlertaPedido
+                abierto={alertaEnvio.abierto}
+                tipo="error"
+                titulo="Campos incompletos"
+                mensaje={alertaEnvio.mensaje}
+                onClose={() => setAlertaEnvio({ abierto: false, mensaje: '' })}
+            />
+        </>
     );
 }

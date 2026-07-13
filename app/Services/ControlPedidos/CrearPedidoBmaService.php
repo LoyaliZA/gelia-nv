@@ -44,7 +44,7 @@ class CrearPedidoBmaService
 
             $this->historialService->registrarCreacion($pedido->id, $vendedorId, $estatusBorrador->id);
 
-            return $pedido->load(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacenSalida', 'banco']);
+            return $pedido->load(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco']);
         });
     }
 

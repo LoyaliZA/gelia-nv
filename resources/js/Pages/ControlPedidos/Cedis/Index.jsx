@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Warehouse, Clock, CheckCircle2, Package } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
@@ -8,21 +8,33 @@ import FiltrosCedis from './Partials/FiltrosCedis';
 import TarjetasCedis from './Partials/TarjetasCedis';
 import ModalDetalleCedis from './Partials/ModalDetalleCedis';
 import ModalReportarIncidencia from './Partials/ModalReportarIncidencia';
+import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
 
 const KPI_CONFIG = [
     { key: 'pendientes', label: 'Pendientes de empaque', icon: Clock, color: '#EAB308' },
-    { key: 'empacados', label: 'Empacados', icon: CheckCircle2, color: '#22C55E' },
+    { key: 'incidencias', label: 'Con incidencia', icon: CheckCircle2, color: '#F97316' },
+    { key: 'empacados', label: 'Empacados', icon: Package, color: '#22C55E' },
     { key: 'total', label: 'Total en bandeja', icon: Package, color: 'var(--color-primario)' },
 ];
 
 export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
+    const { flash } = usePage().props;
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'PENDIENTES');
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalIncidencia, setModalIncidencia] = useState({ abierto: false, pedido: null });
+    const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
+
+    useEffect(() => {
+        if (flash?.success) {
+            setAlerta({ abierto: true, tipo: 'success', titulo: 'Operación exitosa', mensaje: flash.success });
+        } else if (flash?.error) {
+            setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: flash.error });
+        }
+    }, [flash?.success, flash?.error]);
 
     useEffect(() => {
         modalAbiertoRef.current = modalDetalle.abierto || modalIncidencia.abierto;
@@ -85,7 +97,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
                     <p className="text-sm theme-text-muted font-bold mt-2 m-0">Bandeja de empaque para almacén</p>
                 </header>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {KPI_CONFIG.map(({ key, label, icon: Icon, color }) => (
                         <div key={key} className={`${geliaCardClass()} p-5`}>
                             <div className="flex items-center gap-2 mb-2">
@@ -126,6 +138,13 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
                 abierto={modalIncidencia.abierto}
                 pedido={modalIncidencia.pedido}
                 onClose={() => setModalIncidencia({ abierto: false, pedido: null })}
+            />
+            <ModalAlertaPedido
+                abierto={alerta.abierto}
+                tipo={alerta.tipo}
+                titulo={alerta.titulo}
+                mensaje={alerta.mensaje}
+                onClose={() => setAlerta({ ...alerta, abierto: false })}
             />
         </AppLayout>
     );

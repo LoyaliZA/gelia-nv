@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { ClipboardCheck, Clock, CheckCircle2, XCircle, Inbox } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
@@ -7,6 +7,7 @@ import { geliaCardClass } from '../../../utils/geliaTheme';
 import FiltrosAuditoria from './Partials/FiltrosAuditoria';
 import TablaAuditoria from './Partials/TablaAuditoria';
 import ModalRevisarPedido from './Partials/ModalRevisarPedido';
+import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
 
@@ -18,10 +19,20 @@ const KPI_CONFIG = [
 ];
 
 export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
+    const { flash } = usePage().props;
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'PENDIENTES');
     const [modalRevisar, setModalRevisar] = useState({ abierto: false, pedido: null });
+    const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
+
+    useEffect(() => {
+        if (flash?.success) {
+            setAlerta({ abierto: true, tipo: 'success', titulo: 'Operación exitosa', mensaje: flash.success });
+        } else if (flash?.error) {
+            setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: flash.error });
+        }
+    }, [flash?.success, flash?.error]);
 
     useEffect(() => {
         modalAbiertoRef.current = modalRevisar.abierto;
@@ -113,6 +124,13 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
                 abierto={modalRevisar.abierto}
                 pedido={modalRevisar.pedido}
                 onClose={() => setModalRevisar({ abierto: false, pedido: null })}
+            />
+            <ModalAlertaPedido
+                abierto={alerta.abierto}
+                tipo={alerta.tipo}
+                titulo={alerta.titulo}
+                mensaje={alerta.mensaje}
+                onClose={() => setAlerta({ ...alerta, abierto: false })}
             />
         </AppLayout>
     );

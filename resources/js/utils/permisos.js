@@ -66,6 +66,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'control_pedidos.ver_detalle': 'Permite ver el detalle completo de un pedido.',
     'control_pedidos.auditar': 'Permite acceder al panel de auditoría de pedidos (auxiliar).',
     'control_pedidos.cedis': 'Permite acceder al panel de control de empaque en CEDIS.',
+    'control_pedidos.delegado': 'Permite acceder al panel de delegado (asignación de guías y PDF).',
     'control_pedidos.configurar_catalogos': 'Permite administrar catálogos del módulo de control de pedidos.',
     'api_externa.gestionar': 'Permite administrar la API externa, aplicaciones, permisos y documentación.',
     'api_externa.ver_auditoria': 'Permite consultar la bitácora de uso de la API externa.',

@@ -7,6 +7,7 @@ export default function FiltrosCedis({ filtros = {}, tabActiva, onTabChange, onB
     const conteoTab = (tabId) => {
         const map = {
             PENDIENTES: metricas.pendientes,
+            INCIDENCIAS: metricas.incidencias,
             EMPACADOS: metricas.empacados,
             TODOS: metricas.total,
         };
