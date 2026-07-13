@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { Users, Plus, Eye, Pencil, Copy, Check } from 'lucide-react';
+import { Users, Plus, Eye, Pencil, Copy, Check, Upload } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
@@ -10,6 +10,7 @@ import RhSubNav from '../Partials/RhSubNav';
 import RhPageHeader from '../Partials/RhPageHeader';
 import FiltrosColaboradores from './Partials/FiltrosColaboradores';
 import ModalFormColaborador from './Partials/ModalFormColaborador';
+import ModalImportarColaboradores from './Partials/ModalImportarColaboradores';
 
 export default function Index({
     auth,
@@ -25,6 +26,7 @@ export default function Index({
     puedeVincular,
 }) {
     const [modalAbierto, setModalAbierto] = useState(false);
+    const [modalImportarAbierto, setModalImportarAbierto] = useState(false);
     const [colaboradorEditando, setColaboradorEditando] = useState(null);
     const [uuidCopiado, setUuidCopiado] = useState(null);
 
@@ -71,14 +73,23 @@ export default function Index({
                     icon={Users}
                     aside={
                         puedeCrear ? (
-                            <button
-                                type="button"
-                                onClick={abrirNuevo}
-                                className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2"
-                                style={{ backgroundColor: 'var(--color-primario)' }}
-                            >
-                                <Plus className="w-4 h-4" /> Nuevo colaborador
-                            </button>
+                            <div className="flex flex-wrap gap-2 justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setModalImportarAbierto(true)}
+                                    className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase theme-text-main flex items-center justify-center gap-2 theme-element border theme-border"
+                                >
+                                    <Upload className="w-4 h-4" /> Importar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={abrirNuevo}
+                                    className="px-5 py-3 rounded-2xl text-[10px] font-black uppercase text-white flex items-center justify-center gap-2"
+                                    style={{ backgroundColor: 'var(--color-primario)' }}
+                                >
+                                    <Plus className="w-4 h-4" /> Nuevo colaborador
+                                </button>
+                            </div>
                         ) : null
                     }
                 />
@@ -196,6 +207,15 @@ export default function Index({
                 configuracion={configuracion}
                 puedeVincular={puedeVincular}
             />
+
+            {modalImportarAbierto && (
+                <ModalImportarColaboradores
+                    onClose={() => setModalImportarAbierto(false)}
+                    departamentos={departamentos}
+                    puestos={puestos}
+                    turnos={turnos}
+                />
+            )}
         </AppLayout>
     );
 }

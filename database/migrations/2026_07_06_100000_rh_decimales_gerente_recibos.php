@@ -44,7 +44,7 @@ return new class extends Migration
             Permission::findOrCreate($permiso, 'web');
         }
 
-        $gerente = Role::findByName('Gerente', 'web');
+        $gerente = Role::where('name', 'Gerente')->where('guard_name', 'web')->first();
         if ($gerente) {
             $gerente->givePermissionTo([
                 'rh.incidencias.gerente.ver',

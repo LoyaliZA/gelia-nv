@@ -548,6 +548,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/colaboradores/usuarios/{usuario}/sincronizar', [ColaboradorController::class, 'sincronizarUsuario'])
             ->middleware('can:rh.colaboradores.vincular_usuario')
             ->name('colaboradores.sincronizar_usuario');
+        Route::get('/colaboradores/plantilla-importacion', [ColaboradorController::class, 'descargarPlantillaImportacion'])
+            ->middleware('can:rh.colaboradores.crear')
+            ->name('colaboradores.plantilla_importacion');
+        Route::post('/colaboradores/importar', [ColaboradorController::class, 'importar'])
+            ->middleware('can:rh.colaboradores.crear')
+            ->name('colaboradores.importar');
         Route::get('/colaboradores/{colaborador}', [ColaboradorController::class, 'show'])->name('colaboradores.show');
         Route::post('/colaboradores', [ColaboradorController::class, 'store'])
             ->middleware('can:rh.colaboradores.crear')

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Rh;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Rh\ImportarColaboradoresRequest;
 use App\Http\Requests\Rh\StoreColaboradorRequest;
 use App\Http\Requests\Rh\UpdateColaboradorRequest;
 use App\Models\CatalogoPuesto;
@@ -15,7 +16,9 @@ use App\Models\User;
 use App\Services\Rh\ActualizarColaboradorService;
 use App\Services\Rh\CalcularSalariosColaboradorService;
 use App\Services\Rh\CrearColaboradorService;
+use App\Services\Rh\ImportarColaboradoresService;
 use App\Services\Rh\ListarColaboradoresService;
+use App\Services\Rh\PlantillaImportacionColaboradoresService;
 use App\Services\Rh\SincronizarDatosUsuarioService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -23,6 +26,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ColaboradorController extends Controller
 {
@@ -86,6 +90,32 @@ class ColaboradorController extends Controller
             'puedeEditar' => Auth::user()->can('rh.colaboradores.editar'),
             'puedeVincular' => Auth::user()->can('rh.colaboradores.vincular_usuario'),
         ]);
+    }
+
+    public function descargarPlantillaImportacion(
+        PlantillaImportacionColaboradoresService $plantillaService,
+    ): StreamedResponse {
+        abort_unless(Auth::user()->can('rh.colaboradores.crear'), 403);
+
+        return $plantillaService->descargar();
+    }
+
+    public function importar(
+        ImportarColaboradoresRequest $request,
+        ImportarColaboradoresService $importarService,
+    ): RedirectResponse {
+        $stats = $importarService->ejecutar(Auth::user(), $request->file('archivo'));
+
+        $mensaje = sprintf(
+            'Importación completada: %d nuevos, %d omitidos.',
+            $stats['importados'],
+            $stats['omitidos'],
+        );
+
+        return redirect()
+            ->route('rh.colaboradores.index')
+            ->with('success', $mensaje)
+            ->with('reporte_importacion_colaboradores', $stats);
     }
 
     public function store(

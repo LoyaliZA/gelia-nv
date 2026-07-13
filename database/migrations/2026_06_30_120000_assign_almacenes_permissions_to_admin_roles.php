@@ -40,9 +40,9 @@ return new class extends Migration
             ->where('guard_name', 'web')
             ->each(fn (Role $role) => $role->givePermissionTo($permisos));
 
-        User::permission('catalogos.gestionar')->each(
-            fn (User $user) => $user->givePermissionTo($permisos)
-        );
+        User::withoutGlobalScopes()
+            ->permission('catalogos.gestionar')
+            ->each(fn (User $user) => $user->givePermissionTo($permisos));
     }
 
     public function down(): void

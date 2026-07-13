@@ -21,7 +21,10 @@ return new class extends Migration
             ->groupBy('role_name')
             ->map(fn ($rows) => $rows->keyBy('permission_name'));
 
-        User::with(['roles', 'permissions', 'gerentes'])->chunkById(100, function ($users) use ($rolePermissionsMap) {
+        // without SoftDeletes: esta migración corre antes de users.deleted_at
+        User::withoutGlobalScopes()
+            ->with(['roles', 'permissions', 'gerentes'])
+            ->chunkById(100, function ($users) use ($rolePermissionsMap) {
             foreach ($users as $user) {
                 $effective = $user->getAllPermissions()->pluck('name')->unique()->values()->all();
                 $directBefore = $user->permissions->pluck('name')->all();
