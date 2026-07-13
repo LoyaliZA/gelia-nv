@@ -9,6 +9,7 @@ import {
     BTN_PRIMARY,
     BTN_SECONDARY,
 } from '../../Partials/pedidosBmaStyles';
+import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 
 export default function ModalReportarIncidencia({ abierto, onClose, pedido }) {
     const [detalle, setDetalle] = useState('');
@@ -52,9 +53,9 @@ export default function ModalReportarIncidencia({ abierto, onClose, pedido }) {
                     <div>
                         <h2 className="text-lg font-black italic uppercase theme-text-main m-0 flex items-center gap-2">
                             <AlertTriangle className="w-5 h-5 text-orange-500" />
-                            Reportar incidencia
+                            Reportar Error
                         </h2>
-                        <p className="text-xs theme-text-muted font-bold mt-1 m-0">{pedido.folio}</p>
+                        <EncabezadoFolioPedido pedido={pedido} size="sm" className="mt-1" />
                     </div>
                     <button type="button" onClick={onClose} className="p-2 rounded-full theme-text-muted hover:theme-text-main outline-none" aria-label="Cerrar">
                         <X className="w-5 h-5" />

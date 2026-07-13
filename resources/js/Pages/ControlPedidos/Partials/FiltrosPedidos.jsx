@@ -10,6 +10,7 @@ export default function FiltrosPedidos({ filtros = {}, tabActiva, onTabChange, o
             BORRADORES: metricas.borradores,
             PENDIENTE_AUXILIAR: metricas.pendiente_auxiliar,
             EN_CEDIS: metricas.en_cedis,
+            ENVIADOS: metricas.enviados,
             RECHAZADAS: metricas.rechazadas,
         };
         return map[tabId];

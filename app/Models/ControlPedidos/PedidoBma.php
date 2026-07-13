@@ -2,6 +2,7 @@
 
 namespace App\Models\ControlPedidos;
 
+use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\Cliente;
 use App\Models\User;
@@ -18,10 +19,12 @@ class PedidoBma extends Model
 
     protected $fillable = [
         'folio',
+        'folio_remision',
         'fecha',
         'vendedor_id',
         'cliente_id',
-        'catalogo_almacen_salida_id',
+        'origen_id',
+        'almacen_id',
         'catalogo_banco_id',
         'requiere_factura',
         'saldo_a_favor',
@@ -48,6 +51,7 @@ class PedidoBma extends Model
         'catalogo_estatus_pedido_id',
         'comentarios_drive',
         'numero_rastreo',
+        'guia_subida_at',
         'motivo_rechazo',
         'pago_validado_at',
         'pago_validado_por_id',
@@ -61,6 +65,7 @@ class PedidoBma extends Model
     protected $casts = [
         'pago_validado_at' => 'datetime',
         'empacado_at' => 'datetime',
+        'guia_subida_at' => 'datetime',
         'incidencia_empaque_at' => 'datetime',
         'fecha' => 'date',
         'requiere_factura' => 'boolean',
@@ -88,6 +93,11 @@ class PedidoBma extends Model
         return $this->belongsTo(Cliente::class);
     }
 
+    public function origen(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoOrigenPedido::class, 'origen_id');
+    }
+
     public function envioTienda(): BelongsTo
     {
         return $this->belongsTo(CatalogoEnvioTienda::class, 'catalogo_envio_tienda_id');
@@ -98,9 +108,9 @@ class PedidoBma extends Model
         return $this->belongsTo(CatalogoEstatusPedido::class, 'catalogo_estatus_pedido_id');
     }
 
-    public function almacenSalida(): BelongsTo
+    public function almacen(): BelongsTo
     {
-        return $this->belongsTo(CatalogoAlmacenSalida::class, 'catalogo_almacen_salida_id');
+        return $this->belongsTo(Almacen::class, 'almacen_id');
     }
 
     public function banco(): BelongsTo
@@ -167,6 +177,37 @@ class PedidoBma extends Model
             ->orderBy('orden');
     }
 
+    public function guiaPdf(): HasMany
+    {
+        return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
+            ->where('tipo', PedidoBmaDocumento::TIPO_GUIA)
+            ->orderBy('orden');
+    }
+
+    public function tieneGuiaPdf(): bool
+    {
+        return $this->guiaPdf()->exists();
+    }
+
+    public function esEmpacado(): bool
+    {
+        return $this->empacado_at !== null && in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+            CatalogoEstatusPedido::FASE_ENTREGADO,
+            CatalogoEstatusPedido::FASE_ENVIADO,
+        ], true);
+    }
+
+    public function puedeGestionarGuiaPdf(): bool
+    {
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+            CatalogoEstatusPedido::FASE_ENVIADO,
+        ], true);
+    }
+
     public function tienePagoValidado(): bool
     {
         return $this->pago_validado_at !== null;
@@ -202,8 +243,30 @@ class PedidoBma extends Model
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_EN_CEDIS,
             CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
-            CatalogoEstatusPedido::FASE_EN_RUTA,
         ], true);
+    }
+
+    public function ofreceRastreo(): bool
+    {
+        if ($this->paqueteria) {
+            return $this->paqueteria->ofreceRastreo();
+        }
+
+        return (bool) ($this->origen?->requiere_logistica ?? false);
+    }
+
+    public function tieneGuiaLista(): bool
+    {
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+            CatalogoEstatusPedido::FASE_ENVIADO,
+        ], true) && !empty($this->numero_rastreo);
+    }
+
+    public function puedeMarcarEnviado(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO
+            && $this->empacado_at !== null;
     }
 
     public function puedeMarcarEmpacado(): bool
@@ -216,7 +279,11 @@ class PedidoBma extends Model
 
     public function puedeRevertirEmpacado(): bool
     {
-        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_EN_RUTA;
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+            CatalogoEstatusPedido::FASE_ENTREGADO,
+        ], true) && empty($this->numero_rastreo);
     }
 
     public function puedeReportarIncidencia(): bool

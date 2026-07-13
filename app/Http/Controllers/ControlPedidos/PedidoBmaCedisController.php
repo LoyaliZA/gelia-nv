@@ -7,6 +7,7 @@ use App\Http\Requests\ControlPedidos\ReportarIncidenciaEmpaqueRequest;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
+use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
 use App\Services\ControlPedidos\ReportarIncidenciaEmpaqueService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
@@ -40,6 +41,19 @@ class PedidoBmaCedisController extends Controller
         }
 
         return redirect()->back()->with('success', 'Pedido marcado como empacado.');
+    }
+
+    public function marcarEnviado(PedidoBma $pedidoBma, MarcarEnviadoPedidoBmaService $service): RedirectResponse
+    {
+        Gate::authorize('control_pedidos.cedis');
+
+        try {
+            $service->ejecutar($pedidoBma->load(['estatus', 'paqueteria', 'origen']), Auth::id());
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Pedido marcado como enviado.');
     }
 
     public function revertirEmpacado(PedidoBma $pedidoBma, RevertirEmpacadoPedidoBmaService $service): RedirectResponse

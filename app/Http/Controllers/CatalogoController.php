@@ -26,7 +26,7 @@ use App\Services\Catalogos\PlantillaImportacionCatalogoService;
 use App\Services\Almacenes\RegistrarAuditoriaAlmacenService;
 use App\Services\Almacenes\NormalizarTextoImportacionService;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
-use App\Models\ControlPedidos\CatalogoAlmacenSalida;
+use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\CatalogoTipoGuiaPedido;
@@ -382,6 +382,7 @@ class CatalogoController extends Controller
             'sucursal_id' => 'nullable|exists:sucursales,id',
             'tipo_almacen_id' => 'nullable|exists:catalogo_tipos_almacen,id',
             'activo' => 'boolean',
+            'visible_en_pedidos' => 'boolean',
         ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
         $almacen = Almacen::create($data);
@@ -396,6 +397,7 @@ class CatalogoController extends Controller
             'sucursal_id' => 'nullable|exists:sucursales,id',
             'tipo_almacen_id' => 'nullable|exists:catalogo_tipos_almacen,id',
             'activo' => 'boolean',
+            'visible_en_pedidos' => 'boolean',
         ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
         $almacen = Almacen::findOrFail($id);
@@ -530,43 +532,12 @@ class CatalogoController extends Controller
         return back()->with('success', 'Estatus de pedido eliminado.');
     }
 
-    // --- CONTROL PEDIDOS: ALMACENES SALIDA ---
-    public function storeAlmacenSalida(Request $request)
-    {
-        CatalogoAlmacenSalida::create($request->validate([
-            'nombre' => 'required|string|max:255|unique:catalogo_almacenes_salida,nombre',
-            'activo' => 'boolean',
-        ]));
-
-        return back()->with('success', 'Almacén de salida registrado.');
-    }
-
-    public function updateAlmacenSalida(Request $request, $id)
-    {
-        CatalogoAlmacenSalida::findOrFail($id)->update($request->validate([
-            'nombre' => 'required|string|max:255|unique:catalogo_almacenes_salida,nombre,' . $id,
-            'activo' => 'boolean',
-        ]));
-
-        return back()->with('success', 'Almacén de salida actualizado.');
-    }
-
-    public function destroyAlmacenSalida($id)
-    {
-        if (PedidoBma::where('catalogo_almacen_salida_id', $id)->exists()) {
-            return back()->with('error', 'No se puede eliminar un almacén en uso.');
-        }
-        CatalogoAlmacenSalida::findOrFail($id)->delete();
-
-        return back()->with('success', 'Almacén de salida eliminado.');
-    }
-
     // --- CONTROL PEDIDOS: PAQUETERÍAS ---
     public function storePaqueteriaPedido(Request $request)
     {
         CatalogoPaqueteriaPedido::create($request->validate([
             'nombre' => 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre',
-            'costo_seguro_default' => 'nullable|numeric|min:0',
+            'categoria' => 'required|in:comercial,local_regional',
             'activo' => 'boolean',
         ]));
 
@@ -577,7 +548,7 @@ class CatalogoController extends Controller
     {
         CatalogoPaqueteriaPedido::findOrFail($id)->update($request->validate([
             'nombre' => 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre,' . $id,
-            'costo_seguro_default' => 'nullable|numeric|min:0',
+            'categoria' => 'required|in:comercial,local_regional',
             'activo' => 'boolean',
         ]));
 
@@ -724,5 +695,38 @@ class CatalogoController extends Controller
         $item->delete();
 
         return back()->with('success', 'Envío / tienda eliminado.');
+    }
+
+    // --- CONTROL PEDIDOS: ORÍGENES ---
+    public function storeOrigenPedido(Request $request)
+    {
+        CatalogoOrigenPedido::create($request->validate([
+            'nombre' => 'required|string|max:255|unique:origenes_pedido,nombre',
+            'requiere_logistica' => 'boolean',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Origen de pedido registrado.');
+    }
+
+    public function updateOrigenPedido(Request $request, $id)
+    {
+        CatalogoOrigenPedido::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255|unique:origenes_pedido,nombre,' . $id,
+            'requiere_logistica' => 'boolean',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Origen de pedido actualizado.');
+    }
+
+    public function destroyOrigenPedido($id)
+    {
+        if (PedidoBma::where('origen_id', $id)->exists()) {
+            return back()->with('error', 'No se puede eliminar un origen en uso.');
+        }
+        CatalogoOrigenPedido::findOrFail($id)->delete();
+
+        return back()->with('success', 'Origen de pedido eliminado.');
     }
 }

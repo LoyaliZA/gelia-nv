@@ -2,17 +2,26 @@ import React from 'react';
 import { Eye, AlertTriangle } from 'lucide-react';
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
-import { badgeAuditoriaSemantico, formatearMoneda } from '../../Partials/pedidosBmaStyles';
+import { badgeAuditoriaSemantico, formatearMoneda, etiquetaAlmacen, formatearFechaNegocio } from '../../Partials/pedidosBmaStyles';
+import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 
-function CardAuditoria({ pedido, badge, esRechazado, onRevisar }) {
+function CardAuditoria({ pedido, badge, esRechazado, esIncidenciaCedis, onRevisar }) {
     return (
-        <div className={`${geliaCardClass()} p-4 space-y-3 ${esRechazado ? 'ring-1 ring-red-500/30' : ''}`}>
+        <div className={`${geliaCardClass()} p-4 space-y-3 ${esRechazado ? 'ring-1 ring-red-500/30' : ''} ${esIncidenciaCedis ? 'ring-1 ring-orange-500/30' : ''} ${pedido.es_resguardo ? 'ring-2 ring-blue-500/40 bg-blue-500/5' : ''}`}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="text-sm font-black theme-text-main uppercase italic m-0">{pedido.folio}</p>
+                    <EncabezadoFolioPedido pedido={pedido} size="sm" />
                     <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                        {pedido.fecha ? new Date(pedido.fecha).toLocaleDateString('es-MX') : '—'}
+                        {formatearFechaNegocio(pedido.fecha)}
                     </p>
+                    {pedido.vendedor?.name && (
+                        <p className="text-[9px] theme-text-muted font-bold mt-1 m-0">
+                            Capturado por: {pedido.vendedor.name}
+                        </p>
+                    )}
+                    {pedido.origen?.nombre && (
+                        <p className="text-[9px] font-black uppercase text-blue-600 mt-1 m-0">Origen: {pedido.origen.nombre}</p>
+                    )}
                 </div>
                 <span className={badge.className} style={badge.style}>{badge.label}</span>
             </div>
@@ -29,6 +38,11 @@ function CardAuditoria({ pedido, badge, esRechazado, onRevisar }) {
             {esRechazado && pedido.motivo_rechazo && (
                 <p className="text-[10px] text-red-500 font-bold m-0 flex items-start gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {pedido.motivo_rechazo}
+                </p>
+            )}
+            {esIncidenciaCedis && pedido.detalle_incidencia_empaque && (
+                <p className="text-[10px] text-orange-600 font-bold m-0 flex items-start gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {pedido.detalle_incidencia_empaque}
                 </p>
             )}
             <button type="button" onClick={() => onRevisar(pedido)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border theme-border theme-element text-xs font-black uppercase outline-none hover:border-[var(--color-primario)]">
@@ -54,12 +68,14 @@ export default function TablaAuditoria({ pedidos, onRevisar }) {
             <div className="md:hidden p-4 space-y-3">
                 {items.map((pedido) => {
                     const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo);
+                    const fase = pedido.estatus?.fase_ciclo;
                     return (
                         <CardAuditoria
                             key={pedido.id}
                             pedido={pedido}
                             badge={badge}
-                            esRechazado={pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA'}
+                            esRechazado={fase === 'RECHAZADO_VENDEDORA'}
+                            esIncidenciaCedis={fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque)}
                             onRevisar={onRevisar}
                         />
                     );
@@ -83,19 +99,29 @@ export default function TablaAuditoria({ pedidos, onRevisar }) {
                     <tbody>
                         {items.map((pedido) => {
                             const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo);
-                            const esRechazado = pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA';
+                            const fase = pedido.estatus?.fase_ciclo;
+                            const esRechazado = fase === 'RECHAZADO_VENDEDORA';
+                            const esIncidenciaCedis = fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque);
                             return (
-                                <tr key={pedido.id} className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${esRechazado ? 'bg-red-500/5' : ''}`}>
+                                <tr key={pedido.id} className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${esRechazado ? 'bg-red-500/5' : ''} ${esIncidenciaCedis ? 'bg-orange-500/5' : ''} ${pedido.es_resguardo ? 'bg-blue-500/5' : ''}`}>
                                     <td className="px-5 py-4">
-                                        <p className="text-sm font-black theme-text-main uppercase italic m-0">{pedido.folio}</p>
+                                        <EncabezadoFolioPedido pedido={pedido} size="sm" />
+                                        {pedido.origen?.nombre && (
+                                            <p className="text-[9px] font-black uppercase text-blue-600 mt-1 m-0">Origen: {pedido.origen.nombre}</p>
+                                        )}
                                         {esRechazado && pedido.motivo_rechazo && (
                                             <p className="text-[9px] text-red-500 font-bold mt-1 flex items-center gap-1">
                                                 <AlertTriangle className="w-3 h-3" /> {pedido.motivo_rechazo}
                                             </p>
                                         )}
+                                        {esIncidenciaCedis && pedido.detalle_incidencia_empaque && (
+                                            <p className="text-[9px] text-orange-600 font-bold mt-1 flex items-center gap-1">
+                                                <AlertTriangle className="w-3 h-3" /> {pedido.detalle_incidencia_empaque}
+                                            </p>
+                                        )}
                                     </td>
                                     <td className="px-5 py-4 text-xs font-bold theme-text-muted">
-                                        {pedido.fecha ? new Date(pedido.fecha).toLocaleDateString('es-MX') : '—'}
+                                        {formatearFechaNegocio(pedido.fecha)}
                                     </td>
                                     <td className="px-5 py-4">
                                         <p className="text-xs font-black theme-text-main uppercase m-0">{pedido.cliente?.nombre}</p>

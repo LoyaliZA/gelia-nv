@@ -13,7 +13,10 @@ class ListarPedidosAuditoriaService
         CatalogoEstatusPedido::FASE_EN_CEDIS,
         CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
         CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
-        CatalogoEstatusPedido::FASE_EN_RUTA,
+        CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+        CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+        CatalogoEstatusPedido::FASE_ENTREGADO,
+        CatalogoEstatusPedido::FASE_ENVIADO,
     ];
 
     public function ejecutar(array $filtros = [], bool $paginar = true)
@@ -33,7 +36,10 @@ class ListarPedidosAuditoriaService
         $aprobados = (clone $base)->whereIn('catalogo_estatus_pedido_id', array_filter([
             $idsPorFase['EN_CEDIS'] ?? null,
             $idsPorFase['INCIDENCIA_CEDIS'] ?? null,
-            $idsPorFase['EN_RUTA'] ?? null,
+            $idsPorFase['PENDIENTE_DE_GUIA'] ?? null,
+            $idsPorFase['PENDIENTE_DE_ENVIO'] ?? null,
+            $idsPorFase['ENTREGADO'] ?? null,
+            $idsPorFase['ENVIADO'] ?? null,
         ]))->count();
         $rechazados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0)->count();
 
@@ -57,8 +63,9 @@ class ListarPedidosAuditoriaService
             'cliente',
             'vendedor',
             'estatus',
+            'origen',
             'envioTienda',
-            'almacenSalida',
+            'almacen',
             'banco',
             'tipoCaja',
             'paqueteria',
@@ -66,6 +73,7 @@ class ListarPedidosAuditoriaService
             'zona',
             'documentos',
             'pagoValidadoPor',
+            'incidenciaEmpaquePor',
             'historial.usuario',
             'historial.estatusAnterior',
             'historial.estatusNuevo',
@@ -80,6 +88,7 @@ class ListarPedidosAuditoriaService
             $termino = trim($filtros['q']);
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
+                    ->orWhere('folio_remision', 'like', "%{$termino}%")
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
@@ -95,7 +104,10 @@ class ListarPedidosAuditoriaService
             'APROBADOS' => $query->whereIn('catalogo_estatus_pedido_id', array_filter([
                 $idsPorFase['EN_CEDIS'] ?? null,
                 $idsPorFase['INCIDENCIA_CEDIS'] ?? null,
-                $idsPorFase['EN_RUTA'] ?? null,
+                $idsPorFase['PENDIENTE_DE_GUIA'] ?? null,
+                $idsPorFase['PENDIENTE_DE_ENVIO'] ?? null,
+                $idsPorFase['ENTREGADO'] ?? null,
+                $idsPorFase['ENVIADO'] ?? null,
             ])),
             'RECHAZADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0),
             default => null,

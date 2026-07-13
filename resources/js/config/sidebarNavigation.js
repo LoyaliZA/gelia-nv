@@ -109,6 +109,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             href: () => routeHref('control_pedidos.cedis.index', '/control-pedidos/cedis'),
             active: (url) => url.startsWith('/control-pedidos/cedis'),
         },
+        can('control_pedidos.delegado') && {
+            type: 'link',
+            id: 'control_pedidos_delegado',
+            label: 'Actualizar guías',
+            icon: FileSpreadsheet,
+            href: () => routeHref('control_pedidos.delegado.index', '/control-pedidos/delegado'),
+            active: (url) => url.startsWith('/control-pedidos/delegado'),
+        },
     ].filter(Boolean);
 
     const finanzasChildren = [

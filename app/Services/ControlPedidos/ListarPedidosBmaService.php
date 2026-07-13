@@ -15,8 +15,9 @@ class ListarPedidosBmaService
             'cliente',
             'vendedor',
             'estatus',
+            'origen',
             'envioTienda',
-            'almacenSalida',
+            'almacen',
             'banco',
             'tipoCaja',
             'paqueteria',
@@ -50,7 +51,11 @@ class ListarPedidosBmaService
             'todas' => (clone $base)->count(),
             'borradores' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['BORRADOR'] ?? 0)->count(),
             'pendiente_auxiliar' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)->count(),
-            'en_cedis' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0)->count(),
+            'en_cedis' => (clone $base)->whereIn('catalogo_estatus_pedido_id', array_filter([
+                $idsPorFase['EN_CEDIS'] ?? null,
+                $idsPorFase['PENDIENTE_DE_GUIA'] ?? null,
+            ]))->count(),
+            'enviados' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0)->count(),
             'rechazadas' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0)->count(),
         ];
     }
@@ -70,6 +75,7 @@ class ListarPedidosBmaService
             $termino = trim($filtros['q']);
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
+                    ->orWhere('folio_remision', 'like', "%{$termino}%")
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
@@ -83,7 +89,11 @@ class ListarPedidosBmaService
         match ($tab) {
             'BORRADORES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['BORRADOR'] ?? 0),
             'PENDIENTE_AUXILIAR' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0),
-            'EN_CEDIS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0),
+            'EN_CEDIS' => $query->whereIn('catalogo_estatus_pedido_id', array_filter([
+                $idsPorFase['EN_CEDIS'] ?? null,
+                $idsPorFase['PENDIENTE_DE_GUIA'] ?? null,
+            ])),
+            'ENVIADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0),
             'RECHAZADAS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0),
             default => null,
         };
@@ -96,6 +106,8 @@ class ListarPedidosBmaService
                 'BORRADOR',
                 'PENDIENTE_AUXILIAR',
                 'EN_CEDIS',
+                'PENDIENTE_DE_GUIA',
+                'ENVIADO',
                 'RECHAZADO_VENDEDORA',
             ])
             ->pluck('id', 'fase_ciclo')

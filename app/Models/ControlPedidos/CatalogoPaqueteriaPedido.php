@@ -9,7 +9,10 @@ class CatalogoPaqueteriaPedido extends Model
 {
     protected $table = 'catalogo_paqueterias_pedido';
 
-    protected $fillable = ['nombre', 'activo', 'costo_seguro_default'];
+    public const CATEGORIA_COMERCIAL = 'comercial';
+    public const CATEGORIA_LOCAL_REGIONAL = 'local_regional';
+
+    protected $fillable = ['nombre', 'categoria', 'activo', 'costo_seguro_default'];
 
     protected $casts = [
         'activo' => 'boolean',
@@ -19,5 +22,10 @@ class CatalogoPaqueteriaPedido extends Model
     public function pedidos(): HasMany
     {
         return $this->hasMany(PedidoBma::class, 'catalogo_paqueteria_id');
+    }
+
+    public function ofreceRastreo(): bool
+    {
+        return $this->categoria === self::CATEGORIA_COMERCIAL;
     }
 }

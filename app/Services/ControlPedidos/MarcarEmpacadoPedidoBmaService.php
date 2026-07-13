@@ -27,12 +27,17 @@ class MarcarEmpacadoPedidoBmaService
         }
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
+            $pedido->loadMissing(['paqueteria', 'origen']);
             $estatusAnterior = $pedido->estatus;
-            $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_EN_RUTA)
-                ?? CatalogoEstatusPedido::porCodigo('VERDE');
+
+            $faseDestino = $pedido->ofreceRastreo()
+                ? CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
+                : CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO;
+
+            $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
 
             if (!$estatusNuevo) {
-                throw new \RuntimeException('No se encontró el estatus EN_RUTA.');
+                throw new \RuntimeException("No se encontró el estatus {$faseDestino}.");
             }
 
             $pedido->update([
@@ -44,16 +49,20 @@ class MarcarEmpacadoPedidoBmaService
                 'incidencia_empaque_por_id' => null,
             ]);
 
+            $comentario = $faseDestino === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
+                ? 'Pedido empacado; pendiente de captura de guía.'
+                : 'Pedido empacado; pendiente de envío.';
+
             $this->historialService->registrarTransicion(
                 $pedido->id,
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                'Pedido marcado como empacado.'
+                $comentario
             );
 
             return $pedido->fresh([
-                'cliente', 'estatus', 'documentos', 'almacenSalida',
+                'cliente', 'estatus', 'documentos', 'almacen', 'origen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'incidenciaEmpaquePor',
             ]);
         });

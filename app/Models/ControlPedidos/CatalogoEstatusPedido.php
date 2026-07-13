@@ -29,6 +29,10 @@ class CatalogoEstatusPedido extends Model
     public const FASE_RECHAZADO_VENDEDORA = 'RECHAZADO_VENDEDORA';
     public const FASE_INCIDENCIA_CEDIS = 'INCIDENCIA_CEDIS';
     public const FASE_EN_RUTA = 'EN_RUTA';
+    public const FASE_PENDIENTE_DE_GUIA = 'PENDIENTE_DE_GUIA';
+    public const FASE_PENDIENTE_DE_ENVIO = 'PENDIENTE_DE_ENVIO';
+    public const FASE_ENTREGADO = 'ENTREGADO';
+    public const FASE_ENVIADO = 'ENVIADO';
 
     public function pedidos(): HasMany
     {

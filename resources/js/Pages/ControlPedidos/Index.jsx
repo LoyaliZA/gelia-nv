@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Plus, FileSpreadsheet, Package } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -9,6 +9,8 @@ import TablaPedidos from './Partials/TablaPedidos';
 import ModalFormPedido from './Partials/ModalFormPedido';
 import ModalDetallePedido from './Partials/ModalDetallePedido';
 import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
+import ModalAlertaPedido from './Partials/ModalAlertaPedido';
+import ModalConfirmarAccion from './Partials/ModalConfirmarAccion';
 import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/pedidosBmaStyles';
 
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
@@ -22,7 +24,17 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalForm, setModalForm] = useState({ abierto: false, pedido: null });
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
+    const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
+    const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
+
+    useEffect(() => {
+        if (flash?.success) {
+            setAlerta({ abierto: true, tipo: 'success', titulo: 'Operación exitosa', mensaje: flash.success });
+        } else if (flash?.error) {
+            setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: flash.error });
+        }
+    }, [flash?.success, flash?.error]);
 
     const onTabChange = (tab) => {
         setTabActiva(tab);
@@ -51,14 +63,18 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const abrirVer = (pedido) => setModalDetalle({ abierto: true, pedido });
     const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
 
-    const eliminarPedido = (pedido) => {
-        if (!window.confirm(`¿Eliminar el borrador ${pedido.folio}?`)) return;
-        router.delete(route('control_pedidos.destroy', pedido.id), { preserveScroll: true });
+    const confirmarEliminar = () => {
+        if (!pedidoAEliminar) return;
+        const id = pedidoAEliminar.id;
+        setPedidoAEliminar(null);
+        router.delete(route('control_pedidos.destroy', id), { preserveScroll: true });
     };
 
     const exportarCsv = () => {
         window.location.href = route('control_pedidos.exportar', { tab: tabActiva, q: filtros.q || '' });
     };
+
+    const etiquetaEliminar = pedidoAEliminar?.folio_remision || pedidoAEliminar?.folio || 'este borrador';
 
     return (
         <AppLayout auth={auth}>
@@ -88,17 +104,6 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     </div>
                 </header>
 
-                {flash?.success && (
-                    <div className={`${geliaCardClass()} border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-2xl px-4 py-3 text-sm font-bold`}>
-                        {flash.success}
-                    </div>
-                )}
-                {flash?.error && (
-                    <div className={`${geliaCardClass()} border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300 rounded-2xl px-4 py-3 text-sm font-bold`}>
-                        {flash.error}
-                    </div>
-                )}
-
                 <div className={`${geliaCardClass()} p-5`}>
                     <FiltrosPedidos
                         filtros={filtros}
@@ -115,7 +120,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     onVer={abrirVer}
                     onBitacora={abrirBitacora}
                     onEditar={abrirEditar}
-                    onEliminar={eliminarPedido}
+                    onEliminar={setPedidoAEliminar}
                 />
             </GeliaPageShell>
 
@@ -135,6 +140,22 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 abierto={modalBitacora.abierto}
                 pedido={modalBitacora.pedido}
                 onClose={() => setModalBitacora({ abierto: false, pedido: null })}
+            />
+            <ModalConfirmarAccion
+                abierto={Boolean(pedidoAEliminar)}
+                titulo="Eliminar borrador"
+                mensaje={`¿Eliminar el borrador ${etiquetaEliminar}?`}
+                etiquetaConfirmar="Eliminar"
+                variante="danger"
+                onClose={() => setPedidoAEliminar(null)}
+                onConfirm={confirmarEliminar}
+            />
+            <ModalAlertaPedido
+                abierto={alerta.abierto}
+                tipo={alerta.tipo}
+                titulo={alerta.titulo}
+                mensaje={alerta.mensaje}
+                onClose={() => setAlerta({ ...alerta, abierto: false })}
             />
         </AppLayout>
     );

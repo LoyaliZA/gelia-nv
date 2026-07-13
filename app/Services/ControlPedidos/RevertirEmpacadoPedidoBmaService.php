@@ -15,7 +15,7 @@ class RevertirEmpacadoPedidoBmaService
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
         if (!$pedido->puedeRevertirEmpacado()) {
-            throw new \RuntimeException('Solo se puede revertir un pedido empacado.');
+            throw new \RuntimeException('Solo se puede revertir un pedido recién empacado sin guía asignada.');
         }
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
@@ -42,7 +42,7 @@ class RevertirEmpacadoPedidoBmaService
             );
 
             return $pedido->fresh([
-                'cliente', 'estatus', 'documentos', 'almacenSalida',
+                'cliente', 'estatus', 'documentos', 'almacen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'incidenciaEmpaquePor',
             ]);
         });

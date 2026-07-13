@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             RolesSeeder::class,
             SoporteSeeder::class,
             CatalogosSeeder::class,
+            ControlPedidosCatalogosSeeder::class,
             OrganizacionSeeder::class,
             ApiExternaSeeder::class,
             SesionConfiguracionSeeder::class,

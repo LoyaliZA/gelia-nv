@@ -121,11 +121,12 @@ class PedidoBmaController extends Controller
 
         return (new FastExcel($pedidos))->download($nombreArchivo, function ($pedido) {
             return [
-                'Folio' => $pedido->folio,
+                'Folio Remisión' => $pedido->folio_remision ?? '',
+                'Folio Interno' => $pedido->folio,
                 'Fecha' => $pedido->fecha?->format('Y-m-d') ?? '',
                 'Cliente' => $pedido->cliente?->nombre ?? '',
                 'No. Cliente' => $pedido->cliente?->numero_cliente ?? '',
-                'Almacén' => $pedido->almacenSalida?->nombre ?? '',
+                'Almacén' => $pedido->almacen?->nombre ?? '',
                 'Banco' => $pedido->banco?->nombre ?? '',
                 'Total a Cobrar' => number_format((float) $pedido->total_a_cobrar, 2, '.', ''),
                 'Estado' => $pedido->estatus?->nombre_visual ?? '',
