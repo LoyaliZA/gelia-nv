@@ -34,6 +34,32 @@ class CatalogoEstatusPedido extends Model
     public const FASE_ENTREGADO = 'ENTREGADO';
     public const FASE_ENVIADO = 'ENVIADO';
 
+    /** Etiquetas de negocio por fase (evita nombres de color literales). */
+    public const LABELS_POR_FASE = [
+        self::FASE_BORRADOR => 'Borrador',
+        self::FASE_PENDIENTE_AUXILIAR => 'Pendiente Auxiliar',
+        self::FASE_EN_CEDIS => 'En CEDIS',
+        self::FASE_RECHAZADO_VENDEDORA => 'Rechazado',
+        self::FASE_INCIDENCIA_CEDIS => 'Incidencia CEDIS',
+        self::FASE_EN_RUTA => 'En ruta',
+        self::FASE_PENDIENTE_DE_GUIA => 'Pendiente de guía',
+        self::FASE_PENDIENTE_DE_ENVIO => 'Pendiente de envío',
+        self::FASE_ENTREGADO => 'Entregado',
+        self::FASE_ENVIADO => 'Enviado',
+    ];
+
+    public function etiquetaSemantica(?bool $esResguardo = false): string
+    {
+        if ($esResguardo) {
+            return 'Resguardo';
+        }
+
+        return self::LABELS_POR_FASE[$this->fase_ciclo]
+            ?? $this->nombre_visual
+            ?? $this->fase_ciclo
+            ?? '—';
+    }
+
     public function pedidos(): HasMany
     {
         return $this->hasMany(PedidoBma::class, 'catalogo_estatus_pedido_id');

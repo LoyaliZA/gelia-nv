@@ -7,6 +7,7 @@ export default function FiltrosAuditoria({ filtros = {}, tabActiva, onTabChange,
     const conteoTab = (tabId) => {
         const map = {
             PENDIENTES: metricas.pendientes,
+            RESGUARDOS: metricas.resguardos,
             APROBADOS: metricas.aprobados,
             RECHAZADOS: metricas.rechazados,
             TODAS: metricas.total,

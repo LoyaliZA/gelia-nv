@@ -5,7 +5,7 @@ import {
     X, CheckCircle2, AlertTriangle, FileText, User, Truck,
 } from 'lucide-react';
 import {
-    badgeClaseEstatusPedido,
+    badgeEstatusPedido,
     badgeEmpaqueSemantico,
     esPedidoEmpacadoCedis,
     formatearMoneda,
@@ -18,6 +18,8 @@ import {
     BTN_SECONDARY,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
+import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/ModalVistaPreviaDocumento';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
@@ -55,18 +57,15 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
     if (!abierto || !pedido) return null;
 
     const fase = pedido.estatus?.fase_ciclo;
-    const badgeEstatus = badgeClaseEstatusPedido(pedido.estatus);
-    const badgeEmpaque = badgeEmpaqueSemantico(fase);
+    const badgeEstatus = badgeEstatusPedido(pedido.estatus);
+    const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo);
     const comprobantes = comprobantesDe(pedido);
     const remision = remisionDe(pedido);
     const esIncidencia = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
-    const puedeEmpacar = fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS';
+    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
 
-    const envioTienda = pedido.envio_tienda?.es_otro
-        ? pedido.envio_tienda_otro || pedido.envio_tienda?.nombre
-        : pedido.envio_tienda?.nombre;
 
     const recargarPedido = () => {
         router.reload({
@@ -136,7 +135,7 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
                             )}
                             <div className="flex flex-wrap gap-2 mt-2">
                                 <span className={badgeEstatus.className} style={badgeEstatus.style}>
-                                    {pedido.estatus?.nombre_visual}
+                                    {badgeEstatus.label}
                                 </span>
                                 <span className={badgeEmpaque.className} style={badgeEmpaque.style}>
                                     {badgeEmpaque.label}
@@ -197,7 +196,6 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
                                 <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
                                 <Campo label="Saldo a favor" value={Number(pedido.saldo_a_favor) > 0 ? formatearMoneda(pedido.saldo_a_favor) : '—'} />
-                                <Campo label="Factura" value={pedido.requiere_factura ? 'Sí' : 'No'} />
                             </div>
                         </section>
 
@@ -225,10 +223,18 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>Datos de envío</p>
                             <div className="space-y-3">
-                                <Campo label="Domicilio" value={pedido.domicilio_entrega} />
+                                <DireccionPedidoResumen
+                                    direccion={pedido.direccion_vigente || pedido.direccionVigente}
+                                    domicilioLegacy={pedido.domicilio_entrega}
+                                    codigoPostal={pedido.codigo_postal}
+                                codigoDireccion={codigoDireccionCliente(
+                                    pedido.cliente?.numero_cliente,
+                                    (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
+                                )}
+                                />
                                 <Campo label="Código postal" value={pedido.codigo_postal} />
-                                <Campo label="Envío tienda" value={envioTienda} />
                                 <Campo label="Reexpedición / Zona" value={pedido.zona?.nombre} />
+                                <Campo label="Anexar remisión" value={pedido.anexar_remision ? 'Sí' : 'No'} />
                                 {pedido.es_resguardo && <Campo label="Resguardo" value="Sí" />}
                                 {pedido.envia_a_otra_persona && <Campo label="Destinatario alterno" value={pedido.envia_otra_persona} />}
                             </div>
@@ -307,6 +313,11 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
                             >
                                 <CheckCircle2 className="w-4 h-4" /> Marcar empacado
                             </button>
+                        )}
+                        {(fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && pedido.es_resguardo && (
+                            <span className="text-xs font-bold text-blue-600 uppercase ml-auto">
+                                Empaque bloqueado — en resguardo
+                            </span>
                         )}
                     </div>
                 </div>

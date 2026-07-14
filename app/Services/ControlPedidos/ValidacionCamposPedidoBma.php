@@ -54,9 +54,6 @@ trait ValidacionCamposPedidoBma
             if (!$pedido->catalogo_zona_id) {
                 $faltantes[] = 'reexpedición';
             }
-            if (!$pedido->catalogo_envio_tienda_id) {
-                $faltantes[] = 'envío / tienda';
-            }
             if ($pedido->costo_envio === null) {
                 $faltantes[] = 'costo de envío';
             }

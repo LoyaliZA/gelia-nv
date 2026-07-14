@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useForm } from '@inertiajs/react';
+import { useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, Search, Save, Send, MessageCircle, RotateCcw, ImagePlus, Trash2, AlertTriangle, MapPin,
+    X, Search, Save, Send, MessageCircle, RotateCcw, ImagePlus, Trash2, AlertTriangle, MapPin, ExternalLink, PenLine,
 } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
+import DireccionPedidoResumen from './DireccionPedidoResumen';
+import { codigoDireccionCliente, labelOpcionDireccion } from './codigoDireccionCliente';
 import {
     calcularTotalCobrar,
     calcCostoSeguro,
@@ -21,6 +23,7 @@ import {
     BTN_PRIMARY,
     BTN_SECONDARY,
     validarCamposEnvioPedido,
+    etiquetaEstatusPedido,
 } from './pedidosBmaStyles';
 import ModalAlertaPedido from './ModalAlertaPedido';
 
@@ -35,18 +38,18 @@ function formDefaults(pedido = null) {
         folio_remision: pedido?.folio_remision || '',
         fecha: pedido?.fecha?.slice?.(0, 10) || new Date().toISOString().slice(0, 10),
         catalogo_banco_id: pedido?.catalogo_banco_id || '',
-        requiere_factura: pedido?.requiere_factura || false,
         almacen_id: pedido?.almacen_id || '',
         catalogo_tipo_caja_id: pedido?.catalogo_tipo_caja_id || '',
         numero_cajas: pedido?.numero_cajas ?? '',
         peso_real_kg: pedido?.peso_real_kg ?? '',
-        peso_con_productos_kg: pedido?.peso_con_productos_kg ?? '',
+        peso_cobrado_guia_kg: pedido?.peso_cobrado_guia_kg ?? '',
         catalogo_tipo_guia_id: pedido?.catalogo_tipo_guia_id || '',
         codigo_postal: pedido?.codigo_postal || '',
         domicilio_entrega: pedido?.domicilio_entrega || '',
+        cliente_direccion_id: pedido?.cliente_direccion_id || '',
+        direccion_manual_excepcion: false,
+        motivo_direccion_manual: '',
         total_mercancia: pedido?.total_mercancia ?? '',
-        catalogo_envio_tienda_id: pedido?.catalogo_envio_tienda_id || '',
-        envio_tienda_otro: pedido?.envio_tienda_otro || '',
         catalogo_paqueteria_id: pedido?.catalogo_paqueteria_id || '',
         costo_envio: pedido?.costo_envio ?? '',
         aplica_saldo_favor: Number(pedido?.saldo_a_favor || 0) > 0,
@@ -56,6 +59,7 @@ function formDefaults(pedido = null) {
         envia_a_otra_persona: pedido?.envia_a_otra_persona || false,
         envia_otra_persona: pedido?.envia_otra_persona || '',
         es_resguardo: pedido?.es_resguardo || false,
+        anexar_remision: pedido?.anexar_remision || false,
         catalogo_zona_id: pedido?.catalogo_zona_id || '',
         comentarios_drive: pedido?.comentarios_drive || '',
         comprobantes: [],
@@ -64,7 +68,13 @@ function formDefaults(pedido = null) {
     };
 }
 
-export default function ModalFormPedido({ abierto, onClose, pedido = null, catalogos = {} }) {
+export default function ModalFormPedido({ abierto, onClose, pedido = null, catalogos = {}, direccionesNormalizadas = false }) {
+    const { auth } = usePage().props;
+    const permisos = auth?.user?.permissions || [];
+    const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
+    const puedeSeleccionar = can('control_pedidos.direccion.seleccionar') || can('control_pedidos.crear');
+    const puedeManual = can('control_pedidos.direccion.usar_manual');
+
     const modoEdicion = Boolean(pedido?.id);
     const [listaClientes, setListaClientes] = useState([]);
     const [mostrarDropdown, setMostrarDropdown] = useState(false);
@@ -73,6 +83,8 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const [alertaDireccion, setAlertaDireccion] = useState(false);
     const [msgDireccion, setMsgDireccion] = useState('');
     const [cargandoDireccion, setCargandoDireccion] = useState(false);
+    const [direccionesCliente, setDireccionesCliente] = useState([]);
+    const [mostrarExcepcion, setMostrarExcepcion] = useState(false);
     const [previews, setPreviews] = useState([]);
     const [docsEliminar, setDocsEliminar] = useState([]);
     const [pesoVolumetrico, setPesoVolumetrico] = useState(pedido?.peso_volumetrico_kg ?? '');
@@ -81,10 +93,6 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const abortBusqueda = useRef(null);
 
     const { data, setData, post, processing, reset, errors, transform } = useForm(formDefaults(pedido));
-
-    const envioTiendaOtro = (catalogos.envios_tienda || []).find(
-        (e) => String(e.id) === String(data.catalogo_envio_tienda_id)
-    )?.es_otro;
 
     const paqueteriaSeleccionada = (catalogos.paqueterias || []).find(
         (p) => String(p.id) === String(data.catalogo_paqueteria_id)
@@ -183,12 +191,32 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         setMsgDireccion('');
         try {
             const response = await axios.get(`/api/clientes/id/${clienteId}/direccion-envio`);
-            if (response.data?.tiene_direccion) {
+            const usarNormalizadas = direccionesNormalizadas || response.data?.direcciones_normalizadas;
+            if (usarNormalizadas) {
+                const dirs = response.data?.direcciones || [];
+                setDireccionesCliente(dirs);
+                const principal = dirs.find((d) => d.es_principal) || dirs[0];
+                if (principal) {
+                    setData('cliente_direccion_id', principal.id);
+                    setData('domicilio_entrega', principal.direccion_resumida || '');
+                    setData('codigo_postal', principal.codigo_postal || '');
+                    setAlertaDireccion(true);
+                    setMsgDireccion('');
+                } else {
+                    setData('cliente_direccion_id', '');
+                    setAlertaDireccion(false);
+                    if (!silencioso) {
+                        setMsgDireccion('Este cliente no tiene direcciones verificadas. Solicite el registro o use excepción autorizada.');
+                    }
+                }
+            } else if (response.data?.tiene_direccion) {
+                setDireccionesCliente([]);
                 setData('domicilio_entrega', response.data.domicilio_entrega || '');
                 setData('codigo_postal', response.data.codigo_postal || '');
                 setAlertaDireccion(true);
                 setMsgDireccion('');
             } else {
+                setDireccionesCliente([]);
                 setAlertaDireccion(false);
                 if (!silencioso) {
                     setMsgDireccion('Este cliente no tiene dirección registrada. Capture los datos manualmente.');
@@ -287,7 +315,11 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             const comprobantesExistentes = modoEdicion
                 ? (pedido?.documentos || []).filter((d) => !docsEliminar.includes(d.id)).length
                 : 0;
-            const { valido, mensaje } = validarCamposEnvioPedido(data, { comprobantesExistentes, requiereLogistica });
+            const { valido, mensaje } = validarCamposEnvioPedido(data, {
+                comprobantesExistentes,
+                requiereLogistica,
+                direccionesNormalizadas,
+            });
             if (!valido) {
                 setAlertaEnvio({ abierto: true, mensaje });
                 return;
@@ -307,10 +339,25 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             },
         };
         if (modoEdicion) {
-            transform((d) => ({ ...d, _method: 'put', enviar: enviarPedido, saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0 }));
+            transform((d) => ({
+                ...d,
+                _method: 'put',
+                enviar: enviarPedido,
+                saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0,
+                comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
+                    ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
+                    : d.comentarios_drive,
+            }));
             post(route('control_pedidos.update', pedido.id), config);
         } else {
-            transform((d) => ({ ...d, enviar: enviarPedido, saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0 }));
+            transform((d) => ({
+                ...d,
+                enviar: enviarPedido,
+                saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0,
+                comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
+                    ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
+                    : d.comentarios_drive,
+            }));
             post(route('control_pedidos.store'), config);
         }
     };
@@ -409,7 +456,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <input
                                     type="text"
                                     readOnly
-                                    value={pedido?.estatus?.nombre_visual || 'Borrador'}
+                                    value={etiquetaEstatusPedido(pedido?.estatus, { esResguardo: pedido?.es_resguardo }) || 'Borrador'}
                                     className={`${THEME_INPUT} w-full py-3 opacity-60`}
                                 />
                             </div>
@@ -424,10 +471,6 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                     {(catalogos.bancos || []).map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
                                 </select>
                             </div>
-                            <label className="flex items-center gap-2 cursor-pointer theme-text-main md:col-span-2">
-                                <input type="checkbox" checked={data.requiere_factura} onChange={(e) => setData('requiere_factura', e.target.checked)} />
-                                <span className="text-sm font-bold">Requiere factura</span>
-                            </label>
                             <div>
                                 <label className={SECCION}>Peso real (kg)</label>
                                 <input type="number" step="0.0001" min="0" placeholder="0.0000" value={data.peso_real_kg} onChange={(e) => setData('peso_real_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
@@ -479,8 +522,8 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 </select>
                             </div>
                             <div>
-                                <label className={SECCION}>Peso con productos (kg)</label>
-                                <input type="number" step="0.0001" min="0" placeholder="0.0000" value={data.peso_con_productos_kg} onChange={(e) => setData('peso_con_productos_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                                <label className={SECCION}>Peso cobrado guía (kg)</label>
+                                <input type="number" step="0.0001" min="0" placeholder="0.0000" value={data.peso_cobrado_guia_kg} onChange={(e) => setData('peso_cobrado_guia_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                             </div>
                         </div>
                     </section>
@@ -489,18 +532,20 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                     <section className={SECCION_WRAP}>
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                             <p className={`${THEME_LABEL} m-0`}>3. Dirección de envío</p>
-                            <button
-                                type="button"
-                                onClick={rellenarDireccionManual}
-                                disabled={cargandoDireccion || !(data.cliente_id || infoCliente?.id)}
-                                className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none disabled:opacity-50 shrink-0`}
-                                title={!(data.cliente_id || infoCliente?.id) ? 'Seleccione un cliente primero' : 'Rellenar con la dirección del cliente'}
-                            >
-                                <MapPin className="w-4 h-4" />
-                                {cargandoDireccion ? 'Cargando...' : 'Rellenar dirección'}
-                            </button>
+                            {!direccionesNormalizadas && (
+                                <button
+                                    type="button"
+                                    onClick={rellenarDireccionManual}
+                                    disabled={cargandoDireccion || !(data.cliente_id || infoCliente?.id)}
+                                    className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none disabled:opacity-50 shrink-0`}
+                                    title={!(data.cliente_id || infoCliente?.id) ? 'Seleccione un cliente primero' : 'Rellenar con la dirección del cliente'}
+                                >
+                                    <MapPin className="w-4 h-4" />
+                                    {cargandoDireccion ? 'Cargando...' : 'Rellenar dirección'}
+                                </button>
+                            )}
                         </div>
-                        {alertaDireccion && (
+                        {alertaDireccion && !direccionesNormalizadas && (
                             <div className="mb-4 p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex items-start gap-3">
                                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                 <p className="text-xs font-bold theme-text-main m-0">Se cargó la dirección del cliente. Verifique que los datos sean correctos; puede editarlos manualmente.</p>
@@ -517,11 +562,143 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <label className={SECCION}>C.P.</label>
                                 <input type="text" placeholder="Código postal" value={data.codigo_postal} onChange={(e) => setData('codigo_postal', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                             </div>
-                            <div className="md:col-span-2">
-                                <label className={SECCION}>Domicilio de entrega</label>
-                                <textarea placeholder="Calle, colonia, municipio, estado..." value={data.domicilio_entrega} onChange={(e) => setData('domicilio_entrega', e.target.value)} className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`} />
-                            </div>
+                            {direccionesNormalizadas && puedeSeleccionar ? (
+                                <div className="md:col-span-2 space-y-3">
+                                    <label className={SECCION}>Seleccionar dirección de envío</label>
+                                    {direccionesCliente.length > 0 && !mostrarExcepcion ? (
+                                        <>
+                                            <select
+                                                value={data.cliente_direccion_id}
+                                                onChange={(e) => {
+                                                    const id = e.target.value;
+                                                    setData('cliente_direccion_id', id);
+                                                    setData('direccion_manual_excepcion', false);
+                                                    const sel = direccionesCliente.find((d) => String(d.id) === String(id));
+                                                    if (sel) {
+                                                        setData('domicilio_entrega', sel.direccion_resumida || '');
+                                                        setData('codigo_postal', sel.codigo_postal || '');
+                                                    }
+                                                }}
+                                                className={`${THEME_SELECT} w-full py-3`}
+                                            >
+                                                <option value="">Seleccionar dirección de envío…</option>
+                                                {direccionesCliente.map((d) => (
+                                                    <option key={d.id} value={d.id}>
+                                                        {labelOpcionDireccion(data.numero_cliente || infoCliente?.numero_cliente, d)}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {direccionesCliente.find((d) => String(d.id) === String(data.cliente_direccion_id)) && (
+                                                <DireccionPedidoResumen
+                                                    direccion={direccionesCliente.find((d) => String(d.id) === String(data.cliente_direccion_id))}
+                                                    codigoDireccion={codigoDireccionCliente(
+                                                        data.numero_cliente || infoCliente?.numero_cliente,
+                                                        direccionesCliente.find((d) => String(d.id) === String(data.cliente_direccion_id))?.numero_direccion,
+                                                    )}
+                                                />
+                                            )}
+                                        </>
+                                    ) : null}
+
+                                    {(direccionesCliente.length === 0 || mostrarExcepcion) && (
+                                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                                            <p className="text-xs font-bold theme-text-main m-0">
+                                                {direccionesCliente.length === 0
+                                                    ? 'Este cliente no tiene direcciones verificadas.'
+                                                    : 'Captura de excepción manual autorizada.'}
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {infoCliente?.id && (
+                                                    <a
+                                                        href={route('control_pedidos.direcciones.cliente', infoCliente.id)}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs`}
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5" />
+                                                        Gestionar direcciones
+                                                    </a>
+                                                )}
+                                                {puedeManual && !mostrarExcepcion && (
+                                                    <button
+                                                        type="button"
+                                                        className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs`}
+                                                        onClick={() => {
+                                                            setMostrarExcepcion(true);
+                                                            setData('direccion_manual_excepcion', true);
+                                                            setData('cliente_direccion_id', '');
+                                                        }}
+                                                    >
+                                                        <PenLine className="w-3.5 h-3.5" />
+                                                        Usar dirección manual
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {(mostrarExcepcion || (puedeManual && direccionesCliente.length === 0)) && (
+                                                <div className="space-y-2">
+                                                    <textarea
+                                                        placeholder="Domicilio completo (excepción manual)…"
+                                                        value={data.domicilio_entrega}
+                                                        onChange={(e) => {
+                                                            setData('domicilio_entrega', e.target.value);
+                                                            setData('direccion_manual_excepcion', true);
+                                                            setData('cliente_direccion_id', '');
+                                                        }}
+                                                        className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`}
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Motivo de la excepción (requerido al enviar)"
+                                                        value={data.motivo_direccion_manual}
+                                                        onChange={(e) => setData('motivo_direccion_manual', e.target.value)}
+                                                        className={`${THEME_INPUT} w-full py-3`}
+                                                    />
+                                                    {direccionesCliente.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            className="text-xs underline theme-text-muted"
+                                                            onClick={() => {
+                                                                setMostrarExcepcion(false);
+                                                                setData('direccion_manual_excepcion', false);
+                                                            }}
+                                                        >
+                                                            Volver al selector
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {direccionesCliente.length > 0 && !mostrarExcepcion && puedeManual && (
+                                        <button
+                                            type="button"
+                                            className="text-xs underline theme-text-muted"
+                                            onClick={() => {
+                                                setMostrarExcepcion(true);
+                                                setData('direccion_manual_excepcion', true);
+                                                setData('cliente_direccion_id', '');
+                                            }}
+                                        >
+                                            Usar excepción manual en su lugar
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="md:col-span-2">
+                                    <label className={SECCION}>Domicilio de entrega</label>
+                                    <textarea placeholder="Calle, colonia, municipio, estado..." value={data.domicilio_entrega} onChange={(e) => setData('domicilio_entrega', e.target.value)} className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`} />
+                                </div>
+                            )}
                         </div>
+                        <label className="flex items-center gap-3 cursor-pointer theme-text-main p-3 rounded-xl border theme-border w-full mt-4">
+                            <input
+                                type="checkbox"
+                                checked={data.anexar_remision}
+                                onChange={(e) => setData('anexar_remision', e.target.checked)}
+                                className="w-4 h-4"
+                            />
+                            <span className="text-sm font-bold">Anexar remisión</span>
+                        </label>
                     </section>
 
                     {/* 4. Envío y costos (logística) */}
@@ -529,19 +706,6 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                         <p className={SECCION}>4. Envío y costos</p>
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className={SECCION}>Envío / Tienda</label>
-                                    <select value={data.catalogo_envio_tienda_id} onChange={(e) => setData('catalogo_envio_tienda_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
-                                        <option value="">Seleccionar...</option>
-                                        {(catalogos.envios_tienda || []).map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                                    </select>
-                                </div>
-                                {envioTiendaOtro && (
-                                    <div className="md:col-span-2">
-                                        <label className={SECCION}>Especifique envío / tienda</label>
-                                        <input type="text" placeholder="Descripción" value={data.envio_tienda_otro} onChange={(e) => setData('envio_tienda_otro', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
-                                    </div>
-                                )}
                                 <div>
                                     <label className={SECCION}>Paquetería</label>
                                     <select value={data.catalogo_paqueteria_id} onChange={(e) => manejarPaqueteria(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>

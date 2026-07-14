@@ -20,6 +20,7 @@ use App\Http\Controllers\ControlPedidos\PedidoBmaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaAuditoriaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaCedisController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaDelegadoController;
+use App\Http\Controllers\ControlPedidos\DireccionesAuxiliarController;
 use App\Http\Controllers\Mensajeria\{ConversacionController,MensajeController,AdjuntoMensajeController};
 use App\Http\Controllers\WebPushController;
 use App\Http\Controllers\GestionInterna\DirectorioController;
@@ -34,6 +35,18 @@ Route::get('/', function () {
 Route::middleware('throttle:60,1')->group(function () {
     Route::get('/activos/consulta/{token}', [ActivoController::class, 'consultaPublica'])->name('activos.consulta.publica');
     Route::get('/activos/consulta/{token}/qr.svg', [ActivoController::class, 'consultaQr'])->name('activos.consulta.qr');
+});
+
+Route::middleware(['throttle:30,1', \App\Http\Middleware\HardenSolicitudDireccionPublica::class])->group(function () {
+    Route::get('/direcciones-envio/confirmacion/{folio}', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionPublicaController::class, 'confirmacion'])
+        ->name('direcciones.publicas.confirmacion');
+    Route::get('/direcciones-envio/{codigo}', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionPublicaController::class, 'show'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->name('direcciones.publicas.show');
+    Route::get('/direcciones-envio', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionPublicaController::class, 'show'])
+        ->name('direcciones.publicas.form');
+    Route::post('/direcciones-envio', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionPublicaController::class, 'store'])
+        ->name('direcciones.publicas.store');
 });
 
 // ══════════════════════════════════════════════════════════════════════
@@ -384,6 +397,10 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{pedidoBma}', [PedidoBmaController::class, 'destroy'])->name('destroy');
     });
 
+    Route::middleware(['can:control_pedidos.direccion.cambiar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::post('/{pedidoBma}/cambiar-direccion', [PedidoBmaController::class, 'cambiarDireccion'])->name('cambiar_direccion');
+    });
+
     Route::middleware(['can:control_pedidos.auditar'])->prefix('control-pedidos/auditar')->name('control_pedidos.auditar.')->group(function () {
         Route::get('/', [PedidoBmaAuditoriaController::class, 'index'])->name('index');
         Route::post('/{pedidoBma}/validar-pago', [PedidoBmaAuditoriaController::class, 'validarPago'])->name('validar_pago');
@@ -392,6 +409,38 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/aprobar', [PedidoBmaAuditoriaController::class, 'aprobar'])->name('aprobar');
         Route::post('/{pedidoBma}/rechazar', [PedidoBmaAuditoriaController::class, 'rechazar'])->name('rechazar');
         Route::post('/{pedidoBma}/liberar-resguardo', [PedidoBmaAuditoriaController::class, 'liberarResguardo'])->name('liberar_resguardo');
+    });
+
+    // Submódulo Direcciones (Auxiliar) — sin acceso al módulo Clientes
+    Route::middleware(['can:clientes.direcciones.ver'])->prefix('control-pedidos/direcciones')->name('control_pedidos.direcciones.')->group(function () {
+        Route::get('/', [DireccionesAuxiliarController::class, 'index'])->name('index');
+        Route::get('/buscar-cliente', [DireccionesAuxiliarController::class, 'buscarCliente'])->name('buscar_cliente');
+        Route::get('/cliente/{cliente}', [DireccionesAuxiliarController::class, 'cliente'])->name('cliente');
+
+        Route::middleware(['can:clientes.direcciones.crear'])->group(function () {
+            Route::post('/cliente/{cliente}/direcciones', [DireccionesAuxiliarController::class, 'store'])->name('store');
+        });
+        Route::middleware(['can:clientes.direcciones.editar'])->group(function () {
+            Route::put('/cliente/{cliente}/direcciones/{direccion}', [DireccionesAuxiliarController::class, 'update'])->name('update');
+            Route::post('/cliente/{cliente}/direcciones/{direccion}/principal', [DireccionesAuxiliarController::class, 'marcarPrincipal'])->name('principal');
+        });
+        Route::middleware(['can:clientes.direcciones.desactivar'])->group(function () {
+            Route::post('/cliente/{cliente}/direcciones/{direccion}/desactivar', [DireccionesAuxiliarController::class, 'desactivar'])->name('desactivar');
+        });
+        Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
+            Route::post('/cliente/{cliente}/enlace', [DireccionesAuxiliarController::class, 'generarEnlace'])->name('enlace');
+            Route::post('/cliente/{cliente}/enlace/{enlace}/revocar', [DireccionesAuxiliarController::class, 'revocarEnlace'])->name('enlace.revocar');
+        });
+    });
+
+    Route::middleware(['can:clientes.direcciones.revisar_solicitudes'])->prefix('control-pedidos/direcciones')->name('control_pedidos.direcciones.')->group(function () {
+        Route::get('/solicitudes', [DireccionesAuxiliarController::class, 'solicitudesIndex'])->name('solicitudes.index');
+        Route::get('/solicitudes/{solicitud}', [DireccionesAuxiliarController::class, 'solicitudesShow'])->name('solicitudes.show');
+        Route::get('/solicitudes/{solicitud}/remision', [DireccionesAuxiliarController::class, 'solicitudesRemision'])->name('solicitudes.remision');
+        Route::post('/solicitudes/{solicitud}/aprobar', [DireccionesAuxiliarController::class, 'solicitudesAprobar'])->name('solicitudes.aprobar');
+        Route::post('/solicitudes/{solicitud}/rechazar', [DireccionesAuxiliarController::class, 'solicitudesRechazar'])->name('solicitudes.rechazar');
+        Route::post('/solicitudes/{solicitud}/correccion', [DireccionesAuxiliarController::class, 'solicitudesCorreccion'])->name('solicitudes.correccion');
+        Route::post('/solicitudes/{solicitud}/vincular', [DireccionesAuxiliarController::class, 'solicitudesVincular'])->name('solicitudes.vincular');
     });
 
     Route::middleware(['can:control_pedidos.cedis'])->prefix('control-pedidos/cedis')->name('control_pedidos.cedis.')->group(function () {
@@ -819,6 +868,41 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/clientes/{cliente}/historial', [AdminController::class, 'historialCliente'])->name('clientes.historial');
             Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');
             Route::put('/clientes/{cliente}', [ClienteController::class, 'update'])->name('clientes.update');
+
+            Route::middleware(['can:clientes.direcciones.ver'])->group(function () {
+                Route::get('/clientes/{cliente}/direcciones', [\App\Http\Controllers\Clientes\Direcciones\ClienteDireccionController::class, 'index'])
+                    ->name('clientes.direcciones.index');
+            });
+            Route::middleware(['can:clientes.direcciones.crear'])->group(function () {
+                Route::post('/clientes/{cliente}/direcciones', [\App\Http\Controllers\Clientes\Direcciones\ClienteDireccionController::class, 'store'])
+                    ->name('clientes.direcciones.store');
+            });
+            Route::middleware(['can:clientes.direcciones.editar'])->group(function () {
+                Route::put('/clientes/{cliente}/direcciones/{direccion}', [\App\Http\Controllers\Clientes\Direcciones\ClienteDireccionController::class, 'update'])
+                    ->name('clientes.direcciones.update');
+                Route::post('/clientes/{cliente}/direcciones/{direccion}/principal', [\App\Http\Controllers\Clientes\Direcciones\ClienteDireccionController::class, 'marcarPrincipal'])
+                    ->name('clientes.direcciones.principal');
+            });
+            Route::middleware(['can:clientes.direcciones.desactivar'])->group(function () {
+                Route::post('/clientes/{cliente}/direcciones/{direccion}/desactivar', [\App\Http\Controllers\Clientes\Direcciones\ClienteDireccionController::class, 'desactivar'])
+                    ->name('clientes.direcciones.desactivar');
+            });
+            Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
+                Route::post('/clientes/{cliente}/direcciones/enlace', [\App\Http\Controllers\Clientes\Direcciones\ClienteDireccionController::class, 'generarEnlace'])
+                    ->name('clientes.direcciones.enlace');
+                Route::post('/clientes/{cliente}/enlaces/{enlace}/revocar', [\App\Http\Controllers\Clientes\Direcciones\ClienteDireccionController::class, 'revocarEnlace'])
+                    ->name('clientes.direcciones.enlace.revocar');
+            });
+        });
+
+        Route::middleware(['can:clientes.direcciones.revisar_solicitudes'])->prefix('clientes/direcciones')->name('clientes.direcciones.')->group(function () {
+            Route::get('/solicitudes', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionRevisionController::class, 'index'])->name('solicitudes.index');
+            Route::get('/solicitudes/{solicitud}', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionRevisionController::class, 'show'])->name('solicitudes.show');
+            Route::get('/solicitudes/{solicitud}/remision', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionRevisionController::class, 'descargarRemision'])->name('solicitudes.remision');
+            Route::post('/solicitudes/{solicitud}/aprobar', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionRevisionController::class, 'aprobar'])->name('solicitudes.aprobar');
+            Route::post('/solicitudes/{solicitud}/rechazar', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionRevisionController::class, 'rechazar'])->name('solicitudes.rechazar');
+            Route::post('/solicitudes/{solicitud}/correccion', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionRevisionController::class, 'solicitarCorreccion'])->name('solicitudes.correccion');
+            Route::post('/solicitudes/{solicitud}/vincular', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionRevisionController::class, 'vincularCliente'])->name('solicitudes.vincular');
         });
 
         // --- 3. Catálogos Globales (Acceso Estricto Administrativo) ---

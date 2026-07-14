@@ -178,6 +178,18 @@ refresh_permissions() {
     ok "Permisos actualizados."
 }
 
+# Host HTTP para Nginx virtual hosts (APP_URL). Evita el default_server 404.
+health_host_from_app_url() {
+    local url host
+    url="$(env_file_value APP_URL)"
+    host="$(printf '%s' "$url" | sed -E 's|^[a-zA-Z][a-zA-Z0-9+.-]*://||; s|[:/].*||')"
+    if [ -n "$host" ]; then
+        printf '%s' "$host"
+        return 0
+    fi
+    printf '%s' 'gelianv.neobash.site'
+}
+
 health_check() {
     log "Verificando salud del sistema..."
 
@@ -193,8 +205,15 @@ health_check() {
     driver="$(exec_app php artisan tinker --execute="echo config('session.driver');" 2>/dev/null | tail -1)"
     ok "SESSION driver activo: ${driver:-desconocido}"
 
-    if ! docker exec -i "$WEB_CONTAINER" wget -qSO- --timeout=15 http://127.0.0.1/login 2>&1 | grep -q "200 OK"; then
-        fail "Health check falló: Nginx no responde 200 en /login."
+    # Nginx enruta por server_name; sin Host correcto cae en default_server → 404.
+    local health_host
+    health_host="$(health_host_from_app_url)"
+    ok "Health check Host: ${health_host}"
+
+    if ! docker exec -i "$WEB_CONTAINER" wget -qSO- --timeout=15 \
+        --header="Host: ${health_host}" \
+        "http://127.0.0.1/login" 2>&1 | grep -q "200 OK"; then
+        fail "Health check falló: Nginx no responde 200 en /login (Host: ${health_host})."
     fi
 
     ok "Health check exitoso: aplicación respondiendo correctamente."

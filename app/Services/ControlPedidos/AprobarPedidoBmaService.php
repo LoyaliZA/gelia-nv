@@ -28,6 +28,7 @@ class AprobarPedidoBmaService
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $estatusAnterior = $pedido->estatus;
+
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_EN_CEDIS)
                 ?? CatalogoEstatusPedido::porCodigo('AMARILLO');
 
@@ -39,17 +40,22 @@ class AprobarPedidoBmaService
                 'catalogo_estatus_pedido_id' => $estatusNuevo->id,
             ]);
 
+            $comentario = $pedido->es_resguardo
+                ? 'Pedido validado en resguardo. Visible en CEDIS; empaque bloqueado hasta liberar resguardo.'
+                : 'Pedido aprobado y enviado a Registro General.';
+
             $this->historialService->registrarTransicion(
                 $pedido->id,
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                'Pedido aprobado y enviado a Registro General.'
+                $comentario
             );
 
             return $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'banco', 'almacen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'envioTienda', 'pagoValidadoPor',
+                'direccionVigente',
             ]);
         });
     }

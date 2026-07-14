@@ -23,16 +23,16 @@ class PedidoBma extends Model
         'fecha',
         'vendedor_id',
         'cliente_id',
+        'cliente_direccion_id',
         'origen_id',
         'almacen_id',
         'catalogo_banco_id',
-        'requiere_factura',
         'saldo_a_favor',
         'catalogo_tipo_caja_id',
         'numero_cajas',
         'peso_real_kg',
         'peso_volumetrico_kg',
-        'peso_con_productos_kg',
+        'peso_cobrado_guia_kg',
         'catalogo_paqueteria_id',
         'catalogo_tipo_guia_id',
         'catalogo_zona_id',
@@ -42,6 +42,7 @@ class PedidoBma extends Model
         'domicilio_entrega',
         'envia_otra_persona',
         'es_resguardo',
+        'anexar_remision',
         'envia_a_otra_persona',
         'total_mercancia',
         'costo_envio',
@@ -68,14 +69,14 @@ class PedidoBma extends Model
         'guia_subida_at' => 'datetime',
         'incidencia_empaque_at' => 'datetime',
         'fecha' => 'date',
-        'requiere_factura' => 'boolean',
         'aplica_seguro' => 'boolean',
         'es_resguardo' => 'boolean',
+        'anexar_remision' => 'boolean',
         'envia_a_otra_persona' => 'boolean',
         'saldo_a_favor' => 'decimal:2',
         'peso_real_kg' => 'decimal:4',
         'peso_volumetrico_kg' => 'decimal:4',
-        'peso_con_productos_kg' => 'decimal:4',
+        'peso_cobrado_guia_kg' => 'decimal:4',
         'total_mercancia' => 'decimal:2',
         'costo_envio' => 'decimal:2',
         'costo_seguro' => 'decimal:2',
@@ -91,6 +92,21 @@ class PedidoBma extends Model
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class);
+    }
+
+    public function clienteDireccion(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\ClienteDireccion::class, 'cliente_direccion_id');
+    }
+
+    public function direccionesSnapshot(): HasMany
+    {
+        return $this->hasMany(PedidoBmaDireccion::class, 'pedido_bma_id');
+    }
+
+    public function direccionVigente(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PedidoBmaDireccion::class, 'pedido_bma_id')->where('es_vigente', true);
     }
 
     public function origen(): BelongsTo

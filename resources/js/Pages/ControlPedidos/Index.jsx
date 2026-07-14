@@ -15,7 +15,7 @@ import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/pedidosBmaStyles';
 
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
 
-export default function Index({ auth, pedidos, metricas = {}, filtros = {}, catalogos = {} }) {
+export default function Index({ auth, pedidos, metricas = {}, filtros = {}, catalogos = {}, direcciones_normalizadas = false }) {
     const { flash } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (permiso) => permisos.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
@@ -129,6 +129,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 abierto={modalForm.abierto}
                 pedido={modalForm.pedido}
                 catalogos={catalogos}
+                direccionesNormalizadas={direcciones_normalizadas}
                 onClose={() => setModalForm({ abierto: false, pedido: null })}
             />
             <ModalDetallePedido

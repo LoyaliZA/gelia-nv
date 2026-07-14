@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { X, History } from 'lucide-react';
 import {
-    badgeClaseEstatusPedido,
+    badgeEstatusPedido,
     formatearFechaHoraAuditoria,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
@@ -44,11 +44,11 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
                     ) : (
                         <div className="space-y-4">
                             {historial.map((h) => {
-                                const badge = badgeClaseEstatusPedido(h.estatus_nuevo || h.estatusNuevo);
+                                const badge = badgeEstatusPedido(h.estatus_nuevo || h.estatusNuevo);
                                 return (
                                     <div key={h.id} className="p-4 rounded-xl border theme-border theme-element">
                                         <div className="flex justify-between items-start gap-2">
-                                            <span className={badge.className} style={badge.style}>{(h.estatus_nuevo || h.estatusNuevo)?.nombre_visual}</span>
+                                            <span className={badge.className} style={badge.style}>{badge.label}</span>
                                             <span className="text-[9px] theme-text-muted font-bold shrink-0 font-mono">
                                                 {formatearFechaHoraAuditoria(h.created_at)}
                                             </span>

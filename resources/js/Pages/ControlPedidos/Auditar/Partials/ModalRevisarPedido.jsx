@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
-    X, CheckCircle2, AlertTriangle, FileText, Upload, Trash2,
+    X, CheckCircle2, AlertTriangle, FileText, Upload, Trash2, MapPin,
 } from 'lucide-react';
 import {
     badgeAuditoriaSemantico,
@@ -22,6 +22,9 @@ import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import ModalMotivoRechazo from '../../Partials/ModalMotivoRechazo';
 import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
+import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
+import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
+import ModalCambiarDireccion from '../../Partials/ModalCambiarDireccion';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
@@ -37,11 +40,15 @@ const comprobantesDe = (pedido) => (pedido?.documentos || []).filter((d) => d.ti
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 
 export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoInicial }) {
+    const { auth } = usePage().props;
+    const permisos = auth?.user?.permissions || [];
+    const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
     const [pedido, setPedido] = useState(pedidoInicial);
     const [procesando, setProcesando] = useState(false);
     const [docPreview, setDocPreview] = useState(null);
     const [confirmacion, setConfirmacion] = useState(null);
     const [motivoRechazoAbierto, setMotivoRechazoAbierto] = useState(false);
+    const [cambiarDir, setCambiarDir] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
 
     useEffect(() => {
@@ -57,17 +64,15 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     if (!abierto || !pedido) return null;
 
     const fase = pedido.estatus?.fase_ciclo;
-    const badge = badgeAuditoriaSemantico(fase);
+    const badge = badgeAuditoriaSemantico(fase, pedido.es_resguardo);
     const esPendiente = fase === 'PENDIENTE_AUXILIAR';
+    const puedeLiberarResguardo = Boolean(pedido.es_resguardo) && (esPendiente || fase === 'EN_CEDIS');
     const esRechazado = fase === 'RECHAZADO_VENDEDORA';
     const comprobantes = comprobantesDe(pedido);
     const remision = remisionDe(pedido);
     const pagoValidado = Boolean(pedido.pago_validado_at);
     const puedeAprobar = esPendiente && pagoValidado && Boolean(remision);
 
-    const envioTienda = pedido.envio_tienda?.es_otro
-        ? pedido.envio_tienda_otro || pedido.envio_tienda?.nombre
-        : pedido.envio_tienda?.nombre;
 
     const recargarPedido = (mensajeExito = null) => {
         router.reload({
@@ -255,7 +260,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
                                 <Campo label="Origen" value={pedido.origen?.nombre} />
                                 <Campo label="Banco" value={pedido.banco?.nombre} />
-                                <Campo label="Factura" value={pedido.requiere_factura ? 'Sí' : 'No'} />
+                                <Campo label="Anexar remisión" value={pedido.anexar_remision ? 'Sí' : 'No'} />
                                 <Campo label="Saldo a favor" value={Number(pedido.saldo_a_favor) > 0 ? formatearMoneda(pedido.saldo_a_favor) : '—'} />
                                 <Campo label="N° de cajas" value={pedido.numero_cajas} />
                                 <Campo label="Capturado por" value={pedido.vendedor?.name} />
@@ -296,7 +301,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
                                 <Campo label="Tipo caja" value={pedido.tipo_caja?.nombre} />
                                 <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
-                                <Campo label="Envío tienda" value={envioTienda} />
                                 <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                             </div>
                             <div className="mt-4 p-4 rounded-xl border theme-border theme-element space-y-2 text-sm">
@@ -314,7 +318,35 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             </div>
                             <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} compact />
                             <div className="mt-4 space-y-3">
-                                <Campo label="Domicilio de envío" value={pedido.domicilio_entrega} />
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Domicilio de envío</p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {can('clientes.direcciones.ver') && pedido.cliente?.id && (
+                                            <a
+                                                href={route('control_pedidos.direcciones.cliente', pedido.cliente.id)}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className={`${BTN_SECONDARY} text-xs py-1.5 px-2 inline-flex items-center gap-1`}
+                                            >
+                                                <MapPin className="w-3.5 h-3.5" /> Gestionar direcciones
+                                            </a>
+                                        )}
+                                        {can('control_pedidos.direccion.cambiar') && (
+                                            <button type="button" className={`${BTN_SECONDARY} text-xs py-1.5 px-2 inline-flex items-center gap-1`} onClick={() => setCambiarDir(true)}>
+                                                <MapPin className="w-3.5 h-3.5" /> Cambiar
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                <DireccionPedidoResumen
+                                    direccion={pedido.direccion_vigente || pedido.direccionVigente}
+                                    domicilioLegacy={pedido.domicilio_entrega}
+                                    codigoPostal={pedido.codigo_postal}
+                                codigoDireccion={codigoDireccionCliente(
+                                    pedido.cliente?.numero_cliente,
+                                    (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
+                                )}
+                                />
                                 {pedido.envia_a_otra_persona && <Campo label="Destinatario alterno" value={pedido.envia_otra_persona} />}
                                 <Campo label="Comentarios" value={pedido.comentarios_drive} />
                             </div>
@@ -371,18 +403,18 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         <button type="button" onClick={onClose} className={`${BTN_SECONDARY} theme-element border theme-border outline-none`}>
                             Cerrar
                         </button>
+                        {puedeLiberarResguardo && (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmacion({ accion: 'liberar' })}
+                                disabled={procesando}
+                                className={`${BTN_SECONDARY} theme-element border border-blue-500/40 text-blue-600 outline-none`}
+                            >
+                                Liberar resguardo
+                            </button>
+                        )}
                         {esPendiente && (
                             <>
-                                {pedido.es_resguardo && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setConfirmacion({ accion: 'liberar' })}
-                                        disabled={procesando}
-                                        className={`${BTN_SECONDARY} theme-element border border-blue-500/40 text-blue-600 outline-none`}
-                                    >
-                                        Liberar resguardo
-                                    </button>
-                                )}
                                 <button type="button" onClick={() => setMotivoRechazoAbierto(true)} disabled={procesando} className={`${BTN_SECONDARY} theme-element border border-red-500/40 text-red-500 outline-none`}>
                                     Reportar problema
                                 </button>
@@ -423,6 +455,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 mensaje={alerta.mensaje}
                 onClose={() => setAlerta({ ...alerta, abierto: false })}
             />
+            <ModalCambiarDireccion abierto={cambiarDir} onClose={() => setCambiarDir(false)} pedido={pedido} />
         </>,
         document.body
     );

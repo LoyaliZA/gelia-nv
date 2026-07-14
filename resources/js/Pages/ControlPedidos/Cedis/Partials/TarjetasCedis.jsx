@@ -6,7 +6,7 @@ import {
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
-    badgeClaseEstatusPedido,
+    badgeEstatusPedido,
     badgeEmpaqueSemantico,
     esPedidoEmpacadoCedis,
     etiquetaAlmacen,
@@ -25,12 +25,12 @@ const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo ===
 
 function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia, onSolicitarConfirmacion, onVerDocumento }) {
     const fase = pedido.estatus?.fase_ciclo;
-    const badgeEstatus = badgeClaseEstatusPedido(pedido.estatus);
-    const badgeEmpaque = badgeEmpaqueSemantico(fase);
+    const badgeEstatus = badgeEstatusPedido(pedido.estatus);
+    const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo);
     const remision = remisionDe(pedido);
     const esIncidencia = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
-    const puedeEmpacar = fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS';
+    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
     const tieneGuiaPdf = tieneGuiaPdfDisponible(pedido);
     const requiereLogistica = pedido.origen?.requiere_logistica ?? true;
@@ -56,7 +56,7 @@ function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia, onSolicitar
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <span className={badgeEstatus.className} style={badgeEstatus.style}>
-                        {pedido.estatus?.nombre_visual || '—'}
+                        {badgeEstatus.label}
                     </span>
                     <span className={badgeEmpaque.className} style={badgeEmpaque.style}>
                         {badgeEmpaque.label}
@@ -146,6 +146,11 @@ function TarjetaPedido({ pedido, onVerDetalle, onReportarIncidencia, onSolicitar
                     >
                         <CheckCircle2 className="w-3.5 h-3.5" /> Marcar empacado
                     </button>
+                )}
+                {(fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && pedido.es_resguardo && (
+                    <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wide">
+                        Empaque bloqueado — en resguardo
+                    </span>
                 )}
                 {fase === 'EN_CEDIS' && (
                     <button

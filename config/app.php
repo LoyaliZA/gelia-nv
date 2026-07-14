@@ -56,6 +56,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public form origin (customer-facing address forms)
+    |--------------------------------------------------------------------------
+    |
+    | Enlaces generados para /direcciones-envio usan este origen, no APP_URL,
+    | para no exponer el host interno del panel.
+    |
+    */
+
+    'form_public_url' => env('FORM_PUBLIC_URL', env('APP_URL', 'http://localhost')),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Allowed HTTP Hosts (Cloudflare Tunnel)
+    |--------------------------------------------------------------------------
+    |
+    | Lista separada por comas. Vacío = no restringir hosts (útil en local/tests).
+    |
+    */
+
+    'allowed_hosts' => env('APP_ALLOWED_HOSTS', ''),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

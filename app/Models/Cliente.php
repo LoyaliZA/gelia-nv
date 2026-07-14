@@ -118,6 +118,26 @@ class Cliente extends Model
         return $this->hasMany(CobranzaFactura::class, 'cliente_id');
     }
 
+    public function direcciones(): HasMany
+    {
+        return $this->hasMany(ClienteDireccion::class);
+    }
+
+    public function direccionesActivas(): HasMany
+    {
+        return $this->direcciones()->where('esta_activa', true);
+    }
+
+    public function solicitudesDireccion(): HasMany
+    {
+        return $this->hasMany(SolicitudDireccion::class, 'cliente_coincidente_id');
+    }
+
+    public function enlacesDireccion(): HasMany
+    {
+        return $this->hasMany(EnlaceDireccion::class);
+    }
+
     public function facturasActivas(): HasMany
     {
         return $this->hasMany(CobranzaFactura::class, 'cliente_id')->where('pagada', false);

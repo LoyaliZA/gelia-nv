@@ -32,6 +32,7 @@ import {
     DollarSign,
     ClipboardCheck,
     Link2,
+    MapPin,
 } from 'lucide-react';
 
 import { ADMIN_MODULES, isAdminModuleAllowed, adminModuleHref } from './adminModules';
@@ -116,6 +117,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: FileSpreadsheet,
             href: () => routeHref('control_pedidos.delegado.index', '/control-pedidos/delegado'),
             active: (url) => url.startsWith('/control-pedidos/delegado'),
+        },
+        can('clientes.direcciones.ver') && {
+            type: 'link',
+            id: 'control_pedidos_direcciones',
+            label: 'Direcciones',
+            icon: MapPin,
+            href: () => routeHref('control_pedidos.direcciones.index', '/control-pedidos/direcciones'),
+            active: (url) => url.startsWith('/control-pedidos/direcciones'),
         },
     ].filter(Boolean);
 

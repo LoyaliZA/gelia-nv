@@ -24,6 +24,7 @@ class ListarPedidosBmaService
             'tipoGuia',
             'zona',
             'documentos',
+            'direccionVigente',
             'historial.usuario',
             'historial.estatusAnterior',
             'historial.estatusNuevo',

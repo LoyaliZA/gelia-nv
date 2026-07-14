@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Eye, Edit2, Trash2, AlertTriangle, History } from 'lucide-react';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
-import { badgeClaseEstatusPedido, formatearMoneda, etiquetaAlmacen, formatearFechaNegocio, tieneGuiaLista, badgeGuiaLista, tieneGuiaPdfDisponible } from './pedidosBmaStyles';
+import { badgeEstatusPedido, formatearMoneda, etiquetaAlmacen, formatearFechaNegocio, tieneGuiaLista, badgeGuiaLista, tieneGuiaPdfDisponible } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import BotonGuiaPdf from './BotonGuiaPdf';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
@@ -55,7 +55,7 @@ function CardPedido({ pedido, badge, esRechazado, can, onVer, onEditar, onElimin
                     )}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={badge.className} style={badge.style}>{pedido.estatus?.nombre_visual}</span>
+                    <span className={badge.className} style={badge.style}>{badge.label}</span>
                     {guiaLista && (
                         <span className={badgeGuia.className}>{badgeGuia.label}</span>
                     )}
@@ -131,7 +131,7 @@ export default function TablaPedidos({
                     <CardPedido
                         key={pedido.id}
                         pedido={pedido}
-                        badge={badgeClaseEstatusPedido(pedido.estatus)}
+                        badge={badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo })}
                         esRechazado={pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA'}
                         can={can}
                         onVer={onVer}
@@ -162,7 +162,7 @@ export default function TablaPedidos({
                     </thead>
                     <tbody>
                         {items.map((pedido) => {
-                            const badge = badgeClaseEstatusPedido(pedido.estatus);
+                            const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
                             const esRechazado = pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA';
                             const guiaLista = tieneGuiaLista(pedido);
                             const badgeGuia = badgeGuiaLista();
@@ -190,7 +190,7 @@ export default function TablaPedidos({
                                     </td>
                                     <td className="px-5 py-4">
                                         <span className={badge.className} style={badge.style}>
-                                            {pedido.estatus?.nombre_visual}
+                                            {badge.label}
                                         </span>
                                         {guiaLista && (
                                             <span className={`${badgeGuia.className} mt-1.5 block w-fit`}>{badgeGuia.label}</span>
@@ -200,7 +200,6 @@ export default function TablaPedidos({
                                                 Guía: {pedido.numero_rastreo}
                                             </p>
                                         )}
-                                        <p className="text-[8px] font-bold theme-text-muted uppercase mt-1 m-0">{pedido.estatus?.fase_ciclo}</p>
                                     </td>
                                     <td className="px-5 py-4">
                                         <AccionesPedido

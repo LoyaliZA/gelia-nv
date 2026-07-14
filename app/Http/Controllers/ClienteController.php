@@ -128,6 +128,15 @@ class ClienteController extends Controller
 
         // Corrección en los nombres de las relaciones según Cliente.php
         $clientes = Cliente::with(['listaDescuento', 'tipo'])
+            ->withCount([
+                'direccionesActivas as direcciones_activas_count',
+                'solicitudesDireccion as solicitudes_direccion_pendientes' => function ($q) {
+                    $q->whereNotIn('estado', [
+                        \App\Models\SolicitudDireccion::ESTADO_APPROVED,
+                        \App\Models\SolicitudDireccion::ESTADO_REJECTED,
+                    ]);
+                },
+            ])
             ->where(function ($q) use ($usuarioId) {
                 $q->where('vendedor_original_id', $usuarioId)
                     ->orWhere('vendedor_id', $usuarioId);

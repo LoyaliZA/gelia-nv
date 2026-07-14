@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\FormPublicUrl;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,6 +16,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+
+        // Solo si APP_ALLOWED_HOSTS está definido (producción). En testing/local no restringe.
+        if (is_string(env('APP_ALLOWED_HOSTS')) && trim((string) env('APP_ALLOWED_HOSTS')) !== '') {
+            $middleware->trustHosts(
+                at: fn () => FormPublicUrl::allowedHosts(),
+                subdomains: false,
+            );
+        }
+
+        $middleware->web(prepend: [
+            \App\Http\Middleware\RestrictFormHostname::class,
+        ]);
+
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \App\Http\Middleware\ActualizarActividadSesion::class,

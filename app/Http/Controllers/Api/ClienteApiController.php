@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cliente;
+use App\Services\Clientes\Direcciones\GestionDireccionesClienteService;
 use App\Support\ControlPedidos\FormatearDomicilioCliente;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -108,7 +109,7 @@ class ClienteApiController extends Controller
         $domicilio = FormatearDomicilioCliente::ejecutar($cliente);
         $cp = FormatearDomicilioCliente::codigoPostal($cliente);
 
-        return response()->json([
+        $payload = [
             'encontrado' => true,
             'id' => $cliente->id,
             'numero_cliente' => $cliente->numero_cliente,
@@ -116,7 +117,18 @@ class ClienteApiController extends Controller
             'domicilio_entrega' => $domicilio,
             'codigo_postal' => $cp,
             'tiene_direccion' => filled($domicilio) || filled($cp),
-        ]);
+            'direcciones_normalizadas' => (bool) config('control_pedidos.direcciones_normalizadas'),
+            'direcciones' => [],
+        ];
+
+        if (config('control_pedidos.direcciones_normalizadas')) {
+            $payload['direcciones'] = app(GestionDireccionesClienteService::class)
+                ->listarActivasVerificadasPorCliente((int) $cliente->id)
+                ->values()
+                ->all();
+        }
+
+        return response()->json($payload);
     }
 
     private function aplicarBusqueda($query, string $termino): void
