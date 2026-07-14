@@ -11,14 +11,25 @@ import {
 const LABEL = 'mb-1.5 block text-[9px] font-black uppercase tracking-widest theme-text-muted';
 const TITULO_SEC = 'text-[10px] font-black uppercase tracking-[0.2em] theme-text-main m-0';
 
-export default function FormularioPublico({ token, enlace_valido, cliente, direcciones = [], acciones = [] }) {
+export default function FormularioPublico({
+    token,
+    enlace_valido,
+    cliente,
+    direcciones = [],
+    accion_permitida = null,
+    acciones = [],
+}) {
+    const accionInicial = accion_permitida
+        || acciones[0]?.value
+        || 'register_first_address';
+
     const { data, setData, post, processing, errors } = useForm({
         token: token || '',
         numero_cliente: '',
         nombre_declarado: '',
         telefono_declarado: '',
         correo_declarado: '',
-        accion_solicitada: acciones[0]?.value || 'register_first_address',
+        accion_solicitada: accionInicial,
         direccion_seleccionada_id: '',
         nombre_destinatario: '',
         telefono_destinatario: '',
@@ -104,8 +115,13 @@ export default function FormularioPublico({ token, enlace_valido, cliente, direc
 
                     <section className={seccion}>
                         <h2 className={TITULO_SEC}>Acción</h2>
-                        <Campo label="¿Qué deseas hacer?" error={errors.accion_solicitada}>
-                            <select className={THEME_SELECT} value={data.accion_solicitada} onChange={(e) => setData('accion_solicitada', e.target.value)}>
+                        <Campo label="¿Qué deseas hacer?" error={errors.accion_solicitada || errors.token}>
+                            <select
+                                className={THEME_SELECT}
+                                value={data.accion_solicitada}
+                                onChange={(e) => setData('accion_solicitada', e.target.value)}
+                                disabled={Boolean(accion_permitida) && acciones.length <= 1}
+                            >
                                 {acciones.map((a) => (
                                     <option key={a.value} value={a.value}>{a.label}</option>
                                 ))}

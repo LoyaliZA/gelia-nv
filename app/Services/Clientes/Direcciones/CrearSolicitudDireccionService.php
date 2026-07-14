@@ -8,6 +8,7 @@ use App\Models\SolicitudDireccion as Solicitud;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class CrearSolicitudDireccionService
 {
@@ -26,7 +27,9 @@ class CrearSolicitudDireccionService
     {
         $claveRate = 'solicitud-direccion:'.($ip ?? 'unknown');
         if (RateLimiter::tooManyAttempts($claveRate, 10)) {
-            throw new \RuntimeException('Demasiados intentos. Intente más tarde.');
+            throw ValidationException::withMessages([
+                'token' => 'Demasiados intentos. Intente más tarde.',
+            ]);
         }
         RateLimiter::hit($claveRate, 60);
 
@@ -35,10 +38,16 @@ class CrearSolicitudDireccionService
             $clienteId = null;
 
             if (! empty($payload['token'])) {
-                $enlace = $this->validadorEnlace->ejecutar(
-                    (string) $payload['token'],
-                    $payload['accion_solicitada'] ?? null
-                );
+                try {
+                    $enlace = $this->validadorEnlace->ejecutar(
+                        (string) $payload['token'],
+                        $payload['accion_solicitada'] ?? null
+                    );
+                } catch (\InvalidArgumentException $e) {
+                    throw ValidationException::withMessages([
+                        'accion_solicitada' => $e->getMessage(),
+                    ]);
+                }
                 $clienteId = $enlace->cliente_id;
                 $this->validadorEnlace->marcarUsado($enlace);
             }

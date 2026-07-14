@@ -85,6 +85,43 @@ class SolicitudDireccionPublicaTest extends TestCase
             ->assertOk();
     }
 
+    public function test_accion_distinta_a_enlace_devuelve_validacion(): void
+    {
+        $cliente = $this->cliente();
+        $resultado = app(GenerarEnlaceDireccionService::class)->ejecutar($cliente, [
+            'horas' => 24,
+            'accion' => SolicitudDireccion::ACCION_ADICIONAL,
+        ]);
+
+        try {
+            app(CrearSolicitudDireccionService::class)->ejecutar([
+                'token' => $resultado['token'],
+                'accion_solicitada' => SolicitudDireccion::ACCION_PRIMERA,
+                'nombre_declarado' => 'Ana Prueba',
+                'telefono_declarado' => '5511111111',
+                'datos_direccion' => [
+                    'nombre_destinatario' => 'Ana Prueba',
+                    'calle' => 'Calle Sol',
+                    'colonia' => 'Centro',
+                    'codigo_postal' => '06000',
+                    'municipio' => 'CDMX',
+                    'estado' => 'CDMX',
+                    'pais' => 'México',
+                ],
+            ], '127.0.0.1');
+            $this->fail('Se esperaba ValidationException por acción no permitida.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('accion_solicitada', $e->errors());
+        }
+
+        $this->get(route('direcciones.publicas.show', ['codigo' => $resultado['token']]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Clientes/Direcciones/FormularioPublico', false)
+                ->where('accion_permitida', SolicitudDireccion::ACCION_ADICIONAL)
+                ->has('acciones', 1));
+    }
+
     public function test_solicitud_con_enlace_asociado(): void
     {
         $cliente = $this->cliente();

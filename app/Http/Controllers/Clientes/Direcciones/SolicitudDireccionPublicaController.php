@@ -50,16 +50,30 @@ class SolicitudDireccionPublicaController extends Controller
             }
         }
 
+        $acciones = [
+            ['value' => SolicitudDireccion::ACCION_PRIMERA, 'label' => 'Registrar datos de envío por primera vez'],
+            ['value' => SolicitudDireccion::ACCION_ADICIONAL, 'label' => 'Agregar dirección adicional'],
+            ['value' => SolicitudDireccion::ACCION_ACTUALIZAR, 'label' => 'Actualizar dirección existente'],
+        ];
+
+        $accionPermitida = $enlace?->accion_permitida;
+        if (is_string($accionPermitida) && $accionPermitida !== '') {
+            $filtradas = array_values(array_filter(
+                $acciones,
+                static fn (array $a): bool => $a['value'] === $accionPermitida
+            ));
+            if ($filtradas !== []) {
+                $acciones = $filtradas;
+            }
+        }
+
         return Inertia::render('Clientes/Direcciones/FormularioPublico', [
             'token' => $token !== '' ? $token : null,
             'enlace_valido' => $enlace !== null,
             'cliente' => $clienteResumen,
             'direcciones' => $direcciones,
-            'acciones' => [
-                ['value' => SolicitudDireccion::ACCION_PRIMERA, 'label' => 'Registrar datos de envío por primera vez'],
-                ['value' => SolicitudDireccion::ACCION_ADICIONAL, 'label' => 'Agregar dirección adicional'],
-                ['value' => SolicitudDireccion::ACCION_ACTUALIZAR, 'label' => 'Actualizar dirección existente'],
-            ],
+            'accion_permitida' => $accionPermitida,
+            'acciones' => $acciones,
         ]);
     }
 
