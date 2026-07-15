@@ -5,28 +5,35 @@ import { X, Check, Save } from 'lucide-react';
 
 export default function ConfiguracionBellaroma({ onClose, users, notifiedUserIds }) {
     const { data, setData, post, processing, errors } = useForm({
-        notified_users: notifiedUserIds || [],
+        notified_users: (notifiedUserIds || []).map((id) => Number(id)),
     });
 
     const [busqueda, setBusqueda] = useState('');
 
     const toggleUser = (userId) => {
+        const id = Number(userId);
         const current = [...data.notified_users];
-        if (current.includes(userId)) {
-            setData('notified_users', current.filter(id => id !== userId));
+        if (current.includes(id)) {
+            setData('notified_users', current.filter((x) => x !== id));
         } else {
-            setData('notified_users', [...current, userId]);
+            setData('notified_users', [...current, id]);
         }
     };
 
     const submit = (e) => {
         e.preventDefault();
         post(route('plantilla_bellaroma.configuracion.guardar'), {
+            preserveScroll: true,
             onSuccess: () => onClose(),
         });
     };
 
-    const filteredUsers = users.filter(u => u.name.toLowerCase().includes(busqueda.toLowerCase()) || u.email.toLowerCase().includes(busqueda.toLowerCase()));
+    const filteredUsers = users.filter((u) => {
+        const q = busqueda.toLowerCase();
+        const name = (u.name || '').toLowerCase();
+        const email = (u.email || '').toLowerCase();
+        return name.includes(q) || email.includes(q);
+    });
 
     const modalContent = (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -59,8 +66,11 @@ export default function ConfiguracionBellaroma({ onClose, users, notifiedUserIds
                     />
 
                     <div className="space-y-2 border theme-border rounded-xl p-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                        {filteredUsers.length === 0 && (
+                            <p className="text-xs theme-text-muted font-bold p-3">No hay usuarios para mostrar.</p>
+                        )}
                         {filteredUsers.map(user => {
-                            const isSelected = data.notified_users.includes(user.id);
+                            const isSelected = data.notified_users.includes(Number(user.id));
                             return (
                                 <div 
                                     key={user.id}
@@ -75,7 +85,7 @@ export default function ConfiguracionBellaroma({ onClose, users, notifiedUserIds
                                     </div>
                                     <div className="flex flex-col">
                                         <span className={`text-xs font-bold ${isSelected ? '' : 'theme-text-main'}`} style={isSelected ? { color: 'var(--color-primario)' } : {}}>{user.name}</span>
-                                        <span className="text-[10px] theme-text-muted">{user.email}</span>
+                                        <span className="text-[10px] theme-text-muted">{user.email || 'Sin correo'}</span>
                                     </div>
                                 </div>
                             );

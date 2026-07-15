@@ -55,10 +55,12 @@ class PlantillaBellaromaController extends Controller
         }
 
         $configUsers = BellaromaConfig::where('llave', 'notified_users')->first();
-        $notifiedUserIds = $configUsers && $configUsers->valor ? json_decode($configUsers->valor, true) : [];
+        $notifiedUserIds = $configUsers && $configUsers->valor
+            ? array_map('intval', json_decode($configUsers->valor, true) ?: [])
+            : [];
 
         // Obtener usuarios para el selector
-        $users = User::select('id', 'name', 'email')->get();
+        $users = User::select('id', 'name', 'email')->orderBy('name')->get();
 
         // Determinar permisos del usuario actual para la vista
         $user = auth()->user();
@@ -146,11 +148,11 @@ class PlantillaBellaromaController extends Controller
         BellaromaConfig::updateOrCreate(
             ['llave' => 'notified_users'],
             [
-                'valor' => json_encode($request->notified_users ?? []),
+                'valor' => json_encode(array_values($request->notified_users ?? [])),
                 'descripcion' => 'IDs de usuarios que reciben notificación y correo de plantilla Bellaroma'
             ]
         );
 
-        return response()->json(['success' => true, 'message' => 'Configuración actualizada exitosamente.']);
+        return redirect()->back()->with('success', 'Configuración actualizada exitosamente.');
     }
 }

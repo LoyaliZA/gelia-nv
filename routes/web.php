@@ -478,12 +478,17 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:listados.ver'])->prefix('funciones/listados')->name('listados.')->group(function () {
         Route::get('/', [AromasListasController::class, 'index'])->name('index');
         Route::post('/generar', [AromasListasController::class, 'generar'])->name('generar');
+        Route::post('/generar/confirmar', [AromasListasController::class, 'confirmarGeneracion'])->name('generar.confirmar');
         Route::get('/descargar-temporal', [AromasListasController::class, 'descargarTemporal'])->name('descargar_temporal');
-        
+
+        Route::get('/generados/{id}/descargar', [AromasListasController::class, 'descargarGenerado'])->name('generados.descargar')->middleware('can:listados.visualizar');
+        Route::delete('/generados/{id}', [AromasListasController::class, 'eliminarGenerado'])->name('generados.eliminar')->middleware('can:listados.guardar_generado');
+        Route::post('/destinatarios', [AromasListasController::class, 'guardarDestinatarios'])->name('destinatarios.guardar')->middleware('can:listados.enviar');
+
         Route::post('/guardar', [AromasListasController::class, 'guardarLista'])->name('guardar')->middleware('can:listados.crear');
         Route::post('/{id}/actualizar', [AromasListasController::class, 'actualizarLista'])->name('actualizar')->middleware('can:listados.editar');
         Route::delete('/{id}', [AromasListasController::class, 'eliminarLista'])->name('eliminar')->middleware('can:listados.eliminar');
-        
+
         Route::get('/configuracion', [AromasListasController::class, 'obtenerConfiguracion'])->name('config.obtener')->middleware('can:listados.configurar_porcentajes');
         Route::post('/configuracion', [AromasListasController::class, 'guardarConfiguracion'])->name('config.guardar')->middleware('can:listados.configurar_porcentajes');
     });
