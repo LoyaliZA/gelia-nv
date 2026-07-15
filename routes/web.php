@@ -387,6 +387,10 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:control_pedidos.crear'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/', [PedidoBmaController::class, 'store'])->name('store');
         Route::put('/{pedidoBma}/enviar', [PedidoBmaController::class, 'enviar'])->name('enviar');
+        Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
+            Route::post('/cliente/{cliente}/enlace-direccion', [DireccionesAuxiliarController::class, 'generarEnlace'])
+                ->name('enlace_direccion');
+        });
     });
 
     Route::middleware(['can:control_pedidos.editar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {

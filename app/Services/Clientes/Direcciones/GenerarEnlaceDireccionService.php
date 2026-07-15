@@ -34,14 +34,18 @@ class GenerarEnlaceDireccionService
             'creado_por' => $opciones['usuario_id'] ?? null,
         ]);
 
-        $this->auditoria->ejecutar(
+                $this->auditoria->ejecutar(
             $cliente->id,
             'generar_enlace',
             $opciones['usuario_id'] ?? null,
             $opciones['direccion_id'] ?? null,
             null,
             null,
-            ['enlace_id' => $enlace->id, 'expira_en' => $enlace->expira_en?->toIso8601String()],
+            [
+                'enlace_id' => $enlace->id,
+                'accion' => $enlace->accion_permitida,
+                'expira_en' => $enlace->expira_en?->toIso8601String(),
+            ],
             'sistema',
         );
 
@@ -52,7 +56,7 @@ class GenerarEnlaceDireccionService
         ];
     }
 
-    private function generarCodigoUnico(int $longitud = 8): string
+    private function generarCodigoUnico(int $longitud = 16): string
     {
         $max = strlen(self::ALFABETO) - 1;
 
@@ -72,6 +76,6 @@ class GenerarEnlaceDireccionService
             }
         }
 
-        return Str::lower(Str::random(12));
+        return Str::lower(Str::random(24));
     }
 }

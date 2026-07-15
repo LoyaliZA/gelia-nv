@@ -91,9 +91,9 @@ export const LABELS_ESTADO_SOLICITUD = {
 };
 
 export const LABELS_ACCION_SOLICITUD = {
-    register_first_address: 'Primera dirección',
-    add_address: 'Dirección adicional',
-    update_address: 'Actualización',
+    register_first_address: 'Registrar primera dirección',
+    add_address: 'Añadir dirección adicional',
+    update_address: 'Actualizar dirección',
 };
 
 export function labelEstadoSolicitud(estado) {

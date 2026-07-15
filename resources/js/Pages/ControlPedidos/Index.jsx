@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Plus, FileSpreadsheet, Package } from 'lucide-react';
+import { Plus, FileSpreadsheet, Package, Link2 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../utils/geliaTheme';
@@ -11,6 +11,7 @@ import ModalDetallePedido from './Partials/ModalDetallePedido';
 import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
 import ModalAlertaPedido from './Partials/ModalAlertaPedido';
 import ModalConfirmarAccion from './Partials/ModalConfirmarAccion';
+import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
 import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/pedidosBmaStyles';
 
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
@@ -25,6 +26,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
+    const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
 
@@ -96,6 +98,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                                 <FileSpreadsheet className="w-4 h-4" /> Exportar CSV
                             </button>
                         )}
+                        {can('clientes.direcciones.generar_enlace') && (
+                            <button type="button" onClick={() => setModalLinkDireccion(true)} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
+                                <Link2 className="w-4 h-4" /> Link de dirección
+                            </button>
+                        )}
                         {can('control_pedidos.crear') && (
                             <button type="button" onClick={abrirNuevo} className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}>
                                 <Plus className="w-4 h-4" /> Nuevo pedido
@@ -150,6 +157,10 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 variante="danger"
                 onClose={() => setPedidoAEliminar(null)}
                 onConfirm={confirmarEliminar}
+            />
+            <ModalGenerarLinkDireccion
+                abierto={modalLinkDireccion}
+                onClose={() => setModalLinkDireccion(false)}
             />
             <ModalAlertaPedido
                 abierto={alerta.abierto}

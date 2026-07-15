@@ -48,6 +48,7 @@ class GestionDireccionesClienteService
                 'pais' => $d->pais,
                 'referencias' => $d->referencias,
                 'indicaciones_entrega' => $d->indicaciones_entrega,
+                'anexa_remision' => (bool) $d->anexa_remision,
                 'direccion_resumida' => FormatearDireccionEstructurada::resumida($d),
                 'es_principal' => $d->es_principal,
                 'estado_verificacion' => $d->estado_verificacion,
@@ -145,6 +146,73 @@ class GestionDireccionesClienteService
         $actual = ClienteDireccion::query()->findOrFail($direccionId);
 
         return $this->versionador->ejecutar($actual, $datos, $contexto);
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @param  array{usuario_id?: int|null, origen?: string|null, verificar?: bool}  $contexto
+     */
+    public function actualizarDireccionInPlace(int $direccionId, array $datos, array $contexto = []): ClienteDireccion
+    {
+        return DB::transaction(function () use ($direccionId, $datos, $contexto) {
+            $direccion = ClienteDireccion::query()->lockForUpdate()->findOrFail($direccionId);
+
+            if (! $direccion->esta_activa) {
+                throw new \InvalidArgumentException('La dirección no está activa.');
+            }
+
+            $datos = $this->normalizador->ejecutar($datos);
+            $verificar = (bool) ($contexto['verificar'] ?? false);
+
+            $attrs = [
+                'etiqueta' => $datos['etiqueta'] ?? $direccion->etiqueta,
+                'tipo_direccion' => $datos['tipo_direccion'] ?? $direccion->tipo_direccion,
+                'nombre_destinatario' => $datos['nombre_destinatario'] ?? $direccion->nombre_destinatario,
+                'nombres_destinatario' => $datos['nombres_destinatario'] ?? $direccion->nombres_destinatario,
+                'apellidos_destinatario' => $datos['apellidos_destinatario'] ?? $direccion->apellidos_destinatario,
+                'telefono_destinatario' => $datos['telefono_destinatario'] ?? $direccion->telefono_destinatario,
+                'calle' => $datos['calle'] ?? $direccion->calle,
+                'numero_exterior' => $datos['numero_exterior'] ?? $direccion->numero_exterior,
+                'numero_interior' => $datos['numero_interior'] ?? $direccion->numero_interior,
+                'colonia' => $datos['colonia'] ?? $direccion->colonia,
+                'codigo_postal' => $datos['codigo_postal'] ?? $direccion->codigo_postal,
+                'municipio' => $datos['municipio'] ?? $direccion->municipio,
+                'ciudad' => $datos['ciudad'] ?? $direccion->ciudad,
+                'estado' => $datos['estado'] ?? $direccion->estado,
+                'pais' => $datos['pais'] ?? $direccion->pais,
+                'referencias' => $datos['referencias'] ?? $direccion->referencias,
+                'indicaciones_entrega' => $datos['indicaciones_entrega'] ?? $direccion->indicaciones_entrega,
+                'anexa_remision' => array_key_exists('anexa_remision', $datos)
+                    ? (bool) $datos['anexa_remision']
+                    : $direccion->anexa_remision,
+                'actualizada_por' => $contexto['usuario_id'] ?? null,
+            ];
+
+            if ($verificar) {
+                $attrs['estado_verificacion'] = ClienteDireccion::ESTADO_VERIFIED;
+                $attrs['verificada_en'] = now();
+                $attrs['verificada_por'] = $contexto['usuario_id'] ?? null;
+            }
+
+            $direccion->update($attrs);
+
+            $this->auditoria->ejecutar(
+                $direccion->cliente_id,
+                'actualizar_direccion',
+                $contexto['usuario_id'] ?? null,
+                $direccion->id,
+                $contexto['solicitud_id'] ?? null,
+                null,
+                $direccion->fresh()->only($direccion->getFillable()),
+                $contexto['origen'] ?? null,
+            );
+
+            if ($direccion->es_principal && $verificar) {
+                $this->sincronizarContacto->ejecutar($direccion->cliente_id, $contexto);
+            }
+
+            return $direccion->fresh();
+        });
     }
 
     /**
@@ -290,6 +358,8 @@ class GestionDireccionesClienteService
             'etiqueta' => $datos['etiqueta'] ?? null,
             'tipo_direccion' => $datos['tipo_direccion'] ?? ClienteDireccion::TIPO_ENVIO,
             'nombre_destinatario' => $datos['nombre_destinatario'] ?? '',
+            'nombres_destinatario' => $datos['nombres_destinatario'] ?? null,
+            'apellidos_destinatario' => $datos['apellidos_destinatario'] ?? null,
             'telefono_destinatario' => $datos['telefono_destinatario'] ?? null,
             'calle' => $datos['calle'] ?? null,
             'numero_exterior' => $datos['numero_exterior'] ?? null,
@@ -302,6 +372,7 @@ class GestionDireccionesClienteService
             'pais' => $datos['pais'] ?? null,
             'referencias' => $datos['referencias'] ?? null,
             'indicaciones_entrega' => $datos['indicaciones_entrega'] ?? null,
+            'anexa_remision' => (bool) ($datos['anexa_remision'] ?? false),
             'es_principal' => $esPrincipal,
             'esta_activa' => true,
             'estado_verificacion' => $verificar

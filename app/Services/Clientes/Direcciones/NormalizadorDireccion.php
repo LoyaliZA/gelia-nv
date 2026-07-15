@@ -14,6 +14,8 @@ class NormalizadorDireccion
             'etiqueta',
             'tipo_direccion',
             'nombre_destinatario',
+            'nombres_destinatario',
+            'apellidos_destinatario',
             'telefono_destinatario',
             'calle',
             'numero_exterior',

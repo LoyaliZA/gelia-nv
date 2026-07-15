@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, Search, Save, Send, MessageCircle, RotateCcw, ImagePlus, Trash2, AlertTriangle, MapPin, ExternalLink, PenLine,
+    X, Search, Save, Send, MessageCircle, RotateCcw, ImagePlus, Trash2, AlertTriangle, MapPin, PenLine, Link2,
 } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
@@ -26,6 +26,34 @@ import {
     etiquetaEstatusPedido,
 } from './pedidosBmaStyles';
 import ModalAlertaPedido from './ModalAlertaPedido';
+import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
+
+const STORAGE_BORRADOR = 'control_pedidos.borrador_pedido_v1';
+
+function serializarBorrador(data) {
+    const { comprobantes, documentos_eliminar, enviar, ...resto } = data;
+    return resto;
+}
+
+function leerBorradorLocal() {
+    if (typeof window === 'undefined') return null;
+    try {
+        const raw = localStorage.getItem(STORAGE_BORRADOR);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
+function guardarBorradorLocal(data) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(STORAGE_BORRADOR, JSON.stringify(serializarBorrador(data)));
+}
+
+function limpiarBorradorLocal() {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(STORAGE_BORRADOR);
+}
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-8 last:border-0';
@@ -89,6 +117,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const [docsEliminar, setDocsEliminar] = useState([]);
     const [pesoVolumetrico, setPesoVolumetrico] = useState(pedido?.peso_volumetrico_kg ?? '');
     const [alertaEnvio, setAlertaEnvio] = useState({ abierto: false, mensaje: '' });
+    const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
     const temporizadorBusqueda = useRef(null);
     const abortBusqueda = useRef(null);
 
@@ -118,18 +147,61 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             setMsgDireccion('');
             setDocsEliminar([]);
             setPreviews([]);
-            setAlertaEnvio('');
+            setAlertaEnvio({ abierto: false, mensaje: '' });
+            setDireccionesCliente([]);
+            setMostrarExcepcion(false);
+            if (pedido.cliente_id) {
+                cargarDireccionCliente(pedido.cliente_id, {
+                    silencioso: true,
+                    conservarSeleccion: true,
+                    direccionId: pedido.cliente_direccion_id,
+                });
+            }
         } else {
-            setData(formDefaults());
-            setInfoCliente(null);
+            const borrador = leerBorradorLocal();
+            if (borrador) {
+                setData({ ...formDefaults(), ...borrador, comprobantes: [], documentos_eliminar: [], enviar: false });
+                if (borrador.cliente_id) {
+                    setInfoCliente({
+                        id: borrador.cliente_id,
+                        numero_cliente: borrador.numero_cliente,
+                        nombre: borrador._nombre_cliente || '',
+                    });
+                    cargarDireccionCliente(borrador.cliente_id, {
+                        silencioso: true,
+                        conservarSeleccion: true,
+                        direccionId: borrador.cliente_direccion_id,
+                    });
+                } else {
+                    setInfoCliente(null);
+                }
+            } else {
+                setData(formDefaults());
+                setInfoCliente(null);
+            }
             setPesoVolumetrico('');
             setAlertaDireccion(false);
             setMsgDireccion('');
             setPreviews([]);
             setDocsEliminar([]);
-            setAlertaEnvio('');
+            setAlertaEnvio({ abierto: false, mensaje: '' });
+            if (!borrador?.cliente_id) {
+                setDireccionesCliente([]);
+            }
+            setMostrarExcepcion(Boolean(borrador?.direccion_manual_excepcion));
         }
     }, [abierto, pedido?.id]);
+
+    useEffect(() => {
+        if (!abierto || modoEdicion) return;
+        const timer = setTimeout(() => {
+            guardarBorradorLocal({
+                ...data,
+                _nombre_cliente: infoCliente?.nombre || '',
+            });
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [data, abierto, modoEdicion, infoCliente?.nombre]);
 
     useEffect(() => {
         if (!data.catalogo_tipo_caja_id) {
@@ -178,7 +250,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         }
     };
 
-    const cargarDireccionCliente = async (clienteId, { silencioso = false } = {}) => {
+    const cargarDireccionCliente = async (clienteId, { silencioso = false, conservarSeleccion = false, direccionId = null } = {}) => {
         if (!clienteId) {
             if (!silencioso) {
                 setMsgDireccion('Seleccione un cliente primero para rellenar la dirección.');
@@ -195,12 +267,21 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             if (usarNormalizadas) {
                 const dirs = response.data?.direcciones || [];
                 setDireccionesCliente(dirs);
-                const principal = dirs.find((d) => d.es_principal) || dirs[0];
+                const idSeleccion = conservarSeleccion
+                    ? (direccionId || data.cliente_direccion_id)
+                    : null;
+                const seleccionada = idSeleccion
+                    ? dirs.find((d) => String(d.id) === String(idSeleccion))
+                    : null;
+                const principal = seleccionada || dirs.find((d) => d.es_principal) || dirs[0];
                 if (principal) {
                     setData('cliente_direccion_id', principal.id);
                     setData('domicilio_entrega', principal.direccion_resumida || '');
                     setData('codigo_postal', principal.codigo_postal || '');
-                    setAlertaDireccion(true);
+                    if (principal.anexa_remision) {
+                        setData('anexar_remision', true);
+                    }
+                    setAlertaDireccion(!conservarSeleccion);
                     setMsgDireccion('');
                 } else {
                     setData('cliente_direccion_id', '');
@@ -333,6 +414,9 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 if (page?.props?.flash?.error) {
                     setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
                     return;
+                }
+                if (!modoEdicion) {
+                    limpiarBorradorLocal();
                 }
                 onClose();
                 reset();
@@ -564,7 +648,19 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                             </div>
                             {direccionesNormalizadas && puedeSeleccionar ? (
                                 <div className="md:col-span-2 space-y-3">
-                                    <label className={SECCION}>Seleccionar dirección de envío</label>
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <label className={`${SECCION} m-0`}>Seleccionar dirección de envío</label>
+                                        {can('clientes.direcciones.generar_enlace') && infoCliente?.id && (
+                                            <button
+                                                type="button"
+                                                className={`${BTN_SECONDARY} inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest py-2 px-3`}
+                                                onClick={() => setModalLinkDireccion(true)}
+                                            >
+                                                <Link2 className="w-3.5 h-3.5" />
+                                                Link de dirección
+                                            </button>
+                                        )}
+                                    </div>
                                     {direccionesCliente.length > 0 && !mostrarExcepcion ? (
                                         <>
                                             <select
@@ -577,6 +673,9 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                                     if (sel) {
                                                         setData('domicilio_entrega', sel.direccion_resumida || '');
                                                         setData('codigo_postal', sel.codigo_postal || '');
+                                                        if (sel.anexa_remision) {
+                                                            setData('anexar_remision', true);
+                                                        }
                                                     }
                                                 }}
                                                 className={`${THEME_SELECT} w-full py-3`}
@@ -608,16 +707,15 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                                     : 'Captura de excepción manual autorizada.'}
                                             </p>
                                             <div className="flex flex-wrap gap-2">
-                                                {infoCliente?.id && (
-                                                    <a
-                                                        href={route('control_pedidos.direcciones.cliente', infoCliente.id)}
-                                                        target="_blank"
-                                                        rel="noreferrer"
+                                                {can('clientes.direcciones.generar_enlace') && infoCliente?.id && (
+                                                    <button
+                                                        type="button"
                                                         className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs`}
+                                                        onClick={() => setModalLinkDireccion(true)}
                                                     >
-                                                        <ExternalLink className="w-3.5 h-3.5" />
-                                                        Gestionar direcciones
-                                                    </a>
+                                                        <Link2 className="w-3.5 h-3.5" />
+                                                        Generar link de dirección
+                                                    </button>
                                                 )}
                                                 {puedeManual && !mostrarExcepcion && (
                                                     <button
@@ -875,6 +973,20 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     return (
         <>
             {modal}
+            <ModalGenerarLinkDireccion
+                abierto={modalLinkDireccion}
+                onClose={() => setModalLinkDireccion(false)}
+                clientePreseleccionado={infoCliente?.id ? infoCliente : null}
+                onEnlaceGenerado={() => {
+                    if (infoCliente?.id) {
+                        cargarDireccionCliente(infoCliente.id, {
+                            silencioso: true,
+                            conservarSeleccion: true,
+                            direccionId: data.cliente_direccion_id,
+                        });
+                    }
+                }}
+            />
             <ModalAlertaPedido
                 abierto={alertaEnvio.abierto}
                 tipo="error"

@@ -252,12 +252,12 @@ class DireccionesAuxiliarController extends Controller
         return redirect()->back()->with('success', 'Dirección desactivada.');
     }
 
-    public function generarEnlace(Request $request, Cliente $cliente, GenerarEnlaceDireccionService $generar): RedirectResponse
+    public function generarEnlace(Request $request, Cliente $cliente, GenerarEnlaceDireccionService $generar): RedirectResponse|JsonResponse
     {
         Gate::authorize('clientes.direcciones.generar_enlace');
 
         $validated = $request->validate([
-            'accion' => ['nullable', 'string', 'max:40'],
+            'accion' => ['nullable', 'string', 'in:register_first_address,add_address,update_address'],
             'direccion_id' => ['nullable', 'integer', 'exists:cliente_direcciones,id'],
             'horas' => ['nullable', 'integer', 'min:1', 'max:720'],
         ]);
@@ -270,6 +270,14 @@ class DireccionesAuxiliarController extends Controller
         ]);
 
         $url = $resultado['url'] ?? FormPublicUrl::direccionShow($resultado['token']);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'url' => $url,
+                'accion' => $validated['accion'] ?? null,
+            ]);
+        }
 
         return redirect()->back()->with('success', 'Enlace generado.')->with('enlace_direccion_url', $url);
     }

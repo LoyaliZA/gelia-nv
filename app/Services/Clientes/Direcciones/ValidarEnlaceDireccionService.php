@@ -31,6 +31,10 @@ class ValidarEnlaceDireccionService
             throw new \InvalidArgumentException('Enlace no válido.');
         }
 
+        if ($enlace->fueUsado()) {
+            throw new \InvalidArgumentException('Este enlace ya fue utilizado.');
+        }
+
         if (! $enlace->estaVigente()) {
             throw new \InvalidArgumentException('El enlace expiró o fue revocado.');
         }

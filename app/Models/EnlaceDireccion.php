@@ -49,11 +49,20 @@ class EnlaceDireccion extends Model
             return false;
         }
 
+        if ($this->usado_en !== null) {
+            return false;
+        }
+
         if ($this->expira_en !== null && $this->expira_en->isPast()) {
             return false;
         }
 
         return true;
+    }
+
+    public function fueUsado(): bool
+    {
+        return $this->usado_en !== null;
     }
 
     public function urlPublica(): ?string

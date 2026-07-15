@@ -208,6 +208,14 @@ class ClienteDireccionController extends Controller
 
         $url = $resultado['url'] ?? FormPublicUrl::direccionShow($resultado['token']);
 
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'url' => $url,
+                'accion' => $validated['accion'] ?? null,
+            ]);
+        }
+
         return redirect()->back()->with('success', 'Enlace generado.')->with('enlace_direccion_url', $url);
     }
 

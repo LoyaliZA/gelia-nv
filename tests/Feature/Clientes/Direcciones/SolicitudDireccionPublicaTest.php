@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Clientes\Direcciones\CrearSolicitudDireccionService;
 use App\Services\Clientes\Direcciones\GenerarEnlaceDireccionService;
 use App\Services\Clientes\Direcciones\AprobarSolicitudDireccionService;
+use App\Services\Clientes\Direcciones\AplicarDireccionPublicaDesdeEnlaceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
@@ -66,14 +67,17 @@ class SolicitudDireccionPublicaTest extends TestCase
             'https://form.neobash.site/direcciones-envio/'.$resultado['token'],
             $resultado['url']
         );
-        $this->assertLessThanOrEqual(12, strlen($resultado['token']));
+        $this->assertGreaterThanOrEqual(16, strlen($resultado['token']));
     }
 
-    public function test_host_form_permite_formulario_y_bloquea_login(): void
+    public function test_host_form_sin_token_bloquea_formulario_base(): void
     {
         $this->get('https://form.neobash.site/direcciones-envio')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('Clientes/Direcciones/FormularioPublico', false));
+            ->assertInertia(fn ($page) => $page
+                ->component('Clientes/Direcciones/ConfirmacionPublica', false)
+                ->where('enlace_invalido', true)
+                ->where('motivo', 'sin_token'));
 
         $this->get('https://form.neobash.site/login')
             ->assertNotFound();
@@ -207,17 +211,23 @@ class SolicitudDireccionPublicaTest extends TestCase
         $this->assertSame('06600', $cliente->cp_contacto);
     }
 
-    public function test_formulario_publico_renderiza(): void
+    public function test_formulario_publico_sin_token_bloqueado(): void
     {
         $this->get(route('direcciones.publicas.form'))
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('Clientes/Direcciones/FormularioPublico', false));
+            ->assertInertia(fn ($page) => $page
+                ->component('Clientes/Direcciones/ConfirmacionPublica', false)
+                ->where('enlace_invalido', true)
+                ->where('motivo', 'sin_token'));
     }
 
-    public function test_formulario_publico_con_codigo_corto(): void
+    public function test_formulario_publico_con_codigo_y_accion(): void
     {
         $cliente = $this->cliente();
-        $resultado = app(GenerarEnlaceDireccionService::class)->ejecutar($cliente, ['horas' => 24]);
+        $resultado = app(GenerarEnlaceDireccionService::class)->ejecutar($cliente, [
+            'horas' => 24,
+            'accion' => SolicitudDireccion::ACCION_PRIMERA,
+        ]);
 
         $this->get(route('direcciones.publicas.show', ['codigo' => $resultado['token']]))
             ->assertOk()
@@ -225,5 +235,37 @@ class SolicitudDireccionPublicaTest extends TestCase
                 ->component('Clientes/Direcciones/FormularioPublico', false)
                 ->where('enlace_valido', true)
                 ->where('token', $resultado['token']));
+    }
+
+    public function test_enlace_usado_muestra_confirmacion_y_no_formulario(): void
+    {
+        $cliente = $this->cliente();
+        $resultado = app(GenerarEnlaceDireccionService::class)->ejecutar($cliente, [
+            'horas' => 24,
+            'accion' => SolicitudDireccion::ACCION_PRIMERA,
+        ]);
+
+        app(AplicarDireccionPublicaDesdeEnlaceService::class)->ejecutar($resultado['token'], [
+            'nombres_destinatario' => 'Ana',
+            'apellidos_destinatario' => 'Prueba',
+            'nombre_destinatario' => 'Ana Prueba',
+            'calle' => 'Calle Sol',
+            'colonia' => 'Centro',
+            'codigo_postal' => '06000',
+            'municipio' => 'CDMX',
+            'estado' => 'CDMX',
+            'etiqueta' => 'Casa',
+            'anexa_remision' => false,
+        ]);
+
+        $this->assertNotNull($resultado['enlace']->fresh()->usado_en);
+        $this->assertFalse($resultado['enlace']->fresh()->estaVigente());
+
+        $this->get(route('direcciones.publicas.show', ['codigo' => $resultado['token']]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Clientes/Direcciones/ConfirmacionPublica', false)
+                ->where('aplicado', true)
+                ->where('ya_utilizado', true));
     }
 }

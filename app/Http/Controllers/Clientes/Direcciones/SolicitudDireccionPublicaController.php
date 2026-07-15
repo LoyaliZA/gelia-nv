@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Clientes\Direcciones;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Clientes\Direcciones\StoreSolicitudDireccionRequest;
+use App\Http\Requests\Clientes\Direcciones\StoreDireccionPublicaDesdeEnlaceRequest;
 use App\Models\ClienteDireccion;
 use App\Models\SolicitudDireccion;
-use App\Services\Clientes\Direcciones\CrearSolicitudDireccionService;
+use App\Services\Clientes\Direcciones\AplicarDireccionPublicaDesdeEnlaceService;
 use App\Services\Clientes\Direcciones\ValidarEnlaceDireccionService;
 use App\Support\ControlPedidos\CodigoDireccionCliente;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,112 +21,191 @@ class SolicitudDireccionPublicaController extends Controller
         $token = $codigo !== null && $codigo !== ''
             ? $codigo
             : (string) $request->query('token', '');
-        $enlace = null;
-        $clienteResumen = null;
-        $direcciones = [];
 
-        if ($token !== '') {
-            try {
-                $enlace = $validador->ejecutar($token);
-                $cliente = $enlace->cliente;
-                $clienteResumen = [
-                    'nombre_enmascarado' => $this->enmascararNombre((string) $cliente->nombre),
-                    'numero_enmascarado' => $this->enmascararNumero((string) $cliente->numero_cliente),
-                ];
-                $direcciones = ClienteDireccion::query()
-                    ->where('cliente_id', $cliente->id)
-                    ->activas()
-                    ->orderByDesc('es_principal')
-                    ->get(['id', 'numero_direccion', 'etiqueta', 'colonia', 'codigo_postal', 'es_principal'])
-                    ->map(fn (ClienteDireccion $d) => [
-                        'id' => $d->id,
-                        'numero_direccion' => $d->numero_direccion,
-                        'codigo' => CodigoDireccionCliente::formatear($cliente->numero_cliente, $d->numero_direccion),
-                        'etiqueta' => $d->etiqueta,
-                        'resumen' => trim(($d->colonia ?? '').' CP '.($d->codigo_postal ?? '')),
-                        'es_principal' => $d->es_principal,
-                    ]);
-            } catch (\InvalidArgumentException) {
-                $enlace = null;
-            }
+        // Sin token único: no se abre el formulario base.
+        if ($token === '') {
+            return $this->vistaConfirmacion([
+                'aplicado' => false,
+                'enlace_invalido' => true,
+                'motivo' => 'sin_token',
+            ]);
         }
 
-        $acciones = [
-            ['value' => SolicitudDireccion::ACCION_PRIMERA, 'label' => 'Registrar datos de envío por primera vez'],
-            ['value' => SolicitudDireccion::ACCION_ADICIONAL, 'label' => 'Agregar dirección adicional'],
-            ['value' => SolicitudDireccion::ACCION_ACTUALIZAR, 'label' => 'Actualizar dirección existente'],
+        $enlace = $validador->porToken($token);
+
+        if (! $enlace) {
+            return $this->vistaConfirmacion([
+                'aplicado' => false,
+                'enlace_invalido' => true,
+                'motivo' => 'invalido',
+            ]);
+        }
+
+        if ($enlace->fueUsado()) {
+            return $this->vistaConfirmacion([
+                'aplicado' => true,
+                'ya_utilizado' => true,
+                'motivo' => 'usado',
+            ]);
+        }
+
+        if ($enlace->revocado_en !== null || ($enlace->expira_en !== null && $enlace->expira_en->isPast())) {
+            return $this->vistaConfirmacion([
+                'aplicado' => false,
+                'enlace_invalido' => true,
+                'motivo' => 'expirado',
+            ]);
+        }
+
+        if (! filled($enlace->accion_permitida)) {
+            return $this->vistaConfirmacion([
+                'aplicado' => false,
+                'enlace_invalido' => true,
+                'motivo' => 'sin_accion',
+            ]);
+        }
+
+        try {
+            $enlace = $validador->ejecutar($token);
+        } catch (\InvalidArgumentException) {
+            return $this->vistaConfirmacion([
+                'aplicado' => false,
+                'enlace_invalido' => true,
+                'motivo' => 'invalido',
+            ]);
+        }
+
+        $cliente = $enlace->cliente;
+        $clienteResumen = [
+            'nombre_enmascarado' => $this->enmascararNombre((string) $cliente->nombre),
+            'numero_enmascarado' => $this->enmascararNumero((string) $cliente->numero_cliente),
         ];
 
-        $accionPermitida = $enlace?->accion_permitida;
-        if (is_string($accionPermitida) && $accionPermitida !== '') {
-            $filtradas = array_values(array_filter(
-                $acciones,
-                static fn (array $a): bool => $a['value'] === $accionPermitida
-            ));
-            if ($filtradas !== []) {
-                $acciones = $filtradas;
-            }
-        }
+        $direcciones = ClienteDireccion::query()
+            ->where('cliente_id', $cliente->id)
+            ->activas()
+            ->orderByDesc('es_principal')
+            ->get(['id', 'numero_direccion', 'etiqueta', 'colonia', 'codigo_postal', 'es_principal'])
+            ->map(fn (ClienteDireccion $d) => [
+                'id' => $d->id,
+                'numero_direccion' => $d->numero_direccion,
+                'codigo' => CodigoDireccionCliente::formatear($cliente->numero_cliente, $d->numero_direccion),
+                'etiqueta' => $d->etiqueta,
+                'resumen' => trim(($d->colonia ?? '').' CP '.($d->codigo_postal ?? '')),
+                'es_principal' => $d->es_principal,
+            ]);
 
         return Inertia::render('Clientes/Direcciones/FormularioPublico', [
-            'token' => $token !== '' ? $token : null,
-            'enlace_valido' => $enlace !== null,
+            'token' => $token,
+            'enlace_valido' => true,
+            'modo_simplificado' => true,
             'cliente' => $clienteResumen,
             'direcciones' => $direcciones,
-            'accion_permitida' => $accionPermitida,
-            'acciones' => $acciones,
+            'accion_permitida' => $enlace->accion_permitida,
+            'acciones' => [[
+                'value' => $enlace->accion_permitida,
+                'label' => match ($enlace->accion_permitida) {
+                    SolicitudDireccion::ACCION_PRIMERA => 'Registrar primera dirección',
+                    SolicitudDireccion::ACCION_ACTUALIZAR => 'Actualizar dirección',
+                    default => 'Añadir dirección adicional',
+                },
+            ]],
         ]);
     }
 
     public function store(
-        StoreSolicitudDireccionRequest $request,
-        CrearSolicitudDireccionService $crear,
+        Request $request,
+        AplicarDireccionPublicaDesdeEnlaceService $aplicar,
+        ValidarEnlaceDireccionService $validador,
     ) {
-        $validated = $request->validated();
-        $rutaRemision = null;
+        $token = trim((string) ($request->input('token') ?? ''));
 
-        if ($request->boolean('anexa_remision') && $request->hasFile('archivo_remision')) {
-            $rutaRemision = $request->file('archivo_remision')
-                ->store('solicitudes_direccion/remisiones', 'local');
+        if ($token === '') {
+            throw ValidationException::withMessages([
+                'token' => 'Se requiere un enlace válido para guardar la dirección.',
+            ]);
         }
 
-        $datosDireccion = collect($validated)->only([
-            'nombre_destinatario', 'telefono_destinatario', 'calle', 'numero_exterior',
-            'numero_interior', 'colonia', 'codigo_postal', 'municipio', 'ciudad', 'estado',
-            'pais', 'referencias', 'indicaciones_entrega', 'etiqueta', 'tipo_direccion',
-        ])->all();
+        $enlace = $validador->porToken($token);
 
-        if (! empty($validated['comentario'])) {
-            $datosDireccion['indicaciones_entrega'] = trim(
-                ($datosDireccion['indicaciones_entrega'] ?? '')."\n".$validated['comentario']
-            );
+        if (! $enlace) {
+            throw ValidationException::withMessages([
+                'token' => 'Enlace no válido.',
+            ]);
         }
 
-        $solicitud = $crear->ejecutar([
-            'token' => $validated['token'] ?? null,
-            'numero_cliente' => $validated['numero_cliente'] ?? null,
-            'nombre_declarado' => $validated['nombre_declarado'],
-            'telefono_declarado' => $validated['telefono_declarado'],
-            'correo_declarado' => $validated['correo_declarado'] ?? null,
-            'accion_solicitada' => $validated['accion_solicitada'],
-            'direccion_seleccionada_id' => $validated['direccion_seleccionada_id'] ?? null,
-            'anexa_remision' => $request->boolean('anexa_remision'),
-            'archivo_remision' => $rutaRemision,
-            'datos_direccion' => $datosDireccion,
-        ], $request->ip());
+        if ($enlace->fueUsado()) {
+            return redirect()
+                ->route('direcciones.publicas.confirmacion', ['folio' => 'aplicado'])
+                ->with('ya_utilizado', true);
+        }
+
+        $directaRequest = StoreDireccionPublicaDesdeEnlaceRequest::createFrom($request);
+        $directaRequest->setContainer(app())->setRedirector(app('redirect'));
+        $directaRequest->validateResolved();
+
+        try {
+            $direccion = $aplicar->ejecutar($token, $directaRequest->datosDireccion());
+        } catch (\InvalidArgumentException $e) {
+            if (str_contains($e->getMessage(), 'ya fue utilizado')) {
+                return redirect()
+                    ->route('direcciones.publicas.confirmacion', ['folio' => 'aplicado'])
+                    ->with('ya_utilizado', true);
+            }
+
+            throw ValidationException::withMessages([
+                'token' => $e->getMessage(),
+            ]);
+        }
 
         return redirect()
-            ->route('direcciones.publicas.confirmacion', $solicitud->folio)
-            ->with('success', 'Solicitud registrada.');
+            ->route('direcciones.publicas.confirmacion', ['folio' => 'aplicado'])
+            ->with('direccion_aplicada_id', $direccion->id)
+            ->with('aplicado_ok', true);
     }
 
-    public function confirmacion(string $folio): Response
+    public function confirmacion(Request $request, string $folio): Response
     {
-        $solicitud = SolicitudDireccion::query()->where('folio', $folio)->firstOrFail();
+        if ($folio === 'aplicado') {
+            return $this->vistaConfirmacion([
+                'aplicado' => true,
+                'ya_utilizado' => (bool) $request->session()->get('ya_utilizado', false),
+                'motivo' => $request->session()->get('ya_utilizado') ? 'usado' : 'ok',
+            ]);
+        }
 
-        return Inertia::render('Clientes/Direcciones/ConfirmacionPublica', [
+        // Folios legacy de solicitud ya no se usan en el flujo de vendedora;
+        // se mantienen solo como lectura histórica.
+        $solicitud = SolicitudDireccion::query()->where('folio', $folio)->first();
+
+        if (! $solicitud) {
+            return $this->vistaConfirmacion([
+                'aplicado' => false,
+                'enlace_invalido' => true,
+                'motivo' => 'invalido',
+            ]);
+        }
+
+        return $this->vistaConfirmacion([
             'folio' => $solicitud->folio,
             'estado' => $solicitud->estado,
+            'aplicado' => false,
+            'motivo' => 'solicitud',
+        ]);
+    }
+
+    /**
+     * @param  array{folio?: string|null, estado?: string|null, aplicado?: bool, ya_utilizado?: bool, enlace_invalido?: bool, motivo?: string|null}  $props
+     */
+    private function vistaConfirmacion(array $props): Response
+    {
+        return Inertia::render('Clientes/Direcciones/ConfirmacionPublica', [
+            'folio' => $props['folio'] ?? null,
+            'estado' => $props['estado'] ?? null,
+            'aplicado' => (bool) ($props['aplicado'] ?? false),
+            'ya_utilizado' => (bool) ($props['ya_utilizado'] ?? false),
+            'enlace_invalido' => (bool) ($props['enlace_invalido'] ?? false),
+            'motivo' => $props['motivo'] ?? null,
         ]);
     }
 
