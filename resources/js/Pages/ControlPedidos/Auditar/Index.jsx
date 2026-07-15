@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { ClipboardCheck, Clock, CheckCircle2, XCircle, Inbox } from 'lucide-react';
+import { ClipboardCheck, Clock, CheckCircle2, XCircle, Inbox, MapPin } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
-import { geliaCardClass } from '../../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_SECONDARY } from '../../../utils/geliaTheme';
 import FiltrosAuditoria from './Partials/FiltrosAuditoria';
 import TablaAuditoria from './Partials/TablaAuditoria';
 import ModalRevisarPedido from './Partials/ModalRevisarPedido';
@@ -20,6 +20,11 @@ const KPI_CONFIG = [
 
 export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
     const { flash } = usePage().props;
+    const permisos = auth?.user?.permissions || [];
+    const can = (p) => permisos.includes(p)
+        || auth?.user?.roles?.includes('Super Admin')
+        || auth?.user?.roles?.includes('Admin')
+        || auth?.user?.roles?.includes('Super admin (admin)');
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'PENDIENTES');
     const [modalRevisar, setModalRevisar] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
@@ -84,14 +89,28 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
             <Head title="Auditar pedidos | GELIANV" />
             <GeliaPageShell className="space-y-6">
                 <header className={`${geliaCardClass()} p-6 md:p-8`}>
-                    <div className="flex items-center gap-2 mb-2">
-                        <ClipboardCheck className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
-                        <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Control de pedidos_</span>
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <ClipboardCheck className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
+                                <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Control de pedidos_</span>
+                            </div>
+                            <h1 className="text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0">
+                                Auditar <span style={{ color: 'var(--color-primario)' }}>pedidos</span>
+                            </h1>
+                            <p className="text-sm theme-text-muted font-bold mt-2 m-0">Bandeja de entrada para validación antes de Registro General</p>
+                        </div>
+                        {can('clientes.direcciones.ver') && (
+                            <button
+                                type="button"
+                                className={`${THEME_BTN_SECONDARY} inline-flex items-center gap-2`}
+                                onClick={() => router.get(route('control_pedidos.direcciones.index'))}
+                            >
+                                <MapPin className="w-4 h-4" />
+                                Gestión de Direcciones
+                            </button>
+                        )}
                     </div>
-                    <h1 className="text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0">
-                        Auditar <span style={{ color: 'var(--color-primario)' }}>pedidos</span>
-                    </h1>
-                    <p className="text-sm theme-text-muted font-bold mt-2 m-0">Bandeja de entrada para validación antes de Registro General</p>
                 </header>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

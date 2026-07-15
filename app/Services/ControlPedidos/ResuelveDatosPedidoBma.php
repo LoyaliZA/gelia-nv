@@ -2,6 +2,8 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\ControlPedidos\CatalogoEnvioTienda;
+use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\PedidoBma;
@@ -82,10 +84,45 @@ trait ResuelveDatosPedidoBma
         ];
     }
 
+    protected function resolverEnvioTiendaDesdeOrigen(array $datos): array
+    {
+        $origen = ! empty($datos['origen_id'])
+            ? CatalogoOrigenPedido::find($datos['origen_id'])
+            : null;
+
+        if (! $origen) {
+            return [
+                'catalogo_envio_tienda_id' => null,
+                'envio_tienda_otro' => null,
+            ];
+        }
+
+        $termino = $origen->requiere_logistica ? 'Envío' : 'Tienda';
+
+        $match = CatalogoEnvioTienda::query()
+            ->where('activo', true)
+            ->where('es_otro', false)
+            ->where(function ($q) use ($termino, $origen) {
+                $q->where('nombre', $termino)
+                    ->orWhere('nombre', 'like', $termino.'%');
+                if ($origen->requiere_logistica) {
+                    $q->orWhere('nombre', 'like', 'Envio%');
+                }
+            })
+            ->orderBy('nombre')
+            ->first();
+
+        return [
+            'catalogo_envio_tienda_id' => $match?->id,
+            'envio_tienda_otro' => null,
+        ];
+    }
+
     protected function atributosPedidoBase(array $datos): array
     {
         $totales = $this->resolverTotales($datos);
         $envia = $this->resolverEnviaOtraPersona($datos);
+        $envioTienda = $this->resolverEnvioTiendaDesdeOrigen($datos);
 
         return array_merge([
             'folio_remision' => isset($datos['folio_remision']) && trim((string) $datos['folio_remision']) !== ''
@@ -95,23 +132,24 @@ trait ResuelveDatosPedidoBma
             'origen_id' => $datos['origen_id'] ?? null,
             'almacen_id' => $datos['almacen_id'] ?? null,
             'catalogo_banco_id' => $datos['catalogo_banco_id'] ?? null,
-            'requiere_factura' => filter_var($datos['requiere_factura'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'catalogo_tipo_caja_id' => $datos['catalogo_tipo_caja_id'] ?? null,
             'numero_cajas' => isset($datos['numero_cajas']) && $datos['numero_cajas'] !== ''
                 ? (int) $datos['numero_cajas']
                 : null,
             'peso_real_kg' => $datos['peso_real_kg'] ?? null,
             'peso_volumetrico_kg' => $this->resolverPesoVolumetrico($datos),
-            'peso_con_productos_kg' => $datos['peso_con_productos_kg'] ?? null,
+            'peso_cobrado_guia_kg' => $datos['peso_cobrado_guia_kg'] ?? null,
             'catalogo_paqueteria_id' => $datos['catalogo_paqueteria_id'] ?? null,
             'catalogo_tipo_guia_id' => $datos['catalogo_tipo_guia_id'] ?? null,
             'catalogo_zona_id' => $datos['catalogo_zona_id'] ?? null,
-            'catalogo_envio_tienda_id' => $datos['catalogo_envio_tienda_id'] ?? null,
-            'envio_tienda_otro' => $datos['envio_tienda_otro'] ?? null,
             'codigo_postal' => $datos['codigo_postal'] ?? null,
             'domicilio_entrega' => $datos['domicilio_entrega'] ?? null,
+            'cliente_direccion_id' => isset($datos['cliente_direccion_id']) && $datos['cliente_direccion_id'] !== ''
+                ? (int) $datos['cliente_direccion_id']
+                : null,
             'es_resguardo' => filter_var($datos['es_resguardo'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'anexar_remision' => filter_var($datos['anexar_remision'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'comentarios_drive' => $datos['comentarios_drive'] ?? null,
-        ], $envia, $totales);
+        ], $envioTienda, $envia, $totales);
     }
 }

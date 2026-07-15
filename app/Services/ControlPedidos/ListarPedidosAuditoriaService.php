@@ -42,11 +42,13 @@ class ListarPedidosAuditoriaService
             $idsPorFase['ENVIADO'] ?? null,
         ]))->count();
         $rechazados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0)->count();
+        $resguardos = (clone $base)->where('es_resguardo', true)->count();
 
         return [
             'pendientes' => $pendientes,
             'aprobados' => $aprobados,
             'rechazados' => $rechazados,
+            'resguardos' => $resguardos,
             'total' => $pendientes + $aprobados + $rechazados,
         ];
     }
@@ -74,6 +76,7 @@ class ListarPedidosAuditoriaService
             'documentos',
             'pagoValidadoPor',
             'incidenciaEmpaquePor',
+            'direccionVigente',
             'historial.usuario',
             'historial.estatusAnterior',
             'historial.estatusNuevo',
@@ -110,6 +113,7 @@ class ListarPedidosAuditoriaService
                 $idsPorFase['ENVIADO'] ?? null,
             ])),
             'RECHAZADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0),
+            'RESGUARDOS' => $query->where('es_resguardo', true),
             default => null,
         };
     }

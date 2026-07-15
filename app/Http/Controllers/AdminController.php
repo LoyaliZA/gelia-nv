@@ -538,7 +538,13 @@ class AdminController extends Controller
     // --- MÓDULOS RESTANTES ---
     public function clientes(Request $request): Response
     {
-        $query = Cliente::with(['vendedor', 'listaDescuento', 'tipo']);
+        $query = Cliente::with(['vendedor', 'listaDescuento', 'tipo'])
+            ->withCount([
+                'direccionesActivas as direcciones_activas_count',
+                'direccionesActivas as direcciones_sin_verificar_count' => function ($q) {
+                    $q->where('estado_verificacion', '!=', \App\Models\ClienteDireccion::ESTADO_VERIFIED);
+                },
+            ]);
 
         if ($request->filled('q')) {
             $termino = trim($request->q);

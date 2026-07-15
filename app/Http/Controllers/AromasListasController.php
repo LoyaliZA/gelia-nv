@@ -6,45 +6,96 @@ use Illuminate\Http\Request;
 use Rap2hpoutre\FastExcel\FastExcel;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use App\Models\CustomList;
-use Illuminate\Support\Facades\DB;
+use App\Models\ListadoGenerado;
 use App\Models\User;
 use App\Services\Listados\PorcentajesListadoService;
+use App\Services\Listados\ListadoGeneradoService;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Exception;
 
 class AromasListasController extends Controller
 {
-
     // ══════════════════════════════════════════════════════════════════════
     // 0. RENDERIZADO DE LA VISTA PRINCIPAL (SPA)
     // ══════════════════════════════════════════════════════════════════════
 
-    public function index(Request $request)
+    public function index(Request $request, ListadoGeneradoService $listadoService)
     {
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $userId = $user->id;
 
-        // Obtenemos solo las listas del usuario o las compartidas con él
         $listasPersonalizadas = CustomList::with('sharedUsers')
             ->where('active', true)
             ->where(function ($query) use ($userId) {
-                $query->where('user_id', $userId) // Es el dueño
+                $query->where('user_id', $userId)
                     ->orWhereHas('sharedUsers', function ($q) use ($userId) {
-                        $q->where('users.id', $userId); // Se la compartieron
+                        $q->where('users.id', $userId);
                     });
             })->get();
 
         $configuracionListados = DB::table('gelia_settings')->pluck('value', 'key');
 
-        // Usuarios disponibles para compartir (excluyendo al usuario actual)
-        $usuariosSistema = User::select('id', 'name')
-            ->where('id', '!=', $userId)
+        $usuariosSistema = User::select('id', 'name', 'email')
+            ->orderBy('name')
             ->get();
+
+        $usuariosCompartir = $usuariosSistema->where('id', '!=', $userId)->values();
+
+        $permisos = [
+            'ver' => $user->can('listados.ver'),
+            'crear' => $user->can('listados.crear'),
+            'editar' => $user->can('listados.editar'),
+            'eliminar' => $user->can('listados.eliminar'),
+            'configurar_porcentajes' => $user->can('listados.configurar_porcentajes'),
+            'guardar_generado' => $user->can('listados.guardar_generado'),
+            'enviar' => $user->can('listados.enviar'),
+            'visualizar' => $user->can('listados.visualizar'),
+        ];
+
+        $historialHoy = [];
+        $historialAnterior = [];
+        $destinatariosPorTipo = [];
+
+        if ($permisos['visualizar']) {
+            $timezone = config('app.timezone', 'America/Mexico_City');
+            $hoy = now($timezone)->format('Y-m-d');
+
+            $historialHoy = ListadoGenerado::with('user:id,name')
+                ->whereDate('created_at', $hoy)
+                ->orderByDesc('id')
+                ->get();
+
+            $historialAnterior = ListadoGenerado::with('user:id,name')
+                ->whereDate('created_at', '<', $hoy)
+                ->orderByDesc('id')
+                ->limit(100)
+                ->get();
+        }
+
+        if ($permisos['enviar']) {
+            $destinatariosPorTipo = $listadoService->destinatariosPorTipo();
+            // Serializar solo primitivos para Inertia (evitar Collections anidadas)
+            foreach ($destinatariosPorTipo as $tipo => $data) {
+                $destinatariosPorTipo[$tipo] = [
+                    'user_ids' => array_map('intval', $data['user_ids'] ?? []),
+                    'externos' => array_values($data['externos'] ?? []),
+                ];
+            }
+        }
 
         return Inertia::render('FuncionesOperativas/Listados', [
             'listas_personalizadas' => $listasPersonalizadas,
             'configuracion_listados' => $configuracionListados,
-            'usuarios_sistema' => $usuariosSistema
+            'usuarios_sistema' => $usuariosCompartir,
+            'usuarios_entrega' => $usuariosSistema,
+            'permisos' => $permisos,
+            'historial_hoy' => $historialHoy,
+            'historial_anterior' => $historialAnterior,
+            'destinatarios_por_tipo' => $destinatariosPorTipo,
         ]);
     }
 
@@ -58,14 +109,21 @@ class AromasListasController extends Controller
             'titulo_lista' => 'required|string|max:50',
             'descripcion' => 'nullable|string',
             'color' => 'required|string',
-            'icono_personalizado' => 'required|string', // <-- AGREGAR ESTA LÍNEA
+            'icono_personalizado' => 'required|string',
             'archivos_requeridos' => 'required|array',
             'columnas_exportar' => 'required|array',
             'nombre_archivo_salida' => 'required|string|max:50',
-            'shared_users' => 'nullable|array'
+            'shared_users' => 'nullable|array',
+            'destinatarios_user_ids' => 'nullable|array',
+            'destinatarios_user_ids.*' => 'integer|exists:users,id',
+            'destinatarios_externos' => 'nullable|array',
+            'destinatarios_externos.*.nombre' => 'nullable|string|max:100',
+            'destinatarios_externos.*.email' => 'required|email|max:150',
         ]);
 
-        if ($validator->fails()) return response()->json(['errors' => $validator->errors()], 422);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
         try {
             $lista = CustomList::create([
@@ -74,16 +132,17 @@ class AromasListasController extends Controller
                 'titulo_lista' => $request->titulo_lista,
                 'descripcion' => $request->descripcion,
                 'color' => $request->color,
-                'icono_personalizado' => $request->icono_personalizado, // <-- AGREGAR ESTA LÍNEA
+                'icono_personalizado' => $request->icono_personalizado,
                 'archivos_requeridos' => $request->archivos_requeridos,
                 'columnas_exportar' => $request->columnas_exportar,
                 'nombre_archivo_salida' => strtoupper($request->nombre_archivo_salida),
                 'solo_con_existencia' => $request->boolean('solo_con_existencia'),
                 'filtro_relojes' => $request->boolean('filtro_relojes'),
-                'active' => true
+                'destinatarios_user_ids' => $request->input('destinatarios_user_ids', []),
+                'destinatarios_externos' => $request->input('destinatarios_externos', []),
+                'active' => true,
             ]);
 
-            // Sincronizar usuarios compartidos
             if ($request->has('shared_users')) {
                 $lista->sharedUsers()->sync($request->shared_users);
             }
@@ -100,9 +159,10 @@ class AromasListasController extends Controller
     {
         $lista = CustomList::find($id);
 
-        if (!$lista) return response()->json(['error' => 'Lista no encontrada'], 404);
+        if (!$lista) {
+            return response()->json(['error' => 'Lista no encontrada'], 404);
+        }
 
-        // Validación de Propiedad
         if ($lista->user_id !== $request->user()->id && !$request->user()->hasRole('Super Admin')) {
             return response()->json(['error' => 'No tienes permisos para editar esta lista'], 403);
         }
@@ -110,26 +170,35 @@ class AromasListasController extends Controller
         $validator = Validator::make($request->all(), [
             'titulo_lista' => 'required|string|max:50',
             'color' => 'required|string',
-            'icono_personalizado' => 'required|string', // <-- AGREGAR ESTA LÍNEA
+            'icono_personalizado' => 'required|string',
             'archivos_requeridos' => 'required|array',
             'columnas_exportar' => 'required|array',
             'nombre_archivo_salida' => 'required|string|max:50',
-            'shared_users' => 'nullable|array'
+            'shared_users' => 'nullable|array',
+            'destinatarios_user_ids' => 'nullable|array',
+            'destinatarios_user_ids.*' => 'integer|exists:users,id',
+            'destinatarios_externos' => 'nullable|array',
+            'destinatarios_externos.*.nombre' => 'nullable|string|max:100',
+            'destinatarios_externos.*.email' => 'required|email|max:150',
         ]);
 
-        if ($validator->fails()) return response()->json(['errors' => $validator->errors()], 422);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
         try {
             $lista->update([
                 'titulo_lista' => $request->titulo_lista,
                 'descripcion' => $request->descripcion,
                 'color' => $request->color,
-                'icono_personalizado' => $request->icono_personalizado, // <-- AGREGAR ESTA LÍNEA
+                'icono_personalizado' => $request->icono_personalizado,
                 'archivos_requeridos' => $request->archivos_requeridos,
                 'columnas_exportar' => $request->columnas_exportar,
                 'nombre_archivo_salida' => strtoupper($request->nombre_archivo_salida),
                 'solo_con_existencia' => $request->boolean('solo_con_existencia'),
                 'filtro_relojes' => $request->boolean('filtro_relojes'),
+                'destinatarios_user_ids' => $request->input('destinatarios_user_ids', []),
+                'destinatarios_externos' => $request->input('destinatarios_externos', []),
             ]);
 
             $lista->sharedUsers()->sync($request->shared_users ?? []);
@@ -144,7 +213,9 @@ class AromasListasController extends Controller
     {
         $lista = CustomList::find($id);
 
-        if (!$lista) return response()->json(['error' => 'Lista no encontrada.'], 404);
+        if (!$lista) {
+            return response()->json(['error' => 'Lista no encontrada.'], 404);
+        }
 
         if ($lista->user_id !== $request->user()->id && !$request->user()->hasRole('Super Admin')) {
             return response()->json(['error' => 'No tienes permisos para eliminar esta lista'], 403);
@@ -163,7 +234,7 @@ class AromasListasController extends Controller
     // 2. MOTOR PROCESADOR Y CRUCE DE INVENTARIOS
     // ══════════════════════════════════════════════════════════════════════
 
-    public function generar(Request $request)
+    public function generar(Request $request, ListadoGeneradoService $listadoService)
     {
         set_time_limit(0);
         ini_set('memory_limit', '-1');
@@ -177,7 +248,9 @@ class AromasListasController extends Controller
 
         if ($esListaPersonalizadaBD) {
             $configuracionBD = CustomList::find($tipoLista);
-            if (!$configuracionBD) return response()->json(['error' => 'Lista no encontrada'], 404);
+            if (!$configuracionBD) {
+                return response()->json(['error' => 'Lista no encontrada'], 404);
+            }
 
             $nombreArchivo = $configuracionBD->nombre_archivo_salida . "-$fecha.xlsx";
             $columnasSeleccionadas = $configuracionBD->columnas_exportar;
@@ -219,8 +292,12 @@ class AromasListasController extends Controller
 
         if ($esListaPersonalizadaBD) {
             $reqs = $configuracionBD->archivos_requeridos;
-            if (in_array('precios', $reqs)) $rules['precios'] = 'required|file';
-            if (in_array('costos', $reqs)) $rules['costos'] = 'required|file';
+            if (in_array('precios', $reqs)) {
+                $rules['precios'] = 'required|file';
+            }
+            if (in_array('costos', $reqs)) {
+                $rules['costos'] = 'required|file';
+            }
         } else {
             $rules['precios'] = 'nullable|file|required_without:costos';
             $rules['costos'] = 'nullable|file|required_without:precios';
@@ -237,10 +314,12 @@ class AromasListasController extends Controller
         if ($request->hasFile('precios')) {
             $this->procesarArchivoSeguro($request->file('precios'), function ($ruta) use (&$diccionarioPrecios) {
                 (new FastExcel)->withoutHeaders()->import($ruta, function ($linea) use (&$diccionarioPrecios) {
-                    if (!isset($linea[1]) || $linea[1] == 'CODIGO_DEL_PRODUCTO' || $linea[1] == '') return;
-                    $sku = ltrim(trim((string)$linea[1]), '0');
+                    if (!isset($linea[1]) || $linea[1] == 'CODIGO_DEL_PRODUCTO' || $linea[1] == '') {
+                        return;
+                    }
+                    $sku = ltrim(trim((string) $linea[1]), '0');
                     $precio = $linea[7] ?? 0;
-                    $diccionarioPrecios[$sku] = is_numeric($precio) ? (float)$precio : 0.0;
+                    $diccionarioPrecios[$sku] = is_numeric($precio) ? (float) $precio : 0.0;
                 });
             });
         }
@@ -249,11 +328,13 @@ class AromasListasController extends Controller
         if ($request->hasFile('costos')) {
             $this->procesarArchivoSeguro($request->file('costos'), function ($ruta) use (&$diccionarioCostosWizerp) {
                 (new FastExcel)->withoutHeaders()->import($ruta, function ($linea) use (&$diccionarioCostosWizerp) {
-                    if (!isset($linea[1]) || $linea[1] == 'SKU' || $linea[1] == '') return;
-                    $sku = ltrim(trim((string)$linea[1]), '0');
+                    if (!isset($linea[1]) || $linea[1] == 'SKU' || $linea[1] == '') {
+                        return;
+                    }
+                    $sku = ltrim(trim((string) $linea[1]), '0');
                     $costo = $linea[5] ?? 0;
-                    $costoLimpio = str_replace(['$', ','], '', (string)$costo);
-                    $diccionarioCostosWizerp[$sku] = is_numeric($costoLimpio) ? (float)$costoLimpio : 0.0;
+                    $costoLimpio = str_replace(['$', ','], '', (string) $costo);
+                    $diccionarioCostosWizerp[$sku] = is_numeric($costoLimpio) ? (float) $costoLimpio : 0.0;
                 });
             });
         }
@@ -263,19 +344,24 @@ class AromasListasController extends Controller
         $tienePrecios = $request->hasFile('precios');
 
         $this->procesarArchivoSeguro($request->file('existencias'), function ($ruta) use (&$listaCompleta, &$inconsistencias, $diccionarioPrecios, $diccionarioCostosWizerp, $columnasSeleccionadas, $esListaPersonalizadaBD, $configuracionBD, $multiplicadores, $tienePrecios) {
-
             (new FastExcel)->withoutHeaders()->import($ruta, function ($linea) use (&$listaCompleta, &$inconsistencias, $diccionarioPrecios, $diccionarioCostosWizerp, $columnasSeleccionadas, $esListaPersonalizadaBD, $configuracionBD, $multiplicadores, $tienePrecios) {
-                if (!isset($linea[4]) || $linea[4] == 'Código') return;
+                if (!isset($linea[4]) || $linea[4] == 'Código') {
+                    return;
+                }
 
-                $skuCrudo = trim((string)$linea[4]);
-                if ($skuCrudo === '') return;
+                $skuCrudo = trim((string) $linea[4]);
+                if ($skuCrudo === '') {
+                    return;
+                }
                 $skuBuscador = ltrim($skuCrudo, '0');
 
                 $existenciaRaw = $linea[10] ?? 0;
-                $existencia = is_numeric($existenciaRaw) ? (int)$existenciaRaw : 0;
+                $existencia = is_numeric($existenciaRaw) ? (int) $existenciaRaw : 0;
 
                 if ($esListaPersonalizadaBD && $configuracionBD->solo_con_existencia) {
-                    if ($existencia <= 0) return;
+                    if ($existencia <= 0) {
+                        return;
+                    }
                 }
 
                 $almacen = $linea[1] ?? '';
@@ -285,7 +371,9 @@ class AromasListasController extends Controller
 
                 if ($esListaPersonalizadaBD && $configuracionBD->filtro_relojes) {
                     $primeraLetra = strtoupper(substr(ltrim($descripcion), 0, 1));
-                    if ($primeraLetra !== 'R') return;
+                    if ($primeraLetra !== 'R') {
+                        return;
+                    }
                 }
 
                 $pg = $diccionarioPrecios[$skuBuscador] ?? 0.0;
@@ -296,7 +384,7 @@ class AromasListasController extends Controller
                         'sku' => $skuCrudo,
                         'descripcion' => $descripcion,
                         'almacen' => $almacen,
-                        'existencia' => $existencia
+                        'existencia' => $existencia,
                     ];
                 }
 
@@ -304,12 +392,9 @@ class AromasListasController extends Controller
                 foreach ($columnasSeleccionadas as $columna) {
                     switch ($columna) {
                         case 'Folio':
-                            // Si es numérico, lo multiplicamos por 1 para forzar el casteo a int/float sin perder datos.
-                            // Si tiene letras (ej. "FOL-123"), se queda como string.
                             $fila['Folio'] = is_numeric($folio) ? $folio * 1 : $folio;
                             break;
                         case 'SKU':
-                            // Hacemos lo mismo para el SKUCrudo
                             $fila['SKU'] = is_numeric($skuCrudo) ? $skuCrudo * 1 : $skuCrudo;
                             break;
                         case 'Descripcion':
@@ -371,33 +456,139 @@ class AromasListasController extends Controller
             array_multisort($descripciones, SORT_ASC, SORT_STRING | SORT_FLAG_CASE, $listaCompleta);
         }
 
-        if (count($inconsistencias) > 0) {
+        $user = $request->user();
+        $puedeModal = $user->can('listados.guardar_generado')
+            || $user->can('listados.enviar')
+            || $user->can('listados.visualizar');
+
+        // Sin permisos de guardar/enviar/historial: descarga directa (flujo legacy)
+        if (!$puedeModal && count($inconsistencias) === 0) {
+            return (new FastExcel($listaCompleta))->download($nombreArchivo);
+        }
+
+        if (!$puedeModal && count($inconsistencias) > 0) {
             $tempFilename = 'excel_temp_' . uniqid() . '.xlsx';
             $tempDir = storage_path('app/temp');
-
             if (!file_exists($tempDir)) {
                 mkdir($tempDir, 0755, true);
             }
-
-            $tempPath = $tempDir . '/' . $tempFilename;
-            (new FastExcel($listaCompleta))->export($tempPath);
+            (new FastExcel($listaCompleta))->export($tempDir . '/' . $tempFilename);
 
             return response()->json([
                 'requiere_confirmacion' => true,
                 'inconsistencias' => $inconsistencias,
                 'temp_file' => $tempFilename,
-                'nombre_descarga' => $nombreArchivo
+                'nombre_descarga' => $nombreArchivo,
+                'puede_guardar_compartir' => false,
             ]);
         }
 
-        return (new FastExcel($listaCompleta))->download($nombreArchivo);
+        $tempFilename = 'excel_temp_' . uniqid() . '.xlsx';
+        $tempDir = storage_path('app/temp');
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+        (new FastExcel($listaCompleta))->export($tempDir . '/' . $tempFilename);
+
+        $defaults = $listadoService->obtenerDestinatariosDefault((string) $tipoLista);
+
+        return response()->json([
+            'requiere_modal' => true,
+            'requiere_confirmacion' => count($inconsistencias) > 0,
+            'inconsistencias' => $inconsistencias,
+            'temp_file' => $tempFilename,
+            'nombre_descarga' => $nombreArchivo,
+            'tipo_lista' => (string) $tipoLista,
+            'puede_guardar_compartir' => true,
+            'permisos' => [
+                'guardar_generado' => $user->can('listados.guardar_generado'),
+                'enviar' => $user->can('listados.enviar'),
+                'visualizar' => $user->can('listados.visualizar'),
+            ],
+            'destinatarios_default' => [
+                'user_ids' => $defaults['user_ids'],
+                'externos' => $defaults['externos'],
+            ],
+        ]);
+    }
+
+    public function confirmarGeneracion(Request $request, ListadoGeneradoService $listadoService)
+    {
+        $user = $request->user();
+        $puedeModal = $user->can('listados.guardar_generado')
+            || $user->can('listados.enviar')
+            || $user->can('listados.visualizar');
+
+        if (!$puedeModal) {
+            abort(403, 'No tienes permisos para esta operación.');
+        }
+
+        $validator = Validator::make($request->all(), [
+            'temp_file' => ['required', 'string', 'regex:/^excel_temp_[a-zA-Z0-9]+\.xlsx$/'],
+            'nombre_descarga' => 'required|string|max:255',
+            'tipo_lista' => 'required|string|max:50',
+            'guardar' => 'required|boolean',
+            'enviar' => 'required|boolean',
+            'destinatarios_user_ids' => 'nullable|array',
+            'destinatarios_user_ids.*' => 'integer|exists:users,id',
+            'destinatarios_externos' => 'nullable|array',
+            'destinatarios_externos.*.nombre' => 'nullable|string|max:100',
+            'destinatarios_externos.*.email' => 'required|email|max:150',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $guardar = $request->boolean('guardar');
+        $enviar = $request->boolean('enviar');
+
+        if ($guardar && !$user->can('listados.guardar_generado')) {
+            return response()->json(['error' => 'No tienes permiso para guardar listados.'], 403);
+        }
+
+        if ($enviar && !$user->can('listados.enviar')) {
+            return response()->json(['error' => 'No tienes permiso para enviar listados.'], 403);
+        }
+
+        $userIds = $request->input('destinatarios_user_ids', []);
+        $externos = $request->input('destinatarios_externos', []);
+
+        if ($enviar && count($userIds) === 0 && count($externos) === 0) {
+            return response()->json(['error' => 'Selecciona al menos un destinatario para enviar el listado.'], 422);
+        }
+
+        try {
+            $resultado = $listadoService->confirmar(
+                $request->temp_file,
+                $request->nombre_descarga,
+                $request->tipo_lista,
+                $user->id,
+                $guardar,
+                $enviar,
+                $userIds,
+                $externos
+            );
+
+            $downloadResponse = response()->download(
+                $resultado['temp_path'],
+                $resultado['nombre_descarga']
+            )->deleteFileAfterSend(true);
+
+            return $downloadResponse;
+        } catch (\RuntimeException $e) {
+            return response()->json(['error' => $e->getMessage()], 404);
+        } catch (Exception $e) {
+            Log::error('Error al confirmar generación de listado: ' . $e->getMessage());
+            return response()->json(['error' => 'No se pudo confirmar la generación del listado.'], 500);
+        }
     }
 
     public function descargarTemporal(Request $request)
     {
         $request->validate([
             'temp_file' => ['required', 'string', 'regex:/^excel_temp_[a-zA-Z0-9]+\.xlsx$/'],
-            'nombre_descarga' => 'required|string'
+            'nombre_descarga' => 'required|string',
         ]);
 
         $path = storage_path('app/temp/' . $request->temp_file);
@@ -407,6 +598,69 @@ class AromasListasController extends Controller
         }
 
         return response()->download($path, $request->nombre_descarga)->deleteFileAfterSend(true);
+    }
+
+    public function descargarGenerado($id)
+    {
+        Gate::authorize('listados.visualizar');
+
+        $listado = ListadoGenerado::findOrFail($id);
+
+        if (!Storage::disk('public')->exists($listado->ruta_fisica)) {
+            abort(404, 'El archivo físico ya no existe en el servidor.');
+        }
+
+        return Storage::disk('public')->download($listado->ruta_fisica, $listado->nombre_archivo);
+    }
+
+    public function eliminarGenerado($id, ListadoGeneradoService $listadoService)
+    {
+        Gate::authorize('listados.guardar_generado');
+
+        $listado = ListadoGenerado::findOrFail($id);
+        $listadoService->eliminar($listado);
+
+        return response()->json(['message' => 'Listado eliminado del sistema.']);
+    }
+
+    public function guardarDestinatarios(Request $request, ListadoGeneradoService $listadoService)
+    {
+        Gate::authorize('listados.enviar');
+
+        $validator = Validator::make($request->all(), [
+            'tipo_lista' => 'required|string|in:' . implode(',', ListadoGeneradoService::TIPOS_PREDETERMINADOS),
+            'user_ids' => 'nullable|array',
+            'user_ids.*' => 'integer|exists:users,id',
+            'externos' => 'nullable|array',
+            'externos.*.nombre' => 'nullable|string|max:100',
+            'externos.*.email' => 'required|email|max:150',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $listadoService->guardarDestinatariosPredeterminados(
+                $request->tipo_lista,
+                $request->input('user_ids', []),
+                $request->input('externos', [])
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Destinatarios actualizados.',
+                'destinatarios_por_tipo' => collect($listadoService->destinatariosPorTipo())
+                    ->map(fn ($data) => [
+                        'user_ids' => array_map('intval', $data['user_ids'] ?? []),
+                        'externos' => array_values($data['externos'] ?? []),
+                    ])
+                    ->all(),
+            ]);
+        } catch (Exception $e) {
+            Log::error('Error al guardar destinatarios de listados: ' . $e->getMessage());
+            return response()->json(['error' => 'No se pudieron guardar los destinatarios.'], 500);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -430,14 +684,14 @@ class AromasListasController extends Controller
                     [
                         'value' => $value,
                         'created_at' => DB::raw('IFNULL(created_at, NOW())'),
-                        'updated_at' => now()
+                        'updated_at' => now(),
                     ]
                 );
             }
 
             return response()->json(['message' => 'Configuración global actualizada con éxito']);
         } catch (Exception $e) {
-            Log::error("Error al guardar configuración global de listados: " . $e->getMessage());
+            Log::error('Error al guardar configuración global de listados: ' . $e->getMessage());
             return response()->json(['error' => 'Fallo al sincronizar los parámetros globales.'], 500);
         }
     }
@@ -448,7 +702,9 @@ class AromasListasController extends Controller
 
     private function procesarArchivoSeguro($archivo, callable $callbackLogica)
     {
-        if (!$archivo) return;
+        if (!$archivo) {
+            return;
+        }
         $nombreTemp = 'temp_' . uniqid() . '.' . $archivo->getClientOriginalExtension();
         $rutaCompleta = sys_get_temp_dir() . '/' . $nombreTemp;
         $archivo->move(sys_get_temp_dir(), $nombreTemp);

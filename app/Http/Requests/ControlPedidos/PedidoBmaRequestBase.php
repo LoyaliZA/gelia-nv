@@ -17,25 +17,18 @@ abstract class PedidoBmaRequestBase extends FormRequest
             'fecha' => ['nullable', 'date'],
             'almacen_id' => ['nullable', 'exists:almacenes,id'],
             'catalogo_banco_id' => ['nullable', 'exists:catalogo_bancos,id'],
-            'requiere_factura' => ['nullable', 'boolean'],
             'aplica_saldo_favor' => ['nullable', 'boolean'],
             'saldo_a_favor' => ['nullable', 'numeric', 'min:0'],
             'catalogo_tipo_caja_id' => ['nullable', 'exists:catalogo_tipos_caja_pedido,id'],
             'numero_cajas' => ['nullable', 'integer', 'min:0', 'max:999'],
             'peso_real_kg' => ['nullable', 'numeric', 'min:0'],
-            'peso_con_productos_kg' => ['nullable', 'numeric', 'min:0'],
+            'peso_cobrado_guia_kg' => ['nullable', 'numeric', 'min:0'],
             'catalogo_paqueteria_id' => ['nullable', 'exists:catalogo_paqueterias_pedido,id'],
             'catalogo_tipo_guia_id' => ['nullable', 'exists:catalogo_tipos_guia_pedido,id'],
             'catalogo_zona_id' => ['nullable', 'exists:catalogo_zonas_pedido,id'],
-            'catalogo_envio_tienda_id' => ['nullable', 'exists:catalogo_envios_tienda,id'],
-            'envio_tienda_otro' => [
-                'nullable',
-                'string',
-                'max:255',
-                Rule::requiredIf(fn () => $this->requiereEnvioTiendaOtro()),
-            ],
             'codigo_postal' => ['nullable', 'string', 'max:10'],
             'domicilio_entrega' => ['nullable', 'string'],
+            'cliente_direccion_id' => ['nullable', 'integer', 'exists:cliente_direcciones,id'],
             'envia_a_otra_persona' => ['nullable', 'boolean'],
             'envia_otra_persona' => [
                 'nullable',
@@ -44,6 +37,7 @@ abstract class PedidoBmaRequestBase extends FormRequest
                 Rule::requiredIf(fn () => filter_var($this->input('envia_a_otra_persona'), FILTER_VALIDATE_BOOLEAN)),
             ],
             'es_resguardo' => ['nullable', 'boolean'],
+            'anexar_remision' => ['nullable', 'boolean'],
             'total_mercancia' => ['nullable', 'numeric', 'min:0'],
             'costo_envio' => ['nullable', 'numeric', 'min:0'],
             'aplica_seguro' => ['nullable', 'boolean'],
@@ -53,17 +47,5 @@ abstract class PedidoBmaRequestBase extends FormRequest
             'comprobantes.*' => ['file', 'image', 'max:10240'],
             'enviar' => ['nullable', 'boolean'],
         ];
-    }
-
-    protected function requiereEnvioTiendaOtro(): bool
-    {
-        $id = $this->input('catalogo_envio_tienda_id');
-        if (!$id) {
-            return false;
-        }
-
-        return \App\Models\ControlPedidos\CatalogoEnvioTienda::where('id', $id)
-            ->where('es_otro', true)
-            ->exists();
     }
 }

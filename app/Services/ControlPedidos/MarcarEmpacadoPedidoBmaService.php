@@ -26,6 +26,10 @@ class MarcarEmpacadoPedidoBmaService
             throw new \RuntimeException('El pedido debe tener pago validado y remisión adjunta.');
         }
 
+        if ($pedido->es_resguardo) {
+            throw new \RuntimeException('Un pedido en resguardo no puede marcarse como empacado. Libere el resguardo primero.');
+        }
+
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $pedido->loadMissing(['paqueteria', 'origen']);
             $estatusAnterior = $pedido->estatus;

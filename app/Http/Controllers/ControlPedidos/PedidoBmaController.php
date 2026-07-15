@@ -8,6 +8,7 @@ use App\Http\Requests\ControlPedidos\UpdatePedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\ActualizarPedidoBmaService;
 use App\Services\ControlPedidos\CrearPedidoBmaService;
+use App\Services\ControlPedidos\Direcciones\CambiarDireccionPedido;
 use App\Services\ControlPedidos\EliminarPedidoBmaService;
 use App\Services\ControlPedidos\EnviarPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosBmaService;
@@ -35,6 +36,7 @@ class PedidoBmaController extends Controller
             'metricas' => $listarService->metricas(Auth::user()),
             'filtros' => $request->all(),
             'catalogos' => $catalogosService->ejecutar(),
+            'direcciones_normalizadas' => (bool) config('control_pedidos.direcciones_normalizadas'),
         ]);
     }
 
@@ -95,6 +97,29 @@ class PedidoBmaController extends Controller
         return redirect()->back()->with('success', 'Pedido enviado al auxiliar.');
     }
 
+    public function cambiarDireccion(
+        Request $request,
+        PedidoBma $pedidoBma,
+        CambiarDireccionPedido $cambiarDireccion,
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'cliente_direccion_id' => ['required', 'integer', 'exists:cliente_direcciones,id'],
+            'motivo' => ['required', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $cambiarDireccion->ejecutar($pedidoBma, [
+                'cliente_direccion_id' => (int) $validated['cliente_direccion_id'],
+                'motivo' => $validated['motivo'],
+                'usuario_id' => Auth::id(),
+            ]);
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Dirección del pedido actualizada.');
+    }
+
     public function destroy(
         PedidoBma $pedidoBma,
         ListarPedidosBmaService $listarService,
@@ -129,7 +154,7 @@ class PedidoBmaController extends Controller
                 'Almacén' => $pedido->almacen?->nombre ?? '',
                 'Banco' => $pedido->banco?->nombre ?? '',
                 'Total a Cobrar' => number_format((float) $pedido->total_a_cobrar, 2, '.', ''),
-                'Estado' => $pedido->estatus?->nombre_visual ?? '',
+                'Estado' => $pedido->estatus?->etiquetaSemantica((bool) $pedido->es_resguardo) ?? '',
                 'Fase' => $pedido->estatus?->fase_ciclo ?? '',
                 'Vendedora' => $pedido->vendedor?->name ?? '',
             ];

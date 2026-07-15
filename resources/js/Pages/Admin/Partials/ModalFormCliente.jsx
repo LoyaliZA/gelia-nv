@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm, usePage } from '@inertiajs/react';
-import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered, FileText, AlertTriangle } from 'lucide-react';
+import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered, FileText, AlertTriangle, MapPin } from 'lucide-react';
 import { soloDigitosNumeroCliente } from '../../../utils/numeroClienteInput';
 
 const nombrePareceNumero = (valor) => /^\d+(\.\d+)?$/.test(String(valor || '').trim());
@@ -376,6 +376,16 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                     <input type="text" value={data.pais_contacto} onChange={e => setData('pais_contacto', e.target.value)} className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 shadow-sm" />
                                 </div>
                             </div>
+                            {modoModal === 'editar' && clienteActual?.id && (
+                                <a
+                                    href={route('admin.clientes.direcciones.index', clienteActual.id)}
+                                    className="mt-3 inline-flex items-center gap-2 text-sm font-bold underline decoration-[var(--color-primario)]/40 hover:decoration-[var(--color-primario)]"
+                                    style={{ color: 'var(--color-primario)' }}
+                                >
+                                    <MapPin className="w-4 h-4" />
+                                    Administrar direcciones de envío
+                                </a>
+                            )}
                         </div>
 
                         {modoModal === 'editar' && puedeCorreccionEmergencia && (

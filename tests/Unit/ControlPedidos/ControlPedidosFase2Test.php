@@ -68,13 +68,13 @@ class ControlPedidosFase2Test extends TestCase
         app(EnviarPedidoBmaService::class)->ejecutar($pedido->fresh(['origen']), $this->usuario->id);
     }
 
-    public function test_cedis_no_lista_pedidos_en_resguardo(): void
+    public function test_cedis_lista_pedidos_en_resguardo(): void
     {
         $pedido = $this->crearPedidoAprobadoCedis(['es_resguardo' => true]);
 
         $resultado = app(ListarPedidosCedisService::class)->ejecutar([], false);
 
-        $this->assertFalse($resultado->contains('id', $pedido->id));
+        $this->assertTrue($resultado->contains('id', $pedido->id));
     }
 
     public function test_cedis_lista_pedidos_sin_resguardo(): void
@@ -86,7 +86,7 @@ class ControlPedidosFase2Test extends TestCase
         $this->assertTrue($resultado->contains('id', $pedido->id));
     }
 
-    public function test_liberar_resguardo_actualiza_pedido(): void
+    public function test_liberar_resguardo_desde_auxiliar_sin_pago(): void
     {
         $pedido = $this->crearPedidoBase([
             'es_resguardo' => true,
@@ -96,6 +96,48 @@ class ControlPedidosFase2Test extends TestCase
         $actualizado = app(LiberarResguardoPedidoBmaService::class)->ejecutar($pedido, $this->usuario->id);
 
         $this->assertFalse($actualizado->es_resguardo);
+    }
+
+    public function test_liberar_resguardo_desde_cedis_habilita_empaque(): void
+    {
+        $pedido = $this->crearPedidoAprobadoCedis(['es_resguardo' => true]);
+
+        $actualizado = app(LiberarResguardoPedidoBmaService::class)->ejecutar($pedido->fresh('estatus'), $this->usuario->id);
+
+        $this->assertFalse($actualizado->es_resguardo);
+        $this->assertSame(
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            $actualizado->fresh('estatus')->estatus->fase_ciclo
+        );
+    }
+
+    public function test_aprobar_resguardo_avanza_a_cedis_conservando_flag(): void
+    {
+        $pedido = $this->crearPedidoBase([
+            'es_resguardo' => true,
+            'catalogo_estatus_pedido_id' => CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR)->id,
+            'pago_validado_at' => now(),
+            'pago_validado_por_id' => $this->usuario->id,
+        ]);
+
+        PedidoBmaDocumento::create([
+            'pedido_bma_id' => $pedido->id,
+            'tipo' => PedidoBmaDocumento::TIPO_REMISION,
+            'ruta_archivo' => 'test/remision.pdf',
+            'nombre_original' => 'remision.pdf',
+            'mime_type' => 'application/pdf',
+            'tamano_bytes' => 100,
+            'orden' => 0,
+        ]);
+
+        $actualizado = app(\App\Services\ControlPedidos\AprobarPedidoBmaService::class)
+            ->ejecutar($pedido->fresh(['estatus', 'remision']), $this->usuario->id);
+
+        $this->assertTrue($actualizado->es_resguardo);
+        $this->assertSame(
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            $actualizado->fresh('estatus')->estatus->fase_ciclo
+        );
     }
 
     private function origenMostrador(): CatalogoOrigenPedido

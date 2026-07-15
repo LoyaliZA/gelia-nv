@@ -69,9 +69,9 @@ class ListarPedidosCedisService
             'documentos',
             'empacadoPor',
             'incidenciaEmpaquePor',
+            'direccionVigente',
         ])
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
-            ->where('es_resguardo', false)
             ->whereNotNull('pago_validado_at')
             ->whereHas('remision')
             ->orderByDesc('created_at');

@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,6 +15,7 @@ class EnviarPedidoBmaService
 
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private CrearSnapshotDireccionPedido $crearSnapshot,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -24,6 +26,13 @@ class EnviarPedidoBmaService
 
         $this->validarCamposRequeridos($pedido);
 
+        if (config('control_pedidos.direcciones_normalizadas')) {
+            $pedido->loadMissing('origen');
+            if ($pedido->origen?->requiere_logistica && ! $pedido->cliente_direccion_id) {
+                throw new \InvalidArgumentException('Debe seleccionar una dirección de envío verificada.');
+            }
+        }
+
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $estatusAnterior = $pedido->estatus;
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR)
@@ -31,6 +40,11 @@ class EnviarPedidoBmaService
 
             if (!$estatusNuevo) {
                 throw new \RuntimeException('No se encontró el estatus PENDIENTE_AUXILIAR.');
+            }
+
+            if (config('control_pedidos.direcciones_normalizadas') || $pedido->cliente_direccion_id) {
+                $this->crearSnapshot->ejecutar($pedido, $usuarioId);
+                $pedido->refresh();
             }
 
             $pedido->update([
@@ -50,7 +64,7 @@ class EnviarPedidoBmaService
                 'Pedido enviado a revisión del auxiliar.'
             );
 
-            return $pedido->fresh(['cliente', 'estatus', 'documentos', 'almacen', 'banco']);
+            return $pedido->fresh(['cliente', 'estatus', 'documentos', 'almacen', 'banco', 'direccionVigente']);
         });
     }
 

@@ -7,13 +7,16 @@ import { geliaCardClass } from '../../utils/geliaTheme';
 import GeliaLogo from '../../Components/GeliaLogo';
 import ModalPlantilla from './Partials/ModalPlantilla';
 import ModalAlerta from './Partials/ModalAlerta';
+import ModalGuardarCompartir from './Partials/ModalGuardarCompartir';
+import ModalDestinatariosListados from './Partials/ModalDestinatariosListados';
+import HistorialListados from './Partials/HistorialListados';
 import {
     FileSpreadsheet, Settings2, Plus, Download, X,
-    AlertTriangle, Check, Trash2, Edit3, Users, Share2,
+    AlertTriangle, Check, Trash2, Edit3, Users,
     Upload, Archive, Box, Calculator, BarChart, PieChart,
     FileText, ClipboardList, CloudUpload, Zap, Layers,
     Tags, ShoppingCart, Truck, PackageOpen, ListTodo,
-    Briefcase, Folders, Database, TrendingUp, Target, Clock
+    Briefcase, Folders, Database, TrendingUp, Target, Clock, Mail
 } from 'lucide-react';
 
 // ----------------------------------------------------------------------
@@ -148,14 +151,46 @@ const UploadArea = ({ id, label, isRequired, instructions, fileRef, onChange, fi
 // ----------------------------------------------------------------------
 // COMPONENTE PRINCIPAL
 // ----------------------------------------------------------------------
-export default function Listados({ auth, listas_personalizadas = [], configuracion_listados = {}, usuarios_sistema = [] }) {
+export default function Listados({
+    auth,
+    listas_personalizadas = [],
+    configuracion_listados = {},
+    usuarios_sistema = [],
+    usuarios_entrega = null,
+    permisos: permisosProp = {},
+    historial_hoy = [],
+    historial_anterior = [],
+    destinatarios_por_tipo = {},
+}) {
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
     const miId = auth?.user?.id;
+    const usuariosParaEntrega = usuarios_entrega?.length ? usuarios_entrega : usuarios_sistema;
+
+    const permisosListados = {
+        guardar_generado: permisosProp.guardar_generado ?? can('listados.guardar_generado'),
+        enviar: permisosProp.enviar ?? can('listados.enviar'),
+        visualizar: permisosProp.visualizar ?? can('listados.visualizar'),
+    };
 
     const [isLoading, setIsLoading] = useState(false);
     const [archivos, setArchivos] = useState({ existencias: null, precios: null, costos: null });
     const [modalConfig, setModalConfig] = useState({ show: false, unlocked: false, data: { ...CONFIGURACION_POR_DEFECTO, ...configuracion_listados } });
-    const [modalInconsistencias, setModalInconsistencias] = useState({ show: false, data: [], tempFile: '', nombreDescarga: '' });
+    const [modalInconsistencias, setModalInconsistencias] = useState({ show: false, data: [], tempFile: '', nombreDescarga: '', payloadModal: null });
+    const [modalGuardar, setModalGuardar] = useState({
+        show: false,
+        tempFile: '',
+        nombreDescarga: '',
+        tipoLista: '',
+        inconsistencias: [],
+        destinatariosDefault: { user_ids: [], externos: [] },
+        permisos: {},
+    });
+    const [modalDestinatarios, setModalDestinatarios] = useState(false);
+    const [destinatariosEstado, setDestinatariosEstado] = useState(destinatarios_por_tipo);
+
+    useEffect(() => {
+        setDestinatariosEstado(destinatarios_por_tipo);
+    }, [destinatarios_por_tipo]);
 
     // ESTADO PARA MODAL DE ALERTAS GESTIONADO POR GELIA
     const [alerta, setAlerta] = useState({ show: false, type: 'error', title: '', message: '', details: null });
@@ -171,7 +206,9 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
         columnas_exportar: [],
         solo_con_existencia: false,
         filtro_relojes: false,
-        shared_users: []
+        shared_users: [],
+        destinatarios_user_ids: [],
+        destinatarios_externos: [],
     };
     const [modalPlantilla, setModalPlantilla] = useState({ show: false, data: estadoInicialPlantilla });
 
@@ -195,15 +232,34 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
                 id: lista.id,
                 titulo_lista: lista.titulo_lista,
                 descripcion: lista.descripcion || '',
-                icono_personalizado: lista.icono_personalizado || 'FileSpreadsheet', // Valor por defecto si es nulo
+                icono_personalizado: lista.icono_personalizado || 'FileSpreadsheet',
                 color: lista.color || 'azul',
                 nombre_archivo_salida: lista.nombre_archivo_salida,
                 archivos_requeridos: lista.archivos_requeridos || ['existencias'],
                 columnas_exportar: lista.columnas_exportar || [],
                 solo_con_existencia: lista.solo_con_existencia === 1 || lista.solo_con_existencia === true,
                 filtro_relojes: lista.filtro_relojes === 1 || lista.filtro_relojes === true,
-                shared_users: lista.shared_users ? lista.shared_users.map(u => u.id) : []
+                shared_users: lista.shared_users ? lista.shared_users.map(u => u.id) : [],
+                destinatarios_user_ids: lista.destinatarios_user_ids || [],
+                destinatarios_externos: lista.destinatarios_externos || [],
             }
+        });
+    };
+
+    const abrirModalPostGeneracion = (json) => {
+        setModalInconsistencias({ show: false, data: [], tempFile: '', nombreDescarga: '', payloadModal: null });
+        const defaults = json.destinatarios_default || { user_ids: [], externos: [] };
+        setModalGuardar({
+            show: true,
+            tempFile: json.temp_file,
+            nombreDescarga: json.nombre_descarga,
+            tipoLista: json.tipo_lista,
+            inconsistencias: json.inconsistencias || [],
+            destinatariosDefault: {
+                user_ids: (defaults.user_ids || []).map(Number),
+                externos: defaults.externos || [],
+            },
+            permisos: json.permisos || permisosListados,
         });
     };
 
@@ -271,10 +327,28 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
             if (response.data.type === 'application/json') {
                 const text = await response.data.text();
                 const json = JSON.parse(text);
-                if (json.requiere_confirmacion) {
-                    setModalInconsistencias({ show: true, data: json.inconsistencias, tempFile: json.temp_file, nombreDescarga: json.nombre_descarga });
-                } else if (json.errors || json.error) {
+                if (json.errors || json.error) {
                     dispararAlerta('error', 'Cruce Interrumpido_', 'Revisa que hayas subido los archivos requeridos para esta lista.', json.errors || json.error);
+                } else if (json.requiere_modal) {
+                    if (json.requiere_confirmacion && (json.inconsistencias || []).length > 0) {
+                        setModalInconsistencias({
+                            show: true,
+                            data: json.inconsistencias,
+                            tempFile: json.temp_file,
+                            nombreDescarga: json.nombre_descarga,
+                            payloadModal: json,
+                        });
+                    } else {
+                        abrirModalPostGeneracion(json);
+                    }
+                } else if (json.requiere_confirmacion) {
+                    setModalInconsistencias({
+                        show: true,
+                        data: json.inconsistencias,
+                        tempFile: json.temp_file,
+                        nombreDescarga: json.nombre_descarga,
+                        payloadModal: null,
+                    });
                 }
                 setIsLoading(false);
                 return;
@@ -305,6 +379,10 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
     };
 
     const descargarTemporal = () => {
+        if (modalInconsistencias.payloadModal) {
+            abrirModalPostGeneracion(modalInconsistencias.payloadModal);
+            return;
+        }
         setIsLoading(true);
         setModalInconsistencias(prev => ({ ...prev, show: false }));
         const url = new URL(route('listados.descargar_temporal'), window.location.origin);
@@ -312,6 +390,57 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
         url.searchParams.append('nombre_descarga', modalInconsistencias.nombreDescarga);
         window.location.href = url.toString();
         setIsLoading(false);
+    };
+
+    const confirmarGuardarCompartir = async (payload) => {
+        setIsLoading(true);
+        setModalGuardar((prev) => ({ ...prev, show: false }));
+        try {
+            const response = await axios.post(route('listados.generar.confirmar'), payload, {
+                responseType: 'blob',
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (response.data.type === 'application/json') {
+                const text = await response.data.text();
+                const json = JSON.parse(text);
+                dispararAlerta('error', 'No se pudo confirmar_', json.error || json.errors || 'Error desconocido');
+                return;
+            }
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = payload.nombre_descarga || 'listado.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+            dispararAlerta(
+                'success',
+                'Listado listo_',
+                payload.enviar
+                    ? 'Archivo descargado y enviado por correo.'
+                    : payload.guardar
+                        ? 'Archivo descargado y guardado en el historial.'
+                        : 'Archivo descargado correctamente.'
+            );
+
+            if (payload.guardar || payload.enviar || permisosListados.visualizar) {
+                router.reload({ only: ['historial_hoy', 'historial_anterior'] });
+            }
+        } catch (error) {
+            let msgLog = error.message;
+            if (error.response?.data?.type === 'application/json') {
+                const text = await error.response.data.text();
+                const json = JSON.parse(text);
+                msgLog = json.error || json.errors || msgLog;
+            }
+            dispararAlerta('error', 'Error al confirmar_', 'No se pudo completar la operación.', msgLog);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const desbloquearConfiguracion = () => {
@@ -352,7 +481,12 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
                         </div>
                         <p className="text-[11px] uppercase font-bold theme-text-muted tracking-widest ml-16">Genera tu listado personalizados.</p>
                     </div>
-                    <div className="flex gap-4 w-full md:w-auto">
+                    <div className="flex gap-4 w-full md:w-auto flex-wrap">
+                        {can('listados.enviar') && (
+                            <button onClick={() => setModalDestinatarios(true)} className="flex-1 md:flex-none flex justify-center items-center gap-2 px-6 py-4 theme-surface border-[1.5px] theme-border hover:border-[var(--color-primario)] rounded-2xl text-[11px] font-black uppercase tracking-widest theme-text-main transition-all hover:shadow-md outline-none">
+                                <Mail className="w-4 h-4" /> Destinatarios
+                            </button>
+                        )}
                         {can('listados.configurar_porcentajes') && (
                             <button onClick={() => setModalConfig(prev => ({ ...prev, show: true }))} className="flex-1 md:flex-none flex justify-center items-center gap-2 px-6 py-4 theme-surface border-[1.5px] theme-border hover:border-[var(--color-primario)] rounded-2xl text-[11px] font-black uppercase tracking-widest theme-text-main transition-all hover:shadow-md outline-none">
                                 <Settings2 className="w-4 h-4" /> Globales
@@ -550,6 +684,23 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
                         </div>
                     </section>
                 )}
+
+                {permisosListados.visualizar && (
+                    <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <HistorialListados
+                            titulo="Hoy_"
+                            listados={historial_hoy}
+                            permisos={permisosListados}
+                            onError={(msg) => dispararAlerta('error', 'Error_', 'No se pudo eliminar el listado.', msg)}
+                        />
+                        <HistorialListados
+                            titulo="Historial_"
+                            listados={historial_anterior}
+                            permisos={permisosListados}
+                            onError={(msg) => dispararAlerta('error', 'Error_', 'No se pudo eliminar el listado.', msg)}
+                        />
+                    </section>
+                )}
             </div>
 
             {/* ====================================================================== */}
@@ -584,6 +735,32 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
                 usuarios_sistema={usuarios_sistema}
                 ICONS_MAP={ICONS_MAP}
                 COLUMNAS_DISPONIBLES={COLUMNAS_DISPONIBLES}
+            />
+
+            <ModalGuardarCompartir
+                show={modalGuardar.show}
+                tempFile={modalGuardar.tempFile}
+                nombreDescarga={modalGuardar.nombreDescarga}
+                tipoLista={modalGuardar.tipoLista}
+                permisos={modalGuardar.permisos}
+                destinatariosDefault={modalGuardar.destinatariosDefault}
+                usuariosSistema={usuariosParaEntrega}
+                inconsistencias={modalGuardar.inconsistencias}
+                onClose={() => setModalGuardar((prev) => ({ ...prev, show: false }))}
+                onConfirm={confirmarGuardarCompartir}
+            />
+
+            <ModalDestinatariosListados
+                show={modalDestinatarios}
+                onClose={() => setModalDestinatarios(false)}
+                usuariosSistema={usuariosParaEntrega}
+                destinatariosPorTipo={destinatariosEstado}
+                onSaved={(next) => {
+                    setDestinatariosEstado(next);
+                    dispararAlerta('success', 'Destinatarios_', 'Configuración guardada para este tipo de lista.');
+                    router.reload({ only: ['destinatarios_por_tipo', 'usuarios_entrega'] });
+                }}
+                onError={(msg) => dispararAlerta('error', 'Error_', 'No se pudieron guardar los destinatarios.', msg)}
             />
 
             {modalConfig.show && createPortal(
@@ -669,11 +846,11 @@ export default function Listados({ auth, listas_personalizadas = [], configuraci
                         </div>
 
                         <div className="p-8 border-t border-orange-500/30 theme-element bg-orange-500/5 flex justify-end gap-4">
-                            <button onClick={() => setModalInconsistencias({ show: false, data: [] })} className="text-[11px] font-black uppercase tracking-widest px-6 py-4 theme-text-muted hover:theme-text-main transition-all outline-none rounded-2xl hover:bg-black/5 dark:hover:bg-white/5">
+                            <button onClick={() => setModalInconsistencias({ show: false, data: [], payloadModal: null })} className="text-[11px] font-black uppercase tracking-widest px-6 py-4 theme-text-muted hover:theme-text-main transition-all outline-none rounded-2xl hover:bg-black/5 dark:hover:bg-white/5">
                                 Cancelar
                             </button>
                             <button onClick={descargarTemporal} className="text-[11px] font-black uppercase tracking-widest px-8 py-4 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all outline-none flex items-center gap-2">
-                                <Download className="w-4 h-4" /> Descargar de todos modos
+                                <Download className="w-4 h-4" /> {modalInconsistencias.payloadModal ? 'Continuar' : 'Descargar de todos modos'}
                             </button>
                         </div>
                     </div>

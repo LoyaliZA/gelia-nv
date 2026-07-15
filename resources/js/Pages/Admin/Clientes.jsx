@@ -4,7 +4,7 @@ import {
     Users, Upload, Search,
     FileSpreadsheet, TrendingUp,
     CheckCircle, Database, Edit3, ChevronDown, Sparkles,
-    Plus, Shield, X, ChevronRight, History,
+    Plus, Shield, X, ChevronRight, History, MapPin,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
@@ -662,6 +662,33 @@ export default function Clientes({ auth, clientes, vendedores = [], tipos_client
                                                     </div>
                                                 )}
 
+                                                <a
+                                                    href={route('admin.clientes.direcciones.index', cliente.id)}
+                                                    className="relative p-3 theme-surface rounded-xl transition-all shadow-sm hover:shadow-md group-hover:scale-110 outline-none"
+                                                    style={{ color: 'var(--color-primario)' }}
+                                                    title={
+                                                        cliente.direcciones_sin_verificar_count > 0
+                                                            ? `${cliente.direcciones_sin_verificar_count} sin verificar`
+                                                            : `${cliente.direcciones_activas_count || 0} direcciones`
+                                                    }
+                                                >
+                                                    <MapPin className="w-4 h-4" />
+                                                    {(cliente.direcciones_activas_count > 0 || cliente.direcciones_sin_verificar_count > 0) && (
+                                                        <span
+                                                            className={`absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-[8px] font-black flex items-center justify-center text-white ${
+                                                                cliente.direcciones_sin_verificar_count > 0 ? 'bg-amber-500' : ''
+                                                            }`}
+                                                            style={cliente.direcciones_sin_verificar_count > 0 ? undefined : { backgroundColor: 'var(--color-primario)' }}
+                                                        >
+                                                            {cliente.direcciones_sin_verificar_count > 0
+                                                                ? '!'
+                                                                : cliente.direcciones_activas_count}
+                                                        </span>
+                                                    )}
+                                                    {cliente.direcciones_activas_count === 0 && (
+                                                        <span className="sr-only">Sin direcciones verificadas</span>
+                                                    )}
+                                                </a>
                                                 <button
                                                     onClick={() => abrirModal('editar', cliente)}
                                                     className="p-3 theme-surface rounded-xl transition-all shadow-sm hover:shadow-md group-hover:scale-110 outline-none"

@@ -171,6 +171,10 @@ export function resolveNotificationDestination(notification = {}) {
         return '/woocommerce';
     }
 
+    if (payload.tipo === 'listado_generado') {
+        return '/funciones/listados';
+    }
+
     if (payload.modulo === 'funciones' || payload.tipo === 'plantilla_bellaroma') {
         return '/plantilla-bellaroma';
     }

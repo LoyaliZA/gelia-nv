@@ -67,7 +67,7 @@ export default function TablaAuditoria({ pedidos, onRevisar }) {
         <div className={`${geliaCardClass()} overflow-hidden`}>
             <div className="md:hidden p-4 space-y-3">
                 {items.map((pedido) => {
-                    const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo);
+                    const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
                     const fase = pedido.estatus?.fase_ciclo;
                     return (
                         <CardAuditoria
@@ -98,7 +98,7 @@ export default function TablaAuditoria({ pedidos, onRevisar }) {
                     </thead>
                     <tbody>
                         {items.map((pedido) => {
-                            const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo);
+                            const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
                             const fase = pedido.estatus?.fase_ciclo;
                             const esRechazado = fase === 'RECHAZADO_VENDEDORA';
                             const esIncidenciaCedis = fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque);

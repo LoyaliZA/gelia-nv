@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Head, useForm, router } from '@inertiajs/react';
-import { Users, Plus, X, Hash, User, Calendar, ShieldAlert } from 'lucide-react';
+import { Head, useForm, router, usePage } from '@inertiajs/react';
+import { Users, Plus, X, Hash, User, Calendar, ShieldAlert, MapPin, Link2, Copy } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
 import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../utils/geliaTheme';
@@ -12,6 +12,7 @@ export default function MisClientes({ auth, clientes }) {
     | Validaciones de Seguridad (ABAC)
     |--------------------------------------------------------------------------
     */
+    const { flash } = usePage().props;
     const can = (permiso) => {
         const roles = auth?.user?.roles || [];
         const isAdmin = roles.includes('Admin') || roles.includes('Super admin (admin)');
@@ -46,6 +47,14 @@ export default function MisClientes({ auth, clientes }) {
             onSuccess: () => cerrarModal(),
             onFinish: () => setProcesandoAccion(false),
             preserveScroll: true,
+        });
+    };
+
+    const generarEnlace = (clienteId) => {
+        setProcesandoAccion(true);
+        router.post(route('admin.clientes.direcciones.enlace', clienteId), {}, {
+            preserveScroll: true,
+            onFinish: () => setProcesandoAccion(false),
         });
     };
 
@@ -90,6 +99,19 @@ export default function MisClientes({ auth, clientes }) {
                     )}
                 </header>
 
+                {flash?.enlace_direccion_url && (
+                    <div className={`${geliaCardClass()} p-4 flex flex-wrap items-center gap-3`}>
+                        <p className="flex-1 min-w-0 text-sm break-all theme-text-main m-0 font-mono">{flash.enlace_direccion_url}</p>
+                        <button
+                            type="button"
+                            className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border theme-border text-[10px] font-black uppercase tracking-widest"
+                            onClick={() => navigator.clipboard?.writeText(flash.enlace_direccion_url)}
+                        >
+                            <Copy className="w-3.5 h-3.5" /> Copiar
+                        </button>
+                    </div>
+                )}
+
                 {/* Tabla de Datos (Estilo Escritorio) */}
                 <div className={`${geliaCardClass()} overflow-hidden`} style={{ animationDelay: '100ms' }}>
                     <div className="overflow-x-auto pb-4 custom-scrollbar">
@@ -102,12 +124,13 @@ export default function MisClientes({ auth, clientes }) {
                                     <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Nivel / Lista_</th>
                                     <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Monto Actual_</th>
                                     <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Fecha de Alta_</th>
+                                    <th className="p-6 text-[10px] font-black uppercase tracking-widest theme-text-muted">Direcciones_</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {(!clientes.data || clientes.data.length === 0) ? (
                                     <tr>
-                                        <td colSpan="5" className="p-12 text-center text-[11px] font-black uppercase tracking-widest theme-text-muted italic">
+                                        <td colSpan="6" className="p-12 text-center text-[11px] font-black uppercase tracking-widest theme-text-muted italic">
                                             Aún no tienes clientes registrados en tu cartera_
                                         </td>
                                     </tr>
@@ -154,6 +177,36 @@ export default function MisClientes({ auth, clientes }) {
                                                 <div className="text-[10px] font-bold theme-text-muted uppercase flex items-center gap-1.5">
                                                     <Calendar className="w-3.5 h-3.5" />
                                                     {new Date(cliente.created_at).toLocaleDateString('es-MX')}
+                                                </div>
+                                            </td>
+
+                                            <td className="p-6">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    {can('clientes.direcciones.ver') && (
+                                                        <a
+                                                            href={route('admin.clientes.direcciones.index', cliente.id)}
+                                                            className="relative inline-flex items-center gap-1.5 px-3 py-2 rounded-xl theme-element border theme-border text-[10px] font-black uppercase tracking-widest theme-text-main hover:scale-105 transition-transform"
+                                                            title="Ver direcciones"
+                                                        >
+                                                            <MapPin className="w-3.5 h-3.5" style={{ color: 'var(--color-primario)' }} />
+                                                            {cliente.direcciones_activas_count || 0}
+                                                            {cliente.solicitudes_direccion_pendientes > 0 && (
+                                                                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 rounded-full bg-amber-500 text-[8px] text-white font-black flex items-center justify-center">
+                                                                    {cliente.solicitudes_direccion_pendientes}
+                                                                </span>
+                                                            )}
+                                                        </a>
+                                                    )}
+                                                    {can('clientes.direcciones.generar_enlace') && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => generarEnlace(cliente.id)}
+                                                            className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border theme-border text-[10px] font-black uppercase tracking-widest theme-text-muted hover:theme-text-main transition-colors"
+                                                            title="Generar enlace de dirección"
+                                                        >
+                                                            <Link2 className="w-3.5 h-3.5" /> Enlace
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                             

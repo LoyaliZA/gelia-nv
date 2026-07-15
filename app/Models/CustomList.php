@@ -23,6 +23,8 @@ class CustomList extends Model
         'solo_con_existencia',
         'filtro_relojes',
         'pct_venta_especial',
+        'destinatarios_user_ids',
+        'destinatarios_externos',
     ];
 
     protected $casts = [
@@ -31,7 +33,9 @@ class CustomList extends Model
         'active' => 'boolean',
         'solo_con_existencia' => 'boolean',
         'filtro_relojes' => 'boolean',
-        'pct_venta_especial' => 'decimal:2', 
+        'pct_venta_especial' => 'decimal:2',
+        'destinatarios_user_ids' => 'array',
+        'destinatarios_externos' => 'array',
     ];
 
     // Relación: El creador de la lista

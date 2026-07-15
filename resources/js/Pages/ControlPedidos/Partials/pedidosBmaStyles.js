@@ -20,6 +20,31 @@ export const badgeClaseEstatusPedido = (estatus) => {
     };
 };
 
+/** Etiquetas de negocio (no nombres de color como AMARILLO/AZUL). */
+export const LABELS_ESTATUS_POR_FASE = {
+    BORRADOR: 'Borrador',
+    PENDIENTE_AUXILIAR: 'Pendiente Auxiliar',
+    EN_CEDIS: 'En CEDIS',
+    RECHAZADO_VENDEDORA: 'Rechazado',
+    INCIDENCIA_CEDIS: 'Incidencia CEDIS',
+    EN_RUTA: 'En ruta',
+    PENDIENTE_DE_GUIA: 'Pendiente de guía',
+    PENDIENTE_DE_ENVIO: 'Pendiente de envío',
+    ENTREGADO: 'Entregado',
+    ENVIADO: 'Enviado',
+};
+
+export const etiquetaEstatusPedido = (estatus, { esResguardo = false } = {}) => {
+    if (esResguardo) {
+        return 'Resguardo';
+    }
+    const fase = estatus?.fase_ciclo;
+    if (fase && LABELS_ESTATUS_POR_FASE[fase]) {
+        return LABELS_ESTATUS_POR_FASE[fase];
+    }
+    return estatus?.nombre_visual || fase || '—';
+};
+
 export const TABS_PEDIDOS = [
     { id: 'TODAS', label: 'Todas' },
     { id: 'BORRADORES', label: 'Borradores' },
@@ -31,6 +56,7 @@ export const TABS_PEDIDOS = [
 
 export const TABS_AUDITORIA = [
     { id: 'PENDIENTES', label: 'Pendientes' },
+    { id: 'RESGUARDOS', label: 'Pedidos en Resguardo' },
     { id: 'APROBADOS', label: 'Aprobados' },
     { id: 'RECHAZADOS', label: 'Rechazados' },
     { id: 'TODAS', label: 'Todas' },
@@ -43,7 +69,26 @@ export const TABS_CEDIS = [
     { id: 'TODOS', label: 'Todos' },
 ];
 
-export const badgeAuditoriaSemantico = (fase) => {
+export const badgeResguardoSemantico = () => ({
+    label: 'Resguardo',
+    ...badgeClaseEstatusPedido({ color_hex: '#3B82F6' }),
+});
+
+/** Badge con color del catálogo + etiqueta semántica del estado. */
+export const badgeEstatusPedido = (estatus, { esResguardo = false } = {}) => {
+    if (esResguardo) {
+        return badgeResguardoSemantico();
+    }
+    return {
+        label: etiquetaEstatusPedido(estatus),
+        ...badgeClaseEstatusPedido(estatus),
+    };
+};
+
+export const badgeAuditoriaSemantico = (fase, esResguardo = false) => {
+    if (esResguardo) {
+        return badgeResguardoSemantico();
+    }
     const map = {
         PENDIENTE_AUXILIAR: { hex: '#EAB308', label: 'Pendiente' },
         EN_CEDIS: { hex: '#22C55E', label: 'Aprobado' },
@@ -62,9 +107,12 @@ export const badgeAuditoriaSemantico = (fase) => {
     };
 };
 
-export const badgeEmpaqueSemantico = (fase) => {
+export const badgeEmpaqueSemantico = (fase, esResguardo = false) => {
+    if (esResguardo) {
+        return badgeResguardoSemantico();
+    }
     const map = {
-        EN_CEDIS: { hex: '#EAB308', label: 'Pendiente de empaque' },
+        EN_CEDIS: { hex: '#EAB308', label: 'Pendiente de Empaque' },
         INCIDENCIA_CEDIS: { hex: '#F97316', label: 'Error reportado' },
         PENDIENTE_DE_GUIA: { hex: '#A855F7', label: 'Esperando Guía' },
         PENDIENTE_DE_ENVIO: { hex: '#0EA5E9', label: 'Pendiente de envío' },
@@ -176,13 +224,17 @@ export const textoWhatsAppPedido = (pedido) => {
         pedido.folio_remision && pedido.folio ? `Folio interno: ${pedido.folio}` : null,
         `Cliente: ${pedido.cliente?.nombre || ''}`,
         `Total: ${formatearMoneda(pedido.total_a_cobrar)}`,
-        `Estado: ${pedido.estatus?.nombre_visual || ''}`,
+        `Estado: ${etiquetaEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo })}`,
     ].filter(Boolean);
     return encodeURIComponent(lineas.join('\n'));
 };
 
 /** Espeja EnviarPedidoBmaService::validarCamposRequeridos para feedback inmediato en UI. */
-export const validarCamposEnvioPedido = (data, { comprobantesExistentes = 0, requiereLogistica = true } = {}) => {
+export const validarCamposEnvioPedido = (data, {
+    comprobantesExistentes = 0,
+    requiereLogistica = true,
+    direccionesNormalizadas = false,
+} = {}) => {
     const faltantes = [];
 
     if (!String(data.folio_remision || '').trim()) faltantes.push('folio de remisión');
@@ -204,10 +256,17 @@ export const validarCamposEnvioPedido = (data, { comprobantesExistentes = 0, req
         if (!data.catalogo_tipo_guia_id) faltantes.push('tipo de guía');
         if (!data.catalogo_paqueteria_id) faltantes.push('paquetería');
         if (!data.catalogo_zona_id) faltantes.push('reexpedición');
-        if (!data.catalogo_envio_tienda_id) faltantes.push('envío / tienda');
         if (data.costo_envio === '' || data.costo_envio == null) faltantes.push('costo de envío');
         if (!String(data.codigo_postal || '').trim()) faltantes.push('código postal');
-        if (!String(data.domicilio_entrega || '').trim()) faltantes.push('domicilio de entrega');
+        if (direccionesNormalizadas) {
+            const tieneDir = String(data.cliente_direccion_id || '').trim();
+            const excepcion = Boolean(data.direccion_manual_excepcion) && String(data.domicilio_entrega || '').trim();
+            if (!tieneDir && !excepcion) {
+                faltantes.push('dirección de envío verificada o excepción manual');
+            }
+        } else if (!String(data.domicilio_entrega || '').trim()) {
+            faltantes.push('domicilio de entrega');
+        }
     }
 
     return {
