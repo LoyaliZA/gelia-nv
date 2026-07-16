@@ -438,12 +438,12 @@ export default function FichaCliente({ cliente, direcciones = [], enlaces = [], 
                                 </select>
                             </label>
                             <label className="md:col-span-2 block text-sm">
-                                <span className="mb-1 block text-[9px] font-black uppercase tracking-widest theme-text-muted">Referencias</span>
-                                <textarea className={THEME_TEXTAREA} value={form.data.referencias} onChange={(e) => form.setData('referencias', e.target.value)} rows={2} />
+                                <span className="mb-1 block text-[9px] font-black uppercase tracking-widest theme-text-muted">Referencias del domicilio</span>
+                                <textarea className={THEME_TEXTAREA} value={form.data.referencias} onChange={(e) => form.setData('referencias', e.target.value)} rows={3} placeholder="Cómo encontrar el domicilio…" />
                             </label>
                             <label className="md:col-span-2 block text-sm">
                                 <span className="mb-1 block text-[9px] font-black uppercase tracking-widest theme-text-muted">Indicaciones de entrega</span>
-                                <textarea className={THEME_TEXTAREA} value={form.data.indicaciones_entrega} onChange={(e) => form.setData('indicaciones_entrega', e.target.value)} rows={2} />
+                                <textarea className={THEME_TEXTAREA} value={form.data.indicaciones_entrega} onChange={(e) => form.setData('indicaciones_entrega', e.target.value)} rows={3} placeholder="Instrucciones para el repartidor…" />
                             </label>
                             <label className="flex items-center gap-2 text-sm font-bold theme-text-main">
                                 <input type="checkbox" checked={form.data.verificar} onChange={(e) => form.setData('verificar', e.target.checked)} />

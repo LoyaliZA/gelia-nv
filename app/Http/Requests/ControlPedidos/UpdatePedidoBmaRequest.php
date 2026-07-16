@@ -6,7 +6,12 @@ class UpdatePedidoBmaRequest extends PedidoBmaRequestBase
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('control_pedidos.editar') ?? false;
+        $user = $this->user();
+        if (! $user) {
+            return false;
+        }
+        // Autoguardado / borrador: quien puede crear también puede actualizar su borrador.
+        return $user->can('control_pedidos.editar') || $user->can('control_pedidos.crear');
     }
 
     public function rules(): array

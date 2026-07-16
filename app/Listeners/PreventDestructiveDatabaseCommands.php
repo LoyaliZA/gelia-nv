@@ -18,7 +18,7 @@ class PreventDestructiveDatabaseCommands
 
     public function handle(CommandStarting $event): void
     {
-        if (!in_array($event->command, self::COMANDOS_DESTRUCTIVOS, true)) {
+        if (! in_array($event->command, self::COMANDOS_DESTRUCTIVOS, true)) {
             return;
         }
 
@@ -28,26 +28,15 @@ class PreventDestructiveDatabaseCommands
             );
         }
 
-        if (config('app.env') === 'testing') {
-            $dbConnection = config('database.default');
-            $dbName = (string) config("database.connections.{$dbConnection}.database");
-
-            if ($dbName === ':memory:' || str_contains(strtolower($dbName), 'test')) {
-                return;
-            }
-        }
-
         $dbConnection = config('database.default');
-        $dbName = config("database.connections.{$dbConnection}.database");
+        $dbName = (string) config("database.connections.{$dbConnection}.database");
 
-        if ($dbName === ':memory:' || str_contains(strtolower($dbName), 'test')) {
+        // Solo bases claramente de prueba pueden destruirse (nunca laravel/gelia_nv/etc.).
+        if ($this->esBaseDePrueba($dbName)) {
             return;
         }
 
-        if (filter_var(env('ALLOW_DESTRUCTIVE_DB', false), FILTER_VALIDATE_BOOL)) {
-            return;
-        }
-
+        // ALLOW_DESTRUCTIVE_DB ya no bypasea bases con datos reales.
         $users = Schema::hasTable('users') ? User::count() : 0;
         $clientes = Schema::hasTable('clientes') ? Cliente::count() : 0;
 
@@ -56,9 +45,19 @@ class PreventDestructiveDatabaseCommands
         }
 
         throw new RuntimeException(
-            "Comando «{$event->command}» bloqueado: hay datos en la BD ({$users} usuarios, {$clientes} clientes). "
-            . 'Ejecuta «php artisan db:backup» primero. '
-            . 'Para forzar: ALLOW_DESTRUCTIVE_DB=1 php artisan ' . $event->command
+            "Comando «{$event->command}» bloqueado: BD «{$dbName}» tiene datos ({$users} usuarios, {$clientes} clientes). "
+            . 'Usa sqlite :memory: o una BD cuyo nombre contenga «test». '
+            . 'ALLOW_DESTRUCTIVE_DB ya no permite borrar bases con datos.'
         );
+    }
+
+    private function esBaseDePrueba(string $dbName): bool
+    {
+        $n = strtolower($dbName);
+
+        return $n === ':memory:'
+            || str_contains($n, 'test')
+            || str_contains($n, 'phpunit')
+            || str_ends_with($n, '_testing');
     }
 }

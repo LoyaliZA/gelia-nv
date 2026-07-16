@@ -27,6 +27,7 @@ import TablaCatalogoPedidoGenerico from './Partials/Catalogos/TablaCatalogoPedid
 import TablaTiposCajaPedido from './Partials/Catalogos/TablaTiposCajaPedido';
 import TablaPaqueteriasPedido from './Partials/Catalogos/TablaPaqueteriasPedido';
 import TablaOrigenesPedido from './Partials/Catalogos/TablaOrigenesPedido';
+import TablaReexpedicionPedido from './Partials/Catalogos/TablaReexpedicionPedido';
 
 
 export default function Catalogos({
@@ -35,7 +36,7 @@ export default function Catalogos({
     bancos = [], tipos_activo = [], categorias_activo = [],
     sucursales = [], tipos_almacen = [], marcas_producto = [], almacenes = [], categorias_producto = [],
     estatus_pedidos = [], paqueterias_pedido = [], tipos_caja_pedido = [],
-    tipos_guia_pedido = [], zonas_pedido = [], envios_tienda = [], origenes_pedido = [],
+    tipos_guia_pedido = [], zonas_pedido = [], reexpedicion_pedido = [], envios_tienda = [], origenes_pedido = [],
 }) {
     const [tabActiva, setTabActiva] = useState('departamentos');
     const activeCardClass = geliaCardClass('relative z-10');
@@ -66,6 +67,7 @@ export default function Catalogos({
         { id: 'tipos_caja_pedido', label: 'Tipos Caja', icon: Box },
         { id: 'tipos_guia_pedido', label: 'Tipos Guía', icon: Map },
         { id: 'zonas_pedido', label: 'Zonas Pedido', icon: MapPin },
+        { id: 'reexpedicion_pedido', label: 'Reexpedición', icon: MapPin },
     ];
 
     return (
@@ -133,6 +135,9 @@ export default function Catalogos({
                     )}
                     {tabActiva === 'zonas_pedido' && (
                         <TablaCatalogoPedidoGenerico datos={zonas_pedido} titulo="Zonas Pedido_" icon={MapPin} routePrefix="zonas_pedido" loaderMessage="Guardando Zona_" />
+                    )}
+                    {tabActiva === 'reexpedicion_pedido' && (
+                        <TablaReexpedicionPedido datos={reexpedicion_pedido} paqueterias={paqueterias_pedido} />
                     )}
                 </section>
             </div>

@@ -253,7 +253,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             <div className="grid grid-cols-2 gap-4">
                                 <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
                                 <Campo label="Nombre" value={pedido.cliente?.nombre} />
-                                <Campo label="Folio remisión" value={pedido.folio_remision} />
+                                <Campo label="Folio de Pedido" value={pedido.folio_remision} />
                                 <Campo label="Folio interno" value={pedido.folio} />
                                 <Campo label="Fecha pedido" value={formatearFechaNegocio(pedido.fecha)} />
                                 <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />

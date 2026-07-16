@@ -5,15 +5,24 @@ import { Package, Edit2, Trash2, Plus, X, Save, AlertTriangle } from 'lucide-rea
 import GeliaLoader from '../../../../Components/GeliaLoader';
 import { THEME_INPUT, THEME_LABEL, THEME_MODAL_OVERLAY } from '../../../../utils/geliaTheme';
 
+function medidasDesdeDims(largo, ancho, alto) {
+    const parts = [largo, ancho, alto].filter((v) => v !== '' && v != null && Number(v) > 0);
+    if (parts.length !== 3) return '';
+    return `${largo} x ${ancho} x ${alto} cm`;
+}
+
 export default function TablaTiposCajaPedido({ datos = [] }) {
     const [modalAbierto, setModalAbierto] = useState(false);
     const [modalEliminar, setModalEliminar] = useState(false);
     const [itemActual, setItemActual] = useState(null);
 
-    const { data, setData, post, put, processing, reset } = useForm({
+    const { data, setData, processing, reset } = useForm({
         nombre: '',
         peso_volumetrico: 0,
         medidas: '',
+        largo: '',
+        ancho: '',
+        alto: '',
         activo: true,
     });
 
@@ -29,24 +38,37 @@ export default function TablaTiposCajaPedido({ datos = [] }) {
             nombre: item.nombre,
             peso_volumetrico: item.peso_volumetrico ?? 0,
             medidas: item.medidas ?? '',
+            largo: item.largo ?? '',
+            ancho: item.ancho ?? '',
+            alto: item.alto ?? '',
             activo: item.activo,
         });
         setModalAbierto(true);
     };
 
-    const handleSubmit = (e) => {
+    const enviar = (e) => {
         e.preventDefault();
-        const accion = itemActual ? put : post;
-        const ruta = itemActual
-            ? route('admin.catalogos.tipos_caja_pedido.update', itemActual.id)
-            : route('admin.catalogos.tipos_caja_pedido.store');
-        accion(ruta, { onSuccess: () => { setModalAbierto(false); reset(); } });
+        const medidas = medidasDesdeDims(data.largo, data.ancho, data.alto) || data.medidas || '';
+        const body = { ...data, medidas };
+        const opts = { onSuccess: () => { setModalAbierto(false); reset(); } };
+        if (itemActual) {
+            router.put(route('admin.catalogos.tipos_caja_pedido.update', itemActual.id), body, opts);
+        } else {
+            router.post(route('admin.catalogos.tipos_caja_pedido.store'), body, opts);
+        }
     };
 
     const confirmDelete = () => {
         router.delete(route('admin.catalogos.tipos_caja_pedido.destroy', itemActual.id), {
             onSuccess: () => { setModalEliminar(false); setItemActual(null); },
         });
+    };
+
+    const dimLabel = (item) => {
+        if (item.largo != null && item.ancho != null && item.alto != null) {
+            return `${item.largo} × ${item.ancho} × ${item.alto} cm`;
+        }
+        return item.medidas || '—';
     };
 
     return (
@@ -72,7 +94,7 @@ export default function TablaTiposCajaPedido({ datos = [] }) {
                         <tr className="border-b-2 border-[var(--color-primario)]/30">
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Nombre_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Peso vol._</th>
-                            <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Medidas_</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Dimensiones_</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black theme-text-muted uppercase tracking-widest">Acciones_</th>
                         </tr>
                     </thead>
@@ -81,7 +103,7 @@ export default function TablaTiposCajaPedido({ datos = [] }) {
                             <tr key={item.id} className="border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/30">
                                 <td className="px-6 py-5 font-black uppercase italic text-sm theme-text-main">{item.nombre}</td>
                                 <td className="px-6 py-5 text-sm theme-text-main">{item.peso_volumetrico}</td>
-                                <td className="px-6 py-5 text-sm theme-text-muted">{item.medidas || '—'}</td>
+                                <td className="px-6 py-5 text-sm theme-text-muted">{dimLabel(item)}</td>
                                 <td className="px-6 py-5 text-right">
                                     <div className="flex justify-end gap-2">
                                         <button type="button" onClick={() => abrirEditar(item)} className="p-2.5 theme-element border theme-border rounded-xl outline-none"><Edit2 className="w-4 h-4 theme-text-main" /></button>
@@ -98,7 +120,7 @@ export default function TablaTiposCajaPedido({ datos = [] }) {
                     <div className="w-full max-w-md theme-surface border theme-border rounded-[2rem] p-8 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
                         <button type="button" onClick={() => setModalAbierto(false)} className="absolute top-4 right-4 p-2 rounded-full theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 outline-none"><X className="w-5 h-5" /></button>
                         <h3 className="text-xl font-black italic theme-text-main uppercase mb-6">{itemActual ? 'Editar Tipo Caja_' : 'Nuevo Tipo Caja_'}</h3>
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={enviar} className="space-y-4">
                             <div>
                                 <label className={THEME_LABEL}>Nombre_</label>
                                 <input type="text" required placeholder="Nombre" value={data.nombre} onChange={(e) => setData('nombre', e.target.value)} className={`${THEME_INPUT} w-full mt-1.5 text-sm font-bold`} />
@@ -107,9 +129,19 @@ export default function TablaTiposCajaPedido({ datos = [] }) {
                                 <label className={THEME_LABEL}>Peso volumétrico_</label>
                                 <input type="number" step="0.0001" min="0" placeholder="Peso volumétrico" value={data.peso_volumetrico} onChange={(e) => setData('peso_volumetrico', e.target.value)} className={`${THEME_INPUT} w-full mt-1.5 text-sm font-bold`} />
                             </div>
-                            <div>
-                                <label className={THEME_LABEL}>Medidas_</label>
-                                <input type="text" placeholder="Medidas" value={data.medidas} onChange={(e) => setData('medidas', e.target.value)} className={`${THEME_INPUT} w-full mt-1.5 text-sm font-bold`} />
+                            <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label className={THEME_LABEL}>Largo (cm)_</label>
+                                    <input type="number" step="0.01" min="0" value={data.largo} onChange={(e) => setData('largo', e.target.value)} className={`${THEME_INPUT} w-full mt-1.5 text-sm font-bold`} />
+                                </div>
+                                <div>
+                                    <label className={THEME_LABEL}>Ancho (cm)_</label>
+                                    <input type="number" step="0.01" min="0" value={data.ancho} onChange={(e) => setData('ancho', e.target.value)} className={`${THEME_INPUT} w-full mt-1.5 text-sm font-bold`} />
+                                </div>
+                                <div>
+                                    <label className={THEME_LABEL}>Alto (cm)_</label>
+                                    <input type="number" step="0.01" min="0" value={data.alto} onChange={(e) => setData('alto', e.target.value)} className={`${THEME_INPUT} w-full mt-1.5 text-sm font-bold`} />
+                                </div>
                             </div>
                             <label className="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" checked={data.activo} onChange={(e) => setData('activo', e.target.checked)} className="w-4 h-4" />

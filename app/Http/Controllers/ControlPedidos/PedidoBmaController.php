@@ -56,6 +56,38 @@ class PedidoBmaController extends Controller
         return redirect()->back()->with('success', 'Pedido guardado como borrador.');
     }
 
+    public function autoguardar(
+        StorePedidoBmaRequest $request,
+        CrearPedidoBmaService $crearService,
+        ActualizarPedidoBmaService $actualizarService,
+        ListarPedidosBmaService $listarService
+    ) {
+        $datos = $request->validated();
+        $pedidoId = $datos['pedido_id'] ?? null;
+        unset($datos['comprobantes'], $datos['enviar'], $datos['pedido_id']);
+
+        try {
+            if ($pedidoId) {
+                $pedido = PedidoBma::findOrFail($pedidoId);
+                $listarService->asegurarAcceso($pedido, Auth::user());
+                if (!$pedido->esEditablePorVendedora()) {
+                    return response()->json(['message' => 'Este pedido ya no admite autoguardado.'], 422);
+                }
+                $pedido = $actualizarService->ejecutar($pedido, $datos, Auth::id());
+            } else {
+                $pedido = $crearService->ejecutar($datos, Auth::id());
+            }
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'id' => $pedido->id,
+            'folio' => $pedido->folio,
+            'saved_at' => now()->toIso8601String(),
+        ]);
+    }
+
     public function update(
         UpdatePedidoBmaRequest $request,
         PedidoBma $pedidoBma,
@@ -63,7 +95,9 @@ class PedidoBmaController extends Controller
         ActualizarPedidoBmaService $actualizarService,
         EnviarPedidoBmaService $enviarService
     ): RedirectResponse {
-        Gate::authorize('control_pedidos.editar');
+        if (! Auth::user()->can('control_pedidos.editar') && ! Auth::user()->can('control_pedidos.crear')) {
+            abort(403);
+        }
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {

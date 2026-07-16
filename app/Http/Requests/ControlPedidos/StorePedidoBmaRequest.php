@@ -11,6 +11,8 @@ class StorePedidoBmaRequest extends PedidoBmaRequestBase
 
     public function rules(): array
     {
-        return $this->reglasComunes();
+        return array_merge($this->reglasComunes(), [
+            'pedido_id' => ['nullable', 'integer', 'exists:pedidos_bma,id'],
+        ]);
     }
 }

@@ -14,7 +14,7 @@ trait ValidacionCamposPedidoBma
         $requiereLogistica = $pedido->origen?->requiere_logistica ?? true;
 
         if (empty(trim((string) ($pedido->folio_remision ?? '')))) {
-            $faltantes[] = 'folio de remisión';
+            $faltantes[] = 'folio de pedido';
         }
         if (!$pedido->cliente_id) {
             $faltantes[] = 'cliente';

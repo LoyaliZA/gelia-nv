@@ -31,7 +31,10 @@ use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\CatalogoTipoGuiaPedido;
 use App\Models\ControlPedidos\CatalogoEnvioTienda;
+use App\Models\ControlPedidos\CatalogoZonaPedido;
+use App\Models\ControlPedidos\CatalogoReexpedicionPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Services\ControlPedidos\GestionarReexpedicionPedidoService;
 
 class CatalogoController extends Controller
 {
@@ -572,6 +575,9 @@ class CatalogoController extends Controller
             'nombre' => 'required|string|max:255',
             'peso_volumetrico' => 'nullable|numeric|min:0',
             'medidas' => 'nullable|string|max:255',
+            'largo' => 'nullable|numeric|min:0',
+            'ancho' => 'nullable|numeric|min:0',
+            'alto' => 'nullable|numeric|min:0',
             'activo' => 'boolean',
         ]));
 
@@ -584,6 +590,9 @@ class CatalogoController extends Controller
             'nombre' => 'required|string|max:255',
             'peso_volumetrico' => 'nullable|numeric|min:0',
             'medidas' => 'nullable|string|max:255',
+            'largo' => 'nullable|numeric|min:0',
+            'ancho' => 'nullable|numeric|min:0',
+            'alto' => 'nullable|numeric|min:0',
             'activo' => 'boolean',
         ]));
 
@@ -660,6 +669,99 @@ class CatalogoController extends Controller
         CatalogoZonaPedido::findOrFail($id)->delete();
 
         return back()->with('success', 'Zona de pedido eliminada.');
+    }
+
+    // --- CONTROL PEDIDOS: REEXPEDICIÓN ---
+    public function storeReexpedicionPedido(Request $request, GestionarReexpedicionPedidoService $servicio)
+    {
+        $data = $request->validate([
+            'codigo_postal' => 'required|string|max:10',
+            'costo_base' => 'nullable|numeric|min:0',
+            'activo' => 'boolean',
+            'paqueterias' => 'nullable|array',
+            'paqueterias.*.paqueteria_id' => 'required|exists:catalogo_paqueterias_pedido,id',
+            'paqueterias.*.costo_adicional' => 'nullable|numeric|min:0',
+            'paqueteria_id' => 'nullable|exists:catalogo_paqueterias_pedido,id',
+            'costo_adicional' => 'nullable|numeric|min:0',
+        ]);
+
+        $vinculos = $data['paqueterias'] ?? [];
+        if ($vinculos === [] && ! empty($data['paqueteria_id'])) {
+            $vinculos = [[
+                'paqueteria_id' => $data['paqueteria_id'],
+                'costo_adicional' => $data['costo_adicional'] ?? $data['costo_base'] ?? null,
+            ]];
+        }
+
+        try {
+            $res = $servicio->guardarPorCodigoPostal(
+                $data['codigo_postal'],
+                $data['costo_base'] ?? $data['costo_adicional'] ?? null,
+                $vinculos,
+                (bool) ($data['activo'] ?? true),
+            );
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', "Reexpedición guardada ({$res['creados']} nuevas, {$res['actualizados']} actualizadas).");
+    }
+
+    public function updateReexpedicionPedido(Request $request, $id)
+    {
+        $data = $request->validate([
+            'codigo_postal' => 'required|string|max:10',
+            'paqueteria_id' => 'required|exists:catalogo_paqueterias_pedido,id',
+            'costo_adicional' => 'nullable|numeric|min:0',
+            'activo' => 'boolean',
+        ]);
+        $existe = CatalogoReexpedicionPedido::where('codigo_postal', $data['codigo_postal'])
+            ->where('paqueteria_id', $data['paqueteria_id'])
+            ->where('id', '!=', $id)
+            ->exists();
+        if ($existe) {
+            return back()->with('error', 'Ya existe reexpedición para ese C.P. y paquetería.');
+        }
+        CatalogoReexpedicionPedido::findOrFail($id)->update($data);
+
+        return back()->with('success', 'Reexpedición actualizada.');
+    }
+
+    public function destroyReexpedicionPedido($id)
+    {
+        CatalogoReexpedicionPedido::findOrFail($id)->delete();
+
+        return back()->with('success', 'Reexpedición eliminada.');
+    }
+
+    public function plantillaReexpedicionPedido(GestionarReexpedicionPedidoService $servicio)
+    {
+        return $servicio->plantillaCsv();
+    }
+
+    public function importarReexpedicionPedido(Request $request, GestionarReexpedicionPedidoService $servicio)
+    {
+        $request->validate([
+            'archivo' => 'required|file|mimes:csv,txt|max:5120',
+        ]);
+
+        try {
+            $res = $servicio->importarCsv($request->file('archivo'));
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        $msg = "Importación: {$res['creados']} nuevas, {$res['actualizados']} actualizadas.";
+        if ($res['errores'] !== []) {
+            $msg .= ' Errores: ' . implode(' | ', array_slice($res['errores'], 0, 5));
+            if (count($res['errores']) > 5) {
+                $msg .= ' (+' . (count($res['errores']) - 5) . ' más)';
+            }
+
+            return back()->with('error', $msg);
+        }
+
+        return back()->with('success', $msg);
     }
 
     // --- CONTROL PEDIDOS: ENVÍOS / TIENDA ---
