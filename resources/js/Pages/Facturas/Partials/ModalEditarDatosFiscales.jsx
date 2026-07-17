@@ -17,6 +17,7 @@ const CAMPOS = [
     ['correo_electronico', 'Correo electrónico'],
     ['uso_factura', 'Uso de factura'],
     ['nombre_razon_social', 'Nombre / razón social'],
+    ['telefono', 'Número telefónico'],
 ];
 
 export default function ModalEditarDatosFiscales({ cliente, onClose }) {
@@ -27,6 +28,7 @@ export default function ModalEditarDatosFiscales({ cliente, onClose }) {
         correo_electronico: cliente.correo_electronico || '',
         uso_factura: cliente.uso_factura || '',
         nombre_razon_social: cliente.nombre_razon_social || '',
+        telefono: cliente.telefono || '',
     });
 
     const guardar = (e) => {

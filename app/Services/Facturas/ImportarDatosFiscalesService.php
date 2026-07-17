@@ -15,6 +15,7 @@ class ImportarDatosFiscalesService
         'CORREO ELECTRONICO' => 'correo_electronico',
         'USO DE FACTURA' => 'uso_factura',
         'NOMBRE (RAZON SOCIAL)' => 'nombre_razon_social',
+        'NUMERO TELEFONICO' => 'telefono',
     ];
 
     public function etiquetasParaUi(): array
@@ -26,6 +27,7 @@ class ImportarDatosFiscalesService
             'correo_electronico' => 'Correo Electrónico',
             'uso_factura' => 'Uso de Factura',
             'nombre_razon_social' => 'Nombre (Razón Social)',
+            'telefono' => 'Número Telefónico',
         ];
     }
 
@@ -35,7 +37,7 @@ class ImportarDatosFiscalesService
     }
 
     /**
-     * @return array{rfc: string, codigo_postal: string, regimen_fiscal: string, correo_electronico: string, uso_factura: string, nombre_razon_social: string}
+     * @return array{rfc: string, codigo_postal: string, regimen_fiscal: string, correo_electronico: string, uso_factura: string, nombre_razon_social: string, telefono: string}
      */
     public function extraer(UploadedFile $archivo): array
     {
@@ -54,7 +56,7 @@ class ImportarDatosFiscalesService
     }
 
     /**
-     * @return array{rfc: string, codigo_postal: string, regimen_fiscal: string, correo_electronico: string, uso_factura: string, nombre_razon_social: string}
+     * @return array{rfc: string, codigo_postal: string, regimen_fiscal: string, correo_electronico: string, uso_factura: string, nombre_razon_social: string, telefono: string}
      */
     public function extraerDesdeRuta(string $path, string $extension): array
     {
@@ -80,6 +82,7 @@ class ImportarDatosFiscalesService
                 'CORREO ELECTRONICO' => 'facturacion@ejemplo.com',
                 'USO DE FACTURA' => 'G03',
                 'NOMBRE (RAZON SOCIAL)' => 'EMPRESA EJEMPLO SA DE CV',
+                'NUMERO TELEFONICO' => '5512345678',
             ],
         ];
 
@@ -92,7 +95,7 @@ class ImportarDatosFiscalesService
             return null;
         }
 
-        $campos = ['rfc', 'codigo_postal', 'regimen_fiscal', 'correo_electronico', 'uso_factura', 'nombre_razon_social'];
+        $campos = ['rfc', 'codigo_postal', 'regimen_fiscal', 'correo_electronico', 'uso_factura', 'nombre_razon_social', 'telefono'];
         $datos = [];
         foreach ($campos as $campo) {
             $datos[$campo] = trim((string) ($cliente->{$campo} ?? ''));
@@ -227,6 +230,7 @@ class ImportarDatosFiscalesService
 
         return match (true) {
             in_array($header, ['NOMBRE', 'RAZON SOCIAL', 'NOMBRE RAZON SOCIAL'], true) => 'NOMBRE (RAZON SOCIAL)',
+            in_array($header, ['TELEFONO', 'NUMERO TELEFONICO', 'TELEFONO CELULAR'], true) => 'NUMERO TELEFONICO',
             default => $header,
         };
     }
@@ -297,6 +301,10 @@ class ImportarDatosFiscalesService
 
         if (!filter_var($fila['correo_electronico'], FILTER_VALIDATE_EMAIL)) {
             throw ValidationException::withMessages(['archivo_fiscal' => 'El correo electrónico no es válido.']);
+        }
+
+        if (mb_strlen($fila['telefono']) > 20) {
+            throw ValidationException::withMessages(['archivo_fiscal' => 'El número telefónico no puede exceder 20 caracteres.']);
         }
     }
 

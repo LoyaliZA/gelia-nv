@@ -23,6 +23,7 @@ class DatosFiscalesController extends Controller
                 'id', 'numero_cliente', 'nombre',
                 'rfc', 'codigo_postal', 'regimen_fiscal',
                 'correo_electronico', 'uso_factura', 'nombre_razon_social',
+                'telefono',
             ])
             ->orderBy('numero_cliente');
 

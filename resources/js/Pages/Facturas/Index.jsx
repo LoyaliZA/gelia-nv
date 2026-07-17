@@ -275,6 +275,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                 <ModalExpedienteFactura
                     onClose={() => setModalExpediente({ abierto: false, factura: null })}
                     factura={modalExpediente.factura}
+                    puedeActualizarCliente={puedeDatosFiscales}
                 />
             )}
             {modalForm.abierto && (
