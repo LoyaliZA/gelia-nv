@@ -142,11 +142,35 @@ export default function FormularioPublico({
                                 <input className={THEME_INPUT} value={data.estado} onChange={(e) => setData('estado', e.target.value)} required maxLength={255} />
                             </Campo>
                         </div>
-                        <Campo label="Referencias" error={errors.referencias}>
-                            <textarea className={THEME_TEXTAREA} value={data.referencias} onChange={(e) => setData('referencias', e.target.value)} maxLength={2000} />
+                        <Campo label="Referencias del domicilio" error={errors.referencias}>
+                            <textarea
+                                className={THEME_TEXTAREA}
+                                value={data.referencias}
+                                onChange={(e) => setData('referencias', e.target.value)}
+                                maxLength={2000}
+                                rows={3}
+                                placeholder="Ej. Portón negro, entre calles X y Y, frente al Oxxo…"
+                            />
+                            <span className="mt-1 block text-[10px] theme-text-muted font-bold">
+                                Cómo encontrar el domicilio (fachada, calles, puntos de referencia).
+                            </span>
                         </Campo>
-                        <Campo label="Indicaciones de entrega" error={errors.indicaciones_entrega}>
-                            <textarea className={THEME_TEXTAREA} value={data.indicaciones_entrega} onChange={(e) => setData('indicaciones_entrega', e.target.value)} maxLength={2000} />
+                    </section>
+
+                    <section className={seccion}>
+                        <h2 className={TITULO_SEC}>Indicaciones de entrega</h2>
+                        <Campo label="Instrucciones para el repartidor" error={errors.indicaciones_entrega}>
+                            <textarea
+                                className={THEME_TEXTAREA}
+                                value={data.indicaciones_entrega}
+                                onChange={(e) => setData('indicaciones_entrega', e.target.value)}
+                                maxLength={2000}
+                                rows={4}
+                                placeholder="Ej. Llamar al llegar, dejar con el vecino del 2, horario 10–14 h, no tocar timbre…"
+                            />
+                            <span className="mt-1 block text-[10px] theme-text-muted font-bold">
+                                Indicaciones operativas de la entrega (horario, contacto, quién recibe, restricciones).
+                            </span>
                         </Campo>
                     </section>
 

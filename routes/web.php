@@ -386,6 +386,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['can:control_pedidos.crear'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/', [PedidoBmaController::class, 'store'])->name('store');
+        Route::post('/autoguardar', [PedidoBmaController::class, 'autoguardar'])->name('autoguardar');
         Route::put('/{pedidoBma}/enviar', [PedidoBmaController::class, 'enviar'])->name('enviar');
         Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
             Route::post('/cliente/{cliente}/enlace-direccion', [DireccionesAuxiliarController::class, 'generarEnlace'])
@@ -393,7 +394,8 @@ Route::middleware(['auth'])->group(function () {
         });
     });
 
-    Route::middleware(['can:control_pedidos.editar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+    // crear | editar se valida en UpdatePedidoBmaRequest (borradores autoguardados)
+    Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::put('/{pedidoBma}', [PedidoBmaController::class, 'update'])->name('update');
     });
 
@@ -999,6 +1001,12 @@ Route::middleware(['auth'])->group(function () {
                     Route::post('/zonas-pedido', [CatalogoController::class, 'storeZonaPedido'])->name('zonas_pedido.store');
                     Route::put('/zonas-pedido/{id}', [CatalogoController::class, 'updateZonaPedido'])->name('zonas_pedido.update');
                     Route::delete('/zonas-pedido/{id}', [CatalogoController::class, 'destroyZonaPedido'])->name('zonas_pedido.destroy');
+
+                    Route::post('/reexpedicion-pedido', [CatalogoController::class, 'storeReexpedicionPedido'])->name('reexpedicion_pedido.store');
+                    Route::put('/reexpedicion-pedido/{id}', [CatalogoController::class, 'updateReexpedicionPedido'])->name('reexpedicion_pedido.update');
+                    Route::delete('/reexpedicion-pedido/{id}', [CatalogoController::class, 'destroyReexpedicionPedido'])->name('reexpedicion_pedido.destroy');
+                    Route::get('/reexpedicion-pedido/plantilla', [CatalogoController::class, 'plantillaReexpedicionPedido'])->name('reexpedicion_pedido.plantilla');
+                    Route::post('/reexpedicion-pedido/importar', [CatalogoController::class, 'importarReexpedicionPedido'])->name('reexpedicion_pedido.importar');
 
                     Route::post('/envios-tienda', [CatalogoController::class, 'storeEnvioTienda'])->name('envios_tienda.store');
                     Route::put('/envios-tienda/{id}', [CatalogoController::class, 'updateEnvioTienda'])->name('envios_tienda.update');

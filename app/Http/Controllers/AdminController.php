@@ -40,6 +40,7 @@ use App\Models\ControlPedidos\CatalogoTipoGuiaPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\CatalogoEnvioTienda;
 use App\Models\ControlPedidos\CatalogoZonaPedido;
+use App\Models\ControlPedidos\CatalogoReexpedicionPedido;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
@@ -121,6 +122,7 @@ class AdminController extends Controller
             'tipos_caja_pedido' => CatalogoTipoCajaPedido::orderBy('nombre')->get(),
             'tipos_guia_pedido' => CatalogoTipoGuiaPedido::orderBy('nombre')->get(),
             'zonas_pedido' => CatalogoZonaPedido::orderBy('nombre')->get(),
+            'reexpedicion_pedido' => CatalogoReexpedicionPedido::with('paqueteria:id,nombre')->orderBy('codigo_postal')->get(),
             'envios_tienda' => CatalogoEnvioTienda::orderBy('nombre')->get(),
             'origenes_pedido' => CatalogoOrigenPedido::orderBy('nombre')->get(),
         ]);

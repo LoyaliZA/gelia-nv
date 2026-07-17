@@ -1,5 +1,4 @@
 import React from 'react';
-import { MapPin, User, Phone } from 'lucide-react';
 
 /**
  * Resumen estructurado de dirección (snapshot, listado verificado o excepción manual).
@@ -24,58 +23,58 @@ export default function DireccionPedidoResumen({
         );
     }
 
-    const lineaCalle = [
-        d.calle,
-        d.numero_exterior ? `Ext. ${d.numero_exterior}` : null,
-        d.numero_interior ? `Int. ${d.numero_interior}` : null,
-    ].filter(Boolean).join(' ');
-
     const cp = d.codigo_postal || codigoPostal;
-    const lugar = [d.colonia, d.municipio || d.ciudad, d.estado, d.pais].filter(Boolean).join(', ');
+    const ciudad = d.ciudad || d.municipio || '';
+    const numero = [d.numero_exterior, d.numero_interior ? `Int. ${d.numero_interior}` : null]
+        .filter(Boolean)
+        .join(' / ');
     const textoLegacy = domicilioLegacy || d.domicilio_legacy || d.direccion_resumida;
 
+    if (compact && !tieneEstructura) {
+        return (
+            <p className={`text-sm theme-text-main m-0 ${className}`}>{textoLegacy || '—'}</p>
+        );
+    }
+
+    const Campo = ({ label, valor }) => (
+        <div>
+            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mb-0.5">{label}</p>
+            <p className="text-sm font-bold theme-text-main m-0 break-words">{valor || '—'}</p>
+        </div>
+    );
+
+    if (!tieneEstructura) {
+        return (
+            <div className={`rounded-xl border theme-border theme-element p-4 ${className}`}>
+                <Campo label="Domicilio" valor={textoLegacy} />
+                {cp && <div className="mt-3"><Campo label="C.P." valor={cp} /></div>}
+            </div>
+        );
+    }
+
     return (
-        <div className={`rounded-xl border theme-border theme-element p-3 space-y-2 ${className}`}>
+        <div className={`rounded-xl border theme-border theme-element p-4 space-y-3 ${className}`}>
             {codigoDireccion && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest border theme-border theme-text-main">
                     {codigoDireccion}
                 </span>
             )}
-            {(d.nombre_destinatario || d.telefono_destinatario) && (
-                <div className="flex flex-wrap gap-3 text-sm">
-                    {d.nombre_destinatario && (
-                        <span className="inline-flex items-center gap-1.5 font-bold theme-text-main">
-                            <User className="w-3.5 h-3.5 theme-text-muted" />
-                            {d.nombre_destinatario}
-                            {d.etiqueta ? ` · ${d.etiqueta}` : ''}
-                            {d.es_principal ? ' ★' : ''}
-                        </span>
-                    )}
-                    {d.telefono_destinatario && (
-                        <span className="inline-flex items-center gap-1.5 theme-text-muted">
-                            <Phone className="w-3.5 h-3.5" />
-                            {d.telefono_destinatario}
-                        </span>
-                    )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Campo label="Destinatario" valor={d.nombre_destinatario} />
+                <Campo label="Teléfono" valor={d.telefono_destinatario} />
+                <Campo label="Calle" valor={d.calle} />
+                <Campo label="Número" valor={numero} />
+                <Campo label="Colonia" valor={d.colonia} />
+                <Campo label="Ciudad" valor={ciudad} />
+                <Campo label="Estado" valor={d.estado} />
+                <Campo label="C.P." valor={cp} />
+            </div>
+            {!compact && (d.referencias || d.indicaciones_entrega) && (
+                <div className="grid grid-cols-1 gap-3 pt-1 border-t theme-border">
+                    {d.referencias && <Campo label="Referencias" valor={d.referencias} />}
+                    {d.indicaciones_entrega && <Campo label="Indicaciones" valor={d.indicaciones_entrega} />}
                 </div>
             )}
-            <div className="flex items-start gap-2 text-sm theme-text-main">
-                <MapPin className="w-3.5 h-3.5 theme-text-muted shrink-0 mt-0.5" />
-                <div className="min-w-0 space-y-0.5">
-                    {lineaCalle && <p className="m-0 font-semibold">{lineaCalle}</p>}
-                    {lugar && <p className="m-0 theme-text-muted">{lugar}</p>}
-                    {cp && <p className="m-0 theme-text-muted">C.P. {cp}</p>}
-                    {!lineaCalle && textoLegacy && (
-                        <p className="m-0 font-semibold">{textoLegacy}</p>
-                    )}
-                    {!compact && d.referencias && (
-                        <p className="m-0 text-xs theme-text-muted">Ref: {d.referencias}</p>
-                    )}
-                    {!compact && d.indicaciones_entrega && (
-                        <p className="m-0 text-xs theme-text-muted">Indicaciones: {d.indicaciones_entrega}</p>
-                    )}
-                </div>
-            </div>
         </div>
     );
 }

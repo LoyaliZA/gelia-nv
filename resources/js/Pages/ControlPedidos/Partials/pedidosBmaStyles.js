@@ -237,7 +237,7 @@ export const validarCamposEnvioPedido = (data, {
 } = {}) => {
     const faltantes = [];
 
-    if (!String(data.folio_remision || '').trim()) faltantes.push('folio de remisión');
+    if (!String(data.folio_remision || '').trim()) faltantes.push('folio de pedido');
     if (!data.cliente_id) faltantes.push('cliente');
     if (!data.origen_id) faltantes.push('origen del pedido');
     if (!data.catalogo_banco_id) faltantes.push('banco');

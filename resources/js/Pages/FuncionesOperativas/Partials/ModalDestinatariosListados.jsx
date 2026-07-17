@@ -9,6 +9,7 @@ const TIPOS_UI = [
     { id: 'actualizada', label: 'Actualizada' },
     { id: 'inventario', label: 'Inventario' },
     { id: 'venta_especial', label: 'Venta Especial' },
+    { id: 'meli', label: 'Lista MELI' },
 ];
 
 export default function ModalDestinatariosListados({

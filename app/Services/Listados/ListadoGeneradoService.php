@@ -18,6 +18,7 @@ class ListadoGeneradoService
         'actualizada',
         'inventario',
         'venta_especial',
+        'meli',
     ];
 
     public function obtenerDestinatariosDefault(string $tipoLista): array

@@ -31,7 +31,7 @@ class ControlPedidosMejoras21Test extends TestCase
         $this->agregarComprobante($pedido);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('folio de remisión');
+        $this->expectExceptionMessage('folio de pedido');
 
         app(EnviarPedidoBmaService::class)->ejecutar($pedido->fresh(['origen']), $this->usuario->id);
     }
