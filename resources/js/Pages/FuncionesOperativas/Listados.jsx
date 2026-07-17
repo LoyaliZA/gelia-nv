@@ -22,18 +22,35 @@ import {
 // ----------------------------------------------------------------------
 // CONSTANTES GLOBALES Y MAPEO DE DATOS
 // ----------------------------------------------------------------------
-const PIN_SISTEMA = "1998";
+const PCT_KEYS = [
+    'pct_bronce', 'pct_plata', 'pct_oro', 'pct_diamante', 'pct_plataformas',
+    'pct_lista3', 'pct_lista4', 'pct_venta_especial', 'pct_boutique',
+];
+
+const MELI_KEYS = [
+    'meli_factor_base', 'meli_full_multiplicador', 'meli_full_fijo_1', 'meli_full_fijo_2',
+    'meli_msi_multiplicador', 'meli_msi_fijo_1', 'meli_msi_fijo_2',
+];
 
 const CONFIGURACION_POR_DEFECTO = {
     pct_bronce: 12.39, pct_plata: 14.14, pct_oro: 15.89,
     pct_diamante: 17.65, pct_plataformas: 23.00,
-    pct_lista3: 14.28, pct_lista4: 17.71, pct_venta_especial: 25.00
+    pct_lista3: 14.28, pct_lista4: 17.71, pct_venta_especial: 25.00,
+    pct_boutique: 25.00,
+    meli_factor_base: 1.1,
+    meli_full_multiplicador: 1.13,
+    meli_full_fijo_1: 45,
+    meli_full_fijo_2: 90,
+    meli_msi_multiplicador: 1.175,
+    meli_msi_fijo_1: 90,
+    meli_msi_fijo_2: 90,
 };
 
 const COLUMNAS_DISPONIBLES = [
     'Folio', 'SKU', 'Descripcion', 'Marca', 'Existencia', 'Almacen',
     'PG', 'Bronce', 'Plata', 'Oro', 'Diamante', 'Plataformas',
     'Lista3', 'Lista4', 'VentaEspecial', 'ListaBoutique',
+    'CostoFull', 'CostoMSI',
     'CostoCalculado', 'CostoWizerp'
 ];
 
@@ -42,7 +59,8 @@ const LISTAS_DEFAULT = {
     'costos': ['Almacen', 'SKU', 'Descripcion', 'Existencia', 'CostoWizerp'],
     'actualizada': ['Folio', 'SKU', 'Descripcion', 'Existencia', 'CostoCalculado', 'Plataformas'],
     'inventario': ['Folio', 'SKU', 'Descripcion', 'Existencia', 'PG', 'Bronce'],
-    'venta_especial': ['Folio', 'SKU', 'Descripcion', 'Existencia', 'PG', 'VentaEspecial']
+    'venta_especial': ['Folio', 'SKU', 'Descripcion', 'Existencia', 'PG', 'VentaEspecial'],
+    'meli': ['Folio', 'SKU', 'Descripcion', 'Existencia', 'CostoFull', 'CostoMSI'],
 };
 
 const ICONS_MAP = {
@@ -72,7 +90,8 @@ const SYSTEM_TEMPLATES_UI = [
     { id: 'costos', label: 'Costos', icon: Calculator, colorText: 'text-purple-500', bgHover: 'hover:border-purple-500/50' },
     { id: 'actualizada', label: 'Actualizada', icon: Zap, colorText: 'text-amber-500', bgHover: 'hover:border-amber-500/50' },
     { id: 'inventario', label: 'Inventario', icon: Archive, colorText: 'text-emerald-500', bgHover: 'hover:border-emerald-500/50' },
-    { id: 'venta_especial', label: 'Venta Especial', icon: BarChart, colorText: 'text-rose-500', bgHover: 'hover:border-rose-500/50' }
+    { id: 'venta_especial', label: 'Venta Especial', icon: BarChart, colorText: 'text-rose-500', bgHover: 'hover:border-rose-500/50' },
+    { id: 'meli', label: 'Lista MELI', icon: ShoppingCart, colorText: 'text-yellow-500', bgHover: 'hover:border-yellow-500/50' },
 ];
 
 const GELIA_PALETTE = {
@@ -174,7 +193,11 @@ export default function Listados({
 
     const [isLoading, setIsLoading] = useState(false);
     const [archivos, setArchivos] = useState({ existencias: null, precios: null, costos: null });
-    const [modalConfig, setModalConfig] = useState({ show: false, unlocked: false, data: { ...CONFIGURACION_POR_DEFECTO, ...configuracion_listados } });
+    const [modalConfig, setModalConfig] = useState({
+        show: false,
+        password: '',
+        data: { ...CONFIGURACION_POR_DEFECTO, ...configuracion_listados },
+    });
     const [modalInconsistencias, setModalInconsistencias] = useState({ show: false, data: [], tempFile: '', nombreDescarga: '', payloadModal: null });
     const [modalGuardar, setModalGuardar] = useState({
         show: false,
@@ -443,21 +466,24 @@ export default function Listados({
         }
     };
 
-    const desbloquearConfiguracion = () => {
-        const pin = window.prompt("Ingresa el PIN de seguridad:");
-        if (pin === PIN_SISTEMA) setModalConfig(prev => ({ ...prev, unlocked: true }));
-        else if (pin !== null) dispararAlerta('error', 'Acceso Denegado_', 'El PIN proporcionado es incorrecto.');
-    };
-
     const guardarConfiguracionGlobal = async () => {
+        if (!modalConfig.password) {
+            dispararAlerta('error', 'Contraseña requerida_', 'Ingresa la contraseña de tu cuenta GELIA para guardar.');
+            return;
+        }
         setIsLoading(true);
         try {
-            await axios.post(route('listados.config.guardar'), modalConfig.data);
-            setModalConfig(prev => ({ ...prev, show: false, unlocked: false }));
+            const payload = { ...modalConfig.data, password: modalConfig.password };
+            await axios.post(route('listados.config.guardar'), payload);
+            setModalConfig(prev => ({ ...prev, show: false, password: '' }));
             dispararAlerta('success', 'Operación Exitosa_', 'Las configuraciones globales han sido guardadas.');
             router.reload({ only: ['configuracion_listados'] });
         } catch (error) {
-            dispararAlerta('error', 'Error_', 'No se pudo guardar la configuración.', error.response?.data?.errors || error.message);
+            const errors = error.response?.data?.errors;
+            const msg = errors?.password?.[0]
+                || error.response?.data?.error
+                || error.message;
+            dispararAlerta('error', 'Error_', 'No se pudo guardar la configuración.', msg);
         } finally {
             setIsLoading(false);
         }
@@ -488,7 +514,11 @@ export default function Listados({
                             </button>
                         )}
                         {can('listados.configurar_porcentajes') && (
-                            <button onClick={() => setModalConfig(prev => ({ ...prev, show: true }))} className="flex-1 md:flex-none flex justify-center items-center gap-2 px-6 py-4 theme-surface border-[1.5px] theme-border hover:border-[var(--color-primario)] rounded-2xl text-[11px] font-black uppercase tracking-widest theme-text-main transition-all hover:shadow-md outline-none">
+                            <button onClick={() => setModalConfig({
+                                show: true,
+                                password: '',
+                                data: { ...CONFIGURACION_POR_DEFECTO, ...configuracion_listados },
+                            })} className="flex-1 md:flex-none flex justify-center items-center gap-2 px-6 py-4 theme-surface border-[1.5px] theme-border hover:border-[var(--color-primario)] rounded-2xl text-[11px] font-black uppercase tracking-widest theme-text-main transition-all hover:shadow-md outline-none">
                                 <Settings2 className="w-4 h-4" /> Globales
                             </button>
                         )}
@@ -540,7 +570,7 @@ export default function Listados({
                         <h2 className="text-xl font-black italic theme-text-main uppercase tracking-tighter m-0 drop-shadow-sm">Plantillas Base_</h2>
                     </div>
 
-                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
                         {SYSTEM_TEMPLATES_UI.map((tpl) => {
                             const TemplateIcon = tpl.icon;
                             return (
@@ -765,47 +795,94 @@ export default function Listados({
 
             {modalConfig.show && createPortal(
                 <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 backdrop-blur-xl p-4 animate-fade-in">
-                    <div className="theme-surface border border-white/20 dark:border-zinc-700 w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col">
-                        <div className="p-8 border-b theme-border flex justify-between items-center theme-element">
+                    <div className="theme-surface border border-white/20 dark:border-zinc-700 w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="p-8 border-b theme-border flex justify-between items-center theme-element shrink-0">
                             <h2 className="text-lg font-black uppercase theme-text-main flex items-center gap-3 italic">
                                 <Settings2 className="w-6 h-6" style={{ color: 'var(--color-primario)' }} /> Parámetros Globales_
                             </h2>
-                            <button onClick={() => setModalConfig(prev => ({ ...prev, show: false }))} className="p-2 theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors outline-none">
+                            <button
+                                onClick={() => setModalConfig(prev => ({ ...prev, show: false, password: '' }))}
+                                className="p-2 theme-text-muted hover:theme-text-main hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors outline-none"
+                            >
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
 
-                        <div className="p-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-                            {Object.keys(CONFIGURACION_POR_DEFECTO).map((key) => (
-                                <div key={key}>
-                                    <label className="block text-[10px] font-black theme-text-muted mb-2 uppercase tracking-widest">
-                                        {key.replace('pct_', '').replace('_', ' ')}
-                                    </label>
-                                    <div className="flex items-center">
-                                        <input
-                                            type="number" step="0.01"
-                                            value={modalConfig.data[key] || ''}
-                                            onChange={(e) => setModalConfig(prev => ({ ...prev, data: { ...prev.data, [key]: e.target.value } }))}
-                                            disabled={!modalConfig.unlocked}
-                                            className="w-full theme-surface border theme-border rounded-l-2xl p-4 theme-text-main text-center font-mono text-sm disabled:opacity-50 outline-none focus:ring-2 transition-all shadow-sm"
-                                            style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                        />
-                                        <span className="theme-element theme-text-muted px-5 py-4 rounded-r-2xl border border-l-0 theme-border text-sm font-black shadow-sm">%</span>
-                                    </div>
+                        <div className="p-8 space-y-8 overflow-y-auto flex-1 custom-scrollbar">
+                            <section className="space-y-4">
+                                <h3 className="text-[11px] font-black uppercase tracking-widest theme-text-muted">Descuentos %</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    {PCT_KEYS.map((key) => (
+                                        <div key={key}>
+                                            <label className="block text-[10px] font-black theme-text-muted mb-2 uppercase tracking-widest">
+                                                {key.replace('pct_', '').replace(/_/g, ' ')}
+                                            </label>
+                                            <div className="flex items-center">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={modalConfig.data[key] ?? ''}
+                                                    onChange={(e) => setModalConfig(prev => ({
+                                                        ...prev,
+                                                        data: { ...prev.data, [key]: e.target.value },
+                                                    }))}
+                                                    className="w-full theme-surface border theme-border rounded-l-2xl p-3 theme-text-main text-center font-mono text-sm outline-none focus:ring-2 transition-all shadow-sm"
+                                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                                />
+                                                <span className="theme-element theme-text-muted px-4 py-3 rounded-r-2xl border border-l-0 theme-border text-sm font-black shadow-sm">%</span>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
+                            </section>
+
+                            <section className="space-y-4">
+                                <h3 className="text-[11px] font-black uppercase tracking-widest theme-text-muted">MELI (Costo Full / MSI)</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    {MELI_KEYS.map((key) => (
+                                        <div key={key}>
+                                            <label className="block text-[10px] font-black theme-text-muted mb-2 uppercase tracking-widest">
+                                                {key.replace('meli_', '').replace(/_/g, ' ')}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="0.001"
+                                                value={modalConfig.data[key] ?? ''}
+                                                onChange={(e) => setModalConfig(prev => ({
+                                                    ...prev,
+                                                    data: { ...prev.data, [key]: e.target.value },
+                                                }))}
+                                                className="w-full theme-surface border theme-border rounded-2xl p-3 theme-text-main text-center font-mono text-sm outline-none focus:ring-2 transition-all shadow-sm"
+                                                style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
                         </div>
 
-                        <div className="p-8 border-t theme-border theme-element flex justify-end gap-4 items-center">
-                            {!modalConfig.unlocked ? (
-                                <button onClick={desbloquearConfiguracion} className="text-[11px] font-black uppercase tracking-widest px-6 py-4 border-[1.5px] border-orange-500/50 text-orange-500 rounded-2xl hover:bg-orange-500/10 transition-all outline-none">
-                                    Desbloquear Edición
-                                </button>
-                            ) : (
-                                <button onClick={guardarConfiguracionGlobal} className="text-[11px] font-black uppercase tracking-widest px-8 py-4 text-white rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all outline-none" style={{ backgroundColor: 'var(--color-primario)' }}>
-                                    Guardar Cambios
-                                </button>
-                            )}
+                        <div className="p-8 border-t theme-border theme-element flex flex-col sm:flex-row justify-end gap-4 items-stretch sm:items-center shrink-0">
+                            <div className="flex-1 max-w-sm">
+                                <label className="block text-[10px] font-black theme-text-muted mb-2 uppercase tracking-widest">
+                                    Contraseña de tu cuenta
+                                </label>
+                                <input
+                                    type="password"
+                                    autoComplete="current-password"
+                                    value={modalConfig.password}
+                                    onChange={(e) => setModalConfig(prev => ({ ...prev, password: e.target.value }))}
+                                    placeholder="Confirma con tu contraseña GELIA"
+                                    className="w-full theme-surface border theme-border rounded-2xl p-3 theme-text-main text-sm outline-none focus:ring-2 transition-all shadow-sm"
+                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                />
+                            </div>
+                            <button
+                                onClick={guardarConfiguracionGlobal}
+                                className="text-[11px] font-black uppercase tracking-widest px-8 py-4 text-white rounded-2xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all outline-none self-end"
+                                style={{ backgroundColor: 'var(--color-primario)' }}
+                            >
+                                Guardar Cambios
+                            </button>
                         </div>
                     </div>
                 </div>,

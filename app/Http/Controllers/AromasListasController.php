@@ -14,11 +14,31 @@ use App\Models\User;
 use App\Services\Listados\PorcentajesListadoService;
 use App\Services\Listados\ListadoGeneradoService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Exception;
 
 class AromasListasController extends Controller
 {
+    public const CONFIG_KEYS_PERMITIDAS = [
+        'pct_bronce',
+        'pct_plata',
+        'pct_oro',
+        'pct_diamante',
+        'pct_plataformas',
+        'pct_lista3',
+        'pct_lista4',
+        'pct_venta_especial',
+        'pct_boutique',
+        'meli_factor_base',
+        'meli_full_multiplicador',
+        'meli_full_fijo_1',
+        'meli_full_fijo_2',
+        'meli_msi_multiplicador',
+        'meli_msi_fijo_1',
+        'meli_msi_fijo_2',
+    ];
+
     // ══════════════════════════════════════════════════════════════════════
     // 0. RENDERIZADO DE LA VISTA PRINCIPAL (SPA)
     // ══════════════════════════════════════════════════════════════════════
@@ -273,6 +293,9 @@ class AromasListasController extends Controller
                 case 'venta_especial':
                     $nombreArchivo = "VENTA-ESPECIAL-0+-$fecha.xlsx";
                     break;
+                case 'meli':
+                    $nombreArchivo = "LISTA-MELI-$fecha.xlsx";
+                    break;
                 default:
                     $nombreArchivo = "LISTA-PERSONALIZADA-$fecha.xlsx";
                     break;
@@ -433,6 +456,28 @@ class AromasListasController extends Controller
                         case 'Plataformas':
                             $fila['Plataformas'] = round($pg * $multiplicadores['plataformas'], 2);
                             break;
+                        case 'CostoFull': {
+                            $plataformas = $pg * $multiplicadores['plataformas'];
+                            $fila['Costo Full'] = round(PorcentajesListadoService::calcularCostoMeli(
+                                $plataformas,
+                                $multiplicadores['meli_factor_base'],
+                                $multiplicadores['meli_full_multiplicador'],
+                                $multiplicadores['meli_full_fijo_1'],
+                                $multiplicadores['meli_full_fijo_2']
+                            ), 2);
+                            break;
+                        }
+                        case 'CostoMSI': {
+                            $plataformas = $pg * $multiplicadores['plataformas'];
+                            $fila['Costo MSI'] = round(PorcentajesListadoService::calcularCostoMeli(
+                                $plataformas,
+                                $multiplicadores['meli_factor_base'],
+                                $multiplicadores['meli_msi_multiplicador'],
+                                $multiplicadores['meli_msi_fijo_1'],
+                                $multiplicadores['meli_msi_fijo_2']
+                            ), 2);
+                            break;
+                        }
                         case 'CostoWizerp':
                             $fila['Costo (Wizerp)'] = round($costoWizerp, 2);
                             break;
@@ -675,10 +720,21 @@ class AromasListasController extends Controller
 
     public function guardarConfiguracion(Request $request)
     {
+        $request->validate([
+            'password' => 'required|string',
+        ]);
+
+        if (!Hash::check($request->input('password'), $request->user()->password)) {
+            return response()->json(['errors' => ['password' => ['La contraseña es incorrecta.']]], 422);
+        }
+
         try {
-            $configuraciones = $request->except('_token');
+            $configuraciones = $request->only(self::CONFIG_KEYS_PERMITIDAS);
 
             foreach ($configuraciones as $key => $value) {
+                if ($value === null || $value === '') {
+                    continue;
+                }
                 DB::table('gelia_settings')->updateOrInsert(
                     ['key' => $key],
                     [

@@ -7,6 +7,29 @@ use Illuminate\Support\Facades\DB;
 
 class PorcentajesListadoService
 {
+    public const MELI_DEFAULTS = [
+        'meli_factor_base' => 1.1,
+        'meli_full_multiplicador' => 1.13,
+        'meli_full_fijo_1' => 45.0,
+        'meli_full_fijo_2' => 90.0,
+        'meli_msi_multiplicador' => 1.175,
+        'meli_msi_fijo_1' => 90.0,
+        'meli_msi_fijo_2' => 90.0,
+    ];
+
+    /**
+     * Costo MELI = ((Plataformas * factor_base) * multiplicador) + fijo_1 + fijo_2
+     */
+    public static function calcularCostoMeli(
+        float $plataformas,
+        float $factorBase,
+        float $multiplicador,
+        float $fijo1,
+        float $fijo2
+    ): float {
+        return (($plataformas * $factorBase) * $multiplicador) + $fijo1 + $fijo2;
+    }
+
     /**
      * Obtiene multiplicadores de precio para columnas de listados Excel.
      * Prioriza catálogo por lista; usa gelia_settings como respaldo para columnas auxiliares.
@@ -24,6 +47,7 @@ class PorcentajesListadoService
             'lista3'         => (float) ($settings['pct_lista3'] ?? 14.28),
             'lista4'         => (float) ($settings['pct_lista4'] ?? 17.71),
             'venta_especial' => (float) ($settings['pct_venta_especial'] ?? 25.00),
+            'boutique'       => (float) ($settings['pct_boutique'] ?? 25.00),
         ];
 
         $mapaKeywords = [
@@ -54,6 +78,11 @@ class PorcentajesListadoService
             }
         }
 
+        $meli = [];
+        foreach (self::MELI_DEFAULTS as $key => $default) {
+            $meli[$key] = (float) ($settings[$key] ?? $default);
+        }
+
         return [
             'bronce'         => 1 - ($porcentajes['bronce'] / 100),
             'plata'          => 1 - ($porcentajes['plata'] / 100),
@@ -63,8 +92,9 @@ class PorcentajesListadoService
             'lista3'         => 1 - ($porcentajes['lista3'] / 100),
             'lista4'         => 1 - ($porcentajes['lista4'] / 100),
             'venta_especial' => 1 - ($porcentajes['venta_especial'] / 100),
-            'boutique'       => 0.75,
+            'boutique'       => 1 - ($porcentajes['boutique'] / 100),
             'divisor_costo'  => 1.3827,
+            ...$meli,
         ];
     }
 }
