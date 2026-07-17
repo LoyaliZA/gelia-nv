@@ -12,6 +12,7 @@ use App\Models\SolicitudFactura;
 use App\Models\User;
 use App\Services\Facturas\CrearSolicitudFacturaService;
 use App\Services\Facturas\EliminarSolicitudFacturaService;
+use App\Services\Facturas\GestionarDatosFiscalesClienteService;
 use App\Services\Facturas\ImportarDatosFiscalesService;
 use App\Services\Facturas\ListarSolicitudesFacturaService;
 use App\Services\Facturas\RepararSolicitudFacturaService;
@@ -24,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Rap2hpoutre\FastExcel\FastExcel;
@@ -112,7 +114,7 @@ class SolicitudFacturaController extends Controller
         $factura->load([
             'vendedor:id,name',
             'estado:id,nombre',
-            'cliente:id,numero_cliente,nombre,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social',
+            'cliente:id,numero_cliente,nombre,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social,telefono',
             'vouchers:id,solicitud_factura_id,path,nombre_original,orden,mime',
             'respondidaPor:id,name',
             'auditorias.usuario:id,name',
@@ -257,6 +259,53 @@ class SolicitudFacturaController extends Controller
 
             return response()->json(['datos' => null, 'etiquetas' => $etiquetas, 'error' => $mensaje], 422);
         }
+    }
+
+    public function aplicarDatosFiscalesAlCliente(
+        SolicitudFactura $factura,
+        ImportarDatosFiscalesService $importarService,
+        GestionarDatosFiscalesClienteService $gestionarService,
+        ListarSolicitudesFacturaService $listarService
+    ): JsonResponse {
+        Gate::authorize('facturas.gestionar_datos_fiscales');
+
+        if (!$listarService->usuarioPuedeVer(Auth::user(), $factura)) {
+            abort(403);
+        }
+
+        if (!$factura->cliente_id) {
+            return response()->json(['message' => 'La solicitud no tiene cliente asociado.'], 422);
+        }
+
+        $datos = $factura->datos_fiscales;
+
+        if (empty($datos) && $factura->archivo_fiscal_path && Storage::disk('public')->exists($factura->archivo_fiscal_path)) {
+            try {
+                $extension = strtolower(pathinfo($factura->archivo_fiscal_path, PATHINFO_EXTENSION));
+                $rutaAbsoluta = Storage::disk('public')->path($factura->archivo_fiscal_path);
+                $datos = $importarService->extraerDesdeRuta($rutaAbsoluta, $extension);
+                $factura->update(['datos_fiscales' => $datos]);
+            } catch (ValidationException $e) {
+                $mensaje = collect($e->errors())->flatten()->first();
+
+                return response()->json(['message' => $mensaje], 422);
+            }
+        }
+
+        if (empty($datos)) {
+            return response()->json(['message' => 'No hay datos fiscales para aplicar.'], 422);
+        }
+
+        $cliente = $factura->cliente()->firstOrFail();
+
+        // Snapshots previos a NUMERO TELEFONICO no deben vaciar clientes.telefono.
+        if (!array_key_exists('telefono', $datos) || trim((string) $datos['telefono']) === '') {
+            $datos['telefono'] = $cliente->telefono;
+        }
+
+        $gestionarService->actualizar($cliente, $datos);
+
+        return response()->json(['message' => 'Datos fiscales del cliente actualizados.']);
     }
 
     public function exportar(Request $request, ListarSolicitudesFacturaService $listarService)

@@ -20,6 +20,7 @@ class UpdateDatosFiscalesRequest extends FormRequest
             'correo_electronico' => ['nullable', 'email', 'max:255'],
             'uso_factura' => ['nullable', 'string', 'max:255'],
             'nombre_razon_social' => ['nullable', 'string', 'max:255'],
+            'telefono' => ['nullable', 'string', 'max:20'],
         ];
     }
 }

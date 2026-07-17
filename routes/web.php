@@ -323,6 +323,10 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{cliente}', [DatosFiscalesController::class, 'update'])->name('update');
     });
 
+    Route::middleware(['can:facturas.gestionar_datos_fiscales'])->prefix('facturas')->name('facturas.')->group(function () {
+        Route::post('/{factura}/aplicar-datos-fiscales-cliente', [SolicitudFacturaController::class, 'aplicarDatosFiscalesAlCliente'])->name('aplicar_datos_fiscales_cliente');
+    });
+
     Route::middleware(['can:facturas.crear'])->prefix('facturas')->name('facturas.')->group(function () {
         Route::get('/plantilla-fiscales/descargar', [SolicitudFacturaController::class, 'descargarPlantilla'])->name('plantilla_fiscales');
         Route::post('/', [SolicitudFacturaController::class, 'store'])->name('store');

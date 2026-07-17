@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FileSpreadsheet, Download, ChevronLeft, ChevronRight, Copy, Check, Loader2, Receipt, AlertOctagon } from 'lucide-react';
+import { X, FileSpreadsheet, Download, ChevronLeft, ChevronRight, Copy, Check, Loader2, Receipt, AlertOctagon, RefreshCw } from 'lucide-react';
 import { ACCENT, BTN_PRIMARY, BTN_SECONDARY, esImagenVoucher, esPdfVoucher, urlArchivoFactura, nombreArchivoFacturaPdf } from './facturasStyles';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 
@@ -11,6 +11,7 @@ const ETIQUETAS_DEFAULT = {
     correo_electronico: 'Correo Electrónico',
     uso_factura: 'Uso de Factura',
     nombre_razon_social: 'Nombre (Razón Social)',
+    telefono: 'Número Telefónico',
 };
 
 const copiarTexto = (texto) => {
@@ -24,7 +25,7 @@ const copiarTexto = (texto) => {
     return Promise.resolve();
 };
 
-export default function ModalExpedienteFactura({ onClose, factura: facturaInicial }) {
+export default function ModalExpedienteFactura({ onClose, factura: facturaInicial, puedeActualizarCliente = false }) {
     const [factura, setFactura] = useState(facturaInicial);
     const [cargandoFactura, setCargandoFactura] = useState(true);
     const [errorFactura, setErrorFactura] = useState(null);
@@ -38,6 +39,9 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
     const [cargandoDatos, setCargandoDatos] = useState(false);
     const [errorDatos, setErrorDatos] = useState(null);
     const [copiadoKey, setCopiadoKey] = useState(null);
+    const [aplicandoCliente, setAplicandoCliente] = useState(false);
+    const [mensajeSync, setMensajeSync] = useState(null);
+    const [errorSync, setErrorSync] = useState(null);
 
     useEffect(() => {
         document.body.style.overflow = 'hidden';
@@ -93,10 +97,39 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
         ? Object.keys(etiquetas).filter(k => datosFiscales[k] !== undefined && datosFiscales[k] !== '')
         : [];
 
+    const puedeSyncCliente = puedeActualizarCliente
+        && factura?.cliente_id
+        && !cargandoDatos
+        && !errorDatos
+        && filasDatos.length > 0;
+
     const copiarCampo = (clave, valor) => {
         copiarTexto(String(valor ?? ''));
         setCopiadoKey(clave);
         setTimeout(() => setCopiadoKey(null), 2000);
+    };
+
+    const aplicarDatosAlCliente = () => {
+        if (!factura?.id || aplicandoCliente) return;
+        setAplicandoCliente(true);
+        setMensajeSync(null);
+        setErrorSync(null);
+        fetch(route('facturas.aplicar_datos_fiscales_cliente', factura.id), {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
+            },
+            credentials: 'same-origin',
+        })
+            .then(async (res) => {
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(json.message || 'No se pudieron actualizar los datos del cliente.');
+                setMensajeSync(json.message || 'Datos fiscales del cliente actualizados.');
+            })
+            .catch((err) => setErrorSync(err.message || 'Error al actualizar el cliente.'))
+            .finally(() => setAplicandoCliente(false));
     };
 
     return createPortal(
@@ -174,7 +207,28 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                 )}
 
                                 <section>
-                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Datos fiscales</p>
+                                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Datos fiscales</p>
+                                        {puedeSyncCliente && (
+                                            <button
+                                                type="button"
+                                                onClick={aplicarDatosAlCliente}
+                                                disabled={aplicandoCliente}
+                                                className={`${BTN_PRIMARY} !py-1.5 !px-3 text-[10px]`}
+                                            >
+                                                {aplicandoCliente
+                                                    ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                                                    : <RefreshCw className="w-3.5 h-3.5 shrink-0" />}
+                                                Actualizar datos del cliente
+                                            </button>
+                                        )}
+                                    </div>
+                                    {mensajeSync && (
+                                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 p-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 mb-3">{mensajeSync}</p>
+                                    )}
+                                    {errorSync && (
+                                        <p className="text-xs font-bold text-red-600 dark:text-red-400 p-3 rounded-2xl border border-red-500/20 bg-red-500/5 mb-3">{errorSync}</p>
+                                    )}
                                     {cargandoDatos && (
                                         <div className="flex items-center gap-2 p-4 text-xs font-bold theme-text-muted italic">
                                             <Loader2 className="w-4 h-4 animate-spin" /> Extrayendo datos…

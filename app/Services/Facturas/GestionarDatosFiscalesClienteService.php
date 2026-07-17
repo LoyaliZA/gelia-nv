@@ -17,6 +17,7 @@ class GestionarDatosFiscalesClienteService
                 'correo_electronico' => $datos['correo_electronico'] ?? null,
                 'uso_factura' => $datos['uso_factura'] ?? null,
                 'nombre_razon_social' => $datos['nombre_razon_social'] ?? null,
+                'telefono' => $datos['telefono'] ?? null,
             ]);
 
             return $cliente->fresh();
