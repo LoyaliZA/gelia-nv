@@ -126,7 +126,7 @@ class DashboardController extends Controller
             ->first();
 
         // 3. Decodificamos el JSON existente o creamos un array vacío si es la primera vez
-        $temaVisual = $configActual ? json_decode($configActual->tema_visual, true) : [];
+        $temaVisual = $configActual ? (json_decode($configActual->tema_visual ?? '[]', true) ?: []) : [];
 
         // 4. Tarjetas ocultas y disposición del panel (grid)
         if ($request->has('dashboard_ocultos')) {

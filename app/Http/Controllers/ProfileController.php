@@ -79,7 +79,7 @@ class ProfileController extends Controller
             ->where('user_id', $user->id)
             ->first();
 
-        $temaVisual = $configuracion ? json_decode($configuracion->tema_visual, true) : [];
+        $temaVisual = $configuracion ? (json_decode($configuracion->tema_visual ?? '[]', true) ?: []) : [];
 
         $areaPrincipal = $user->area ?? $user->areas->first();
 
@@ -140,7 +140,7 @@ class ProfileController extends Controller
         // 2. CAPTURA DE PREFERENCIAS VISUALES DEL REQUEST
         // Desempaquetamos la cadena de texto segura a un array asociativo
         $configVisual = $request->filled('tema_visual') 
-            ? json_decode($request->input('tema_visual'), true) 
+            ? (json_decode($request->input('tema_visual'), true) ?: [])
             : [];
 
         if (isset($configVisual['escala_fuente'])) {
@@ -250,7 +250,10 @@ class ProfileController extends Controller
         if (!empty($configVisual)) {
             // A. Leemos lo que ya existe en la BD (incluyendo dashboard_ocultos)
             $configActualDB = DB::table('configuraciones_usuarios')->where('user_id', $user->id)->first();
-            $temaActualDecodificado = $configActualDB ? json_decode($configActualDB->tema_visual, true) : [];
+            // Presencia puede crear la fila con tema_visual NULL; json_decode(null) => null rompe array_merge en PHP 8+.
+            $temaActualDecodificado = $configActualDB
+                ? (json_decode($configActualDB->tema_visual ?? '[]', true) ?: [])
+                : [];
 
             // B. Fusionamos: Lo nuevo del perfil pisa los colores/fondo, pero respeta lo demás
             $temaFinalMerge = array_merge($temaActualDecodificado, $configVisual);
