@@ -1,14 +1,42 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Head, router } from '@inertiajs/react';
 import {
     History, ChevronDown, Calendar,
     ArrowRight, User, Terminal, Globe, Tag,
-    Settings, Code, FileJson, LogIn, MapPin, Monitor, Clock
+    Settings, Code, FileJson, LogIn, MapPin, Monitor, Clock, Palette, Shield
 } from 'lucide-react';
 
 // Se ajusta la ruta relativa basándonos en tu estructura
 import AppLayout from '../../Layouts/AppLayout';
-import { geliaCardClass } from '../../utils/geliaTheme';
+import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } from '../../utils/geliaTheme';
+
+const TEMA_VISUAL_LABELS = {
+    modo: 'Modo',
+    color_nombre: 'Color',
+    fondo_base: 'Fondo',
+    fuente_principal: 'Fuente',
+    escala_fuente: 'Escala de fuente',
+    layout_sidebar: 'Layout sidebar',
+    layout_sidebar_mobile: 'Sidebar móvil',
+    sidebar_modo: 'Modo sidebar',
+    sidebar_posicion_fija: 'Posición sidebar',
+    efecto_cristal: 'Efecto cristal',
+    densidad_contenido: 'Densidad',
+    contenido_max_rem: 'Ancho máximo',
+    contenido_padding_rem: 'Padding',
+    alertas_prefs: 'Preferencias de alertas',
+};
+
+const formatTemaValor = (clave, valor) => {
+    if (valor === null || valor === undefined || valor === '') return null;
+    if (typeof valor === 'boolean') return valor ? 'Sí' : 'No';
+    if (typeof valor === 'object') return 'Actualizado';
+    if (clave === 'fondo_base' && typeof valor === 'string' && valor.length > 48) {
+        return `${valor.slice(0, 45)}…`;
+    }
+    return String(valor);
+};
 
 export default function Auditorias({
     auth,
@@ -29,6 +57,13 @@ export default function Auditorias({
     const [filtroLista, setFiltroLista] = useState(filtros.lista_id || '');
     const [filtroOrigen, setFiltroOrigen] = useState(filtros.origen || '');
     const [jsonModal, setJsonModal] = useState(null);
+
+    useEffect(() => {
+        if (!jsonModal) return undefined;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+    }, [jsonModal]);
 
     // Disparador de Inertia para recargar la data según los filtros y tabs
     const handleNavigation = (nuevosParametros) => {
@@ -179,46 +214,52 @@ export default function Auditorias({
 
                 {/* --- TABS --- */}
                 {(isSuperAdmin || puedeVerAccesos) && (
-                    <div className="flex flex-wrap gap-2 bg-black/5 dark:bg-white/5 p-1.5 rounded-2xl w-full max-w-2xl mx-auto sm:mx-0">
-                        {puedeVerCatalogos && (
-                            <button
-                                onClick={() => handleTabChange('catalogos')}
-                                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                    tabActivo === 'catalogos'
-                                        ? 'bg-white dark:bg-zinc-800 shadow-md theme-text-main'
-                                        : 'theme-text-muted hover:bg-black/5 dark:hover:bg-white/5'
-                                }`}
-                            >
-                                <Tag className="w-4 h-4" />
-                                Catálogos
-                            </button>
-                        )}
-                        {isSuperAdmin && (
-                            <button
-                                onClick={() => handleTabChange('configuracion')}
-                                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                    tabActivo === 'configuracion'
-                                        ? 'bg-white dark:bg-zinc-800 shadow-md theme-text-main'
-                                        : 'theme-text-muted hover:bg-black/5 dark:hover:bg-white/5'
-                                }`}
-                            >
-                                <Settings className="w-4 h-4" />
-                                Configuración
-                            </button>
-                        )}
-                        {puedeVerAccesos && (
-                            <button
-                                onClick={() => handleTabChange('accesos')}
-                                className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                                    tabActivo === 'accesos'
-                                        ? 'bg-white dark:bg-zinc-800 shadow-md theme-text-main'
-                                        : 'theme-text-muted hover:bg-black/5 dark:hover:bg-white/5'
-                                }`}
-                            >
-                                <LogIn className="w-4 h-4" />
-                                Accesos
-                            </button>
-                        )}
+                    <div className={`${GELIA_SEGMENT_TABS_SCROLL} w-full max-w-2xl`}>
+                        <div
+                            className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`}
+                            role="tablist"
+                            aria-label="Tipo de auditoría"
+                        >
+                            {puedeVerCatalogos && (
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={tabActivo === 'catalogos'}
+                                    onClick={() => handleTabChange('catalogos')}
+                                    className="gelia-segment-btn whitespace-nowrap uppercase tracking-widest"
+                                    data-active={tabActivo === 'catalogos'}
+                                >
+                                    <Tag className="w-4 h-4" />
+                                    Catálogos
+                                </button>
+                            )}
+                            {isSuperAdmin && (
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={tabActivo === 'configuracion'}
+                                    onClick={() => handleTabChange('configuracion')}
+                                    className="gelia-segment-btn whitespace-nowrap uppercase tracking-widest"
+                                    data-active={tabActivo === 'configuracion'}
+                                >
+                                    <Settings className="w-4 h-4" />
+                                    Configuración
+                                </button>
+                            )}
+                            {puedeVerAccesos && (
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={tabActivo === 'accesos'}
+                                    onClick={() => handleTabChange('accesos')}
+                                    className="gelia-segment-btn whitespace-nowrap uppercase tracking-widest"
+                                    data-active={tabActivo === 'accesos'}
+                                >
+                                    <LogIn className="w-4 h-4" />
+                                    Accesos
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
                 
@@ -498,6 +539,59 @@ export default function Auditorias({
                                                         </div>
                                                     )}
 
+                                                    {/* Roles */}
+                                                    {(log.detalles.roles || log.detalles.rol_modificado) && (
+                                                        <div className="bg-black/5 dark:bg-white/5 p-4 rounded-xl border border-black/10 dark:border-white/10">
+                                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
+                                                                <Shield className="w-3 h-3" />
+                                                                Roles
+                                                            </h4>
+                                                            {log.detalles.roles && (
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                    <div>
+                                                                        <h5 className="text-[9px] font-bold uppercase tracking-widest text-emerald-500 mb-1">
+                                                                            Asignados ({log.detalles.roles.asignados?.length || 0})
+                                                                        </h5>
+                                                                        <ul className="text-[10px] opacity-80 list-disc list-inside theme-text-main max-h-32 overflow-y-auto">
+                                                                            {log.detalles.roles.asignados?.map((r) => <li key={`asig-${r}`}>{r}</li>)}
+                                                                        </ul>
+                                                                    </div>
+                                                                    <div>
+                                                                        <h5 className="text-[9px] font-bold uppercase tracking-widest text-rose-500 mb-1">
+                                                                            Retirados ({log.detalles.roles.retirados?.length || 0})
+                                                                        </h5>
+                                                                        <ul className="text-[10px] opacity-80 list-disc list-inside theme-text-main max-h-32 overflow-y-auto">
+                                                                            {log.detalles.roles.retirados?.map((r) => <li key={`ret-${r}`}>{r}</li>)}
+                                                                        </ul>
+                                                                    </div>
+                                                                    <div>
+                                                                        <h5 className="text-[9px] font-bold uppercase tracking-widest text-blue-500 mb-1">
+                                                                            Actuales ({log.detalles.roles.actuales?.length || 0})
+                                                                        </h5>
+                                                                        <ul className="text-[10px] opacity-80 list-disc list-inside theme-text-main max-h-32 overflow-y-auto">
+                                                                            {log.detalles.roles.actuales?.map((r) => <li key={`act-${r}`}>{r}</li>)}
+                                                                        </ul>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {log.detalles.rol_modificado && (
+                                                                <p className={`text-xs theme-text-main ${log.detalles.roles ? 'mt-2' : ''}`}>
+                                                                    <span className="font-bold">Plantilla:</span> {log.detalles.rol_modificado}
+                                                                </p>
+                                                            )}
+                                                            {log.detalles.nuevos_permisos?.length > 0 && (
+                                                                <div className="mt-2">
+                                                                    <h5 className="text-[9px] font-bold uppercase tracking-widest text-blue-500 mb-1">
+                                                                        Permisos de plantilla ({log.detalles.nuevos_permisos.length})
+                                                                    </h5>
+                                                                    <ul className="text-[10px] opacity-80 list-disc list-inside theme-text-main max-h-32 overflow-y-auto">
+                                                                        {log.detalles.nuevos_permisos.map((p) => <li key={`tpl-${p}`}>{p}</li>)}
+                                                                    </ul>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+
                                                     {/* Permisos (Soporte nuevo formato y formato legacy) */}
                                                     {(log.detalles.permisos || log.detalles.permisos_nuevos) && (
                                                         <div className="bg-black/5 dark:bg-white/5 p-4 rounded-xl border border-black/10 dark:border-white/10">
@@ -530,6 +624,51 @@ export default function Auditorias({
                                                                     <ul className="text-[10px] opacity-80 list-disc list-inside theme-text-main max-h-32 overflow-y-auto">
                                                                         {log.detalles.permisos_nuevos?.map(p => <li key={p}>{p}</li>)}
                                                                     </ul>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Personalización / tema visual */}
+                                                    {(log.detalles.tema_visual || log.detalles.cambios_principales?.length > 0) && (
+                                                        <div className="bg-black/5 dark:bg-white/5 p-4 rounded-xl border border-black/10 dark:border-white/10">
+                                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5">
+                                                                <Palette className="w-3 h-3" />
+                                                                Personalización
+                                                            </h4>
+                                                            {log.detalles.cambios_principales?.length > 0 && (
+                                                                <div className="mb-3">
+                                                                    <h5 className="text-[9px] font-bold uppercase tracking-widest text-blue-500 mb-1">
+                                                                        Campos de perfil ({log.detalles.cambios_principales.length})
+                                                                    </h5>
+                                                                    <div className="flex flex-wrap gap-1.5">
+                                                                        {log.detalles.cambios_principales.map((campo) => (
+                                                                            <span
+                                                                                key={campo}
+                                                                                className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg theme-element border theme-border theme-text-main"
+                                                                            >
+                                                                                {campo.replace(/_/g, ' ')}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {log.detalles.tema_visual && typeof log.detalles.tema_visual === 'object' && Object.keys(log.detalles.tema_visual).length > 0 && (
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                                                                    {Object.entries(log.detalles.tema_visual).map(([clave, valor]) => {
+                                                                        const mostrado = formatTemaValor(clave, valor);
+                                                                        if (mostrado === null) return null;
+                                                                        return (
+                                                                            <div key={clave} className="text-xs flex gap-2 min-w-0">
+                                                                                <span className="font-bold theme-text-muted shrink-0">
+                                                                                    {TEMA_VISUAL_LABELS[clave] || clave.replace(/_/g, ' ')}:
+                                                                                </span>
+                                                                                <span className="theme-text-main truncate" title={typeof valor === 'string' ? valor : undefined}>
+                                                                                    {mostrado}
+                                                                                </span>
+                                                                            </div>
+                                                                        );
+                                                                    })}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -717,29 +856,48 @@ export default function Auditorias({
                 </section>
             </div>
 
-            {/* Modal para ver JSON Snapshot */}
-            {jsonModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-zinc-900 w-full max-w-3xl rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/50">
-                            <h3 className="text-sm font-black uppercase tracking-widest theme-text-main flex items-center gap-2">
+            {/* Modal snapshot: portal a body para salir de .gelia-ui-scale (zoom rompe fixed) */}
+            {jsonModal && typeof document !== 'undefined' && createPortal(
+                <div
+                    className={`${THEME_MODAL_OVERLAY} items-center overflow-y-auto`}
+                    onClick={() => setJsonModal(null)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Snapshot de configuración"
+                >
+                    <div
+                        className={`${THEME_MODAL_SHELL} max-w-3xl`}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="p-4 border-b theme-border flex justify-between items-center shrink-0">
+                            <h3 className="text-sm font-black uppercase tracking-widest theme-text-main flex items-center gap-2 m-0">
                                 <Code className="w-5 h-5 text-emerald-500" />
                                 Snapshot de Configuración
                             </h3>
-                            <button onClick={() => setJsonModal(null)} className="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 p-1">
+                            <button
+                                type="button"
+                                onClick={() => setJsonModal(null)}
+                                className="theme-text-muted p-1 text-xl leading-none hover:opacity-80"
+                                aria-label="Cerrar"
+                            >
                                 &times;
                             </button>
                         </div>
-                        <div className="p-6 overflow-y-auto font-mono text-xs text-zinc-800 dark:text-emerald-400 bg-zinc-50 dark:bg-black/50 whitespace-pre-wrap">
+                        <div className="p-6 overflow-y-auto font-mono text-xs theme-text-main bg-black/5 dark:bg-black/40 whitespace-pre-wrap min-h-0">
                             {JSON.stringify(jsonModal.detalles, null, 2)}
                         </div>
-                        <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 text-right">
-                            <button onClick={() => setJsonModal(null)} className="px-4 py-2 bg-zinc-200 dark:bg-zinc-800 rounded-xl text-xs font-bold uppercase tracking-widest">
+                        <div className="p-4 border-t theme-border text-right shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setJsonModal(null)}
+                                className="px-4 py-2 theme-element border theme-border rounded-xl text-xs font-bold uppercase tracking-widest"
+                            >
                                 Cerrar
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </AppLayout>
     );
