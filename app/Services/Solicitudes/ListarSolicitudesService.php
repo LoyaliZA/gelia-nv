@@ -21,6 +21,7 @@ class ListarSolicitudesService
             'banco',
             'auditorias.usuario',
             'auditorias.estadoNuevo',
+            'auditorias.estadoAnterior',
             'listaDescuento',
             'listaRebaja',
             'tipoCliente',
@@ -139,11 +140,14 @@ class ListarSolicitudesService
 
     private function aplicarFiltroTab(Builder $query, string $tab, ?User $usuario): void
     {
-        $idCancelada = CatalogoEstadoSolicitud::where('nombre', 'Cancelada')->value('id');
+        $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
+        $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+        $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
+        $idCancelada = CatalogoEstadoSolicitud::idDe('Cancelada');
 
         match ($tab) {
-            'PENDIENTES' => $query->where(function (Builder $q) use ($idCancelada) {
-                $q->where('catalogo_estado_solicitud_id', 1)
+            'PENDIENTES' => $query->where(function (Builder $q) use ($idPendiente, $idCancelada) {
+                $q->where('catalogo_estado_solicitud_id', $idPendiente)
                     ->orWhere(function (Builder $sub) use ($idCancelada) {
                         $sub->whereNotNull('cancelacion_solicitada_at');
                         if ($idCancelada) {
@@ -154,8 +158,8 @@ class ListarSolicitudesService
                         $c->where('estado', 'pendiente');
                     });
             }),
-            'RESPONDIDAS' => $query->where('catalogo_estado_solicitud_id', 2),
-            'INCORRECTAS' => $query->where('catalogo_estado_solicitud_id', 4),
+            'RESPONDIDAS' => $query->where('catalogo_estado_solicitud_id', $idRespondida),
+            'INCORRECTAS' => $query->where('catalogo_estado_solicitud_id', $idIncorrecta),
             'CANCELADAS' => $idCancelada
                 ? $query->where('catalogo_estado_solicitud_id', $idCancelada)
                 : $query->whereRaw('1 = 0'),
@@ -168,7 +172,8 @@ class ListarSolicitudesService
 
     private function aplicarFiltroMotivoIncidencia(Builder $query, string $motivo): void
     {
-        $query->where('catalogo_estado_solicitud_id', 4);
+        $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
+        $query->where('catalogo_estado_solicitud_id', $idIncorrecta);
 
         match ($motivo) {
             'vencimiento_pago' => $query->where(function (Builder $q) {
@@ -184,13 +189,13 @@ class ListarSolicitudesService
                         $aq->where('motivo_reporte', 'like', '%ALERTA DE PAGO%');
                     });
             }),
-            'error_reportado' => $query->where(function (Builder $q) {
+            'error_reportado' => $query->where(function (Builder $q) use ($idIncorrecta) {
                 $q->where('motivo_incorrecta', 'error_reportado')
                     ->orWhereNull('motivo_incorrecta')
-                    ->orWhere(function (Builder $sub) {
+                    ->orWhere(function (Builder $sub) use ($idIncorrecta) {
                         $sub->whereNotIn('motivo_incorrecta', ['vencimiento_pago', 'pago_insuficiente'])
-                            ->whereHas('auditorias', function (Builder $aq) {
-                                $aq->where('estado_nuevo_id', 4)
+                            ->whereHas('auditorias', function (Builder $aq) use ($idIncorrecta) {
+                                $aq->where('estado_nuevo_id', $idIncorrecta)
                                     ->where(function (Builder $mq) {
                                         $mq->where('motivo_reporte', 'like', '%error%')
                                             ->orWhere('motivo_reporte', 'like', '%Reporte%')

@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use App\Models\SolicitudTag;
 use App\Models\AuditoriaSolicitud;
 use App\Models\CatalogoListaDescuento;
+use App\Models\CatalogoEstadoSolicitud;
 use App\Models\Cliente;
 use App\Models\User;
 use App\Services\Clientes\RegistrarHistorialMontoClienteService;
@@ -48,6 +49,8 @@ class RechazarPagosVencidos extends Command
 
             DB::transaction(function () use ($solicitud, $listas, &$contador) {
                 $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
+                $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+                $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
                 $cliente = $solicitud->cliente;
                 $snapshotDiff = [];
 
@@ -56,12 +59,12 @@ class RechazarPagosVencidos extends Command
                 }
 
                 $solicitud->update([
-                    'catalogo_estado_solicitud_id' => 4,
+                    'catalogo_estado_solicitud_id' => $idIncorrecta,
                     'motivo_incorrecta' => 'vencimiento_pago',
                 ]);
 
                 if ($cliente) {
-                    if ($estadoAnteriorId == 2) {
+                    if ((int) $estadoAnteriorId === (int) $idRespondida) {
                         $montoAnterior = $cliente->monto_venta_actual;
                         $montoNuevo = max(0, $montoAnterior - $solicitud->monto_cotizado);
                         $nuevaListaId = $this->determinarListaPorMonto($montoNuevo, $listas);
@@ -96,7 +99,7 @@ class RechazarPagosVencidos extends Command
                     'solicitud_id' => $solicitud->id,
                     'usuario_id' => 1,
                     'estado_anterior_id' => $estadoAnteriorId,
-                    'estado_nuevo_id' => 4,
+                    'estado_nuevo_id' => $idIncorrecta,
                     'motivo_reporte' => 'SISTEMA AUTOMÁTICO: Plazo de pago expirado (24h).',
                     'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
                 ]);

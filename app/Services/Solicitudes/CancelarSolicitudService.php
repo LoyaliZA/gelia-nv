@@ -37,7 +37,10 @@ class CancelarSolicitudService
             }
 
             $snapshotDiff = [];
-            $estadosConBeneficios = [2, 3];
+            $estadosConBeneficios = [
+                CatalogoEstadoSolicitud::idDe('Respondida'),
+                CatalogoEstadoSolicitud::idDe('Verificada'),
+            ];
 
             if (in_array($estadoAnteriorId, $estadosConBeneficios) && $solicitud->proceso?->esFinanciero()) {
                 $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
@@ -88,7 +91,10 @@ class CancelarSolicitudService
         $antes = $this->capturarSnapshotCliente($cliente);
 
         $auditoriaAprobacion = AuditoriaSolicitud::where('solicitud_id', $solicitud->id)
-            ->whereIn('estado_nuevo_id', [2, 3])
+            ->whereIn('estado_nuevo_id', [
+                CatalogoEstadoSolicitud::idDe('Respondida'),
+                CatalogoEstadoSolicitud::idDe('Verificada'),
+            ])
             ->whereNotNull('datos_snapshot')
             ->orderBy('id')
             ->first();

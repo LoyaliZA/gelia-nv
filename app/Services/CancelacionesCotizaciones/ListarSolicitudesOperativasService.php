@@ -20,6 +20,8 @@ class ListarSolicitudesOperativasService
             'estado',
             'banco',
             'auditorias.usuario',
+            'auditorias.estadoAnterior',
+            'auditorias.estadoNuevo',
             'auditorias.estadoNuevo',
         ])
             ->whereHas('proceso', function (Builder $proceso) {

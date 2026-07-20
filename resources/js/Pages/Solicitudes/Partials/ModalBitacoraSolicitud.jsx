@@ -1,12 +1,83 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, History, ShieldCheck, CheckCircle2, FileImage, Camera, Users, TrendingUp, Tag, Server } from 'lucide-react';
+import { X, History, ShieldCheck, CheckCircle2, FileImage, Camera, Users, TrendingUp, Tag, Server, AlertOctagon, CreditCard } from 'lucide-react';
 
-const ComparativaSnapshot = ({ antes, despues }) => {
+const money = (v) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(v || 0);
+
+const LightboxEvidencia = ({ path, onClose }) => {
+    if (!path) return null;
+    const url = `/storage/${path}`;
+    const esPdf = path.toLowerCase().endsWith('.pdf');
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 md:p-8 animate-fade-in"
+            onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+            }}
+        >
+            <button
+                type="button"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                }}
+                className="absolute top-6 right-6 p-3 rounded-2xl bg-white/10 text-white border border-white/20 hover:bg-white/20 outline-none"
+            >
+                <X className="w-5 h-5" />
+            </button>
+            <div className="max-w-5xl w-full max-h-full" onClick={(e) => e.stopPropagation()}>
+                {esPdf ? (
+                    <iframe title="Evidencia PDF" src={url} className="w-full h-[80vh] rounded-2xl bg-white border border-white/20" />
+                ) : (
+                    <img src={url} alt="Evidencia" className="max-w-full max-h-[85vh] mx-auto object-contain rounded-2xl shadow-2xl" />
+                )}
+            </div>
+        </div>,
+        document.body
+    );
+};
+
+const BotonEvidencia = ({ path, label = 'Ver evidencia', onAbrir, miniatura = false }) => {
+    if (!path) return null;
+    const url = `/storage/${path}`;
+    const esPdf = path.toLowerCase().endsWith('.pdf');
+
+    if (miniatura && !esPdf) {
+        return (
+            <button
+                type="button"
+                onClick={() => onAbrir(path)}
+                className="block w-full rounded-2xl overflow-hidden border theme-border h-32 relative group text-left outline-none"
+            >
+                <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={label} />
+            </button>
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={() => onAbrir(path)}
+            className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-blue-500 hover:text-blue-600 transition-colors w-fit outline-none"
+        >
+            <FileImage className="w-3 h-3" /> {esPdf ? `${label} (PDF)` : label}
+        </button>
+    );
+};
+
+const ComparativaSnapshot = ({
+    antes,
+    despues,
+    etiquetaIzq = 'Antes',
+    etiquetaDer = 'Después',
+    titulo = 'Comparativa de cambios en cliente',
+}) => {
     if (!antes && !despues) return null;
 
     const filas = [
-        { label: 'Monto de venta', key: 'monto_venta', formato: (v) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(v || 0) },
+        { label: 'Monto de venta', key: 'monto_venta', formato: money },
         { label: 'Lista', key: 'lista_nombre', formato: (v) => v || 'Sin lista' },
         { label: 'TAG (Vendedora)', key: 'tag_vendedor_nombre', formato: (v) => v || 'Sin asignar' },
         { label: 'Clasificación', key: 'tipo_cliente_nombre', formato: (v) => v || 'Normal' },
@@ -14,32 +85,121 @@ const ComparativaSnapshot = ({ antes, despues }) => {
 
     return (
         <div className="mb-4 p-4 bg-black/5 dark:bg-white/5 rounded-2xl border theme-border">
-            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Comparativa de cambios</p>
+            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">{titulo}</p>
             <div className="grid grid-cols-3 gap-2 text-[9px] font-black uppercase tracking-widest theme-text-muted mb-2">
                 <span>Campo</span>
-                <span className="text-center">Antes</span>
-                <span className="text-center">Después</span>
+                <span className="text-center">{etiquetaIzq}</span>
+                <span className="text-center">{etiquetaDer}</span>
             </div>
             {filas.map(({ label, key, formato }) => (
                 <div key={key} className="grid grid-cols-3 gap-2 py-2 border-t theme-border items-center">
                     <span className="text-[9px] font-black uppercase theme-text-muted">{label}</span>
                     <span className="text-xs font-bold theme-text-main text-center">{formato(antes?.[key])}</span>
-                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">{formato(despues?.[key])}</span>
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">
+                        {despues ? formato(despues?.[key]) : '—'}
+                    </span>
                 </div>
             ))}
         </div>
     );
 };
 
+const describirPaso = (registro) => {
+    const motivo = (registro.motivo_reporte || '').toUpperCase();
+    const nuevo = registro.estado_nuevo?.nombre || registro.estadoNuevo?.nombre || '';
+    const anterior = registro.estado_anterior?.nombre || registro.estadoAnterior?.nombre || '';
+    const esSistema = motivo.includes('SISTEMA AUTOMÁTICO') || motivo.includes('AUTOMÁTICAMENTE');
+    const esCreacion = (!anterior && nuevo === 'Pendiente') || motivo.includes('CREACIÓN');
+    const esPago = motivo.includes('PAGO CONFIRMADO') || motivo.includes('ALERTA DE PAGO') || motivo.includes('ALERTA DE ASCENSO');
+
+    if (motivo.includes('PLAZO DE PAGO') || motivo.includes('PAGO RECHAZADO')) {
+        return { titulo: 'Pago vencido', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : nuevo || 'Incorrecta', tono: 'error', esSistema: true, modoComparativa: 'default' };
+    }
+    if (motivo.includes('PAGO CONFIRMADO')) {
+        return { titulo: 'Pago confirmado', detalle: 'Vendedora registró el pago', tono: 'pago', esSistema: false, modoComparativa: 'pago' };
+    }
+    if (motivo.includes('ALERTA DE PAGO')) {
+        return { titulo: 'Alerta: pago insuficiente', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : nuevo, tono: 'alerta', esSistema: false, modoComparativa: 'pago' };
+    }
+    if (motivo.includes('ALERTA DE ASCENSO')) {
+        return { titulo: 'Alerta: ascenso de lista', detalle: 'Pago permite subir de categoría', tono: 'alerta', esSistema: false, modoComparativa: 'pago' };
+    }
+    if (motivo.includes('CAMBIO DE LISTA CONFIRMADO')) {
+        return { titulo: 'Ajuste de lista confirmado', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : nuevo, tono: 'ok', esSistema: false, modoComparativa: 'default' };
+    }
+    if (motivo.includes('CORRIGIÓ') || motivo.includes('REPAR')) {
+        return { titulo: 'Solicitud reparada', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : 'Vuelve a revisión', tono: 'info', esSistema: false, modoComparativa: 'default' };
+    }
+    if (motivo.includes('REVERSIÓN CONFIRMADA') || motivo.includes('ROLLBACK')) {
+        return { titulo: 'Reversión confirmada', detalle: 'Cierre por vencimiento', tono: 'error', esSistema: false, modoComparativa: 'default' };
+    }
+    if (motivo.includes('CANCEL')) {
+        return { titulo: nuevo === 'Cancelada' ? 'Solicitud cancelada' : 'Cancelación solicitada', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : nuevo, tono: 'error', esSistema: false, modoComparativa: 'default' };
+    }
+    if (esSistema) {
+        return { titulo: 'Acción del sistema', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : (nuevo || 'Actualización'), tono: 'sistema', esSistema: true, modoComparativa: 'default' };
+    }
+
+    switch (nuevo) {
+        case 'Pendiente':
+            return {
+                titulo: anterior === 'Incorrecta' ? 'Reenviada a revisión' : 'Solicitud creada',
+                detalle: anterior ? `${anterior} → Pendiente` : 'Pendiente de respuesta',
+                tono: 'info',
+                esSistema: false,
+                modoComparativa: esCreacion ? 'creacion' : 'default',
+            };
+        case 'Respondida':
+            return { titulo: anterior === 'Incorrecta' ? 'Respuesta a corrección' : 'Proceso aprobado', detalle: `${anterior || '—'} → Respondida`, tono: 'ok', esSistema: false, modoComparativa: 'default' };
+        case 'Verificada':
+            return { titulo: 'Solicitud verificada', detalle: `${anterior || '—'} → Verificada`, tono: 'ok', esSistema: false, modoComparativa: 'default' };
+        case 'Incorrecta':
+            return { titulo: 'Error reportado', detalle: `${anterior || '—'} → Incorrecta`, tono: 'error', esSistema: false, modoComparativa: 'default' };
+        case 'Cancelada':
+            return { titulo: 'Solicitud cancelada', detalle: `${anterior || '—'} → Cancelada`, tono: 'error', esSistema: false, modoComparativa: 'default' };
+        default:
+            return {
+                titulo: 'Actualización',
+                detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : (nuevo || 'Sin cambio de estado'),
+                tono: 'info',
+                esSistema: false,
+                modoComparativa: esPago ? 'pago' : 'default',
+            };
+    }
+};
+
+const etiquetasComparativa = (modo) => {
+    if (modo === 'creacion') {
+        return { izq: 'Actual', der: 'Cotizado', titulo: 'Estado del cliente al crear' };
+    }
+    if (modo === 'pago') {
+        return { izq: 'Anterior', der: 'Nuevo (pago confirmado)', titulo: 'Cambios tras confirmar pago' };
+    }
+    return { izq: 'Antes', der: 'Después', titulo: 'Comparativa de cambios en cliente' };
+};
+
+const estilosPaso = {
+    ok: { iconBg: 'bg-emerald-500 text-white', border: 'border-emerald-500/30', label: 'text-emerald-600 dark:text-emerald-400', Icon: CheckCircle2 },
+    error: { iconBg: 'bg-red-500 text-white', border: 'border-red-500/30', label: 'text-red-600 dark:text-red-400', Icon: AlertOctagon },
+    alerta: { iconBg: 'bg-amber-500 text-white', border: 'border-amber-500/30', label: 'text-amber-600 dark:text-amber-400', Icon: TrendingUp },
+    pago: { iconBg: 'bg-blue-500 text-white', border: 'border-blue-500/30', label: 'text-blue-600 dark:text-blue-400', Icon: CreditCard },
+    sistema: { iconBg: 'bg-slate-500 text-white', border: 'border-slate-500/30', label: 'text-slate-500', Icon: Server },
+    info: { iconBg: 'bg-purple-500 text-white', border: 'theme-border', label: 'text-purple-600 dark:text-purple-400', Icon: ShieldCheck },
+};
+
 export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = [], tiposCliente = [] }) {
+    const [evidenciaAbierta, setEvidenciaAbierta] = useState(null);
+
     if (!solicitud) return null;
 
-    const auditoriasLimpias = solicitud?.auditorias || [];
+    const auditoriasLimpias = [...(solicitud?.auditorias || [])].sort((a, b) => a.id - b.id);
     const objListaActual = solicitud.lista_descuento || solicitud.listaDescuento;
     const objTipoActual = solicitud.tipo_cliente || solicitud.tipoCliente;
-    const consultas = solicitud?.consultas || [];
+    const consultas = [...(solicitud?.consultas || [])].sort((a, b) => a.id - b.id);
 
-    return createPortal(
+    return (
+        <>
+            {createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-md animate-fade-in" onClick={onClose}>
             <div className="w-full max-w-6xl theme-surface border theme-border shadow-2xl rounded-[2.5rem] p-10 md:p-12 flex flex-col relative modal-pop max-h-[90vh]" onClick={e => e.stopPropagation()}>
                 <button onClick={onClose} className="absolute top-6 right-6 p-3 theme-text-muted hover:theme-text-main theme-element border theme-border rounded-2xl outline-none hover:scale-110 transition-transform z-10">
@@ -70,7 +230,17 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                                     <p className="text-sm font-bold theme-text-main">{objListaActual?.nombre || 'Mantener actual'}</p>
                                 </div>
                             </div>
-                            <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Cotización Final</p><p className="text-base font-black theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud?.monto_cotizado || 0)}</p></div>
+                            <div><p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Cotización Final</p><p className="text-base font-black theme-text-main">{money(solicitud?.monto_cotizado)}</p></div>
+                            <div>
+                                <p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Estado</p>
+                                <p className="text-base font-black theme-text-main">{solicitud?.estado?.nombre || '—'}</p>
+                                {solicitud?.motivo_incorrecta === 'vencimiento_pago' && (
+                                    <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-1">Motivo: pago vencido</p>
+                                )}
+                                {solicitud?.pago_confirmado && (
+                                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-1">Pago confirmado</p>
+                                )}
+                            </div>
                             <div>
                                 <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Comentario de la Vendedora</p>
                                 {solicitud?.observaciones_vendedor?.trim() ? (
@@ -86,14 +256,14 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                                     {solicitud.monto_final_tentativo != null && (
                                         <div>
                                             <p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Pago Tentativo</p>
-                                            <p className="text-sm font-black theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_final_tentativo)}</p>
+                                            <p className="text-sm font-black theme-text-main">{money(solicitud.monto_final_tentativo)}</p>
                                         </div>
                                     )}
                                     {solicitud.total_proyectado_neto != null && (
                                         <div>
                                             <p className="text-[10px] font-bold theme-text-muted uppercase mb-1">Total Neto Proyectado</p>
                                             <p className={`text-sm font-black ${parseFloat(solicitud.total_proyectado_neto) >= parseFloat(objListaActual?.monto_requerido || 0) ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                                {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.total_proyectado_neto)}
+                                                {money(solicitud.total_proyectado_neto)}
                                             </p>
                                         </div>
                                     )}
@@ -112,9 +282,13 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             {solicitud?.evidencia_path && (
                                 <div>
                                     <p className="text-[10px] font-bold theme-text-muted uppercase mb-3">Evidencia Histórica</p>
-                                    <a href={`/storage/${solicitud.evidencia_path}`} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border theme-border hover:ring-2 transition-all h-40">
+                                    <button
+                                        type="button"
+                                        onClick={() => setEvidenciaAbierta(solicitud.evidencia_path)}
+                                        className="block w-full overflow-hidden rounded-2xl border theme-border hover:ring-2 transition-all h-40 outline-none text-left"
+                                    >
                                         <img src={`/storage/${solicitud.evidencia_path}`} className="w-full h-full object-cover hover:scale-105 transition-transform" alt="Evidencia histórica" />
-                                    </a>
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -129,81 +303,105 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             )}
 
                             {auditoriasLimpias.map((registro, idx) => {
-                                const estadoNombre = registro.estado_nuevo?.nombre;
-                                const esRespuesta = estadoNombre === 'Respondida' || estadoNombre === 'Verificada' || estadoNombre === 'Incorrecta';
-                                const esSistema = registro.motivo_reporte?.toUpperCase().includes('AUTOMÁTICAMENTE') || registro.motivo_reporte?.toUpperCase().includes('SISTEMA AUTOMÁTICO');
+                                const paso = describirPaso(registro);
+                                const estilo = estilosPaso[paso.tono] || estilosPaso.info;
+                                const IconoPaso = estilo.Icon;
                                 const snapshot = typeof registro.datos_snapshot === 'string' ? JSON.parse(registro.datos_snapshot) : registro.datos_snapshot;
                                 const nombreListaHistorial = snapshot?.lista_descuento_id ? listas.find(l => l.id == snapshot.lista_descuento_id)?.nombre : null;
                                 const nombreTipoHistorial = snapshot?.tipo_cliente_id ? tiposCliente.find(t => t.id == snapshot.tipo_cliente_id)?.nombre : null;
+                                const actor = paso.esSistema ? 'Sistema' : (registro.usuario?.name || 'Usuario');
+                                const labels = etiquetasComparativa(paso.modoComparativa);
+                                const montoCotizado = snapshot?.monto_cotizado;
+                                const mostrarMontoCotizado = montoCotizado != null && montoCotizado !== '';
+
+                                // En creación: "Cotizado" proyecta monto actual + cotizado si no hay despues
+                                const despuesComparativa = snapshot?.despues || (
+                                    paso.modoComparativa === 'creacion' && snapshot?.antes
+                                        ? {
+                                            ...snapshot.antes,
+                                            monto_venta: (parseFloat(snapshot.antes.monto_venta) || 0) + (parseFloat(montoCotizado) || 0),
+                                        }
+                                        : null
+                                );
 
                                 return (
                                     <div key={`audit-${idx}`} className="relative flex flex-col ml-10">
-                                        <div className={`absolute -left-[3.5rem] top-1 w-10 h-10 rounded-full border-4 theme-surface flex items-center justify-center shadow-md z-10 ${esSistema ? 'bg-slate-500 text-white' : esRespuesta ? 'bg-emerald-500 text-white' : 'bg-purple-500 text-white'}`}>
-                                            {esSistema ? <Server className="w-4 h-4" /> : esRespuesta ? <CheckCircle2 className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                                        <div className={`absolute -left-[3.5rem] top-1 w-10 h-10 rounded-full border-4 theme-surface flex items-center justify-center shadow-md z-10 ${estilo.iconBg}`}>
+                                            <IconoPaso className="w-4 h-4" />
                                         </div>
 
-                                        <div className={`theme-element border ${esRespuesta ? 'border-emerald-500/30' : 'theme-border'} p-6 rounded-3xl shadow-sm`}>
-                                            <div className="flex justify-between items-center mb-3">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`font-black text-xs uppercase tracking-widest ${esRespuesta ? 'text-emerald-600 dark:text-emerald-400' : 'text-purple-600 dark:text-purple-400'}`}>
-                                                        {registro.usuario?.name}
+                                        <div className={`theme-element border ${estilo.border} p-6 rounded-3xl shadow-sm`}>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className={`font-black text-xs uppercase tracking-widest ${estilo.label}`}>
+                                                        {paso.titulo}
                                                     </span>
-                                                    {esSistema && (
+                                                    {paso.esSistema && (
                                                         <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-slate-500/10 text-slate-500 border border-slate-500/20">Sistema</span>
                                                     )}
                                                 </div>
-                                                <span className="text-[10px] font-bold theme-text-muted">{new Date(registro.created_at).toLocaleString()}</span>
+                                                <span className="text-[10px] font-bold theme-text-muted shrink-0">{new Date(registro.created_at).toLocaleString()}</span>
                                             </div>
 
+                                            <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mb-1">
+                                                Por: {actor}
+                                            </p>
                                             <p className="text-sm font-black theme-text-main mb-3">
-                                                Estado: <span className="italic">{estadoNombre || 'Actualización / Corrección'}</span>
+                                                {paso.detalle}
                                             </p>
 
-                                            {(snapshot?.antes || snapshot?.despues) && (
-                                                <ComparativaSnapshot antes={snapshot.antes} despues={snapshot.despues} />
+                                            {mostrarMontoCotizado && (
+                                                <div className="mb-4 p-4 rounded-2xl border border-blue-500/25 bg-blue-500/10 flex justify-between items-center gap-3">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 m-0">Monto cotizado</p>
+                                                    <span className="text-sm font-black text-blue-700 dark:text-blue-300">{money(montoCotizado)}</span>
+                                                </div>
                                             )}
 
-                                            {snapshot && !esRespuesta && !snapshot?.antes && (
+                                            {(snapshot?.antes || snapshot?.despues) && (
+                                                <ComparativaSnapshot
+                                                    antes={snapshot.antes}
+                                                    despues={despuesComparativa}
+                                                    etiquetaIzq={labels.izq}
+                                                    etiquetaDer={labels.der}
+                                                    titulo={labels.titulo}
+                                                />
+                                            )}
+
+                                            {snapshot && !snapshot?.antes && !snapshot?.despues && (nombreListaHistorial || nombreTipoHistorial || snapshot?.compra_en_tienda) && (
                                                 <div className="mb-4 p-4 bg-black/5 dark:bg-white/5 rounded-2xl border theme-border flex flex-col gap-3">
-                                                    {(nombreListaHistorial || nombreTipoHistorial || snapshot?.compra_en_tienda) && (
-                                                        <div className="flex flex-wrap gap-2 mb-2">
-                                                            {snapshot?.compra_en_tienda && (
-                                                                <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-[#cd7f32]/15 text-[#b87333] border border-[#cd7f32]/30">
-                                                                    Compra en tienda · {snapshot.lista_descuento_nombre || nombreListaHistorial || 'Bronce'}
-                                                                </span>
-                                                            )}
-                                                            {nombreListaHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Aspiraba a: {nombreListaHistorial}</span>}
-                                                            {nombreTipoHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">Clasificación: {nombreTipoHistorial}</span>}
-                                                        </div>
-                                                    )}
-                                                    <div className="flex justify-between items-center">
-                                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Cotización Proyectada</p>
-                                                        <span className="text-xs font-black theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(snapshot.monto_cotizado || 0)}</span>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {snapshot?.compra_en_tienda && (
+                                                            <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-[#cd7f32]/15 text-[#b87333] border border-[#cd7f32]/30">
+                                                                Compra en tienda · {snapshot.lista_descuento_nombre || nombreListaHistorial || 'Bronce'}
+                                                            </span>
+                                                        )}
+                                                        {nombreListaHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Lista solicitada: {nombreListaHistorial}</span>}
+                                                        {nombreTipoHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">Clasificación: {nombreTipoHistorial}</span>}
                                                     </div>
-                                                    {snapshot.evidencia_path && (
-                                                        <a href={`/storage/${snapshot.evidencia_path}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-blue-500 hover:text-blue-600 transition-colors w-fit">
-                                                            <FileImage className="w-3 h-3" /> Ver Evidencia Adjunta
-                                                        </a>
-                                                    )}
                                                 </div>
                                             )}
 
                                             {registro.motivo_reporte && (
                                                 <div className="p-4 theme-surface rounded-2xl border theme-border">
-                                                    <p className="text-xs font-bold theme-text-main m-0 uppercase tracking-widest leading-relaxed">
-                                                        Nota: {registro.motivo_reporte}
+                                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Nota del registro</p>
+                                                    <p className="text-xs font-bold theme-text-main m-0 leading-relaxed">
+                                                        {registro.motivo_reporte}
                                                     </p>
                                                 </div>
                                             )}
 
-                                            {esRespuesta && snapshot?.evidencia_respuesta_path && (
-                                                <div className="mt-6 pt-4 border-t border-emerald-500/20">
-                                                    <h4 className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                                        <Camera className="w-3 h-3" /> Evidencia de Resolución
+                                            {snapshot?.evidencia_path && (
+                                                <div className="mt-4">
+                                                    <BotonEvidencia path={snapshot.evidencia_path} label="Ver evidencia adjunta" onAbrir={setEvidenciaAbierta} />
+                                                </div>
+                                            )}
+
+                                            {snapshot?.evidencia_respuesta_path && (
+                                                <div className="mt-4 pt-4 border-t theme-border">
+                                                    <h4 className={`text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2 ${estilo.label}`}>
+                                                        <Camera className="w-3 h-3" /> Evidencia de respuesta
                                                     </h4>
-                                                    <a href={`/storage/${snapshot.evidencia_respuesta_path}`} target="_blank" rel="noreferrer" className="block rounded-2xl overflow-hidden border border-emerald-500/30 h-32 relative group">
-                                                        <img src={`/storage/${snapshot.evidencia_respuesta_path}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt="Evidencia" />
-                                                    </a>
+                                                    <BotonEvidencia path={snapshot.evidencia_respuesta_path} label="Ver evidencia" onAbrir={setEvidenciaAbierta} miniatura />
                                                 </div>
                                             )}
                                         </div>
@@ -221,7 +419,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                                         <div className="theme-element border border-amber-500/30 p-6 rounded-3xl shadow-sm">
                                             <div className="flex justify-between items-center mb-3">
                                                 <span className="font-black text-xs uppercase tracking-widest text-amber-600 dark:text-amber-400">
-                                                    Consulta · {consulta.vendedor?.name}
+                                                    Consulta TAG/Lista · {consulta.vendedor?.name}
                                                 </span>
                                                 <span className="text-[10px] font-bold theme-text-muted">{new Date(consulta.created_at).toLocaleString()}</span>
                                             </div>
@@ -242,9 +440,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                                                         <p className="text-xs font-bold theme-text-main mb-2">Respuesta ({consulta.encargada?.name}): {consulta.comentario_encargada}</p>
                                                     )}
                                                     {consulta.evidencia_respuesta_path && (
-                                                        <a href={`/storage/${consulta.evidencia_respuesta_path}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-blue-500">
-                                                            <FileImage className="w-3 h-3" /> Ver evidencia de respuesta
-                                                        </a>
+                                                        <BotonEvidencia path={consulta.evidencia_respuesta_path} label="Ver evidencia de respuesta" onAbrir={setEvidenciaAbierta} />
                                                     )}
                                                 </>
                                             )}
@@ -258,5 +454,11 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
             </div>
         </div>,
         document.body
+            )}
+
+            {evidenciaAbierta && (
+                <LightboxEvidencia path={evidenciaAbierta} onClose={() => setEvidenciaAbierta(null)} />
+            )}
+        </>
     );
 }

@@ -3,6 +3,7 @@
 namespace App\Services\Solicitudes;
 
 use App\Models\ConsultaSolicitud;
+use App\Models\CatalogoEstadoSolicitud;
 use App\Models\SolicitudTag;
 use App\Models\User;
 use App\Notifications\AlertaSolicitud;
@@ -22,7 +23,10 @@ class CrearConsultaSolicitudService
                 abort(403, 'Solo la vendedora dueña puede consultar.');
             }
 
-            $estadosAprobados = [2, 3];
+            $estadosAprobados = [
+                (int) CatalogoEstadoSolicitud::idDe('Respondida'),
+                (int) CatalogoEstadoSolicitud::idDe('Verificada'),
+            ];
             if (!in_array((int) $solicitud->catalogo_estado_solicitud_id, $estadosAprobados, true) || $solicitud->pago_confirmado) {
                 abort(403, 'La consulta solo está disponible en solicitudes aprobadas con pago pendiente.');
             }

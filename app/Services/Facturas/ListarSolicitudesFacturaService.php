@@ -21,6 +21,7 @@ class ListarSolicitudesFacturaService
             'auditorias' => fn ($q) => $q->latest('id')->limit(3),
             'auditorias.usuario:id,name',
             'auditorias.estadoNuevo:id,nombre',
+            'auditorias.estadoAnterior:id,nombre',
         ])->orderByDesc('created_at');
 
         if ($usuario) {

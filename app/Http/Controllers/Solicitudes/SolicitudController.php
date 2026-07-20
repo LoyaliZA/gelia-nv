@@ -26,6 +26,7 @@ use App\Models\CatalogoProceso;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoTipoCliente;
 use App\Models\CatalogoBanco;
+use App\Models\CatalogoEstadoSolicitud;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -88,6 +89,7 @@ class SolicitudController extends Controller
             'tipos_cliente' => CatalogoTipoCliente::where('activo', true)->orderBy('nombre')->get(),
             'vendedores' => $vendedores,
             'bancos' => CatalogoBanco::where('activo', true)->orderBy('nombre')->get(),
+            'estados' => CatalogoEstadoSolicitud::orderBy('id')->get(['id', 'nombre']),
         ]);
     }
 
@@ -105,7 +107,10 @@ class SolicitudController extends Controller
             abort(403, 'Las solicitudes operativas no requieren confirmación de pago.');
         }
 
-        if ($solicitud->catalogo_estado_solicitud_id != 2) {
+        $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+        $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
+
+        if ((int) $solicitud->catalogo_estado_solicitud_id !== (int) $idRespondida) {
             abort(403, 'Acción Bloqueada: El pago solo puede confirmarse después de que la encargada haya emitido una resolución aprobatoria.');
         }
 
@@ -117,10 +122,10 @@ class SolicitudController extends Controller
             'monto_final_pagado' => 'required|numeric|min:0'
         ]);
 
-        DB::transaction(function () use ($solicitud, $request) {
+        DB::transaction(function () use ($solicitud, $request, $idRespondida, $idIncorrecta) {
             $montoOriginal = $solicitud->monto_cotizado;
             $montoFinal = $request->monto_final_pagado;
-            $estadoNuevoId = 2; 
+            $estadoNuevoId = $idRespondida;
             $mensajeAuditoria = 'PAGO CONFIRMADO POR EL COLABORADOR';
             $esAlertaFaltaPago = false;
             $esAlertaAscenso = false;
@@ -153,7 +158,7 @@ class SolicitudController extends Controller
                             $listaSolicitada = CatalogoListaDescuento::find($solicitud->catalogo_lista_descuento_id);
                             if ($listaSolicitada && $totalProyectado < $listaSolicitada->monto_requerido) {
                                 $mensajeAuditoria = "ALERTA DE PAGO: Pago final de $" . number_format($montoFinal, 2) . " es insuficiente para la lista {$listaSolicitada->nombre}. El cliente califica para: {$listaCalificada->nombre}.";
-                                $estadoNuevoId = 4;
+                                $estadoNuevoId = $idIncorrecta;
                                 $esAlertaFaltaPago = true;
                             }
                         }
@@ -232,7 +237,7 @@ class SolicitudController extends Controller
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
-                'estado_anterior_id' => 2,
+                'estado_anterior_id' => $idRespondida,
                 'estado_nuevo_id' => $estadoNuevoId,
                 'motivo_reporte' => $mensajeAuditoria,
                 'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
@@ -270,7 +275,7 @@ class SolicitudController extends Controller
 
         DB::transaction(function () use ($solicitud) {
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
-            $estadoNuevoId = 3;
+            $estadoNuevoId = CatalogoEstadoSolicitud::idDe('Verificada');
 
             $cliente = Cliente::find($solicitud->cliente_id);
             if ($cliente) {
@@ -310,7 +315,10 @@ class SolicitudController extends Controller
 
     public function update(Request $request, SolicitudTag $solicitud)
     {
-        if ($solicitud->vendedor_id !== Auth::id() || $solicitud->catalogo_estado_solicitud_id != 4) {
+        $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
+        $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
+
+        if ($solicitud->vendedor_id !== Auth::id() || (int) $solicitud->catalogo_estado_solicitud_id !== (int) $idIncorrecta) {
             abort(403, 'No tienes permiso para editar esta solicitud o no está en estado Incorrecto.');
         }
 
@@ -326,14 +334,14 @@ class SolicitudController extends Controller
             'observaciones_vendedor' => 'nullable|string',
         ]);
 
-        DB::transaction(function () use ($solicitud, $request) {
+        DB::transaction(function () use ($solicitud, $request, $idIncorrecta, $idPendiente) {
             $solicitud->update([
                 'monto_cotizado' => $request->monto_cotizado,
                 'catalogo_proceso_id' => $request->catalogo_proceso_id,
                 'catalogo_tipo_cliente_id' => $request->catalogo_tipo_cliente_id,
                 'catalogo_lista_descuento_id' => $request->catalogo_lista_descuento_id,
                 'observaciones_vendedor' => $request->observaciones_vendedor,
-                'catalogo_estado_solicitud_id' => 1,
+                'catalogo_estado_solicitud_id' => $idPendiente,
                 'motivo_incorrecta' => null,
             ]);
 
@@ -346,8 +354,8 @@ class SolicitudController extends Controller
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
-                'estado_anterior_id' => 4,
-                'estado_nuevo_id' => 1,
+                'estado_anterior_id' => $idIncorrecta,
+                'estado_nuevo_id' => $idPendiente,
                 'motivo_reporte' => 'El colaborador corrigió la solicitud.',
                 'datos_snapshot' => array_merge([
                     'monto_cotizado' => $request->monto_cotizado,
@@ -390,29 +398,53 @@ class SolicitudController extends Controller
             'evidencia_respuesta' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf|max:5120',
         ]);
 
-        $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
-        $estadoNuevoId = $request->catalogo_estado_solicitud_id;
+        $estadoAnteriorId = (int) $solicitud->catalogo_estado_solicitud_id;
+        $estadoNuevoId = (int) $request->catalogo_estado_solicitud_id;
+        $idPendiente = (int) CatalogoEstadoSolicitud::idDe('Pendiente');
+        $idRespondida = (int) CatalogoEstadoSolicitud::idDe('Respondida');
+        $idVerificada = (int) CatalogoEstadoSolicitud::idDe('Verificada');
+        $idIncorrecta = (int) CatalogoEstadoSolicitud::idDe('Incorrecta');
 
-        if ($estadoNuevoId == 2) {
+        if ($estadoNuevoId === $idRespondida) {
             if (!$usuario->can('solicitudes.reportar')) {
                 abort(403, 'Solo las encargadas pueden aprobar procesos.');
             }
-            if ($estadoAnteriorId != 1) {
-                abort(422, 'Solo se puede aprobar una solicitud en estado Pendiente.');
+            $esCorreccionErrorReportado = $estadoAnteriorId === $idIncorrecta
+                && $solicitud->motivo_incorrecta === 'error_reportado';
+            if ($estadoAnteriorId !== $idPendiente && !$esCorreccionErrorReportado) {
+                abort(422, 'Solo se puede aprobar una solicitud en estado Pendiente o corregir un error reportado.');
             }
         }
 
-        if ($estadoNuevoId == 4 && $estadoAnteriorId == 4) {
+        if ($estadoNuevoId === $idVerificada) {
+            if (!$usuario->can('solicitudes.verificar')) {
+                abort(403, 'No tienes permiso para verificar solicitudes.');
+            }
+            if ($estadoAnteriorId !== $idRespondida) {
+                abort(422, 'Solo se pueden verificar solicitudes respondidas.');
+            }
+            if (!$solicitud->pago_confirmado) {
+                abort(422, 'No se puede verificar una solicitud con pago pendiente.');
+            }
+        }
+
+        if ($estadoNuevoId === $idIncorrecta && $estadoAnteriorId === $idIncorrecta) {
             abort(422, 'Esta solicitud ya está marcada como incorrecta.');
         }
 
-        if ($esVendedoraPropia && !$usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar']) && !$usuario->hasRole('Gerente')) {
-            if ($estadoNuevoId != 4) {
+        $esStaffSolicitudes = $usuario->hasAnyPermission(['solicitudes.verificar', 'solicitudes.reportar'])
+            || $usuario->hasRole('Gerente');
+
+        if ($esVendedoraPropia && !$esStaffSolicitudes) {
+            if ($estadoNuevoId !== $idIncorrecta) {
                 abort(403, 'Como vendedora, solo puedes reportar un error en tu propia solicitud.');
+            }
+            if ($estadoAnteriorId !== $idRespondida) {
+                abort(422, 'Solo puedes reportar error sobre una solicitud respondida.');
             }
         }
 
-        DB::transaction(function () use ($solicitud, $estadoAnteriorId, $estadoNuevoId, $request) {
+        DB::transaction(function () use ($solicitud, $estadoAnteriorId, $estadoNuevoId, $request, $idRespondida, $idVerificada, $idIncorrecta) {
 
             $rutaEvidencia = $solicitud->evidencia_respuesta_path;
             if ($request->hasFile('evidencia_respuesta')) {
@@ -427,16 +459,16 @@ class SolicitudController extends Controller
             $solicitud->update([
                 'catalogo_estado_solicitud_id' => $estadoNuevoId,
                 'evidencia_respuesta_path' => $rutaEvidencia,
-                'motivo_incorrecta' => $estadoNuevoId == 4 ? 'error_reportado' : null,
+                'motivo_incorrecta' => $estadoNuevoId === $idIncorrecta ? 'error_reportado' : null,
             ]);
 
-            $estadosAprobatorios = [2, 3];
+            $estadosAprobatorios = [$idRespondida, $idVerificada];
             $solicitud->loadMissing('proceso');
             $esFinanciero = $solicitud->proceso?->esFinanciero() ?? true;
 
-            if ($esFinanciero && in_array($estadoNuevoId, $estadosAprobatorios) && !in_array($estadoAnteriorId, $estadosAprobatorios)) {
+            if ($esFinanciero && in_array($estadoNuevoId, $estadosAprobatorios, true) && !in_array($estadoAnteriorId, $estadosAprobatorios, true)) {
                 $snapshotDiff = $this->aplicarBeneficiosCliente($solicitud);
-            } elseif ($esFinanciero && $estadoNuevoId == 4 && in_array($estadoAnteriorId, $estadosAprobatorios)) {
+            } elseif ($esFinanciero && $estadoNuevoId === $idIncorrecta && in_array($estadoAnteriorId, $estadosAprobatorios, true)) {
                 $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
             }
 
@@ -452,20 +484,24 @@ class SolicitudController extends Controller
                 ),
             ]);
 
-            $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, true);
+            $esVendedoraPropia = $solicitud->vendedor_id === Auth::id();
+            $reportadoPorVendedora = $estadoNuevoId === $idIncorrecta && $esVendedoraPropia;
+            $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, !$reportadoPorVendedora);
 
             if ($destinatarios->isNotEmpty()) {
-                $esVendedoraPropia = $solicitud->vendedor_id === Auth::id();
-                $tipoAlerta = $estadoNuevoId == 4 ? 'rechazada' : 'actualizacion';
-                
-                $mensaje = $estadoNuevoId == 4
-                    ? ($esVendedoraPropia ? 'La vendedora ha reportado un error en su propia solicitud.' : 'Se ha reportado un error en tu solicitud. Revisa las observaciones.')
+                $tipoAlerta = $estadoNuevoId === $idIncorrecta ? 'rechazada' : 'actualizacion';
+
+                $mensaje = $estadoNuevoId === $idIncorrecta
+                    ? ($reportadoPorVendedora
+                        ? 'La vendedora ha reportado un error en la respuesta de su solicitud.'
+                        : 'Se ha reportado un error en tu solicitud. Revisa las observaciones.')
                     : 'El área administrativa ha emitido una resolución para tu solicitud.';
 
                 Notification::send($destinatarios, new AlertaSolicitud(
                     $solicitud,
                     $tipoAlerta,
-                    $mensaje
+                    $mensaje,
+                    $reportadoPorVendedora ? ['reportado_por_vendedora' => true] : []
                 ));
             }
         });
@@ -493,14 +529,17 @@ class SolicitudController extends Controller
 
         DB::transaction(function () use ($solicitud) {
             $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
+            $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+            $idVerificada = CatalogoEstadoSolicitud::idDe('Verificada');
+            $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
             $snapshotDiff = [];
 
-            if (in_array($estadoAnteriorId, [2, 3])) {
+            if (in_array((int) $estadoAnteriorId, [(int) $idRespondida, (int) $idVerificada], true)) {
                 $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
             }
 
             $solicitud->update([
-                'catalogo_estado_solicitud_id' => 4,
+                'catalogo_estado_solicitud_id' => $idIncorrecta,
                 'pago_confirmado' => false,
                 'motivo_incorrecta' => 'vencimiento_pago',
             ]);
@@ -516,7 +555,7 @@ class SolicitudController extends Controller
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $estadoAnteriorId,
-                'estado_nuevo_id' => 4,
+                'estado_nuevo_id' => $idIncorrecta,
                 'motivo_reporte' => 'PAGO RECHAZADO: Se aplicó la reversión automática de las propiedades del cliente.',
                 'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
             ]);
@@ -867,7 +906,7 @@ class SolicitudController extends Controller
 
         $auditoriaAprobacion = AuditoriaSolicitud::query()
             ->where('solicitud_id', $solicitud->id)
-            ->where('estado_nuevo_id', 2)
+            ->where('estado_nuevo_id', CatalogoEstadoSolicitud::idDe('Respondida'))
             ->whereNotNull('datos_snapshot')
             ->orderByDesc('id')
             ->first();
