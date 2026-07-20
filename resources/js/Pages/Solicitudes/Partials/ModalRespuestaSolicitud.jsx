@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { X, Edit2, Info, AlertOctagon, Upload, Send } from 'lucide-react';
 
-export default function ModalRespuestaSolicitud({ onClose, solicitud, estadoId }) {
+export default function ModalRespuestaSolicitud({ onClose, solicitud, estadoId, esReporteError = false }) {
     const [previewEvidenciaRespuesta, setPreviewEvidenciaRespuesta] = useState(null);
 
     const { data, setData, post, processing, reset } = useForm({
@@ -57,8 +57,6 @@ export default function ModalRespuestaSolicitud({ onClose, solicitud, estadoId }
             forceFormData: true // Garantiza el envío correcto del archivo
         });
     };
-
-    const esReporteError = data.catalogo_estado_solicitud_id === 4;
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-md animate-fade-in" onClick={onClose}>

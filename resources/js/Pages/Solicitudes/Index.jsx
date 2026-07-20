@@ -21,6 +21,7 @@ import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import { badgeClaseEstadoSolicitud } from './Partials/solicitudesStyles';
 import { puedeEmitirConsultaSolicitud, puedeResponderConsultaSolicitud } from '../../utils/permisos';
+import { idEstadoPorNombre } from '../Facturas/Partials/facturasFiltros';
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
 const formatearTiempoRelativo = (fechaString) => {
@@ -106,7 +107,7 @@ const VisorImagenHover = ({ path }) => {
         <div className="inline-block" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors">
                 <img src={imageUrl} className="w-5 h-5 object-cover rounded shadow-sm" alt="Miniatura" />
-                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Ver Resolución</span>
+                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Ver evidencia</span>
             </div>
             {isHovered && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md pointer-events-none animate-fade-in p-4 md:p-8">
@@ -168,20 +169,30 @@ const RespuestaConsultaEncargada = ({ solicitud, auth, onMarcarLeido, procesando
 // =============================================
 // COMPONENTE: COMENTARIOS Y FEEDBACK
 // =============================================
+const esMotivoSistema = (motivo) => {
+    const m = (motivo || '').toUpperCase();
+    return m.includes('SISTEMA AUTOMÁTICO') || m.includes('AUTOMÁTICAMENTE');
+};
+
+const esMotivoVencimientoPago = (motivo) => {
+    const m = (motivo || '').toUpperCase();
+    return m.includes('PLAZO DE PAGO') || m.includes('PAGO RECHAZADO') || m.includes('PAGO VENCIDO');
+};
+
 const FeedbackYComentarios = ({ solicitud }) => {
-    const esError = solicitud.estado?.nombre === 'Incorrecta';
+    const esVencimiento = solicitud.motivo_incorrecta === 'vencimiento_pago';
+    const esErrorEstado = solicitud.estado?.nombre === 'Incorrecta';
     const esAprobada = solicitud.estado?.nombre === 'Respondida' || solicitud.estado?.nombre === 'Verificada';
 
     const auditoriasOrdenadas = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id);
-
-    // Buscar la última auditoría real
-    const ultimaAuditoria = auditoriasOrdenadas.find(a => !a.motivo_reporte?.toUpperCase().includes('AUTOMÁTICAMENTE'));
-
-    // Variable clave para renderizar Alerta en lugar de Error
-    const esAlertaPago = ultimaAuditoria?.motivo_reporte?.toUpperCase().includes('ALERTA DE PAGO');
+    const ultimaAuditoria = auditoriasOrdenadas[0] || null;
+    const motivoUltimo = ultimaAuditoria?.motivo_reporte || '';
+    const esSistema = esMotivoSistema(motivoUltimo) || esMotivoVencimientoPago(motivoUltimo) || esVencimiento;
+    const esAlertaPago = !esSistema && motivoUltimo.toUpperCase().includes('ALERTA DE PAGO');
+    const esError = esErrorEstado || esVencimiento || esMotivoVencimientoPago(motivoUltimo);
 
     const tieneObservacion = solicitud.observaciones_vendedor && solicitud.observaciones_vendedor.trim() !== '';
-    const tieneFeedback = (esError || esAprobada || esAlertaPago) && ultimaAuditoria?.motivo_reporte;
+    const tieneFeedback = (esError || esAprobada || esAlertaPago) && motivoUltimo;
 
     let evidenciaAdmin = solicitud.evidencia_respuesta_path;
     if (!evidenciaAdmin && ultimaAuditoria?.datos_snapshot) {
@@ -191,7 +202,6 @@ const FeedbackYComentarios = ({ solicitud }) => {
 
     if (!tieneObservacion && !tieneFeedback && !evidenciaAdmin) return null;
 
-    // Configuración visual dinámica
     const colorContenedor = esAlertaPago
         ? 'bg-amber-500/10 border-amber-500/25'
         : (esError ? 'bg-red-500/10 border-red-500/25' : 'bg-emerald-500/10 border-emerald-500/25');
@@ -199,7 +209,26 @@ const FeedbackYComentarios = ({ solicitud }) => {
     const Icono = esAlertaPago ? AlertTriangle : (esError ? AlertOctagon : CheckCircle2);
     const colorIcono = esAlertaPago ? 'text-amber-500' : (esError ? 'text-red-500' : 'text-emerald-500');
     const colorTexto = esAlertaPago ? 'text-amber-600 dark:text-amber-400' : (esError ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400');
-    const titulo = esAlertaPago ? 'ALERTA DE AJUSTE DE LISTA' : (esError ? 'Corrección Requerida' : 'Resolución Admin');
+    const autor = ultimaAuditoria?.usuario?.name?.trim();
+    const estadoAnteriorNombre = ultimaAuditoria?.estado_anterior?.nombre
+        || ultimaAuditoria?.estadoAnterior?.nombre
+        || '';
+    const esRespuestaACorreccion = !esError && esAprobada && estadoAnteriorNombre === 'Incorrecta';
+
+    let titulo;
+    if (esAlertaPago) {
+        titulo = 'ALERTA DE AJUSTE DE LISTA';
+    } else if (esVencimiento || esMotivoVencimientoPago(motivoUltimo)) {
+        titulo = 'Pago vencido · Sistema';
+    } else if (esSistema) {
+        titulo = 'Respuesta del sistema';
+    } else if (esError) {
+        titulo = autor ? `Error reportado por ${autor}` : 'Corrección requerida';
+    } else if (esRespuestaACorreccion) {
+        titulo = autor ? `Respuesta a corrección · ${autor}` : 'Respuesta a corrección';
+    } else {
+        titulo = autor ? `Respuesta de ${autor}` : 'Respuesta';
+    }
 
     return (
         <div className="mt-3 flex flex-col gap-2">
@@ -221,14 +250,16 @@ const FeedbackYComentarios = ({ solicitud }) => {
                             <p className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${colorTexto}`}>
                                 {titulo}
                             </p>
-                            {ultimaAuditoria?.motivo_reporte && (
+                            {motivoUltimo && (
                                 <p className={`text-xs font-bold italic leading-tight ${esAlertaPago ? 'text-amber-700 dark:text-amber-500' : 'theme-text-main'}`}>
-                                    {ultimaAuditoria.motivo_reporte}
+                                    {motivoUltimo}
                                 </p>
                             )}
                         </div>
                     </div>
-                    {evidenciaAdmin && <div className="mt-1"><VisorImagenHover path={evidenciaAdmin} /></div>}
+                    {evidenciaAdmin && !esVencimiento && !esMotivoVencimientoPago(motivoUltimo) && (
+                        <div className="mt-1"><VisorImagenHover path={evidenciaAdmin} /></div>
+                    )}
                 </div>
             )}
         </div>
@@ -455,7 +486,7 @@ const ModalSolicitarCancelacion = ({ onClose, solicitud, listas = [] }) => {
 // =============================================
 // MENÚ ACCIONES — Portal
 // =============================================
-const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, setModalConsulta, setModalRespuestaConsulta, abrirModalPago, confirmarCambioLista, confirmarRollback, eliminarSolicitud, abrirModalCancelacion, abrirModalConfirmarCancelacion, can, auth }) => {
+const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbierto, setModalForm, setModalRespuesta, setModalBitacora, setModalConsulta, setModalRespuestaConsulta, abrirModalPago, confirmarCambioLista, confirmarRollback, eliminarSolicitud, abrirModalCancelacion, abrirModalConfirmarCancelacion, can, auth, idRespondida, idVerificada, idIncorrecta }) => {
     if (!menuAbierto || !menuSolicitud) return null;
     const solicitud = menuSolicitud;
     const esCancelada = solicitud.estado?.nombre === 'Cancelada';
@@ -463,14 +494,28 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
 
     const roles = auth?.user?.roles || [];
     const esGerente = roles.some(r => String(r).toLowerCase().includes('gerente'));
-    const puedeReportarError = (can('solicitudes.reportar') || can('solicitudes.verificar') || esGerente)
+    const esDueña = Number(solicitud.vendedor_id) === Number(auth.user.id);
+    const puedeReportarErrorStaff = (can('solicitudes.reportar') || can('solicitudes.verificar') || esGerente)
         && solicitud.estado?.nombre !== 'Incorrecta'
         && !esCancelada;
+    const puedeReportarErrorVendedora = esDueña
+        && solicitud.estado?.nombre === 'Respondida'
+        && !esCancelada;
+    const puedeReportarError = puedeReportarErrorStaff || puedeReportarErrorVendedora;
 
     const auditoriasOrdenadas = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id);
-    const ultimaAuditoria = auditoriasOrdenadas.find(a => !a.motivo_reporte?.toUpperCase().includes('AUTOMÁTICAMENTE'));
+    const ultimaAuditoria = auditoriasOrdenadas.find(a => {
+        const m = a.motivo_reporte?.toUpperCase() || '';
+        return !m.includes('AUTOMÁTICAMENTE') && !m.includes('SISTEMA AUTOMÁTICO');
+    });
     const esAlertaPago = ultimaAuditoria?.motivo_reporte?.toUpperCase().includes('ALERTA DE PAGO');
     const esVencimiento = solicitud.motivo_incorrecta === 'vencimiento_pago';
+    const puedeCorregirRespuesta = can('solicitudes.reportar')
+        && solicitud.estado?.nombre === 'Incorrecta'
+        && solicitud.motivo_incorrecta === 'error_reportado'
+        && !esAlertaPago
+        && !esVencimiento
+        && idRespondida;
     const esAprobadaConPagoPendiente = ['Respondida', 'Verificada'].includes(solicitud.estado?.nombre);
     const consultaPendiente = (solicitud.consultas || []).find(c => c.estado === 'pendiente');
     const puedeConsultar = puedeEmitirConsultaSolicitud(auth)
@@ -567,23 +612,29 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Verificado (Paso final de la auxiliar) */}
-                {can('solicitudes.verificar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre !== 'Incorrecta' && (
-                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 3 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
+                {/* Verificado (Paso final de la auxiliar) — solo con pago confirmado */}
+                {can('solicitudes.verificar') && solicitud.estado?.nombre === 'Respondida' && solicitud.pago_confirmado && !esAlertaPago && idVerificada && (
+                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
                         <CheckSquare className="w-4 h-4" /> Verificado
                     </button>
                 )}
 
-                {/* Aprobar (Encargada) — solo Pendiente */}
-                {can('solicitudes.reportar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre === 'Pendiente' && (
-                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 2 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3" style={{ color: 'var(--color-primario)' }}>
+                {/* Aprobar (Encargada) — Pendiente; o corregir error reportado por vendedora */}
+                {can('solicitudes.reportar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre === 'Pendiente' && idRespondida && (
+                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3" style={{ color: 'var(--color-primario)' }}>
                         <CheckCircle2 className="w-4 h-4" /> Aprobar Proceso
                     </button>
                 )}
 
-                {/* Reportar error — encargadas, auxiliares y gerentes en cualquier etapa activa */}
-                {puedeReportarError && !esAlertaPago && (
-                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: 4 }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                {puedeCorregirRespuesta && (
+                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
+                        <CheckCircle2 className="w-4 h-4" /> Corregir Respuesta
+                    </button>
+                )}
+
+                {/* Reportar error — staff en etapas activas; vendedora dueña solo en Respondida */}
+                {puedeReportarError && !esAlertaPago && idIncorrecta && (
+                    <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idIncorrecta }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
                         <AlertOctagon className="w-4 h-4" /> Reportar Error
                     </button>
                 )}
@@ -638,9 +689,13 @@ export default function Index({
     tipos_cliente = [],
     vendedores = [],
     bancos = [],
+    estados = [],
     filtros = {},
     auth
 }) {
+    const idRespondida = idEstadoPorNombre(estados, 'Respondida');
+    const idVerificada = idEstadoPorNombre(estados, 'Verificada');
+    const idIncorrecta = idEstadoPorNombre(estados, 'Incorrecta');
 
     const [modalForm, setModalForm] = useState({ abierto: false, modoEdicion: false, solicitud: null });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, solicitud: null, estadoId: null });
@@ -827,6 +882,9 @@ export default function Index({
                 eliminarSolicitud={eliminarSolicitud}
                 can={can}
                 auth={auth}
+                idRespondida={idRespondida}
+                idVerificada={idVerificada}
+                idIncorrecta={idIncorrecta}
             />
             {modalPago.abierto && <ModalConfirmarPago onClose={() => setModalPago({ abierto: false, solicitud: null })} solicitud={modalPago.solicitud} onConfirmar={confirmarPagoConMonto} />}
             {modalCancelacion.abierto && (
@@ -1095,7 +1153,14 @@ export default function Index({
             </div>
 
             {modalForm.abierto && <ModalFormSolicitud onClose={() => setModalForm({ ...modalForm, abierto: false })} procesos={procesos} listas={listas} tiposCliente={tipos_cliente} bancos={bancos} modoEdicion={modalForm.modoEdicion} solicitudAEditar={modalForm.solicitud} />}
-            {modalRespuesta.abierto && <ModalRespuestaSolicitud onClose={() => setModalRespuesta({ ...modalRespuesta, abierto: false })} solicitud={modalRespuesta.solicitud} estadoId={modalRespuesta.estadoId} />}
+            {modalRespuesta.abierto && (
+                <ModalRespuestaSolicitud
+                    onClose={() => setModalRespuesta({ ...modalRespuesta, abierto: false })}
+                    solicitud={modalRespuesta.solicitud}
+                    estadoId={modalRespuesta.estadoId}
+                    esReporteError={Number(modalRespuesta.estadoId) === Number(idIncorrecta)}
+                />
+            )}
             {modalBitacora.abierto && <ModalBitacoraSolicitud onClose={() => setModalBitacora({ ...modalBitacora, abierto: false })} solicitud={modalBitacora.solicitud} listas={listas} tiposCliente={tipos_cliente} />}
             {modalConsulta.abierto && <ModalConsultaSolicitud onClose={() => setModalConsulta({ ...modalConsulta, abierto: false })} solicitud={modalConsulta.solicitud} />}
             {modalRespuestaConsulta.abierto && <ModalRespuestaConsulta onClose={() => setModalRespuestaConsulta({ ...modalRespuestaConsulta, abierto: false })} solicitud={modalRespuestaConsulta.solicitud} consulta={modalRespuestaConsulta.consulta} />}

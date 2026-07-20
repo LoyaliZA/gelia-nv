@@ -60,7 +60,16 @@ export default function FeedbackResolucion({ solicitud }) {
     const Icono = esError ? AlertOctagon : CheckCircle2;
     const colorIcono = esError ? 'text-red-500' : 'text-emerald-500';
     const colorTexto = esError ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400';
-    const titulo = esError ? 'Corrección requerida' : 'Resolución admin';
+    const autor = ultimaAuditoria?.usuario?.name?.trim();
+    const estadoAnteriorNombre = ultimaAuditoria?.estado_anterior?.nombre
+        || ultimaAuditoria?.estadoAnterior?.nombre
+        || '';
+    const esRespuestaACorreccion = esAprobada && estadoAnteriorNombre === 'Incorrecta';
+    const titulo = esError
+        ? (autor ? `Error reportado por ${autor}` : 'Corrección requerida')
+        : esRespuestaACorreccion
+            ? (autor ? `Respuesta a corrección · ${autor}` : 'Respuesta a corrección')
+            : (autor ? `Respuesta de ${autor}` : 'Respuesta');
 
     return (
         <div className="mb-4 flex flex-col gap-2">

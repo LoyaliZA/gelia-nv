@@ -167,6 +167,9 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
                 if ($esVendedorOriginal) {
                     return "{$nombreDestinatario}, se reportó un error en tu solicitud de {$proceso}, {$folio}. Revisa o inicia una nueva si el pago venció.";
                 }
+                if (!empty($this->extras['reportado_por_vendedora'])) {
+                    return "Atención {$nombreDestinatario}, {$nombreVendedor} ha reportado un error en la respuesta de su solicitud de {$proceso}, {$folio}.";
+                }
                 return "{$nombreDestinatario}, {$nombreVendedor} recibió una observación en su solicitud de {$proceso}, {$folio}.";
             case 'reparada':
                 return "Atención {$nombreDestinatario}, {$nombreVendedor} reparó su solicitud de {$proceso}, {$folio}, y está lista para revisión.";
