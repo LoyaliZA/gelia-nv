@@ -30,12 +30,20 @@ class ActualizarPedidoBmaService
                 }
             }
 
+            $eraRechazado = $pedido->estatus?->fase_ciclo === 'RECHAZADO_VENDEDORA';
+
             $pedido->update(array_merge(
                 $this->atributosPedidoBase($datos),
                 [
                     'cliente_id' => $clienteId,
-                    'motivo_rechazo' => $pedido->estatus?->fase_ciclo === 'RECHAZADO_VENDEDORA' ? null : $pedido->motivo_rechazo,
-                ]
+                    'motivo_rechazo' => $eraRechazado ? null : $pedido->motivo_rechazo,
+                ],
+                $eraRechazado ? [
+                    'campos_incorrectos' => null,
+                    'detalle_error_datos' => null,
+                    'error_datos_at' => null,
+                    'error_datos_por_id' => null,
+                ] : []
             ));
 
             if (!empty($datos['documentos_eliminar']) && is_array($datos['documentos_eliminar'])) {

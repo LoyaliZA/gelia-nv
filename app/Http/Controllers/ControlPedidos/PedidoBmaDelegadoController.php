@@ -5,6 +5,7 @@ namespace App\Http\Controllers\ControlPedidos;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ControlPedidos\AsignarGuiaPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ImportarGuiasPedidoRequest;
+use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\AsignarGuiaPedidoBmaService;
 use App\Services\ControlPedidos\ActualizarGuiaPedidoBmaService;
@@ -13,6 +14,7 @@ use App\Http\Requests\ControlPedidos\SubirGuiaPdfPedidoBmaRequest;
 use App\Services\ControlPedidos\GestionarGuiaPdfPedidoBmaService;
 use App\Services\ControlPedidos\ImportarGuiasPedidoService;
 use App\Services\ControlPedidos\ListarPedidosDelegadoService;
+use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -103,6 +105,25 @@ class PedidoBmaDelegadoController extends Controller
         }
 
         return redirect()->back()->with('success', 'PDF de guía eliminado.');
+    }
+
+    public function reportarErrorDatos(
+        ReportarErrorDatosPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ReportarErrorDatosPedidoBmaService $service
+    ): RedirectResponse {
+        try {
+            $service->ejecutar(
+                $pedidoBma->load(['estatus', 'documentos']),
+                Auth::id(),
+                $request->validated('campos_incorrectos'),
+                (string) ($request->validated('detalle') ?? '')
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Error de datos reportado. CEDIS, auxiliar y vendedora fueron notificados.');
     }
 
     public function importar(ImportarGuiasPedidoRequest $request, ImportarGuiasPedidoService $service): RedirectResponse

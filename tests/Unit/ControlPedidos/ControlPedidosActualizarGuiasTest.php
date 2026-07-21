@@ -7,18 +7,18 @@ use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\User;
+use App\Services\ControlPedidos\ActualizarGuiaPedidoBmaService;
 use App\Services\ControlPedidos\AsignarGuiaPedidoBmaService;
-use App\Services\ControlPedidos\GestionarGuiaPdfPedidoBmaService;
-use App\Services\ControlPedidos\ListarPedidosCedisService;
+use App\Services\ControlPedidos\ListarPedidosDelegadoService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
-use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
+use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
+use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
-class ControlPedidosFase23Test extends TestCase
+class ControlPedidosActualizarGuiasTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -30,152 +30,101 @@ class ControlPedidosFase23Test extends TestCase
 
         $this->usuario = User::factory()->create();
         $this->seedCatalogosMinimos();
+        Notification::fake();
     }
 
-    public function test_cedis_lista_pedido_empacado_en_tab_pendientes_guia(): void
+    public function test_filtros_delegado_por_tab(): void
     {
-        $pedido = $this->crearPedidoAprobadoCedis([
-            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
-        ]);
+        $pedidoGuia = $this->crearPedidoPendienteGuia();
+        $pedidoEnvio = $this->crearPedidoPendienteEnvio();
 
-        app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
-            $pedido->fresh(['paqueteria', 'origen']),
+        $listar = app(ListarPedidosDelegadoService::class);
+
+        $pendientes = $listar->ejecutar(['tab' => 'PENDIENTES_GUIA'], false);
+        $this->assertTrue($pendientes->contains('id', $pedidoGuia->id));
+        $this->assertFalse($pendientes->contains('id', $pedidoEnvio->id));
+
+        $envio = $listar->ejecutar(['tab' => 'PENDIENTES_ENVIO'], false);
+        $this->assertTrue($envio->contains('id', $pedidoEnvio->id));
+        $this->assertFalse($envio->contains('id', $pedidoGuia->id));
+
+        $metricas = $listar->metricas();
+        $this->assertGreaterThanOrEqual(1, $metricas['pendientes_guia']);
+        $this->assertGreaterThanOrEqual(1, $metricas['pendientes_envio']);
+        $this->assertSame(
+            $metricas['pendientes_guia'] + $metricas['pendientes_envio'] + $metricas['enviados'],
+            $metricas['total']
+        );
+    }
+
+    public function test_corregir_guia_marca_retraso(): void
+    {
+        $pedido = $this->crearPedidoPendienteEnvio();
+
+        $actualizado = app(ActualizarGuiaPedidoBmaService::class)->ejecutar(
+            $pedido->fresh('estatus'),
+            'GUIA-CORREGIDA-99',
             $this->usuario->id
         );
 
-        $pendientesGuia = app(ListarPedidosCedisService::class)->ejecutar(['tab' => 'PENDIENTES_GUIA'], false);
-
-        $this->assertTrue($pendientesGuia->contains('id', $pedido->id));
-        $this->assertNotNull($pedido->fresh()->empacado_at);
-    }
-
-    public function test_subir_pdf_guia_crea_documento_tipo_guia(): void
-    {
-        Storage::fake('public');
-
-        $pedido = $this->empacarComercialPendienteGuia();
-        $archivo = UploadedFile::fake()->create('guia-test.pdf', 100, 'application/pdf');
-
-        $actualizado = app(GestionarGuiaPdfPedidoBmaService::class)->subir(
-            $pedido->fresh('estatus'),
-            $archivo
+        $this->assertSame('GUIA-CORREGIDA-99', $actualizado->numero_rastreo);
+        $this->assertTrue((bool) $actualizado->guia_retraso);
+        $this->assertNotNull($actualizado->guia_corregida_at);
+        $this->assertSame(
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+            $actualizado->fresh('estatus')->estatus->fase_ciclo
         );
-
-        $this->assertTrue($actualizado->tieneGuiaPdf());
-        $this->assertDatabaseHas('pedido_bma_documentos', [
+        $this->assertDatabaseHas('pedido_bma_historial_estados', [
             'pedido_bma_id' => $pedido->id,
-            'tipo' => PedidoBmaDocumento::TIPO_GUIA,
         ]);
+        $this->assertTrue(
+            DB::table('pedido_bma_historial_estados')
+                ->where('pedido_bma_id', $pedido->id)
+                ->where('comentarios', 'like', '%provoca retraso%')
+                ->exists()
+        );
     }
 
-    public function test_asignar_numero_setea_guia_subida_at(): void
+    public function test_reportar_error_datos_rechaza_y_bloquea_envio(): void
     {
-        $pedido = $this->empacarComercialPendienteGuia();
+        $pedido = $this->crearPedidoPendienteEnvio();
 
-        $this->assertNull($pedido->guia_subida_at);
-
-        $actualizado = app(AsignarGuiaPedidoBmaService::class)->ejecutar(
-            $pedido->fresh('estatus'),
-            'GUIA-FASE23-001',
-            $this->usuario->id
-        );
-
-        $this->assertSame('GUIA-FASE23-001', $actualizado->numero_rastreo);
-        $this->assertNotNull($actualizado->guia_subida_at);
-    }
-
-    public function test_pdf_guia_persiste_tras_pasar_a_pendiente_de_envio(): void
-    {
-        Storage::fake('public');
-
-        $pedido = $this->empacarComercialPendienteGuia();
-        $archivo = UploadedFile::fake()->create('guia-persist.pdf', 100, 'application/pdf');
-
-        app(GestionarGuiaPdfPedidoBmaService::class)->subir(
-            $pedido->fresh('estatus'),
-            $archivo
-        );
-
-        $pendienteEnvio = app(AsignarGuiaPedidoBmaService::class)->ejecutar(
-            $pedido->fresh('estatus'),
-            'TRACK-PERSIST',
-            $this->usuario->id
+        $actualizado = app(ReportarErrorDatosPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['estatus', 'documentos']),
+            $this->usuario->id,
+            ['domicilio', 'codigo_postal'],
+            'CP y calle incorrectos'
         );
 
         $this->assertSame(
-            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
-            $pendienteEnvio->fresh('estatus')->estatus->fase_ciclo
+            CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
+            $actualizado->fresh('estatus')->estatus->fase_ciclo
         );
-        $this->assertTrue($pendienteEnvio->fresh(['documentos'])->tieneGuiaPdf());
+        $this->assertSame(['domicilio', 'codigo_postal'], $actualizado->campos_incorrectos);
+        $this->assertNull($actualizado->numero_rastreo);
+        $this->assertFalse($actualizado->fresh('estatus')->puedeMarcarEnviado());
     }
 
-    public function test_cedis_tab_pendientes_envio_incluye_local_empacado(): void
+    public function test_allowlist_campos_incorrectos_filtra_invalidos(): void
     {
-        $pedido = $this->crearPedidoAprobadoCedis([
-            'catalogo_paqueteria_id' => $this->paqueteriaLocalId(),
-        ]);
-
-        app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
-            $pedido->fresh(['paqueteria', 'origen']),
-            $this->usuario->id
-        );
-
-        $pendientesEnvio = app(ListarPedidosCedisService::class)->ejecutar(['tab' => 'PENDIENTES_ENVIO'], false);
-
-        $this->assertTrue($pendientesEnvio->contains('id', $pedido->id));
+        $filtrados = CamposIncorrectosPedidoBma::filtrar(['domicilio', 'hack', 'paqueteria', 'foo']);
+        $this->assertSame(['domicilio', 'paqueteria'], $filtrados);
     }
 
-    public function test_marcar_enviado_requiere_guia_si_ofrece_rastreo(): void
+    public function test_reportar_error_sin_campos_validos_falla(): void
     {
-        $pedido = $this->empacarComercialPendienteGuia();
+        $this->expectException(\InvalidArgumentException::class);
 
-        $this->expectException(\RuntimeException::class);
-
-        app(MarcarEnviadoPedidoBmaService::class)->ejecutar(
-            $pedido->fresh(['estatus', 'paqueteria', 'origen']),
-            $this->usuario->id
+        $pedido = $this->crearPedidoPendienteEnvio();
+        app(ReportarErrorDatosPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['estatus', 'documentos']),
+            $this->usuario->id,
+            ['campo_inventado'],
+            'detalle'
         );
     }
 
-    public function test_no_subir_pdf_en_resguardo(): void
-    {
-        Storage::fake('public');
-
-        $pedido = $this->crearPedidoAprobadoCedis([
-            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
-            'es_resguardo' => true,
-        ]);
-
-        $archivo = UploadedFile::fake()->create('guia-invalida.pdf', 100, 'application/pdf');
-
-        $this->expectException(\RuntimeException::class);
-
-        app(GestionarGuiaPdfPedidoBmaService::class)->subir(
-            $pedido->fresh('estatus'),
-            $archivo
-        );
-    }
-
-    public function test_si_permite_subir_pdf_en_cedis_sin_resguardo(): void
-    {
-        Storage::fake('public');
-
-        $pedido = $this->crearPedidoAprobadoCedis([
-            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
-            'es_resguardo' => false,
-        ]);
-
-        $archivo = UploadedFile::fake()->create('guia-cedis.pdf', 100, 'application/pdf');
-
-        $actualizado = app(GestionarGuiaPdfPedidoBmaService::class)->subir(
-            $pedido->fresh('estatus'),
-            $archivo
-        );
-
-        $this->assertTrue($actualizado->tieneGuiaPdf());
-    }
-
-    private function empacarComercialPendienteGuia(): PedidoBma
+    private function crearPedidoPendienteGuia(): PedidoBma
     {
         $pedido = $this->crearPedidoAprobadoCedis([
             'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
@@ -183,6 +132,17 @@ class ControlPedidosFase23Test extends TestCase
 
         return app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
             $pedido->fresh(['paqueteria', 'origen']),
+            $this->usuario->id
+        );
+    }
+
+    private function crearPedidoPendienteEnvio(): PedidoBma
+    {
+        $pedido = $this->crearPedidoPendienteGuia();
+
+        return app(AsignarGuiaPedidoBmaService::class)->ejecutar(
+            $pedido->fresh('estatus'),
+            'GUIA-ORIGINAL',
             $this->usuario->id
         );
     }
@@ -202,20 +162,13 @@ class ControlPedidosFase23Test extends TestCase
             ->value('id');
     }
 
-    private function paqueteriaLocalId(): int
-    {
-        return (int) DB::table('catalogo_paqueterias_pedido')
-            ->where('categoria', 'local_regional')
-            ->value('id');
-    }
-
     private function crearPedidoAprobadoCedis(array $overrides = []): PedidoBma
     {
         $enCedis = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_EN_CEDIS);
 
         $pedido = PedidoBma::create(array_merge([
-            'folio' => 'PED-TEST-' . uniqid(),
-            'folio_remision' => 'REM-TEST-001',
+            'folio' => 'PED-TEST-'.uniqid(),
+            'folio_remision' => 'REM-TEST-'.uniqid(),
             'fecha' => now()->toDateString(),
             'vendedor_id' => $this->usuario->id,
             'cliente_id' => DB::table('clientes')->value('id'),
@@ -242,27 +195,29 @@ class ControlPedidosFase23Test extends TestCase
         PedidoBmaDocumento::create([
             'pedido_bma_id' => $pedido->id,
             'tipo' => PedidoBmaDocumento::TIPO_REMISION,
-            'ruta_archivo' => 'test/remision.pdf',
+            'ruta_archivo' => 'pedidos_bma/remisiones/test.pdf',
             'nombre_original' => 'remision.pdf',
             'mime_type' => 'application/pdf',
             'tamano_bytes' => 100,
-            'orden' => 0,
+            'orden' => 1,
         ]);
 
-        return $pedido;
+        return $pedido->fresh();
     }
 
     private function seedCatalogosMinimos(): void
     {
         $now = now();
 
-        if (!CatalogoEstatusPedido::exists()) {
+        if (! CatalogoEstatusPedido::exists()) {
             foreach ([
                 ['codigo_interno' => 'BORRADOR', 'nombre_visual' => 'Borrador', 'color_hex' => '#94A3B8', 'fase_ciclo' => 'BORRADOR', 'orden' => 1],
+                ['codigo_interno' => 'AZUL_1', 'nombre_visual' => 'AZUL ①', 'color_hex' => '#3B82F6', 'fase_ciclo' => 'PENDIENTE_AUXILIAR', 'orden' => 2],
                 ['codigo_interno' => 'AMARILLO', 'nombre_visual' => 'AMARILLO', 'color_hex' => '#EAB308', 'fase_ciclo' => 'EN_CEDIS', 'orden' => 3],
+                ['codigo_interno' => 'ROJO', 'nombre_visual' => 'Incidencia', 'color_hex' => '#EF4444', 'fase_ciclo' => 'INCIDENCIA_CEDIS', 'orden' => 4],
+                ['codigo_interno' => 'NARANJA', 'nombre_visual' => 'Rechazado', 'color_hex' => '#F97316', 'fase_ciclo' => 'RECHAZADO_VENDEDORA', 'orden' => 5],
                 ['codigo_interno' => 'PENDIENTE_GUIA', 'nombre_visual' => 'Pendiente de guía', 'color_hex' => '#A855F7', 'fase_ciclo' => 'PENDIENTE_DE_GUIA', 'orden' => 7],
                 ['codigo_interno' => 'PENDIENTE_ENVIO', 'nombre_visual' => 'Pendiente de envío', 'color_hex' => '#0EA5E9', 'fase_ciclo' => 'PENDIENTE_DE_ENVIO', 'orden' => 10],
-                ['codigo_interno' => 'ENTREGADO', 'nombre_visual' => 'Entregado', 'color_hex' => '#10B981', 'fase_ciclo' => 'ENTREGADO', 'orden' => 8],
                 ['codigo_interno' => 'ENVIADO', 'nombre_visual' => 'Enviado', 'color_hex' => '#22C55E', 'fase_ciclo' => 'ENVIADO', 'orden' => 9],
             ] as $row) {
                 CatalogoEstatusPedido::create(array_merge($row, ['activo' => true]));
@@ -271,7 +226,7 @@ class ControlPedidosFase23Test extends TestCase
 
         $this->origenForaneo();
 
-        if (!DB::table('catalogo_bancos')->exists()) {
+        if (! DB::table('catalogo_bancos')->exists()) {
             DB::table('catalogo_bancos')->insert([
                 'nombre' => 'BBVA',
                 'activo' => true,
@@ -280,7 +235,7 @@ class ControlPedidosFase23Test extends TestCase
             ]);
         }
 
-        if (!DB::table('catalogo_listas_descuento')->exists()) {
+        if (! DB::table('catalogo_listas_descuento')->exists()) {
             DB::table('catalogo_listas_descuento')->insert([
                 'nombre' => 'Lista Test',
                 'activo' => true,
@@ -289,7 +244,7 @@ class ControlPedidosFase23Test extends TestCase
             ]);
         }
 
-        if (!DB::table('catalogo_paqueterias_pedido')->where('categoria', 'comercial')->exists()) {
+        if (! DB::table('catalogo_paqueterias_pedido')->where('categoria', 'comercial')->exists()) {
             $existente = DB::table('catalogo_paqueterias_pedido')->where('nombre', 'FEDEX')->first();
             if ($existente) {
                 DB::table('catalogo_paqueterias_pedido')
@@ -306,24 +261,7 @@ class ControlPedidosFase23Test extends TestCase
             }
         }
 
-        if (!DB::table('catalogo_paqueterias_pedido')->where('categoria', 'local_regional')->exists()) {
-            $existenteLocal = DB::table('catalogo_paqueterias_pedido')->where('nombre', 'TAXI FRONTERA')->first();
-            if ($existenteLocal) {
-                DB::table('catalogo_paqueterias_pedido')
-                    ->where('id', $existenteLocal->id)
-                    ->update(['categoria' => 'local_regional', 'updated_at' => $now]);
-            } else {
-                DB::table('catalogo_paqueterias_pedido')->insert([
-                    'nombre' => 'TAXI FRONTERA',
-                    'categoria' => 'local_regional',
-                    'activo' => true,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
-            }
-        }
-
-        if (!DB::table('catalogo_tipos_caja_pedido')->exists()) {
+        if (! DB::table('catalogo_tipos_caja_pedido')->exists()) {
             DB::table('catalogo_tipos_caja_pedido')->insert([
                 'nombre' => 'CAJA TEST',
                 'peso_volumetrico' => 1,
@@ -333,7 +271,7 @@ class ControlPedidosFase23Test extends TestCase
             ]);
         }
 
-        if (!DB::table('catalogo_tipos_guia_pedido')->exists()) {
+        if (! DB::table('catalogo_tipos_guia_pedido')->exists()) {
             DB::table('catalogo_tipos_guia_pedido')->insert([
                 'nombre' => 'Terrestre',
                 'activo' => true,
@@ -342,7 +280,7 @@ class ControlPedidosFase23Test extends TestCase
             ]);
         }
 
-        if (!DB::table('catalogo_zonas_pedido')->exists()) {
+        if (! DB::table('catalogo_zonas_pedido')->exists()) {
             DB::table('catalogo_zonas_pedido')->insert([
                 'nombre' => 'Sin reexpedición',
                 'activo' => true,
@@ -351,7 +289,7 @@ class ControlPedidosFase23Test extends TestCase
             ]);
         }
 
-        if (!DB::table('clientes')->exists()) {
+        if (! DB::table('clientes')->exists()) {
             DB::table('clientes')->insert([
                 'numero_cliente' => '1001',
                 'nombre' => 'Cliente Test',
@@ -362,7 +300,7 @@ class ControlPedidosFase23Test extends TestCase
             ]);
         }
 
-        if (!DB::table('almacenes')->exists()) {
+        if (! DB::table('almacenes')->exists()) {
             DB::table('almacenes')->insert([
                 'codigo' => 'VTA',
                 'nombre' => 'CEDIS',
@@ -371,7 +309,7 @@ class ControlPedidosFase23Test extends TestCase
             ]);
         }
 
-        if (!DB::table('catalogo_envios_tienda')->exists()) {
+        if (! DB::table('catalogo_envios_tienda')->exists()) {
             DB::table('catalogo_envios_tienda')->insert([
                 'nombre' => 'Tienda',
                 'es_otro' => false,

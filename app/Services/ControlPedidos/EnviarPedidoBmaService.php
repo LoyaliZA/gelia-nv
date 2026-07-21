@@ -52,6 +52,10 @@ class EnviarPedidoBmaService
                 'motivo_rechazo' => null,
                 'pago_validado_at' => null,
                 'pago_validado_por_id' => null,
+                'campos_incorrectos' => null,
+                'detalle_error_datos' => null,
+                'error_datos_at' => null,
+                'error_datos_por_id' => null,
             ]);
 
             $this->eliminarRemisiones($pedido);

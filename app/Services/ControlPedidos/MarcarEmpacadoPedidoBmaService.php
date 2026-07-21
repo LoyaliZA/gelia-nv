@@ -34,9 +34,10 @@ class MarcarEmpacadoPedidoBmaService
             $pedido->loadMissing(['paqueteria', 'origen']);
             $estatusAnterior = $pedido->estatus;
 
-            $faseDestino = $pedido->ofreceRastreo()
-                ? CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
-                : CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO;
+            $tieneGuia = !empty($pedido->numero_rastreo);
+            $faseDestino = (!$pedido->ofreceRastreo() || $tieneGuia)
+                ? CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO
+                : CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA;
 
             $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
 
@@ -55,7 +56,9 @@ class MarcarEmpacadoPedidoBmaService
 
             $comentario = $faseDestino === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
                 ? 'Pedido empacado; pendiente de captura de guía.'
-                : 'Pedido empacado; pendiente de envío.';
+                : ($tieneGuia
+                    ? 'Pedido empacado; guía ya asignada, pendiente de envío.'
+                    : 'Pedido empacado; pendiente de envío.');
 
             $this->historialService->registrarTransicion(
                 $pedido->id,

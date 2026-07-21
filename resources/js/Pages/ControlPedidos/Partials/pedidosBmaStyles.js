@@ -34,8 +34,15 @@ export const LABELS_ESTATUS_POR_FASE = {
     ENVIADO: 'Enviado',
 };
 
+/** Resguardo solo etiqueta el estado cuando el pedido ya está en flujo (no borrador/rechazado). */
+export const etiquetaResguardoVisible = (estatus, esResguardo = false) => {
+    if (!esResguardo) return false;
+    const fase = estatus?.fase_ciclo;
+    return Boolean(fase) && fase !== 'BORRADOR' && fase !== 'RECHAZADO_VENDEDORA';
+};
+
 export const etiquetaEstatusPedido = (estatus, { esResguardo = false } = {}) => {
-    if (esResguardo) {
+    if (etiquetaResguardoVisible(estatus, esResguardo)) {
         return 'Resguardo';
     }
     const fase = estatus?.fase_ciclo;
@@ -63,10 +70,19 @@ export const TABS_AUDITORIA = [
 ];
 
 export const TABS_CEDIS = [
-    { id: 'PENDIENTES', label: 'Pendientes' },
-    { id: 'INCIDENCIAS', label: 'Incidencias' },
-    { id: 'EMPACADOS', label: 'Empacados' },
     { id: 'TODOS', label: 'Todos' },
+    { id: 'EMPACADOS', label: 'Empacados' },
+    { id: 'PENDIENTES_ENVIO', label: 'Pendientes de Enviar' },
+    { id: 'PENDIENTES_GUIA', label: 'Pendientes de Guía' },
+    { id: 'ENVIADOS', label: 'Enviados' },
+    { id: 'INCORRECTAS', label: 'Incorrectas' },
+];
+
+export const TABS_DELEGADO = [
+    { id: 'TODOS', label: 'Todos' },
+    { id: 'PENDIENTES_GUIA', label: 'Pendientes de Guía' },
+    { id: 'PENDIENTES_ENVIO', label: 'Pendientes de Envío' },
+    { id: 'ENVIADOS', label: 'Enviados' },
 ];
 
 export const badgeResguardoSemantico = () => ({
@@ -74,9 +90,24 @@ export const badgeResguardoSemantico = () => ({
     ...badgeClaseEstatusPedido({ color_hex: '#3B82F6' }),
 });
 
+export const badgeResguardoApartado = () => ({
+    label: 'Apartado',
+    ...badgeClaseEstatusPedido({ color_hex: '#0EA5E9' }),
+});
+
+export const badgeRetrasoGuia = () => ({
+    label: 'Retraso',
+    ...badgeClaseEstatusPedido({ color_hex: '#F59E0B' }),
+});
+
+export const badgeErrorDatos = () => ({
+    label: 'Error datos',
+    ...badgeClaseEstatusPedido({ color_hex: '#EF4444' }),
+});
+
 /** Badge con color del catálogo + etiqueta semántica del estado. */
 export const badgeEstatusPedido = (estatus, { esResguardo = false } = {}) => {
-    if (esResguardo) {
+    if (etiquetaResguardoVisible(estatus, esResguardo)) {
         return badgeResguardoSemantico();
     }
     return {
@@ -86,7 +117,7 @@ export const badgeEstatusPedido = (estatus, { esResguardo = false } = {}) => {
 };
 
 export const badgeAuditoriaSemantico = (fase, esResguardo = false) => {
-    if (esResguardo) {
+    if (etiquetaResguardoVisible({ fase_ciclo: fase }, esResguardo)) {
         return badgeResguardoSemantico();
     }
     const map = {
@@ -107,9 +138,9 @@ export const badgeAuditoriaSemantico = (fase, esResguardo = false) => {
     };
 };
 
-export const badgeEmpaqueSemantico = (fase, esResguardo = false) => {
-    if (esResguardo) {
-        return badgeResguardoSemantico();
+export const badgeEmpaqueSemantico = (fase, esResguardo = false, resguardoApartado = false) => {
+    if (etiquetaResguardoVisible({ fase_ciclo: fase }, esResguardo)) {
+        return resguardoApartado ? badgeResguardoApartado() : badgeResguardoSemantico();
     }
     const map = {
         EN_CEDIS: { hex: '#EAB308', label: 'Pendiente de Empaque' },

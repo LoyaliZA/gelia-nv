@@ -459,6 +459,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/marcar-enviado', [PedidoBmaCedisController::class, 'marcarEnviado'])->name('marcar_enviado');
         Route::post('/{pedidoBma}/revertir-empacado', [PedidoBmaCedisController::class, 'revertirEmpacado'])->name('revertir_empacado');
         Route::post('/{pedidoBma}/reportar-incidencia', [PedidoBmaCedisController::class, 'reportarIncidencia'])->name('reportar_incidencia');
+        Route::post('/{pedidoBma}/reportar-error-datos', [PedidoBmaCedisController::class, 'reportarErrorDatos'])->name('reportar_error_datos');
+        Route::post('/{pedidoBma}/marcar-resguardo-apartado', [PedidoBmaCedisController::class, 'marcarResguardoApartado'])->name('marcar_resguardo_apartado');
     });
 
     Route::middleware(['can:control_pedidos.delegado'])->prefix('control-pedidos/delegado')->name('control_pedidos.delegado.')->group(function () {
@@ -469,6 +471,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/actualizar-guia', [PedidoBmaDelegadoController::class, 'actualizarGuia'])->name('actualizar_guia');
         Route::post('/{pedidoBma}/guia-pdf', [PedidoBmaDelegadoController::class, 'subirGuiaPdf'])->name('guia_pdf.store');
         Route::delete('/{pedidoBma}/guia-pdf', [PedidoBmaDelegadoController::class, 'eliminarGuiaPdf'])->name('guia_pdf.destroy');
+        Route::post('/{pedidoBma}/reportar-error-datos', [PedidoBmaDelegadoController::class, 'reportarErrorDatos'])->name('reportar_error_datos');
     });
 
     // --- Nuevo Módulo: Interfaz de Entregas ---

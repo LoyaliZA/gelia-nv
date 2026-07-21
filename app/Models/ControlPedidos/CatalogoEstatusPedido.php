@@ -50,7 +50,11 @@ class CatalogoEstatusPedido extends Model
 
     public function etiquetaSemantica(?bool $esResguardo = false): string
     {
-        if ($esResguardo) {
+        // Flag de intención en borrador/rechazado: no sustituye la etiqueta de fase.
+        if ($esResguardo
+            && $this->fase_ciclo !== self::FASE_BORRADOR
+            && $this->fase_ciclo !== self::FASE_RECHAZADO_VENDEDORA
+        ) {
             return 'Resguardo';
         }
 

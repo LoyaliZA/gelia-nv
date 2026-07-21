@@ -27,6 +27,9 @@ export const ALERTAS_TIPOS = {
     soporte_ticket_nuevo: 'Nuevo ticket de soporte',
     soporte_respuesta_agente: 'Respuesta de soporte',
     soporte_respuesta_usuario: 'Mensaje en ticket',
+    pedido_error_datos: 'Error de datos (pedido)',
+    pedido_guia_retraso: 'Retraso por corrección de guía',
+    pedido_resguardo_apartado: 'Resguardo apartado (CEDIS)',
 };
 
 export const MENSAJERIA_TIPO_ALERTA = 'mensaje_nuevo';
@@ -165,6 +168,10 @@ export function resolveNotificationDestination(notification = {}) {
 
     if (payload.modulo === 'facturas' && payload.folio) {
         return `/facturas?folio=${payload.folio}`;
+    }
+
+    if (payload.modulo === 'control_pedidos' || payload.pedido_bma_id) {
+        return toAppPath(payload.url) || '/control-pedidos';
     }
 
     if (payload.modulo === 'woocommerce') {

@@ -633,6 +633,23 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     if (!abierto) return null;
 
     const docsExistentes = (pedido?.documentos || []).filter((d) => !docsEliminar.includes(d.id));
+    const camposIncorrectos = Array.isArray(pedido?.campos_incorrectos) ? pedido.campos_incorrectos : [];
+    const esCampoIncorrecto = (key) => camposIncorrectos.includes(key);
+    const wrapIncorrecto = (key) => (esCampoIncorrecto(key)
+        ? 'rounded-xl ring-2 ring-orange-500/70 bg-orange-500/10 p-2'
+        : '');
+    const etiquetasIncorrectas = {
+        domicilio: 'Domicilio',
+        destinatario: 'Destinatario',
+        telefono: 'Teléfono',
+        paqueteria: 'Paquetería',
+        tipo_guia: 'Tipo de guía',
+        referencia: 'Referencias',
+        codigo_postal: 'Código postal',
+        ciudad_estado: 'Ciudad / estado',
+        numero_rastreo: 'Número de guía',
+        guia_pdf: 'PDF de guía',
+    };
 
     const modal = createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
@@ -670,6 +687,26 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 </div>
 
                 <div className="gelia-modal-body p-5 md:p-8 space-y-8">
+                    {camposIncorrectos.length > 0 && (
+                        <div className="p-4 rounded-xl border border-orange-500/50 bg-orange-500/10 flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                                <p className="text-sm font-black text-orange-700 m-0">Datos a corregir</p>
+                                <p className="text-xs font-bold theme-text-main mt-1 m-0">
+                                    {camposIncorrectos.map((k) => etiquetasIncorrectas[k] || k).join(', ')}
+                                </p>
+                                {pedido?.detalle_error_datos && (
+                                    <p className="text-xs font-bold theme-text-muted mt-2 m-0">{pedido.detalle_error_datos}</p>
+                                )}
+                                {(esCampoIncorrecto('numero_rastreo') || esCampoIncorrecto('guia_pdf')) && (
+                                    <p className="text-[10px] font-bold text-orange-600 mt-2 m-0">
+                                        La guía fue invalidada; al reenviar el pedido se solicitará una nueva guía.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* 0. Origen y resguardo */}
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>Origen del pedido</p>
@@ -796,7 +833,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <label className={SECCION}>Alto (cm)</label>
                                 <input type="text" readOnly value={dimsCaja.alto != null ? dimsCaja.alto : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
                             </div>
-                            <div>
+                            <div className={wrapIncorrecto('tipo_guia')}>
                                 <label className={SECCION}>Tipo de guía</label>
                                 <select value={data.catalogo_tipo_guia_id} onChange={(e) => setData('catalogo_tipo_guia_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
                                     <option value="">Seleccionar...</option>
@@ -849,8 +886,8 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <p className="text-xs font-bold theme-text-main m-0">{msgDireccion}</p>
                             </div>
                         )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
+                        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${(esCampoIncorrecto('domicilio') || esCampoIncorrecto('ciudad_estado') || esCampoIncorrecto('referencia') || esCampoIncorrecto('destinatario') || esCampoIncorrecto('telefono')) ? 'rounded-xl ring-2 ring-orange-500/40 bg-orange-500/5 p-3' : ''}`}>
+                            <div className={wrapIncorrecto('codigo_postal')}>
                                 <label className={SECCION}>C.P.</label>
                                 <input type="text" placeholder="Código postal" value={data.codigo_postal} onChange={(e) => setData('codigo_postal', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                             </div>
@@ -1009,10 +1046,12 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 </div>
                                 <div>
                                     <label className={SECCION}>Paquetería</label>
+                                    <div className={wrapIncorrecto('paqueteria')}>
                                     <select value={data.catalogo_paqueteria_id} onChange={(e) => manejarPaqueteria(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
                                         <option value="">Seleccionar...</option>
                                         {(catalogos.paqueterias || []).map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                                     </select>
+                                    </div>
                                 </div>
                                 {!tieneCoberturaSeguro && data.catalogo_paqueteria_id && (
                                     <div id="seg-warn" className="md:col-span-2 flex items-start gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
@@ -1071,7 +1110,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                         </div>
                                     )}
                                     {data.envia_a_otra_persona && (
-                                        <div className="md:col-span-2">
+                                        <div className={`md:col-span-2 ${wrapIncorrecto('destinatario')}`}>
                                             <label className={SECCION}>Nombre del destinatario</label>
                                             <input type="text" placeholder="Nombre completo" value={data.envia_otra_persona} onChange={(e) => setData('envia_otra_persona', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                                         </div>
