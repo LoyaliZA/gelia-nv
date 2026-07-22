@@ -5,6 +5,7 @@ import { X, Edit2, Info, AlertOctagon, Upload, Send } from 'lucide-react';
 
 export default function ModalRespuestaSolicitud({ onClose, solicitud, estadoId, esReporteError = false }) {
     const [previewEvidenciaRespuesta, setPreviewEvidenciaRespuesta] = useState(null);
+    const esSoloTag = !!solicitud?.compra_en_tienda_solo_tag && !esReporteError;
 
     const { data, setData, post, processing, reset } = useForm({
         solicitud_id: solicitud?.id || '',
@@ -68,7 +69,16 @@ export default function ModalRespuestaSolicitud({ onClose, solicitud, estadoId, 
                     <div className="space-y-8">
                         <div className="p-5 rounded-2xl border flex items-start gap-4 transition-colors" style={{ backgroundColor: esReporteError ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', borderColor: esReporteError ? 'rgba(239, 68, 68, 0.3)' : 'rgba(52, 211, 153, 0.3)' }}>
                             {esReporteError ? <AlertOctagon className="w-6 h-6 text-red-500 mt-0.5" /> : <Info className="w-6 h-6 text-emerald-500 mt-0.5" />}
-                            <div><p className="text-sm font-black uppercase tracking-widest" style={{ color: esReporteError ? '#ef4444' : '#10b981' }}>{esReporteError ? 'Reporte de Error' : 'Aprobación'}</p></div>
+                            <div>
+                                <p className="text-sm font-black uppercase tracking-widest" style={{ color: esReporteError ? '#ef4444' : '#10b981' }}>
+                                    {esReporteError ? 'Reporte de Error' : 'Aprobación'}
+                                </p>
+                                {esSoloTag && (
+                                    <p className="text-[11px] font-bold theme-text-muted mt-2 m-0 leading-snug">
+                                        Compra en tienda: Solo Tag. Al aprobar queda concluida para la vendedora (sin confirmar pago) y pendiente de verificar.
+                                    </p>
+                                )}
+                            </div>
                         </div>
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Observaciones / Motivo</label>

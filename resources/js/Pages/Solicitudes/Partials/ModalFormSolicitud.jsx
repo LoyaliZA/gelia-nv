@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, FileSpreadsheet, Upload, Trash2, Download, ChevronDown } from 'lucide-react';
+import { X, Sparkles, Search, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, Tag, FileSpreadsheet, Upload, Trash2, Download, ChevronDown } from 'lucide-react';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import {
     evaluarEscalonamiento,
@@ -12,9 +12,18 @@ import {
 
 const obtenerProceso = (procesos, procesoId) => procesos.find(p => String(p.id) === String(procesoId)) || null;
 
-const esProcesoClienteNuevo = (procesos, procesoId) => {
-    const nombre = obtenerProceso(procesos, procesoId)?.nombre?.toUpperCase() || '';
-    return nombre.includes('ASIGNAR CLIENTE NUEVO');
+const esProcesoFinancieroSeleccionado = (procesos, procesoId) => {
+    if (!procesoId) return false;
+    const proceso = obtenerProceso(procesos, procesoId);
+    if (!proceso) return false;
+    // Los procesos del módulo de solicitudes son financieros; operativos no llegan aquí.
+    return true;
+};
+
+/** Solo el proceso exacto ASIGNAR TAG (no "… Y CAMBIO DE LISTA"). */
+const esProcesoAsignarTagSolo = (procesos, procesoId) => {
+    const nombre = (obtenerProceso(procesos, procesoId)?.nombre || '').trim().toUpperCase();
+    return nombre === 'ASIGNAR TAG';
 };
 
 const resolverListaBronce = (catalogoListas) => {
@@ -58,12 +67,15 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         confirmo_informacion_escalonamiento: false,
         monto_final_tentativo: '',
         total_proyectado_neto: '',
-        compra_en_tienda: false,
+        compra_en_tienda: !!(solicitudAEditar?.compra_en_tienda),
+        compra_en_tienda_solo_tag: !!(solicitudAEditar?.compra_en_tienda_solo_tag),
     });
 
-    const esClienteNuevo = esProcesoClienteNuevo(procesos, data.catalogo_proceso_id);
+    const procesoFinancieroSeleccionado = esProcesoFinancieroSeleccionado(procesos, data.catalogo_proceso_id);
+    const procesoAsignarTagSolo = esProcesoAsignarTagSolo(procesos, data.catalogo_proceso_id);
     const listaBronce = resolverListaBronce(listas);
-    const cotizacionOpcional = esClienteNuevo && data.compra_en_tienda;
+    const flujoTienda = procesoFinancieroSeleccionado && (!!data.compra_en_tienda || !!data.compra_en_tienda_solo_tag);
+    const cotizacionOpcional = flujoTienda;
 
     const opcionesTipoCliente = infoCliente?.es_heredado
         ? tiposCliente.filter(t => t.nombre.toUpperCase().includes('HEREDADO'))
@@ -79,10 +91,13 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     };
 
     useEffect(() => {
-        if (!esClienteNuevo && data.compra_en_tienda) {
-            setData('compra_en_tienda', false);
+        if (!procesoFinancieroSeleccionado) {
+            if (data.compra_en_tienda) setData('compra_en_tienda', false);
         }
-    }, [data.catalogo_proceso_id, esClienteNuevo]);
+        if (!procesoAsignarTagSolo && data.compra_en_tienda_solo_tag) {
+            setData('compra_en_tienda_solo_tag', false);
+        }
+    }, [data.catalogo_proceso_id, procesoFinancieroSeleccionado, procesoAsignarTagSolo]);
 
     useEffect(() => {
         if (!data.compra_en_tienda || !listaBronce) return;
@@ -94,6 +109,17 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setAnalisisFinanciero(null);
         setAlertaLista({ mensaje: `Lista ${listaBronce.nombre} asignada (compra en tienda)` });
     }, [data.compra_en_tienda, listaBronce?.id]);
+
+    useEffect(() => {
+        if (!data.compra_en_tienda_solo_tag) return;
+        setData('catalogo_lista_descuento_id', '');
+        setData('monto_cotizado', '');
+        setData('confirmo_informacion_escalonamiento', false);
+        setData('monto_final_tentativo', '');
+        setData('total_proyectado_neto', '');
+        setAnalisisFinanciero(null);
+        setAlertaLista({ mensaje: 'Compra en tienda: Solo Tag — sin lista ni cotización' });
+    }, [data.compra_en_tienda_solo_tag]);
 
     useEffect(() => {
         if (cotizacionOpcional || !infoCliente || !data.monto_cotizado || isNaN(data.monto_cotizado)) {
@@ -215,10 +241,8 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
     const guardarSolicitud = (e) => {
         e.preventDefault();
-        const procesoSeleccionado = procesos.find(p => p.id == data.catalogo_proceso_id);
 
-        if (infoCliente?.es_heredado && (procesoSeleccionado?.nombre === 'ASIGNAR CLIENTE REACTIVADO' || procesoSeleccionado?.nombre === 'ASIGNAR CLIENTE REACTIVADO Y CAMBIO DE LISTA')) {
-            setAlertaHeredado(true);
+        if (!modoEdicion && (!data.numero_cliente || !infoCliente)) {
             return;
         }
 
@@ -283,8 +307,23 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Cliente (Buscador)_</label>
                             <div className="theme-field-with-icon relative">
                                 <Search className="theme-field-icon w-5 h-5" aria-hidden />
-                                <input type="text" value={data.numero_cliente} onChange={e => manejarBusquedaCliente(e.target.value)} onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }} placeholder="Ingresa nombre o folio..." className={`${THEME_INPUT} w-full py-4 text-sm`} disabled={modoEdicion} />
+                                <input
+                                    type="text"
+                                    value={data.numero_cliente}
+                                    required
+                                    onChange={e => manejarBusquedaCliente(e.target.value)}
+                                    onFocus={() => { if (data.numero_cliente) setMostrarDropdown(true); }}
+                                    placeholder="Ingresa nombre o folio..."
+                                    className={`${THEME_INPUT} w-full py-4 text-sm`}
+                                    disabled={modoEdicion}
+                                />
                             </div>
+                            {errors.numero_cliente && <p className="text-xs text-red-500">{errors.numero_cliente}</p>}
+                            {!modoEdicion && data.numero_cliente && !infoCliente && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400 font-bold">
+                                    Selecciona un cliente de la lista para continuar.
+                                </p>
+                            )}
                             {infoCliente && (
                                 <div className={`mt-4 p-4 theme-element border ${infoCliente.es_heredado ? 'border-purple-500/50 bg-purple-500/5' : 'theme-border'} rounded-2xl shadow-sm animate-fade-in`}>
                                     <div className="flex justify-between items-start">
@@ -310,24 +349,54 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             )}
                         </div>
 
-                        {esClienteNuevo && !modoEdicion && (
-                            <label className="flex items-start gap-3 p-4 rounded-2xl border-2 border-[#cd7f32]/40 bg-[#cd7f32]/10 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={!!data.compra_en_tienda}
-                                    onChange={e => setData('compra_en_tienda', e.target.checked)}
-                                    className="mt-1 w-4 h-4 accent-[#cd7f32]"
-                                />
-                                <div>
-                                    <span className="text-sm font-black theme-text-main flex items-center gap-2">
-                                        <Store className="w-4 h-4 text-[#cd7f32]" />
-                                        El cliente realizará su compra en tienda
-                                    </span>
-                                    <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
-                                        Se asignará lista {listaBronce?.nombre || 'Bronce'} automáticamente y la cotización no será obligatoria. Quedará registrado en la bitácora.
-                                    </p>
-                                </div>
-                            </label>
+                        {procesoFinancieroSeleccionado && (
+                            <div className="space-y-3">
+                                <label className="flex items-start gap-3 p-4 rounded-2xl border-2 border-[#cd7f32]/40 bg-[#cd7f32]/10 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!data.compra_en_tienda}
+                                        onChange={e => {
+                                            const on = e.target.checked;
+                                            setData('compra_en_tienda', on);
+                                            if (on) setData('compra_en_tienda_solo_tag', false);
+                                        }}
+                                        className="mt-1 w-4 h-4 accent-[#cd7f32]"
+                                    />
+                                    <div>
+                                        <span className="text-sm font-black theme-text-main flex items-center gap-2">
+                                            <Store className="w-4 h-4 text-[#cd7f32]" />
+                                            Compra en Tienda
+                                        </span>
+                                        <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
+                                            Cotización no obligatoria. La lista se asigna automáticamente (Bronce) y el ascenso se indica al confirmar el pago.
+                                        </p>
+                                    </div>
+                                </label>
+
+                                {procesoAsignarTagSolo && (
+                                <label className="flex items-start gap-3 p-4 rounded-2xl border-2 border-sky-500/40 bg-sky-500/10 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!data.compra_en_tienda_solo_tag}
+                                        onChange={e => {
+                                            const on = e.target.checked;
+                                            setData('compra_en_tienda_solo_tag', on);
+                                            if (on) setData('compra_en_tienda', false);
+                                        }}
+                                        className="mt-1 w-4 h-4 accent-sky-500"
+                                    />
+                                    <div>
+                                        <span className="text-sm font-black theme-text-main flex items-center gap-2">
+                                            <Tag className="w-4 h-4 text-sky-500" />
+                                            Compra en tienda: Solo Tag
+                                        </span>
+                                        <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
+                                            Para asegurar el TAG de la vendedora cuando la compra ya ocurrió (p. ej. al día siguiente). Sin lista ni cotización.
+                                        </p>
+                                    </div>
+                                </label>
+                                )}
+                            </div>
                         )}
 
                         <div className="space-y-2">
@@ -343,7 +412,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     disabled={cotizacionOpcional}
                                     value={data.monto_cotizado}
                                     onChange={e => setData('monto_cotizado', e.target.value)}
-                                    placeholder={cotizacionOpcional ? 'No requerida — compra en tienda' : ''}
+                                    placeholder={cotizacionOpcional ? (data.compra_en_tienda_solo_tag ? 'No requerida — Solo Tag' : 'No requerida — compra en tienda') : ''}
                                     className={`${THEME_INPUT} w-full py-4 text-sm disabled:opacity-60`}
                                 />
                             </div>

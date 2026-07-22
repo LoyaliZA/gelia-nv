@@ -17,6 +17,10 @@ Broadcast::channel('solicitudes.facturas', function ($user) {
     return $user->hasPermissionTo('facturas.ver_listado');
 });
 
+Broadcast::channel('solicitudes.traspasos', function ($user) {
+    return $user->hasPermissionTo('traspasos.ver_listado');
+});
+
 Broadcast::channel('solicitudes.operativas', function ($user) {
     return $user->hasPermissionTo('cancelaciones_cotizaciones.ver_listado');
 });

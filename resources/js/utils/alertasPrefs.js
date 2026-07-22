@@ -2,6 +2,8 @@ export const ALERTAS_PREFS_STORAGE_KEY = 'alertas_prefs';
 
 export const ALERTAS_TIPOS = {
     nueva: 'Nueva solicitud',
+    compra_en_tienda: 'Compra en Tienda',
+    compra_en_tienda_solo_tag: 'Compra en tienda: Solo Tag',
     reparada: 'Solicitud reparada',
     rechazada: 'Error reportado',
     pago_rechazado: 'Pago vencido',
@@ -168,6 +170,10 @@ export function resolveNotificationDestination(notification = {}) {
 
     if (payload.modulo === 'facturas' && payload.folio) {
         return `/facturas?folio=${payload.folio}`;
+    }
+
+    if (payload.modulo === 'traspasos' && payload.folio) {
+        return `/traspasos?folio=${payload.folio}`;
     }
 
     if (payload.modulo === 'control_pedidos' || payload.pedido_bma_id) {

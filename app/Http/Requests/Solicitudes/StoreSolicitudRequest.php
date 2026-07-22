@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\CatalogoProceso;
 use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoTipoCliente;
+use App\Services\Solicitudes\CrearSolicitudService;
 use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -21,14 +22,15 @@ class StoreSolicitudRequest extends FormRequest
     {
         $proceso = $this->resolverProceso();
         $esOperativo = $proceso?->esOperativo() ?? false;
-        $compraEnTienda = $this->aplicaFlujoCompraEnTienda();
+        $flujoTienda = $this->aplicaFlujoTienda();
 
         $reglas = [
-            'numero_cliente' => [$esOperativo ? 'required' : 'nullable', 'string', 'max:255'],
+            'numero_cliente' => ['required', 'string', 'max:255', 'exists:clientes,numero_cliente'],
             'nombre_cliente' => ['nullable', 'string', 'max:255'],
             'catalogo_proceso_id' => ['required', 'exists:catalogo_procesos,id'],
             'observaciones_vendedor' => ['nullable', 'string'],
             'compra_en_tienda' => ['nullable', 'boolean'],
+            'compra_en_tienda_solo_tag' => ['nullable', 'boolean'],
         ];
 
         if ($esOperativo) {
@@ -37,7 +39,7 @@ class StoreSolicitudRequest extends FormRequest
             $reglas = array_merge($reglas, [
                 'catalogo_tipo_cliente_id' => ['nullable', 'exists:catalogo_tipo_clientes,id'],
                 'catalogo_lista_descuento_id' => ['nullable', 'exists:catalogo_listas_descuento,id'],
-                'monto_cotizado' => [$compraEnTienda ? 'nullable' : 'required', 'numeric', 'min:0'],
+                'monto_cotizado' => [$flujoTienda ? 'nullable' : 'required', 'numeric', 'min:0'],
                 'confirmo_informacion_escalonamiento' => ['nullable', 'boolean'],
                 'monto_final_tentativo' => ['nullable', 'numeric', 'min:0'],
                 'total_proyectado_neto' => ['nullable', 'numeric', 'min:0'],
@@ -45,6 +47,14 @@ class StoreSolicitudRequest extends FormRequest
         }
 
         return $reglas;
+    }
+
+    public function messages(): array
+    {
+        return [
+            'numero_cliente.required' => 'Debes seleccionar un cliente para enviar la solicitud.',
+            'numero_cliente.exists' => 'El cliente indicado no existe en el directorio. Selecciónalo desde el buscador.',
+        ];
     }
 
     private function reglasOperativas(?CatalogoProceso $proceso): array
@@ -90,13 +100,32 @@ class StoreSolicitudRequest extends FormRequest
 
     private function aplicaFlujoCompraEnTienda(): bool
     {
-        $proceso = $this->resolverProceso();
-        if (!$proceso || $proceso->esOperativo()) {
+        if ($this->aplicaFlujoCompraEnTiendaSoloTag()) {
             return false;
         }
 
-        return str_contains(strtoupper($proceso->nombre), 'ASIGNAR CLIENTE NUEVO')
-            && filter_var($this->input('compra_en_tienda'), FILTER_VALIDATE_BOOLEAN);
+        return CrearSolicitudService::flagCompraEnTiendaAplica(
+            $this->resolverProceso(),
+            $this->input('compra_en_tienda')
+        );
+    }
+
+    private function aplicaFlujoCompraEnTiendaSoloTag(): bool
+    {
+        $proceso = $this->resolverProceso();
+        if (!CrearSolicitudService::esProcesoAsignarTagSolo($proceso)) {
+            return false;
+        }
+
+        return CrearSolicitudService::flagCompraEnTiendaAplica(
+            $proceso,
+            $this->input('compra_en_tienda_solo_tag')
+        );
+    }
+
+    private function aplicaFlujoTienda(): bool
+    {
+        return $this->aplicaFlujoCompraEnTienda() || $this->aplicaFlujoCompraEnTiendaSoloTag();
     }
 
     public function after(): array
@@ -123,16 +152,11 @@ class StoreSolicitudRequest extends FormRequest
                     return;
                 }
 
-                if ($this->aplicaFlujoCompraEnTienda()) {
-                    if (!str_contains(strtoupper($proceso->nombre), 'ASIGNAR CLIENTE NUEVO')) {
-                        $validator->errors()->add('compra_en_tienda', 'La compra en tienda solo aplica a solicitudes de asignar cliente nuevo.');
-                    }
-
+                if ($this->aplicaFlujoTienda()) {
                     return;
                 }
 
                 $numeroCliente = $this->input('numero_cliente');
-                $procesoId = $this->input('catalogo_proceso_id');
                 $listaSolicitadaId = $this->input('catalogo_lista_descuento_id');
                 $tipoClienteId = $this->input('catalogo_tipo_cliente_id');
                 $montoCotizado = (float) $this->input('monto_cotizado', 0);
@@ -141,13 +165,6 @@ class StoreSolicitudRequest extends FormRequest
 
                 $cliente = Cliente::where('numero_cliente', $numeroCliente)->first();
                 if (!$cliente) return;
-
-                if ($procesoId && $cliente->es_heredado) {
-                    $procesoObj = CatalogoProceso::find($procesoId);
-                    if ($procesoObj && in_array($procesoObj->nombre, ['ASIGNAR CLIENTE REACTIVADO', 'ASIGNAR CLIENTE REACTIVADO Y CAMBIO DE LISTA'])) {
-                        $validator->errors()->add('catalogo_proceso_id', 'ALERTA: Este es un cliente heredado. Selecciona el proceso específico para clientes heredados.');
-                    }
-                }
 
                 if ($tipoClienteId && $cliente->es_heredado) {
                     $tipoCliente = CatalogoTipoCliente::find($tipoClienteId);

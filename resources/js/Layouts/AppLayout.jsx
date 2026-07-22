@@ -86,11 +86,35 @@ export default function AppLayout({ children, fullScreen = false }) {
     };
 
     const navigateFromNotification = useCallback((notification) => {
+        if (typeof document !== 'undefined' && document.querySelector('[data-gelia-unsaved-form="1"]')) {
+            const salir = window.confirm(
+                'Tienes un formulario abierto con cambios sin guardar. Si continúas, se perderán. ¿Salir de todas formas?'
+            );
+            if (!salir) return;
+        }
         router.visit(resolveNotificationDestination(notification));
+    }, []);
+
+    const reloadAuthSilencioso = useCallback(() => {
+        if (typeof document !== 'undefined' && document.querySelector('[data-gelia-unsaved-form="1"]')) {
+            return;
+        }
+        router.reload({
+            only: ['auth'],
+            preserveScroll: true,
+            preserveState: true,
+            showProgress: false,
+        });
     }, []);
 
     const handleToastClick = useCallback((toast) => {
         if (toast.conversacionId) {
+            if (typeof document !== 'undefined' && document.querySelector('[data-gelia-unsaved-form="1"]')) {
+                const salir = window.confirm(
+                    'Tienes un formulario abierto con cambios sin guardar. Si continúas, se perderán. ¿Salir de todas formas?'
+                );
+                if (!salir) return;
+            }
             abrirConversacionDesdeNotificacion(toast.conversacionId);
         } else if (toast.notification) {
             navigateFromNotification(toast.notification);
@@ -256,7 +280,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                     window.dispatchEvent(new CustomEvent('notification-received', { detail: payload }));
 
                     window.setTimeout(() => {
-                        router.reload({ only: ['auth'], preserveScroll: true, preserveState: true, showProgress: false });
+                        reloadAuthSilencioso();
                     }, 800);
                 })
                 .listen('.mensaje.leido', (event) => {
@@ -290,12 +314,7 @@ export default function AppLayout({ children, fullScreen = false }) {
 
                     notificarMensajeNuevo(mensaje, auth);
 
-                    router.reload({
-                        only: ['auth'],
-                        preserveScroll: true,
-                        preserveState: true,
-                        showProgress: false,
-                    });
+                    reloadAuthSilencioso();
                 });
         }
 
@@ -306,7 +325,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                 echoChannelRef.current = null;
             }
         };
-    }, [auth?.user?.id, navigateFromNotification]);
+    }, [auth?.user?.id, navigateFromNotification, reloadAuthSilencioso]);
 
     const [isDarkMode, setIsDarkMode] = useState(() => {
         if (typeof window !== 'undefined') {

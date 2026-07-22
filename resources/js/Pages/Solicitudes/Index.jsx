@@ -86,7 +86,12 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
             )}
             {solicitud.compra_en_tienda && (
                 <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-[#cd7f32]/15 text-[#b87333] dark:text-[#daa520] border border-[#cd7f32]/30 flex items-center gap-1">
-                    Compra en tienda · Bronce
+                    Compra en Tienda
+                </span>
+            )}
+            {solicitud.compra_en_tienda_solo_tag && (
+                <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 flex items-center gap-1">
+                    <Tag className="w-3 h-3" /> Compra en tienda: Solo Tag
                 </span>
             )}
             {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
@@ -383,8 +388,20 @@ const ModalConfirmarCancelacion = ({ onClose, solicitud, onProcesando }) => {
 };
 
 const ModalConfirmarPago = ({ onClose, solicitud, onConfirmar }) => {
-    const { data, setData, processing } = useForm({ monto_final_pagado: solicitud?.monto_cotizado || '' });
-    const submit = (e) => { e.preventDefault(); onConfirmar(solicitud.id, data); };
+    const esCompraTienda = !!solicitud?.compra_en_tienda || !!solicitud?.compra_en_tienda_solo_tag;
+    const { data, setData, processing } = useForm({
+        modo: 'pago',
+        monto_final_pagado: solicitud?.monto_cotizado || '',
+    });
+
+    const requiereMonto = data.modo === 'pago';
+    const submit = (e) => {
+        e.preventDefault();
+        const payload = requiereMonto
+            ? { modo: data.modo, monto_final_pagado: data.monto_final_pagado }
+            : { modo: data.modo };
+        onConfirmar(solicitud.id, payload);
+    };
 
     return createPortal(
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in" onClick={onClose}>
@@ -392,14 +409,42 @@ const ModalConfirmarPago = ({ onClose, solicitud, onConfirmar }) => {
                 <button onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-xl outline-none transition-transform hover:scale-110"><X className="w-5 h-5" /></button>
                 <div className="flex items-center gap-3 mb-6">
                     <CreditCard className="w-6 h-6 text-blue-500" />
-                    <h3 className="text-xl font-black italic theme-text-main uppercase m-0">Confirmar Pago</h3>
+                    <h3 className="text-xl font-black italic theme-text-main uppercase m-0">
+                        {esCompraTienda ? 'Validar Solicitud' : 'Confirmar Pago'}
+                    </h3>
                 </div>
                 <form onSubmit={submit} className="space-y-6">
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Monto Final Cobrado_</label>
-                        <input type="number" step="0.01" required value={data.monto_final_pagado} onChange={e => setData('monto_final_pagado', e.target.value)} className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-black outline-none focus:ring-2 shadow-sm transition-all" />
-                        <p className="text-[10px] theme-text-muted mt-2 italic">* Si el monto cobrado con descuento es inferior a la meta de la lista, el sistema lo alertará automáticamente a la encargada.</p>
-                    </div>
+                    {esCompraTienda && (
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Tipo de validación_</label>
+                            <select
+                                value={data.modo}
+                                onChange={e => setData('modo', e.target.value)}
+                                className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-xs font-black outline-none focus:ring-2 shadow-sm transition-all"
+                            >
+                                <option value="pago">Confirmar pago (con monto)</option>
+                                <option value="pago_sin_monto">Confirmar pago sin monto</option>
+                                <option value="atencion_gelia">Confirmar atención Gelia</option>
+                            </select>
+                            {data.modo === 'pago_sin_monto' && (
+                                <p className="text-[10px] theme-text-muted italic leading-snug">
+                                    Valida la solicitud sin sumar monto (si la remisión ya se cargó, evita duplicar cantidades).
+                                </p>
+                            )}
+                            {data.modo === 'atencion_gelia' && (
+                                <p className="text-[10px] theme-text-muted italic leading-snug">
+                                    Confirma que el cliente fue atendido en Gelia. No modifica montos ni lista.
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    {requiereMonto && (
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Monto Final Cobrado_</label>
+                            <input type="number" step="0.01" required value={data.monto_final_pagado} onChange={e => setData('monto_final_pagado', e.target.value)} className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-black outline-none focus:ring-2 shadow-sm transition-all" />
+                            <p className="text-[10px] theme-text-muted mt-2 italic">* Si el monto cobrado con descuento es inferior a la meta de la lista, el sistema lo alertará automáticamente a la encargada.</p>
+                        </div>
+                    )}
                     <button type="submit" disabled={processing} className="w-full py-4 text-white rounded-xl font-black uppercase text-[11px] tracking-widest bg-blue-600 hover:bg-blue-700 transition-all shadow-lg outline-none disabled:opacity-50">
                         Confirmar Operación
                     </button>
@@ -579,10 +624,14 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Confirmar Pago - solo procesos financieros */}
-                {(can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id) && !solicitud.pago_confirmado && solicitud.estado?.nombre === 'Respondida' && !esAlertaPago && (
+                {/* Confirmar Pago / Validar tienda — no aplica a Solo Tag (se concluye al aprobar) */}
+                {(can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id)
+                    && !solicitud.pago_confirmado
+                    && !solicitud.compra_en_tienda_solo_tag
+                    && solicitud.estado?.nombre === 'Respondida'
+                    && !esAlertaPago && (
                     <button onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <CreditCard className="w-4 h-4" /> Confirmar Pago
+                        <CreditCard className="w-4 h-4" /> {solicitud.compra_en_tienda ? 'Validar Solicitud' : 'Confirmar Pago'}
                     </button>
                 )}
 
@@ -612,14 +661,18 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Verificado (Paso final de la auxiliar) — solo con pago confirmado */}
-                {can('solicitudes.verificar') && solicitud.estado?.nombre === 'Respondida' && solicitud.pago_confirmado && !esAlertaPago && idVerificada && (
+                {/* Verificado (Paso final) — Solo Tag también queda pendiente de verificar */}
+                {can('solicitudes.verificar')
+                    && solicitud.estado?.nombre === 'Respondida'
+                    && solicitud.pago_confirmado
+                    && !esAlertaPago
+                    && idVerificada && (
                     <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
                         <CheckSquare className="w-4 h-4" /> Verificado
                     </button>
                 )}
 
-                {/* Aprobar (Encargada) — Pendiente; o corregir error reportado por vendedora */}
+                {/* Aprobar (Encargada) — Solo Tag: marca concluida para vendedora, sigue pendiente de verificar */}
                 {can('solicitudes.reportar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre === 'Pendiente' && idRespondida && (
                     <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3" style={{ color: 'var(--color-primario)' }}>
                         <CheckCircle2 className="w-4 h-4" /> Aprobar Proceso
@@ -1040,7 +1093,12 @@ export default function Index({
                                     <div className="flex items-center justify-between pt-2 border-t theme-border">
                                         <div>
                                             <div className="font-black italic theme-text-main text-sm">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
-                                            <div className={`mt-1 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest ${solicitud.pago_confirmado ? 'text-emerald-500' : 'text-amber-500'}`}>{solicitud.pago_confirmado ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />} {solicitud.pago_confirmado ? 'Pago Confirmado' : 'Pago Pendiente'}</div>
+                                            <div className={`mt-1 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest ${solicitud.pago_confirmado ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                {solicitud.pago_confirmado ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                                {solicitud.compra_en_tienda_solo_tag && solicitud.pago_confirmado
+                                                    ? 'Concluida'
+                                                    : (solicitud.pago_confirmado ? 'Pago Confirmado' : 'Pago Pendiente')}
+                                            </div>
                                         </div>
                                         <button onClick={(e) => abrirMenu(e, solicitud)} className="p-2.5 theme-element border theme-border hover:border-[var(--color-primario)] rounded-xl transition-all shadow-sm outline-none"><MoreVertical className="w-5 h-5 theme-text-main" /></button>
                                     </div>
@@ -1133,7 +1191,12 @@ export default function Index({
                                             </td>
                                             <td className="p-6 align-top">
                                                 <div className="font-black italic theme-text-main text-sm bg-black/5 dark:bg-white/5 px-3 py-1.5 rounded-lg inline-block border theme-border">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
-                                                <div className={`mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md w-fit border ${solicitud.pago_confirmado ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-500 bg-amber-500/10 border-amber-500/20'}`}>{solicitud.pago_confirmado ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />} {solicitud.pago_confirmado ? 'Confirmado' : 'Pendiente'}</div>
+                                                <div className={`mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md w-fit border ${solicitud.pago_confirmado ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-500 bg-amber-500/10 border-amber-500/20'}`}>
+                                                    {solicitud.pago_confirmado ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                                    {solicitud.compra_en_tienda_solo_tag && solicitud.pago_confirmado
+                                                        ? 'Concluida'
+                                                        : (solicitud.pago_confirmado ? 'Confirmado' : 'Pendiente')}
+                                                </div>
                                             </td>
                                             <td className="p-6 align-top">
                                                 <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${estatus.clase} whitespace-nowrap shadow-sm`}><StatusIcon className="w-4 h-4" /><span className="text-[10px] font-black uppercase tracking-wider italic">{estatus.label}</span></div>

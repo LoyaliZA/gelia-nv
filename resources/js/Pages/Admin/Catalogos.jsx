@@ -12,6 +12,7 @@ import TablaEstados from './Partials/Catalogos/TablaEstados';
 import TablaTipoClientes from './Partials/Catalogos/TablaTipoClientes';
 import TablaZonasEntrega from './Partials/Catalogos/TablaZonasEntrega';
 import TablaHorariosEntrega from './Partials/Catalogos/TablaHorariosEntrega';
+import TablaHorariosTraspaso from './Partials/Catalogos/TablaHorariosTraspaso';
 import TablaPorcentajesEscalonamiento from './Partials/Catalogos/TablaPorcentajesEscalonamiento';
 import TablaPorcentajesListado from './Partials/Catalogos/TablaPorcentajesListado';
 import TablaBancos from './Partials/Catalogos/TablaBancos';
@@ -32,7 +33,7 @@ import TablaReexpedicionPedido from './Partials/Catalogos/TablaReexpedicionPedid
 
 export default function Catalogos({
     auth, procesos, listas, estados, departamentos, areas, tipos_cliente,
-    zonas_entrega, horarios_entrega, porcentajes_escalonamiento = [], porcentajes_listado = [],
+    zonas_entrega, horarios_entrega, horarios_traspaso = [], porcentajes_escalonamiento = [], porcentajes_listado = [],
     bancos = [], tipos_activo = [], categorias_activo = [],
     sucursales = [], tipos_almacen = [], marcas_producto = [], almacenes = [], categorias_producto = [],
     estatus_pedidos = [], paqueterias_pedido = [], tipos_caja_pedido = [],
@@ -60,6 +61,7 @@ export default function Catalogos({
         { id: 'categorias_activo', label: 'Categorías Activo', icon: Tags },
         { id: 'zonas_entrega', label: 'Zonas Logísticas', icon: Map },
         { id: 'horarios_entrega', label: 'Horarios Entrega', icon: Clock },
+        { id: 'horarios_traspaso', label: 'Horarios Traspaso', icon: Clock },
         { id: 'origenes_pedido', label: 'Orígenes Pedido', icon: Tags },
         { id: 'envios_tienda', label: 'Envíos / Tienda', icon: Truck },
         { id: 'estatus_pedidos', label: 'Estatus Pedidos', icon: Activity },
@@ -119,6 +121,7 @@ export default function Catalogos({
                     {tabActiva === 'tipos_cliente' && <TablaTipoClientes datos={tipos_cliente} />}
                     {tabActiva === 'zonas_entrega' && <TablaZonasEntrega datos={zonas_entrega} auth={auth} />}
                     {tabActiva === 'horarios_entrega' && <TablaHorariosEntrega datos={horarios_entrega} zonas_entrega={zonas_entrega} auth={auth} />}
+                    {tabActiva === 'horarios_traspaso' && <TablaHorariosTraspaso datos={horarios_traspaso} />}
                     {tabActiva === 'estatus_pedidos' && <TablaEstatusPedidos datos={estatus_pedidos} />}
                     {tabActiva === 'origenes_pedido' && (
                         <TablaOrigenesPedido datos={origenes_pedido} />

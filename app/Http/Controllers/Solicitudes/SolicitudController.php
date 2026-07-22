@@ -118,9 +118,61 @@ class SolicitudController extends Controller
             abort(403, 'No tienes autorización para confirmar este pago.');
         }
 
-        $request->validate([
-            'monto_final_pagado' => 'required|numeric|min:0'
-        ]);
+        $modo = $request->input('modo', 'pago');
+        if (!in_array($modo, ['pago', 'pago_sin_monto', 'atencion_gelia'], true)) {
+            abort(422, 'Modo de confirmación inválido.');
+        }
+
+        if (in_array($modo, ['pago_sin_monto', 'atencion_gelia'], true) && !CrearSolicitudService::esFlujoTienda($solicitud)) {
+            abort(422, 'Ese modo de confirmación solo aplica a solicitudes de compra en tienda.');
+        }
+
+        if ($modo === 'pago') {
+            $request->validate([
+                'monto_final_pagado' => 'required|numeric|min:0',
+            ]);
+        }
+
+        if (CrearSolicitudService::modoValidacionSinMonto($modo)) {
+            DB::transaction(function () use ($solicitud, $modo, $idRespondida) {
+                $mensajeAuditoria = $modo === 'atencion_gelia'
+                    ? 'ATENCIÓN GELIA CONFIRMADA. Solicitud validada sin modificar montos.'
+                    : 'PAGO CONFIRMADO SIN MONTO (compra en tienda). No se agregó cantidad para evitar duplicar remisión ya cargada.';
+
+                $solicitud->update([
+                    'pago_confirmado' => true,
+                ]);
+
+                AuditoriaSolicitud::create([
+                    'solicitud_id' => $solicitud->id,
+                    'usuario_id' => Auth::id(),
+                    'estado_anterior_id' => $idRespondida,
+                    'estado_nuevo_id' => $idRespondida,
+                    'motivo_reporte' => $mensajeAuditoria,
+                    'datos_snapshot' => [
+                        'modo_confirmacion' => $modo,
+                        'compra_en_tienda' => (bool) $solicitud->compra_en_tienda,
+                        'compra_en_tienda_solo_tag' => (bool) $solicitud->compra_en_tienda_solo_tag,
+                        'monto_venta_sin_cambio' => true,
+                    ],
+                ]);
+
+                $destinatarios = $this->obtenerDestinatariosDepartamentales($solicitud, false);
+                if ($destinatarios->isNotEmpty()) {
+                    $mensajeNotificacion = $modo === 'atencion_gelia'
+                        ? 'El colaborador ' . Auth::user()->name . ' confirmó atención Gelia (sin montos).'
+                        : 'El colaborador ' . Auth::user()->name . ' confirmó el pago sin agregar monto.';
+
+                    Notification::send($destinatarios, new AlertaSolicitud(
+                        $solicitud,
+                        'pago_confirmado',
+                        $mensajeNotificacion
+                    ));
+                }
+            });
+
+            return $this->redirectToSolicitudesList($request, 'Operación procesada.');
+        }
 
         DB::transaction(function () use ($solicitud, $request, $idRespondida, $idIncorrecta) {
             $montoOriginal = $solicitud->monto_cotizado;
@@ -326,21 +378,57 @@ class SolicitudController extends Controller
             abort(403, 'No se puede reparar una solicitud vencida por falta de pago. Debe iniciar una nueva solicitud.');
         }
 
+        $proceso = CatalogoProceso::find($request->input('catalogo_proceso_id'));
+        $compraSoloTag = CrearSolicitudService::esProcesoAsignarTagSolo($proceso)
+            && CrearSolicitudService::flagCompraEnTiendaAplica(
+                $proceso,
+                $request->input('compra_en_tienda_solo_tag')
+            );
+        $compraEnTienda = !$compraSoloTag && CrearSolicitudService::flagCompraEnTiendaAplica(
+            $proceso,
+            $request->input('compra_en_tienda')
+        );
+        $flujoTienda = $compraEnTienda || $compraSoloTag;
+
         $request->validate([
-            'monto_cotizado' => 'required|numeric|min:0',
+            'monto_cotizado' => [$flujoTienda ? 'nullable' : 'required', 'numeric', 'min:0'],
             'catalogo_proceso_id' => 'required|exists:catalogo_procesos,id',
             'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
             'catalogo_lista_descuento_id' => 'nullable|exists:catalogo_listas_descuento,id',
             'observaciones_vendedor' => 'nullable|string',
+            'compra_en_tienda' => 'nullable|boolean',
+            'compra_en_tienda_solo_tag' => 'nullable|boolean',
         ]);
 
-        DB::transaction(function () use ($solicitud, $request, $idIncorrecta, $idPendiente) {
+        $listaDescuentoId = $request->catalogo_lista_descuento_id;
+        $montoCotizado = (float) ($request->monto_cotizado ?? 0);
+
+        if ($compraSoloTag) {
+            $listaDescuentoId = null;
+            $montoCotizado = 0;
+        } elseif ($compraEnTienda) {
+            $listaDescuentoId = CrearSolicitudService::buscarListaBronce()?->id;
+            $montoCotizado = 0;
+        }
+
+        DB::transaction(function () use (
+            $solicitud,
+            $request,
+            $idIncorrecta,
+            $idPendiente,
+            $compraEnTienda,
+            $compraSoloTag,
+            $listaDescuentoId,
+            $montoCotizado
+        ) {
             $solicitud->update([
-                'monto_cotizado' => $request->monto_cotizado,
+                'monto_cotizado' => $montoCotizado,
                 'catalogo_proceso_id' => $request->catalogo_proceso_id,
                 'catalogo_tipo_cliente_id' => $request->catalogo_tipo_cliente_id,
-                'catalogo_lista_descuento_id' => $request->catalogo_lista_descuento_id,
+                'catalogo_lista_descuento_id' => $listaDescuentoId,
                 'observaciones_vendedor' => $request->observaciones_vendedor,
+                'compra_en_tienda' => $compraEnTienda,
+                'compra_en_tienda_solo_tag' => $compraSoloTag,
                 'catalogo_estado_solicitud_id' => $idPendiente,
                 'motivo_incorrecta' => null,
             ]);
@@ -351,18 +439,27 @@ class SolicitudController extends Controller
                 $clienteSnapshot = ['antes' => $this->capturarSnapshotCliente($cliente)];
             }
 
+            $motivoReparacion = $compraSoloTag
+                ? 'El colaborador corrigió la solicitud. Compra en tienda reportada (solo TAG): sin lista ni cotización.'
+                : ($compraEnTienda
+                    ? 'El colaborador corrigió la solicitud. Compra en tienda: lista Bronce, sin cotización.'
+                    : 'El colaborador corrigió la solicitud.');
+
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $idIncorrecta,
                 'estado_nuevo_id' => $idPendiente,
-                'motivo_reporte' => 'El colaborador corrigió la solicitud.',
+                'motivo_reporte' => $motivoReparacion,
                 'datos_snapshot' => array_merge([
-                    'monto_cotizado' => $request->monto_cotizado,
+                    'monto_cotizado' => $montoCotizado,
                     'proceso_id' => $request->catalogo_proceso_id,
                     'tipo_cliente_id' => $request->catalogo_tipo_cliente_id,
-                    'lista_descuento_id' => $request->catalogo_lista_descuento_id,
+                    'lista_descuento_id' => $listaDescuentoId,
                     'observaciones_vendedor' => $request->observaciones_vendedor,
+                    'compra_en_tienda' => $compraEnTienda,
+                    'compra_en_tienda_solo_tag' => $compraSoloTag,
+                    'lista_bronce_autoasignada' => $compraEnTienda,
                 ], $clienteSnapshot ?? []),
             ]);
 
@@ -416,6 +513,9 @@ class SolicitudController extends Controller
             }
         }
 
+        // Solo Tag: al aprobar se marca pago_confirmado (vendedora no hace más), pero sigue pendiente de verificar.
+        $aprobarSoloTag = $estadoNuevoId === $idRespondida && $solicitud->compra_en_tienda_solo_tag;
+
         if ($estadoNuevoId === $idVerificada) {
             if (!$usuario->can('solicitudes.verificar')) {
                 abort(403, 'No tienes permiso para verificar solicitudes.');
@@ -444,7 +544,16 @@ class SolicitudController extends Controller
             }
         }
 
-        DB::transaction(function () use ($solicitud, $estadoAnteriorId, $estadoNuevoId, $request, $idRespondida, $idVerificada, $idIncorrecta) {
+        DB::transaction(function () use (
+            $solicitud,
+            $estadoAnteriorId,
+            $estadoNuevoId,
+            $request,
+            $idRespondida,
+            $idVerificada,
+            $idIncorrecta,
+            $aprobarSoloTag
+        ) {
 
             $rutaEvidencia = $solicitud->evidencia_respuesta_path;
             if ($request->hasFile('evidencia_respuesta')) {
@@ -456,11 +565,16 @@ class SolicitudController extends Controller
 
             $snapshotDiff = [];
 
-            $solicitud->update([
+            $datosUpdate = [
                 'catalogo_estado_solicitud_id' => $estadoNuevoId,
                 'evidencia_respuesta_path' => $rutaEvidencia,
                 'motivo_incorrecta' => $estadoNuevoId === $idIncorrecta ? 'error_reportado' : null,
-            ]);
+            ];
+            if ($aprobarSoloTag) {
+                $datosUpdate['pago_confirmado'] = true;
+            }
+
+            $solicitud->update($datosUpdate);
 
             $estadosAprobatorios = [$idRespondida, $idVerificada];
             $solicitud->loadMissing('proceso');
@@ -472,14 +586,26 @@ class SolicitudController extends Controller
                 $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
             }
 
+            $motivoReporte = $request->motivo ?: 'CAMBIO DE ESTADO OPERATIVO';
+            if ($aprobarSoloTag) {
+                $motivoReporte = trim(
+                    ($request->motivo ? $request->motivo.' · ' : '')
+                    .'Aprobado (Compra en tienda: Solo Tag). Concluida para la vendedora — pendiente de verificar. Compra ya cargada en masivo.'
+                );
+            }
+
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $estadoAnteriorId,
                 'estado_nuevo_id' => $estadoNuevoId,
-                'motivo_reporte' => $request->motivo ?: 'CAMBIO DE ESTADO OPERATIVO',
+                'motivo_reporte' => $motivoReporte,
                 'datos_snapshot' => array_merge(
-                    ['evidencia_respuesta_path' => $rutaEvidencia],
+                    [
+                        'evidencia_respuesta_path' => $rutaEvidencia,
+                        'compra_en_tienda_solo_tag' => (bool) $solicitud->compra_en_tienda_solo_tag,
+                        'pago_confirmado_auto_solo_tag' => $aprobarSoloTag,
+                    ],
                     !empty($snapshotDiff) ? $snapshotDiff : []
                 ),
             ]);
@@ -495,7 +621,9 @@ class SolicitudController extends Controller
                     ? ($reportadoPorVendedora
                         ? 'La vendedora ha reportado un error en la respuesta de su solicitud.'
                         : 'Se ha reportado un error en tu solicitud. Revisa las observaciones.')
-                    : 'El área administrativa ha emitido una resolución para tu solicitud.';
+                    : ($aprobarSoloTag
+                        ? 'Tu solicitud Solo Tag fue aprobada y quedó concluida de tu lado. Queda pendiente de verificar.'
+                        : 'El área administrativa ha emitido una resolución para tu solicitud.');
 
                 Notification::send($destinatarios, new AlertaSolicitud(
                     $solicitud,
@@ -813,6 +941,14 @@ class SolicitudController extends Controller
 
         if ($solicitud->catalogo_tipo_cliente_id) {
             $cliente->catalogo_tipo_cliente_id = $solicitud->catalogo_tipo_cliente_id;
+        }
+
+        $nombreProceso = strtoupper($solicitud->proceso?->nombre ?? '');
+        if ($solicitud->vendedor_id && (
+            str_contains($nombreProceso, 'ASIGNAR TAG')
+            || str_contains($nombreProceso, 'ASIGNAR CLIENTE')
+        )) {
+            $cliente->vendedor_id = $solicitud->vendedor_id;
         }
 
         app(ReactivarClienteInactivoService::class)->ejecutar(

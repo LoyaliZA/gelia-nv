@@ -8,11 +8,14 @@ import {
     filtrarPermisosAsignables,
     usuarioPuedeAsignarPermiso,
     descripcionPermiso,
-    etiquetaPermiso,
+    etiquetaPermisoEnMatriz,
+    esPermisoExcepcion,
     permisoProtegidoParaEditor,
     permisoNoDelegablePorGerente,
     gerentePuedeMostrarPermisoInactivo,
-    agruparPermisosEnMatriz,
+    agruparPermisosPorSubmodulo,
+    agruparModulosPorSeccionSidebar,
+    etiquetaModuloUi,
     filtrarPermisosPorBusqueda,
     calcularDiffPlantilla,
     permisoCoincideBusqueda,
@@ -30,22 +33,17 @@ function MatrizPermisos({
     esSuperAdmin,
     permisosUsuario,
     onToggle,
+    onAsignarLote,
     soloLectura = false,
     removidosSet = null,
 }) {
-    const { columnas, filas } = useMemo(
-        () => agruparPermisosEnMatriz(permisosDeModulo),
-        [permisosDeModulo],
+    const moduloRoot = permisosDeModulo?.[0]?.name?.split('.')[0] || '';
+    const submodulos = useMemo(
+        () => agruparPermisosPorSubmodulo(moduloRoot, permisosDeModulo),
+        [moduloRoot, permisosDeModulo],
     );
 
-    const columnasVisibles = columnas.filter((col) => {
-        if (col.key === 'otros') {
-            return filas.some((f) => f.celdas.otros.length > 0);
-        }
-        return filas.some((f) => f.celdas[col.key]);
-    });
-
-    if (filas.length === 0) return null;
+    if (!permisosDeModulo?.length) return null;
 
     const permisoEsToggleable = (permiso) => {
         const meta = procedencia[permiso.name];
@@ -55,32 +53,22 @@ function MatrizPermisos({
         return !soloLectura && !protegido && !noDelegable && puedeAsignar;
     };
 
-    const obtenerPermisosDeFila = (fila) => {
-        const permisos = [];
-        columnasVisibles.forEach((col) => {
-            if (col.key === 'otros') {
-                permisos.push(...fila.celdas.otros);
-            } else if (fila.celdas[col.key]) {
-                permisos.push(fila.celdas[col.key]);
-            }
-        });
-        return permisos;
-    };
-
-    const toggleFila = (fila) => {
-        const permisos = obtenerPermisosDeFila(fila).filter(permisoEsToggleable);
-        if (permisos.length === 0) return;
-
-        const todosActivos = permisos.every((p) => activos.includes(p.name));
-        permisos.forEach((p) => {
-            const isAsignado = activos.includes(p.name);
-            if (todosActivos ? isAsignado : !isAsignado) {
-                onToggle(p.name);
-            }
+    const togglePermisos = (permisos) => {
+        const toggleables = permisos.filter(permisoEsToggleable);
+        if (toggleables.length === 0) return;
+        const nombres = toggleables.map((p) => p.name);
+        const todosActivos = nombres.every((name) => activos.includes(name));
+        if (onAsignarLote) {
+            onAsignarLote(nombres, !todosActivos);
+            return;
+        }
+        nombres.forEach((name) => {
+            const isAsignado = activos.includes(name);
+            if (todosActivos ? isAsignado : !isAsignado) onToggle(name);
         });
     };
 
-    const renderCeldaContenido = (permiso, esOtros = false) => {
+    const renderCheckbox = (permiso, { conEtiqueta = false } = {}) => {
         const isAsignado = activos.includes(permiso.name);
         const isRemovido = removidosSet?.has(permiso.name);
         const isDePlantilla = permisoDePlantilla(permiso.name, plantillasActivas, roles);
@@ -90,21 +78,22 @@ function MatrizPermisos({
         const puedeAsignar = usuarioPuedeAsignarPermiso(permiso.name, permisosUsuario, esSuperAdmin);
         const deshabilitado = soloLectura || protegido || noDelegable || !puedeAsignar;
         const ayuda = descripcionPermiso(permiso.name);
-        const etiqueta = esOtros ? etiquetaPermiso(permiso.name) : null;
+        const etiqueta = etiquetaPermisoEnMatriz(permiso.name);
+        const esExcepcion = esPermisoExcepcion(permiso.name);
 
         return (
             <label
-                className={`inline-flex flex-col items-center gap-0.5 cursor-pointer ${deshabilitado ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex items-start gap-2 min-h-8 cursor-pointer ${deshabilitado ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title={ayuda || etiqueta || permiso.name}
             >
-                <span className="inline-flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1.5 shrink-0 pt-0.5">
                     <input
                         type="checkbox"
                         checked={isAsignado}
                         disabled={deshabilitado}
                         onChange={() => !deshabilitado && onToggle(permiso.name)}
                         className="w-4 h-4 rounded accent-[var(--color-primario)] cursor-pointer disabled:cursor-not-allowed"
-                        aria-label={`${etiquetaPermiso(permiso.name)}${isAsignado ? ' activo' : ' inactivo'}`}
+                        aria-label={`${etiqueta}${ayuda ? `. ${ayuda}` : ''}${isAsignado ? ' activo' : ' inactivo'}`}
                     />
                     {isAsignado && (
                         <PermisoOrigenIndicador
@@ -115,103 +104,99 @@ function MatrizPermisos({
                         />
                     )}
                 </span>
-                {esOtros && (
-                    <span className={`text-[10px] font-bold normal-case tracking-normal leading-tight max-w-[72px] text-center ${isRemovido ? 'line-through opacity-60' : 'theme-text-muted'}`}>
-                        {etiqueta}
+                {conEtiqueta && (
+                    <span className="flex flex-col min-w-0 gap-0.5">
+                        <span
+                            className={`text-xs font-semibold leading-snug ${
+                                isRemovido
+                                    ? 'line-through opacity-60 theme-text-muted'
+                                    : esExcepcion
+                                        ? 'text-amber-600 dark:text-amber-400'
+                                        : 'theme-text-main'
+                            }`}
+                        >
+                            {etiqueta}
+                        </span>
+                        {ayuda && (
+                            <span className="text-[11px] theme-text-muted leading-snug font-normal">
+                                {ayuda}
+                            </span>
+                        )}
                     </span>
                 )}
             </label>
         );
     };
 
-    const renderCelda = (permiso, esOtros = false) => {
-        if (!permiso) {
-            return <td className="px-2 py-1.5 text-center text-xs theme-text-muted opacity-30">—</td>;
-        }
+    const renderListaPermisos = (permisos) => {
+        const normales = permisos.filter((p) => !esPermisoExcepcion(p.name));
+        const excepciones = permisos.filter((p) => esPermisoExcepcion(p.name));
 
         return (
-            <td className="px-2 py-1.5 text-center">
-                {renderCeldaContenido(permiso, esOtros)}
-            </td>
+            <div className="space-y-2">
+                {normales.length > 0 && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-2">
+                        {normales.map((p) => (
+                            <div key={p.id ?? p.name}>{renderCheckbox(p, { conEtiqueta: true })}</div>
+                        ))}
+                    </div>
+                )}
+                {excepciones.length > 0 && (
+                    <div className="pt-1 space-y-1.5">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-amber-600/90 dark:text-amber-400/90">
+                            Excepción · estados avanzados
+                        </p>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-2">
+                            {excepciones.map((p) => (
+                                <div key={p.id ?? p.name}>{renderCheckbox(p, { conEtiqueta: true })}</div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
         );
     };
 
-    const thSticky = 'sticky top-0 z-20 theme-element';
-    const thEntidad = 'sticky left-0 top-0 z-30 theme-element';
-    const tdEntidad = 'sticky left-0 z-10 theme-element group-hover:bg-black/[0.02] dark:group-hover:bg-white/[0.02]';
+    const renderBloqueSubmodulo = (grupo) => {
+        const toggleables = grupo.permisos.filter(permisoEsToggleable);
+        const todosActivos = toggleables.length > 0
+            && toggleables.every((p) => activos.includes(p.name));
+        const puedeAlternar = toggleables.length > 0 && !soloLectura;
+
+        return (
+            <section key={grupo.id} className="border theme-border rounded-xl p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                        <h4 className="text-[11px] font-black uppercase tracking-widest theme-text-muted">
+                            {grupo.label}
+                        </h4>
+                        {grupo.descripcion && (
+                            <p className="text-[11px] theme-text-muted mt-0.5 leading-snug">
+                                {grupo.descripcion}
+                            </p>
+                        )}
+                    </div>
+                    {puedeAlternar && (
+                        <button
+                            type="button"
+                            onClick={() => togglePermisos(grupo.permisos)}
+                            className="shrink-0 text-[10px] font-bold uppercase tracking-wide theme-text-muted hover:text-[var(--color-primario)] transition-colors"
+                            aria-pressed={todosActivos}
+                        >
+                            {todosActivos ? 'Quitar todos' : 'Seleccionar todos'}
+                        </button>
+                    )}
+                </div>
+                {renderListaPermisos(grupo.permisos)}
+            </section>
+        );
+    };
+
+    if (!submodulos?.length) return null;
 
     return (
-        <div className="overflow-auto max-h-[min(60vh,480px)] border theme-border rounded-xl">
-            <table className="w-full text-left border-collapse min-w-[320px]">
-                <thead>
-                    <tr className="border-b theme-border">
-                        <th className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest theme-text-muted text-left ${thEntidad}`}>
-                            Entidad
-                        </th>
-                        {columnasVisibles.map((col) => (
-                            <th
-                                key={col.key}
-                                className={`px-2 py-2 text-[10px] font-black uppercase tracking-widest theme-text-muted text-center whitespace-nowrap ${thSticky}`}
-                            >
-                                {col.label}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {filas.map((fila) => {
-                        const permisosToggleables = obtenerPermisosDeFila(fila).filter(permisoEsToggleable);
-                        const todosActivosFila = permisosToggleables.length > 0
-                            && permisosToggleables.every((p) => activos.includes(p.name));
-                        const puedeAlternarFila = permisosToggleables.length > 0 && !soloLectura;
-
-                        return (
-                            <tr key={fila.entidad} className="group border-b theme-border/50 hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
-                                <td className={`px-2 py-1.5 text-xs font-bold uppercase tracking-wide theme-text-main whitespace-nowrap ${tdEntidad}`}>
-                                    {puedeAlternarFila ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleFila(fila)}
-                                            className="text-left hover:text-[var(--color-primario)] transition-colors underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] rounded"
-                                            title={todosActivosFila
-                                                ? 'Quitar todos los permisos de esta entidad'
-                                                : 'Seleccionar todos los permisos de esta entidad'}
-                                            aria-pressed={todosActivosFila}
-                                        >
-                                            {fila.entidadLabel}
-                                        </button>
-                                    ) : (
-                                        fila.entidadLabel
-                                    )}
-                                </td>
-                                {columnasVisibles.map((col) => {
-                                    if (col.key === 'otros') {
-                                        const otros = fila.celdas.otros;
-                                        if (otros.length === 0) {
-                                            return <td key={col.key} className="px-2 py-1.5 text-center opacity-30">—</td>;
-                                        }
-                                        if (otros.length === 1) {
-                                            return <React.Fragment key={col.key}>{renderCelda(otros[0], true)}</React.Fragment>;
-                                        }
-                                        return (
-                                            <td key={col.key} className="px-2 py-1.5">
-                                                <div className="flex flex-wrap gap-1 justify-center items-start">
-                                                    {otros.map((p) => (
-                                                        <div key={p.id ?? p.name} className="inline-flex">
-                                                            {renderCeldaContenido(p, true)}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                        );
-                                    }
-                                    return <React.Fragment key={col.key}>{renderCelda(fila.celdas[col.key])}</React.Fragment>;
-                                })}
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
+        <div className="space-y-2">
+            {submodulos.map(renderBloqueSubmodulo)}
         </div>
     );
 }
@@ -260,6 +245,7 @@ function AcordeonModulo({
 }) {
     const activosEnModulo = permisosDeModulo.filter((p) => activos.includes(p.name)).length;
     const total = permisosDeModulo.length;
+    const titulo = etiquetaModuloUi(modulo);
 
     const variantClasses = {
         default: 'theme-element',
@@ -278,7 +264,7 @@ function AcordeonModulo({
                     <div className="flex items-center gap-2.5 min-w-0">
                         <ShieldCheck className="w-4 h-4 theme-text-muted shrink-0" />
                         <span className="text-xs font-black uppercase tracking-widest theme-text-main italic truncate">
-                            Módulo: {modulo}
+                            {titulo}
                             <span className="ml-2 not-italic font-bold theme-text-muted">
                                 ({activosEnModulo}/{total} activos)
                             </span>
@@ -293,6 +279,84 @@ function AcordeonModulo({
         >
             {children}
         </AcordeonAnimado>
+    );
+}
+
+function SeccionesSidebarPermisos({
+    permisosAgrupados,
+    keyPrefix = '',
+    activos,
+    plantillasActivas,
+    roles,
+    procedencia,
+    plantillaActiva,
+    usuarioActualId,
+    esSuperAdmin,
+    permisosUsuario,
+    onToggle,
+    onAsignarLote,
+    soloLectura = false,
+    removidosSet = null,
+    modulosExpandidos,
+    onToggleModulo,
+    variant = 'default',
+}) {
+    const secciones = useMemo(
+        () => agruparModulosPorSeccionSidebar(permisosAgrupados),
+        [permisosAgrupados],
+    );
+
+    if (secciones.length === 0) return null;
+
+    return (
+        <div className="space-y-5">
+            {secciones.map((seccion) => (
+                <section key={`${keyPrefix}${seccion.id}`} className="space-y-2">
+                    <header className="px-0.5 border-b theme-border/60 pb-1.5">
+                        <h4 className="text-[11px] font-black uppercase tracking-widest theme-text-muted">
+                            {seccion.label}
+                        </h4>
+                        {seccion.descripcion && (
+                            <p className="text-[11px] theme-text-muted mt-0.5 leading-snug">
+                                {seccion.descripcion}
+                            </p>
+                        )}
+                    </header>
+                    <div className="space-y-2">
+                        {seccion.modulos.map(({ modulo, permisos }) => {
+                            const expandKey = `${keyPrefix}${modulo}`;
+                            return (
+                                <AcordeonModulo
+                                    key={expandKey}
+                                    modulo={modulo}
+                                    permisosDeModulo={permisos}
+                                    activos={activos}
+                                    expandido={modulosExpandidos[expandKey] ?? false}
+                                    onToggleExpandido={(_, abierto) => onToggleModulo(expandKey, abierto)}
+                                    variant={variant}
+                                >
+                                    <MatrizPermisos
+                                        permisosDeModulo={permisos}
+                                        activos={activos}
+                                        plantillasActivas={plantillasActivas}
+                                        roles={roles}
+                                        procedencia={procedencia}
+                                        plantillaActiva={plantillaActiva}
+                                        usuarioActualId={usuarioActualId}
+                                        esSuperAdmin={esSuperAdmin}
+                                        permisosUsuario={permisosUsuario}
+                                        onToggle={onToggle}
+                                        onAsignarLote={onAsignarLote}
+                                        soloLectura={soloLectura}
+                                        removidosSet={removidosSet}
+                                    />
+                                </AcordeonModulo>
+                            );
+                        })}
+                    </div>
+                </section>
+            ))}
+        </div>
     );
 }
 
@@ -355,31 +419,43 @@ export default function PermisosAtomicos({
         [permisosSoloLecturaActivos],
     );
 
-    const togglePermisoIndividual = (permisoName) => {
-        const meta = procedencia[permisoName];
-        if (permisoProtegidoParaEditor(meta, usuarioActualId, esSuperAdmin)) return;
-        if (!usuarioPuedeAsignarPermiso(permisoName, permisosUsuario, esSuperAdmin)) return;
-        if (permisoNoDelegablePorGerente(permisoName, esSuperAdmin)) return;
+    const asignarPermisosLote = (nombres, activar) => {
+        const candidatos = (nombres || []).filter((permisoName) => {
+            const meta = procedencia[permisoName];
+            if (permisoProtegidoParaEditor(meta, usuarioActualId, esSuperAdmin)) return false;
+            if (!usuarioPuedeAsignarPermiso(permisoName, permisosUsuario, esSuperAdmin)) return false;
+            if (permisoNoDelegablePorGerente(permisoName, esSuperAdmin)) return false;
+            return true;
+        });
+        if (candidatos.length === 0) return;
 
         const actuales = data.permisos_individuales || [];
-        const nuevos = actuales.includes(permisoName)
-            ? actuales.filter((item) => item !== permisoName)
-            : [...actuales, permisoName];
-
+        const set = new Set(actuales);
+        candidatos.forEach((name) => {
+            if (activar) set.add(name);
+            else set.delete(name);
+        });
+        const nuevos = [...set];
         setData('permisos_individuales', nuevos);
 
         if (onPlantillaPorPermisoChange) {
             onPlantillaPorPermisoChange((prev) => {
                 const next = { ...prev };
-                if (nuevos.includes(permisoName)) {
-                    const sugerido = plantillasDePermiso(permisoName, plantillasActivas, roles)[0];
-                    if (sugerido) next[permisoName] = sugerido;
-                } else {
-                    delete next[permisoName];
-                }
+                candidatos.forEach((permisoName) => {
+                    if (nuevos.includes(permisoName)) {
+                        const sugerido = plantillasDePermiso(permisoName, plantillasActivas, roles)[0];
+                        if (sugerido) next[permisoName] = sugerido;
+                    } else {
+                        delete next[permisoName];
+                    }
+                });
                 return next;
             });
         }
+    };
+
+    const togglePermisoIndividual = (permisoName) => {
+        asignarPermisosLote([permisoName], !activos.includes(permisoName));
     };
 
     const permisoVisibleEnRejilla = (permiso) => {
@@ -521,31 +597,23 @@ export default function PermisosAtomicos({
                         </>
                     )}
                 >
-                        {Object.entries(permisosPlantillaAgrupados).map(([modulo, permisosDeModulo]) => (
-                            <AcordeonModulo
-                                key={`tpl-${modulo}`}
-                                modulo={modulo}
-                                permisosDeModulo={permisosDeModulo}
-                                activos={activos}
-                                expandido={modulosExpandidos[`tpl-${modulo}`] ?? false}
-                                onToggleExpandido={(_, abierto) => toggleModulo(`tpl-${modulo}`, abierto)}
-                                variant="plantilla"
-                            >
-                                <MatrizPermisos
-                                    permisosDeModulo={permisosDeModulo}
-                                    activos={activos}
-                                    plantillasActivas={plantillasActivas}
-                                    roles={roles}
-                                    procedencia={procedencia}
-                                    plantillaActiva={plantillaActiva}
-                                    usuarioActualId={usuarioActualId}
-                                    esSuperAdmin={esSuperAdmin}
-                                    permisosUsuario={permisosUsuario}
-                                    onToggle={togglePermisoIndividual}
-                                    soloLectura
-                                />
-                            </AcordeonModulo>
-                        ))}
+                        <SeccionesSidebarPermisos
+                            permisosAgrupados={permisosPlantillaAgrupados}
+                            keyPrefix="tpl-"
+                            activos={activos}
+                            plantillasActivas={plantillasActivas}
+                            roles={roles}
+                            procedencia={procedencia}
+                            plantillaActiva={plantillaActiva}
+                            usuarioActualId={usuarioActualId}
+                            esSuperAdmin={esSuperAdmin}
+                            permisosUsuario={permisosUsuario}
+                            onToggle={togglePermisoIndividual}
+                            soloLectura
+                            modulosExpandidos={modulosExpandidos}
+                            onToggleModulo={toggleModulo}
+                            variant="plantilla"
+                        />
                 </AcordeonAnimado>
             )}
 
@@ -557,32 +625,22 @@ export default function PermisosAtomicos({
             )}
 
             {hayRejilla && (
-                <div className="space-y-3">
-                    {Object.entries(permisosAgrupados).map(([modulo, permisosDeModulo]) => (
-                        <AcordeonModulo
-                            key={modulo}
-                            modulo={modulo}
-                            permisosDeModulo={permisosDeModulo}
-                            activos={activos}
-                            expandido={modulosExpandidos[modulo] ?? false}
-                            onToggleExpandido={toggleModulo}
-                        >
-                            <MatrizPermisos
-                                permisosDeModulo={permisosDeModulo}
-                                activos={activos}
-                                plantillasActivas={plantillasActivas}
-                                roles={roles}
-                                procedencia={procedencia}
-                                plantillaActiva={plantillaActiva}
-                                usuarioActualId={usuarioActualId}
-                                esSuperAdmin={esSuperAdmin}
-                                permisosUsuario={permisosUsuario}
-                                onToggle={togglePermisoIndividual}
-                                removidosSet={removidosSet}
-                            />
-                        </AcordeonModulo>
-                    ))}
-                </div>
+                <SeccionesSidebarPermisos
+                    permisosAgrupados={permisosAgrupados}
+                    activos={activos}
+                    plantillasActivas={plantillasActivas}
+                    roles={roles}
+                    procedencia={procedencia}
+                    plantillaActiva={plantillaActiva}
+                    usuarioActualId={usuarioActualId}
+                    esSuperAdmin={esSuperAdmin}
+                    permisosUsuario={permisosUsuario}
+                    onToggle={togglePermisoIndividual}
+                    onAsignarLote={asignarPermisosLote}
+                    removidosSet={removidosSet}
+                    modulosExpandidos={modulosExpandidos}
+                    onToggleModulo={toggleModulo}
+                />
             )}
 
             {diffPlantilla.tienePlantilla && !hayRejilla && diffPlantilla.personalizados.length === 0 && !busquedaPermisos.trim() && (
@@ -603,31 +661,23 @@ export default function PermisosAtomicos({
                         <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
                         Permisos asignados por administración (solo lectura)
                     </h4>
-                    {Object.entries(soloLecturaAgrupados).map(([modulo, permisosDeModulo]) => (
-                        <AcordeonModulo
-                            key={`sl-${modulo}`}
-                            modulo={modulo}
-                            permisosDeModulo={permisosDeModulo}
-                            activos={activos}
-                            expandido={modulosExpandidos[`sl-${modulo}`] ?? false}
-                            onToggleExpandido={(_, abierto) => toggleModulo(`sl-${modulo}`, abierto)}
-                            variant="soloLectura"
-                        >
-                            <MatrizPermisos
-                                permisosDeModulo={permisosDeModulo}
-                                activos={activos}
-                                plantillasActivas={plantillasActivas}
-                                roles={roles}
-                                procedencia={procedencia}
-                                plantillaActiva={plantillaActiva}
-                                usuarioActualId={usuarioActualId}
-                                esSuperAdmin={esSuperAdmin}
-                                permisosUsuario={permisosUsuario}
-                                onToggle={() => {}}
-                                soloLectura
-                            />
-                        </AcordeonModulo>
-                    ))}
+                    <SeccionesSidebarPermisos
+                        permisosAgrupados={soloLecturaAgrupados}
+                        keyPrefix="sl-"
+                        activos={activos}
+                        plantillasActivas={plantillasActivas}
+                        roles={roles}
+                        procedencia={procedencia}
+                        plantillaActiva={plantillaActiva}
+                        usuarioActualId={usuarioActualId}
+                        esSuperAdmin={esSuperAdmin}
+                        permisosUsuario={permisosUsuario}
+                        onToggle={() => {}}
+                        soloLectura
+                        modulosExpandidos={modulosExpandidos}
+                        onToggleModulo={toggleModulo}
+                        variant="soloLectura"
+                    />
                 </div>
             )}
         </div>

@@ -88,6 +88,7 @@ body {
  * el ancho lo controla --gelia-content-max en .gelia-app-content-inner.
  */
 .gelia-app-content-inner [class*='max-w-[1400px]'],
+.gelia-app-content-inner [class*='max-w-[1440px]'],
 .gelia-app-content-inner .gelia-page-shell {
     max-width: 100% !important;
     width: 100%;
@@ -95,8 +96,10 @@ body {
 }
 
 .gelia-app-shell[data-content-density='completo'] .gelia-app-content-inner [class*='max-w-[1400px]'],
+.gelia-app-shell[data-content-density='completo'] .gelia-app-content-inner [class*='max-w-[1440px]'],
 .gelia-app-shell[data-content-density='completo'] .gelia-app-content-inner .gelia-page-shell,
 .gelia-app-shell[data-content-density='personalizado'] .gelia-app-content-inner [class*='max-w-[1400px]'],
+.gelia-app-shell[data-content-density='personalizado'] .gelia-app-content-inner [class*='max-w-[1440px]'],
 .gelia-app-shell[data-content-density='personalizado'] .gelia-app-content-inner .gelia-page-shell {
     padding-inline: var(--gelia-page-shell-padding-inline);
     padding-block-start: var(--gelia-page-shell-padding-block);

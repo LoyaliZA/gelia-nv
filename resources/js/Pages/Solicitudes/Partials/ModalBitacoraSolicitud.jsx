@@ -271,7 +271,12 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             )}
                             {solicitud?.compra_en_tienda && (
                                 <p className="text-[10px] font-bold text-[#b87333] dark:text-[#daa520] uppercase tracking-widest flex items-center gap-1">
-                                    Compra en tienda — lista Bronce asignada al crear la solicitud.
+                                    Compra en Tienda
+                                </p>
+                            )}
+                            {solicitud?.compra_en_tienda_solo_tag && (
+                                <p className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest flex items-center gap-1">
+                                    Compra en tienda: Solo Tag
                                 </p>
                             )}
                             {solicitud?.confirmo_informacion_escalonamiento && (
@@ -367,12 +372,17 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                                                 />
                                             )}
 
-                                            {snapshot && !snapshot?.antes && !snapshot?.despues && (nombreListaHistorial || nombreTipoHistorial || snapshot?.compra_en_tienda) && (
+                                            {snapshot && !snapshot?.antes && !snapshot?.despues && (nombreListaHistorial || nombreTipoHistorial || snapshot?.compra_en_tienda || snapshot?.compra_en_tienda_solo_tag) && (
                                                 <div className="mb-4 p-4 bg-black/5 dark:bg-white/5 rounded-2xl border theme-border flex flex-col gap-3">
                                                     <div className="flex flex-wrap gap-2">
                                                         {snapshot?.compra_en_tienda && (
                                                             <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-[#cd7f32]/15 text-[#b87333] border border-[#cd7f32]/30">
-                                                                Compra en tienda · {snapshot.lista_descuento_nombre || nombreListaHistorial || 'Bronce'}
+                                                                Compra en Tienda
+                                                            </span>
+                                                        )}
+                                                        {snapshot?.compra_en_tienda_solo_tag && (
+                                                            <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-sky-500/15 text-sky-600 border border-sky-500/30">
+                                                                Compra en tienda: Solo Tag
                                                             </span>
                                                         )}
                                                         {nombreListaHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Lista solicitada: {nombreListaHistorial}</span>}

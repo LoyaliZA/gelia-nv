@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use App\Models\SolicitudTag;
 use App\Models\SolicitudFactura;
+use App\Models\SolicitudTraspaso;
 use App\Observers\SolicitudTagObserver;
 // Importaciones requeridas para el módulo de auditoría de catálogos
 use App\Models\CatalogoListaDescuento;
@@ -109,6 +110,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(CommandStarting::class, PreventDestructiveDatabaseCommands::class);
 
         Route::bind('factura', fn (string $value) => SolicitudFactura::where('id', $value)->orWhere('folio', $value)->firstOrFail());
+        Route::bind('traspaso', fn (string $value) => SolicitudTraspaso::where('id', $value)->orWhere('folio', $value)->firstOrFail());
         Route::bind('colaborador', fn (string $value) => RhColaborador::findOrFail($value));
         Route::bind('puesto', fn (string $value) => CatalogoPuesto::findOrFail($value));
         Route::bind('horasExtra', fn (string $value) => RhHorasExtra::findOrFail($value));

@@ -51,17 +51,18 @@ function routeHref(name, fallback) {
 /** Árbol de navegación del menú lateral (permisos aplicados al renderizar). */
 export function buildSidebarNavigation({ can, showAdminMenu }) {
     const showReportes = can('solicitudes.exportar');
+    const showReporteTraspasos = can('traspasos.reporte_dia');
     const showListados = can('listados.ver');
     const showLimpieza = can('funciones.limpieza_clientes');
     const showEjercicioEscalonamiento = can('ejercicio_escalonamiento.ver');
-    
+
     const showAsistencia = can('funciones.asistencia');
     const showAvisos = can('funciones.avisos');
     const showGastos = can('funciones.gastos');
     const showLimpiezaArchivos = can('funciones.limpieza_archivos');
     const showTransacciones = can('funciones.transacciones');
 
-    const showHerramientas = showReportes || showListados || showLimpieza || showEjercicioEscalonamiento || showAsistencia || showAvisos || showGastos || showLimpiezaArchivos || showTransacciones;
+    const showHerramientas = showReportes || showReporteTraspasos || showListados || showLimpieza || showEjercicioEscalonamiento || showAsistencia || showAvisos || showGastos || showLimpiezaArchivos || showTransacciones;
 
     const solicitudesChildren = [
         can('solicitudes.ver_listado') && {
@@ -79,6 +80,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: Ban,
             href: () => routeHref('cancelaciones_cotizaciones.index', '/cancelaciones-cotizaciones'),
             active: (url) => url.startsWith('/cancelaciones-cotizaciones'),
+        },
+        can('traspasos.ver_listado') && {
+            type: 'link',
+            id: 'traspasos',
+            label: 'Traspasos',
+            icon: Package,
+            href: () => routeHref('traspasos.index', '/traspasos'),
+            active: (url) => url.startsWith('/traspasos'),
         },
     ].filter(Boolean);
 
@@ -224,6 +233,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: BarChart3,
             href: () => routeHref('reportes.solicitudes.index', '/reportes/solicitudes'),
             active: (url) => url.startsWith('/reportes/solicitudes'),
+        },
+        showReporteTraspasos && {
+            type: 'link',
+            id: 'reportes_traspasos_dia',
+            label: 'Traspasos del día',
+            icon: Package,
+            href: () => routeHref('reportes.traspasos_dia.index', '/reportes/traspasos-dia'),
+            active: (url) => url.startsWith('/reportes/traspasos-dia'),
         },
         showListados && {
             type: 'link',

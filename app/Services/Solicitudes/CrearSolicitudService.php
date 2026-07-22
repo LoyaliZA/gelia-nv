@@ -39,11 +39,15 @@ class CrearSolicitudService
             $proceso = \App\Models\CatalogoProceso::find($datos['catalogo_proceso_id']);
             $esOperativo = $proceso?->esOperativo() ?? false;
             $compraEnTienda = $this->aplicaCompraEnTienda($proceso, $datos);
+            $compraSoloTag = $this->aplicaCompraEnTiendaSoloTag($proceso, $datos);
 
             $listaDescuentoId = $esOperativo ? null : ($datos['catalogo_lista_descuento_id'] ?? null);
             $montoCotizado = $esOperativo ? 0 : (float) ($datos['monto_cotizado'] ?? 0);
 
-            if ($compraEnTienda) {
+            if ($compraSoloTag) {
+                $listaDescuentoId = null;
+                $montoCotizado = 0;
+            } elseif ($compraEnTienda) {
                 $listaBronce = $this->resolverListaBronce();
                 $listaDescuentoId = $listaBronce?->id;
                 $montoCotizado = 0;
@@ -85,6 +89,7 @@ class CrearSolicitudService
                 'catalogo_tipo_cliente_id' => $esOperativo ? null : ($datos['catalogo_tipo_cliente_id'] ?? null),
                 'catalogo_lista_descuento_id' => $esOperativo ? null : $listaDescuentoId,
                 'compra_en_tienda' => $compraEnTienda,
+                'compra_en_tienda_solo_tag' => $compraSoloTag,
                 'confirmo_informacion_escalonamiento' => $esOperativo ? false : filter_var($datos['confirmo_informacion_escalonamiento'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'monto_final_tentativo' => $esOperativo ? null : $montoFinalTentativo,
                 'total_proyectado_neto' => $esOperativo ? null : $totalProyectadoNeto,
@@ -102,13 +107,16 @@ class CrearSolicitudService
                 'usuario_id' => $vendedorId,
                 'estado_anterior_id' => null, // Es nuevo, no hay estado anterior
                 'estado_nuevo_id' => $estadoPendiente->id,
-                'motivo_reporte' => $compraEnTienda
-                    ? 'Creación de solicitud. Compra en tienda: lista Bronce asignada automáticamente. Cotización no requerida.'
-                    : 'Creación original de la solicitud.',
+                'motivo_reporte' => $compraSoloTag
+                    ? 'Creación de solicitud. Compra en tienda reportada (solo TAG): sin lista ni cotización.'
+                    : ($compraEnTienda
+                        ? 'Creación de solicitud. Compra en tienda: lista Bronce asignada automáticamente. Cotización no requerida.'
+                        : 'Creación original de la solicitud.'),
                 'datos_snapshot' => [
                     'monto_cotizado' => $solicitud->monto_cotizado,
                     'proceso_id' => $solicitud->catalogo_proceso_id,
                     'compra_en_tienda' => $compraEnTienda,
+                    'compra_en_tienda_solo_tag' => $compraSoloTag,
                     'lista_bronce_autoasignada' => $compraEnTienda,
                     'lista_descuento_nombre' => $compraEnTienda
                         ? CatalogoListaDescuento::find($listaDescuentoId)?->nombre
@@ -152,10 +160,21 @@ class CrearSolicitudService
             $encargados = $encargadosPorDepto->merge($adminsGlobales)->unique('id');
 
             if ($encargados->isNotEmpty()) {
+                if ($compraSoloTag) {
+                    $tipoAlerta = 'compra_en_tienda_solo_tag';
+                    $mensajeAlerta = "Compra en tienda: Solo Tag de: {$nombreColaborador}";
+                } elseif ($compraEnTienda) {
+                    $tipoAlerta = 'compra_en_tienda';
+                    $mensajeAlerta = "Compra en Tienda de: {$nombreColaborador}";
+                } else {
+                    $tipoAlerta = 'nueva';
+                    $mensajeAlerta = "Nueva solicitud recibida de: {$nombreColaborador}";
+                }
+
                 Notification::send($encargados, new AlertaSolicitud(
                     $solicitud,
-                    'nueva',
-                    "Nueva solicitud recibida de: {$nombreColaborador}"
+                    $tipoAlerta,
+                    $mensajeAlerta
                 ));
             }
 
@@ -178,16 +197,69 @@ class CrearSolicitudService
 
     private function aplicaCompraEnTienda(?\App\Models\CatalogoProceso $proceso, array $datos): bool
     {
+        if ($this->aplicaCompraEnTiendaSoloTag($proceso, $datos)) {
+            return false;
+        }
+
+        return self::flagCompraEnTiendaAplica($proceso, $datos['compra_en_tienda'] ?? false);
+    }
+
+    private function aplicaCompraEnTiendaSoloTag(?\App\Models\CatalogoProceso $proceso, array $datos): bool
+    {
+        if (!self::esProcesoAsignarTagSolo($proceso)) {
+            return false;
+        }
+
+        return self::flagCompraEnTiendaAplica($proceso, $datos['compra_en_tienda_solo_tag'] ?? false);
+    }
+
+    /** Proceso exacto ASIGNAR TAG (no incluye “… Y CAMBIO DE LISTA”). */
+    public static function esProcesoAsignarTagSolo(?\App\Models\CatalogoProceso $proceso): bool
+    {
+        if (!$proceso) {
+            return false;
+        }
+
+        return strtoupper(trim($proceso->nombre)) === 'ASIGNAR TAG';
+    }
+
+    /** Regla compartida: toggle en cualquier proceso financiero (no operativo). */
+    public static function flagCompraEnTiendaAplica(?\App\Models\CatalogoProceso $proceso, mixed $flag): bool
+    {
         if (!$proceso || $proceso->esOperativo()) {
             return false;
         }
 
-        $esClienteNuevo = str_contains(strtoupper($proceso->nombre), 'ASIGNAR CLIENTE NUEVO');
+        return filter_var($flag, FILTER_VALIDATE_BOOLEAN);
+    }
 
-        return $esClienteNuevo && filter_var($datos['compra_en_tienda'] ?? false, FILTER_VALIDATE_BOOLEAN);
+    /** Cualquiera de las marcas de tienda (Bronce o solo TAG). */
+    public static function esFlujoTienda(SolicitudTag|array|null $solicitud): bool
+    {
+        if (!$solicitud) {
+            return false;
+        }
+
+        if (is_array($solicitud)) {
+            return filter_var($solicitud['compra_en_tienda'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                || filter_var($solicitud['compra_en_tienda_solo_tag'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return (bool) $solicitud->compra_en_tienda || (bool) $solicitud->compra_en_tienda_solo_tag;
+    }
+
+    /** Modos de validación de tienda que no tocan monto_venta_actual. */
+    public static function modoValidacionSinMonto(string $modo): bool
+    {
+        return in_array($modo, ['pago_sin_monto', 'atencion_gelia'], true);
     }
 
     private function resolverListaBronce(): ?CatalogoListaDescuento
+    {
+        return self::buscarListaBronce();
+    }
+
+    public static function buscarListaBronce(): ?CatalogoListaDescuento
     {
         return CatalogoListaDescuento::query()
             ->where('activo', true)

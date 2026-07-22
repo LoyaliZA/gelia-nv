@@ -6,7 +6,7 @@ import axios from 'axios';
 
 import {
     Users, UserPlus, Search, Edit3, Archive,
-    MapPin, Mail, AtSign,
+    MapPin, Mail, AtSign, UserCog,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
@@ -18,6 +18,24 @@ import {
     permisoProtegidoParaEditor,
 } from '../../utils/permisos';
 import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
+
+function nombreCompleto(usuario) {
+    return [(usuario.name || '').trim(), (usuario.apellido_paterno || '').trim(), (usuario.apellido_materno || '').trim()]
+        .filter(Boolean)
+        .join(' ');
+}
+
+function nombreCortoPersona(persona) {
+    return [(persona?.name || '').trim(), (persona?.apellido_paterno || '').trim()]
+        .filter(Boolean)
+        .join(' ');
+}
+
+function etiquetasGerentes(usuario) {
+    const lista = usuario?.gerentes || [];
+    if (lista.length === 0) return 'Sin gerente';
+    return lista.map(nombreCortoPersona).filter(Boolean).join(', ');
+}
 
 function UserAvatar({ usuario }) {
     const [loadFailed, setLoadFailed] = useState(false);
@@ -45,12 +63,6 @@ function UserAvatar({ usuario }) {
             )}
         </div>
     );
-}
-
-function nombreCompleto(usuario) {
-    return [(usuario.name || '').trim(), (usuario.apellido_paterno || '').trim(), (usuario.apellido_materno || '').trim()]
-        .filter(Boolean)
-        .join(' ');
 }
 
 function RolesChips({ roles = [], maxVisible = 4 }) {
@@ -81,7 +93,7 @@ function usuarioEsSuperAdmin(usuario) {
     return (usuario.roles || []).some((rol) => rol.name === 'Super Admin');
 }
 
-function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, usuarioActualId }) {
+function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, usuarioActualId, esCabezaEquipo = false }) {
     const mostrarArchivar = puedeArchivar
         && usuario.id !== usuarioActualId
         && !usuarioEsSuperAdmin(usuario);
@@ -90,9 +102,16 @@ function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, us
             <div className="flex items-start gap-3">
                 <UserAvatar usuario={usuario} />
                 <div className="min-w-0 flex-1 space-y-1.5">
-                    <h3 className="theme-text-main font-black text-sm uppercase italic tracking-tighter leading-snug break-words">
-                        {nombreCompleto(usuario)}
-                    </h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="theme-text-main font-black text-sm uppercase italic tracking-tighter leading-snug break-words">
+                            {nombreCompleto(usuario)}
+                        </h3>
+                        {esCabezaEquipo && (
+                            <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border border-[var(--color-primario)] text-[var(--color-primario)]">
+                                Gerente del equipo
+                            </span>
+                        )}
+                    </div>
                     {usuario.username && (
                         <p className="text-[10px] font-bold theme-text-muted flex items-start gap-1.5 break-all">
                             <AtSign className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--color-primario)' }} />
@@ -110,6 +129,13 @@ function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, us
                 <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--color-primario)' }} />
                 <span className="line-clamp-2 break-words min-w-0">
                     {usuario.departamentos?.map((d) => d.nombre).join(', ') || 'Sin departamento'}
+                </span>
+            </p>
+
+            <p className="text-[10px] font-bold uppercase tracking-widest theme-text-muted flex items-start gap-2">
+                <UserCog className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--color-primario)' }} />
+                <span className="line-clamp-2 break-words min-w-0 normal-case tracking-normal">
+                    Reporta a: {etiquetasGerentes(usuario)}
                 </span>
             </p>
 
@@ -141,7 +167,7 @@ function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, us
     );
 }
 
-function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usuarioActualId }) {
+function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usuarioActualId, esCabezaEquipo = false }) {
     const mostrarArchivar = puedeArchivar
         && usuario.id !== usuarioActualId
         && !usuarioEsSuperAdmin(usuario);
@@ -157,6 +183,11 @@ function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usua
                         {usuario.username && (
                             <p className="text-[9px] font-bold theme-text-muted mt-0.5 truncate">@{usuario.username}</p>
                         )}
+                        {esCabezaEquipo && (
+                            <p className="text-[8px] font-black uppercase tracking-widest mt-1 text-[var(--color-primario)]">
+                                Gerente del equipo
+                            </p>
+                        )}
                     </div>
                 </div>
             </td>
@@ -168,6 +199,11 @@ function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usua
             <td className="px-4 py-4 hidden xl:table-cell">
                 <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted line-clamp-2 max-w-[180px]">
                     {usuario.departamentos?.map((d) => d.nombre).join(', ') || '—'}
+                </span>
+            </td>
+            <td className="px-4 py-4 hidden xl:table-cell">
+                <span className="text-[9px] font-bold theme-text-muted normal-case tracking-normal line-clamp-2 max-w-[180px]">
+                    {etiquetasGerentes(usuario)}
                 </span>
             </td>
             <td className="px-4 py-4 min-w-[160px]">
@@ -224,10 +260,18 @@ function resolverAreaPrincipalFormulario(areas = [], areaId = null) {
     return '';
 }
 
+function paramsListadoUsuarios({ busqueda, gerenteId, page }) {
+    const params = { page: page ?? 1 };
+    const termino = (busqueda || '').trim();
+    if (termino) params.busqueda = termino;
+    if (gerenteId) params.gerente_id = Number(gerenteId);
+    return params;
+}
+
 export default function Usuarios({
     auth,
     usuarios = { data: [], current_page: 1, last_page: 1, per_page: 12, total: 0, from: 0, to: 0 },
-    filtros = { busqueda: '' },
+    filtros = { busqueda: '', gerente_id: null },
     departamentos = [],
     posiblesGerentes = [],
     roles = [],
@@ -241,6 +285,7 @@ export default function Usuarios({
     const { version: inertiaVersion } = usePage();
     const [usuariosState, setUsuariosState] = useState(usuarios);
     const [buscando, setBuscando] = useState(false);
+    const [guardando, setGuardando] = useState(false);
     const abortRef = useRef(null);
 
     useEffect(() => {
@@ -249,6 +294,7 @@ export default function Usuarios({
 
     const lista = usuariosState?.data ?? [];
     const busquedaInicial = filtros?.busqueda ?? '';
+    const gerenteInicial = filtros?.gerente_id ? String(filtros.gerente_id) : '';
     const debounceRef = useRef(null);
 
     const puedeArchivar = esSuperAdmin || (auth?.user?.permissions || []).includes('usuarios.archivar');
@@ -272,6 +318,7 @@ export default function Usuarios({
     };
 
     const [busqueda, setBusqueda] = useState(busquedaInicial);
+    const [gerenteId, setGerenteId] = useState(gerenteInicial);
     const [showModal, setShowModal] = useState(false);
     const [usuarioEditando, setUsuarioEditando] = useState(null);
     const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
@@ -279,7 +326,7 @@ export default function Usuarios({
     const [procedenciaActual, setProcedenciaActual] = useState({});
 
     // --- FORMULARIO MATRICIAL ---
-    const { data, setData, post, put, processing, reset, errors, setError, clearErrors } = useForm({
+    const { data, setData, processing, reset, errors, setError, clearErrors } = useForm({
         name: '',
         apellido_paterno: '',
         apellido_materno: '',
@@ -314,6 +361,10 @@ export default function Usuarios({
         setBusqueda(busquedaInicial);
     }, [busquedaInicial]);
 
+    useEffect(() => {
+        setGerenteId(gerenteInicial);
+    }, [gerenteInicial]);
+
     const recargarUsuarios = useCallback(async (params, { actualizarUrl } = {}) => {
         if (abortRef.current) abortRef.current.abort();
         const controller = new AbortController();
@@ -338,6 +389,11 @@ export default function Usuarios({
                 } else {
                     url.searchParams.delete('busqueda');
                 }
+                if (params.gerente_id) {
+                    url.searchParams.set('gerente_id', String(params.gerente_id));
+                } else {
+                    url.searchParams.delete('gerente_id');
+                }
                 url.searchParams.set('page', String(params.page ?? 1));
                 window.history.replaceState({}, '', url.pathname + url.search);
             }
@@ -353,21 +409,26 @@ export default function Usuarios({
         }
     }, [inertiaVersion]);
 
-    const aplicarBusqueda = useCallback((valor) => {
+    const aplicarFiltros = useCallback((overrides = {}) => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
         debounceRef.current = setTimeout(() => {
-            const termino = valor.trim();
+            const nextBusqueda = overrides.busqueda !== undefined ? overrides.busqueda : busqueda;
+            const nextGerente = overrides.gerenteId !== undefined ? overrides.gerenteId : gerenteId;
             recargarUsuarios(
-                { busqueda: termino || undefined, page: 1 },
+                paramsListadoUsuarios({
+                    busqueda: nextBusqueda,
+                    gerenteId: nextGerente,
+                    page: 1,
+                }),
                 { actualizarUrl: true },
             );
-        }, 350);
-    }, [recargarUsuarios]);
+        }, overrides.inmediato ? 0 : 350);
+    }, [busqueda, gerenteId, recargarUsuarios]);
 
     const irAPagina = (pagina) => {
         if (pagina < 1 || pagina > (usuariosState.last_page || 1)) return;
         recargarUsuarios(
-            { busqueda: busqueda.trim() || undefined, page: pagina },
+            paramsListadoUsuarios({ busqueda, gerenteId, page: pagina }),
             { actualizarUrl: true },
         ).then(() => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -525,7 +586,7 @@ export default function Usuarios({
     };
 
     const handleSubmit = (e) => {
-        e.preventDefault();
+        e?.preventDefault?.();
         let permisosLimpios = deduplicarPermisos(data.permisos_individuales);
         if (!esSuperAdmin && usuarioEditando) {
             const usuarioActualId = auth?.user?.id;
@@ -556,20 +617,34 @@ export default function Usuarios({
             plantilla_por_permiso: plantillaPorPermiso,
         };
 
+        setGuardando(true);
+        const opciones = {
+            preserveScroll: true,
+            onSuccess: () => {
+                cerrarModal();
+                recargarUsuarios(
+                    paramsListadoUsuarios({
+                        busqueda,
+                        gerenteId,
+                        page: usuariosState.current_page || 1,
+                    }),
+                    { actualizarUrl: true },
+                );
+            },
+            onFinish: () => setGuardando(false),
+        };
+
         if (usuarioEditando) {
-            put(route('admin.usuarios.update', usuarioEditando.id), payload, {
-                preserveScroll: true,
-                onSuccess: () => cerrarModal(),
-            });
+            router.put(route('admin.usuarios.update', usuarioEditando.id), payload, opciones);
         } else {
-            post(route('admin.usuarios.store'), payload, {
-                onSuccess: () => cerrarModal(),
-            });
+            router.post(route('admin.usuarios.store'), payload, opciones);
         }
     };
 
     const cardHeader = geliaCardClass('p-6 md:p-10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6');
     const cardListado = geliaCardClass('overflow-hidden');
+    const procesandoForm = processing || guardando;
+    const gerenteFiltroId = gerenteId ? Number(gerenteId) : null;
 
     return (
         <AppLayout auth={auth}>
@@ -598,33 +673,55 @@ export default function Usuarios({
                         </p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto lg:max-w-xl shrink-0">
-                        <div className="theme-field-with-icon flex-1 min-w-0">
-                            {buscando ? (
-                                <div className="theme-field-icon flex items-center justify-center">
-                                    <div className="w-3.5 h-3.5 rounded-full border-2 border-[var(--color-primario)] border-t-transparent animate-spin" />
-                                </div>
-                            ) : (
-                                <Search className="theme-field-icon" aria-hidden />
-                            )}
-                            <input
-                                type="search"
-                                placeholder="Buscar por nombre, correo o usuario..."
-                                className="theme-input w-full pr-4 py-3 text-[11px] font-bold normal-case tracking-normal placeholder:uppercase placeholder:tracking-wider placeholder:text-[10px]"
-                                value={busqueda}
-                                onChange={(e) => {
-                                    setBusqueda(e.target.value);
-                                    aplicarBusqueda(e.target.value);
-                                }}
-                            />
+                    <div className="flex flex-col gap-3 w-full lg:w-auto lg:max-w-2xl shrink-0">
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <div className="theme-field-with-icon flex-1 min-w-0">
+                                {buscando ? (
+                                    <div className="theme-field-icon flex items-center justify-center">
+                                        <div className="w-3.5 h-3.5 rounded-full border-2 border-[var(--color-primario)] border-t-transparent animate-spin" />
+                                    </div>
+                                ) : (
+                                    <Search className="theme-field-icon" aria-hidden />
+                                )}
+                                <input
+                                    type="search"
+                                    placeholder="Buscar por nombre, correo o usuario..."
+                                    className="theme-input w-full pr-4 py-3 text-[11px] font-bold normal-case tracking-normal placeholder:uppercase placeholder:tracking-wider placeholder:text-[10px]"
+                                    value={busqueda}
+                                    onChange={(e) => {
+                                        setBusqueda(e.target.value);
+                                        aplicarFiltros({ busqueda: e.target.value });
+                                    }}
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => abrirModal()}
+                                className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact shrink-0`}
+                            >
+                                <UserPlus className="w-4 h-4" /> Nuevo ingreso
+                            </button>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => abrirModal()}
-                            className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact shrink-0`}
-                        >
-                            <UserPlus className="w-4 h-4" /> Nuevo ingreso
-                        </button>
+                        <div className="theme-field-with-icon w-full">
+                            <UserCog className="theme-field-icon" aria-hidden />
+                            <select
+                                className="theme-input w-full pr-4 py-3 text-[11px] font-bold normal-case tracking-normal"
+                                value={gerenteId}
+                                onChange={(e) => {
+                                    const valor = e.target.value;
+                                    setGerenteId(valor);
+                                    aplicarFiltros({ gerenteId: valor, inmediato: true });
+                                }}
+                                aria-label="Filtrar por gerente y su equipo"
+                            >
+                                <option value="">Todos los equipos (gerente → colaboradores)</option>
+                                {(posiblesGerentes || []).map((g) => (
+                                    <option key={g.id} value={String(g.id)}>
+                                        Equipo de {nombreCortoPersona(g)}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                 </header>
 
@@ -654,6 +751,7 @@ export default function Usuarios({
                                 onArchivar={archivarUsuario}
                                 puedeArchivar={puedeArchivar}
                                 usuarioActualId={auth?.user?.id}
+                                esCabezaEquipo={gerenteFiltroId != null && Number(usuario.id) === gerenteFiltroId}
                             />
                         ))
                     )}
@@ -670,6 +768,7 @@ export default function Usuarios({
                                     <th className="px-4 py-4">Colaborador</th>
                                     <th className="px-4 py-4">Correo</th>
                                     <th className="px-4 py-4 hidden xl:table-cell">Departamentos</th>
+                                    <th className="px-4 py-4 hidden xl:table-cell">Reporta a</th>
                                     <th className="px-4 py-4">Roles</th>
                                     <th className="px-4 py-4 text-right">Acciones</th>
                                 </tr>
@@ -677,7 +776,7 @@ export default function Usuarios({
                             <tbody>
                                 {lista.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="px-4 py-16 text-center">
+                                        <td colSpan={6} className="px-4 py-16 text-center">
                                             <Users className="w-10 h-10 theme-text-muted mx-auto mb-3 opacity-50" />
                                             <p className="font-black italic uppercase theme-text-main text-sm">Sin resultados</p>
                                             <p className="text-[10px] font-bold theme-text-muted mt-1 uppercase tracking-widest">
@@ -694,6 +793,7 @@ export default function Usuarios({
                                             onArchivar={archivarUsuario}
                                             puedeArchivar={puedeArchivar}
                                             usuarioActualId={auth?.user?.id}
+                                            esCabezaEquipo={gerenteFiltroId != null && Number(usuario.id) === gerenteFiltroId}
                                         />
                                     ))
                                 )}
@@ -709,6 +809,7 @@ export default function Usuarios({
                     <div
                         className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6 overflow-y-auto`}
                         onClick={cerrarModal}
+                        data-gelia-unsaved-form="1"
                     >
                         <div
                             className={`${THEME_MODAL_SHELL} max-w-4xl modal-pop text-left`}
@@ -719,7 +820,7 @@ export default function Usuarios({
                                 usuarioEditando={usuarioEditando}
                                 onCerrar={cerrarModal}
                                 onSubmit={handleSubmit}
-                                processing={processing}
+                                processing={procesandoForm}
                                 data={data}
                                 setData={setData}
                                 errors={errors}
