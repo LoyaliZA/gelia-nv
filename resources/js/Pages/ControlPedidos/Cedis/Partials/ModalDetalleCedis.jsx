@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
 import {
-    X, CheckCircle2, AlertTriangle, FileText, User, Truck,
+    X, CheckCircle2, AlertTriangle, FileText, User, Truck, PackageCheck,
 } from 'lucide-react';
 import {
     badgeEstatusPedido,
     badgeEmpaqueSemantico,
+    badgeRetrasoGuia,
     esPedidoEmpacadoCedis,
     formatearMoneda,
     etiquetaAlmacen,
@@ -24,6 +25,7 @@ import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/Mo
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
+import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
@@ -38,7 +40,9 @@ const Campo = ({ label, value }) => (
 const comprobantesDe = (pedido) => (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' || !d.tipo);
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 
-export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInicial, onReportarIncidencia }) {
+export default function ModalDetalleCedis({
+    abierto, onClose, pedido: pedidoInicial, onReportarIncidencia, onReportarErrorDatos, onMarcarApartado,
+}) {
     const [pedido, setPedido] = useState(pedidoInicial);
     const [procesando, setProcesando] = useState(false);
     const [docPreview, setDocPreview] = useState(null);
@@ -58,13 +62,17 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
 
     const fase = pedido.estatus?.fase_ciclo;
     const badgeEstatus = badgeEstatusPedido(pedido.estatus);
-    const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo);
+    const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
+    const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
     const comprobantes = comprobantesDe(pedido);
     const remision = remisionDe(pedido);
+    const evidenciasApartado = (pedido?.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
     const esIncidencia = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
+    const puedeErrorDatos = ['EN_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
+    const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
 
 
     const recargarPedido = () => {
@@ -113,7 +121,7 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
     const cfgConfirm = confirmacion === 'empacar'
         ? { titulo: 'Confirmar empaque', mensaje: '¿Confirmar que el pedido fue empacado?', etiquetaConfirmar: 'Marcar empacado', variante: 'primary' }
         : confirmacion === 'enviar'
-            ? { titulo: 'Confirmar envío', mensaje: '¿Confirmar que el pedido salió de almacén?', etiquetaConfirmar: 'Marcar enviado', variante: 'primary' }
+            ? { titulo: 'Confirmar envío', mensaje: 'Al confirmar, el pedido sale a recolección y el estado se actualiza para auxiliar, CEDIS y logística.', etiquetaConfirmar: 'Marcar enviado', variante: 'primary' }
             : null;
 
     return createPortal(
@@ -140,6 +148,11 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
                                 <span className={badgeEmpaque.className} style={badgeEmpaque.style}>
                                     {badgeEmpaque.label}
                                 </span>
+                                {badgeRetraso && (
+                                    <span className={badgeRetraso.className} style={badgeRetraso.style}>
+                                        {badgeRetraso.label}
+                                    </span>
+                                )}
                             </div>
                         </div>
                         <button type="button" onClick={onClose} className="p-2 rounded-full theme-text-muted hover:theme-text-main outline-none shrink-0" aria-label="Cerrar">
@@ -150,41 +163,65 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
                     <div className="gelia-modal-body p-5 md:p-6 space-y-6">
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>Estatus de empaque</p>
-                            <div className={`p-4 rounded-xl border theme-border ${esIncidencia ? 'bg-orange-500/10 border-orange-500/30' : esEmpacado ? 'bg-emerald-500/10 border-emerald-500/30' : 'theme-element'}`}>
+                            <div className="space-y-3">
+                                {(fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && pedido.es_resguardo && (
+                                    <AvisoOperativoPedido
+                                        label="Resguardo"
+                                        tono="blue"
+                                        icon={PackageCheck}
+                                    >
+                                        {pedido.resguardo_apartado_at
+                                            ? 'Resguardo apartado — empaque bloqueado'
+                                            : 'Empaque bloqueado — en resguardo'}
+                                    </AvisoOperativoPedido>
+                                )}
                                 {esEmpacado && pedido.empacado_at && (
-                                    <p className="text-sm font-bold text-emerald-600 m-0 flex items-center gap-2">
-                                        <CheckCircle2 className="w-4 h-4" />
-                                        Empacado por {(pedido.empacado_por?.name || pedido.empacadoPor?.name) || '—'} el {formatearFechaHoraAuditoria(pedido.empacado_at)}
-                                    </p>
+                                    <AvisoOperativoPedido
+                                        label="Empaque"
+                                        tono="success"
+                                        icon={CheckCircle2}
+                                    >
+                                        Empacado por {(pedido.empacado_por?.name || pedido.empacadoPor?.name) || '—'}
+                                        <span className="block text-sm font-bold mt-1 opacity-80 font-mono">
+                                            {formatearFechaHoraAuditoria(pedido.empacado_at)}
+                                        </span>
+                                    </AvisoOperativoPedido>
                                 )}
                                 {esIncidencia && (
-                                    <>
-                                        <p className="text-sm font-bold text-orange-600 m-0 flex items-center gap-2">
-                                            <AlertTriangle className="w-4 h-4" /> Con detalle / incidencia
-                                        </p>
-                                        <p className="text-sm font-bold theme-text-main mt-2 m-0">{pedido.detalle_incidencia_empaque}</p>
+                                    <AvisoOperativoPedido
+                                        label="Incidencia"
+                                        tono="danger"
+                                        icon={AlertTriangle}
+                                    >
+                                        {pedido.detalle_incidencia_empaque || 'Con detalle / incidencia'}
                                         {pedido.incidencia_empaque_at && (
-                                            <p className="text-xs theme-text-muted font-bold mt-2 m-0 font-mono">
-                                                Reportado por {(pedido.incidencia_empaque_por?.name || pedido.incidenciaEmpaquePor?.name) || '—'} el {formatearFechaHoraAuditoria(pedido.incidencia_empaque_at)}
-                                            </p>
+                                            <span className="block text-sm font-bold mt-1 opacity-80 font-mono">
+                                                {(pedido.incidencia_empaque_por?.name || pedido.incidenciaEmpaquePor?.name) || '—'}
+                                                {' · '}
+                                                {formatearFechaHoraAuditoria(pedido.incidencia_empaque_at)}
+                                            </span>
                                         )}
-                                    </>
+                                    </AvisoOperativoPedido>
+                                )}
+                                {!pedido.es_resguardo && !esEmpacado && !esIncidencia && fase === 'EN_CEDIS' && (
+                                    <AvisoOperativoPedido label="Estatus" tono="warning">
+                                        Pendiente de empaque en almacén
+                                    </AvisoOperativoPedido>
                                 )}
                                 {fase === 'PENDIENTE_DE_GUIA' && (
-                                    <p className="text-sm font-bold theme-text-main m-0">Esperando captura de guía por delegado.</p>
+                                    <AvisoOperativoPedido label="Estatus" tono="info">
+                                        Esperando captura de guía por delegado
+                                    </AvisoOperativoPedido>
                                 )}
                                 {fase === 'PENDIENTE_DE_ENVIO' && (
-                                    <p className="text-sm font-bold theme-text-main m-0">Listo para verificación y envío en almacén.</p>
+                                    <AvisoOperativoPedido label="Estatus" tono="info">
+                                        Listo para verificación y envío en almacén
+                                    </AvisoOperativoPedido>
                                 )}
-                                {fase === 'EN_CEDIS' && (
-                                    <p className="text-sm font-bold theme-text-main m-0">Pendiente de empaque en almacén.</p>
+                                {(fase === 'PENDIENTE_DE_ENVIO' || fase === 'ENVIADO') && (
+                                    <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} />
                                 )}
                             </div>
-                            {(fase === 'PENDIENTE_DE_ENVIO' || fase === 'ENVIADO') && (
-                                <div className="mt-4">
-                                    <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} compact />
-                                </div>
-                            )}
                         </section>
 
                         <section className={SECCION_WRAP}>
@@ -235,10 +272,31 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
                                 <Campo label="Código postal" value={pedido.codigo_postal} />
                                 <Campo label="Reexpedición / Zona" value={pedido.zona?.nombre} />
                                 <Campo label="Anexar remisión" value={pedido.anexar_remision ? 'Sí' : 'No'} />
-                                {pedido.es_resguardo && <Campo label="Resguardo" value="Sí" />}
+                                {pedido.es_resguardo && (
+                                    <Campo
+                                        label="Resguardo"
+                                        value={pedido.resguardo_apartado_at
+                                            ? `Apartado${pedido.resguardo_apartado_at ? ` · ${formatearFechaHoraAuditoria(pedido.resguardo_apartado_at)}` : ''}`
+                                            : 'Sí — pendiente de apartar'}
+                                    />
+                                )}
+                                {pedido.detalle_resguardo_apartado && (
+                                    <Campo label="Nota apartado" value={pedido.detalle_resguardo_apartado} />
+                                )}
                                 {pedido.envia_a_otra_persona && <Campo label="Destinatario alterno" value={pedido.envia_otra_persona} />}
                             </div>
                         </section>
+
+                        {evidenciasApartado.length > 0 && (
+                            <section className={SECCION_WRAP}>
+                                <p className={SECCION}>Evidencia de apartado</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {evidenciasApartado.map((doc) => (
+                                        <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
 
                         {pedido.comentarios_drive && (
                             <section className={SECCION_WRAP}>
@@ -291,7 +349,17 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
                                 disabled={procesando}
                                 className={`${BTN_SECONDARY} theme-element border border-orange-500/40 text-orange-600 outline-none`}
                             >
-                                <AlertTriangle className="w-4 h-4 inline mr-1" /> Reportar Error
+                                <AlertTriangle className="w-4 h-4 inline mr-1" /> Incidencia empaque
+                            </button>
+                        )}
+                        {puedeErrorDatos && (
+                            <button
+                                type="button"
+                                onClick={() => { onClose(); onReportarErrorDatos?.(pedido); }}
+                                disabled={procesando}
+                                className={`${BTN_SECONDARY} theme-element border border-orange-500/40 text-orange-600 outline-none`}
+                            >
+                                <AlertTriangle className="w-4 h-4 inline mr-1" /> Error de datos
                             </button>
                         )}
                         {puedeMarcarEnviado && (
@@ -314,10 +382,15 @@ export default function ModalDetalleCedis({ abierto, onClose, pedido: pedidoInic
                                 <CheckCircle2 className="w-4 h-4" /> Marcar empacado
                             </button>
                         )}
-                        {(fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && pedido.es_resguardo && (
-                            <span className="text-xs font-bold text-blue-600 uppercase ml-auto">
-                                Empaque bloqueado — en resguardo
-                            </span>
+                        {puedeApartar && (
+                            <button
+                                type="button"
+                                onClick={() => { onClose(); onMarcarApartado?.(pedido); }}
+                                disabled={procesando}
+                                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
+                            >
+                                <PackageCheck className="w-4 h-4" /> Marcar apartado
+                            </button>
                         )}
                     </div>
                 </div>

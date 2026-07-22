@@ -33,18 +33,23 @@ class ListarPedidosCedisService
         $base = $this->queryBase();
         $idsPorFase = $this->idsPorFase();
 
-        $pendientes = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0)->count();
-        $incidencias = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0)->count();
-        $empacados = (clone $base)->whereIn('catalogo_estatus_pedido_id', array_values(array_filter(array_map(
-            fn (string $fase) => $idsPorFase[$fase] ?? null,
-            self::FASES_EMPACADOS
-        ))))->whereNotNull('empacado_at')->count();
+        $empacados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0)->count();
+        $pendientesEnvio = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_ENVIO'] ?? 0)->count();
+        $pendientesGuia = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_GUIA'] ?? 0)->count();
+        $enviados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0)->count();
+        $incorrectas = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0)->count();
 
         return [
-            'pendientes' => $pendientes,
-            'incidencias' => $incidencias,
             'empacados' => $empacados,
-            'total' => $pendientes + $incidencias + $empacados,
+            'pendientes_envio' => $pendientesEnvio,
+            'pendientes_guia' => $pendientesGuia,
+            'enviados' => $enviados,
+            'incorrectas' => $incorrectas,
+            // Compat KPI / tests previos
+            'pendientes' => $empacados,
+            'incidencias' => $incorrectas,
+            'total' => $empacados + $pendientesEnvio + $pendientesGuia + $enviados + $incorrectas
+                + ((clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENTREGADO'] ?? 0)->count()),
         ];
     }
 
@@ -69,6 +74,7 @@ class ListarPedidosCedisService
             'documentos',
             'empacadoPor',
             'incidenciaEmpaquePor',
+            'resguardoApartadoPor',
             'direccionVigente',
         ])
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
@@ -91,20 +97,18 @@ class ListarPedidosCedisService
             });
         }
 
-        $tab = strtoupper($filtros['tab'] ?? 'PENDIENTES');
+        $tab = strtoupper($filtros['tab'] ?? 'TODOS');
         $idsPorFase = $this->idsPorFase();
 
-        $idsEmpacados = array_values(array_filter(array_map(
-            fn (string $fase) => $idsPorFase[$fase] ?? null,
-            self::FASES_EMPACADOS
-        )));
-
         match ($tab) {
+            'EMPACADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0),
+            'PENDIENTES_ENVIO' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_ENVIO'] ?? 0),
+            'PENDIENTES_GUIA' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_GUIA'] ?? 0),
+            'ENVIADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0),
+            'INCORRECTAS', 'INCIDENCIAS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0),
+            // Legacy: tab PENDIENTES apuntaba a EN_CEDIS
             'PENDIENTES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0),
-            'INCIDENCIAS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0),
-            'EMPACADOS' => $query->whereIn('catalogo_estatus_pedido_id', $idsEmpacados ?: [0])
-                ->whereNotNull('empacado_at'),
-            default => null,
+            default => null, // TODOS
         };
     }
 

@@ -17,6 +17,7 @@ class Almacen extends Model
         'tipo_almacen_id',
         'activo',
         'visible_en_pedidos',
+        'visible_en_traspasos',
     ];
 
     protected function casts(): array
@@ -24,6 +25,7 @@ class Almacen extends Model
         return [
             'activo' => 'boolean',
             'visible_en_pedidos' => 'boolean',
+            'visible_en_traspasos' => 'boolean',
         ];
     }
 

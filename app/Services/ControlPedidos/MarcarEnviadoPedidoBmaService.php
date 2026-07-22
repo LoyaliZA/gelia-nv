@@ -46,7 +46,7 @@ class MarcarEnviadoPedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusEnviado,
-                'Pedido marcado como enviado por CEDIS.'
+                'Pedido marcado como enviado; sale a recolección.'
             );
 
             return $pedido->fresh([

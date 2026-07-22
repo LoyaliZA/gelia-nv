@@ -50,7 +50,7 @@ class ControlPedidosFase22Test extends TestCase
         );
     }
 
-    public function test_empacar_comercial_aparece_en_tab_empacados_cedis(): void
+    public function test_empacar_comercial_aparece_en_tab_pendientes_guia_cedis(): void
     {
         $pedido = $this->crearPedidoAprobadoCedis([
             'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
@@ -61,11 +61,11 @@ class ControlPedidosFase22Test extends TestCase
             $this->usuario->id
         );
 
-        $pendientes = app(ListarPedidosCedisService::class)->ejecutar(['tab' => 'PENDIENTES'], false);
-        $this->assertFalse($pendientes->contains('id', $pedido->id));
+        $porEmpacar = app(ListarPedidosCedisService::class)->ejecutar(['tab' => 'EMPACADOS'], false);
+        $this->assertFalse($porEmpacar->contains('id', $pedido->id));
 
-        $empacados = app(ListarPedidosCedisService::class)->ejecutar(['tab' => 'EMPACADOS'], false);
-        $this->assertTrue($empacados->contains('id', $pedido->id));
+        $pendientesGuia = app(ListarPedidosCedisService::class)->ejecutar(['tab' => 'PENDIENTES_GUIA'], false);
+        $this->assertTrue($pendientesGuia->contains('id', $pedido->id));
     }
 
     public function test_empacar_paqueteria_local_pasa_a_pendiente_de_envio(): void
@@ -412,23 +412,37 @@ class ControlPedidosFase22Test extends TestCase
         }
 
         if (!DB::table('catalogo_paqueterias_pedido')->where('categoria', 'comercial')->exists()) {
-            DB::table('catalogo_paqueterias_pedido')->insert([
-                'nombre' => 'FEDEX',
-                'categoria' => 'comercial',
-                'activo' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
+            $existente = DB::table('catalogo_paqueterias_pedido')->where('nombre', 'FEDEX')->first();
+            if ($existente) {
+                DB::table('catalogo_paqueterias_pedido')
+                    ->where('id', $existente->id)
+                    ->update(['categoria' => 'comercial', 'updated_at' => $now]);
+            } else {
+                DB::table('catalogo_paqueterias_pedido')->insert([
+                    'nombre' => 'FEDEX',
+                    'categoria' => 'comercial',
+                    'activo' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
         }
 
         if (!DB::table('catalogo_paqueterias_pedido')->where('categoria', 'local_regional')->exists()) {
-            DB::table('catalogo_paqueterias_pedido')->insert([
-                'nombre' => 'TAXI FRONTERA',
-                'categoria' => 'local_regional',
-                'activo' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
+            $existenteLocal = DB::table('catalogo_paqueterias_pedido')->where('nombre', 'TAXI FRONTERA')->first();
+            if ($existenteLocal) {
+                DB::table('catalogo_paqueterias_pedido')
+                    ->where('id', $existenteLocal->id)
+                    ->update(['categoria' => 'local_regional', 'updated_at' => $now]);
+            } else {
+                DB::table('catalogo_paqueterias_pedido')->insert([
+                    'nombre' => 'TAXI FRONTERA',
+                    'categoria' => 'local_regional',
+                    'activo' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
         }
 
         if (!DB::table('catalogo_tipos_caja_pedido')->exists()) {

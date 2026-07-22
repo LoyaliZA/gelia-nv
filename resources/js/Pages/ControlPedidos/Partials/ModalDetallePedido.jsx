@@ -4,6 +4,7 @@ import { usePage } from '@inertiajs/react';
 import { X, User, MapPin } from 'lucide-react';
 import {
     badgeEstatusPedido,
+    badgeResguardoApartado,
     etiquetaEstatusPedido,
     formatearMoneda,
     etiquetaAlmacen,
@@ -41,7 +42,9 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
     const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
     const guiaLista = tieneGuiaLista(pedido);
     const badgeGuia = badgeGuiaLista();
+    const badgeApartado = pedido.resguardo_apartado_at ? badgeResguardoApartado() : null;
     const docsSinGuia = (pedido.documentos || []).filter((d) => d.tipo !== 'guia');
+    const evidenciasApartado = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
     const snap = pedido.direccion_vigente || pedido.direccionVigente;
 
     return createPortal(
@@ -59,6 +62,9 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 <span className={badge.className} style={badge.style}>{badge.label}</span>
                                 {guiaLista && (
                                     <span className={badgeGuia.className}>{badgeGuia.label}</span>
+                                )}
+                                {badgeApartado && (
+                                    <span className={badgeApartado.className} style={badgeApartado.style}>{badgeApartado.label}</span>
                                 )}
                             </div>
                             {pedido.vendedor?.name && (
@@ -92,6 +98,12 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <Campo label="Tipo guía" value={pedido.tipo_guia?.nombre} />
                             <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                             <Campo label="Resguardo" value={pedido.es_resguardo ? 'Sí' : 'No'} />
+                            <Campo
+                                label="Apartado CEDIS"
+                                value={pedido.resguardo_apartado_at
+                                    ? formatearFechaHoraAuditoria(pedido.resguardo_apartado_at)
+                                    : (pedido.es_resguardo ? 'Pendiente' : '—')}
+                            />
                             <Campo label="Anexar remisión" value={pedido.anexar_remision ? 'Sí' : 'No'} />
                             <Campo label="C.P." value={pedido.codigo_postal} />
                             <Campo label="Total a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} />
@@ -120,9 +132,25 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             )}
                             <Campo label="Comentarios" value={pedido.comentarios_drive} />
                         </div>
-                        {docsSinGuia.length > 0 && (
+                        {pedido.detalle_resguardo_apartado && (
+                            <div className="mt-4 p-3 rounded-xl border border-sky-500/30 bg-sky-500/10">
+                                <p className="text-[9px] font-black uppercase theme-text-muted m-0">Nota de apartado CEDIS</p>
+                                <p className="text-sm font-bold theme-text-main m-0 mt-1">{pedido.detalle_resguardo_apartado}</p>
+                            </div>
+                        )}
+                        {evidenciasApartado.length > 0 && (
+                            <div className="mt-4">
+                                <p className="text-[9px] font-black uppercase theme-text-muted m-0 mb-2">Evidencia de apartado</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {evidenciasApartado.map((doc) => (
+                                        <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {docsSinGuia.filter((d) => d.tipo !== 'evidencia_apartado').length > 0 && (
                             <div className="mt-4 flex flex-wrap gap-2">
-                                {docsSinGuia.map((doc) => (
+                                {docsSinGuia.filter((d) => d.tipo !== 'evidencia_apartado').map((doc) => (
                                     <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
                                 ))}
                             </div>

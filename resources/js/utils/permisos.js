@@ -17,7 +17,9 @@ export const DESCRIPCIONES_PERMISOS = {
     'solicitudes.cancelar': 'Permite confirmar cancelaciones pendientes y revertir cambios al cliente.',
     'solicitudes.confirmar_cambio_lista': 'Permite confirmar el ajuste de lista tras alerta de pago insuficiente.',
     'solicitudes.eliminar': 'Permite eliminar registros de solicitudes con respaldo en auditoría.',
+    'solicitudes.eliminadas': 'Permite consultar solicitudes eliminadas (papelera).',
     'solicitudes.exportar': 'Permite exportar reportes de solicitudes financieras en PDF, Excel y CSV.',
+    'solicitudes.consultar': 'Permiso legado de consulta TAG/lista (usar emitir/responder consulta).',
     'clientes.ver': 'Permite consultar el catálogo de clientes.',
     'clientes.crear': 'Permite registrar clientes manualmente.',
     'clientes.carga_masiva': 'Permite importar clientes de forma masiva.',
@@ -30,11 +32,15 @@ export const DESCRIPCIONES_PERMISOS = {
     'clientes.direcciones.ver_historial': 'Permite consultar el historial de versiones de direcciones.',
     'clientes.direcciones.revisar_solicitudes': 'Permite revisar y aprobar solicitudes públicas de dirección.',
     'clientes.direcciones.generar_enlace': 'Permite generar y revocar enlaces seguros del formulario de direcciones.',
+    'clientes.limpieza': 'Permiso legado; usar funciones.limpieza_clientes.',
     'configuracion.ver_auditoria': 'Permite consultar la bitácora de auditoría de solicitudes.',
     'usuarios.gestionar': 'Permite administrar usuarios del sistema.',
     'usuarios.generar_permisos': 'Permite asignar permisos a otros usuarios.',
+    'usuarios.archivar': 'Permite archivar usuarios del sistema.',
+    'catalogos.gestionar': 'Permite administrar catálogos globales del sistema.',
     'catalogos.comisiones.ver': 'Permite consultar el catálogo de comisiones.',
     'catalogos.comisiones.gestionar': 'Permite editar el catálogo de comisiones.',
+    'comisiones.gestionar': 'Permite administrar tabuladores de comisiones.',
     'listados.ver': 'Permite ver listados de productos para resurtido.',
     'listados.crear': 'Permite crear listados de productos.',
     'listados.editar': 'Permite editar listados de productos.',
@@ -61,6 +67,14 @@ export const DESCRIPCIONES_PERMISOS = {
     'facturas.eliminar': 'Permite eliminar solicitudes de factura con auditoría.',
     'facturas.gestionar_datos_fiscales': 'Permite administrar datos fiscales de clientes desde el módulo de facturas.',
     'facturas.exportar': 'Permite exportar el listado de solicitudes de factura.',
+    'traspasos.ver_listado': 'Permite acceder al módulo de solicitudes de traspaso.',
+    'traspasos.crear': 'Permite crear solicitudes de traspaso de piezas.',
+    'traspasos.responder': 'Permite registrar el folio y captura del traspaso generado.',
+    'traspasos.reportar_error': 'Permite reportar error en solicitudes de traspaso pendientes.',
+    'traspasos.verificar': 'Permite marcar solicitudes de traspaso como verificadas.',
+    'traspasos.monitorear_alertas': 'Recibe todas las alertas de traspasos (estación de bocina / designado).',
+    'traspasos.reporte_dia': 'Permite generar el reporte de traspasos planificados para el día siguiente.',
+    'traspasos.eliminar': 'Permite eliminar solicitudes de traspaso con auditoría.',
     'cancelaciones_cotizaciones.ver_listado': 'Permite acceder al módulo de cancelaciones y cotizaciones.',
     'cancelaciones_cotizaciones.crear': 'Permite crear solicitudes de cancelación de remisión/pedido o cotización sobre pedido.',
     'cancelaciones_cotizaciones.reportar': 'Permite aprobar o reportar errores en solicitudes operativas.',
@@ -84,10 +98,15 @@ export const DESCRIPCIONES_PERMISOS = {
     'control_pedidos.direccion.cambiar_despues_remision': 'Permite cambiar dirección después de que exista remisión.',
     'control_pedidos.direccion.cambiar_despues_guia': 'Permite cambiar dirección e invalidar guía existente.',
     'control_pedidos.direccion.usar_manual': 'Permite capturar una dirección manual excepcional en un pedido.',
-
     'api_externa.gestionar': 'Permite administrar la API externa, aplicaciones, permisos y documentación.',
     'api_externa.ver_auditoria': 'Permite consultar la bitácora de uso de la API externa.',
     'funciones.limpieza_clientes': 'Permite acceder a la herramienta operativa de Limpieza de Clientes.',
+    'funciones.asistencia': 'Permite acceder a la herramienta de Asistencia.',
+    'funciones.avisos': 'Permite acceder a Avisos de mercancía.',
+    'funciones.gastos': 'Permite acceder a Depuración de gastos.',
+    'funciones.limpieza_archivos': 'Permite acceder a Limpieza de archivos.',
+    'funciones.transacciones': 'Permite acceder a Depuración de transacciones.',
+    'funciones.plantilla_bellaroma': 'Permiso legado de plantilla Bellaroma (usar plantilla_pedidos).',
     'contabilidad.ver': 'Permite acceder al módulo de contabilidad Bellaroma.',
     'contabilidad.pedidos.crear': 'Permite registrar pedidos manualmente en contabilidad.',
     'contabilidad.pedidos.editar': 'Permite editar pedidos de contabilidad no bloqueados.',
@@ -106,12 +125,991 @@ export const DESCRIPCIONES_PERMISOS = {
     'almacenes.costos.ver': 'Permite consultar costo, costo de reposición y precio de venta por producto y almacén.',
     'almacenes.costos.gestionar': 'Permite crear, editar y eliminar costos y precios por producto y almacén.',
     'almacenes.costos.importar': 'Permite importar costos y precios de forma masiva (cuando esté habilitada la carga).',
+    'entregas.cotizar': 'Permite usar el cotizador de entregas.',
+    'entregas.configurar_zonas': 'Permite configurar el mapa logístico y zonas de entrega.',
+    'cobranza.ver': 'Permite acceder al módulo Credibox / cobranza.',
+    'cobranza.importar_reporte': 'Permite importar reportes de cobranza.',
+    'cobranza.ejecutar_llamadas': 'Permite ejecutar llamadas de cobranza.',
+    'cobranza.editar_credito': 'Permite editar créditos de clientes en cobranza.',
+    'cobranza.confirmar_pago': 'Permite confirmar pagos en cobranza.',
+    'cobranza.ver_bitacora': 'Permite consultar la bitácora de cobranza.',
+    'cobranza.recibir_alertas': 'Permite recibir alertas de cobranza.',
+    'cobranza.configurar_alertas': 'Permite configurar alertas de cobranza.',
+    'cobranza.reparar_fecha': 'Permite reparar fechas en registros de cobranza.',
+    'cobranza.reportes': 'Permite generar reportes de cobranza.',
+    'cobranza.recalcular_creditos': 'Permite recalcular créditos en cobranza.',
+    'ejercicio_escalonamiento.ver': 'Permite acceder al ejercicio de escalonamiento.',
+    'woocommerce.ver': 'Permite ver productos vinculados a WooCommerce.',
+    'woocommerce.sincronizar': 'Permite sincronizar precios/productos con WooCommerce.',
+    'woocommerce.configurar': 'Permite configurar la vinculación WooCommerce.',
+    'woocommerce.auditoria': 'Permite consultar la auditoría de WooCommerce.',
+    'woocommerce.emergencia': 'Permite acciones de emergencia en WooCommerce.',
+    'plantilla_pedidos.ver': 'Permite acceder a Plantilla de Pedidos.',
+    'plantilla_pedidos.generar': 'Permite generar plantillas de pedidos.',
+    'plantilla_pedidos.descargar': 'Permite descargar plantillas generadas.',
+    'plantilla_pedidos.visualizar': 'Permite visualizar plantillas generadas.',
+    'plantilla_pedidos.ver_programadas': 'Permite ver plantillas programadas.',
+    'plantilla_pedidos.configurar': 'Permite configurar Plantilla de Pedidos.',
+    'plantilla_pedidos.eliminar': 'Permite eliminar plantillas de pedidos.',
+    'gestion_interna.directorio.ver': 'Permite consultar el directorio interno.',
+    'gestion_interna.directorio.gestionar': 'Permite administrar el directorio interno.',
+    'configuracion_sistema.gestionar': 'Permite administrar la configuración del sistema (variables / entorno).',
+    'sistema.auditorias.ver': 'Permite consultar auditorías del sistema.',
+    'sistema.auditorias.accesos.ver': 'Permite consultar la auditoría de accesos.',
+    'soporte.reportar': 'Permite reportar tickets de soporte.',
+    'soporte.gestionar': 'Permite atender tickets en el dashboard de soporte.',
+    'soporte.administrar': 'Permite administrar SLA y catálogos de soporte.',
+    'mensajeria.monitorear': 'Permite monitorear la mensajería del sistema.',
+    'mensajeria.eliminar': 'Permite eliminar mensajes de mensajería.',
+    'rh.ver': 'Permite acceder al módulo de Recursos Humanos.',
+    'rh.colaboradores.crear': 'Permite dar de alta colaboradores.',
+    'rh.colaboradores.editar': 'Permite editar colaboradores.',
+    'rh.colaboradores.vincular_usuario': 'Permite vincular un colaborador con un usuario del sistema.',
+    'rh.horas_extra.ver': 'Permite consultar horas extra.',
+    'rh.horas_extra.crear': 'Permite registrar horas extra.',
+    'rh.horas_extra.editar': 'Permite editar horas extra.',
+    'rh.incidencias.ver': 'Permite consultar incidencias RH.',
+    'rh.incidencias.crear': 'Permite crear incidencias RH.',
+    'rh.incidencias.editar': 'Permite editar incidencias RH.',
+    'rh.incidencias.aplicar': 'Permite aplicar incidencias RH.',
+    'rh.incidencias.gerente.ver': 'Permite ver incidencias propias como gerente.',
+    'rh.incidencias.gerente.crear': 'Permite crear incidencias propias como gerente.',
+    'rh.deducciones.ver': 'Permite consultar deducciones.',
+    'rh.deducciones.crear': 'Permite crear deducciones.',
+    'rh.deducciones.editar': 'Permite editar deducciones.',
+    'rh.deducciones.aplicar': 'Permite aplicar deducciones.',
+    'rh.prestamos.ver': 'Permite consultar préstamos.',
+    'rh.prestamos.crear': 'Permite crear préstamos.',
+    'rh.prestamos.editar': 'Permite editar préstamos.',
+    'rh.prestamos.detener': 'Permite detener préstamos activos.',
+    'rh.prestamos.generar': 'Permite generar movimientos de préstamos.',
+    'rh.salidas_personales.ver': 'Permite consultar salidas personales.',
+    'rh.salidas_personales.crear': 'Permite registrar salidas personales.',
+    'rh.salidas_personales.editar': 'Permite editar salidas personales.',
+    'rh.salidas_personales.eliminar': 'Permite eliminar salidas personales.',
+    'rh.salidas_personales.sellar': 'Permite sellar salidas personales.',
+    'rh.banco_tiempo.ver': 'Permite consultar banco de tiempo.',
+    'rh.banco_tiempo.crear': 'Permite registrar movimientos de banco de tiempo.',
+    'rh.banco_tiempo.editar': 'Permite editar banco de tiempo.',
+    'rh.banco_tiempo.saldar': 'Permite saldar banco de tiempo.',
+    'rh.banco_tiempo.eliminar': 'Permite eliminar movimientos de banco de tiempo.',
+    'rh.periodo_pago.ver': 'Permite consultar periodos de pago / nómina.',
+    'rh.recibos.ver': 'Permite consultar recibos de nómina.',
+    'rh.recibos.generar': 'Permite generar recibos de nómina.',
+    'rh.comisiones_auditor.ver': 'Permite consultar comisiones de auditor.',
+    'rh.configurar': 'Permite configurar parámetros de RH.',
+    'rh.catalogos.puestos': 'Permite administrar el catálogo de puestos.',
+    'rh.catalogos.bonos': 'Permite administrar el catálogo de bonos.',
+    'rh.catalogos.tipos_faltas': 'Permite administrar el catálogo de tipos de faltas.',
+    'rh.catalogos.incidencias_generales': 'Permite administrar el catálogo de incidencias generales.',
 };
 
 /** Etiqueta corta en la UI de permisos (evita repetir solo «productos» / «inventarios» / «costos»). */
 export const ETIQUETAS_PERMISOS = {
     'almacenes.ver': 'almacenes · grupo',
+    'control_pedidos.cedis': 'gestionar cedis',
+    'control_pedidos.delegado': 'asignar / actualizar guías',
+    'control_pedidos.configurar_catalogos': 'configurar catálogos',
+    'control_pedidos.auditar': 'auditar pedidos',
 };
+
+/** Permisos de excepción / estados avanzados (resalte en permisos específicos). */
+export const PERMISOS_EXCEPCION = new Set([
+    'control_pedidos.direccion.cambiar_despues_remision',
+    'control_pedidos.direccion.cambiar_despues_guia',
+]);
+
+export function esPermisoExcepcion(permisoName) {
+    return PERMISOS_EXCEPCION.has(permisoName);
+}
+
+/**
+ * Submódulos UI por módulo Spatie (alineados al sidebar / paneles reales).
+ * Los permisos no listados caen en un bloque «Otros» del mismo módulo.
+ * Si el módulo no tiene mapa, se agrupa por entidad automáticamente.
+ */
+export const SUBMODULOS_UI_POR_MODULO = {
+    control_pedidos: [
+        {
+            id: 'registrar',
+            label: 'Registrar pedidos',
+            descripcion: 'Gestión de pedidos: listado, alta, edición y direcciones en el pedido',
+            permisos: [
+                'control_pedidos.ver_listado',
+                'control_pedidos.ver_detalle',
+                'control_pedidos.crear',
+                'control_pedidos.editar',
+                'control_pedidos.eliminar',
+                'control_pedidos.exportar',
+                'control_pedidos.direccion.seleccionar',
+                'control_pedidos.direccion.cambiar',
+                'control_pedidos.direccion.usar_manual',
+                'control_pedidos.direccion.cambiar_despues_remision',
+                'control_pedidos.direccion.cambiar_despues_guia',
+            ],
+        },
+        {
+            id: 'auditar',
+            label: 'Auditar pedidos',
+            descripcion: 'Panel de auditoría (validar, remisión, aprobar / rechazar)',
+            permisos: ['control_pedidos.auditar'],
+        },
+        {
+            id: 'cedis',
+            label: 'Control pedidos CEDIS',
+            descripcion: 'Empaque y control operativo en CEDIS',
+            permisos: ['control_pedidos.cedis'],
+        },
+        {
+            id: 'delegado',
+            label: 'Actualizar guías',
+            descripcion: 'Asignación de guías, PDF e importación (delegado)',
+            permisos: ['control_pedidos.delegado'],
+        },
+        {
+            id: 'catalogos',
+            label: 'Catálogos',
+            descripcion: 'Administrar catálogos del módulo (orígenes, paqueterías, etc.)',
+            permisos: ['control_pedidos.configurar_catalogos'],
+        },
+    ],
+    solicitudes: [
+        {
+            id: 'listado',
+            label: 'Listado y detalle',
+            descripcion: 'Acceso al listado y detalle de solicitudes',
+            permisos: ['solicitudes.ver_listado', 'solicitudes.ver_detalle', 'solicitudes.eliminadas'],
+        },
+        {
+            id: 'captura',
+            label: 'Captura',
+            descripcion: 'Alta y edición de solicitudes',
+            permisos: ['solicitudes.crear', 'solicitudes.editar'],
+        },
+        {
+            id: 'flujo',
+            label: 'Flujo operativo',
+            descripcion: 'Verificar, reportar, consultas TAG/lista, pago y cancelación',
+            permisos: [
+                'solicitudes.verificar',
+                'solicitudes.reportar',
+                'solicitudes.emitir_consulta',
+                'solicitudes.responder_consulta',
+                'solicitudes.confirmar_pago',
+                'solicitudes.solicitar_cancelacion',
+                'solicitudes.cancelar',
+                'solicitudes.confirmar_cambio_lista',
+                'solicitudes.consultar',
+            ],
+        },
+        {
+            id: 'admin',
+            label: 'Administración',
+            descripcion: 'Eliminar y exportar reportes',
+            permisos: ['solicitudes.eliminar', 'solicitudes.exportar'],
+        },
+    ],
+    cancelaciones_cotizaciones: [
+        {
+            id: 'panel',
+            label: 'Cancelaciones y cotizaciones',
+            descripcion: 'Listado, flujo operativo, exportar y eliminar',
+            permisos: [
+                'cancelaciones_cotizaciones.ver_listado',
+                'cancelaciones_cotizaciones.crear',
+                'cancelaciones_cotizaciones.reportar',
+                'cancelaciones_cotizaciones.verificar',
+                'cancelaciones_cotizaciones.solicitar_cancelacion',
+                'cancelaciones_cotizaciones.cancelar',
+                'cancelaciones_cotizaciones.exportar',
+                'cancelaciones_cotizaciones.eliminar',
+            ],
+        },
+    ],
+    mis_clientes: [
+        {
+            id: 'cartera',
+            label: 'Mis clientes',
+            descripcion: 'Cartera propia y altas de clientes',
+            permisos: ['mis_clientes.gestionar'],
+        },
+    ],
+    clientes: [
+        {
+            id: 'catalogo',
+            label: 'Base de clientes',
+            descripcion: 'Catálogo admin: consulta, altas y correcciones',
+            permisos: [
+                'clientes.ver',
+                'clientes.crear',
+                'clientes.carga_masiva',
+                'clientes.correccion_emergencia',
+                'clientes.limpieza',
+            ],
+        },
+        {
+            id: 'direcciones',
+            label: 'Direcciones',
+            descripcion: 'Panel de direcciones de envío (bajo Gestión de pedidos)',
+            permisos: [
+                'clientes.direcciones.ver',
+                'clientes.direcciones.crear',
+                'clientes.direcciones.editar',
+                'clientes.direcciones.desactivar',
+                'clientes.direcciones.ver_historial',
+                'clientes.direcciones.revisar_solicitudes',
+                'clientes.direcciones.generar_enlace',
+            ],
+        },
+    ],
+    entregas: [
+        {
+            id: 'cotizador',
+            label: 'Cotizar entregas',
+            descripcion: 'Cotizador de entregas',
+            permisos: ['entregas.cotizar'],
+        },
+        {
+            id: 'mapa',
+            label: 'Mapa logístico',
+            descripcion: 'Configuración de zonas y mapa',
+            permisos: ['entregas.configurar_zonas'],
+        },
+    ],
+    contabilidad: [
+        {
+            id: 'acceso',
+            label: 'Acceso',
+            descripcion: 'Entrar al módulo de contabilidad',
+            permisos: ['contabilidad.ver'],
+        },
+        {
+            id: 'pedidos',
+            label: 'Pedidos',
+            descripcion: 'Pedidos manuales de contabilidad',
+            permisos: [
+                'contabilidad.pedidos.crear',
+                'contabilidad.pedidos.editar',
+                'contabilidad.pedidos.eliminar',
+            ],
+        },
+        {
+            id: 'retiros',
+            label: 'Retiros',
+            descripcion: 'Confirmación de retiros bancarios',
+            permisos: ['contabilidad.retiros.confirmar'],
+        },
+        {
+            id: 'plataformas',
+            label: 'Plataformas',
+            descripcion: 'Comisiones y frecuencia de pago',
+            permisos: ['contabilidad.plataformas.configurar'],
+        },
+        {
+            id: 'import_export',
+            label: 'Importar / exportar',
+            descripcion: 'Cargas y reportes',
+            permisos: ['contabilidad.importar', 'contabilidad.exportar'],
+        },
+        {
+            id: 'historial',
+            label: 'Historial',
+            descripcion: 'Ediciones de emergencia en lotes pagados',
+            permisos: ['contabilidad.historial.editar_emergencia'],
+        },
+    ],
+    facturas: [
+        {
+            id: 'solicitudes',
+            label: 'Solicitudes de factura',
+            descripcion: 'Flujo de facturación',
+            permisos: [
+                'facturas.ver_listado',
+                'facturas.crear',
+                'facturas.responder',
+                'facturas.reportar_error',
+                'facturas.verificar',
+                'facturas.eliminar',
+                'facturas.exportar',
+            ],
+        },
+        {
+            id: 'datos_fiscales',
+            label: 'Datos fiscales',
+            descripcion: 'Administrar datos fiscales de clientes',
+            permisos: ['facturas.gestionar_datos_fiscales'],
+        },
+    ],
+    traspasos: [
+        {
+            id: 'listado',
+            label: 'Solicitudes de traspaso',
+            descripcion: 'Flujo de traspasos de piezas',
+            permisos: [
+                'traspasos.ver_listado',
+                'traspasos.crear',
+                'traspasos.responder',
+                'traspasos.reportar_error',
+                'traspasos.verificar',
+                'traspasos.monitorear_alertas',
+                'traspasos.reporte_dia',
+                'traspasos.eliminar',
+            ],
+        },
+    ],
+    cobranza: [
+        {
+            id: 'panel',
+            label: 'Credibox',
+            descripcion: 'Acceso al módulo de cobranza',
+            permisos: ['cobranza.ver'],
+        },
+        {
+            id: 'operacion',
+            label: 'Operación',
+            descripcion: 'Importar, llamadas, crédito y pagos',
+            permisos: [
+                'cobranza.importar_reporte',
+                'cobranza.ejecutar_llamadas',
+                'cobranza.editar_credito',
+                'cobranza.confirmar_pago',
+            ],
+        },
+        {
+            id: 'admin_tools',
+            label: 'Herramientas admin',
+            descripcion: 'Bitácora, alertas, reparación y reportes',
+            permisos: [
+                'cobranza.ver_bitacora',
+                'cobranza.recibir_alertas',
+                'cobranza.configurar_alertas',
+                'cobranza.reparar_fecha',
+                'cobranza.reportes',
+                'cobranza.recalcular_creditos',
+            ],
+        },
+    ],
+    listados: [
+        {
+            id: 'crud',
+            label: 'Listados',
+            descripcion: 'Ver, crear, editar y eliminar listados',
+            permisos: ['listados.ver', 'listados.crear', 'listados.editar', 'listados.eliminar'],
+        },
+        {
+            id: 'config',
+            label: 'Configuración',
+            descripcion: 'Porcentajes globales',
+            permisos: ['listados.configurar_porcentajes'],
+        },
+        {
+            id: 'historial',
+            label: 'Historial y envío',
+            descripcion: 'Guardar, enviar y visualizar generados',
+            permisos: ['listados.guardar_generado', 'listados.enviar', 'listados.visualizar'],
+        },
+    ],
+    funciones: [
+        {
+            id: 'limpieza_clientes',
+            label: 'Limpieza de clientes',
+            descripcion: 'Herramienta operativa de limpieza',
+            permisos: ['funciones.limpieza_clientes'],
+        },
+        {
+            id: 'asistencia',
+            label: 'Asistencia',
+            descripcion: 'Herramienta de asistencia',
+            permisos: ['funciones.asistencia'],
+        },
+        {
+            id: 'avisos',
+            label: 'Avisos',
+            descripcion: 'Avisos de mercancía',
+            permisos: ['funciones.avisos'],
+        },
+        {
+            id: 'gastos',
+            label: 'Gastos',
+            descripcion: 'Depuración de gastos',
+            permisos: ['funciones.gastos'],
+        },
+        {
+            id: 'limpieza_archivos',
+            label: 'Limpieza de archivos',
+            descripcion: 'Herramienta de limpieza de archivos',
+            permisos: ['funciones.limpieza_archivos'],
+        },
+        {
+            id: 'transacciones',
+            label: 'Transacciones',
+            descripcion: 'Depuración de transacciones',
+            permisos: ['funciones.transacciones'],
+        },
+        {
+            id: 'legado',
+            label: 'Legado',
+            descripcion: 'Permisos antiguos en desuso',
+            permisos: ['funciones.plantilla_bellaroma'],
+        },
+    ],
+    ejercicio_escalonamiento: [
+        {
+            id: 'acceso',
+            label: 'Ejercicio escalonamiento',
+            descripcion: 'Acceso a la herramienta',
+            permisos: ['ejercicio_escalonamiento.ver'],
+        },
+    ],
+    woocommerce: [
+        {
+            id: 'productos',
+            label: 'Productos',
+            descripcion: 'Ver y sincronizar con WooCommerce',
+            permisos: ['woocommerce.ver', 'woocommerce.sincronizar'],
+        },
+        {
+            id: 'config',
+            label: 'Configuración',
+            descripcion: 'Ajustes de vinculación',
+            permisos: ['woocommerce.configurar'],
+        },
+        {
+            id: 'auditoria',
+            label: 'Auditoría',
+            descripcion: 'Bitácora de sincronización',
+            permisos: ['woocommerce.auditoria'],
+        },
+        {
+            id: 'emergencia',
+            label: 'Emergencia',
+            descripcion: 'Acciones excepcionales',
+            permisos: ['woocommerce.emergencia'],
+        },
+    ],
+    plantilla_pedidos: [
+        {
+            id: 'uso',
+            label: 'Uso',
+            descripcion: 'Ver, generar, descargar y visualizar',
+            permisos: [
+                'plantilla_pedidos.ver',
+                'plantilla_pedidos.generar',
+                'plantilla_pedidos.descargar',
+                'plantilla_pedidos.visualizar',
+                'plantilla_pedidos.ver_programadas',
+            ],
+        },
+        {
+            id: 'admin',
+            label: 'Administración',
+            descripcion: 'Configurar y eliminar plantillas',
+            permisos: ['plantilla_pedidos.configurar', 'plantilla_pedidos.eliminar'],
+        },
+    ],
+    rh: [
+        {
+            id: 'principal',
+            label: 'RH · principal',
+            descripcion: 'Dashboard y colaboradores',
+            permisos: [
+                'rh.ver',
+                'rh.colaboradores.crear',
+                'rh.colaboradores.editar',
+                'rh.colaboradores.vincular_usuario',
+            ],
+        },
+        {
+            id: 'horas_extra',
+            label: 'Horas extra',
+            descripcion: 'Registro de horas extra',
+            permisos: ['rh.horas_extra.ver', 'rh.horas_extra.crear', 'rh.horas_extra.editar'],
+        },
+        {
+            id: 'deducciones',
+            label: 'Deducciones e incidencias',
+            descripcion: 'Incidencias RH y deducciones',
+            permisos: [
+                'rh.incidencias.ver',
+                'rh.incidencias.crear',
+                'rh.incidencias.editar',
+                'rh.incidencias.aplicar',
+                'rh.deducciones.ver',
+                'rh.deducciones.crear',
+                'rh.deducciones.editar',
+                'rh.deducciones.aplicar',
+            ],
+        },
+        {
+            id: 'incidencias_gerente',
+            label: 'Incidencias gerente',
+            descripcion: 'Mis incidencias (vista gerente)',
+            permisos: ['rh.incidencias.gerente.ver', 'rh.incidencias.gerente.crear'],
+        },
+        {
+            id: 'prestamos',
+            label: 'Préstamos',
+            descripcion: 'Gestión de préstamos',
+            permisos: [
+                'rh.prestamos.ver',
+                'rh.prestamos.crear',
+                'rh.prestamos.editar',
+                'rh.prestamos.detener',
+                'rh.prestamos.generar',
+            ],
+        },
+        {
+            id: 'salidas',
+            label: 'Salidas personales',
+            descripcion: 'Registro y sello de salidas',
+            permisos: [
+                'rh.salidas_personales.ver',
+                'rh.salidas_personales.crear',
+                'rh.salidas_personales.editar',
+                'rh.salidas_personales.eliminar',
+                'rh.salidas_personales.sellar',
+            ],
+        },
+        {
+            id: 'banco_tiempo',
+            label: 'Banco de tiempo',
+            descripcion: 'Movimientos y saldo de banco de tiempo',
+            permisos: [
+                'rh.banco_tiempo.ver',
+                'rh.banco_tiempo.crear',
+                'rh.banco_tiempo.editar',
+                'rh.banco_tiempo.saldar',
+                'rh.banco_tiempo.eliminar',
+            ],
+        },
+        {
+            id: 'nomina',
+            label: 'Nómina',
+            descripcion: 'Periodo de pago, recibos y comisiones auditor',
+            permisos: [
+                'rh.periodo_pago.ver',
+                'rh.recibos.ver',
+                'rh.recibos.generar',
+                'rh.comisiones_auditor.ver',
+            ],
+        },
+        {
+            id: 'configuracion',
+            label: 'Configuración RH',
+            descripcion: 'Parámetros y catálogos RH',
+            permisos: [
+                'rh.configurar',
+                'rh.catalogos.puestos',
+                'rh.catalogos.bonos',
+                'rh.catalogos.tipos_faltas',
+                'rh.catalogos.incidencias_generales',
+            ],
+        },
+    ],
+    activos: [
+        {
+            id: 'inventario',
+            label: 'Inventario de activos',
+            descripcion: 'CRUD, estados y exportación',
+            permisos: [
+                'activos.ver',
+                'activos.crear',
+                'activos.editar',
+                'activos.cambiar_estado',
+                'activos.ver_todos',
+                'activos.exportar',
+            ],
+        },
+        {
+            id: 'asignaciones',
+            label: 'Asignaciones',
+            descripcion: 'Asignar y transferir activos',
+            permisos: ['activos.asignar', 'activos.transferir'],
+        },
+        {
+            id: 'tipos',
+            label: 'Tipos de activo',
+            descripcion: 'Catálogo de tipos',
+            permisos: ['activos.configurar_tipos'],
+        },
+    ],
+    gestion_interna: [
+        {
+            id: 'directorio',
+            label: 'Directorio',
+            descripcion: 'Directorio interno',
+            permisos: ['gestion_interna.directorio.ver', 'gestion_interna.directorio.gestionar'],
+        },
+    ],
+    almacenes: [
+        {
+            id: 'grupo',
+            label: 'Grupo almacenes',
+            descripcion: 'Permiso legacy de grupo (no abre submódulos por sí solo)',
+            permisos: ['almacenes.ver'],
+        },
+        {
+            id: 'productos',
+            label: 'Productos',
+            descripcion: 'Catálogo maestro de productos',
+            permisos: ['almacenes.productos.ver', 'almacenes.productos.gestionar'],
+        },
+        {
+            id: 'inventarios',
+            label: 'Inventarios',
+            descripcion: 'Existencias por almacén',
+            permisos: [
+                'almacenes.inventarios.ver',
+                'almacenes.inventarios.gestionar',
+                'almacenes.inventarios.importar',
+            ],
+        },
+        {
+            id: 'costos',
+            label: 'Costos',
+            descripcion: 'Costos y precios por producto/almacén',
+            permisos: [
+                'almacenes.costos.ver',
+                'almacenes.costos.gestionar',
+                'almacenes.costos.importar',
+            ],
+        },
+    ],
+    catalogos: [
+        {
+            id: 'globales',
+            label: 'Catálogos globales',
+            descripcion: 'Administración de catálogos del sistema',
+            permisos: ['catalogos.gestionar'],
+        },
+        {
+            id: 'comisiones_catalogo',
+            label: 'Catálogo de comisiones',
+            descripcion: 'Consulta y edición del catálogo de comisiones',
+            permisos: ['catalogos.comisiones.ver', 'catalogos.comisiones.gestionar'],
+        },
+    ],
+    comisiones: [
+        {
+            id: 'tabuladores',
+            label: 'Tabuladores',
+            descripcion: 'Administrar tabuladores de comisiones',
+            permisos: ['comisiones.gestionar'],
+        },
+    ],
+    usuarios: [
+        {
+            id: 'cuentas',
+            label: 'Usuarios',
+            descripcion: 'Administrar cuentas de usuario',
+            permisos: ['usuarios.gestionar', 'usuarios.archivar'],
+        },
+        {
+            id: 'enlaces',
+            label: 'Enlaces y permisos',
+            descripcion: 'Generar enlaces y asignar permisos',
+            permisos: ['usuarios.generar_permisos'],
+        },
+    ],
+    personalizacion: [
+        {
+            id: 'temas',
+            label: 'Personalización',
+            descripcion: 'Temas y apariencia visual',
+            permisos: ['personalizacion.gestionar'],
+        },
+    ],
+    configuracion: [
+        {
+            id: 'auditoria',
+            label: 'Auditoría de solicitudes',
+            descripcion: 'Bitácora de auditoría',
+            permisos: ['configuracion.ver_auditoria'],
+        },
+    ],
+    configuracion_sistema: [
+        {
+            id: 'sistema',
+            label: 'Configuración del sistema',
+            descripcion: 'Variables y entorno',
+            permisos: ['configuracion_sistema.gestionar'],
+        },
+    ],
+    sistema: [
+        {
+            id: 'auditorias',
+            label: 'Auditorías',
+            descripcion: 'Auditorías del sistema',
+            permisos: ['sistema.auditorias.ver'],
+        },
+        {
+            id: 'accesos',
+            label: 'Auditoría de accesos',
+            descripcion: 'Consulta de accesos',
+            permisos: ['sistema.auditorias.accesos.ver'],
+        },
+    ],
+    api_externa: [
+        {
+            id: 'gestion',
+            label: 'API externa',
+            descripcion: 'Aplicaciones, permisos y documentación',
+            permisos: ['api_externa.gestionar'],
+        },
+        {
+            id: 'auditoria',
+            label: 'Auditoría API',
+            descripcion: 'Bitácora de uso de la API',
+            permisos: ['api_externa.ver_auditoria'],
+        },
+    ],
+    soporte: [
+        {
+            id: 'reportar',
+            label: 'Reportar',
+            descripcion: 'Crear tickets de soporte',
+            permisos: ['soporte.reportar'],
+        },
+        {
+            id: 'agente',
+            label: 'Atención',
+            descripcion: 'Dashboard de agente de soporte',
+            permisos: ['soporte.gestionar'],
+        },
+        {
+            id: 'admin',
+            label: 'Administración',
+            descripcion: 'SLA y catálogos de soporte',
+            permisos: ['soporte.administrar'],
+        },
+    ],
+    mensajeria: [
+        {
+            id: 'monitoreo',
+            label: 'Monitoreo',
+            descripcion: 'Monitorear mensajería del sistema',
+            permisos: ['mensajeria.monitorear'],
+        },
+        {
+            id: 'moderacion',
+            label: 'Moderación',
+            descripcion: 'Eliminar mensajes',
+            permisos: ['mensajeria.eliminar'],
+        },
+    ],
+};
+
+function agruparPorEntidadComoSubmodulos(permisosDeModulo) {
+    const { columnas, filas } = agruparPermisosEnMatriz(permisosDeModulo);
+    return filas.map((fila) => {
+        const permisos = [];
+        columnas.forEach((col) => {
+            if (col.key === 'otros') {
+                permisos.push(...fila.celdas.otros);
+            } else if (fila.celdas[col.key]) {
+                permisos.push(fila.celdas[col.key]);
+            }
+        });
+        return {
+            id: fila.entidad,
+            label: fila.entidadLabel,
+            descripcion: null,
+            permisos,
+        };
+    }).filter((g) => g.permisos.length > 0);
+}
+
+/** Agrupa permisos visibles de un módulo según SUBMODULOS_UI_POR_MODULO (o por entidad). */
+export function agruparPermisosPorSubmodulo(modulo, permisosDeModulo) {
+    const defs = SUBMODULOS_UI_POR_MODULO[modulo];
+    if (!defs?.length) {
+        return agruparPorEntidadComoSubmodulos(permisosDeModulo);
+    }
+
+    const porNombre = new Map((permisosDeModulo || []).map((p) => [p.name, p]));
+    const asignados = new Set();
+    const grupos = [];
+
+    defs.forEach((def) => {
+        const permisos = def.permisos
+            .map((name) => porNombre.get(name))
+            .filter(Boolean);
+        permisos.forEach((p) => asignados.add(p.name));
+        if (permisos.length > 0) {
+            grupos.push({
+                id: def.id,
+                label: def.label,
+                descripcion: def.descripcion || null,
+                permisos,
+            });
+        }
+    });
+
+    const resto = (permisosDeModulo || []).filter((p) => !asignados.has(p.name));
+    if (resto.length > 0) {
+        grupos.push({
+            id: 'otros',
+            label: 'Otros',
+            descripcion: null,
+            permisos: resto,
+        });
+    }
+
+    return grupos;
+}
+
+/** Secciones del sidebar → módulos Spatie (orden de visualización en permisos atómicos). */
+export const SECCIONES_SIDEBAR_PERMISOS = [
+    {
+        id: 'operaciones',
+        label: 'Operaciones',
+        descripcion: 'Solicitudes, comercial y logística (gestión de pedidos)',
+        modulos: [
+            'solicitudes',
+            'cancelaciones_cotizaciones',
+            'traspasos',
+            'mis_clientes',
+            'entregas',
+            'control_pedidos',
+        ],
+    },
+    {
+        id: 'finanzas',
+        label: 'Finanzas',
+        descripcion: 'Contabilidad, facturas y cobranza',
+        modulos: ['contabilidad', 'facturas', 'cobranza'],
+    },
+    {
+        id: 'herramientas',
+        label: 'Herramientas',
+        descripcion: 'Listados, funciones operativas y ejercicios',
+        modulos: ['listados', 'funciones', 'ejercicio_escalonamiento'],
+    },
+    {
+        id: 'vinculaciones',
+        label: 'Vinculaciones',
+        descripcion: 'Integraciones externas',
+        modulos: ['woocommerce'],
+    },
+    {
+        id: 'gestion_interna',
+        label: 'Gestión interna',
+        descripcion: 'RH, activos, plantillas y directorio',
+        modulos: ['plantilla_pedidos', 'rh', 'activos', 'gestion_interna'],
+    },
+    {
+        id: 'almacenes',
+        label: 'Almacenes',
+        descripcion: 'Productos, inventarios y costos',
+        modulos: ['almacenes'],
+    },
+    {
+        id: 'soporte',
+        label: 'Soporte',
+        descripcion: 'Tickets y atención',
+        modulos: ['soporte'],
+    },
+    {
+        id: 'sistema',
+        label: 'Sistema',
+        descripcion: 'Administración, usuarios, catálogos y configuración',
+        modulos: [
+            'usuarios',
+            'clientes',
+            'catalogos',
+            'comisiones',
+            'personalizacion',
+            'api_externa',
+            'sistema',
+            'configuracion',
+            'configuracion_sistema',
+            'mensajeria',
+        ],
+    },
+];
+
+/** Etiqueta legible del módulo Spatie en la UI de permisos. */
+export const ETIQUETAS_MODULO_UI = {
+    solicitudes: 'Cambio de lista y tags',
+    cancelaciones_cotizaciones: 'Cancelación y cotización',
+    mis_clientes: 'Mis clientes',
+    entregas: 'Entregas / mapa logístico',
+    control_pedidos: 'Gestión de pedidos',
+    contabilidad: 'Contabilidad',
+    facturas: 'Facturas',
+    traspasos: 'Traspasos',
+    cobranza: 'Credibox',
+    listados: 'Listados',
+    funciones: 'Funciones operativas',
+    ejercicio_escalonamiento: 'Ejercicio escalonamiento',
+    woocommerce: 'WooCommerce',
+    plantilla_pedidos: 'Plantilla de pedidos',
+    rh: 'Recursos humanos',
+    activos: 'Control de activos',
+    gestion_interna: 'Directorio interno',
+    almacenes: 'Almacenes',
+    soporte: 'Soporte',
+    usuarios: 'Usuarios',
+    clientes: 'Base de clientes / direcciones',
+    catalogos: 'Catálogos globales',
+    comisiones: 'Comisiones',
+    personalizacion: 'Personalización',
+    api_externa: 'API externa',
+    sistema: 'Auditorías de sistema',
+    configuracion: 'Auditoría de solicitudes',
+    configuracion_sistema: 'Configuración del sistema',
+    mensajeria: 'Mensajería',
+};
+
+export function etiquetaModuloUi(modulo) {
+    return ETIQUETAS_MODULO_UI[modulo] || String(modulo || '').replace(/_/g, ' ');
+}
+
+/**
+ * Reordena un mapa { modulo: permisos[] } según las secciones del sidebar.
+ * Módulos no mapeados van a «Otros».
+ */
+export function agruparModulosPorSeccionSidebar(permisosAgrupadosPorModulo) {
+    const pendientes = new Set(Object.keys(permisosAgrupadosPorModulo || {}));
+    const secciones = [];
+
+    SECCIONES_SIDEBAR_PERMISOS.forEach((sec) => {
+        const modulos = [];
+        sec.modulos.forEach((modulo) => {
+            const permisos = permisosAgrupadosPorModulo?.[modulo];
+            if (permisos?.length) {
+                modulos.push({ modulo, permisos, label: etiquetaModuloUi(modulo) });
+                pendientes.delete(modulo);
+            }
+        });
+        if (modulos.length > 0) {
+            secciones.push({
+                id: sec.id,
+                label: sec.label,
+                descripcion: sec.descripcion || null,
+                modulos,
+            });
+        }
+    });
+
+    if (pendientes.size > 0) {
+        const modulos = [...pendientes]
+            .sort((a, b) => etiquetaModuloUi(a).localeCompare(etiquetaModuloUi(b), 'es'))
+            .map((modulo) => ({
+                modulo,
+                permisos: permisosAgrupadosPorModulo[modulo],
+                label: etiquetaModuloUi(modulo),
+            }));
+        secciones.push({
+            id: 'otros',
+            label: 'Otros',
+            descripcion: 'Módulos sin sección de menú asociada',
+            modulos,
+        });
+    }
+
+    return secciones;
+}
 
 export function etiquetaPermiso(permisoName) {
     if (ETIQUETAS_PERMISOS[permisoName]) {
@@ -124,6 +1122,18 @@ export function etiquetaPermiso(permisoName) {
     const accion = parts[parts.length - 1].replace(/_/g, ' ');
     const contexto = parts.slice(1, -1).join(' ').replace(/_/g, ' ');
     return `${contexto} · ${accion}`;
+}
+
+/** Etiqueta en la matriz: sin repetir la entidad (ya está en la columna Entidad). */
+export function etiquetaPermisoEnMatriz(permisoName) {
+    if (ETIQUETAS_PERMISOS[permisoName]) {
+        return ETIQUETAS_PERMISOS[permisoName];
+    }
+    const parts = (permisoName || '').split('.');
+    if (parts.length <= 1) {
+        return permisoName;
+    }
+    return parts[parts.length - 1].replace(/_/g, ' ');
 }
 
 export function descripcionPermiso(permisoName) {

@@ -25,6 +25,7 @@ use App\Models\Area;
 use App\Models\CatalogoSexo;
 use App\Models\CatalogoZonaEntrega;
 use App\Models\CatalogoHorarioEntrega;
+use App\Models\CatalogoHorarioTraspaso;
 use App\Models\CatalogoBanco;
 use App\Models\CatalogoCategoriaActivo;
 use App\Models\CatalogoTipoActivo;
@@ -107,6 +108,7 @@ class AdminController extends Controller
             'tipos_cliente' => CatalogoTipoCliente::orderBy('nombre')->get(), // <-- Añadido
             'zonas_entrega' => CatalogoZonaEntrega::orderBy('nombre')->get(), // <-- Añadido
             'horarios_entrega' => CatalogoHorarioEntrega::with('zona')->get(),
+            'horarios_traspaso' => CatalogoHorarioTraspaso::orderBy('orden')->get(),
             'porcentajes_escalonamiento' => CatalogoPorcentajeEscalonamientoLista::with('listaDescuento')->get(),
             'porcentajes_listado' => CatalogoPorcentajeListadoLista::with('listaDescuento')->get(),
             'bancos' => CatalogoBanco::orderBy('nombre')->get(),
@@ -183,6 +185,7 @@ class AdminController extends Controller
             'usuarios' => $usuariosPaginados,
             'filtros' => [
                 'busqueda' => trim((string) request('busqueda', '')),
+                'gerente_id' => request()->filled('gerente_id') ? (int) request('gerente_id') : null,
             ],
             'departamentos' => $departamentos,
             'posiblesGerentes' => $posiblesGerentes,
@@ -698,7 +701,20 @@ class AdminController extends Controller
             });
         }
 
+        $gerenteId = (int) request('gerente_id', 0);
+        if ($gerenteId > 0) {
+            $query->where(function ($q) use ($gerenteId) {
+                $q->where('users.id', $gerenteId)
+                    ->orWhereHas('gerentes', function ($g) use ($gerenteId) {
+                        $g->where('gerente_colaborador.gerente_id', $gerenteId);
+                    });
+            });
+        }
+
         $paginated = $query
+            ->when($gerenteId > 0, function ($q) use ($gerenteId) {
+                $q->orderByRaw('CASE WHEN users.id = ? THEN 0 ELSE 1 END', [$gerenteId]);
+            })
             ->orderBy('name')
             ->orderBy('apellido_paterno')
             ->paginate(12)

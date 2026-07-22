@@ -39,6 +39,7 @@ class SolicitudTag extends Model
         'catalogo_banco_id',
         'solicitar_cotizacion',
         'compra_en_tienda',
+        'compra_en_tienda_solo_tag',
         'cancelacion_solicitada_at',
         'motivo_cancelacion',
         'catalogo_lista_rebaja_id',
@@ -58,6 +59,7 @@ class SolicitudTag extends Model
         'fecha_operacion' => 'date',
         'solicitar_cotizacion' => 'boolean',
         'compra_en_tienda' => 'boolean',
+        'compra_en_tienda_solo_tag' => 'boolean',
         'cancelacion_solicitada_at' => 'datetime',
         'factura_datos_fiscales' => 'array',
     ];

@@ -12,6 +12,7 @@ use App\Models\Departamento; // <-- NUEVO
 use App\Models\Area;         // <-- NUEVO
 use App\Models\CatalogoZonaEntrega; // <-- NUEVO
 use App\Models\CatalogoHorarioEntrega;
+use App\Models\CatalogoHorarioTraspaso;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
 use App\Models\CatalogoBanco;
@@ -214,6 +215,40 @@ class CatalogoController extends Controller
         return back()->with('success', 'Horario de entrega eliminado.');
     }
 
+    // ----------------------------------------------------------------------
+    // 8b. CATÁLOGO DE HORARIOS DE TRASPASO (informativo)
+    // ----------------------------------------------------------------------
+    public function storeHorarioTraspaso(Request $request) {
+        CatalogoHorarioTraspaso::create($request->validate([
+            'nombre' => 'required|string|max:255',
+            'hora_inicio' => 'required|date_format:H:i',
+            'hora_fin' => 'required|date_format:H:i',
+            'dias_para_entrega' => 'required|integer|min:0|max:30',
+            'descripcion' => 'nullable|string|max:500',
+            'activo' => 'boolean',
+            'orden' => 'nullable|integer|min:0|max:999',
+        ]));
+        return back()->with('success', 'Horario de traspaso registrado.');
+    }
+
+    public function updateHorarioTraspaso(Request $request, $id) {
+        CatalogoHorarioTraspaso::findOrFail($id)->update($request->validate([
+            'nombre' => 'required|string|max:255',
+            'hora_inicio' => 'required|date_format:H:i',
+            'hora_fin' => 'required|date_format:H:i',
+            'dias_para_entrega' => 'required|integer|min:0|max:30',
+            'descripcion' => 'nullable|string|max:500',
+            'activo' => 'boolean',
+            'orden' => 'nullable|integer|min:0|max:999',
+        ]));
+        return back()->with('success', 'Horario de traspaso actualizado.');
+    }
+
+    public function destroyHorarioTraspaso($id) {
+        CatalogoHorarioTraspaso::findOrFail($id)->delete();
+        return back()->with('success', 'Horario de traspaso eliminado.');
+    }
+
     // --- 9. PORCENTAJES ESCALONAMIENTO (cotización / solicitudes) ---
     public function storePorcentajeEscalonamiento(Request $request) {
         CatalogoPorcentajeEscalonamientoLista::create($request->validate([
@@ -386,6 +421,7 @@ class CatalogoController extends Controller
             'tipo_almacen_id' => 'nullable|exists:catalogo_tipos_almacen,id',
             'activo' => 'boolean',
             'visible_en_pedidos' => 'boolean',
+            'visible_en_traspasos' => 'boolean',
         ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
         $almacen = Almacen::create($data);
@@ -401,6 +437,7 @@ class CatalogoController extends Controller
             'tipo_almacen_id' => 'nullable|exists:catalogo_tipos_almacen,id',
             'activo' => 'boolean',
             'visible_en_pedidos' => 'boolean',
+            'visible_en_traspasos' => 'boolean',
         ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
         $almacen = Almacen::findOrFail($id);

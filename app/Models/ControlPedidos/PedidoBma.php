@@ -42,6 +42,9 @@ class PedidoBma extends Model
         'domicilio_entrega',
         'envia_otra_persona',
         'es_resguardo',
+        'resguardo_apartado_at',
+        'resguardo_apartado_por_id',
+        'detalle_resguardo_apartado',
         'anexar_remision',
         'envia_a_otra_persona',
         'total_mercancia',
@@ -53,6 +56,9 @@ class PedidoBma extends Model
         'comentarios_drive',
         'numero_rastreo',
         'guia_subida_at',
+        'guia_retraso',
+        'guia_corregida_at',
+        'guia_corregida_por_id',
         'motivo_rechazo',
         'pago_validado_at',
         'pago_validado_por_id',
@@ -61,16 +67,25 @@ class PedidoBma extends Model
         'detalle_incidencia_empaque',
         'incidencia_empaque_at',
         'incidencia_empaque_por_id',
+        'campos_incorrectos',
+        'detalle_error_datos',
+        'error_datos_at',
+        'error_datos_por_id',
     ];
 
     protected $casts = [
         'pago_validado_at' => 'datetime',
         'empacado_at' => 'datetime',
         'guia_subida_at' => 'datetime',
+        'guia_corregida_at' => 'datetime',
+        'guia_retraso' => 'boolean',
         'incidencia_empaque_at' => 'datetime',
+        'error_datos_at' => 'datetime',
+        'campos_incorrectos' => 'array',
         'fecha' => 'date',
         'aplica_seguro' => 'boolean',
         'es_resguardo' => 'boolean',
+        'resguardo_apartado_at' => 'datetime',
         'anexar_remision' => 'boolean',
         'envia_a_otra_persona' => 'boolean',
         'saldo_a_favor' => 'decimal:2',
@@ -179,6 +194,37 @@ class PedidoBma extends Model
         return $this->belongsTo(User::class, 'incidencia_empaque_por_id');
     }
 
+    public function guiaCorregidaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'guia_corregida_por_id');
+    }
+
+    public function errorDatosPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'error_datos_por_id');
+    }
+
+    public function resguardoApartadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'resguardo_apartado_por_id');
+    }
+
+    public function puedeMarcarResguardoApartado(): bool
+    {
+        return (bool) $this->es_resguardo
+            && $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_EN_CEDIS
+            && $this->resguardo_apartado_at === null;
+    }
+
+    public function puedeReportarErrorDatos(): bool
+    {
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+        ], true);
+    }
+
     public function comprobantes(): HasMany
     {
         return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
@@ -217,10 +263,45 @@ class PedidoBma extends Model
 
     public function puedeGestionarGuiaPdf(): bool
     {
+        if ($this->es_resguardo || $this->guiaSoloLecturaHastaEmpaque()) {
+            return false;
+        }
+
         return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
             CatalogoEstatusPedido::FASE_ENVIADO,
+        ], true);
+    }
+
+    public function guiaBloqueadaPorResguardo(): bool
+    {
+        return (bool) $this->es_resguardo;
+    }
+
+    public function guiaSoloLecturaHastaEmpaque(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_EN_CEDIS
+            && !empty($this->numero_rastreo)
+            && $this->empacado_at === null;
+    }
+
+    public function puedeAsignarGuia(): bool
+    {
+        if ($this->es_resguardo || !empty($this->numero_rastreo)) {
+            return false;
+        }
+
+        $this->loadMissing(['paqueteria', 'origen']);
+
+        if (!$this->ofreceRastreo()) {
+            return false;
+        }
+
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
         ], true);
     }
 

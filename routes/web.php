@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\{LoginController,RegistroController};
 use App\Http\Controllers\{DashboardController,AdminController,CatalogoController,ClienteController,LimpiezaClientesController,AutoCobranzaController,ProfileController};
 use App\Http\Controllers\Solicitudes\SolicitudController;
 use App\Http\Controllers\Reportes\ReporteSolicitudesController;
+use App\Http\Controllers\Reportes\ReporteTraspasosDiaController;
 use App\Http\Controllers\Api\{CotizacionEntregaController,ClienteApiController};
 use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\MapaLogisticoController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,Cat
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Almacenes\{ProductoController as AlmacenProductoController, InventarioController as AlmacenInventarioController, CostoController as AlmacenCostoController, ImportacionAlmacenController};
 use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
+use App\Http\Controllers\Traspasos\SolicitudTraspasoController;
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaAuditoriaController;
@@ -354,6 +356,36 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: SOLICITUDES DE TRASPASOS
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:traspasos.crear'])->prefix('traspasos')->name('traspasos.')->group(function () {
+        Route::post('/', [SolicitudTraspasoController::class, 'store'])->name('store');
+    });
+
+    Route::middleware(['can:traspasos.ver_listado'])->prefix('traspasos')->name('traspasos.')->group(function () {
+        Route::get('/', [SolicitudTraspasoController::class, 'index'])->name('index');
+        Route::get('/{traspaso}/evidencia', [SolicitudTraspasoController::class, 'evidencia'])->name('evidencia');
+        Route::get('/{traspaso}', [SolicitudTraspasoController::class, 'show'])->name('show');
+    });
+
+    Route::prefix('traspasos')->name('traspasos.')->group(function () {
+        Route::put('/{traspaso}/estado', [SolicitudTraspasoController::class, 'actualizarEstado'])->name('actualizar_estado');
+    });
+
+    Route::middleware(['can:traspasos.verificar'])->prefix('traspasos')->name('traspasos.')->group(function () {
+        Route::put('/{traspaso}/verificar', [SolicitudTraspasoController::class, 'verificar'])->name('verificar');
+    });
+
+    Route::middleware(['can:traspasos.eliminar'])->prefix('traspasos')->name('traspasos.')->group(function () {
+        Route::delete('/{traspaso}', [SolicitudTraspasoController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::middleware(['can:traspasos.reporte_dia'])->prefix('reportes/traspasos-dia')->name('reportes.traspasos_dia.')->group(function () {
+        Route::get('/', [ReporteTraspasosDiaController::class, 'index'])->name('index');
+        Route::get('/exportar', [ReporteTraspasosDiaController::class, 'exportar'])->name('exportar');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: CANCELACIONES Y COTIZACIONES
     // ══════════════════════════════════════════════════════════════════════
     Route::middleware(['can:cancelaciones_cotizaciones.ver_listado'])->prefix('cancelaciones-cotizaciones')->name('cancelaciones_cotizaciones.')->group(function () {
@@ -459,6 +491,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/marcar-enviado', [PedidoBmaCedisController::class, 'marcarEnviado'])->name('marcar_enviado');
         Route::post('/{pedidoBma}/revertir-empacado', [PedidoBmaCedisController::class, 'revertirEmpacado'])->name('revertir_empacado');
         Route::post('/{pedidoBma}/reportar-incidencia', [PedidoBmaCedisController::class, 'reportarIncidencia'])->name('reportar_incidencia');
+        Route::post('/{pedidoBma}/reportar-error-datos', [PedidoBmaCedisController::class, 'reportarErrorDatos'])->name('reportar_error_datos');
+        Route::post('/{pedidoBma}/marcar-resguardo-apartado', [PedidoBmaCedisController::class, 'marcarResguardoApartado'])->name('marcar_resguardo_apartado');
     });
 
     Route::middleware(['can:control_pedidos.delegado'])->prefix('control-pedidos/delegado')->name('control_pedidos.delegado.')->group(function () {
@@ -469,6 +503,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/actualizar-guia', [PedidoBmaDelegadoController::class, 'actualizarGuia'])->name('actualizar_guia');
         Route::post('/{pedidoBma}/guia-pdf', [PedidoBmaDelegadoController::class, 'subirGuiaPdf'])->name('guia_pdf.store');
         Route::delete('/{pedidoBma}/guia-pdf', [PedidoBmaDelegadoController::class, 'eliminarGuiaPdf'])->name('guia_pdf.destroy');
+        Route::post('/{pedidoBma}/reportar-error-datos', [PedidoBmaDelegadoController::class, 'reportarErrorDatos'])->name('reportar_error_datos');
     });
 
     // --- Nuevo Módulo: Interfaz de Entregas ---
@@ -968,6 +1003,10 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/horarios-entrega', [CatalogoController::class, 'storeHorarioEntrega'])->name('horarios_entrega.store')->middleware('can:entregas.configurar_zonas');
                 Route::put('/horarios-entrega/{id}', [CatalogoController::class, 'updateHorarioEntrega'])->name('horarios_entrega.update')->middleware('can:entregas.configurar_zonas');
                 Route::delete('/horarios-entrega/{id}', [CatalogoController::class, 'destroyHorarioEntrega'])->name('horarios_entrega.destroy')->middleware('can:entregas.configurar_zonas');
+
+                Route::post('/horarios-traspaso', [CatalogoController::class, 'storeHorarioTraspaso'])->name('horarios_traspaso.store');
+                Route::put('/horarios-traspaso/{id}', [CatalogoController::class, 'updateHorarioTraspaso'])->name('horarios_traspaso.update');
+                Route::delete('/horarios-traspaso/{id}', [CatalogoController::class, 'destroyHorarioTraspaso'])->name('horarios_traspaso.destroy');
 
                 // Porcentajes Escalonamiento (solicitudes)
                 Route::post('/porcentajes-escalonamiento', [CatalogoController::class, 'storePorcentajeEscalonamiento'])->name('porcentajes_escalonamiento.store');

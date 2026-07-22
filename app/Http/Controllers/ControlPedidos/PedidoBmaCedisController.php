@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ControlPedidos\MarcarResguardoApartadoPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarIncidenciaEmpaqueRequest;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
 use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
+use App\Services\ControlPedidos\MarcarResguardoApartadoPedidoBmaService;
+use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use App\Services\ControlPedidos\ReportarIncidenciaEmpaqueService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
@@ -81,5 +85,43 @@ class PedidoBmaCedisController extends Controller
         }
 
         return redirect()->back()->with('success', 'Incidencia reportada correctamente.');
+    }
+
+    public function reportarErrorDatos(
+        ReportarErrorDatosPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ReportarErrorDatosPedidoBmaService $service
+    ): RedirectResponse {
+        try {
+            $service->ejecutar(
+                $pedidoBma->load(['estatus', 'documentos']),
+                Auth::id(),
+                $request->validated('campos_incorrectos'),
+                (string) ($request->validated('detalle') ?? '')
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Error de datos reportado. Encargado de guías, auxiliar y vendedora fueron notificados.');
+    }
+
+    public function marcarResguardoApartado(
+        MarcarResguardoApartadoPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        MarcarResguardoApartadoPedidoBmaService $service
+    ): RedirectResponse {
+        try {
+            $service->ejecutar(
+                $pedidoBma->load('estatus'),
+                Auth::id(),
+                $request->file('evidencias', []),
+                (string) ($request->validated('detalle') ?? '')
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Resguardo marcado como apartado. Se notificó a quien realizó el pedido.');
     }
 }

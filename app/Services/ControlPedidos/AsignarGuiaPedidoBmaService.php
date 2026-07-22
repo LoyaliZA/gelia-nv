@@ -20,34 +20,59 @@ class AsignarGuiaPedidoBmaService
             throw new \InvalidArgumentException('El número de guía es obligatorio.');
         }
 
-        if ($pedido->estatus?->fase_ciclo !== CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA) {
+        $pedido->loadMissing(['estatus', 'paqueteria', 'origen']);
+
+        if ($pedido->es_resguardo) {
+            throw new \RuntimeException('Un pedido en resguardo no puede recibir guía. Libere el resguardo primero.');
+        }
+
+        if (!$pedido->puedeAsignarGuia()) {
             throw new \RuntimeException('El pedido no está pendiente de guía.');
         }
 
-        $estatusPendienteEnvio = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO);
+        $fase = $pedido->estatus?->fase_ciclo;
+        $yaEmpacado = $fase === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
+            || $pedido->empacado_at !== null;
 
-        if (!$estatusPendienteEnvio) {
-            throw new \RuntimeException('No se encontró el estatus PENDIENTE_DE_ENVIO.');
-        }
-
-        return DB::transaction(function () use ($pedido, $guia, $usuarioId, $estatusPendienteEnvio) {
+        return DB::transaction(function () use ($pedido, $guia, $usuarioId, $yaEmpacado) {
             $estatusAnterior = $pedido->estatus;
 
-            $pedido->update([
-                'numero_rastreo' => $guia,
-                'guia_subida_at' => now(),
-                'catalogo_estatus_pedido_id' => $estatusPendienteEnvio->id,
-            ]);
+            if ($yaEmpacado) {
+                $estatusPendienteEnvio = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO);
 
-            $this->historialService->registrarTransicion(
-                $pedido->id,
-                $usuarioId,
-                $estatusAnterior,
-                $estatusPendienteEnvio,
-                "Guía de rastreo asignada: {$guia}"
-            );
+                if (!$estatusPendienteEnvio) {
+                    throw new \RuntimeException('No se encontró el estatus PENDIENTE_DE_ENVIO.');
+                }
 
-            return $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos']);
+                $pedido->update([
+                    'numero_rastreo' => $guia,
+                    'guia_subida_at' => now(),
+                    'catalogo_estatus_pedido_id' => $estatusPendienteEnvio->id,
+                ]);
+
+                $this->historialService->registrarTransicion(
+                    $pedido->id,
+                    $usuarioId,
+                    $estatusAnterior,
+                    $estatusPendienteEnvio,
+                    "Guía de rastreo asignada: {$guia}"
+                );
+            } else {
+                $pedido->update([
+                    'numero_rastreo' => $guia,
+                    'guia_subida_at' => now(),
+                ]);
+
+                $this->historialService->ejecutar(
+                    $pedido->id,
+                    $usuarioId,
+                    $estatusAnterior->id,
+                    $estatusAnterior->id,
+                    "Guía de rastreo asignada (pendiente de empaque): {$guia}"
+                );
+            }
+
+            return $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
         });
     }
 }

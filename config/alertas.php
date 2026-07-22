@@ -41,6 +41,8 @@ return [
         'mensajeria_voz' => 'solo_aviso',
         'tipos'   => [
             'nueva'                    => true,
+            'compra_en_tienda'         => true,
+            'compra_en_tienda_solo_tag'=> true,
             'reparada'                 => true,
             'rechazada'                => true,
             'pago_rechazado'           => true,

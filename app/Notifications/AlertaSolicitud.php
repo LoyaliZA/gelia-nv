@@ -25,6 +25,8 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
 
     private const ETIQUETAS_TIPO = [
         'nueva' => 'Nueva solicitud',
+        'compra_en_tienda' => 'Compra en Tienda',
+        'compra_en_tienda_solo_tag' => 'Compra en tienda: Solo Tag',
         'reparada' => 'Solicitud reparada',
         'rechazada' => 'Error reportado',
         'pago_rechazado' => 'Pago vencido',
@@ -160,6 +162,10 @@ class AlertaSolicitud extends Notification implements ShouldQueue, ShouldBroadca
         switch ($this->tipoAlerta) {
             case 'nueva':
                 return "Atención {$nombreDestinatario}, {$nombreVendedor} envió una solicitud de {$proceso}, {$folio}.";
+            case 'compra_en_tienda':
+                return "Atención {$nombreDestinatario}, {$nombreVendedor} envió una solicitud de compra en tienda de {$proceso}, {$folio}.";
+            case 'compra_en_tienda_solo_tag':
+                return "Atención {$nombreDestinatario}, {$nombreVendedor} envió una compra en tienda solo Tag de {$proceso}, {$folio}. Sin lista ni cotización.";
             case 'alerta_ascenso_lista':
                 return "Atención {$nombreDestinatario}, el pago de {$nombreVendedor} en {$proceso} permite ascender al cliente de categoría, {$folio}.";
             case 'rechazada':

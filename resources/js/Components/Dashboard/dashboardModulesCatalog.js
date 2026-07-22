@@ -1,5 +1,5 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Calculator, Boxes, DollarSign
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Calculator, Boxes, DollarSign, ArrowLeftRight
 } from 'lucide-react';
 import { contabilidadRoutes } from '../../Pages/Contabilidad/contabilidadRoutes';
 
@@ -218,6 +218,17 @@ export const DASHBOARD_MODULE_CARDS = [
         borderClass: 'border-cyan-500/20',
         iconWrapClass: 'bg-cyan-500/10 border-cyan-500/20',
         iconClass: 'text-cyan-500',
+    },
+    {
+        id: 'card_traspasos',
+        titulo: 'Traspasos',
+        subtitulo: 'Solicitud de traspaso de piezas.',
+        permiso: 'traspasos.ver_listado',
+        href: () => route('traspasos.index'),
+        icon: ArrowLeftRight,
+        borderClass: 'border-lime-500/20',
+        iconWrapClass: 'bg-lime-500/10 border-lime-500/20',
+        iconClass: 'text-lime-600 dark:text-lime-400',
     },
 ];
 
