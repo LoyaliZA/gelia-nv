@@ -91,6 +91,8 @@ class WebPushService {
             return { ok: false, reason: 'vapid_not_configured' };
         }
 
+        const keyBytes = urlBase64ToUint8Array(vapid.public_key);
+
         await this.registerServiceWorker();
 
         const existente = await this.registration.pushManager.getSubscription();
@@ -101,7 +103,7 @@ class WebPushService {
 
         const subscription = await this.registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(vapid.public_key),
+            applicationServerKey: keyBytes,
         });
 
         await this.syncSubscription(subscription);
@@ -111,10 +113,15 @@ class WebPushService {
 
     async syncSubscription(subscription) {
         const json = subscription.toJSON();
+        // Chrome/Brave modernos usan aes128gcm; aesgcm hardcodeado rompe el descifrado.
+        const contentEncoding = (typeof PushManager !== 'undefined'
+            && PushManager.supportedContentEncodings?.[0])
+            || 'aes128gcm';
+
         await axios.post(urlPushSubscribe(), {
             endpoint: json.endpoint,
             keys: json.keys,
-            content_encoding: 'aesgcm',
+            content_encoding: contentEncoding,
         });
     }
 

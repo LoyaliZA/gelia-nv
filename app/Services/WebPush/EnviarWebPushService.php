@@ -54,11 +54,13 @@ class EnviarWebPushService
 
         foreach ($suscripciones as $sub) {
             try {
+                $encoding = $sub->content_encoding ?: 'aes128gcm';
+
                 $subscription = Subscription::create([
                     'endpoint' => $sub->endpoint,
                     'publicKey' => $sub->public_key,
                     'authToken' => $sub->auth_token,
-                    'contentEncoding' => $sub->content_encoding ?: 'aesgcm',
+                    'contentEncoding' => $encoding,
                 ]);
 
                 $report = $webPush->sendOneNotification($subscription, $json);
@@ -77,6 +79,7 @@ class EnviarWebPushService
                     'endpoint' => $sub->endpoint,
                     'reason' => $report->getReason(),
                     'status' => $status,
+                    'encoding' => $encoding,
                 ]);
             } catch (\Throwable $e) {
                 Log::error('[WebPush] Error de envío', [

@@ -56,7 +56,9 @@ const MOBILE_SIDEBAR_LAYOUT_TOPBAR = 'mobile_topbar';
 export default function AppLayout({ children, fullScreen = false }) {
     const { props: { auth, tonos_alertas = [] }, url } = usePage();
 
-    useWebPush(auth, tonos_alertas);
+    const { needsPrompt, activarNotificaciones } = useWebPush(auth);
+    const [promptDismissed, setPromptDismissed] = useState(false);
+    const [promptBusy, setPromptBusy] = useState(false);
 
     useEffect(() => {
         if (typeof window !== 'undefined' && !url.startsWith('/activos')) {
@@ -630,6 +632,39 @@ export default function AppLayout({ children, fullScreen = false }) {
                 />
 
                 <div className={`gelia-app-body gelia-ui-scale ${GELIA_PREVENT_OVERFLOW_X} ${isMensajeriaFull ? 'h-dvh overflow-hidden' : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
+                    {needsPrompt && !promptDismissed && (
+                        <div className="sticky top-0 z-[9000] border-b theme-border theme-surface px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                            <p className="text-sm theme-text-main m-0">
+                                Activa las notificaciones para recibir mensajes y solicitudes a tiempo.
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    disabled={promptBusy}
+                                    className="px-3 py-1.5 rounded-lg text-sm font-bold text-white"
+                                    style={{ background: 'var(--color-primario)' }}
+                                    onClick={async () => {
+                                        setPromptBusy(true);
+                                        try {
+                                            await activarNotificaciones();
+                                        } finally {
+                                            setPromptBusy(false);
+                                            setPromptDismissed(true);
+                                        }
+                                    }}
+                                >
+                                    {promptBusy ? 'Activando…' : 'Activar'}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="px-3 py-1.5 rounded-lg text-sm theme-text-muted"
+                                    onClick={() => setPromptDismissed(true)}
+                                >
+                                    Ahora no
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <main className={mainClassName}>
                         <div
                             key={url}
