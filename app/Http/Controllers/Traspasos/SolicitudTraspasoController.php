@@ -70,7 +70,7 @@ class SolicitudTraspasoController extends Controller
             departamentoId: $solicitud->departamento_id,
         ));
 
-        return redirect()->back()->with('success', 'Solicitud de traspaso creada correctamente.');
+        return redirect()->route('traspasos.index')->with('success', 'Solicitud de traspaso creada correctamente.');
     }
 
     public function show(SolicitudTraspaso $traspaso, ListarSolicitudesTraspasoService $listarService): JsonResponse
@@ -210,9 +210,12 @@ class SolicitudTraspasoController extends Controller
         SolicitudTraspaso $traspaso,
         ListarSolicitudesTraspasoService $listarService
     ): StreamedResponse {
-        Gate::authorize('traspasos.ver_listado');
+        $user = Auth::user();
+        if (! $user->can('traspasos.ver_listado') && ! $user->can('traspasos.cedis')) {
+            abort(403);
+        }
 
-        if (! $listarService->usuarioPuedeVer(Auth::user(), $traspaso)) {
+        if (! $listarService->usuarioPuedeVer($user, $traspaso)) {
             abort(403);
         }
 

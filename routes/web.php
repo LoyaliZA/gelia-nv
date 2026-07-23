@@ -17,6 +17,7 @@ use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Almacenes\{ProductoController as AlmacenProductoController, InventarioController as AlmacenInventarioController, CostoController as AlmacenCostoController, ImportacionAlmacenController};
 use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
 use App\Http\Controllers\Traspasos\SolicitudTraspasoController;
+use App\Http\Controllers\Traspasos\TraspasoCedisController;
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaAuditoriaController;
@@ -362,11 +363,23 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/', [SolicitudTraspasoController::class, 'store'])->name('store');
     });
 
+    Route::middleware(['can:traspasos.cedis'])->prefix('traspasos/cedis')->name('traspasos.cedis.')->group(function () {
+        Route::get('/', [TraspasoCedisController::class, 'index'])->name('index');
+        Route::put('/{traspaso}/confirmar', [TraspasoCedisController::class, 'confirmar'])->name('confirmar');
+        Route::post('/{traspaso}/detalle-dano', [TraspasoCedisController::class, 'reportarDetalleDano'])->name('detalle_dano');
+    });
+
+    Route::get('/traspasos/detalle-dano/{detalleDano}/{indice}', [TraspasoCedisController::class, 'fotoDetalleDano'])
+        ->whereNumber('indice')
+        ->name('traspasos.detalle_dano_foto');
+
     Route::middleware(['can:traspasos.ver_listado'])->prefix('traspasos')->name('traspasos.')->group(function () {
         Route::get('/', [SolicitudTraspasoController::class, 'index'])->name('index');
-        Route::get('/{traspaso}/evidencia', [SolicitudTraspasoController::class, 'evidencia'])->name('evidencia');
         Route::get('/{traspaso}', [SolicitudTraspasoController::class, 'show'])->name('show');
     });
+
+    Route::get('/traspasos/{traspaso}/evidencia', [SolicitudTraspasoController::class, 'evidencia'])
+        ->name('traspasos.evidencia');
 
     Route::prefix('traspasos')->name('traspasos.')->group(function () {
         Route::put('/{traspaso}/estado', [SolicitudTraspasoController::class, 'actualizarEstado'])->name('actualizar_estado');

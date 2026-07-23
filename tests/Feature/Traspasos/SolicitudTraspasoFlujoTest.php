@@ -9,6 +9,7 @@ use App\Models\Cliente;
 use App\Models\Departamento;
 use App\Models\Producto;
 use App\Models\SolicitudTraspaso;
+use App\Models\SolicitudTraspasoDetalleDano;
 use App\Models\User;
 use App\Notifications\AlertaTraspaso;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,6 +28,7 @@ class SolicitudTraspasoFlujoTest extends TestCase
     private User $vendedor;
     private User $encargada;
     private User $otroVendedor;
+    private Departamento $departamento;
     private Almacen $almacen;
     private Cliente $cliente;
     private Producto $productoA;
@@ -51,12 +53,14 @@ class SolicitudTraspasoFlujoTest extends TestCase
             'traspasos.monitorear_alertas',
             'traspasos.reporte_dia',
             'traspasos.eliminar',
+            'traspasos.cedis',
         ] as $perm) {
             Permission::findOrCreate($perm, 'web');
         }
 
         Role::findOrCreate('Super Admin', 'web');
         Role::findOrCreate('Administrador', 'web');
+        Role::findOrCreate('Gerente', 'web');
 
         foreach (['Pendiente', 'Respondida', 'Verificada', 'Incorrecta'] as $estado) {
             CatalogoEstadoSolicitud::create([
@@ -66,19 +70,19 @@ class SolicitudTraspasoFlujoTest extends TestCase
         }
         CatalogoEstadoSolicitud::reiniciarCache();
 
-        $depto = Departamento::create(['nombre' => 'Ventas Test', 'activo' => true]);
+        $this->departamento = Departamento::create(['nombre' => 'Ventas Test', 'activo' => true]);
 
         $this->vendedor = User::factory()->create(['name' => 'Vendedora Test']);
         $this->vendedor->givePermissionTo(['traspasos.ver_listado', 'traspasos.crear']);
-        $this->vendedor->departamentos()->sync([$depto->id]);
+        $this->vendedor->departamentos()->sync([$this->departamento->id]);
 
         $this->encargada = User::factory()->create(['name' => 'Encargada Test']);
         $this->encargada->givePermissionTo(['traspasos.ver_listado', 'traspasos.responder', 'traspasos.verificar']);
-        $this->encargada->departamentos()->sync([$depto->id]);
+        $this->encargada->departamentos()->sync([$this->departamento->id]);
 
         $this->otroVendedor = User::factory()->create(['name' => 'Otra Vendedora']);
         $this->otroVendedor->givePermissionTo(['traspasos.ver_listado', 'traspasos.crear']);
-        $this->otroVendedor->departamentos()->sync([$depto->id]);
+        $this->otroVendedor->departamentos()->sync([$this->departamento->id]);
 
         $this->almacen = Almacen::create([
             'codigo' => 'CEDIS',
@@ -122,7 +126,7 @@ class SolicitudTraspasoFlujoTest extends TestCase
 
         $solicitud = SolicitudTraspaso::first();
         $this->assertNotNull($solicitud);
-        $this->assertMatchesRegularExpression('/^TRA-\d{4}-\d{5}$/', $solicitud->folio);
+        $this->assertMatchesRegularExpression('/^TRA-\d{4}-\d+$/', $solicitud->folio);
         $this->assertSame(5, $solicitud->total_piezas);
         $this->assertCount(2, $solicitud->productos);
         $this->assertSame($this->vendedor->id, $solicitud->vendedor_id);
@@ -179,6 +183,163 @@ class SolicitudTraspasoFlujoTest extends TestCase
                 ->where('traspasos.data.0.tiene_evidencia_respuesta', true)
                 ->has('traspasos.data.0.auditorias', 2)
             );
+    }
+
+    public function test_gerente_ve_solo_colaboradores_encargada_ve_departamento(): void
+    {
+        Notification::fake();
+
+        $gerente = User::factory()->create(['name' => 'Gerente Test']);
+        $gerente->assignRole('Gerente');
+        $gerente->givePermissionTo(['traspasos.ver_listado']);
+        $gerente->departamentos()->sync([$this->departamento->id]);
+        $gerente->colaboradores()->sync([$this->vendedor->id]);
+
+        $payload = [
+            'numero_cliente' => '1001',
+            'almacen_origen_id' => $this->almacen->id,
+            'productos' => [
+                ['producto_id' => $this->productoA->id, 'piezas' => 1],
+            ],
+        ];
+
+        $this->actingAs($this->vendedor)->post(route('traspasos.store'), $payload)->assertRedirect();
+        $this->actingAs($this->otroVendedor)->post(route('traspasos.store'), $payload)->assertRedirect();
+
+        $this->assertSame(2, SolicitudTraspaso::count());
+        $folioColaborador = SolicitudTraspaso::where('vendedor_id', $this->vendedor->id)->value('folio');
+        $folioAjeno = SolicitudTraspaso::where('vendedor_id', $this->otroVendedor->id)->value('folio');
+
+        $this->actingAs($gerente)
+            ->get(route('traspasos.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Traspasos/Index', false)
+                ->has('traspasos.data', 1)
+                ->where('traspasos.data.0.folio', $folioColaborador)
+            );
+
+        $this->actingAs($this->encargada)
+            ->get(route('traspasos.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Traspasos/Index', false)
+                ->has('traspasos.data', 2)
+            );
+
+        $this->actingAs($this->otroVendedor)
+            ->get(route('traspasos.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Traspasos/Index', false)
+                ->has('traspasos.data', 1)
+                ->where('traspasos.data.0.folio', $folioAjeno)
+            );
+    }
+
+    public function test_cedis_notificado_solo_tras_respuesta_y_puede_confirmar_o_reportar_dano(): void
+    {
+        Notification::fake();
+        Storage::fake('public');
+
+        $cedis = User::factory()->create(['name' => 'CEDIS Test']);
+        $cedis->givePermissionTo(['traspasos.cedis']);
+
+        $payload = [
+            'numero_cliente' => '1001',
+            'almacen_origen_id' => $this->almacen->id,
+            'productos' => [
+                ['producto_id' => $this->productoA->id, 'piezas' => 2],
+                ['producto_id' => $this->productoB->id, 'piezas' => 1],
+            ],
+        ];
+
+        $this->actingAs($this->vendedor)->post(route('traspasos.store'), $payload)->assertRedirect();
+
+        Notification::assertNotSentTo($cedis, AlertaTraspaso::class);
+
+        $solicitud = SolicitudTraspaso::with('productos')->first();
+        $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+        $lineaA = $solicitud->productos->firstWhere('producto_id', $this->productoA->id);
+        $lineaB = $solicitud->productos->firstWhere('producto_id', $this->productoB->id);
+        $this->assertNotNull($lineaA);
+        $this->assertNotNull($lineaB);
+
+        $this->actingAs($this->encargada)
+            ->put(route('traspasos.actualizar_estado', $solicitud->id), [
+                'catalogo_estado_solicitud_id' => $idRespondida,
+                'folio_traspaso' => 'EXT-CEDIS-1',
+                'motivo' => 'Listo para CEDIS',
+                'evidencia_respuesta' => UploadedFile::fake()->image('captura.jpg'),
+            ])
+            ->assertRedirect();
+
+        Notification::assertSentTo($cedis, AlertaTraspaso::class, function (AlertaTraspaso $n) {
+            return $n->tipoAlerta === 'listo_cedis';
+        });
+
+        $this->actingAs($this->vendedor)
+            ->get(route('traspasos.cedis.index'))
+            ->assertForbidden();
+
+        $this->actingAs($cedis)
+            ->get(route('traspasos.cedis.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Traspasos/Cedis/Index', false)
+                ->has('traspasos.data', 1)
+                ->where('traspasos.data.0.folio', $solicitud->folio)
+            );
+
+        // Reportar detalle/daño solo en producto A
+        $this->actingAs($cedis)
+            ->post(route('traspasos.cedis.detalle_dano', $solicitud->id), [
+                'solicitud_traspaso_producto_id' => $lineaA->id,
+                'motivo' => 'Rayadura visible en empaque',
+                'fotos' => [UploadedFile::fake()->image('dano.jpg')],
+            ])
+            ->assertRedirect();
+
+        $solicitud->refresh();
+        $this->assertSame($idRespondida, $solicitud->catalogo_estado_solicitud_id);
+        $this->assertTrue($solicitud->tiene_detalle_dano);
+
+        $detalleA = SolicitudTraspasoDetalleDano::query()
+            ->where('solicitud_traspaso_producto_id', $lineaA->id)
+            ->first();
+        $this->assertNotNull($detalleA);
+        $this->assertSame('Rayadura visible en empaque', $detalleA->motivo);
+        $this->assertNotEmpty($detalleA->paths);
+        $this->assertSame($solicitud->id, $detalleA->solicitud_traspaso_id);
+
+        $this->assertNull(
+            SolicitudTraspasoDetalleDano::query()
+                ->where('solicitud_traspaso_producto_id', $lineaB->id)
+                ->first()
+        );
+
+        Notification::assertSentTo($this->vendedor, AlertaTraspaso::class, function (AlertaTraspaso $n) {
+            return $n->tipoAlerta === 'detalle_dano_cedis';
+        });
+        Notification::assertSentTo($this->encargada, AlertaTraspaso::class, function (AlertaTraspaso $n) {
+            return $n->tipoAlerta === 'detalle_dano_cedis';
+        });
+
+        // Confirmar OK permitido aunque exista detalle/daño en una línea
+        $this->actingAs($cedis)
+            ->put(route('traspasos.cedis.confirmar', $solicitud->id))
+            ->assertRedirect();
+
+        $solicitud->refresh();
+        $this->assertSame(CatalogoEstadoSolicitud::idDe('Verificada'), $solicitud->catalogo_estado_solicitud_id);
+        $this->assertTrue($solicitud->tiene_detalle_dano);
+
+        // Segundo confirmar es idempotente (no 422)
+        $this->actingAs($cedis)
+            ->put(route('traspasos.cedis.confirmar', $solicitud->id))
+            ->assertRedirect();
+        $solicitud->refresh();
+        $this->assertSame(CatalogoEstadoSolicitud::idDe('Verificada'), $solicitud->catalogo_estado_solicitud_id);
     }
 
     private function crearProducto(array $attrs = []): Producto

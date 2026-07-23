@@ -229,12 +229,22 @@ export default function ModalBitacoraTraspaso({ traspaso, onClose }) {
                                                 Piezas solicitadas ({productos.length})
                                             </p>
                                             <div className="space-y-2">
-                                                {productos.map((p) => (
-                                                    <div key={p.id} className="flex justify-between gap-2 text-xs border theme-border rounded-xl px-3 py-2">
-                                                        <span className="font-bold theme-text-main truncate">{p.sku} · {p.descripcion}</span>
-                                                        <span className="font-black shrink-0" style={{ color: 'var(--color-primario)' }}>{p.piezas}</span>
+                                                {productos.map((p) => {
+                                                    const detalle = p.detalle_dano || p.detalleDano;
+                                                    return (
+                                                    <div key={p.id} className="flex flex-col gap-1 text-xs border theme-border rounded-xl px-3 py-2">
+                                                        <div className="flex justify-between gap-2">
+                                                            <span className="font-bold theme-text-main truncate">{p.sku} · {p.descripcion}</span>
+                                                            <span className="font-black shrink-0" style={{ color: 'var(--color-primario)' }}>{p.piezas}</span>
+                                                        </div>
+                                                        {detalle && (
+                                                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                                                                Detalle/daño: {detalle.motivo}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}

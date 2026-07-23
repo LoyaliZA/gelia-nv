@@ -70,6 +70,8 @@ return [
             'soporte_ticket_nuevo'        => true,
             'soporte_respuesta_agente'    => true,
             'soporte_respuesta_usuario'   => true,
+            'listo_cedis'                 => true,
+            'detalle_dano_cedis'          => true,
         ],
     ],
 

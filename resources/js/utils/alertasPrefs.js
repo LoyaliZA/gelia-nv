@@ -32,6 +32,8 @@ export const ALERTAS_TIPOS = {
     pedido_error_datos: 'Error de datos (pedido)',
     pedido_guia_retraso: 'Retraso por corrección de guía',
     pedido_resguardo_apartado: 'Resguardo apartado (CEDIS)',
+    listo_cedis: 'Traspaso listo para CEDIS',
+    detalle_dano_cedis: 'Detalle o daño CEDIS (traspaso)',
 };
 
 export const MENSAJERIA_TIPO_ALERTA = 'mensaje_nuevo';
@@ -172,8 +174,13 @@ export function resolveNotificationDestination(notification = {}) {
         return `/facturas?folio=${payload.folio}`;
     }
 
-    if (payload.modulo === 'traspasos' && payload.folio) {
-        return `/traspasos?folio=${payload.folio}`;
+    if (payload.modulo === 'traspasos') {
+        if (payload.tipo === 'listo_cedis') {
+            return '/traspasos/cedis';
+        }
+        if (payload.folio) {
+            return `/traspasos?folio=${payload.folio}`;
+        }
     }
 
     if (payload.modulo === 'control_pedidos' || payload.pedido_bma_id) {

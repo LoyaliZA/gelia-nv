@@ -6,7 +6,6 @@ import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import { puedePermiso } from '../../utils/permisos';
-import { recargarModuloInertia } from '../../utils/recargarModuloInertia';
 import useSolicitudRealtime from '../../hooks/useSolicitudRealtime';
 import TarjetaTraspaso from './Partials/TarjetaTraspaso';
 import FiltrosTraspasos from './Partials/FiltrosTraspasos';
@@ -200,8 +199,12 @@ export default function Index({
     );
 
     const recargarTrasAccion = useCallback(() => {
-        recargarModuloInertia(PROPS_LISTADO);
-    }, []);
+        router.get(route('traspasos.index'), paramsBase({ page: 1 }), {
+            ...OPCIONES_LISTADO,
+            onStart: () => setListaCargando(true),
+            onFinish: () => setListaCargando(false),
+        });
+    }, [paramsBase]);
 
     const verificar = (traspaso) => {
         router.put(route('traspasos.verificar', traspaso.id), {}, {

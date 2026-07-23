@@ -18,7 +18,9 @@ Broadcast::channel('solicitudes.facturas', function ($user) {
 });
 
 Broadcast::channel('solicitudes.traspasos', function ($user) {
-    return $user->hasPermissionTo('traspasos.ver_listado');
+    // CEDIS solo tiene traspasos.cedis; el listado usa ver_listado.
+    // can() respeta Gate::before (Super Admin).
+    return $user->can('traspasos.ver_listado') || $user->can('traspasos.cedis');
 });
 
 Broadcast::channel('solicitudes.operativas', function ($user) {

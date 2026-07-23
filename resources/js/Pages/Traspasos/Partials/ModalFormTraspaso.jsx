@@ -124,10 +124,12 @@ export default function ModalFormTraspaso({ onClose, almacenes = [], horarios = 
             return;
         }
         post(route('traspasos.store'), {
+            preserveScroll: true,
             onSuccess: () => {
                 reset();
-                onExito?.();
                 onClose();
+                // Después de cerrar: GET explícito al listado (page 1) para ver la nueva solicitud.
+                onExito?.();
             },
         });
     };

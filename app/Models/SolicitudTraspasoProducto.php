@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SolicitudTraspasoProducto extends Model
 {
@@ -32,5 +33,10 @@ class SolicitudTraspasoProducto extends Model
     public function producto(): BelongsTo
     {
         return $this->belongsTo(Producto::class, 'producto_id');
+    }
+
+    public function detalleDano(): HasOne
+    {
+        return $this->hasOne(SolicitudTraspasoDetalleDano::class, 'solicitud_traspaso_producto_id');
     }
 }

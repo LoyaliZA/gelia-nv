@@ -87,7 +87,18 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             label: 'Traspasos',
             icon: Package,
             href: () => routeHref('traspasos.index', '/traspasos'),
-            active: (url) => url.startsWith('/traspasos'),
+            active: (url) => {
+                const path = url.split('?')[0].replace(/\/$/, '');
+                return path === '/traspasos' || (url.startsWith('/traspasos/') && !url.startsWith('/traspasos/cedis'));
+            },
+        },
+        can('traspasos.cedis') && {
+            type: 'link',
+            id: 'traspasos_cedis',
+            label: 'Traspasos CEDIS',
+            icon: Warehouse,
+            href: () => routeHref('traspasos.cedis.index', '/traspasos/cedis'),
+            active: (url) => url.startsWith('/traspasos/cedis'),
         },
     ].filter(Boolean);
 

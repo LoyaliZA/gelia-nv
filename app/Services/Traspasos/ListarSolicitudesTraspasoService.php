@@ -20,6 +20,7 @@ class ListarSolicitudesTraspasoService
             'horario:id,nombre,dias_para_entrega,descripcion',
             'respondidaPor:id,name',
             'productos:id,solicitud_traspaso_id,producto_id,sku,descripcion,piezas',
+            'productos.detalleDano.reportadoPor:id,name',
             'auditorias.usuario:id,name',
             'auditorias.estadoNuevo:id,nombre',
             'auditorias.estadoAnterior:id,nombre',
@@ -63,24 +64,29 @@ class ListarSolicitudesTraspasoService
             return true;
         }
 
-        if ($solicitud->vendedor_id === $usuario->id) {
-            return true;
-        }
-
         if ($usuario->hasPermissionTo('traspasos.monitorear_alertas')) {
             return true;
         }
 
-        $tieneVisibilidadArea = $usuario->hasRole('Gerente') ||
-            $usuario->hasAnyPermission(['traspasos.verificar', 'traspasos.responder']);
+        if ($this->esOperativoTraspasos($usuario)) {
+            $departamentos = $usuario->departamentos->pluck('id')->all();
 
-        if ($tieneVisibilidadArea) {
-            $departamentos = $usuario->departamentos->pluck('id')->toArray();
-
-            return ! empty($departamentos) && in_array($solicitud->departamento_id, $departamentos, true);
+            return ! empty($departamentos)
+                && in_array($solicitud->departamento_id, $departamentos, true);
         }
 
-        return false;
+        if ($usuario->hasPermissionTo('traspasos.cedis')) {
+            $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+
+            return $idRespondida !== null
+                && (int) $solicitud->catalogo_estado_solicitud_id === $idRespondida;
+        }
+
+        if ($usuario->hasRole('Gerente')) {
+            return in_array($solicitud->vendedor_id, $this->idsVendedoresVisiblesGerente($usuario), true);
+        }
+
+        return $solicitud->vendedor_id === $usuario->id;
     }
 
     private function aplicarAislamiento(Builder $query, User $usuario): void
@@ -93,11 +99,8 @@ class ListarSolicitudesTraspasoService
             return;
         }
 
-        $tieneVisibilidadArea = $usuario->hasRole('Gerente') ||
-            $usuario->hasAnyPermission(['traspasos.verificar', 'traspasos.responder']);
-
-        if ($tieneVisibilidadArea) {
-            $departamentos = $usuario->departamentos->pluck('id')->toArray();
+        if ($this->esOperativoTraspasos($usuario)) {
+            $departamentos = $usuario->departamentos->pluck('id')->all();
             if (! empty($departamentos)) {
                 $query->whereIn('departamento_id', $departamentos);
             } else {
@@ -107,7 +110,38 @@ class ListarSolicitudesTraspasoService
             return;
         }
 
+        if ($usuario->hasPermissionTo('traspasos.cedis')) {
+            $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+            if ($idRespondida) {
+                $query->where('catalogo_estado_solicitud_id', $idRespondida);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+
+            return;
+        }
+
+        if ($usuario->hasRole('Gerente')) {
+            $query->whereIn('vendedor_id', $this->idsVendedoresVisiblesGerente($usuario));
+
+            return;
+        }
+
         $query->where('vendedor_id', $usuario->id);
+    }
+
+    private function esOperativoTraspasos(User $usuario): bool
+    {
+        return $usuario->hasAnyPermission(['traspasos.responder', 'traspasos.verificar']);
+    }
+
+    /** @return list<int> */
+    private function idsVendedoresVisiblesGerente(User $usuario): array
+    {
+        $ids = $usuario->colaboradores()->pluck('users.id')->all();
+        $ids[] = $usuario->id;
+
+        return array_values(array_unique(array_map('intval', $ids)));
     }
 
     private function aplicarFiltros(Builder $query, array $filtros): void

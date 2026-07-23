@@ -71,12 +71,18 @@ class ResponderSolicitudTraspasoService
                 ? 'Se reportó un error en tu solicitud de traspaso.'
                 : 'Tu solicitud de traspaso fue procesada. Revisa el folio y la captura.';
 
+            $fresh = $solicitud->fresh(['vendedor', 'estado', 'cliente']);
+
             $this->notificar->respuesta(
-                $solicitud->fresh(['vendedor', 'estado', 'cliente']),
+                $fresh,
                 $tipo,
                 $mensaje,
                 $usuario->id
             );
+
+            if (! $esError) {
+                $this->notificar->listoParaCedis($fresh, $usuario->id);
+            }
 
             return $solicitud->fresh([
                 'vendedor',
