@@ -55,4 +55,52 @@ class NotificarTraspasoService
             Notification::send($destinatarios, new AlertaTraspaso($solicitud, $tipo, $mensaje));
         }
     }
+
+    /** Solo tras respuesta OK (Respondida). No llamar en Incorrecta ni en creación. */
+    public function listoParaCedis(SolicitudTraspaso $solicitud, ?int $excluirUserId = null): void
+    {
+        $cedis = User::permission('traspasos.cedis')->get();
+        $destinatarios = $cedis
+            ->unique('id')
+            ->reject(fn ($u) => $excluirUserId !== null && $u->id === $excluirUserId);
+
+        if ($destinatarios->isNotEmpty()) {
+            Notification::send($destinatarios, new AlertaTraspaso(
+                $solicitud->loadMissing(['vendedor', 'estado', 'cliente']),
+                'listo_cedis',
+                'Traspaso listo para revisión en CEDIS. Revisa folio y evidencia.'
+            ));
+        }
+    }
+
+    public function detalleDanoCedis(SolicitudTraspaso $solicitud, ?int $excluirUserId = null): void
+    {
+        $destinatarios = collect();
+
+        if ($solicitud->vendedor) {
+            $destinatarios->push($solicitud->vendedor);
+        }
+
+        $departamentoId = $solicitud->departamento_id;
+        if ($departamentoId) {
+            $encargados = User::permission('traspasos.responder')
+                ->whereHas('departamentos', fn ($q) => $q->where('departamentos.id', $departamentoId))
+                ->get();
+            $destinatarios = $destinatarios->merge($encargados);
+        }
+
+        $monitores = User::permission('traspasos.monitorear_alertas')->get();
+        $destinatarios = $destinatarios
+            ->merge($monitores)
+            ->unique('id')
+            ->reject(fn ($u) => $excluirUserId !== null && $u->id === $excluirUserId);
+
+        if ($destinatarios->isNotEmpty()) {
+            Notification::send($destinatarios, new AlertaTraspaso(
+                $solicitud->loadMissing(['vendedor', 'estado', 'cliente']),
+                'detalle_dano_cedis',
+                'CEDIS reportó un detalle o daño en piezas del traspaso.'
+            ));
+        }
+    }
 }

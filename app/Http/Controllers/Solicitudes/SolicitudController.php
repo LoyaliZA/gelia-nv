@@ -716,7 +716,12 @@ class SolicitudController extends Controller
             })
             ->get();
 
+        // Misma regla que CrearSolicitudService / SolicitudOperativaController:
+        // Super Admin y Administrador reciben alertas de actualización, no solo de alta.
+        $adminsGlobales = User::role(['Super Admin', 'Administrador'])->get();
+
         return $destinatarios->merge($verificadores)
+            ->merge($adminsGlobales)
             ->unique('id')
             ->reject(function ($usuario) {
                 return $usuario->id === Auth::id();

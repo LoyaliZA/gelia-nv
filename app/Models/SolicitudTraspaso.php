@@ -42,6 +42,7 @@ class SolicitudTraspaso extends Model
 
     protected $appends = [
         'tiene_evidencia_respuesta',
+        'tiene_detalle_dano',
     ];
 
     public function vendedor(): BelongsTo
@@ -84,6 +85,11 @@ class SolicitudTraspaso extends Model
         return $this->hasMany(SolicitudTraspasoProducto::class, 'solicitud_traspaso_id');
     }
 
+    public function detallesDano(): HasMany
+    {
+        return $this->hasMany(SolicitudTraspasoDetalleDano::class, 'solicitud_traspaso_id');
+    }
+
     public function auditorias(): HasMany
     {
         return $this->hasMany(AuditoriaSolicitudTraspaso::class, 'solicitud_traspaso_id')->orderByDesc('created_at');
@@ -92,6 +98,25 @@ class SolicitudTraspaso extends Model
     public function getTieneEvidenciaRespuestaAttribute(): bool
     {
         return ! empty($this->evidencia_respuesta_path);
+    }
+
+    public function getTieneDetalleDanoAttribute(): bool
+    {
+        if ($this->relationLoaded('detallesDano')) {
+            return $this->detallesDano->isNotEmpty();
+        }
+
+        // Solo confiar en productos si cada línea ya trae detalleDano eager-loaded;
+        // si no, un exists() evita falsos negativos tras refresh/with('productos').
+        if (
+            $this->relationLoaded('productos')
+            && $this->productos->isNotEmpty()
+            && $this->productos->every(fn ($p) => $p->relationLoaded('detalleDano'))
+        ) {
+            return $this->productos->contains(fn ($p) => $p->detalleDano !== null);
+        }
+
+        return $this->detallesDano()->exists();
     }
 
     public static function generarFolio(): string
@@ -107,6 +132,6 @@ class SolicitudTraspaso extends Model
             $secuencia = (int) $m[1] + 1;
         }
 
-        return sprintf('TRA-%s-%05d', $anio, $secuencia);
+        return "TRA-{$anio}-{$secuencia}";
     }
 }

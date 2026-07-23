@@ -21,14 +21,25 @@ export default function useSolicitudRealtime(canal, evento, propsListado, auth) 
         const user = authRef.current?.user;
         if (!user) return false;
 
+        // Quien disparó la acción ya refresca vía onSuccess del form;
+        // recargar aquí compite con el redirect de Inertia y puede dejar props viejas.
+        if (payload.por_usuario_id != null && Number(payload.por_usuario_id) === Number(user.id)) {
+            return false;
+        }
+
         const permisos = user.permissions || [];
         const roles = user.roles || [];
-        const departamentoIds = user.departamento_ids || [];
+        const departamentoIds = (user.departamento_ids || []).map(Number);
 
         const esAdmin = roles.includes('Super Admin') || roles.includes('Administrador');
 
         // Los admins siempre reciben actualizaciones
         if (esAdmin) return true;
+
+        // Bandeja CEDIS: cualquier cambio en el canal puede entrar/salir de Respondida.
+        if (permisos.includes('traspasos.cedis')) {
+            return true;
+        }
 
         // Usuarios con visibilidad de área (gerentes, verificadores, respondedores)
         // solo reciben eventos de su departamento
@@ -46,14 +57,16 @@ export default function useSolicitudRealtime(canal, evento, propsListado, auth) 
         if (tieneVisibilidadArea) {
             // Si el evento tiene departamento, verificar que pertenezca a mis departamentos
             if (payload.departamento_id && departamentoIds.length > 0) {
-                return departamentoIds.includes(payload.departamento_id);
+                return departamentoIds.includes(Number(payload.departamento_id));
             }
             // Sin departamento asignado o sin departamentos del usuario: recargar por seguridad
             return true;
         }
 
         // Vendedoras: solo reciben eventos de sus propias solicitudes
-        if (payload.vendedor_id === user.id) return true;
+        if (payload.vendedor_id != null && Number(payload.vendedor_id) === Number(user.id)) {
+            return true;
+        }
 
         return false;
     }, []);

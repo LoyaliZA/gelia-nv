@@ -158,7 +158,9 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                             </h4>
 
                             <div className="space-y-2">
-                                {productos.map((p) => (
+                                {productos.map((p) => {
+                                    const detalle = p.detalle_dano || p.detalleDano;
+                                    return (
                                     <div
                                         key={p.id}
                                         className="rounded-lg border theme-border px-4 py-3 bg-black/[0.02] dark:bg-white/[0.02]"
@@ -177,6 +179,11 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                                                     </p>
                                                     <BotonCopiarTexto texto={p.descripcion} label="nombre" />
                                                 </div>
+                                                {detalle && (
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 m-0">
+                                                        Detalle/daño CEDIS: {detalle.motivo}
+                                                    </p>
+                                                )}
                                             </div>
                                             <span
                                                 className="text-xl font-black shrink-0 tabular-nums"
@@ -186,7 +193,8 @@ export default function ModalDetalleTraspaso({ traspaso, onClose }) {
                                             </span>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>

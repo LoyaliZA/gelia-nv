@@ -75,6 +75,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'traspasos.monitorear_alertas': 'Recibe todas las alertas de traspasos (estación de bocina / designado).',
     'traspasos.reporte_dia': 'Permite generar el reporte de traspasos planificados para el día siguiente.',
     'traspasos.eliminar': 'Permite eliminar solicitudes de traspaso con auditoría.',
+    'traspasos.cedis': 'Permite la bandeja CEDIS de traspasos: confirmar OK o reportar detalles/daños con fotos.',
     'cancelaciones_cotizaciones.ver_listado': 'Permite acceder al módulo de cancelaciones y cotizaciones.',
     'cancelaciones_cotizaciones.crear': 'Permite crear solicitudes de cancelación de remisión/pedido o cotización sobre pedido.',
     'cancelaciones_cotizaciones.reportar': 'Permite aprobar o reportar errores en solicitudes operativas.',
@@ -455,6 +456,12 @@ export const SUBMODULOS_UI_POR_MODULO = {
                 'traspasos.reporte_dia',
                 'traspasos.eliminar',
             ],
+        },
+        {
+            id: 'cedis',
+            label: 'CEDIS',
+            descripcion: 'Revisión de piezas, confirmar OK y reportar detalles/daños',
+            permisos: ['traspasos.cedis'],
         },
     ],
     cobranza: [

@@ -25,6 +25,8 @@ class AlertaTraspaso extends Notification implements ShouldQueue, ShouldBroadcas
         'respondida' => 'Traspaso generado',
         'rechazada' => 'Error en traspaso',
         'verificada' => 'Traspaso verificado',
+        'listo_cedis' => 'Traspaso listo para CEDIS',
+        'detalle_dano_cedis' => 'Detalle o daño reportado por CEDIS',
     ];
 
     public function __construct(SolicitudTraspaso $solicitud, string $tipoAlerta, string $mensaje)
@@ -53,7 +55,7 @@ class AlertaTraspaso extends Notification implements ShouldQueue, ShouldBroadcas
             ->greeting('Hola, ' . $notifiable->name . '!')
             ->line($this->titulo)
             ->line($this->mensajeVisible)
-            ->action('Ver solicitud de traspaso', url('/traspasos?folio=' . $this->solicitud->folio));
+            ->action('Ver solicitud de traspaso', $this->urlAccion());
     }
 
     public function toDatabase(object $notifiable): array
@@ -69,6 +71,15 @@ class AlertaTraspaso extends Notification implements ShouldQueue, ShouldBroadcas
         ));
     }
 
+    private function urlAccion(): string
+    {
+        if ($this->tipoAlerta === 'listo_cedis') {
+            return url('/traspasos/cedis');
+        }
+
+        return url('/traspasos?folio=' . $this->solicitud->folio);
+    }
+
     private function payload(): array
     {
         return [
@@ -82,6 +93,7 @@ class AlertaTraspaso extends Notification implements ShouldQueue, ShouldBroadcas
             'vendedora' => $this->solicitud->vendedor->name ?? null,
             'fecha' => now()->toDateTimeString(),
             'modulo' => 'traspasos',
+            'url' => $this->urlAccion(),
         ];
     }
 
@@ -96,6 +108,8 @@ class AlertaTraspaso extends Notification implements ShouldQueue, ShouldBroadcas
             'respondida' => "{$nombre}, el traspaso {$folio} fue generado exitosamente.",
             'rechazada' => "{$nombre}, se reportó un error en la solicitud de traspaso {$folio}.",
             'verificada' => "{$nombre}, el traspaso {$folio} fue verificado correctamente.",
+            'listo_cedis' => "Atención {$nombre}, el traspaso {$folio} está listo para revisión en CEDIS.",
+            'detalle_dano_cedis' => "{$nombre}, CEDIS reportó un detalle o daño en el traspaso {$folio}.",
             default => "{$nombre}, tienes una notificación sobre el traspaso {$folio}.",
         };
     }
