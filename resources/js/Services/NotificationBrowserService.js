@@ -538,8 +538,16 @@ class NotificationBrowserService {
     showDesktopNotification(title, options, force = false, onClick = null) {
         if (!force && this.preferences?.canales?.escritorio === false) return;
 
-        // Si hay SW push activo, no duplicar: el Service Worker ya muestra la notificación.
-        if (this._hasActiveServiceWorkerPush()) return;
+        // Solo evitar duplicar en segundo plano: si la pestaña está visible y el
+        // push no llega (p. ej. Brave sin "Google services for push"), el usuario
+        // se quedaba sin ninguna notificación de escritorio.
+        if (
+            this._hasActiveServiceWorkerPush()
+            && typeof document !== 'undefined'
+            && document.hidden
+        ) {
+            return;
+        }
 
         if (this.permissionsGranted && Notification.permission === 'granted') {
             const notification = new Notification(title, options);
