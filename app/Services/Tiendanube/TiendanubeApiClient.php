@@ -210,8 +210,35 @@ class TiendanubeApiClient
             return;
         }
 
-        $body = $response->json('message') ?? $response->body();
+        $json = $response->json();
+        $detalle = is_array($json) ? $this->formatearErrorApi($json) : (string) $response->body();
 
-        throw new RuntimeException("Tiendanube API HTTP {$response->status()}: {$body}");
+        throw new RuntimeException("Tiendanube API HTTP {$response->status()}: {$detalle}");
+    }
+
+    /** @param array<string, mixed> $json */
+    private function formatearErrorApi(array $json): string
+    {
+        $partes = [];
+
+        foreach (['message', 'description', 'code'] as $clave) {
+            if (! empty($json[$clave]) && is_scalar($json[$clave])) {
+                $partes[] = (string) $json[$clave];
+            }
+        }
+
+        foreach ($json as $campo => $valor) {
+            if (in_array($campo, ['message', 'description', 'code'], true)) {
+                continue;
+            }
+            if (is_array($valor)) {
+                $msgs = array_values(array_filter($valor, fn ($v) => is_scalar($v)));
+                if ($msgs !== []) {
+                    $partes[] = $campo.': '.implode(' | ', array_map('strval', $msgs));
+                }
+            }
+        }
+
+        return $partes !== [] ? implode(' — ', $partes) : json_encode($json, JSON_UNESCAPED_UNICODE);
     }
 }

@@ -9,6 +9,11 @@ return [
     'user_agent' => env('TIENDANUBE_USER_AGENT', 'Gelianv'),
     'per_page' => (int) env('TIENDANUBE_PER_PAGE', 50),
     'webhook_url' => env('TIENDANUBE_WEBHOOK_URL'),
+    /*
+     * Eventos registrables vía POST /webhooks de la API.
+     * No incluir store/redact ni customers/*: son webhooks de privacidad (LGPD)
+     * y la API responde 422 "Invalid event" al intentar crearlos así.
+     */
     'webhook_events' => [
         'app/uninstalled',
         'product/created',
@@ -17,8 +22,5 @@ return [
         'category/created',
         'category/updated',
         'category/deleted',
-        'store/redact',
-        'customers/redact',
-        'customers/data_request',
     ],
 ];
