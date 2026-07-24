@@ -1,5 +1,6 @@
 import React from 'react';
-import { Link } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
+import { inertiaVisitUrl } from '../../../utils/inertiaVisitUrl';
 
 export default function TablaProductos({ productos, onSelect }) {
     const rows = productos?.data || [];
@@ -11,6 +12,12 @@ export default function TablaProductos({ productos, onSelect }) {
             </p>
         );
     }
+
+    const irAPagina = (url) => {
+        const href = inertiaVisitUrl(url);
+        if (!href) return;
+        router.get(href, {}, { preserveState: true, preserveScroll: true });
+    };
 
     return (
         <div className="overflow-x-auto">
@@ -71,13 +78,14 @@ export default function TablaProductos({ productos, onSelect }) {
             {productos?.links && (
                 <div className="flex flex-wrap gap-2 justify-center pt-4">
                     {productos.links.map((link, i) => (
-                        <Link
+                        <button
                             key={i}
-                            href={link.url || '#'}
-                            preserveState
+                            type="button"
+                            disabled={!link.url}
+                            onClick={() => irAPagina(link.url)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold border theme-border ${
                                 link.active ? 'text-white' : 'theme-text-muted'
-                            } ${!link.url ? 'opacity-40 pointer-events-none' : ''}`}
+                            } ${!link.url ? 'opacity-40 cursor-not-allowed' : ''}`}
                             style={link.active ? { backgroundColor: 'var(--color-primario)' } : {}}
                             dangerouslySetInnerHTML={{ __html: link.label }}
                         />

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { CloudDownload, Pencil, Info } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
+import { inertiaVisitUrl } from '../../../utils/inertiaVisitUrl';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import ModalEditarPrecio from './ModalEditarPrecio';
 
@@ -162,7 +163,8 @@ export default function TablaProductos({ productos, filters, permisos, configura
                         link.url ? (
                             <button
                                 key={i}
-                                onClick={() => router.get(link.url)}
+                                type="button"
+                                onClick={() => router.get(inertiaVisitUrl(link.url), {}, { preserveState: true, preserveScroll: true })}
                                 dangerouslySetInnerHTML={{ __html: link.label }}
                                 className={`px-3 py-1 rounded text-xs font-bold ${link.active ? 'text-white' : 'theme-text-muted border theme-border'}`}
                                 style={link.active ? { backgroundColor: 'var(--color-primario)' } : {}}

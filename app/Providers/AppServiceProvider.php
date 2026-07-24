@@ -90,9 +90,14 @@ class AppServiceProvider extends ServiceProvider
             // Ignorar errores durante la carga inicial o migraciones si la tabla no existe
             \Illuminate\Support\Facades\Log::error('AppServiceProvider config load error: ' . $e->getMessage());
         }
-        // 1. Forzar HTTPS en entorno de producción para evitar contenido mixto
-        if (config('app.env') === 'production') {
+        // 1. Forzar HTTPS cuando la app pública es https (o env production).
+        // Evita links de paginación/Inertia en http:// detrás de Cloudflare/proxy → HttpNetworkError.
+        $appUrl = (string) config('app.url');
+        if (config('app.env') === 'production' || str_starts_with($appUrl, 'https://')) {
             URL::forceScheme('https');
+            if ($appUrl !== '') {
+                URL::forceRootUrl(rtrim($appUrl, '/'));
+            }
         }
 
         // 2. PASE VIP UNIVERSAL: El Super Admin ignora todas las restricciones de Gate::authorize o @can
