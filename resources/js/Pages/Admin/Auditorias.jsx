@@ -10,6 +10,7 @@ import {
 // Se ajusta la ruta relativa basándonos en tu estructura
 import AppLayout from '../../Layouts/AppLayout';
 import { geliaCardClass, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } from '../../utils/geliaTheme';
+import { inertiaVisitUrl } from '../../utils/inertiaVisitUrl';
 
 const TEMA_VISUAL_LABELS = {
     modo: 'Modo',
@@ -167,7 +168,8 @@ export default function Auditorias({
                             <button
                                 key={i}
                                 onClick={() => {
-                                    if (link.url) router.get(link.url, {}, { preserveState: true });
+                                    const href = inertiaVisitUrl(link.url);
+                                    if (href) router.get(href, {}, { preserveState: true, preserveScroll: true });
                                 }}
                                 disabled={!link.url}
                                 className={`w-10 h-10 flex items-center justify-center rounded-xl text-xs font-black transition-all outline-none shadow-sm ${
