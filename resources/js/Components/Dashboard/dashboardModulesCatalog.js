@@ -1,5 +1,5 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Calculator, Boxes, DollarSign, ArrowLeftRight
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Store, Calculator, Boxes, DollarSign, ArrowLeftRight
 } from 'lucide-react';
 import { contabilidadRoutes } from '../../Pages/Contabilidad/contabilidadRoutes';
 
@@ -207,6 +207,17 @@ export const DASHBOARD_MODULE_CARDS = [
         borderClass: 'border-violet-500/20',
         iconWrapClass: 'bg-violet-500/10 border-violet-500/20',
         iconClass: 'text-violet-500',
+    },
+    {
+        id: 'card_tiendanube',
+        titulo: 'Tiendanube',
+        subtitulo: 'Catálogo, SEO e imágenes.',
+        permiso: 'tiendanube.ver',
+        href: () => route('tiendanube.index'),
+        icon: Store,
+        borderClass: 'border-sky-500/20',
+        iconWrapClass: 'bg-sky-500/10 border-sky-500/20',
+        iconClass: 'text-sky-500',
     },
     {
         id: 'card_facturas',

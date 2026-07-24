@@ -3,116 +3,101 @@
 namespace App\Http\Controllers\FuncionesOperativas;
 
 use App\Http\Controllers\Controller;
+use App\Services\FuncionesOperativas\CruceAvisoMercanciaService;
 use Illuminate\Http\Request;
-use Rap2hpoutre\FastExcel\FastExcel;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
+use Rap2hpoutre\FastExcel\FastExcel;
 
 class AvisosController extends Controller
 {
-    // Carga de la nueva vista de UI
     public function index()
     {
         return Inertia::render('FuncionesOperativas/Avisos');
     }
 
-    // Motor de cruce O(N) para intersección de inventario
-    public function procesar(Request $request)
+    public function procesar(Request $request, CruceAvisoMercanciaService $cruce)
     {
         set_time_limit(0);
         ini_set('memory_limit', '-1');
 
         $validator = Validator::make($request->all(), [
-            'orden_compra' => 'required|file|mimes:xlsx,xls,csv',
-            'aviso_mercancia' => 'required|file|mimes:xlsx,xls,csv',
+            'orden_compra' => 'required|file',
+            'aviso_mercancia' => 'required|file',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $diccionarioAvisos = [];
-
-        // 1. CREACIÓN DEL HASH MAP: Extracción de UPCs del Aviso de Mercancía
-        $this->procesarArchivoSeguro($request->file('aviso_mercancia'), function ($ruta) use (&$diccionarioAvisos) {
-            (new FastExcel)->import($ruta, function ($linea) use (&$diccionarioAvisos) {
-                $upc = trim((string)($linea['UPC'] ?? ''));
-                if ($upc !== '') {
-                    $upcLimpio = ltrim($upc, '0');
-                    $diccionarioAvisos[$upcLimpio] = [
-                        'vendedor' => $linea['VENDEDOR'] ?? 'SIN ASIGNAR',
-                        'cliente' => $linea['CLIENTE'] ?? 'SIN DATOS'
-                    ];
-                }
-            });
-        });
-
-        $resultados = [];
-
-        // 2. CRUCE DINÁMICO: Escaneo de la Orden de Compra
-        $this->procesarArchivoSeguro($request->file('orden_compra'), function ($ruta) use (&$resultados, $diccionarioAvisos) {
-            $leyendoDatos = false;
-            $indices = [];
-
-            // Se lee sin cabeceras para evadir la fila basura "Compra,,,,," de Wizerp
-            (new FastExcel)->withoutHeaders()->import($ruta, function ($linea) use (&$resultados, $diccionarioAvisos, &$leyendoDatos, &$indices) {
-                $valores = array_values($linea);
-
-                // Detección en tiempo real de la fila de encabezados reales
-                if (!$leyendoDatos) {
-                    if (in_array('SKU', $valores) && in_array('Recibido', $valores)) {
-                        $leyendoDatos = true;
-                        $indices['sku'] = array_search('SKU', $valores);
-                        // BLINDAJE: Forzamos la Columna B (Índice 1) evadiendo errores de codificación UTF-8 de Wizerp
-                        $indices['descripcion'] = 1; 
-                        $indices['recibido'] = array_search('Recibido', $valores);
-                    }
-                    return;
-                }
-
-                $skuCrudo = trim((string)($linea[$indices['sku']] ?? ''));
-                $skuLimpio = ltrim($skuCrudo, '0');
-                $recibido = (int)($linea[$indices['recibido']] ?? 0);
-
-                // Lógica de negocio: Existe en el aviso Y llegaron piezas reales
-                if ($skuLimpio !== '' && isset($diccionarioAvisos[$skuLimpio]) && $recibido > 0) {
-                    $resultados[] = [
-                        'SKU' => $skuCrudo,
-                        // Extracción estricta de la Columna B
-                        'Descripción' => $linea[$indices['descripcion']] ?? 'SIN DESCRIPCION',
-                        'Piezas Recibidas' => $recibido,
-                        'Vendedor Asignado' => $diccionarioAvisos[$skuLimpio]['vendedor'],
-                        'Clientes en Espera' => $diccionarioAvisos[$skuLimpio]['cliente'],
-                    ];
-                }
-            });
-        });
-
-        if (empty($resultados)) {
-            return response()->json(['error' => 'El cruce finalizó, pero no se encontraron coincidencias de mercancía que haya llegado físicamente en la Orden de Compra.'], 404);
+        foreach (['orden_compra', 'aviso_mercancia'] as $campo) {
+            $ext = strtolower($request->file($campo)->getClientOriginalExtension());
+            if (! in_array($ext, ['xlsx', 'xls', 'csv', 'txt'], true)) {
+                return response()->json([
+                    'errors' => [$campo => ['El archivo debe ser Excel o CSV.']],
+                ], 422);
+            }
         }
 
-        Log::info("AROMAS - Cruce de Aviso de Mercancía generado exitosamente (Renderizado en pantalla).");
-        
+        $resultado = ['resultados' => [], 'avisos' => 0, 'compra' => 0];
+
+        $this->procesarArchivoSeguro($request->file('aviso_mercancia'), function ($rutaAviso) use ($request, $cruce, &$resultado) {
+            $this->procesarArchivoSeguro($request->file('orden_compra'), function ($rutaCompra) use ($cruce, &$resultado, $rutaAviso) {
+                $resultado = $cruce->cruzar($rutaAviso, $rutaCompra);
+            });
+        });
+
+        if (empty($resultado['resultados'])) {
+            return response()->json([
+                'error' => 'El cruce finalizó, pero no se encontraron coincidencias de mercancía que haya llegado físicamente en la Orden de Compra.',
+                'meta' => [
+                    'avisos_cargados' => $resultado['avisos'],
+                    'filas_compra' => $resultado['compra'],
+                ],
+            ], 404);
+        }
+
+        Log::info('AROMAS - Cruce de Aviso de Mercancía generado exitosamente.', [
+            'coincidencias' => count($resultado['resultados']),
+            'avisos' => $resultado['avisos'],
+        ]);
+
+        if ($request->boolean('descargar')) {
+            $estiloEncabezado = (new \OpenSpout\Common\Entity\Style\Style())->setFontBold();
+            $fecha = date('d-m-y');
+
+            return (new FastExcel(collect($resultado['resultados'])))
+                ->headerStyle($estiloEncabezado)
+                ->download("AVISO-MERCANCIA-CRUZADO-$fecha.xlsx");
+        }
+
         return response()->json([
             'success' => true,
-            'data' => $resultados, // Este es el arreglo con SKU, Descripción, Piezas, etc.
-            'count' => count($resultados)
+            'data' => $resultado['resultados'],
+            'count' => count($resultado['resultados']),
+            'meta' => [
+                'avisos_cargados' => $resultado['avisos'],
+                'filas_compra' => $resultado['compra'],
+            ],
         ]);
     }
 
-    // Abstracción para el manejo seguro de almacenamiento en I/O
-    private function procesarArchivoSeguro($archivo, callable $callbackLogica)
+    private function procesarArchivoSeguro($archivo, callable $callbackLogica): void
     {
-        if (!$archivo) return;
-        $nombreTemp = 'temp_' . uniqid() . '.' . $archivo->getClientOriginalExtension();
-        $rutaCompleta = sys_get_temp_dir() . '/' . $nombreTemp;
+        if (! $archivo) {
+            return;
+        }
+
+        $nombreTemp = 'temp_'.uniqid().'.'.$archivo->getClientOriginalExtension();
+        $rutaCompleta = sys_get_temp_dir().'/'.$nombreTemp;
         $archivo->move(sys_get_temp_dir(), $nombreTemp);
         try {
             $callbackLogica($rutaCompleta);
         } finally {
-            if (file_exists($rutaCompleta)) unlink($rutaCompleta);
+            if (file_exists($rutaCompleta)) {
+                unlink($rutaCompleta);
+            }
         }
     }
 }

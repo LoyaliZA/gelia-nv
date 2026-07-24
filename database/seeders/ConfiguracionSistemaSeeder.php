@@ -70,6 +70,62 @@ class ConfiguracionSistemaSeeder extends Seeder
                 'grupo' => 'Mail',
                 'descripcion' => 'Nombre del remitente',
             ],
+            [
+                'clave' => 'tiendanube.app_id',
+                'valor' => '',
+                'tipo' => 'string',
+                'grupo' => 'Tiendanube',
+                'descripcion' => 'App ID partner',
+            ],
+            [
+                'clave' => 'tiendanube.app_secret',
+                'valor' => '',
+                'tipo' => 'string',
+                'grupo' => 'Tiendanube',
+                'descripcion' => 'Secret (webhooks)',
+            ],
+            [
+                'clave' => 'tiendanube.store_id',
+                'valor' => '',
+                'tipo' => 'string',
+                'grupo' => 'Tiendanube',
+                'descripcion' => 'Store ID',
+            ],
+            [
+                'clave' => 'tiendanube.access_token',
+                'valor' => '',
+                'tipo' => 'string',
+                'grupo' => 'Tiendanube',
+                'descripcion' => 'Access token',
+            ],
+            [
+                'clave' => 'tiendanube.api_base',
+                'valor' => 'https://api.tiendanube.com/v1',
+                'tipo' => 'string',
+                'grupo' => 'Tiendanube',
+                'descripcion' => 'Base API',
+            ],
+            [
+                'clave' => 'tiendanube.user_agent',
+                'valor' => 'Gelianv',
+                'tipo' => 'string',
+                'grupo' => 'Tiendanube',
+                'descripcion' => 'User-Agent',
+            ],
+            [
+                'clave' => 'tiendanube.per_page',
+                'valor' => '50',
+                'tipo' => 'integer',
+                'grupo' => 'Tiendanube',
+                'descripcion' => 'Página sync',
+            ],
+            [
+                'clave' => 'tiendanube.webhook_url',
+                'valor' => '',
+                'tipo' => 'string',
+                'grupo' => 'Tiendanube',
+                'descripcion' => 'URL webhooks (vacío = {APP_URL}/webhooks/tiendanube)',
+            ],
         ];
 
         foreach ($configuraciones as $config) {

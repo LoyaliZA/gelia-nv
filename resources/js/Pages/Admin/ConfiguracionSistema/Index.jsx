@@ -196,7 +196,7 @@ export default function ConfiguracionSistema({ auth, configuracionesGrupos, conf
                                                             <span className="flex items-center gap-1 text-red-600 dark:text-red-400 font-bold"><X className="w-4 h-4"/> FALSE</span>
                                                         )
                                                     ) : (
-                                                        config.tipo === 'string' && config.clave.toLowerCase().includes('password') ? '••••••••' : config.valor || <em className="text-gray-400">Nulo/Vacío</em>
+                                                        config.tipo === 'string' && /password|secret|token/.test(config.clave.toLowerCase()) ? '••••••••' : config.valor || <em className="text-gray-400">Nulo/Vacío</em>
                                                     )}
                                                 </div>
                                             </div>
