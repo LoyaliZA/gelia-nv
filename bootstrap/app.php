@@ -26,6 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
             );
         }
 
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/tiendanube',
+        ]);
+
         $middleware->web(prepend: [
             \App\Http\Middleware\RestrictFormHostname::class,
         ]);

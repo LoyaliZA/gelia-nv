@@ -145,6 +145,10 @@ export const DESCRIPCIONES_PERMISOS = {
     'woocommerce.configurar': 'Permite configurar la vinculación WooCommerce.',
     'woocommerce.auditoria': 'Permite consultar la auditoría de WooCommerce.',
     'woocommerce.emergencia': 'Permite acciones de emergencia en WooCommerce.',
+    'tiendanube.ver': 'Permite ver el catálogo de Tiendanube.',
+    'tiendanube.configurar': 'Permite configurar la vinculación Tiendanube.',
+    'tiendanube.sincronizar': 'Permite sincronizar catálogo desde Tiendanube.',
+    'tiendanube.productos.editar': 'Permite crear y editar productos en Tiendanube.',
     'plantilla_pedidos.ver': 'Permite acceder a Plantilla de Pedidos.',
     'plantilla_pedidos.generar': 'Permite generar plantillas de pedidos.',
     'plantilla_pedidos.descargar': 'Permite descargar plantillas generadas.',
@@ -594,6 +598,32 @@ export const SUBMODULOS_UI_POR_MODULO = {
             permisos: ['woocommerce.emergencia'],
         },
     ],
+    tiendanube: [
+        {
+            id: 'catalogo',
+            label: 'Catálogo',
+            descripcion: 'Ver catálogo de Tiendanube',
+            permisos: ['tiendanube.ver'],
+        },
+        {
+            id: 'editar',
+            label: 'Editar productos',
+            descripcion: 'Crear y editar productos simples en Tiendanube',
+            permisos: ['tiendanube.productos.editar'],
+        },
+        {
+            id: 'config',
+            label: 'Configuración',
+            descripcion: 'Ajustes de vinculación Tiendanube',
+            permisos: ['tiendanube.configurar'],
+        },
+        {
+            id: 'sync',
+            label: 'Sincronizar',
+            descripcion: 'Sincronizar productos y categorías',
+            permisos: ['tiendanube.sincronizar'],
+        },
+    ],
     plantilla_pedidos: [
         {
             id: 'uso',
@@ -996,7 +1026,7 @@ export const SECCIONES_SIDEBAR_PERMISOS = [
         id: 'vinculaciones',
         label: 'Vinculaciones',
         descripcion: 'Integraciones externas',
-        modulos: ['woocommerce'],
+        modulos: ['woocommerce', 'tiendanube'],
     },
     {
         id: 'gestion_interna',
@@ -1050,6 +1080,7 @@ export const ETIQUETAS_MODULO_UI = {
     funciones: 'Funciones operativas',
     ejercicio_escalonamiento: 'Ejercicio escalonamiento',
     woocommerce: 'WooCommerce',
+    tiendanube: 'Tiendanube',
     plantilla_pedidos: 'Plantilla de pedidos',
     rh: 'Recursos humanos',
     activos: 'Control de activos',

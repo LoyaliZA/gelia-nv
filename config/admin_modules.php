@@ -17,4 +17,5 @@ return [
     'api_externa.ver_auditoria',
     'entregas.configurar_zonas',
     'woocommerce.configurar',
+    'tiendanube.configurar',
 ];

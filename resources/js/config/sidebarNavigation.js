@@ -23,6 +23,7 @@ import {
     Database,
     FileSpreadsheet,
     ShoppingBag,
+    Store,
     Calculator,
     LifeBuoy,
     Bug,
@@ -362,6 +363,22 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
                     active: (url) => url.startsWith('/woocommerce'),
                 }
             ]
+        },
+        can('tiendanube.ver') && {
+            type: 'group',
+            id: 'tiendanube',
+            label: 'Tiendanube',
+            icon: Store,
+            children: [
+                {
+                    type: 'link',
+                    id: 'tiendanube_catalogo',
+                    label: 'Catálogo',
+                    icon: Package,
+                    href: () => routeHref('tiendanube.index', '/tiendanube'),
+                    active: (url) => url.startsWith('/tiendanube'),
+                },
+            ],
         },
     ].filter(Boolean);
 

@@ -106,6 +106,15 @@ export const ADMIN_MODULES = [
         permission: 'woocommerce.configurar',
     },
     {
+        id: 'tiendanube',
+        title: 'Tiendanube',
+        description: 'Catálogo: productos, categorías, SEO e imágenes.',
+        path: '/tiendanube',
+        routeName: 'tiendanube.index',
+        icon: ShoppingBag,
+        permission: 'tiendanube.configurar',
+    },
+    {
         id: 'configuracion_sistema',
         title: 'Configuración del Sistema',
         description: 'Variables globales, sobreescritura de .env y testeo de integraciones clave.',
