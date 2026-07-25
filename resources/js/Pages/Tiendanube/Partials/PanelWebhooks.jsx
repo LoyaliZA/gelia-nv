@@ -148,6 +148,9 @@ export default function PanelWebhooks({
                     <p className="text-xs theme-text-muted mt-1">
                         Suscripciones en Tiendanube. Receptor público: {webhookUrl || url || '—'}
                     </p>
+                    <p className="text-xs theme-text-muted mt-1">
+                        Privacidad (Partners): los 3 campos LGPD usan esta misma URL; no se registran vía API.
+                    </p>
                 </div>
             </div>
 

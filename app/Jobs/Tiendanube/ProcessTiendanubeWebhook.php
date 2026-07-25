@@ -8,6 +8,7 @@ use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeWebhookDelivery;
 use App\Services\Tiendanube\TiendanubeApiClient;
 use App\Services\Tiendanube\TiendanubeCatalogoSyncService;
+use App\Services\Tiendanube\TiendanubePrivacyService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -27,7 +28,8 @@ class ProcessTiendanubeWebhook implements ShouldQueue
 
     public function handle(
         TiendanubeApiClient $api,
-        TiendanubeCatalogoSyncService $sync
+        TiendanubeCatalogoSyncService $sync,
+        TiendanubePrivacyService $privacy
     ): void {
         $delivery = TiendanubeWebhookDelivery::find($this->deliveryId);
         if (! $delivery || in_array($delivery->status, ['processed', 'ignored'], true)) {
@@ -50,7 +52,7 @@ class ProcessTiendanubeWebhook implements ShouldQueue
                 in_array($event, ['category/created', 'category/updated'], true) => $this->syncCategory($api, $sync, $delivery),
                 $event === 'category/deleted' => $this->deleteCategory($delivery),
                 $event === 'app/uninstalled' => $this->handleUninstalled($config, $delivery),
-                in_array($event, ['store/redact', 'customers/redact', 'customers/data_request'], true) => $this->handlePrivacy($delivery),
+                in_array($event, ['store/redact', 'customers/redact', 'customers/data_request'], true) => $this->handlePrivacy($privacy, $delivery),
                 default => $delivery->markIgnored($event === '' ? 'Evento ausente.' : "Evento no soportado: {$event}"),
             };
         } catch (\Throwable $e) {
@@ -134,14 +136,9 @@ class ProcessTiendanubeWebhook implements ShouldQueue
         $delivery->markProcessed();
     }
 
-    private function handlePrivacy(TiendanubeWebhookDelivery $delivery): void
+    private function handlePrivacy(TiendanubePrivacyService $privacy, TiendanubeWebhookDelivery $delivery): void
     {
-        Log::info('Tiendanube privacy webhook recibido.', [
-            'event' => $delivery->event,
-            'store_id' => $delivery->store_id,
-            'delivery_id' => $delivery->id,
-        ]);
-
+        $privacy->handle($delivery);
         $delivery->markProcessed();
     }
 
