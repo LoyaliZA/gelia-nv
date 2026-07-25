@@ -1,0 +1,194 @@
+<?php
+
+namespace App\Services\Facturas;
+
+use App\Events\SolicitudFacturaActualizada;
+use App\Models\AuditoriaSolicitudFactura;
+use App\Models\CatalogoEstadoSolicitud;
+use App\Models\Cliente;
+use App\Models\EnlaceDatosFiscales;
+use App\Models\SolicitudFactura;
+use App\Notifications\AlertaFactura;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+class AplicarDatosFiscalesPublicosDesdeEnlaceService
+{
+    public function __construct(
+        private ValidarEnlaceDatosFiscalesService $validador,
+        private GestionarDatosFiscalesClienteService $gestionarDatosFiscales,
+    ) {}
+
+    /**
+     * @param  array<string, mixed>  $datosEntrada
+     */
+    public function ejecutar(string $token, array $datosEntrada): SolicitudFactura
+    {
+        return DB::transaction(function () use ($token, $datosEntrada) {
+            $enlace = $this->reclamarEnlace($token);
+            $solicitud = SolicitudFactura::query()
+                ->whereKey($enlace->solicitud_factura_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $idBorrador = CatalogoEstadoSolicitud::idDe('Borrador');
+            if ($idBorrador === null || (int) $solicitud->catalogo_estado_solicitud_id !== $idBorrador) {
+                throw new \InvalidArgumentException('La solicitud ya no acepta respuesta del formulario.');
+            }
+
+            $campos = is_array($enlace->campos_permitidos) && $enlace->campos_permitidos !== []
+                ? $enlace->campos_permitidos
+                : EnlaceDatosFiscales::CAMPOS;
+
+            $datos = $this->filtrarYValidar($datosEntrada, $campos);
+
+            $snapshot = is_array($solicitud->datos_fiscales) ? $solicitud->datos_fiscales : [];
+            foreach ($datos as $clave => $valor) {
+                $snapshot[$clave] = $valor;
+            }
+
+            $razonSocial = $solicitud->razon_social;
+            if (! empty($datos['nombre_razon_social'])) {
+                $razonSocial = $datos['nombre_razon_social'];
+            }
+
+            $estadoAnterior = $solicitud->catalogo_estado_solicitud_id;
+
+            // Se queda en Borrador: el colaborador adjunta voucher y envía a encargada.
+            $solicitud->update([
+                'datos_fiscales' => $snapshot,
+                'razon_social' => $razonSocial,
+                'formulario_respondido_at' => now(),
+            ]);
+
+            if ($enlace->destinatario_tipo === SolicitudFactura::DESTINATARIO_CLIENTE && $solicitud->cliente_id) {
+                $cliente = Cliente::query()->whereKey($solicitud->cliente_id)->lockForUpdate()->first();
+                if ($cliente) {
+                    $merge = [
+                        'rfc' => $cliente->rfc,
+                        'codigo_postal' => $cliente->codigo_postal,
+                        'regimen_fiscal' => $cliente->regimen_fiscal,
+                        'correo_electronico' => $cliente->correo_electronico,
+                        'uso_factura' => $cliente->uso_factura,
+                        'nombre_razon_social' => $cliente->nombre_razon_social,
+                        'telefono' => $cliente->telefono,
+                    ];
+                    foreach ($datos as $clave => $valor) {
+                        $merge[$clave] = $valor;
+                    }
+                    $this->gestionarDatosFiscales->actualizar($cliente, $merge);
+                }
+            }
+
+            AuditoriaSolicitudFactura::create([
+                'solicitud_factura_id' => $solicitud->id,
+                'usuario_id' => $enlace->creado_por,
+                'estado_anterior_id' => $estadoAnterior,
+                'estado_nuevo_id' => $estadoAnterior,
+                'motivo_reporte' => 'Formulario público de datos fiscales respondido. Pendiente de voucher y envío a encargada.',
+                'datos_snapshot' => [
+                    'campos' => array_keys($datos),
+                    'destinatario_tipo' => $enlace->destinatario_tipo,
+                    'enlace_id' => $enlace->id,
+                ],
+            ]);
+
+            $solicitud = $solicitud->fresh(['vendedor', 'estado', 'cliente', 'vouchers']);
+
+            if ($solicitud->vendedor) {
+                $solicitud->vendedor->notify(new AlertaFactura(
+                    $solicitud,
+                    'formulario_respondido',
+                    'El cliente respondió el formulario. Adjunte el voucher y envíe a encargada.'
+                ));
+            }
+
+            event(new SolicitudFacturaActualizada(
+                solicitudId: $solicitud->id,
+                accion: 'actualizada',
+                porUsuarioId: $enlace->creado_por,
+                vendedorId: $solicitud->vendedor_id,
+                departamentoId: $solicitud->departamento_id,
+            ));
+
+            return $solicitud;
+        });
+    }
+
+    private function reclamarEnlace(string $token): EnlaceDatosFiscales
+    {
+        $enlace = $this->validador->porToken($token);
+
+        if (! $enlace) {
+            throw new \InvalidArgumentException('Enlace no válido.');
+        }
+
+        $enlace = EnlaceDatosFiscales::query()
+            ->whereKey($enlace->id)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        if ($enlace->fueUsado()) {
+            throw new \InvalidArgumentException('Este enlace ya fue utilizado.');
+        }
+
+        if ($enlace->revocado_en !== null || ($enlace->expira_en !== null && $enlace->expira_en->isPast())) {
+            throw new \InvalidArgumentException('El enlace expiró o fue revocado.');
+        }
+
+        $enlace->update(['usado_en' => now()]);
+
+        return $enlace->fresh();
+    }
+
+    /**
+     * @param  array<string, mixed>  $entrada
+     * @param  list<string>  $campos
+     * @return array<string, string>
+     */
+    private function filtrarYValidar(array $entrada, array $campos): array
+    {
+        $datos = [];
+        $errores = [];
+
+        foreach ($campos as $campo) {
+            $valor = trim((string) ($entrada[$campo] ?? ''));
+            if ($valor === '') {
+                $errores[$campo] = 'Este campo es obligatorio.';
+                continue;
+            }
+            $datos[$campo] = $valor;
+        }
+
+        if (isset($datos['rfc'])) {
+            $rfc = strtoupper(preg_replace('/\s+/', '', $datos['rfc']) ?? '');
+            if (! preg_match('/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/u', $rfc)) {
+                $errores['rfc'] = 'El RFC no tiene un formato válido.';
+            } else {
+                $datos['rfc'] = $rfc;
+            }
+        }
+
+        if (isset($datos['codigo_postal']) && ! preg_match('/^\d{5}$/', $datos['codigo_postal'])) {
+            $errores['codigo_postal'] = 'El código postal debe tener 5 dígitos.';
+        }
+
+        if (isset($datos['correo_electronico']) && ! filter_var($datos['correo_electronico'], FILTER_VALIDATE_EMAIL)) {
+            $errores['correo_electronico'] = 'El correo electrónico no es válido.';
+        }
+
+        if (isset($datos['telefono']) && mb_strlen($datos['telefono']) > 20) {
+            $errores['telefono'] = 'El número telefónico no puede exceder 20 caracteres.';
+        }
+
+        if (isset($datos['nombre_razon_social']) && mb_strlen($datos['nombre_razon_social']) < 3) {
+            $errores['nombre_razon_social'] = 'La razón social debe tener al menos 3 caracteres.';
+        }
+
+        if ($errores !== []) {
+            throw ValidationException::withMessages($errores);
+        }
+
+        return $datos;
+    }
+}

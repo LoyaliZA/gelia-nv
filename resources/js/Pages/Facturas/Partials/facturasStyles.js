@@ -11,6 +11,7 @@ export const ESTADO_BADGE = {
 };
 
 export const ESTADO_LABELS = {
+    Borrador: 'Borrador',
     Pendiente: 'Pendiente',
     Respondida: 'Respondida',
     Verificada: 'Verificada',

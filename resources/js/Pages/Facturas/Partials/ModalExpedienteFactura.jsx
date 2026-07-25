@@ -99,6 +99,7 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
 
     const puedeSyncCliente = puedeActualizarCliente
         && factura?.cliente_id
+        && factura?.destinatario_tipo !== 'tercero'
         && !cargandoDatos
         && !errorDatos
         && filasDatos.length > 0;
@@ -170,9 +171,35 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
 
                     {!cargandoFactura && factura && (
                         <>
-                            <div className="p-4 rounded-2xl border theme-border mb-6 theme-element">
-                                <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Razón Social</p>
-                                <p className="text-sm font-black theme-text-main m-0">{factura.razon_social || '—'}</p>
+                            <div className="p-4 rounded-2xl border theme-border mb-6 theme-element space-y-3">
+                                {factura.destinatario_tipo === 'tercero' && factura.cliente ? (
+                                    <>
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Quién solicita (cliente de cuenta)</p>
+                                            <p className="text-sm font-black theme-text-main m-0">
+                                                {factura.cliente.numero_cliente} — {factura.cliente.nombre}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Razón social a facturar (tercero)</p>
+                                            <p className="text-sm font-black theme-text-main m-0">{factura.razon_social || '—'}</p>
+                                            <p className="text-[10px] theme-text-muted mt-1 m-0">Solo aplica a esta solicitud; no modifica los fiscales del cliente de cuenta.</p>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div>
+                                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Razón Social</p>
+                                        <p className="text-sm font-black theme-text-main m-0">{factura.razon_social || '—'}</p>
+                                    </div>
+                                )}
+                                {factura.formulario_respondido_at && (
+                                    <p className="text-[10px] font-bold theme-text-muted m-0">
+                                        Formulario fiscal respondido el {new Date(factura.formulario_respondido_at).toLocaleString('es-MX')}
+                                        {factura.estado?.nombre === 'Borrador' && !factura.tiene_voucher
+                                            ? '. Adjunte el voucher y envíe a encargada.'
+                                            : ''}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-6">

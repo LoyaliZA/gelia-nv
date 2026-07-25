@@ -15,7 +15,7 @@ use App\Http\Controllers\Activos\{ActivoController,CategoriaActivoController,Tip
 use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,IncidenciaGerenteController,ReciboRhController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController,ConsolidadoHorasExtraController,BancoTiempoController};
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Almacenes\{ProductoController as AlmacenProductoController, InventarioController as AlmacenInventarioController, CostoController as AlmacenCostoController, ImportacionAlmacenController};
-use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
+use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController,DatosFiscalesPublicosController};
 use App\Http\Controllers\Traspasos\SolicitudTraspasoController;
 use App\Http\Controllers\Traspasos\TraspasoCedisController;
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
@@ -50,6 +50,16 @@ Route::middleware(['throttle:30,1', \App\Http\Middleware\HardenSolicitudDireccio
         ->name('direcciones.publicas.form');
     Route::post('/direcciones-envio', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionPublicaController::class, 'store'])
         ->name('direcciones.publicas.store');
+
+    Route::get('/datos-fiscales/confirmacion/{folio}', [DatosFiscalesPublicosController::class, 'confirmacion'])
+        ->name('datos_fiscales.publicas.confirmacion');
+    Route::get('/datos-fiscales/{codigo}', [DatosFiscalesPublicosController::class, 'show'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->name('datos_fiscales.publicas.show');
+    Route::get('/datos-fiscales', [DatosFiscalesPublicosController::class, 'show'])
+        ->name('datos_fiscales.publicas.form');
+    Route::post('/datos-fiscales', [DatosFiscalesPublicosController::class, 'store'])
+        ->name('datos_fiscales.publicas.store');
 });
 
 Route::post('/webhooks/tiendanube', \App\Http\Controllers\TiendanubeWebhookController::class)
@@ -356,6 +366,8 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:facturas.crear'])->prefix('facturas')->name('facturas.')->group(function () {
         Route::get('/plantilla-fiscales/descargar', [SolicitudFacturaController::class, 'descargarPlantilla'])->name('plantilla_fiscales');
         Route::post('/', [SolicitudFacturaController::class, 'store'])->name('store');
+        Route::put('/{factura}/borrador', [SolicitudFacturaController::class, 'actualizarBorrador'])->name('borrador');
+        Route::post('/{factura}/enlace-fiscal', [SolicitudFacturaController::class, 'regenerarEnlaceFiscal'])->name('enlace_fiscal');
         Route::put('/{factura}/reparar', [SolicitudFacturaController::class, 'reparar'])->name('reparar');
     });
 

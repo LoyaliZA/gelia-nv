@@ -185,8 +185,9 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                     </div>
                 </header>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 min-w-0">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-6 min-w-0">
                     {[
+                        { label: 'Borradores', value: metricas?.borradores ?? 0, color: '#94a3b8' },
                         { label: 'Pendientes', value: metricas?.pendientes ?? 0, color: '#f59e0b' },
                         { label: 'Respondidas hoy', value: metricas?.respondidas_hoy ?? 0, accent: true },
                         { label: 'Incorrectas', value: metricas?.incorrectas ?? 0, color: '#ef4444' },
@@ -251,6 +252,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                                             onVerificar={verificar}
                                             onEliminar={eliminar}
                                             onReparar={(factura) => setModalForm({ abierto: true, modoEdicion: true, factura })}
+                                            onEditarBorrador={(factura) => setModalForm({ abierto: true, modoEdicion: false, factura })}
                                         />
                                     ))}
                                 </div>
@@ -280,7 +282,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
             )}
             {modalForm.abierto && (
                 <ModalFormFactura
-                    key={modalForm.modoEdicion ? `reparar-${modalForm.factura?.id}` : 'nueva'}
+                    key={modalForm.factura?.id ? `${modalForm.modoEdicion ? 'reparar' : 'borrador'}-${modalForm.factura.id}` : 'nueva'}
                     onClose={() => setModalForm({ abierto: false, modoEdicion: false, factura: null })}
                     onExito={recargarTrasAccion}
                     modoEdicion={modalForm.modoEdicion}

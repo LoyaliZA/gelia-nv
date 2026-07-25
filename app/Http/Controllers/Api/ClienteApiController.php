@@ -19,34 +19,60 @@ class ClienteApiController extends Controller
             return response()->json([]);
         }
 
+        $conFiscales = filter_var($request->query('con_fiscales', false), FILTER_VALIDATE_BOOLEAN);
+
+        $columnas = [
+            'id',
+            'numero_cliente',
+            'nombre',
+            'nombre_razon_social',
+            'rfc',
+            'es_heredado',
+            'es_inactivo',
+            'lista_actual_id',
+            'monto_venta_actual',
+        ];
+
+        if ($conFiscales) {
+            $columnas = array_merge($columnas, [
+                'codigo_postal',
+                'regimen_fiscal',
+                'correo_electronico',
+                'uso_factura',
+                'telefono',
+            ]);
+        }
+
         $query = Cliente::query()
-            ->select([
-                'id',
-                'numero_cliente',
-                'nombre',
-                'nombre_razon_social',
-                'rfc',
-                'es_heredado',
-                'es_inactivo',
-                'lista_actual_id',
-                'monto_venta_actual',
-            ])
+            ->select($columnas)
             ->with('listaDescuento:id,nombre');
 
         $this->aplicarBusqueda($query, $termino);
 
-        $clientes = $query->limit(50)->get()->map(fn ($cliente) => [
-            'id' => $cliente->id,
-            'numero_cliente' => $cliente->numero_cliente,
-            'nombre' => $cliente->nombre,
-            'nombre_razon_social' => $cliente->nombre_razon_social,
-            'rfc' => $cliente->rfc,
-            'es_heredado' => (bool) $cliente->es_heredado,
-            'es_inactivo' => (bool) $cliente->es_inactivo,
-            'lista_actual_id' => $cliente->lista_actual_id,
-            'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
-            'monto_venta_actual' => (float) $cliente->monto_venta_actual,
-        ]);
+        $clientes = $query->limit(50)->get()->map(function ($cliente) use ($conFiscales) {
+            $fila = [
+                'id' => $cliente->id,
+                'numero_cliente' => $cliente->numero_cliente,
+                'nombre' => $cliente->nombre,
+                'nombre_razon_social' => $cliente->nombre_razon_social,
+                'rfc' => $cliente->rfc,
+                'es_heredado' => (bool) $cliente->es_heredado,
+                'es_inactivo' => (bool) $cliente->es_inactivo,
+                'lista_actual_id' => $cliente->lista_actual_id,
+                'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
+                'monto_venta_actual' => (float) $cliente->monto_venta_actual,
+            ];
+
+            if ($conFiscales) {
+                $fila['codigo_postal'] = $cliente->codigo_postal;
+                $fila['regimen_fiscal'] = $cliente->regimen_fiscal;
+                $fila['correo_electronico'] = $cliente->correo_electronico;
+                $fila['uso_factura'] = $cliente->uso_factura;
+                $fila['telefono'] = $cliente->telefono;
+            }
+
+            return $fila;
+        });
 
         return response()
             ->json($clientes)

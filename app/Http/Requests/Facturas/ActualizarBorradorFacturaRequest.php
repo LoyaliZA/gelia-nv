@@ -9,7 +9,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
-class StoreSolicitudFacturaRequest extends FormRequest
+class ActualizarBorradorFacturaRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -18,14 +18,10 @@ class StoreSolicitudFacturaRequest extends FormRequest
 
     public function rules(): array
     {
-        $modo = $this->input('modo', 'pendiente');
-        $esBorrador = $modo === 'borrador';
-        $terceroConForm = $esBorrador
-            && $this->input('destinatario_tipo') === SolicitudFactura::DESTINATARIO_TERCERO
+        $terceroConForm = $this->input('destinatario_tipo') === SolicitudFactura::DESTINATARIO_TERCERO
             && filter_var($this->input('pedir_formulario'), FILTER_VALIDATE_BOOLEAN);
 
         return [
-            'modo' => ['nullable', Rule::in(['borrador', 'pendiente'])],
             'destinatario_tipo' => ['nullable', Rule::in([SolicitudFactura::DESTINATARIO_CLIENTE, SolicitudFactura::DESTINATARIO_TERCERO])],
             'razon_social' => [$terceroConForm ? 'nullable' : 'required', 'string', 'min:3', 'max:255'],
             'numero_cliente' => [
@@ -35,29 +31,27 @@ class StoreSolicitudFacturaRequest extends FormRequest
             ],
             'observaciones_vendedor' => ['nullable', 'string', 'max:2000'],
             'archivo_fiscal' => ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'eliminar_archivo_fiscal' => ['nullable', 'boolean'],
             'pedir_formulario' => ['nullable', 'boolean'],
+            'enviar_ahora' => ['nullable', 'boolean'],
             'accion_formulario' => ['nullable', Rule::in([EnlaceDatosFiscales::ACCION_PRIMERA, EnlaceDatosFiscales::ACCION_ACTUALIZAR])],
             'campos_fiscales' => ['nullable', 'array'],
             'campos_fiscales.*' => ['string', Rule::in(EnlaceDatosFiscales::CAMPOS)],
-            'vouchers' => [$esBorrador ? 'nullable' : 'required', 'array', $esBorrador ? 'max:5' : 'min:1', 'max:5'],
+            'vouchers' => ['nullable', 'array', 'max:5'],
             'vouchers.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
-        ];
-    }
-
-    public function messages(): array
-    {
-        return [
-            'vouchers.required' => 'Debe adjuntar al menos un comprobante de pago (voucher).',
-            'vouchers.min' => 'Debe adjuntar al menos un comprobante de pago (voucher).',
+            'vouchers_conservar' => ['nullable', 'array'],
+            'vouchers_conservar.*' => ['integer'],
         ];
     }
 
     protected function prepareForValidation(): void
     {
-        if ($this->has('pedir_formulario')) {
-            $this->merge([
-                'pedir_formulario' => filter_var($this->input('pedir_formulario'), FILTER_VALIDATE_BOOLEAN),
-            ]);
+        foreach (['pedir_formulario', 'enviar_ahora', 'eliminar_archivo_fiscal'] as $campo) {
+            if ($this->has($campo)) {
+                $this->merge([
+                    $campo => filter_var($this->input($campo), FILTER_VALIDATE_BOOLEAN),
+                ]);
+            }
         }
 
         if (is_string($this->input('campos_fiscales'))) {
@@ -67,12 +61,11 @@ class StoreSolicitudFacturaRequest extends FormRequest
             }
         }
 
-        $esBorradorTerceroForm = $this->input('modo') === 'borrador'
-            && $this->input('destinatario_tipo') === SolicitudFactura::DESTINATARIO_TERCERO
+        $terceroConForm = $this->input('destinatario_tipo') === SolicitudFactura::DESTINATARIO_TERCERO
             && filter_var($this->input('pedir_formulario'), FILTER_VALIDATE_BOOLEAN)
             && trim((string) $this->input('razon_social', '')) === '';
 
-        if ($esBorradorTerceroForm) {
+        if ($terceroConForm) {
             $this->merge(['razon_social' => 'Pendiente de formulario']);
         }
     }
@@ -92,12 +85,7 @@ class StoreSolicitudFacturaRequest extends FormRequest
                 }
             }
 
-            $pedir = filter_var($this->input('pedir_formulario'), FILTER_VALIDATE_BOOLEAN);
-            if ($pedir && $this->input('modo') !== 'borrador') {
-                $v->errors()->add('modo', 'Para pedir datos por formulario guarde como borrador.');
-            }
-
-            if ($pedir) {
+            if (filter_var($this->input('pedir_formulario'), FILTER_VALIDATE_BOOLEAN)) {
                 $campos = $this->input('campos_fiscales', []);
                 if (! is_array($campos) || $campos === []) {
                     $v->errors()->add('campos_fiscales', 'Seleccione al menos un campo fiscal.');

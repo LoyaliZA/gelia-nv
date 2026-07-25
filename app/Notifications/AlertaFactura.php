@@ -26,6 +26,7 @@ class AlertaFactura extends Notification implements ShouldQueue, ShouldBroadcast
         'rechazada' => 'Error en factura',
         'reparada' => 'Solicitud de factura reparada',
         'verificada' => 'Factura verificada',
+        'formulario_respondido' => 'Formulario fiscal respondido',
     ];
 
     public function __construct(SolicitudFactura $solicitud, string $tipoAlerta, string $mensaje)
@@ -98,6 +99,7 @@ class AlertaFactura extends Notification implements ShouldQueue, ShouldBroadcast
             'rechazada' => "{$nombre}, se reportó un error en la solicitud de factura {$folio}.",
             'reparada' => "Atención {$nombre}, la solicitud de factura {$folio} fue reparada y está lista para revisión.",
             'verificada' => "{$nombre}, la factura {$folio} fue verificada correctamente.",
+            'formulario_respondido' => "{$nombre}, el cliente respondió el formulario de la solicitud {$folio}. Adjunte el voucher y envíela a encargada.",
             default => "{$nombre}, tienes una notificación sobre la factura {$folio}.",
         };
     }
