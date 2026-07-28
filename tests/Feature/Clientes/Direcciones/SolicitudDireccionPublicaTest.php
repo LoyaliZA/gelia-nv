@@ -99,6 +99,24 @@ class SolicitudDireccionPublicaTest extends TestCase
             "#style-src[^;]*https://gelianv\\.neobash\\.site(?:[ ;]|$)#",
             $csp
         );
+        $this->assertMatchesRegularExpression(
+            "#script-src[^;]*https://static\\.cloudflareinsights\\.com(?:[ ;]|$)#",
+            $csp
+        );
+        $this->assertMatchesRegularExpression(
+            "#connect-src[^;]*https://static\\.cloudflareinsights\\.com(?:[ ;]|$)#",
+            $csp
+        );
+    }
+
+    public function test_form_publico_emite_assets_vite_en_mismo_origen(): void
+    {
+        $html = $this->get('https://form.neobash.site/direcciones-envio')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('https://form.neobash.site/build/', $html);
+        $this->assertStringNotContainsString('https://gelianv.neobash.site/build/', $html);
     }
 
     public function test_host_interno_sigue_sirviendo_login(): void

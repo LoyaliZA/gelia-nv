@@ -2,14 +2,28 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\FormPublicUrl;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\Response;
 
 class HardenSolicitudDireccionPublica
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // AppServiceProvider fuerza APP_URL → @vite emite type=module absolutos a gelianv.
+        // En el host del form eso dispara CORS. Servir assets same-origin (form ya tiene /build/).
+        $formBase = rtrim(FormPublicUrl::base(), '/');
+        $formHost = FormPublicUrl::host();
+        if ($formBase !== '' && $formHost !== null && strcasecmp($request->getHost(), $formHost) === 0) {
+            URL::forceRootUrl($formBase);
+            $scheme = parse_url($formBase, PHP_URL_SCHEME);
+            if (is_string($scheme) && $scheme !== '') {
+                URL::forceScheme($scheme);
+            }
+        }
+
         $response = $next($request);
 
         $response->headers->set('X-Frame-Options', 'DENY');
@@ -30,7 +44,11 @@ class HardenSolicitudDireccionPublica
         $connectSrc = ["'self'"];
         $imgSrc = ["'self'", 'data:', 'blob:'];
 
-        // FORM_PUBLIC_URL != APP_URL: Vite/@vite emite assets absolutos vía URL::forceRootUrl(APP_URL).
+        // Cloudflare Web Analytics inyecta beacon en el edge; no lo controla la app.
+        $scriptSrc[] = 'https://static.cloudflareinsights.com';
+        $connectSrc[] = 'https://static.cloudflareinsights.com';
+
+        // APP_URL residual (CSS/font legacy o assets si forceRootUrl falla).
         foreach ($this->appAssetOrigins() as $origin) {
             $scriptSrc[] = $origin;
             $styleSrc[] = $origin;
@@ -39,7 +57,7 @@ class HardenSolicitudDireccionPublica
             $connectSrc[] = $origin;
         }
 
-        // Sail/Vite HMR + Reverb: el formulario público usa app.blade.php con @vite/Echo.
+        // Sail/Vite HMR + Reverb: solo en local/debug (el form público no inicializa Echo).
         if (app()->isLocal() || (bool) config('app.debug')) {
             foreach ($this->viteOrigins() as $origin) {
                 $scriptSrc[] = $origin;
