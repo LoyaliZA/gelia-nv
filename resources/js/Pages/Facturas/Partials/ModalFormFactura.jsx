@@ -12,7 +12,7 @@ const CAMPOS_FISCALES = [
     { clave: 'codigo_postal', etiqueta: 'Código Postal' },
     { clave: 'regimen_fiscal', etiqueta: 'Régimen Fiscal' },
     { clave: 'correo_electronico', etiqueta: 'Correo Electrónico' },
-    { clave: 'uso_factura', etiqueta: 'Uso de Factura' },
+    { clave: 'uso_factura', etiqueta: 'Uso de CFDI' },
     { clave: 'nombre_razon_social', etiqueta: 'Nombre (Razón Social)' },
     { clave: 'telefono', etiqueta: 'Número Telefónico' },
 ];

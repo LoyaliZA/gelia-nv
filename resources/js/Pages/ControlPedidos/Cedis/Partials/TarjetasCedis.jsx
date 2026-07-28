@@ -8,6 +8,8 @@ import {
     badgeEstatusPedido,
     badgeEmpaqueSemantico,
     badgeRetrasoGuia,
+    badgeConComplementos,
+    complementosDe,
     esPedidoEmpacadoCedis,
     etiquetaAlmacen,
     formatearFechaNegocio,
@@ -31,6 +33,8 @@ function TarjetaPedido({
     const badgeEstatus = badgeEstatusPedido(pedido.estatus);
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
+    const badgeComp = badgeConComplementos(pedido);
+    const complementos = complementosDe(pedido);
     const remision = remisionDe(pedido);
     const esIncidencia = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
@@ -61,19 +65,27 @@ function TarjetaPedido({
                     )}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={badgeEstatus.className} style={badgeEstatus.style}>
-                        {badgeEstatus.label}
-                    </span>
-                    <span className={badgeEmpaque.className} style={badgeEmpaque.style}>
-                        {badgeEmpaque.label}
-                    </span>
+                    <span className={badgeEstatus.className} style={badgeEstatus.style}>{badgeEstatus.label}</span>
+                    <span className={badgeEmpaque.className} style={badgeEmpaque.style}>{badgeEmpaque.label}</span>
+                    {badgeComp && (
+                        <span className={badgeComp.className} style={badgeComp.style}>{badgeComp.label}</span>
+                    )}
                     {badgeRetraso && (
-                        <span className={badgeRetraso.className} style={badgeRetraso.style}>
-                            {badgeRetraso.label}
-                        </span>
+                        <span className={badgeRetraso.className} style={badgeRetraso.style}>{badgeRetraso.label}</span>
                     )}
                 </div>
             </div>
+
+            {complementos.length > 0 && (
+                <div className="rounded-xl border border-teal-500/30 bg-teal-500/5 p-2.5 space-y-1">
+                    <p className="text-[9px] font-black uppercase text-teal-700 dark:text-teal-400 m-0">Complementos</p>
+                    {complementos.map((c) => (
+                        <p key={c.id} className="text-[11px] font-bold theme-text-main m-0">
+                            {c.folio}{c.folio_remision ? ` · ${c.folio_remision}` : ''}
+                        </p>
+                    ))}
+                </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2 text-[10px] font-bold theme-text-muted uppercase">
                 <div>
@@ -103,12 +115,6 @@ function TarjetaPedido({
             {esIncidencia && pedido.detalle_incidencia_empaque && (
                 <AvisoOperativoPedido label="Incidencia" tono="danger" icon={AlertTriangle}>
                     {pedido.detalle_incidencia_empaque}
-                    {pedido.incidencia_empaque_at && (
-                        <span className="block text-sm font-bold mt-1 opacity-80 font-mono">
-                            {(pedido.incidencia_empaque_por?.name || pedido.incidenciaEmpaquePor?.name) && `${pedido.incidencia_empaque_por?.name || pedido.incidenciaEmpaquePor?.name} · `}
-                            {formatearFechaHoraAuditoria(pedido.incidencia_empaque_at)}
-                        </span>
-                    )}
                 </AvisoOperativoPedido>
             )}
 
@@ -129,80 +135,41 @@ function TarjetaPedido({
                 </AvisoOperativoPedido>
             )}
 
-            {fase === 'PENDIENTE_DE_ENVIO' && pedido.numero_rastreo && (
-                <AvisoOperativoPedido label="Guía de rastreo" tono="success">
-                    <span className="font-mono tracking-wide break-all">{pedido.numero_rastreo}</span>
-                </AvisoOperativoPedido>
-            )}
-
             <div className="grid grid-cols-2 gap-2 pt-2 border-t theme-border">
                 {puedeMarcarEnviado && (
-                    <button
-                        type="button"
-                        onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })}
-                        className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}
-                    >
+                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}>
                         <Truck className="w-4 h-4" /> Marcar enviado
                     </button>
                 )}
                 {puedeEmpacar && (
-                    <button
-                        type="button"
-                        onClick={() => onSolicitarConfirmacion({ accion: 'empacar', pedido })}
-                        className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}
-                    >
-                        <CheckCircle2 className="w-4 h-4" /> Marcar empacado
+                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'empacar', pedido })} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}>
+                        <CheckCircle2 className="w-4 h-4" /> {complementos.length ? 'Empacar grupo' : 'Marcar empacado'}
                     </button>
                 )}
                 {puedeApartar && (
-                    <button
-                        type="button"
-                        onClick={() => onMarcarApartado?.(pedido)}
-                        className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}
-                    >
+                    <button type="button" onClick={() => onMarcarApartado?.(pedido)} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}>
                         <PackageCheck className="w-4 h-4" /> Marcar apartado
                     </button>
                 )}
                 {remision && (
-                    <button
-                        type="button"
-                        onClick={() => onVerDocumento(remision)}
-                        className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}
-                    >
+                    <button type="button" onClick={() => onVerDocumento(remision)} className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}>
                         <FileText className="w-3.5 h-3.5" /> Remisión
                     </button>
                 )}
                 {esEmpacado && tieneGuiaPdf && (
-                    <BotonGuiaPdf
-                        pedido={pedido}
-                        onVerPdf={onVerDocumento}
-                        compact
-                        className="w-full justify-center py-2.5"
-                    />
+                    <BotonGuiaPdf pedido={pedido} onVerPdf={onVerDocumento} compact className="w-full justify-center py-2.5" />
                 )}
                 {fase === 'EN_CEDIS' && (
-                    <button
-                        type="button"
-                        onClick={() => onReportarIncidencia(pedido)}
-                        className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] border border-orange-500/40 text-orange-600 outline-none py-2.5`}
-                    >
+                    <button type="button" onClick={() => onReportarIncidencia(pedido)} className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] border border-orange-500/40 text-orange-600 outline-none py-2.5`}>
                         <AlertTriangle className="w-3.5 h-3.5" /> Incidencia
                     </button>
                 )}
                 {puedeErrorDatos && (
-                    <button
-                        type="button"
-                        onClick={() => onReportarErrorDatos?.(pedido)}
-                        className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] border border-orange-500/40 text-orange-600 outline-none py-2.5`}
-                    >
+                    <button type="button" onClick={() => onReportarErrorDatos?.(pedido)} className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] border border-orange-500/40 text-orange-600 outline-none py-2.5`}>
                         <AlertTriangle className="w-3.5 h-3.5" /> Error datos
                     </button>
                 )}
-                <button
-                    type="button"
-                    onClick={() => onVerDetalle(pedido)}
-                    className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}
-                >
+                <button type="button" onClick={() => onVerDetalle(pedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}>
                     <Eye className="w-3.5 h-3.5" /> Ver detalle
                 </button>
             </div>
@@ -215,14 +182,12 @@ export default function TarjetasCedis({
 }) {
     const [confirmacion, setConfirmacion] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
-
     const items = pedidos?.data || [];
 
     const ejecutarConfirmacion = () => {
         const { accion, pedido } = confirmacion || {};
         setConfirmacion(null);
         if (!pedido) return;
-
         if (accion === 'empacar') {
             router.post(route('control_pedidos.cedis.marcar_empacado', pedido.id), {}, { preserveScroll: true });
         } else if (accion === 'enviar') {
@@ -230,10 +195,18 @@ export default function TarjetasCedis({
         }
     };
 
+    const comps = confirmacion?.accion === 'empacar' ? complementosDe(confirmacion.pedido) : [];
     const cfgConfirm = confirmacion?.accion === 'empacar'
-        ? { titulo: 'Confirmar empaque', mensaje: '¿Confirmar que el pedido fue empacado?', etiquetaConfirmar: 'Marcar empacado', variante: 'primary' }
+        ? {
+            titulo: comps.length ? 'Confirmar empaque del grupo' : 'Confirmar empaque',
+            mensaje: comps.length
+                ? `Se empacará ${confirmacion.pedido.folio} y ${comps.length} complemento(s).`
+                : '¿Confirmar que el pedido fue empacado?',
+            etiquetaConfirmar: comps.length ? 'Empacar grupo' : 'Marcar empacado',
+            variante: 'primary',
+        }
         : confirmacion?.accion === 'enviar'
-            ? { titulo: 'Confirmar envío', mensaje: 'Al confirmar, el pedido sale a recolección y el estado se actualiza para auxiliar, CEDIS y logística.', etiquetaConfirmar: 'Marcar enviado', variante: 'primary' }
+            ? { titulo: 'Confirmar envío', mensaje: 'Al confirmar, el pedido sale a recolección.', etiquetaConfirmar: 'Marcar enviado', variante: 'primary' }
             : null;
 
     if (items.length === 0) {

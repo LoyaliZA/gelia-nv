@@ -49,6 +49,7 @@ class EnviarPedidoBmaService
 
             $pedido->update([
                 'catalogo_estatus_pedido_id' => $estatusNuevo->id,
+                'estatus_envio' => $this->resolverEstatusEnvioAlEnviar($pedido),
                 'motivo_rechazo' => null,
                 'pago_validado_at' => null,
                 'pago_validado_por_id' => null,

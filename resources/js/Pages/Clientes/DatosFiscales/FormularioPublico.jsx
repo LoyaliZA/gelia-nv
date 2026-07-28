@@ -1,29 +1,85 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Head, useForm } from '@inertiajs/react';
 import {
     geliaCardClass,
     THEME_BTN_PRIMARY,
     THEME_INPUT,
 } from '../../../utils/geliaTheme';
+import SelectorCatalogoFiscal from '../../../Components/Facturas/SelectorCatalogoFiscal';
+import {
+    esRegimenSueldosSalarios,
+    usoCfdiParaRegimen,
+    USO_SIN_EFECTOS_FISCALES,
+} from '../../../utils/reglasCatalogosFiscales';
 
 const LABEL = 'mb-1.5 block text-[9px] font-black uppercase tracking-widest theme-text-muted';
+const INPUT_ERROR = '!border-red-500 focus:!border-red-500 focus:!ring-red-500/30';
+
+function opcionesCatalogo(catalogos, clave) {
+    if (clave === 'regimen_fiscal') return catalogos?.regimen_fiscal || [];
+    if (clave === 'uso_factura') return catalogos?.uso_cfdi || [];
+    return null;
+}
+
+function esCorreoValido(valor) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(valor || '').trim());
+}
 
 export default function FormularioPublico({
     token,
     cliente,
     campos = [],
     destinatario_tipo = 'cliente',
+    catalogos = { regimen_fiscal: [], uso_cfdi: [] },
 }) {
     const initial = { token: token || '' };
     campos.forEach((c) => {
         initial[c.clave] = '';
     });
 
-    const { data, setData, post, processing, errors } = useForm(initial);
+    const { data, setData, post, processing, errors, setError, clearErrors } = useForm(initial);
+
+    const usoBloqueado = esRegimenSueldosSalarios(data.regimen_fiscal);
+    const tieneUso = campos.some((c) => c.clave === 'uso_factura');
+
+    useEffect(() => {
+        if (!tieneUso) return;
+        const forzado = usoCfdiParaRegimen(data.regimen_fiscal);
+        if (forzado && data.uso_factura !== forzado) {
+            setData('uso_factura', forzado);
+        }
+    }, [data.regimen_fiscal, data.uso_factura, tieneUso, setData]);
 
     const enviar = (e) => {
         e.preventDefault();
         if (!data.token) return;
+
+        clearErrors();
+        let ok = true;
+
+        for (const campo of campos) {
+            const val = String(data[campo.clave] ?? '').trim();
+            if (!val) {
+                setError(campo.clave, 'Este campo es obligatorio.');
+                ok = false;
+                continue;
+            }
+            if (campo.clave === 'correo_electronico' && !esCorreoValido(val)) {
+                setError(campo.clave, 'Ingrese un correo electrónico válido.');
+                ok = false;
+            }
+            if (campo.clave === 'telefono' && !/^\d{1,10}$/.test(val)) {
+                setError(campo.clave, 'El teléfono solo admite dígitos (máximo 10).');
+                ok = false;
+            }
+            if (campo.clave === 'codigo_postal' && !/^\d{5}$/.test(val)) {
+                setError(campo.clave, 'El código postal debe tener 5 dígitos.');
+                ok = false;
+            }
+        }
+
+        if (!ok) return;
+
         post(route('datos_fiscales.publicas.store'), { preserveScroll: true });
     };
 
@@ -57,37 +113,106 @@ export default function FormularioPublico({
                     </div>
                 )}
 
-                <form onSubmit={enviar} className="mt-8 space-y-5" autoComplete="off">
+                <form onSubmit={enviar} className="mt-8 space-y-5" autoComplete="off" noValidate>
                     <input type="hidden" name="token" value={data.token} />
 
                     <section className={seccion}>
                         <h2 className="text-[10px] font-black uppercase tracking-[0.2em] theme-text-main m-0">Información fiscal</h2>
                         <div className="grid gap-4 md:grid-cols-2">
-                            {campos.map((campo) => (
-                                <div key={campo.clave} className={campo.clave === 'nombre_razon_social' || campo.clave === 'correo_electronico' ? 'md:col-span-2' : ''}>
-                                    <label className={LABEL}>{campo.etiqueta}</label>
-                                    <input
-                                        className={THEME_INPUT}
-                                        value={data[campo.clave] || ''}
-                                        onChange={(e) => {
-                                            let val = e.target.value;
-                                            if (campo.clave === 'rfc') val = val.toUpperCase().replace(/\s+/g, '');
-                                            if (campo.clave === 'codigo_postal') val = val.replace(/\D/g, '').slice(0, 5);
-                                            setData(campo.clave, val);
-                                        }}
-                                        required
-                                        maxLength={campo.clave === 'rfc' ? 13 : campo.clave === 'codigo_postal' ? 5 : 255}
-                                        inputMode={campo.clave === 'codigo_postal' || campo.clave === 'telefono' ? 'numeric' : campo.clave === 'correo_electronico' ? 'email' : 'text'}
-                                    />
-                                    {errors[campo.clave] && (
-                                        <p className="mt-1 text-xs text-red-500 m-0">{errors[campo.clave]}</p>
-                                    )}
-                                </div>
-                            ))}
+                            {campos.map((campo) => {
+                                const opciones = opcionesCatalogo(catalogos, campo.clave);
+                                const esSelect = Array.isArray(opciones);
+                                const spanAncho = campo.clave === 'nombre_razon_social'
+                                    || campo.clave === 'correo_electronico'
+                                    || campo.clave === 'regimen_fiscal'
+                                    || campo.clave === 'uso_factura';
+                                const esUsoBloqueado = campo.clave === 'uso_factura' && usoBloqueado;
+                                const tieneError = Boolean(errors[campo.clave]);
+
+                                return (
+                                    <div key={campo.clave} className={spanAncho ? 'md:col-span-2' : ''}>
+                                        <label className={`${LABEL} ${tieneError ? 'text-red-500' : ''}`}>
+                                            {campo.etiqueta}
+                                        </label>
+                                        {esSelect ? (
+                                            <SelectorCatalogoFiscal
+                                                opciones={
+                                                    esUsoBloqueado
+                                                        ? (opciones.filter((o) => o.codigo === USO_SIN_EFECTOS_FISCALES).length
+                                                            ? opciones.filter((o) => o.codigo === USO_SIN_EFECTOS_FISCALES)
+                                                            : [{ codigo: USO_SIN_EFECTOS_FISCALES, nombre: 'Sin efectos fiscales' }])
+                                                        : opciones
+                                                }
+                                                value={data[campo.clave] || ''}
+                                                onChange={(codigo) => {
+                                                    clearErrors(campo.clave);
+                                                    if (campo.clave === 'regimen_fiscal') {
+                                                        const forzado = usoCfdiParaRegimen(codigo);
+                                                        if (forzado && tieneUso) {
+                                                            setData((prev) => ({
+                                                                ...prev,
+                                                                regimen_fiscal: codigo,
+                                                                uso_factura: forzado,
+                                                            }));
+                                                            clearErrors('uso_factura');
+                                                            return;
+                                                        }
+                                                    }
+                                                    setData(campo.clave, codigo);
+                                                }}
+                                                required
+                                                disabled={esUsoBloqueado}
+                                                invalid={tieneError}
+                                            />
+                                        ) : (
+                                            <input
+                                                type={campo.clave === 'correo_electronico' ? 'email' : 'text'}
+                                                className={`${THEME_INPUT} ${tieneError ? INPUT_ERROR : ''}`}
+                                                value={data[campo.clave] || ''}
+                                                onChange={(e) => {
+                                                    let val = e.target.value;
+                                                    if (campo.clave === 'rfc') val = val.toUpperCase().replace(/[^A-ZÑ&0-9]/gi, '').slice(0, 13);
+                                                    if (campo.clave === 'codigo_postal') val = val.replace(/\D/g, '').slice(0, 5);
+                                                    if (campo.clave === 'correo_electronico') val = val.toLowerCase();
+                                                    if (campo.clave === 'telefono') val = val.replace(/\D/g, '').slice(0, 10);
+                                                    setData(campo.clave, val);
+                                                    if (errors[campo.clave]) clearErrors(campo.clave);
+                                                }}
+                                                onBlur={() => {
+                                                    if (campo.clave !== 'correo_electronico') return;
+                                                    const val = String(data.correo_electronico || '').trim();
+                                                    if (val && !esCorreoValido(val)) {
+                                                        setError('correo_electronico', 'Ingrese un correo electrónico válido.');
+                                                    }
+                                                }}
+                                                required
+                                                maxLength={
+                                                    campo.clave === 'rfc' ? 13
+                                                        : campo.clave === 'codigo_postal' ? 5
+                                                            : campo.clave === 'telefono' ? 10
+                                                                : 255
+                                                }
+                                                inputMode={campo.clave === 'codigo_postal' || campo.clave === 'telefono' ? 'numeric' : campo.clave === 'correo_electronico' ? 'email' : 'text'}
+                                                autoCapitalize={campo.clave === 'correo_electronico' ? 'none' : campo.clave === 'rfc' ? 'characters' : undefined}
+                                                autoCorrect={campo.clave === 'correo_electronico' || campo.clave === 'rfc' ? 'off' : undefined}
+                                                aria-invalid={tieneError}
+                                            />
+                                        )}
+                                        {esUsoBloqueado && (
+                                            <p className="mt-1 text-[10px] font-bold theme-text-muted m-0">
+                                                Bloqueado por Regimen fiscal: {data.regimen_fiscal}.
+                                            </p>
+                                        )}
+                                        {tieneError && (
+                                            <p className="mt-1 text-xs text-red-500 font-bold m-0">{errors[campo.clave]}</p>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </section>
 
-                    {errors.token && <p className="text-xs text-red-500 m-0">{errors.token}</p>}
+                    {errors.token && <p className="text-xs text-red-500 font-bold m-0">{errors.token}</p>}
 
                     <button type="submit" disabled={processing || !data.token} className={`${THEME_BTN_PRIMARY} w-full !py-4 disabled:opacity-50`}>
                         {processing ? 'Guardando…' : 'Enviar datos fiscales'}

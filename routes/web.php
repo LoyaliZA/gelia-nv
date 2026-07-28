@@ -205,6 +205,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/imagenes/importar/{id}', [\App\Http\Controllers\TiendanubeController::class, 'progresoImportImagenes'])->name('imagenes.importar.progreso');
         Route::put('/configuracion', [\App\Http\Controllers\TiendanubeController::class, 'guardarConfiguracion'])->name('configuracion.update')->middleware('can:tiendanube.configurar');
         Route::post('/configuracion/probar-conexion', [\App\Http\Controllers\TiendanubeController::class, 'probarConexion'])->name('configuracion.probar_conexion')->middleware('can:tiendanube.configurar');
+        Route::post('/catalogo/limpiar', [\App\Http\Controllers\TiendanubeController::class, 'limpiarCatalogo'])->name('catalogo.limpiar')->middleware('can:tiendanube.configurar');
         Route::get('/webhooks', [\App\Http\Controllers\TiendanubeController::class, 'listarWebhooks'])->name('webhooks.index')->middleware('can:tiendanube.configurar');
         Route::post('/webhooks/aplicar-recomendados', [\App\Http\Controllers\TiendanubeController::class, 'aplicarWebhooksRecomendados'])->name('webhooks.aplicar_recomendados')->middleware('can:tiendanube.configurar');
         Route::post('/webhooks', [\App\Http\Controllers\TiendanubeController::class, 'crearWebhook'])->name('webhooks.store')->middleware('can:tiendanube.configurar');
@@ -471,7 +472,10 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:control_pedidos.crear'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/', [PedidoBmaController::class, 'store'])->name('store');
         Route::post('/autoguardar', [PedidoBmaController::class, 'autoguardar'])->name('autoguardar');
+        Route::get('/candidatos-principal', [PedidoBmaController::class, 'candidatosPrincipal'])->name('candidatos_principal');
+        Route::post('/{pedidoBma}/completar-envio-resguardo', [PedidoBmaController::class, 'completarEnvioResguardo'])->name('completar_envio_resguardo');
         Route::put('/{pedidoBma}/enviar', [PedidoBmaController::class, 'enviar'])->name('enviar');
+        Route::post('/{pedidoBma}/anexar-pago-envio', [PedidoBmaController::class, 'anexarPagoEnvio'])->name('anexar_pago_envio');
         Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
             Route::post('/cliente/{cliente}/enlace-direccion', [DireccionesAuxiliarController::class, 'generarEnlace'])
                 ->name('enlace_direccion');
@@ -499,6 +503,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/aprobar', [PedidoBmaAuditoriaController::class, 'aprobar'])->name('aprobar');
         Route::post('/{pedidoBma}/rechazar', [PedidoBmaAuditoriaController::class, 'rechazar'])->name('rechazar');
         Route::post('/{pedidoBma}/liberar-resguardo', [PedidoBmaAuditoriaController::class, 'liberarResguardo'])->name('liberar_resguardo');
+        Route::post('/{pedidoBma}/anexar-pago-envio', [PedidoBmaAuditoriaController::class, 'anexarPagoEnvio'])->name('anexar_pago_envio');
+        Route::post('/{pedidoBma}/anexo-envio/aprobar', [PedidoBmaAuditoriaController::class, 'aprobarAnexoEnvio'])->name('anexo_envio.aprobar');
+        Route::post('/{pedidoBma}/anexo-envio/rechazar', [PedidoBmaAuditoriaController::class, 'rechazarAnexoEnvio'])->name('anexo_envio.rechazar');
     });
 
     // Submódulo Direcciones (Auxiliar) — sin acceso al módulo Clientes

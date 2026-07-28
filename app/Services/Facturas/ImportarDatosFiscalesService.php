@@ -25,7 +25,7 @@ class ImportarDatosFiscalesService
             'codigo_postal' => 'Código Postal',
             'regimen_fiscal' => 'Régimen Fiscal',
             'correo_electronico' => 'Correo Electrónico',
-            'uso_factura' => 'Uso de Factura',
+            'uso_factura' => 'Uso de CFDI',
             'nombre_razon_social' => 'Nombre (Razón Social)',
             'telefono' => 'Número Telefónico',
         ];

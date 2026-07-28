@@ -7,6 +7,7 @@ use App\Http\Requests\Facturas\StoreDatosFiscalesPublicosRequest;
 use App\Models\EnlaceDatosFiscales;
 use App\Services\Facturas\AplicarDatosFiscalesPublicosDesdeEnlaceService;
 use App\Services\Facturas\ImportarDatosFiscalesService;
+use App\Services\Facturas\ListarCatalogosFiscalesService;
 use App\Services\Facturas\ValidarEnlaceDatosFiscalesService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -15,7 +16,7 @@ use Inertia\Response;
 
 class DatosFiscalesPublicosController extends Controller
 {
-    public function show(Request $request, ValidarEnlaceDatosFiscalesService $validador, ?string $codigo = null): Response
+    public function show(Request $request, ValidarEnlaceDatosFiscalesService $validador, ListarCatalogosFiscalesService $catalogos, ?string $codigo = null): Response
     {
         $token = $codigo !== null && $codigo !== ''
             ? $codigo
@@ -88,6 +89,7 @@ class DatosFiscalesPublicosController extends Controller
                 'clave' => $clave,
                 'etiqueta' => $etiquetas[$clave] ?? $clave,
             ])->values()->all(),
+            'catalogos' => $catalogos->activosParaUi(),
         ]);
     }
 

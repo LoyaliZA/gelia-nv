@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import {
     badgeAuditoriaSemantico,
+    badgeEstatusEnvio,
+    badgeConComplementos,
     formatearMoneda,
     etiquetaAlmacen,
     formatearFechaNegocio,
@@ -15,6 +17,9 @@ import {
     THEME_LABEL,
     BTN_PRIMARY,
     BTN_SECONDARY,
+    anexoEnvioPendienteDe,
+    puedeAnexarPagoEnvio,
+    LABELS_ESTATUS_ENVIO,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/ModalVistaPreviaDocumento';
@@ -25,6 +30,7 @@ import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import ModalCambiarDireccion from '../../Partials/ModalCambiarDireccion';
+import ModalLiberarResguardoAbierto from './ModalLiberarResguardoAbierto';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
@@ -39,7 +45,7 @@ const Campo = ({ label, value }) => (
 const comprobantesDe = (pedido) => (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' || !d.tipo);
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 
-export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoInicial }) {
+export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoInicial, bancos = [] }) {
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
@@ -48,6 +54,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [docPreview, setDocPreview] = useState(null);
     const [confirmacion, setConfirmacion] = useState(null);
     const [motivoRechazoAbierto, setMotivoRechazoAbierto] = useState(false);
+    const [motivoAnexoAbierto, setMotivoAnexoAbierto] = useState(false);
+    const [liberarCapturaAbierto, setLiberarCapturaAbierto] = useState(false);
     const [cambiarDir, setCambiarDir] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
 
@@ -57,6 +65,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             setProcesando(false);
             setConfirmacion(null);
             setMotivoRechazoAbierto(false);
+            setMotivoAnexoAbierto(false);
+            setLiberarCapturaAbierto(false);
             setDocPreview(null);
         }
     }, [abierto, pedidoInicial?.id]);
@@ -65,13 +75,21 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
 
     const fase = pedido.estatus?.fase_ciclo;
     const badge = badgeAuditoriaSemantico(fase, pedido.es_resguardo);
+    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
+    const badgeComp = badgeConComplementos(pedido);
     const esPendiente = fase === 'PENDIENTE_AUXILIAR';
     const puedeLiberarResguardo = Boolean(pedido.es_resguardo) && (esPendiente || fase === 'EN_CEDIS');
+    const requiereCapturaLiberacion = Boolean(pedido.es_resguardo)
+        && (pedido.tipo_operacion_envio?.codigo === 'RESGUARDO_ABIERTO'
+            || pedido.estatus_envio === 'pendiente_liberacion');
     const esRechazado = fase === 'RECHAZADO_VENDEDORA';
     const comprobantes = comprobantesDe(pedido);
     const remision = remisionDe(pedido);
     const pagoValidado = Boolean(pedido.pago_validado_at);
     const puedeAprobar = esPendiente && pagoValidado && Boolean(remision);
+    const anexoPendiente = anexoEnvioPendienteDe(pedido);
+    const puedeRevisarAnexo = Boolean(anexoPendiente) && pedido.estatus_envio === 'pendiente_revision_anexo';
+    const puedeAnexar = puedeAnexarPagoEnvio(pedido);
 
 
     const recargarPedido = (mensajeExito = null) => {
@@ -146,6 +164,17 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo liberar el resguardo.' }),
                 onFinish: () => setProcesando(false),
             });
+            return;
+        }
+
+        if (accion === 'aprobar_anexo') {
+            setProcesando(true);
+            router.post(route('control_pedidos.auditar.anexo_envio.aprobar', pedido.id), {}, {
+                preserveScroll: true,
+                onSuccess: () => recargarPedido('Anexo de envío aprobado.'),
+                onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo aprobar el anexo.' }),
+                onFinish: () => setProcesando(false),
+            });
         }
     };
 
@@ -158,6 +187,17 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 onClose();
             },
             onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo rechazar el pedido.' }),
+        });
+    };
+
+    const enviarRechazoAnexo = (motivo) => {
+        setMotivoAnexoAbierto(false);
+        setProcesando(true);
+        router.post(route('control_pedidos.auditar.anexo_envio.rechazar', pedido.id), { motivo }, {
+            preserveScroll: true,
+            onSuccess: () => recargarPedido('Anexo de envío rechazado.'),
+            onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo rechazar el anexo.' }),
+            onFinish: () => setProcesando(false),
         });
     };
 
@@ -178,6 +218,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             titulo: 'Liberar resguardo',
             mensaje: '¿Liberar el resguardo de este pedido?',
             etiquetaConfirmar: 'Liberar',
+            variante: 'primary',
+        },
+        aprobar_anexo: {
+            titulo: 'Aprobar anexo de envío',
+            mensaje: '¿Aprobar el pago de envío y actualizar el costo del pedido?',
+            etiquetaConfirmar: 'Aprobar anexo',
             variante: 'primary',
         },
     };
@@ -297,6 +343,16 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
 
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>4. Envío, costos y dirección</p>
+                            <div className="grid grid-cols-2 gap-4 mb-3">
+                                <Campo label="Tipo operación" value={pedido.tipo_operacion_envio?.nombre} />
+                                <Campo label="Estatus envío" value={LABELS_ESTATUS_ENVIO[pedido.estatus_envio] || pedido.estatus_envio} />
+                            </div>
+                            {badgeEnvio && (
+                                <span className={`${badgeEnvio.className} mb-3 inline-flex`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
+                            )}
+                            {badgeComp && (
+                                <span className={`${badgeComp.className} mb-3 ml-2 inline-flex`} style={badgeComp.style}>{badgeComp.label}</span>
+                            )}
                             <div className="grid grid-cols-2 gap-4">
                                 <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
                                 <Campo label="Tipo caja" value={pedido.tipo_caja?.nombre} />
@@ -352,6 +408,70 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             </div>
                         </section>
 
+                        {(anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && (
+                            <section className={SECCION_WRAP}>
+                                <p className={SECCION}>Anexo de pago de envío</p>
+                                {anexoPendiente ? (
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <Campo label="Monto" value={formatearMoneda(anexoPendiente.monto)} />
+                                            <Campo label="Banco" value={anexoPendiente.banco?.nombre} />
+                                            <Campo label="Registrado por" value={anexoPendiente.registrado_por?.name} />
+                                            <Campo label="Fecha" value={formatearFechaHoraAuditoria(anexoPendiente.created_at)} />
+                                        </div>
+                                        {anexoPendiente.comentarios && (
+                                            <Campo label="Comentarios" value={anexoPendiente.comentarios} />
+                                        )}
+                                        <MiniaturaDocumento
+                                            documento={{
+                                                ...anexoPendiente,
+                                                tipo: 'comprobante',
+                                                nombre_original: anexoPendiente.nombre_original || 'Comprobante envío',
+                                            }}
+                                            onVer={setDocPreview}
+                                        />
+                                        {puedeRevisarAnexo && (
+                                            <div className="flex flex-wrap gap-2 pt-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setConfirmacion({ accion: 'aprobar_anexo' })}
+                                                    disabled={procesando}
+                                                    className={`${BTN_PRIMARY} outline-none`}
+                                                >
+                                                    Aprobar anexo
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMotivoAnexoAbierto(true)}
+                                                    disabled={procesando}
+                                                    className={`${BTN_SECONDARY} border border-red-500/40 text-red-500 outline-none`}
+                                                >
+                                                    Rechazar anexo
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs theme-text-muted font-bold italic m-0">
+                                        {puedeAnexar
+                                            ? 'Sin anexo pendiente. Use la acción Anexar pago de envío desde el listado.'
+                                            : 'Sin anexo de envío pendiente.'}
+                                    </p>
+                                )}
+                                {(pedido.anexos_envio || []).filter((a) => a.estatus !== 'pendiente').length > 0 && (
+                                    <div className="mt-4 space-y-2">
+                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Historial de anexos</p>
+                                        {(pedido.anexos_envio || []).filter((a) => a.estatus !== 'pendiente').map((a) => (
+                                            <p key={a.id} className="text-xs font-bold theme-text-muted m-0">
+                                                {a.estatus} · {formatearMoneda(a.monto)} · {formatearFechaHoraAuditoria(a.created_at)}
+                                                {a.motivo_rechazo ? ` · ${a.motivo_rechazo}` : ''}
+                                            </p>
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
+                        )}
+
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>5. Remisión</p>
                             {remision ? (
@@ -406,7 +526,13 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         {puedeLiberarResguardo && (
                             <button
                                 type="button"
-                                onClick={() => setConfirmacion({ accion: 'liberar' })}
+                                onClick={() => {
+                                    if (requiereCapturaLiberacion) {
+                                        setLiberarCapturaAbierto(true);
+                                    } else {
+                                        setConfirmacion({ accion: 'liberar' });
+                                    }
+                                }}
                                 disabled={procesando}
                                 className={`${BTN_SECONDARY} theme-element border border-blue-500/40 text-blue-600 outline-none`}
                             >
@@ -448,6 +574,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 onClose={() => setMotivoRechazoAbierto(false)}
                 onConfirm={enviarRechazo}
             />
+            <ModalMotivoRechazo
+                abierto={motivoAnexoAbierto}
+                onClose={() => setMotivoAnexoAbierto(false)}
+                onConfirm={enviarRechazoAnexo}
+                titulo="Rechazar anexo de envío"
+            />
             <ModalAlertaPedido
                 abierto={alerta.abierto}
                 tipo={alerta.tipo}
@@ -456,6 +588,16 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 onClose={() => setAlerta({ ...alerta, abierto: false })}
             />
             <ModalCambiarDireccion abierto={cambiarDir} onClose={() => setCambiarDir(false)} pedido={pedido} />
+            <ModalLiberarResguardoAbierto
+                abierto={liberarCapturaAbierto}
+                pedido={pedido}
+                bancos={bancos}
+                onClose={() => setLiberarCapturaAbierto(false)}
+                onSuccess={() => {
+                    setLiberarCapturaAbierto(false);
+                    recargarPedido('Resguardo liberado correctamente.');
+                }}
+            />
         </>,
         document.body
     );

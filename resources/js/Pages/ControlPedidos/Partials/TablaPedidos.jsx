@@ -1,18 +1,46 @@
 import React, { useState } from 'react';
-import { Eye, Edit2, Trash2, AlertTriangle, History } from 'lucide-react';
+import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck } from 'lucide-react';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
-import { badgeEstatusPedido, formatearMoneda, etiquetaAlmacen, formatearFechaNegocio, tieneGuiaLista, badgeGuiaLista, tieneGuiaPdfDisponible } from './pedidosBmaStyles';
+import {
+    badgeEstatusPedido,
+    badgeEstatusEnvio,
+    formatearMoneda,
+    etiquetaAlmacen,
+    formatearFechaNegocio,
+    tieneGuiaLista,
+    badgeGuiaLista,
+    tieneGuiaPdfDisponible,
+    puedeAnexarPagoEnvio,
+    puedeCompletarEnvioResguardo,
+} from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import BotonGuiaPdf from './BotonGuiaPdf';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 
-function AccionesPedido({ pedido, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, puedeEditar, puedeEliminar, compact = false }) {
+function AccionesPedido({
+    pedido, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio,
+    puedeEditar, puedeEliminar, compact = false,
+}) {
     const btnClass = compact ? 'p-2.5' : 'p-2';
+    const puedeAnexar = puedeAnexarPagoEnvio(pedido) && (can('control_pedidos.crear') || can('control_pedidos.auditar'));
+    const puedeCompletar = puedeCompletarEnvioResguardo(pedido)
+        && (can('control_pedidos.crear') || can('control_pedidos.editar'))
+        && onCompletarEnvio;
     return (
         <div className={`flex ${compact ? 'flex-wrap' : 'justify-end'} gap-1.5`}>
             {tieneGuiaPdfDisponible(pedido) && onVerGuia && (
                 <BotonGuiaPdf pedido={pedido} onVerPdf={onVerGuia} compact className="!px-3 !py-2" />
+            )}
+            {puedeCompletar && (
+                <button type="button" onClick={() => onCompletarEnvio(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-teal-500`} title="Completar envío del resguardo">
+                    <PackageCheck className="w-4 h-4 text-teal-600" />
+                </button>
+            )}
+            {puedeAnexar && onAnexarEnvio && (
+                <button type="button" onClick={() => onAnexarEnvio(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-amber-500`} title="Anexar pago de envío">
+                    <Receipt className="w-4 h-4 text-amber-600" />
+                </button>
             )}
             {can('control_pedidos.ver_detalle') && (
                 <button type="button" onClick={() => onVer(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-[var(--color-primario)]`} title="Ver">
@@ -38,7 +66,7 @@ function AccionesPedido({ pedido, can, onVer, onEditar, onEliminar, onBitacora, 
     );
 }
 
-function CardPedido({ pedido, badge, esRechazado, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, puedeEditar, puedeEliminar }) {
+function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, puedeEditar, puedeEliminar }) {
     const guiaLista = tieneGuiaLista(pedido);
     const badgeGuia = badgeGuiaLista();
 
@@ -56,6 +84,9 @@ function CardPedido({ pedido, badge, esRechazado, can, onVer, onEditar, onElimin
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <span className={badge.className} style={badge.style}>{badge.label}</span>
+                    {badgeEnvio && (
+                        <span className={badgeEnvio.className} style={badgeEnvio.style}>{badgeEnvio.label}</span>
+                    )}
                     {guiaLista && (
                         <span className={badgeGuia.className}>{badgeGuia.label}</span>
                     )}
@@ -89,6 +120,8 @@ function CardPedido({ pedido, badge, esRechazado, can, onVer, onEditar, onElimin
                 onEliminar={onEliminar}
                 onBitacora={onBitacora}
                 onVerGuia={onVerGuia}
+                onAnexarEnvio={onAnexarEnvio}
+                onCompletarEnvio={onCompletarEnvio}
                 puedeEditar={puedeEditar}
                 puedeEliminar={puedeEliminar}
                 compact
@@ -104,6 +137,8 @@ export default function TablaPedidos({
     onEditar,
     onEliminar,
     onBitacora,
+    onAnexarEnvio,
+    onCompletarEnvio,
 }) {
     const [docPreview, setDocPreview] = useState(null);
     const items = pedidos?.data || [];
@@ -125,13 +160,13 @@ export default function TablaPedidos({
 
     return (
         <div className={`${geliaCardClass()} overflow-hidden`}>
-            {/* Vista móvil: cards */}
             <div className="md:hidden p-4 space-y-3">
                 {items.map((pedido) => (
                     <CardPedido
                         key={pedido.id}
                         pedido={pedido}
                         badge={badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo })}
+                        badgeEnvio={badgeEstatusEnvio(pedido.estatus_envio)}
                         esRechazado={pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA'}
                         can={can}
                         onVer={onVer}
@@ -139,13 +174,14 @@ export default function TablaPedidos({
                         onEliminar={onEliminar}
                         onBitacora={onBitacora}
                         onVerGuia={setDocPreview}
+                        onAnexarEnvio={onAnexarEnvio}
+                        onCompletarEnvio={onCompletarEnvio}
                         puedeEditar={puedeEditar}
                         puedeEliminar={puedeEliminar}
                     />
                 ))}
             </div>
 
-            {/* Vista desktop: tabla */}
             <div className="hidden md:block overflow-x-auto">
                 <table className="w-full border-collapse">
                     <thead>
@@ -163,6 +199,7 @@ export default function TablaPedidos({
                     <tbody>
                         {items.map((pedido) => {
                             const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
+                            const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
                             const esRechazado = pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA';
                             const guiaLista = tieneGuiaLista(pedido);
                             const badgeGuia = badgeGuiaLista();
@@ -192,6 +229,9 @@ export default function TablaPedidos({
                                         <span className={badge.className} style={badge.style}>
                                             {badge.label}
                                         </span>
+                                        {badgeEnvio && (
+                                            <span className={`${badgeEnvio.className} mt-1.5 block w-fit`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
+                                        )}
                                         {guiaLista && (
                                             <span className={`${badgeGuia.className} mt-1.5 block w-fit`}>{badgeGuia.label}</span>
                                         )}
@@ -210,6 +250,8 @@ export default function TablaPedidos({
                                             onEliminar={onEliminar}
                                             onBitacora={onBitacora}
                                             onVerGuia={setDocPreview}
+                                            onAnexarEnvio={onAnexarEnvio}
+                                            onCompletarEnvio={onCompletarEnvio}
                                             puedeEditar={puedeEditar}
                                             puedeEliminar={puedeEliminar}
                                         />

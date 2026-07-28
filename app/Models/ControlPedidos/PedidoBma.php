@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PedidoBma extends Model
@@ -16,6 +17,14 @@ class PedidoBma extends Model
     use SoftDeletes;
 
     protected $table = 'pedidos_bma';
+
+    public const ESTATUS_ENVIO_COMPLETO = 'completo';
+    public const ESTATUS_ENVIO_PENDIENTE_REGULARIZACION = 'pendiente_regularizacion';
+    public const ESTATUS_ENVIO_PENDIENTE_REVISION_ANEXO = 'pendiente_revision_anexo';
+    public const ESTATUS_ENVIO_ANEXO_RECHAZADO = 'anexo_rechazado';
+    public const ESTATUS_ENVIO_PENDIENTE_LIBERACION = 'pendiente_liberacion';
+    public const ESTATUS_ENVIO_PENDIENTE_CONSOLIDACION = 'pendiente_consolidacion';
+    public const ESTATUS_ENVIO_CONSOLIDADO = 'consolidado';
 
     protected $fillable = [
         'folio',
@@ -25,11 +34,14 @@ class PedidoBma extends Model
         'cliente_id',
         'cliente_direccion_id',
         'origen_id',
+        'tipo_operacion_envio_id',
+        'pedido_principal_id',
         'almacen_id',
         'catalogo_banco_id',
         'saldo_a_favor',
         'catalogo_tipo_caja_id',
         'numero_cajas',
+        'cantidad_piezas',
         'peso_real_kg',
         'peso_volumetrico_kg',
         'peso_cobrado_guia_kg',
@@ -49,6 +61,7 @@ class PedidoBma extends Model
         'envia_a_otra_persona',
         'total_mercancia',
         'costo_envio',
+        'estatus_envio',
         'aplica_seguro',
         'costo_seguro',
         'total_a_cobrar',
@@ -97,6 +110,7 @@ class PedidoBma extends Model
         'costo_seguro' => 'decimal:2',
         'total_a_cobrar' => 'decimal:2',
         'numero_cajas' => 'integer',
+        'cantidad_piezas' => 'integer',
     ];
 
     public function vendedor(): BelongsTo
@@ -129,9 +143,138 @@ class PedidoBma extends Model
         return $this->belongsTo(CatalogoOrigenPedido::class, 'origen_id');
     }
 
+    public function tipoOperacionEnvio(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoTipoOperacionEnvio::class, 'tipo_operacion_envio_id');
+    }
+
+    public function anexosEnvio(): HasMany
+    {
+        return $this->hasMany(PedidoBmaAnexoEnvio::class, 'pedido_bma_id')->orderByDesc('created_at');
+    }
+
+    public function anexoEnvioPendiente(): HasOne
+    {
+        return $this->hasOne(PedidoBmaAnexoEnvio::class, 'pedido_bma_id')
+            ->where('estatus', PedidoBmaAnexoEnvio::ESTATUS_PENDIENTE)
+            ->latestOfMany();
+    }
+
+    public function miembroOperacionEmpaque(): HasOne
+    {
+        return $this->hasOne(OperacionEmpaqueMiembro::class, 'pedido_bma_id');
+    }
+
+    public function principal(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'pedido_principal_id');
+    }
+
+    public function complementos(): HasMany
+    {
+        return $this->hasMany(self::class, 'pedido_principal_id')->orderBy('id');
+    }
+
     public function envioTienda(): BelongsTo
     {
         return $this->belongsTo(CatalogoEnvioTienda::class, 'catalogo_envio_tienda_id');
+    }
+
+    public function esComplemento(): bool
+    {
+        return $this->pedido_principal_id !== null;
+    }
+
+    public function esPrincipalConComplementos(): bool
+    {
+        if ($this->esComplemento()) {
+            return false;
+        }
+
+        if ($this->relationLoaded('complementos')) {
+            return $this->complementos->isNotEmpty();
+        }
+
+        return $this->complementos()->exists();
+    }
+
+    public function raizEmpaque(): self
+    {
+        if ($this->esComplemento()) {
+            $this->loadMissing('principal');
+
+            return $this->principal ?? $this;
+        }
+
+        return $this;
+    }
+
+    public function folioVisibleCabecera(): string
+    {
+        if ($this->esComplemento()) {
+            $this->loadMissing('principal');
+
+            return (string) ($this->principal?->folio ?? $this->folio);
+        }
+
+        return (string) $this->folio;
+    }
+
+    public function esMunicipioDiferido(): bool
+    {
+        $this->loadMissing('tipoOperacionEnvio');
+
+        return (bool) $this->tipoOperacionEnvio?->esMunicipioDiferido();
+    }
+
+    public function esResguardoAbierto(): bool
+    {
+        $this->loadMissing('tipoOperacionEnvio');
+
+        return (bool) $this->tipoOperacionEnvio?->esResguardoAbierto();
+    }
+
+    public function esResguardoComplementario(): bool
+    {
+        $this->loadMissing('tipoOperacionEnvio');
+
+        return (bool) $this->tipoOperacionEnvio?->esResguardoComplementario();
+    }
+
+    /** @deprecated Fase 5: usar pedido_principal_id / complementos */
+    public function operacionEmpaqueActual(): ?OperacionEmpaque
+    {
+        $this->loadMissing('miembroOperacionEmpaque.operacion');
+
+        return $this->miembroOperacionEmpaque?->operacion;
+    }
+
+    /** @deprecated Fase 5 */
+    public function estaConsolidado(): bool
+    {
+        return $this->esPrincipalConComplementos()
+            || $this->esComplemento()
+            || $this->estatus_envio === self::ESTATUS_ENVIO_CONSOLIDADO;
+    }
+
+    public function puedeLiberarConCaptura(): bool
+    {
+        return $this->esResguardoAbierto()
+            && (bool) $this->es_resguardo
+            && $this->estatus_envio === self::ESTATUS_ENVIO_PENDIENTE_LIBERACION;
+    }
+
+    public function puedeAnexarPagoEnvio(): bool
+    {
+        return in_array($this->estatus_envio, [
+            self::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION,
+            self::ESTATUS_ENVIO_ANEXO_RECHAZADO,
+        ], true);
+    }
+
+    public function tieneAnexoEnvioPorRevisar(): bool
+    {
+        return $this->estatus_envio === self::ESTATUS_ENVIO_PENDIENTE_REVISION_ANEXO;
     }
 
     public function estatus(): BelongsTo
@@ -393,5 +536,17 @@ class PedidoBma extends Model
         $total = $mercancia + $envio + ($seguro ? $costoSeguro : 0) - $saldoFavor;
 
         return max(0, round($total, 2));
+    }
+
+    /**
+     * Fórmula Drive: se cobra el mayor entre peso real y peso volumétrico de la caja.
+     */
+    public static function calcularPesoCobradoGuia(?float $pesoReal, ?float $pesoVolumetrico): ?float
+    {
+        if ($pesoReal === null && $pesoVolumetrico === null) {
+            return null;
+        }
+
+        return round(max((float) ($pesoReal ?? 0), (float) ($pesoVolumetrico ?? 0)), 4);
     }
 }

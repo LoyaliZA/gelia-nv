@@ -4,6 +4,7 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\Cliente;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\CatalogoTipoOperacionEnvio;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use Illuminate\Http\UploadedFile;
@@ -28,14 +29,25 @@ class CrearPedidoBmaService
                 throw new \RuntimeException('No se encontró el estatus BORRADOR en catálogo.');
             }
 
-            $clienteId = $this->resolverClienteId($datos);
+            $principal = $this->resolverPrincipalSiComplementario($datos);
+            if ($principal) {
+                $datos['pedido_principal_id'] = $principal->id;
+                $datos['cliente_id'] = $principal->cliente_id;
+                $datos['es_resguardo'] = true;
+                $datos['modo_resguardo'] = 'complementario';
+            }
+
+            $attrs = $this->atributosPedidoBase($datos);
+            $folio = $principal
+                ? $this->folioService->ejecutarComplemento($principal)
+                : $this->folioService->ejecutar();
 
             $pedido = PedidoBma::create(array_merge(
-                $this->atributosPedidoBase($datos),
+                $attrs,
                 [
-                    'folio' => $this->folioService->ejecutar(),
+                    'folio' => $folio,
                     'vendedor_id' => $vendedorId,
-                    'cliente_id' => $clienteId,
+                    'cliente_id' => $principal?->cliente_id ?? $this->resolverClienteId($datos),
                     'catalogo_estatus_pedido_id' => $estatusBorrador->id,
                 ]
             ));
@@ -44,8 +56,57 @@ class CrearPedidoBmaService
 
             $this->historialService->registrarCreacion($pedido->id, $vendedorId, $estatusBorrador->id);
 
-            return $pedido->load(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco']);
+            if ($principal) {
+                $this->historialService->ejecutar(
+                    $pedido->id,
+                    $vendedorId,
+                    $estatusBorrador->id,
+                    $estatusBorrador->id,
+                    "Complemento de {$principal->folio}."
+                );
+            }
+
+            return $pedido->load(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'principal']);
         });
+    }
+
+    private function resolverPrincipalSiComplementario(array $datos): ?PedidoBma
+    {
+        $esResguardo = filter_var($datos['es_resguardo'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $modo = strtolower(trim((string) ($datos['modo_resguardo'] ?? '')));
+        $tipoId = $datos['tipo_operacion_envio_id'] ?? null;
+        $esComplementario = $modo === 'complementario'
+            || ($tipoId && CatalogoTipoOperacionEnvio::find((int) $tipoId)?->esResguardoComplementario());
+
+        if (!$esResguardo || !$esComplementario) {
+            return null;
+        }
+
+        $principalId = (int) ($datos['pedido_principal_id'] ?? 0);
+        if ($principalId < 1) {
+            throw new \InvalidArgumentException('Seleccione el pedido principal a complementar.');
+        }
+
+        $principal = PedidoBma::with(['estatus', 'tipoOperacionEnvio'])->find($principalId);
+        if (!$principal) {
+            throw new \InvalidArgumentException('El pedido principal no existe.');
+        }
+
+        $this->validarPrincipalParaComplemento($principal, $this->resolverClienteId($datos));
+
+        return $principal;
+    }
+
+    /** Reglas de vínculo: padre no es complemento; mismo cliente. Resguardo abierto pendiente de liberación sí es válido. */
+    public function validarPrincipalParaComplemento(PedidoBma $principal, ?int $clienteId): void
+    {
+        if ($principal->esComplemento()) {
+            throw new \InvalidArgumentException('No se puede complementar un pedido que ya es complemento.');
+        }
+
+        if ($clienteId && (int) $principal->cliente_id !== $clienteId) {
+            throw new \InvalidArgumentException('El pedido principal debe ser del mismo cliente.');
+        }
     }
 
     private function resolverClienteId(array $datos): ?int

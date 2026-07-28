@@ -3,13 +3,20 @@
 namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\LiberarResguardoPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\RechazarAnexoEnvioPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\RechazarPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SubirRemisionPedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Services\ControlPedidos\AnexarPagoEnvioPedidoBmaService;
+use App\Services\ControlPedidos\AprobarAnexoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\AprobarPedidoBmaService;
 use App\Services\ControlPedidos\GestionarRemisionPedidoBmaService;
 use App\Services\ControlPedidos\LiberarResguardoPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosAuditoriaService;
+use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
+use App\Services\ControlPedidos\RechazarAnexoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RechazarPedidoBmaService;
 use App\Services\ControlPedidos\ValidarPagoPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
@@ -21,14 +28,18 @@ use Inertia\Response;
 
 class PedidoBmaAuditoriaController extends Controller
 {
-    public function index(Request $request, ListarPedidosAuditoriaService $listarService): Response
-    {
+    public function index(
+        Request $request,
+        ListarPedidosAuditoriaService $listarService,
+        ObtenerCatalogosPedidoBmaService $catalogosService
+    ): Response {
         Gate::authorize('control_pedidos.auditar');
 
         return Inertia::render('ControlPedidos/Auditar/Index', [
             'pedidos' => $listarService->ejecutar($request->all()),
             'metricas' => $listarService->metricas(),
             'filtros' => $request->all(),
+            'catalogos' => $catalogosService->ejecutar(),
         ]);
     }
 
@@ -99,8 +110,54 @@ class PedidoBmaAuditoriaController extends Controller
         return redirect()->back()->with('success', 'Pedido rechazado y devuelto a la vendedora.');
     }
 
-    public function liberarResguardo(PedidoBma $pedidoBma, LiberarResguardoPedidoBmaService $service): RedirectResponse
-    {
+    public function liberarResguardo(
+        LiberarResguardoPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        LiberarResguardoPedidoBmaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.auditar');
+
+        try {
+            $datos = $request->validated();
+            $comprobante = $request->file('comprobante');
+            $service->ejecutar(
+                $pedidoBma,
+                Auth::id(),
+                $datos ?: null,
+                $comprobante
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Resguardo liberado correctamente.');
+    }
+
+    public function anexarPagoEnvio(
+        AnexarPagoEnvioPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        AnexarPagoEnvioPedidoBmaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.auditar');
+
+        try {
+            $service->ejecutar(
+                $pedidoBma,
+                $request->validated(),
+                $request->file('comprobante'),
+                Auth::id()
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Pago de envío anexado. Pendiente de revisión.');
+    }
+
+    public function aprobarAnexoEnvio(
+        PedidoBma $pedidoBma,
+        AprobarAnexoEnvioPedidoBmaService $service
+    ): RedirectResponse {
         Gate::authorize('control_pedidos.auditar');
 
         try {
@@ -109,6 +166,20 @@ class PedidoBmaAuditoriaController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Resguardo liberado correctamente.');
+        return redirect()->back()->with('success', 'Anexo de envío aprobado.');
+    }
+
+    public function rechazarAnexoEnvio(
+        RechazarAnexoEnvioPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        RechazarAnexoEnvioPedidoBmaService $service
+    ): RedirectResponse {
+        try {
+            $service->ejecutar($pedidoBma, Auth::id(), $request->validated('motivo'));
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Anexo de envío rechazado.');
     }
 }

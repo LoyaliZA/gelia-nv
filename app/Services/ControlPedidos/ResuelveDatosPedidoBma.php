@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEnvioTienda;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
+use App\Models\ControlPedidos\CatalogoTipoOperacionEnvio;
 use App\Models\ControlPedidos\PedidoBma;
 
 trait ResuelveDatosPedidoBma
@@ -118,27 +119,106 @@ trait ResuelveDatosPedidoBma
         ];
     }
 
+    protected function resolverTipoOperacionEnvioId(array $datos): ?int
+    {
+        $esResguardo = filter_var($datos['es_resguardo'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $modo = strtolower(trim((string) ($datos['modo_resguardo'] ?? '')));
+
+        if ($esResguardo) {
+            // Preferencia explícita de modo; si no, inferir de tipo enviado (edición legacy).
+            if ($modo === 'complementario') {
+                return CatalogoTipoOperacionEnvio::porCodigo(
+                    CatalogoTipoOperacionEnvio::CODIGO_RESGUARDO_COMPLEMENTARIO
+                )?->id ?? CatalogoTipoOperacionEnvio::idNormal();
+            }
+
+            if ($modo === 'abierto') {
+                return CatalogoTipoOperacionEnvio::porCodigo(
+                    CatalogoTipoOperacionEnvio::CODIGO_RESGUARDO_ABIERTO
+                )?->id ?? CatalogoTipoOperacionEnvio::idNormal();
+            }
+
+            if (!empty($datos['tipo_operacion_envio_id'])) {
+                $tipo = CatalogoTipoOperacionEnvio::find((int) $datos['tipo_operacion_envio_id']);
+                if ($tipo && in_array($tipo->codigo, [
+                    CatalogoTipoOperacionEnvio::CODIGO_RESGUARDO_ABIERTO,
+                    CatalogoTipoOperacionEnvio::CODIGO_RESGUARDO_COMPLEMENTARIO,
+                ], true)) {
+                    return $tipo->id;
+                }
+            }
+
+            return CatalogoTipoOperacionEnvio::porCodigo(
+                CatalogoTipoOperacionEnvio::CODIGO_RESGUARDO_ABIERTO
+            )?->id ?? CatalogoTipoOperacionEnvio::idNormal();
+        }
+
+        // No resguardo: nunca persistir tipos de resguardo aunque el FE envíe id viejo.
+        $paqueteriaId = $datos['catalogo_paqueteria_id'] ?? null;
+        if ($paqueteriaId) {
+            $paqueteria = CatalogoPaqueteriaPedido::find($paqueteriaId);
+            if ($paqueteria?->permiteCostoDiferido()) {
+                return CatalogoTipoOperacionEnvio::porCodigo(
+                    CatalogoTipoOperacionEnvio::CODIGO_MUNICIPIO_DIFERIDO
+                )?->id ?? CatalogoTipoOperacionEnvio::idNormal();
+            }
+        }
+
+        return CatalogoTipoOperacionEnvio::idNormal();
+    }
+
     protected function atributosPedidoBase(array $datos): array
     {
+        $tipoId = $this->resolverTipoOperacionEnvioId($datos);
+        $tipo = $tipoId ? CatalogoTipoOperacionEnvio::find($tipoId) : null;
+        $esResguardoAbierto = $tipo?->esResguardoAbierto() ?? false;
+        $esComplementario = $tipo?->esResguardoComplementario() ?? false;
+
+        if ($esComplementario && !empty($datos['pedido_principal_id'])) {
+            $principal = PedidoBma::find((int) $datos['pedido_principal_id']);
+            if ($principal) {
+                $datos = $this->aplicarLogisticaDesdePrincipal($datos, $principal);
+            }
+        }
+
+        if ($esResguardoAbierto || $esComplementario) {
+            $datos['costo_envio'] = null;
+            $datos['numero_cajas'] = null;
+            $datos['peso_real_kg'] = null;
+            $datos['peso_cobrado_guia_kg'] = null;
+            $datos['es_resguardo'] = true;
+        }
+
         $totales = $this->resolverTotales($datos);
         $envia = $this->resolverEnviaOtraPersona($datos);
         $envioTienda = $this->resolverEnvioTiendaDesdeOrigen($datos);
+        $pesoVolumetrico = ($esResguardoAbierto || $esComplementario) ? null : $this->resolverPesoVolumetrico($datos);
+        $pesoReal = isset($datos['peso_real_kg']) && $datos['peso_real_kg'] !== '' && $datos['peso_real_kg'] !== null
+            ? (float) $datos['peso_real_kg']
+            : null;
+        $pesoCobrado = ($esResguardoAbierto || $esComplementario)
+            ? null
+            : PedidoBma::calcularPesoCobradoGuia($pesoReal, $pesoVolumetrico);
 
-        return array_merge([
+        $attrs = array_merge([
             'folio_remision' => isset($datos['folio_remision']) && trim((string) $datos['folio_remision']) !== ''
                 ? trim((string) $datos['folio_remision'])
                 : null,
             'fecha' => $datos['fecha'] ?? now()->toDateString(),
             'origen_id' => $datos['origen_id'] ?? null,
+            'tipo_operacion_envio_id' => $tipoId,
+            'pedido_principal_id' => $esComplementario && !empty($datos['pedido_principal_id'])
+                ? (int) $datos['pedido_principal_id']
+                : null,
             'almacen_id' => $datos['almacen_id'] ?? null,
             'catalogo_banco_id' => $datos['catalogo_banco_id'] ?? null,
             'catalogo_tipo_caja_id' => $datos['catalogo_tipo_caja_id'] ?? null,
             'numero_cajas' => isset($datos['numero_cajas']) && $datos['numero_cajas'] !== ''
                 ? (int) $datos['numero_cajas']
                 : null,
-            'peso_real_kg' => $datos['peso_real_kg'] ?? null,
-            'peso_volumetrico_kg' => $this->resolverPesoVolumetrico($datos),
-            'peso_cobrado_guia_kg' => $datos['peso_cobrado_guia_kg'] ?? null,
+            'peso_real_kg' => $pesoReal,
+            'peso_volumetrico_kg' => $pesoVolumetrico,
+            'peso_cobrado_guia_kg' => $pesoCobrado,
             'catalogo_paqueteria_id' => $datos['catalogo_paqueteria_id'] ?? null,
             'catalogo_tipo_guia_id' => $datos['catalogo_tipo_guia_id'] ?? null,
             'catalogo_zona_id' => $datos['catalogo_zona_id'] ?? null,
@@ -147,9 +227,46 @@ trait ResuelveDatosPedidoBma
             'cliente_direccion_id' => isset($datos['cliente_direccion_id']) && $datos['cliente_direccion_id'] !== ''
                 ? (int) $datos['cliente_direccion_id']
                 : null,
-            'es_resguardo' => filter_var($datos['es_resguardo'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'es_resguardo' => $esResguardoAbierto || $esComplementario
+                ? true
+                : filter_var($datos['es_resguardo'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'anexar_remision' => filter_var($datos['anexar_remision'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'comentarios_drive' => $datos['comentarios_drive'] ?? null,
         ], $envioTienda, $envia, $totales);
+
+        if ($esResguardoAbierto || $esComplementario) {
+            $attrs['costo_envio'] = null;
+            $attrs['numero_cajas'] = null;
+            $attrs['peso_real_kg'] = null;
+            $attrs['peso_cobrado_guia_kg'] = null;
+            $attrs['peso_volumetrico_kg'] = null;
+            $attrs['es_resguardo'] = true;
+        }
+
+        return $attrs;
+    }
+
+    /** Copia logística del padre hacia el hijo (peso/cajas/costo se anulan aparte). */
+    public function aplicarLogisticaDesdePrincipal(array $datos, PedidoBma $principal): array
+    {
+        $datos['cliente_id'] = $principal->cliente_id;
+        $datos['origen_id'] = $principal->origen_id;
+        $datos['almacen_id'] = $principal->almacen_id;
+        $datos['cliente_direccion_id'] = $principal->cliente_direccion_id;
+        $datos['domicilio_entrega'] = $principal->domicilio_entrega;
+        $datos['codigo_postal'] = $principal->codigo_postal;
+        $datos['catalogo_paqueteria_id'] = $principal->catalogo_paqueteria_id;
+        $datos['catalogo_tipo_guia_id'] = $principal->catalogo_tipo_guia_id;
+        $datos['catalogo_zona_id'] = $principal->catalogo_zona_id;
+        $datos['catalogo_tipo_caja_id'] = $principal->catalogo_tipo_caja_id;
+        $datos['envia_a_otra_persona'] = $principal->envia_a_otra_persona;
+        $datos['envia_otra_persona'] = $principal->envia_otra_persona;
+        $datos['anexar_remision'] = $principal->anexar_remision;
+        $datos['costo_envio'] = null;
+        $datos['numero_cajas'] = null;
+        $datos['peso_real_kg'] = null;
+        $datos['peso_cobrado_guia_kg'] = null;
+
+        return $datos;
     }
 }

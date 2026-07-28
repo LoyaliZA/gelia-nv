@@ -2,10 +2,10 @@ import React from 'react';
 import { Eye, AlertTriangle } from 'lucide-react';
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
-import { badgeAuditoriaSemantico, formatearMoneda, etiquetaAlmacen, formatearFechaNegocio } from '../../Partials/pedidosBmaStyles';
+import { badgeAuditoriaSemantico, badgeEstatusEnvio, formatearMoneda, etiquetaAlmacen, formatearFechaNegocio } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 
-function CardAuditoria({ pedido, badge, esRechazado, esIncidenciaCedis, onRevisar }) {
+function CardAuditoria({ pedido, badge, badgeEnvio, esRechazado, esIncidenciaCedis, onRevisar }) {
     return (
         <div className={`${geliaCardClass()} p-4 space-y-3 ${esRechazado ? 'ring-1 ring-red-500/30' : ''} ${esIncidenciaCedis ? 'ring-1 ring-orange-500/30' : ''} ${pedido.es_resguardo ? 'ring-2 ring-blue-500/40 bg-blue-500/5' : ''}`}>
             <div className="flex items-start justify-between gap-3">
@@ -23,7 +23,12 @@ function CardAuditoria({ pedido, badge, esRechazado, esIncidenciaCedis, onRevisa
                         <p className="text-[9px] font-black uppercase text-blue-600 mt-1 m-0">Origen: {pedido.origen.nombre}</p>
                     )}
                 </div>
-                <span className={badge.className} style={badge.style}>{badge.label}</span>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className={badge.className} style={badge.style}>{badge.label}</span>
+                    {badgeEnvio && (
+                        <span className={badgeEnvio.className} style={badgeEnvio.style}>{badgeEnvio.label}</span>
+                    )}
+                </div>
             </div>
             <div>
                 <p className="text-xs font-black theme-text-main uppercase m-0">{pedido.cliente?.nombre || '—'}</p>
@@ -52,7 +57,7 @@ function CardAuditoria({ pedido, badge, esRechazado, esIncidenciaCedis, onRevisa
     );
 }
 
-export default function TablaAuditoria({ pedidos, onRevisar }) {
+export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
     const items = pedidos?.data || [];
 
     if (items.length === 0) {
@@ -68,12 +73,14 @@ export default function TablaAuditoria({ pedidos, onRevisar }) {
             <div className="md:hidden p-4 space-y-3">
                 {items.map((pedido) => {
                     const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
+                    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
                     const fase = pedido.estatus?.fase_ciclo;
                     return (
                         <CardAuditoria
                             key={pedido.id}
                             pedido={pedido}
                             badge={badge}
+                            badgeEnvio={badgeEnvio}
                             esRechazado={fase === 'RECHAZADO_VENDEDORA'}
                             esIncidenciaCedis={fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque)}
                             onRevisar={onRevisar}
@@ -99,9 +106,11 @@ export default function TablaAuditoria({ pedidos, onRevisar }) {
                     <tbody>
                         {items.map((pedido) => {
                             const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
+                            const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
                             const fase = pedido.estatus?.fase_ciclo;
                             const esRechazado = fase === 'RECHAZADO_VENDEDORA';
                             const esIncidenciaCedis = fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque);
+                            const puedeAnexar = ['pendiente_regularizacion', 'anexo_rechazado'].includes(pedido.estatus_envio);
                             return (
                                 <tr key={pedido.id} className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${esRechazado ? 'bg-red-500/5' : ''} ${esIncidenciaCedis ? 'bg-orange-500/5' : ''} ${pedido.es_resguardo ? 'bg-blue-500/5' : ''}`}>
                                     <td className="px-5 py-4">
@@ -134,11 +143,21 @@ export default function TablaAuditoria({ pedidos, onRevisar }) {
                                     </td>
                                     <td className="px-5 py-4">
                                         <span className={badge.className} style={badge.style}>{badge.label}</span>
+                                        {badgeEnvio && (
+                                            <span className={`${badgeEnvio.className} mt-1.5 block w-fit`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
+                                        )}
                                     </td>
                                     <td className="px-5 py-4 text-right">
-                                        <button type="button" onClick={() => onRevisar(pedido)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border theme-border theme-element text-[10px] font-black uppercase outline-none hover:border-[var(--color-primario)]">
-                                            <Eye className="w-4 h-4" /> Revisar
-                                        </button>
+                                        <div className="inline-flex flex-wrap justify-end gap-1.5">
+                                            {puedeAnexar && onAnexarEnvio && (
+                                                <button type="button" onClick={() => onAnexarEnvio(pedido)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border theme-border theme-element text-[10px] font-black uppercase outline-none hover:border-amber-500 text-amber-700">
+                                                    Anexar envío
+                                                </button>
+                                            )}
+                                            <button type="button" onClick={() => onRevisar(pedido)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border theme-border theme-element text-[10px] font-black uppercase outline-none hover:border-[var(--color-primario)]">
+                                                <Eye className="w-4 h-4" /> Revisar
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             );

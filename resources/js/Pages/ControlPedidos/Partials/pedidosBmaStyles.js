@@ -63,11 +63,87 @@ export const TABS_PEDIDOS = [
 
 export const TABS_AUDITORIA = [
     { id: 'PENDIENTES', label: 'Pendientes' },
+    { id: 'ENVIO_PENDIENTE', label: 'Envío pendiente' },
+    { id: 'PENDIENTE_LIBERACION', label: 'Pendiente de liberación' },
+    { id: 'ANEXO_POR_VERIFICAR', label: 'Anexo por verificar' },
+    { id: 'ANEXO_RECHAZADO', label: 'Anexo rechazado' },
+    { id: 'CONSOLIDADOS', label: 'Con complementos' },
     { id: 'RESGUARDOS', label: 'Pedidos en Resguardo' },
     { id: 'APROBADOS', label: 'Aprobados' },
     { id: 'RECHAZADOS', label: 'Rechazados' },
     { id: 'TODAS', label: 'Todas' },
 ];
+
+export const LABELS_ESTATUS_ENVIO = {
+    completo: 'Envío completo',
+    pendiente_regularizacion: 'Pendiente regularizar envío',
+    pendiente_revision_anexo: 'Anexo por verificar',
+    anexo_rechazado: 'Anexo rechazado',
+    pendiente_liberacion: 'Pendiente de liberación',
+    pendiente_consolidacion: 'Pendiente consolidación',
+    consolidado: 'Consolidado',
+};
+
+export const badgeEstatusEnvio = (estatusEnvio) => {
+    if (!estatusEnvio || estatusEnvio === 'completo') return null;
+    const colores = {
+        pendiente_regularizacion: '#F59E0B',
+        pendiente_revision_anexo: '#8B5CF6',
+        anexo_rechazado: '#EF4444',
+        pendiente_liberacion: '#3B82F6',
+        pendiente_consolidacion: '#0EA5E9',
+        consolidado: '#14B8A6',
+    };
+    const hex = colores[estatusEnvio] || '#94A3B8';
+    return {
+        label: LABELS_ESTATUS_ENVIO[estatusEnvio] || estatusEnvio,
+        ...badgeClaseEstatusPedido({ color_hex: hex }),
+    };
+};
+
+export const operacionEmpaqueDe = (pedido) => (
+    pedido?.miembro_operacion_empaque?.operacion
+    || pedido?.miembroOperacionEmpaque?.operacion
+    || null
+);
+
+export const complementosDe = (pedido) => pedido?.complementos || [];
+
+export const badgeConComplementos = (pedido) => {
+    const n = complementosDe(pedido).length;
+    if (n < 1) return null;
+    return {
+        label: `+${n} complemento${n === 1 ? '' : 's'}`,
+        ...badgeClaseEstatusPedido({ color_hex: '#14B8A6' }),
+    };
+};
+
+export const badgeConsolidadoEmpaque = (operacion) => {
+    if (!operacion) return null;
+    return {
+        label: `Consolidado · ${operacion.folio_operacion || ''}`.trim(),
+        ...badgeClaseEstatusPedido({ color_hex: '#14B8A6' }),
+    };
+};
+
+export const puedeAnexarPagoEnvio = (pedido) => [
+    'pendiente_regularizacion',
+    'anexo_rechazado',
+].includes(pedido?.estatus_envio);
+
+/** Raíz en resguardo abierto pendiente de liberación (vendedora/auxiliar puede completar envío). */
+export const puedeCompletarEnvioResguardo = (pedido) => {
+    if (!pedido || pedido.pedido_principal_id) return false;
+    if (!pedido.es_resguardo) return false;
+    const fase = pedido.estatus?.fase_ciclo;
+    if (!['PENDIENTE_AUXILIAR', 'EN_CEDIS'].includes(fase)) return false;
+    return pedido.estatus_envio === 'pendiente_liberacion'
+        || pedido.tipo_operacion_envio?.codigo === 'RESGUARDO_ABIERTO';
+};
+
+export const anexoEnvioPendienteDe = (pedido) => (
+    (pedido?.anexos_envio || []).find((a) => a.estatus === 'pendiente') || null
+);
 
 export const TABS_CEDIS = [
     { id: 'TODOS', label: 'Todos' },
@@ -218,6 +294,16 @@ export const calcularTotalCobrar = (mercancia, envio, aplicaSeguro, costoSeguro,
     return Math.max(0, Math.round(total * 100) / 100);
 };
 
+/** Fórmula Drive: se cobra el mayor entre peso real y peso volumétrico. */
+export const calcularPesoCobradoGuia = (pesoReal, pesoVolumetrico) => {
+    const real = pesoReal === '' || pesoReal == null ? null : Number(pesoReal);
+    const vol = pesoVolumetrico === '' || pesoVolumetrico == null ? null : Number(pesoVolumetrico);
+    if (real == null && vol == null) return '';
+    const r = Number.isFinite(real) ? real : 0;
+    const v = Number.isFinite(vol) ? vol : 0;
+    return String(Math.round(Math.max(r, v) * 10000) / 10000);
+};
+
 const COMERCIALES_CON_COBERTURA = ['FEDEX', 'ESTAFETA', 'DHL'];
 
 export const paqueteriaTieneCobertura = (nombrePaqueteria) => {
@@ -265,14 +351,20 @@ export const validarCamposEnvioPedido = (data, {
     comprobantesExistentes = 0,
     requiereLogistica = true,
     direccionesNormalizadas = false,
+    esMunicipioDiferido = false,
+    esResguardoAbierto = false,
+    esResguardoComplementario = false,
 } = {}) => {
     const faltantes = [];
+    const omitePesoCajasCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario;
 
     if (!String(data.folio_remision || '').trim()) faltantes.push('folio de pedido');
     if (!data.cliente_id) faltantes.push('cliente');
     if (!data.origen_id) faltantes.push('origen del pedido');
     if (!data.catalogo_banco_id) faltantes.push('banco');
-    if (data.peso_real_kg === '' || data.peso_real_kg == null) faltantes.push('peso real');
+    if (!omitePesoCajasCosto && (data.peso_real_kg === '' || data.peso_real_kg == null)) {
+        faltantes.push('peso real');
+    }
     if (!data.almacen_id) faltantes.push('almacén de salida');
     if (Number(data.total_mercancia || 0) <= 0) faltantes.push('total de mercancía');
 
@@ -283,11 +375,15 @@ export const validarCamposEnvioPedido = (data, {
 
     if (requiereLogistica) {
         if (!data.catalogo_tipo_caja_id) faltantes.push('tipo de caja');
-        if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de cajas');
+        if (!omitePesoCajasCosto && (data.numero_cajas === '' || data.numero_cajas == null)) {
+            faltantes.push('número de cajas');
+        }
         if (!data.catalogo_tipo_guia_id) faltantes.push('tipo de guía');
         if (!data.catalogo_paqueteria_id) faltantes.push('paquetería');
         if (!data.catalogo_zona_id) faltantes.push('reexpedición');
-        if (data.costo_envio === '' || data.costo_envio == null) faltantes.push('costo de envío');
+        if (!omitePesoCajasCosto && (data.costo_envio === '' || data.costo_envio == null)) {
+            faltantes.push('costo de envío');
+        }
         if (!String(data.codigo_postal || '').trim()) faltantes.push('código postal');
         if (direccionesNormalizadas) {
             const tieneDir = String(data.cliente_direccion_id || '').trim();

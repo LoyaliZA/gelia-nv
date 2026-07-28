@@ -50,6 +50,8 @@ class DatosFiscalesPublicosFacturaTest extends TestCase
         }
         CatalogoEstadoSolicitud::reiniciarCache();
 
+        app(\App\Services\Facturas\ImportarCatalogosFiscalesService::class)->ejecutar();
+
         foreach (['facturas.crear', 'facturas.responder', 'facturas.verificar', 'facturas.ver_listado'] as $perm) {
             Permission::findOrCreate($perm, 'web');
         }
@@ -109,7 +111,7 @@ class DatosFiscalesPublicosFacturaTest extends TestCase
         return [
             'rfc' => 'XAXX010101000',
             'codigo_postal' => '06000',
-            'regimen_fiscal' => '601',
+            'regimen_fiscal' => '626',
             'correo_electronico' => 'fiscal@example.com',
             'uso_factura' => 'G03',
             'nombre_razon_social' => 'EMPRESA PRUEBA SA DE CV',

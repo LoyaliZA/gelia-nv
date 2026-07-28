@@ -5,10 +5,13 @@ namespace App\Services\Facturas;
 use App\Events\SolicitudFacturaActualizada;
 use App\Models\AuditoriaSolicitudFactura;
 use App\Models\CatalogoEstadoSolicitud;
+use App\Models\CatalogoRegimenFiscal;
+use App\Models\CatalogoUsoCfdi;
 use App\Models\Cliente;
 use App\Models\EnlaceDatosFiscales;
 use App\Models\SolicitudFactura;
 use App\Notifications\AlertaFactura;
+use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -161,7 +164,8 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
         }
 
         if (isset($datos['rfc'])) {
-            $rfc = strtoupper(preg_replace('/\s+/', '', $datos['rfc']) ?? '');
+            $rfc = strtoupper(preg_replace('/[^A-ZÑ&0-9]/iu', '', $datos['rfc']) ?? '');
+            $rfc = mb_substr($rfc, 0, 13);
             if (! preg_match('/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/u', $rfc)) {
                 $errores['rfc'] = 'El RFC no tiene un formato válido.';
             } else {
@@ -173,16 +177,34 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
             $errores['codigo_postal'] = 'El código postal debe tener 5 dígitos.';
         }
 
-        if (isset($datos['correo_electronico']) && ! filter_var($datos['correo_electronico'], FILTER_VALIDATE_EMAIL)) {
-            $errores['correo_electronico'] = 'El correo electrónico no es válido.';
+        if (isset($datos['correo_electronico'])) {
+            $datos['correo_electronico'] = mb_strtolower(trim($datos['correo_electronico']));
+            if (! filter_var($datos['correo_electronico'], FILTER_VALIDATE_EMAIL)) {
+                $errores['correo_electronico'] = 'El correo electrónico no es válido.';
+            }
         }
 
-        if (isset($datos['telefono']) && mb_strlen($datos['telefono']) > 20) {
-            $errores['telefono'] = 'El número telefónico no puede exceder 20 caracteres.';
+        if (isset($datos['telefono'])) {
+            $datos['telefono'] = preg_replace('/\D+/', '', $datos['telefono']) ?? '';
+            if ($datos['telefono'] === '' || ! preg_match('/^\d{1,10}$/', $datos['telefono'])) {
+                $errores['telefono'] = 'El número telefónico solo admite dígitos (máximo 10).';
+            }
         }
 
         if (isset($datos['nombre_razon_social']) && mb_strlen($datos['nombre_razon_social']) < 3) {
             $errores['nombre_razon_social'] = 'La razón social debe tener al menos 3 caracteres.';
+        }
+
+        $datos = ReglasCatalogosFiscales::aplicarForzados($datos);
+
+        if (isset($datos['regimen_fiscal'])
+            && ! CatalogoRegimenFiscal::query()->activos()->where('codigo', $datos['regimen_fiscal'])->exists()) {
+            $errores['regimen_fiscal'] = 'El régimen fiscal no es válido.';
+        }
+
+        if (isset($datos['uso_factura'])
+            && ! CatalogoUsoCfdi::query()->activos()->where('codigo', $datos['uso_factura'])->exists()) {
+            $errores['uso_factura'] = 'El uso de CFDI no es válido.';
         }
 
         if ($errores !== []) {

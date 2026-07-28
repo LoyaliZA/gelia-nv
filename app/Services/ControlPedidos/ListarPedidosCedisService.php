@@ -45,7 +45,6 @@ class ListarPedidosCedisService
             'pendientes_guia' => $pendientesGuia,
             'enviados' => $enviados,
             'incorrectas' => $incorrectas,
-            // Compat KPI / tests previos
             'pendientes' => $empacados,
             'incidencias' => $incorrectas,
             'total' => $empacados + $pendientesEnvio + $pendientesGuia + $enviados + $incorrectas
@@ -76,7 +75,12 @@ class ListarPedidosCedisService
             'incidenciaEmpaquePor',
             'resguardoApartadoPor',
             'direccionVigente',
+            'tipoOperacionEnvio',
+            'complementos.documentos',
+            'complementos.estatus',
+            'complementos.cliente',
         ])
+            ->whereNull('pedido_principal_id')
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
             ->whereNotNull('pago_validado_at')
             ->whereHas('remision')
@@ -90,6 +94,10 @@ class ListarPedidosCedisService
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
                     ->orWhere('folio_remision', 'like', "%{$termino}%")
+                    ->orWhereHas('complementos', function (Builder $c) use ($termino) {
+                        $c->where('folio', 'like', "%{$termino}%")
+                            ->orWhere('folio_remision', 'like', "%{$termino}%");
+                    })
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
@@ -106,9 +114,8 @@ class ListarPedidosCedisService
             'PENDIENTES_GUIA' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_GUIA'] ?? 0),
             'ENVIADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0),
             'INCORRECTAS', 'INCIDENCIAS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0),
-            // Legacy: tab PENDIENTES apuntaba a EN_CEDIS
             'PENDIENTES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0),
-            default => null, // TODOS
+            default => null,
         };
     }
 

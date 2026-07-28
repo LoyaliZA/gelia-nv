@@ -8,6 +8,8 @@ import {
     badgeEstatusPedido,
     badgeEmpaqueSemantico,
     badgeRetrasoGuia,
+    badgeConComplementos,
+    complementosDe,
     esPedidoEmpacadoCedis,
     formatearMoneda,
     etiquetaAlmacen,
@@ -64,6 +66,8 @@ export default function ModalDetalleCedis({
     const badgeEstatus = badgeEstatusPedido(pedido.estatus);
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
+    const badgeComp = badgeConComplementos(pedido);
+    const complementos = complementosDe(pedido);
     const comprobantes = comprobantesDe(pedido);
     const remision = remisionDe(pedido);
     const evidenciasApartado = (pedido?.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
@@ -73,18 +77,6 @@ export default function ModalDetalleCedis({
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
     const puedeErrorDatos = ['EN_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
-
-
-    const recargarPedido = () => {
-        router.reload({
-            only: ['pedidos'],
-            preserveScroll: true,
-            onSuccess: (page) => {
-                const actualizado = page.props.pedidos?.data?.find((p) => p.id === pedido.id);
-                if (actualizado) setPedido(actualizado);
-            },
-        });
-    };
 
     const ejecutarConfirmacion = () => {
         const accion = confirmacion;
@@ -119,7 +111,14 @@ export default function ModalDetalleCedis({
     };
 
     const cfgConfirm = confirmacion === 'empacar'
-        ? { titulo: 'Confirmar empaque', mensaje: '¿Confirmar que el pedido fue empacado?', etiquetaConfirmar: 'Marcar empacado', variante: 'primary' }
+        ? {
+            titulo: complementos.length ? 'Confirmar empaque del grupo' : 'Confirmar empaque',
+            mensaje: complementos.length
+                ? `Se empacará ${pedido.folio} y ${complementos.length} complemento(s).`
+                : '¿Confirmar que el pedido fue empacado?',
+            etiquetaConfirmar: complementos.length ? 'Empacar grupo' : 'Marcar empacado',
+            variante: 'primary',
+        }
         : confirmacion === 'enviar'
             ? { titulo: 'Confirmar envío', mensaje: 'Al confirmar, el pedido sale a recolección y el estado se actualiza para auxiliar, CEDIS y logística.', etiquetaConfirmar: 'Marcar enviado', variante: 'primary' }
             : null;
@@ -151,6 +150,11 @@ export default function ModalDetalleCedis({
                                 {badgeRetraso && (
                                     <span className={badgeRetraso.className} style={badgeRetraso.style}>
                                         {badgeRetraso.label}
+                                    </span>
+                                )}
+                                {badgeComp && (
+                                    <span className={badgeComp.className} style={badgeComp.style}>
+                                        {badgeComp.label}
                                     </span>
                                 )}
                             </div>
@@ -305,6 +309,39 @@ export default function ModalDetalleCedis({
                             </section>
                         )}
 
+                        {complementos.length > 0 && (
+                            <section className={SECCION_WRAP}>
+                                <p className={SECCION}>Remisiones del grupo</p>
+                                <div className="space-y-3">
+                                    {[pedido, ...complementos].map((p) => {
+                                        const rem = remisionDe(p);
+                                        return (
+                                            <div key={p.id} className="p-3 rounded-xl border theme-border theme-element space-y-2">
+                                                <p className="text-sm font-black theme-text-main m-0">
+                                                    {p.folio}
+                                                    {p.folio_remision ? ` · ${p.folio_remision}` : ''}
+                                                    {p.id === pedido.id ? ' · principal' : ' · complemento'}
+                                                </p>
+                                                <p className="text-[10px] theme-text-muted font-bold m-0">
+                                                    {formatearMoneda(p.total_mercancia)}
+                                                </p>
+                                                {rem && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDocPreview(rem)}
+                                                        className="text-xs font-bold inline-flex items-center gap-1 outline-none"
+                                                        style={{ color: 'var(--color-primario)' }}
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5" /> Ver remisión
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
+
                         {(comprobantes.length > 0 || remision) && (
                             <section className={SECCION_WRAP}>
                                 <p className={SECCION}>Documentos adjuntos</p>
@@ -379,7 +416,7 @@ export default function ModalDetalleCedis({
                                 disabled={procesando}
                                 className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 ml-auto`}
                             >
-                                <CheckCircle2 className="w-4 h-4" /> Marcar empacado
+                                <CheckCircle2 className="w-4 h-4" /> {complementos.length ? 'Empacar grupo' : 'Marcar empacado'}
                             </button>
                         )}
                         {puedeApartar && (

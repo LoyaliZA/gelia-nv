@@ -16,6 +16,9 @@ class ListarPedidosBmaService
             'vendedor',
             'estatus',
             'origen',
+            'tipoOperacionEnvio',
+            'anexosEnvio.banco',
+            'anexosEnvio.registradoPor',
             'envioTienda',
             'almacen',
             'banco',
@@ -28,6 +31,7 @@ class ListarPedidosBmaService
             'historial.usuario',
             'historial.estatusAnterior',
             'historial.estatusNuevo',
+            'complementos',
         ])->orderByDesc('created_at');
 
         if ($usuario) {

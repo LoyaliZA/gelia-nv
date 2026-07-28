@@ -18,12 +18,19 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
     const { data, setData, post, put, processing, reset, errors } = useForm({
         nombre: '',
         categoria: 'local_regional',
+        permite_costo_diferido: true,
         activo: true,
     });
 
     const abrirNuevo = () => {
         setItemActual(null);
         reset();
+        setData({
+            nombre: '',
+            categoria: 'local_regional',
+            permite_costo_diferido: true,
+            activo: true,
+        });
         setModalAbierto(true);
     };
 
@@ -32,6 +39,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
         setData({
             nombre: item.nombre,
             categoria: item.categoria || 'local_regional',
+            permite_costo_diferido: item.permite_costo_diferido ?? item.categoria === 'local_regional',
             activo: item.activo,
         });
         setModalAbierto(true);
@@ -70,6 +78,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
                         <tr className="border-b-2 border-[var(--color-primario)]/30">
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Nombre_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Categoría_</th>
+                            <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Costo diferido_</th>
                             <th className="px-6 py-4 text-left text-[9px] font-black theme-text-muted uppercase tracking-widest">Status_</th>
                             <th className="px-6 py-4 text-right text-[9px] font-black theme-text-muted uppercase tracking-widest">Acciones_</th>
                         </tr>
@@ -79,6 +88,7 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
                             <tr key={item.id} className="border-b theme-border last:border-0">
                                 <td className="px-6 py-5 text-sm font-black theme-text-main uppercase italic">{item.nombre}</td>
                                 <td className="px-6 py-5 text-sm font-bold theme-text-muted">{ETIQUETAS_CATEGORIA[item.categoria] || item.categoria}</td>
+                                <td className="px-6 py-5 text-sm font-bold theme-text-muted">{item.permite_costo_diferido ? 'Sí' : 'No'}</td>
                                 <td className="px-6 py-5">
                                     <span className={`inline-flex px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${item.activo ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'}`}>
                                         {item.activo ? 'Activo' : 'Inactivo'}
@@ -108,11 +118,31 @@ export default function TablaPaqueteriasPedido({ datos = [] }) {
                             </div>
                             <div>
                                 <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Categoría_</label>
-                                <select value={data.categoria} onChange={(e) => setData('categoria', e.target.value)} className={`${THEME_INPUT} w-full mt-2 text-sm font-bold`}>
+                                <select
+                                    value={data.categoria}
+                                    onChange={(e) => {
+                                        const categoria = e.target.value;
+                                        setData({
+                                            ...data,
+                                            categoria,
+                                            permite_costo_diferido: categoria === 'local_regional',
+                                        });
+                                    }}
+                                    className={`${THEME_INPUT} w-full mt-2 text-sm font-bold`}
+                                >
                                     <option value="comercial">Comercial</option>
                                     <option value="local_regional">Local / Regional</option>
                                 </select>
                             </div>
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={Boolean(data.permite_costo_diferido)}
+                                    onChange={(e) => setData('permite_costo_diferido', e.target.checked)}
+                                    className="w-4 h-4"
+                                />
+                                <span className="text-sm font-bold theme-text-main">Permite costo de envío diferido (municipio)</span>
+                            </label>
                             <label className="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" checked={data.activo} onChange={(e) => setData('activo', e.target.checked)} className="w-4 h-4" />
                                 <span className="text-sm font-bold theme-text-main">Activo</span>

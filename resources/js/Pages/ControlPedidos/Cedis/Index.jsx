@@ -104,12 +104,12 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Control pedidos CEDIS | GELIANV" />
+            <Head title="Gestión de pedidos CEDIS | GELIANV" />
             <GeliaPageShell className="space-y-3 md:space-y-6">
                 <header className={`${geliaCardClass()} p-4 md:p-8`}>
                     <div className="flex items-center gap-2 mb-1 md:mb-2">
                         <Warehouse className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
-                        <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Control de pedidos_</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Gestión de pedidos_</span>
                     </div>
                     <h1 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0">
                         Control <span style={{ color: 'var(--color-primario)' }}>pedidos</span> CEDIS

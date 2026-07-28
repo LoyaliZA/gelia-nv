@@ -12,6 +12,7 @@ use App\Models\Tiendanube\TiendanubeImageImport;
 use App\Models\Tiendanube\TiendanubeProducto;
 use App\Models\Tiendanube\TiendanubeSyncLog;
 use App\Services\Tiendanube\TiendanubeApiClient;
+use App\Services\Tiendanube\TiendanubeCatalogoWipeService;
 use App\Services\Tiendanube\TiendanubeImageImportService;
 use App\Services\Tiendanube\TiendanubeProductoWriteService;
 use App\Services\Tiendanube\TiendanubeWebhookService;
@@ -96,7 +97,7 @@ class TiendanubeController extends Controller
         ]);
     }
 
-    public function guardarConfiguracion(Request $request): JsonResponse
+    public function guardarConfiguracion(Request $request, TiendanubeCatalogoWipeService $wipe): JsonResponse
     {
         Gate::authorize('tiendanube.configurar');
 
@@ -105,9 +106,25 @@ class TiendanubeController extends Controller
             'app_id' => 'nullable|string|max:64',
             'access_token' => 'nullable|string',
             'scopes' => 'nullable|string|max:500',
+            'limpiar_catalogo' => 'nullable|boolean',
+            'iniciar_sync' => 'nullable|boolean',
         ]);
 
         $config = TiendanubeConfiguracion::obtener();
+        $storeAnterior = $config->store_id;
+        $storeNuevo = $request->filled('store_id') ? (int) $request->input('store_id') : $storeAnterior;
+        $cambioTienda = $storeAnterior && $storeNuevo && (int) $storeAnterior !== (int) $storeNuevo;
+        $limpiar = $request->boolean('limpiar_catalogo');
+
+        if ($cambioTienda && ! $limpiar) {
+            return response()->json([
+                'success' => false,
+                'requires_wipe_confirmation' => true,
+                'message' => 'Al cambiar de tienda se borrará el catálogo local de la tienda anterior. Confirma para continuar.',
+                'store_id_anterior' => $storeAnterior,
+                'store_id_nuevo' => $storeNuevo,
+            ], 409);
+        }
 
         if ($request->filled('store_id')) {
             $config->store_id = (int) $request->input('store_id');
@@ -124,12 +141,81 @@ class TiendanubeController extends Controller
 
         $config->save();
 
+        $borrados = null;
+        if ($limpiar) {
+            $borrados = $wipe->wipe();
+        }
+
+        $syncLogId = null;
+        if ($limpiar && $request->boolean('iniciar_sync') && $config->credencialesConfiguradas() && ! TiendanubeSyncLog::activo()) {
+            $log = TiendanubeSyncLog::create([
+                'tipo' => 'completo',
+                'estado' => 'pendiente',
+            ]);
+            SyncTiendanubeCatalogoJob::dispatch($log->id);
+            $syncLogId = $log->id;
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Configuración Tiendanube guardada.',
+            'message' => $limpiar
+                ? 'Configuración guardada. Catálogo local limpiado'.($syncLogId ? ' y sincronización iniciada.' : '.')
+                : 'Configuración Tiendanube guardada.',
             'configuracion' => [
                 'store_id' => $config->store_id,
                 'app_id' => $config->app_id,
+                'credenciales_configuradas' => $config->credencialesConfiguradas(),
+            ],
+            'catalogo_borrado' => $borrados,
+            'sync_log_id' => $syncLogId,
+        ]);
+    }
+
+    public function limpiarCatalogo(Request $request, TiendanubeCatalogoWipeService $wipe): JsonResponse
+    {
+        Gate::authorize('tiendanube.configurar');
+
+        $request->validate([
+            'iniciar_sync' => 'nullable|boolean',
+        ]);
+
+        $config = TiendanubeConfiguracion::obtener();
+        $borrados = $wipe->wipe();
+
+        $syncLogId = null;
+        if ($request->boolean('iniciar_sync')) {
+            if (! $config->credencialesConfiguradas()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Catálogo limpiado, pero faltan credenciales para sincronizar.',
+                    'catalogo_borrado' => $borrados,
+                ], 422);
+            }
+            if (TiendanubeSyncLog::activo()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Catálogo limpio, pero ya hay una sincronización en curso.',
+                    'catalogo_borrado' => $borrados,
+                ], 409);
+            }
+
+            $log = TiendanubeSyncLog::create([
+                'tipo' => 'completo',
+                'estado' => 'pendiente',
+            ]);
+            SyncTiendanubeCatalogoJob::dispatch($log->id);
+            $syncLogId = $log->id;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $syncLogId
+                ? 'Catálogo local borrado. Sincronización iniciada. Credenciales intactas.'
+                : 'Catálogo local borrado. Credenciales intactas.',
+            'catalogo_borrado' => $borrados,
+            'sync_log_id' => $syncLogId,
+            'configuracion' => [
+                'store_id' => $config->store_id,
                 'credenciales_configuradas' => $config->credencialesConfiguradas(),
             ],
         ]);
