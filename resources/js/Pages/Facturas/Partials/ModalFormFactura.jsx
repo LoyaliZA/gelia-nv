@@ -45,6 +45,46 @@ function clienteTieneFiscales(c) {
     return !!(String(c.rfc || '').trim() || String(c.nombre_razon_social || '').trim());
 }
 
+function snapshotDatosFiscales(factura) {
+    return { ...(factura?.datos_fiscales || {}) };
+}
+
+function calcularResaltesFiscales(antes, despues, solicitados) {
+    const keys = (solicitados?.length ? solicitados : CAMPOS_FISCALES.map(c => c.clave));
+    const out = {};
+    for (const k of keys) {
+        const a = String(antes?.[k] ?? '').trim();
+        const b = String(despues?.[k] ?? '').trim();
+        if (b && a !== b) {
+            out[k] = a ? 'actualizado' : 'nuevo';
+        }
+    }
+    return out;
+}
+
+function CampoFiscalResaltado({ etiqueta, valor, resalte }) {
+    const marcado = Boolean(resalte);
+    return (
+        <div
+            className={marcado ? 'rounded-lg p-2 border' : undefined}
+            style={marcado ? {
+                borderColor: FACTURA_ACCENT,
+                background: 'color-mix(in srgb, var(--color-primario) 10%, transparent)',
+            } : undefined}
+        >
+            <dt className="text-[9px] font-black uppercase theme-text-muted m-0 flex items-center gap-2">
+                {etiqueta}
+                {marcado && (
+                    <span className="normal-case tracking-normal font-black" style={{ color: FACTURA_ACCENT }}>
+                        {resalte === 'nuevo' ? 'Nuevo' : 'Actualizado'}
+                    </span>
+                )}
+            </dt>
+            <dd className="text-xs font-bold theme-text-main m-0 break-all">{valor || '—'}</dd>
+        </div>
+    );
+}
+
 async function copiarAlPortapapeles(texto) {
     if (!texto) return false;
     if (navigator.clipboard?.writeText && window.isSecureContext) {
@@ -71,7 +111,7 @@ async function copiarAlPortapapeles(texto) {
     }
 }
 
-export default function ModalFormFactura({ onClose, onExito, modoEdicion = false, facturaAEditar = null }) {
+export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, modoEdicion = false, facturaAEditar = null }) {
     const flash = usePage().props?.flash || {};
     const trabajandoBorrador = Boolean(facturaAEditar?.estado?.nombre === 'Borrador');
 
@@ -104,11 +144,16 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
         return vigentes?.url || flash.enlace_fiscal_url || null;
     });
     const [copiado, setCopiado] = useState(false);
+    const [facturaLive, setFacturaLive] = useState(facturaAEditar);
+    const [camposResaltados, setCamposResaltados] = useState({});
+    const [excelExpandido, setExcelExpandido] = useState(false);
     const excelInputRef = useRef(null);
     const debounceRef = useRef(null);
     const abortBusquedaCliente = useRef(null);
     const debounceReceptorRef = useRef(null);
     const abortBusquedaReceptor = useRef(null);
+    const snapshotFiscalRef = useRef(snapshotDatosFiscales(facturaAEditar));
+    const factura = facturaLive || facturaAEditar;
 
     const { data, setData, post, processing, errors, transform } = useForm({
         razon_social: facturaAEditar ? razonSocialDesdeFactura(facturaAEditar) : '',
@@ -129,7 +174,16 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
     const tieneFiscalesCliente = useMemo(() => clienteTieneFiscales(clienteSeleccionado), [clienteSeleccionado]);
 
     useEffect(() => {
-        if (!facturaAEditar) return;
+        if (!facturaAEditar) {
+            setFacturaLive(null);
+            setCamposResaltados({});
+            snapshotFiscalRef.current = {};
+            return;
+        }
+
+        setFacturaLive(facturaAEditar);
+        setCamposResaltados({});
+        snapshotFiscalRef.current = snapshotDatosFiscales(facturaAEditar);
 
         setData({
             razon_social: razonSocialDesdeFactura(facturaAEditar),
@@ -150,10 +204,104 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
         setVouchers([]);
         setVouchersConservarIds((facturaAEditar.vouchers || []).map(v => v.id));
         setQuitarExcel(false);
+        setExcelExpandido(Boolean(facturaAEditar.tiene_archivo_fiscal));
         if (facturaAEditar.campos_fiscales_solicitados?.length) {
             setCamposSeleccionados([...facturaAEditar.campos_fiscales_solicitados]);
         }
+        const vigentes = (facturaAEditar.enlaces_fiscales || facturaAEditar.enlacesFiscales || [])
+            .find(e => !e.usado_en && !e.revocado_en);
+        if (vigentes?.url) setEnlaceUrl(vigentes.url);
     }, [facturaAEditar?.id, setData]);
+
+    // Live: misma solicitud, datos fiscales llegan vía Index/Echo sin remount.
+    useEffect(() => {
+        if (!facturaAEditar?.id || !facturaAEditar.formulario_respondido_at) return;
+        if (facturaLive?.formulario_respondido_at
+            && facturaLive.id === facturaAEditar.id
+            && JSON.stringify(facturaLive.datos_fiscales || {}) === JSON.stringify(facturaAEditar.datos_fiscales || {})) {
+            return;
+        }
+
+        const antes = snapshotFiscalRef.current || {};
+        const despues = facturaAEditar.datos_fiscales || {};
+        setCamposResaltados(calcularResaltesFiscales(
+            antes,
+            despues,
+            facturaAEditar.campos_fiscales_solicitados,
+        ));
+        snapshotFiscalRef.current = snapshotDatosFiscales(facturaAEditar);
+        setFacturaLive(facturaAEditar);
+        setClienteSeleccionado(facturaAEditar.cliente || null);
+        setReceptorSeleccionado(receptorFiscalDeFactura(facturaAEditar));
+        setData(prev => ({
+            ...prev,
+            razon_social: razonSocialDesdeFactura(facturaAEditar) || prev.razon_social,
+            numero_cliente: facturaAEditar.cliente?.numero_cliente
+                || facturaAEditar.datos_fiscales?.numero_cliente
+                || prev.numero_cliente,
+            destinatario_tipo: facturaAEditar.destinatario_tipo || prev.destinatario_tipo,
+            receptor_fiscal_id: facturaAEditar.receptor_fiscal_id
+                || facturaAEditar.receptor_fiscal?.id
+                || prev.receptor_fiscal_id,
+        }));
+        if (facturaAEditar.cliente) {
+            setBusquedaCliente(busquedaClienteDesdeFactura(facturaAEditar));
+        }
+    }, [
+        facturaAEditar?.id,
+        facturaAEditar?.formulario_respondido_at,
+        facturaAEditar?.razon_social,
+        facturaAEditar?.datos_fiscales,
+        setData,
+    ]);
+
+    useEffect(() => {
+        const solicitudId = facturaAEditar?.id;
+        if (!solicitudId || typeof window === 'undefined' || !window.Echo) return;
+
+        const channel = window.Echo.private('solicitudes.facturas');
+        const handler = async (payload) => {
+            if (Number(payload.solicitud_id) !== Number(solicitudId)) return;
+            if (payload.accion !== 'formulario_respondido' && payload.accion !== 'actualizada') return;
+
+            try {
+                const res = await axios.get(route('facturas.show', solicitudId));
+                const f = res.data?.factura;
+                if (!f) return;
+
+                const antes = snapshotFiscalRef.current || {};
+                const despues = f.datos_fiscales || {};
+                setCamposResaltados(calcularResaltesFiscales(
+                    antes,
+                    despues,
+                    f.campos_fiscales_solicitados,
+                ));
+                snapshotFiscalRef.current = snapshotDatosFiscales(f);
+                setFacturaLive(f);
+                setClienteSeleccionado(f.cliente || null);
+                setReceptorSeleccionado(receptorFiscalDeFactura(f));
+                setData(prev => ({
+                    ...prev,
+                    razon_social: razonSocialDesdeFactura(f) || prev.razon_social,
+                    numero_cliente: f.cliente?.numero_cliente || f.datos_fiscales?.numero_cliente || prev.numero_cliente,
+                    destinatario_tipo: f.destinatario_tipo || prev.destinatario_tipo,
+                    receptor_fiscal_id: f.receptor_fiscal_id || f.receptor_fiscal?.id || prev.receptor_fiscal_id,
+                    observaciones_vendedor: f.observaciones_vendedor ?? prev.observaciones_vendedor,
+                }));
+                if (f.cliente) {
+                    setBusquedaCliente(busquedaClienteDesdeFactura(f));
+                }
+                onBorradorCreado?.(f);
+            } catch {
+                /* ignore */
+            }
+        };
+
+        channel.listen('.solicitud-factura.actualizada', handler);
+        return () => {
+            channel.stopListening('.solicitud-factura.actualizada', handler);
+        };
+    }, [facturaAEditar?.id, setData, onBorradorCreado]);
 
     useEffect(() => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -316,13 +464,13 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
     };
 
     const vouchersExistentesUi = useMemo(() => {
-        if (!facturaAEditar) return [];
+        if (!factura) return [];
 
-        return (facturaAEditar.vouchers || [])
+        return (factura.vouchers || [])
             .filter(v => vouchersConservarIds.includes(v.id))
             .map(v => {
-                const indice = indiceVoucherEnFactura(facturaAEditar, v.id);
-                const verUrl = indice >= 0 ? urlArchivoFactura(facturaAEditar.id, 'voucher', indice) : null;
+                const indice = indiceVoucherEnFactura(factura, v.id);
+                const verUrl = indice >= 0 ? urlArchivoFactura(factura.id, 'voucher', indice) : null;
                 const esImagen = esImagenVoucher(v);
                 return {
                     id: v.id,
@@ -332,13 +480,25 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                     esPdf: esPdfVoucher(v),
                 };
             });
-    }, [facturaAEditar, vouchersConservarIds]);
+    }, [factura, vouchersConservarIds]);
 
-    const tieneExcelActual = facturaAEditar?.tiene_archivo_fiscal && !quitarExcel && !data.archivo_fiscal;
+    const tieneExcelActual = factura?.tiene_archivo_fiscal && !quitarExcel && !data.archivo_fiscal;
 
     const totalVouchers = (trabajandoBorrador || modoEdicion)
         ? vouchersConservarIds.length + vouchers.length
         : vouchers.length;
+
+    const formPendiente = Boolean(factura?.formulario_enviado_at && !factura?.formulario_respondido_at);
+
+    const previewFiscalFuente = useMemo(() => {
+        if (data.destinatario_tipo === 'tercero') {
+            return receptorSeleccionado || factura?.datos_fiscales || null;
+        }
+        if (factura?.datos_fiscales && Object.keys(factura.datos_fiscales).length) {
+            return { ...clienteSeleccionado, ...factura.datos_fiscales };
+        }
+        return clienteSeleccionado;
+    }, [data.destinatario_tipo, receptorSeleccionado, factura?.datos_fiscales, clienteSeleccionado]);
 
     const construirPayloadBase = (extras = {}) => ({
         ...data,
@@ -358,14 +518,33 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
             forceFormData: true,
             onSuccess: (page) => {
                 const url = page?.props?.flash?.enlace_fiscal_url;
+                const borradorId = page?.props?.flash?.factura_borrador_id;
                 if (url) {
                     setEnlaceUrl(url);
+                    setFacturaLive(prev => ({
+                        ...(prev || facturaAEditar || {}),
+                        id: borradorId || prev?.id || facturaAEditar?.id,
+                        formulario_enviado_at: new Date().toISOString(),
+                        formulario_respondido_at: null,
+                    }));
+                    snapshotFiscalRef.current = snapshotDatosFiscales(facturaLive || facturaAEditar);
                     copiarAlPortapapeles(url).then(ok => {
                         if (ok) {
                             setCopiado(true);
                             setTimeout(() => setCopiado(false), 2000);
                         }
                     });
+                }
+                if (borradorId) {
+                    axios.get(route('facturas.show', borradorId))
+                        .then((res) => {
+                            if (res.data?.factura) {
+                                onBorradorCreado?.(res.data.factura);
+                            }
+                        })
+                        .catch(() => {
+                            onBorradorCreado?.({ id: borradorId });
+                        });
                 }
                 onExito?.();
             },
@@ -449,6 +628,12 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
             });
             if (res?.url) {
                 setEnlaceUrl(res.url);
+                setFacturaLive(prev => ({
+                    ...(prev || facturaAEditar || {}),
+                    formulario_enviado_at: new Date().toISOString(),
+                    formulario_respondido_at: null,
+                }));
+                snapshotFiscalRef.current = snapshotDatosFiscales(facturaLive || facturaAEditar);
                 const ok = await copiarAlPortapapeles(res.url);
                 if (ok) {
                     setCopiado(true);
@@ -460,7 +645,7 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
         }
     };
 
-    const puedeEnviarDirecto = !processing && totalVouchers >= 1;
+    const puedeEnviarDirecto = !processing && totalVouchers >= 1 && !formPendiente;
     const puedeGuardarBorrador = !processing
         && (!pedirFormulario || camposSeleccionados.length > 0)
         && (
@@ -533,7 +718,7 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                             </div>
                             {data.destinatario_tipo === 'tercero' && (
                                 <p className="text-[10px] theme-text-muted m-0 ml-1">
-                                    Elija el cliente de cuenta (quien solicita). La razón social a facturar es del tercero — distinta del nombre de la cuenta.
+                                    Separe la cuenta que compra de quien factura (tercero).
                                 </p>
                             )}
                         </div>
@@ -541,8 +726,13 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
 
                     <div className="space-y-2 relative">
                         <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
-                            {data.destinatario_tipo === 'tercero' ? 'Quién solicita (cliente de cuenta)_' : 'Cliente (opcional)_'}
+                            {data.destinatario_tipo === 'tercero' ? 'Cuenta que compra_' : 'Cliente_'}
                         </label>
+                        {data.destinatario_tipo === 'tercero' && (
+                            <p className="text-[10px] theme-text-muted m-0 ml-1">
+                                Número de cliente que presta la cuenta; no es quien factura.
+                            </p>
+                        )}
                         <div className="relative">
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
                             <input
@@ -568,7 +758,7 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
 
                     {clienteSeleccionado && data.destinatario_tipo === 'tercero' && (
                         <div className="p-4 rounded-2xl border theme-border theme-element space-y-1">
-                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Quién solicita</p>
+                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Cuenta que compra</p>
                             <p className="text-sm font-black theme-text-main m-0">
                                 {clienteSeleccionado.numero_cliente} — {clienteSeleccionado.nombre}
                             </p>
@@ -581,13 +771,15 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                     {clienteSeleccionado && data.destinatario_tipo === 'cliente' && (
                         <div className="p-4 rounded-2xl border theme-border theme-element space-y-2">
                             <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Preview datos fiscales actuales</p>
-                            {tieneFiscalesCliente ? (
+                            {clienteTieneFiscales(previewFiscalFuente) || (previewFiscalFuente && Object.keys(camposResaltados).length > 0) ? (
                                 <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 m-0">
                                     {CAMPOS_FISCALES.map(({ clave, etiqueta }) => (
-                                        <div key={clave}>
-                                            <dt className="text-[9px] font-black uppercase theme-text-muted m-0">{etiqueta}</dt>
-                                            <dd className="text-xs font-bold theme-text-main m-0 break-all">{clienteSeleccionado[clave] || '—'}</dd>
-                                        </div>
+                                        <CampoFiscalResaltado
+                                            key={clave}
+                                            etiqueta={etiqueta}
+                                            valor={previewFiscalFuente?.[clave]}
+                                            resalte={camposResaltados[clave]}
+                                        />
                                     ))}
                                 </dl>
                             ) : (
@@ -596,10 +788,10 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                         </div>
                     )}
 
-                    {!(data.destinatario_tipo === 'tercero' && pedirFormulario) && (
+                    {!(data.destinatario_tipo === 'tercero' && pedirFormulario && !factura?.formulario_respondido_at) && (
                         <div className="space-y-2 relative">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
-                                {data.destinatario_tipo === 'tercero' ? 'Razón social a facturar (tercero)_' : 'Razón Social_'}
+                                {data.destinatario_tipo === 'tercero' ? 'Quién factura (tercero)_' : 'Razón Social_'}
                             </label>
                             <div className="relative">
                                 {data.destinatario_tipo === 'tercero' && (
@@ -658,22 +850,24 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                             {data.destinatario_tipo === 'tercero' && errorBusquedaReceptor && (
                                 <p className="text-[10px] text-red-500 font-bold m-0">{errorBusquedaReceptor}</p>
                             )}
-                            {data.destinatario_tipo === 'tercero' && receptorSeleccionado && (
+                            {data.destinatario_tipo === 'tercero' && (receptorSeleccionado || (factura?.formulario_respondido_at && previewFiscalFuente)) && (
                                 <div className="p-4 rounded-2xl border theme-border theme-element space-y-2">
                                     <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
                                         Preview datos fiscales del tercero
                                     </p>
-                                    <p className="text-[10px] font-black theme-text-main m-0">
-                                        {receptorSeleccionado.codigo_interno}
-                                    </p>
+                                    {receptorSeleccionado?.codigo_interno && (
+                                        <p className="text-[10px] font-black theme-text-main m-0">
+                                            {receptorSeleccionado.codigo_interno}
+                                        </p>
+                                    )}
                                     <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 m-0">
                                         {CAMPOS_FISCALES.map(({ clave, etiqueta }) => (
-                                            <div key={clave}>
-                                                <dt className="text-[9px] font-black uppercase theme-text-muted m-0">{etiqueta}</dt>
-                                                <dd className="text-xs font-bold theme-text-main m-0 break-all">
-                                                    {receptorSeleccionado[clave] || '—'}
-                                                </dd>
-                                            </div>
+                                            <CampoFiscalResaltado
+                                                key={clave}
+                                                etiqueta={etiqueta}
+                                                valor={(receptorSeleccionado || previewFiscalFuente)?.[clave]}
+                                                resalte={camposResaltados[clave]}
+                                            />
                                         ))}
                                     </dl>
                                 </div>
@@ -687,19 +881,24 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                         </div>
                     )}
 
-                    {data.destinatario_tipo === 'tercero' && pedirFormulario && (
+                    {data.destinatario_tipo === 'tercero' && pedirFormulario && !factura?.formulario_respondido_at && (
                         <div className="p-4 rounded-2xl border border-dashed theme-border space-y-1">
-                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Razón social a facturar</p>
-                            <p className="text-xs font-bold theme-text-main m-0">
-                                {facturaAEditar?.formulario_respondido_at && data.razon_social && data.razon_social !== 'Pendiente de formulario'
-                                    ? data.razon_social
-                                    : 'La capturará el tercero en el formulario público'}
+                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Quién factura (tercero)</p>
+                            <p className="text-xs font-bold theme-text-main m-0">Pendiente del formulario</p>
+                            <p className="text-[10px] theme-text-muted m-0">
+                                La capturará el tercero en el formulario público — no se mezcla con el nombre de la cuenta.
                             </p>
                         </div>
                     )}
 
                     {(!modoEdicion || trabajandoBorrador) && (
-                        <div className="space-y-3 p-4 rounded-2xl border theme-border">
+                        <div
+                            className="space-y-3 p-4 rounded-2xl border-2"
+                            style={{
+                                borderColor: 'color-mix(in srgb, var(--color-primario) 45%, transparent)',
+                                background: 'color-mix(in srgb, var(--color-primario) 6%, transparent)',
+                            }}
+                        >
                             <label className="flex items-start gap-3 cursor-pointer">
                                 <input
                                     type="checkbox"
@@ -708,9 +907,11 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                                     className="mt-1"
                                 />
                                 <span>
-                                    <span className="text-[10px] font-black uppercase tracking-widest theme-text-main block">Pedir datos por formulario</span>
+                                    <span className="text-[10px] font-black uppercase tracking-widest theme-text-main block">
+                                        Pedir datos por formulario
+                                    </span>
                                     <span className="text-[10px] theme-text-muted">
-                                        Guarda borrador y genera link. Cuando respondan, usted adjunta el voucher y envía a encargada.
+                                        Camino principal: guarda borrador y genera link. Cuando respondan, adjunte el voucher y envíe a encargada.
                                     </span>
                                 </span>
                             </label>
@@ -778,12 +979,35 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                     )}
 
                     <div className="space-y-2">
-                        <div className="flex items-center justify-between ml-1">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest">Excel datos fiscales (opcional)_</label>
-                            <a href={route('facturas.plantilla_fiscales')} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest hover:underline" style={{ color: FACTURA_ACCENT }}>
-                                <Download className="w-3.5 h-3.5" /> Plantilla
-                            </a>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setExcelExpandido(v => !v)}
+                            className="w-full flex items-center justify-between gap-2 px-1 py-1 outline-none"
+                        >
+                            <span className="text-[10px] font-black uppercase theme-text-muted tracking-widest text-left">
+                                Otra forma de cargar datos (Excel)_
+                            </span>
+                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                                {excelExpandido ? 'Ocultar' : 'Mostrar'}
+                            </span>
+                        </button>
+
+                        {excelExpandido && (
+                            <div className="space-y-2 p-4 rounded-2xl border theme-border">
+                                <div className="flex items-center justify-between ml-1">
+                                    <p className="text-[10px] theme-text-muted m-0">
+                                        Usar Excel en lugar del formulario. Si ya hay link pendiente, primero debe responderse o regenerarse.
+                                    </p>
+                                    <a href={route('facturas.plantilla_fiscales')} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest hover:underline shrink-0 ml-2" style={{ color: FACTURA_ACCENT }}>
+                                        <Download className="w-3.5 h-3.5" /> Plantilla
+                                    </a>
+                                </div>
+
+                                {(data.archivo_fiscal || tieneExcelActual) && !pedirFormulario && (
+                                    <p className="text-[10px] theme-text-muted m-0">
+                                        Con Excel cargado, el formulario no es necesario.
+                                    </p>
+                                )}
 
                         {tieneExcelActual && (
                             <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl theme-element border theme-border bg-[color-mix(in_srgb,var(--color-primario)_6%,transparent)]">
@@ -793,7 +1017,7 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                                     <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Se conservará si no sube otro</p>
                                 </div>
                                 <a
-                                    href={urlArchivoFactura(facturaAEditar.id, 'fiscal')}
+                                    href={urlArchivoFactura(factura.id, 'fiscal')}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="p-1.5 theme-text-muted hover:theme-text-main rounded-lg outline-none"
@@ -852,6 +1076,8 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                             }} />
                         </div>
                         {errors.archivo_fiscal && <p className="text-xs text-red-500">{errors.archivo_fiscal}</p>}
+                            </div>
+                        )}
                     </div>
 
                     <ZonaAdjuntoVoucher
@@ -896,6 +1122,12 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                                     ? 'Reenviar corrección'
                                     : 'Enviar a encargada')}
                         </button>
+                        {formPendiente && (
+                            <p className="text-[10px] font-bold theme-text-muted text-center m-0">
+                                Espere a que respondan el formulario fiscal
+                            </p>
+                        )}
+                        {errors.enviar_ahora && <p className="text-xs text-red-500 text-center">{errors.enviar_ahora}</p>}
                     </div>
                 </form>
 

@@ -339,4 +339,119 @@ class DatosFiscalesPublicosFacturaTest extends TestCase
         $this->assertNotNull($primero->fresh()->revocado_en);
         $this->assertTrue($segundo['enlace']->estaVigente());
     }
+
+    public function test_bloquear_enviar_ahora_con_formulario_pendiente(): void
+    {
+        $vendedor = $this->vendedor();
+        $cliente = $this->cliente();
+
+        $creado = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'pedir_formulario' => true,
+            'accion_formulario' => EnlaceDatosFiscales::ACCION_PRIMERA,
+            'campos_fiscales' => EnlaceDatosFiscales::CAMPOS,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'razon_social' => 'EMPRESA',
+            'numero_cliente' => $cliente->numero_cliente,
+        ], $vendedor->id);
+
+        $solicitud = $creado['solicitud']->fresh();
+        $this->assertNotNull($solicitud->formulario_enviado_at);
+        $this->assertNull($solicitud->formulario_respondido_at);
+
+        \App\Models\SolicitudFacturaVoucher::create([
+            'solicitud_factura_id' => $solicitud->id,
+            'path' => 'facturas/vouchers/test.jpg',
+            'nombre_original' => 'voucher.jpg',
+            'mime' => 'image/jpeg',
+            'orden' => 1,
+        ]);
+
+        try {
+            app(\App\Services\Facturas\ActualizarBorradorFacturaService::class)->ejecutar($solicitud, [
+                'razon_social' => $solicitud->razon_social,
+                'numero_cliente' => $cliente->numero_cliente,
+                'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+                'enviar_ahora' => true,
+            ], $vendedor);
+            $this->fail('Se esperaba ValidationException');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('enviar_ahora', $e->errors());
+        }
+
+        $this->assertSame('Borrador', $solicitud->fresh(['estado'])->estado->nombre);
+    }
+
+    public function test_enviar_ahora_tras_formulario_respondido(): void
+    {
+        Notification::fake();
+        $vendedor = $this->vendedor();
+        $this->encargada();
+        $cliente = $this->cliente();
+
+        $creado = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'pedir_formulario' => true,
+            'accion_formulario' => EnlaceDatosFiscales::ACCION_PRIMERA,
+            'campos_fiscales' => EnlaceDatosFiscales::CAMPOS,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'razon_social' => 'TEMP',
+            'numero_cliente' => $cliente->numero_cliente,
+        ], $vendedor->id);
+
+        $token = EnlaceDatosFiscales::query()->value('codigo_publico');
+        app(AplicarDatosFiscalesPublicosDesdeEnlaceService::class)->ejecutar(
+            $token,
+            $this->datosFiscalesCompletos()
+        );
+
+        $solicitud = $creado['solicitud']->fresh();
+        $this->assertNotNull($solicitud->formulario_respondido_at);
+
+        \App\Models\SolicitudFacturaVoucher::create([
+            'solicitud_factura_id' => $solicitud->id,
+            'path' => 'facturas/vouchers/test.jpg',
+            'nombre_original' => 'voucher.jpg',
+            'mime' => 'image/jpeg',
+            'orden' => 1,
+        ]);
+
+        $resultado = app(\App\Services\Facturas\ActualizarBorradorFacturaService::class)->ejecutar($solicitud, [
+            'razon_social' => $solicitud->razon_social,
+            'numero_cliente' => $cliente->numero_cliente,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'enviar_ahora' => true,
+        ], $vendedor);
+
+        $this->assertSame('Pendiente', $resultado['solicitud']->estado->nombre);
+    }
+
+    public function test_evento_formulario_respondido_sin_por_usuario(): void
+    {
+        \Illuminate\Support\Facades\Event::fake([\App\Events\SolicitudFacturaActualizada::class]);
+        Notification::fake();
+        $vendedor = $this->vendedor();
+        $cliente = $this->cliente();
+
+        app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'pedir_formulario' => true,
+            'accion_formulario' => EnlaceDatosFiscales::ACCION_PRIMERA,
+            'campos_fiscales' => EnlaceDatosFiscales::CAMPOS,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'razon_social' => 'TEMP',
+            'numero_cliente' => $cliente->numero_cliente,
+        ], $vendedor->id);
+
+        $token = EnlaceDatosFiscales::query()->value('codigo_publico');
+        app(AplicarDatosFiscalesPublicosDesdeEnlaceService::class)->ejecutar(
+            $token,
+            $this->datosFiscalesCompletos()
+        );
+
+        \Illuminate\Support\Facades\Event::assertDispatched(
+            \App\Events\SolicitudFacturaActualizada::class,
+            fn ($e) => $e->accion === 'formulario_respondido' && $e->porUsuarioId === null
+        );
+    }
 }

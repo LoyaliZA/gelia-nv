@@ -115,8 +115,8 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
 
             event(new SolicitudFacturaActualizada(
                 solicitudId: $solicitud->id,
-                accion: 'actualizada',
-                porUsuarioId: $enlace->creado_por,
+                accion: 'formulario_respondido',
+                porUsuarioId: null,
                 vendedorId: $solicitud->vendedor_id,
                 departamentoId: $solicitud->departamento_id,
             ));

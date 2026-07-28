@@ -15,7 +15,7 @@ class SolicitudFacturaActualizada implements ShouldBroadcastNow
     public function __construct(
         public int $solicitudId,
         public string $accion,
-        public int $porUsuarioId,
+        public ?int $porUsuarioId,
         public ?int $vendedorId = null,
         public ?int $departamentoId = null,
     ) {}

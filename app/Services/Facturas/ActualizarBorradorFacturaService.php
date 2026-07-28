@@ -14,6 +14,7 @@ use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class ActualizarBorradorFacturaService
 {
@@ -176,6 +177,13 @@ class ActualizarBorradorFacturaService
             }
 
             if ($enviarAhora) {
+                $solicitud = $solicitud->fresh();
+                if ($solicitud->formulario_enviado_at && ! $solicitud->formulario_respondido_at) {
+                    throw ValidationException::withMessages([
+                        'enviar_ahora' => 'Espere a que respondan el formulario fiscal antes de enviar a encargada.',
+                    ]);
+                }
+
                 $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
                 if ($idPendiente === null) {
                     throw new \RuntimeException('Estado Pendiente no configurado.');

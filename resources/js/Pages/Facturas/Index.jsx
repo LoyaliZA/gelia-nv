@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
+import axios from 'axios';
 import { Receipt, Plus, Download, Database, Loader2 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
@@ -38,12 +39,38 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
     const [modalForm, setModalForm] = useState({ abierto: false, modoEdicion: false, factura: null });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, factura: null, estadoId: null, modo: 'emitir' });
     const [modalExpediente, setModalExpediente] = useState({ abierto: false, factura: null });
+    const modalFormRef = useRef(modalForm);
+    useEffect(() => { modalFormRef.current = modalForm; });
 
     useEffect(() => {
         setTabActiva(filtros.tab || 'TODAS');
     }, [filtros.tab]);
 
-    useSolicitudRealtime('solicitudes.facturas', '.solicitud-factura.actualizada', PROPS_LISTADO, auth);
+    const refrescarFacturaModalAbierta = useCallback(async (solicitudId) => {
+        const abierto = modalFormRef.current;
+        if (!abierto?.abierto || abierto.factura?.id == null) return;
+        if (Number(abierto.factura.id) !== Number(solicitudId)) return;
+
+        try {
+            const { data } = await axios.get(route('facturas.show', solicitudId));
+            if (!data?.factura) return;
+            setModalForm(prev => {
+                if (!prev.abierto || prev.factura?.id == null) return prev;
+                if (Number(prev.factura.id) !== Number(solicitudId)) return prev;
+                return { ...prev, factura: data.factura };
+            });
+        } catch {
+            /* ignore */
+        }
+    }, []);
+
+    useSolicitudRealtime('solicitudes.facturas', '.solicitud-factura.actualizada', PROPS_LISTADO, auth, {
+        onEvent: (payload) => {
+            if (payload.accion !== 'formulario_respondido') return;
+            if (payload.solicitud_id == null) return;
+            refrescarFacturaModalAbierta(payload.solicitud_id);
+        },
+    });
 
     const paramsBase = useCallback(
         (extra = {}) => {
@@ -178,7 +205,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                             </a>
                         )}
                         {puedeCrear && (
-                            <button type="button" onClick={() => setModalForm({ abierto: true, modoEdicion: false, factura: null })} className={BTN_PRIMARY}>
+                            <button type="button" onClick={() => setModalForm({ abierto: true, modoEdicion: false, factura: null, instanceKey: Date.now() })} className={BTN_PRIMARY}>
                                 <Plus className="w-4 h-4 shrink-0" /> Nueva solicitud
                             </button>
                         )}
@@ -251,8 +278,8 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                                             onReportar={(factura) => setModalRespuesta({ abierto: true, factura, estadoId: idIncorrecta, modo: 'reportar' })}
                                             onVerificar={verificar}
                                             onEliminar={eliminar}
-                                            onReparar={(factura) => setModalForm({ abierto: true, modoEdicion: true, factura })}
-                                            onEditarBorrador={(factura) => setModalForm({ abierto: true, modoEdicion: false, factura })}
+                                            onReparar={(factura) => setModalForm({ abierto: true, modoEdicion: true, factura, instanceKey: Date.now() })}
+                                            onEditarBorrador={(factura) => setModalForm({ abierto: true, modoEdicion: false, factura, instanceKey: Date.now() })}
                                         />
                                     ))}
                                 </div>
@@ -282,9 +309,18 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
             )}
             {modalForm.abierto && (
                 <ModalFormFactura
-                    key={modalForm.factura?.id ? `${modalForm.modoEdicion ? 'reparar' : 'borrador'}-${modalForm.factura.id}` : 'nueva'}
+                    key={modalForm.instanceKey || modalForm.factura?.id || 'nueva'}
                     onClose={() => setModalForm({ abierto: false, modoEdicion: false, factura: null })}
                     onExito={recargarTrasAccion}
+                    onBorradorCreado={(factura) => {
+                        if (!factura?.id) return;
+                        setModalForm(prev => ({
+                            ...prev,
+                            abierto: true,
+                            modoEdicion: false,
+                            factura,
+                        }));
+                    }}
                     modoEdicion={modalForm.modoEdicion}
                     facturaAEditar={modalForm.factura}
                 />

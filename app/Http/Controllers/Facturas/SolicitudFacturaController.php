@@ -93,6 +93,7 @@ class SolicitudFacturaController extends Controller
         return redirect()->back()->with([
             'success' => $mensaje,
             'enlace_fiscal_url' => $resultado['enlace_url'],
+            'factura_borrador_id' => ($datos['modo'] ?? '') === 'borrador' ? $solicitud->id : null,
         ]);
     }
 
@@ -145,6 +146,7 @@ class SolicitudFacturaController extends Controller
         return redirect()->back()->with([
             'success' => $mensaje,
             'enlace_fiscal_url' => $resultado['enlace_url'],
+            'factura_borrador_id' => $solicitud->id,
         ]);
     }
 
@@ -224,7 +226,7 @@ class SolicitudFacturaController extends Controller
             'vendedor:id,name',
             'estado:id,nombre',
             'cliente:id,numero_cliente,nombre,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social,telefono',
-            'receptorFiscal:id,codigo_interno,rfc,nombre_razon_social',
+            'receptorFiscal:id,codigo_interno,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social,telefono',
             'vouchers:id,solicitud_factura_id,path,nombre_original,orden,mime',
             'enlacesFiscales',
             'respondidaPor:id,name',

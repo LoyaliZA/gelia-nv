@@ -12,10 +12,14 @@ import { recargarModuloInertia } from '../utils/recargarModuloInertia';
  * @param {string}   evento         — Nombre del evento broadcast (ej: '.solicitud-factura.actualizada')
  * @param {string[]} propsListado   — Props de Inertia a recargar (ej: ['facturas', 'metricas', 'filtros'])
  * @param {object}   auth           — Objeto auth de Inertia (auth.user)
+ * @param {{ onEvent?: (payload: object) => void }} [opciones]
  */
-export default function useSolicitudRealtime(canal, evento, propsListado, auth) {
+export default function useSolicitudRealtime(canal, evento, propsListado, auth, opciones = {}) {
     const authRef = useRef(auth);
     useEffect(() => { authRef.current = auth; });
+
+    const onEventRef = useRef(opciones.onEvent);
+    useEffect(() => { onEventRef.current = opciones.onEvent; });
 
     const esRelevante = useCallback((payload) => {
         const user = authRef.current?.user;
@@ -23,7 +27,12 @@ export default function useSolicitudRealtime(canal, evento, propsListado, auth) 
 
         // Quien disparó la acción ya refresca vía onSuccess del form;
         // recargar aquí compite con el redirect de Inertia y puede dejar props viejas.
-        if (payload.por_usuario_id != null && Number(payload.por_usuario_id) === Number(user.id)) {
+        // Excepción: respuesta del formulario público (por_usuario_id null / accion dedicada).
+        if (
+            payload.accion !== 'formulario_respondido'
+            && payload.por_usuario_id != null
+            && Number(payload.por_usuario_id) === Number(user.id)
+        ) {
             return false;
         }
 
@@ -76,14 +85,18 @@ export default function useSolicitudRealtime(canal, evento, propsListado, auth) 
 
         const channel = window.Echo.private(canal);
 
-        channel.listen(evento, (payload) => {
+        const handler = (payload) => {
+            onEventRef.current?.(payload);
             if (esRelevante(payload)) {
                 recargarModuloInertia(propsListado);
             }
-        });
+        };
+
+        channel.listen(evento, handler);
 
         return () => {
-            window.Echo.leave(canal);
+            // No Echo.leave: otros listeners (p. ej. modal abierto) comparten el canal.
+            channel.stopListening(evento, handler);
         };
     }, [canal, evento, propsListado, esRelevante]);
 }
