@@ -83,6 +83,24 @@ class SolicitudDireccionPublicaTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_csp_del_form_publico_permite_origen_de_assets_app_url(): void
+    {
+        $csp = $this->get('https://form.neobash.site/direcciones-envio')
+            ->assertOk()
+            ->headers
+            ->get('Content-Security-Policy');
+
+        $this->assertIsString($csp);
+        $this->assertMatchesRegularExpression(
+            "#script-src[^;]*https://gelianv\\.neobash\\.site(?:[ ;]|$)#",
+            $csp
+        );
+        $this->assertMatchesRegularExpression(
+            "#style-src[^;]*https://gelianv\\.neobash\\.site(?:[ ;]|$)#",
+            $csp
+        );
+    }
+
     public function test_host_interno_sigue_sirviendo_login(): void
     {
         $this->get('https://gelianv.neobash.site/login')

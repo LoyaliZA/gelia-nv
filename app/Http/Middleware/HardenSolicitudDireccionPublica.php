@@ -30,6 +30,15 @@ class HardenSolicitudDireccionPublica
         $connectSrc = ["'self'"];
         $imgSrc = ["'self'", 'data:', 'blob:'];
 
+        // FORM_PUBLIC_URL != APP_URL: Vite/@vite emite assets absolutos vía URL::forceRootUrl(APP_URL).
+        foreach ($this->appAssetOrigins() as $origin) {
+            $scriptSrc[] = $origin;
+            $styleSrc[] = $origin;
+            $fontSrc[] = $origin;
+            $imgSrc[] = $origin;
+            $connectSrc[] = $origin;
+        }
+
         // Sail/Vite HMR + Reverb: el formulario público usa app.blade.php con @vite/Echo.
         if (app()->isLocal() || (bool) config('app.debug')) {
             foreach ($this->viteOrigins() as $origin) {
@@ -58,6 +67,44 @@ class HardenSolicitudDireccionPublica
             "frame-ancestors 'none'",
             "object-src 'none'",
         ]);
+    }
+
+    /**
+     * Orígenes de build Vite/APP_URL cuando el form se sirve en otro host.
+     *
+     * @return list<string>
+     */
+    private function appAssetOrigins(): array
+    {
+        $origins = [];
+        foreach ([(string) config('app.url'), (string) env('ASSET_URL', '')] as $url) {
+            $origin = $this->originFromUrl($url);
+            if ($origin !== null) {
+                $origins[] = $origin;
+            }
+        }
+
+        return array_values(array_unique($origins));
+    }
+
+    private function originFromUrl(string $url): ?string
+    {
+        $url = rtrim($url, '/');
+        if ($url === '') {
+            return null;
+        }
+
+        $parts = parse_url($url);
+        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'])) {
+            return null;
+        }
+
+        $origin = $parts['scheme'].'://'.$parts['host'];
+        if (isset($parts['port'])) {
+            $origin .= ':'.$parts['port'];
+        }
+
+        return $origin;
     }
 
     /**
