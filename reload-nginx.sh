@@ -6,9 +6,11 @@
 #   ./reload-nginx.sh
 #
 # Qué hace:
-#   1. Valida la config montada (nginx -t)
-#   2. Recarga en caliente (nginx -s reload) — sin tumbar el contenedor
-#   3. Si el reload falla, reinicia el servicio web por Compose
+#   1. Sincroniza default.conf al inode montado (git pull reemplaza el inode;
+#      un contenedor largo vivo seguiría leyendo el archivo viejo)
+#   2. Valida la config (nginx -t)
+#   3. Recarga en caliente (nginx -s reload) — sin tumbar el contenedor
+#   4. Si el reload falla, reinicia el servicio web por Compose
 # ==============================================================================
 
 set -euo pipefail
@@ -30,6 +32,19 @@ fi
 if [ ! -f default.conf ]; then
     fail "No se encontró default.conf en ${SCRIPT_DIR}."
 fi
+
+# git pull / checkout reemplaza el inode del archivo en el host; un contenedor
+# con bind-mount de archivo largo vivo sigue leyendo el inode viejo. Un
+# `nginx -s reload` solo no aplica cambios. Escribimos vía la ruta montada
+# para actualizar el inode que nginx realmente lee (sin recrear el contenedor).
+log "Sincronizando default.conf al inode montado en ${WEB_CONTAINER}..."
+HOST_MD5="$(md5sum default.conf | awk '{print $1}')"
+docker exec -i "$WEB_CONTAINER" sh -c 'cat > /etc/nginx/conf.d/default.conf' < default.conf
+CTR_MD5="$(docker exec -i "$WEB_CONTAINER" md5sum /etc/nginx/conf.d/default.conf | awk '{print $1}')"
+if [ "$HOST_MD5" != "$CTR_MD5" ]; then
+    fail "Tras sincronizar, host ($HOST_MD5) y contenedor ($CTR_MD5) no coinciden."
+fi
+ok "default.conf sincronizado (md5=${CTR_MD5})."
 
 log "Validando configuración de Nginx..."
 if ! docker exec -i "$WEB_CONTAINER" nginx -t; then
