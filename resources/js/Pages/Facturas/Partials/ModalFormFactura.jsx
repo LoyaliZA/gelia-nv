@@ -6,7 +6,7 @@ import { X, Receipt, Search, Download, FileSpreadsheet, AlertOctagon, ExternalLi
 import ZonaAdjuntoVoucher from './ZonaAdjuntoVoucher';
 import { FACTURA_ACCENT, BTN_PRIMARY, BTN_SECONDARY, urlArchivoFactura, esImagenVoucher, esPdfVoucher, receptorFiscalDeFactura } from './facturasStyles';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
-import { normalizarRazonSocial } from '../../../utils/reglasCatalogosFiscales';
+import { normalizarRazonSocial, normalizarRazonSocialAlEscribir } from '../../../utils/reglasCatalogosFiscales';
 
 const CAMPOS_FISCALES = [
     { clave: 'rfc', etiqueta: 'RFC' },
@@ -621,7 +621,8 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                             <input
                                 required={!(data.destinatario_tipo === 'tercero' && pedirFormulario)}
                                 value={data.razon_social}
-                                onChange={e => setData('razon_social', normalizarRazonSocial(e.target.value))}
+                                onChange={e => setData('razon_social', normalizarRazonSocialAlEscribir(e.target.value))}
+                                onBlur={() => setData('razon_social', normalizarRazonSocial(data.razon_social))}
                                 className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none"
                                 placeholder={data.destinatario_tipo === 'tercero' ? 'Nombre fiscal del tercero a facturar' : 'Nombre o razón social a facturar'}
                             />

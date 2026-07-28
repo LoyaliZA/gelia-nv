@@ -13,6 +13,14 @@ class NormalizarRazonSocialTest extends TestCase
             'JOSE PEREZ',
             ReglasCatalogosFiscales::normalizarRazonSocial('  José Pérez  ')
         );
+        $this->assertSame(
+            'RAZON SOCIAL',
+            ReglasCatalogosFiscales::normalizarRazonSocial(' RAZON SOCIAL ')
+        );
+        $this->assertSame(
+            'RAZON SOCIAL',
+            ReglasCatalogosFiscales::normalizarRazonSocial('RAZON SOCIAL')
+        );
     }
 
     public function test_conserva_enie(): void

@@ -15,6 +15,7 @@ import {
     usoCfdiParaRegimen,
     USO_SIN_EFECTOS_FISCALES,
     normalizarRazonSocial,
+    normalizarRazonSocialAlEscribir,
 } from '../../../utils/reglasCatalogosFiscales';
 
 const CAMPOS = [
@@ -169,11 +170,15 @@ export default function ModalEditarDatosFiscales({
                                                 if (key === 'telefono') val = val.replace(/\D/g, '').slice(0, 10);
                                                 if (key === 'rfc') val = val.toUpperCase().replace(/[^A-ZÑ&0-9]/gi, '').slice(0, 13);
                                                 if (key === 'codigo_postal') val = val.replace(/\D/g, '').slice(0, 5);
-                                                if (key === 'nombre_razon_social') val = normalizarRazonSocial(val);
+                                                if (key === 'nombre_razon_social') val = normalizarRazonSocialAlEscribir(val);
                                                 setData(key, val);
                                                 if (errors[key]) clearErrors(key);
                                             }}
                                             onBlur={() => {
+                                                if (key === 'nombre_razon_social') {
+                                                    setData('nombre_razon_social', normalizarRazonSocial(data.nombre_razon_social));
+                                                    return;
+                                                }
                                                 if (key !== 'correo_electronico') return;
                                                 const val = String(data.correo_electronico || '').trim();
                                                 if (val && !esCorreoValido(val)) {

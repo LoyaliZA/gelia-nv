@@ -15,6 +15,7 @@ import {
     normalizarRfc,
     errorRfc,
     normalizarRazonSocial,
+    normalizarRazonSocialAlEscribir,
 } from '../../../utils/reglasCatalogosFiscales';
 
 const LABEL = 'mb-1.5 block text-[9px] font-black uppercase tracking-widest theme-text-muted';
@@ -225,11 +226,15 @@ export default function FormularioPublico({
                                                     if (campo.clave === 'codigo_postal') val = val.replace(/\D/g, '').slice(0, 5);
                                                     if (campo.clave === 'correo_electronico') val = val.toLowerCase();
                                                     if (campo.clave === 'telefono') val = val.replace(/\D/g, '').slice(0, 10);
-                                                    if (campo.clave === 'nombre_razon_social') val = normalizarRazonSocial(val);
+                                                    if (campo.clave === 'nombre_razon_social') val = normalizarRazonSocialAlEscribir(val);
                                                     setData(campo.clave, val);
                                                     if (errors[campo.clave]) clearErrors(campo.clave);
                                                 }}
                                                 onBlur={() => {
+                                                    if (campo.clave === 'nombre_razon_social') {
+                                                        setData('nombre_razon_social', normalizarRazonSocial(data.nombre_razon_social));
+                                                        return;
+                                                    }
                                                     if (campo.clave === 'correo_electronico') {
                                                         const val = String(data.correo_electronico || '').trim();
                                                         if (val && !esCorreoValido(val)) {

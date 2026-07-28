@@ -54,18 +54,33 @@ export function errorRfc(rfc) {
 }
 
 /**
- * Razón social factura-safe: trim, sin acentos (conserva Ñ), MAYÚSCULAS.
+ * Al tipear: MAYÚSCULAS, sin acentos (conserva Ñ), sin espacios al inicio.
+ * Conserva un espacio final para poder escribir el siguiente nombre/apellido.
  */
-export function normalizarRazonSocial(valor) {
-    let s = String(valor || '').trim();
+export function normalizarRazonSocialAlEscribir(valor) {
+    let s = String(valor || '');
     if (!s) return '';
+
+    const terminaEnEspacio = /\s$/.test(s);
 
     s = s.replace(/[Ññ]/g, '\u0000');
     s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     s = s.replace(/\u0000/g, 'Ñ');
     s = s.toUpperCase();
     s = s.replace(/[^A-Z0-9Ñ&.\-' ]+/g, '');
-    s = s.replace(/\s+/g, ' ').trim();
+    s = s.replace(/^\s+/, '');
+    s = s.replace(/\s+/g, ' ');
+    if (terminaEnEspacio && s !== '' && !s.endsWith(' ')) {
+        s += ' ';
+    }
 
     return s;
+}
+
+/**
+ * Al guardar/blur: igual que al escribir + sin espacios al inicio ni al final.
+ * " RAZON SOCIAL " → "RAZON SOCIAL"
+ */
+export function normalizarRazonSocial(valor) {
+    return normalizarRazonSocialAlEscribir(valor).trim();
 }
