@@ -85,11 +85,7 @@ detect_docker_compose() {
         fail "No se encontró Docker Compose. Requiere 'docker compose' (plugin v2) o 'docker-compose'."
     fi
 
-    # #region agent log
-    local debug_log="${SCRIPT_DIR}/.cursor/debug-8c8146.log"
-    mkdir -p "${SCRIPT_DIR}/.cursor"
-    printf '%s\n' "{\"sessionId\":\"8c8146\",\"runId\":\"post-fix\",\"hypothesisId\":\"A\",\"location\":\"update-safe.sh:detect_docker_compose\",\"message\":\"compose command detected\",\"data\":{\"compose_bin\":\"${COMPOSE_BIN_DISPLAY}\"},\"timestamp\":$(($(date +%s)*1000))}" >> "$debug_log"
-    # #endregion
+
 
     ok "Docker Compose detectado: ${COMPOSE_BIN_DISPLAY}"
 }
@@ -237,10 +233,10 @@ main() {
         fail "El contenedor ${APP_CONTAINER} no está corriendo. Ejecute primero: ${COMPOSE_BIN_DISPLAY} -f ${COMPOSE_FILE} up -d"
     fi
 
-    # 1. Código fuente
+    # 1. Código fuente (sin abrir editor de merge commit)
     if ! $SKIP_GIT; then
         log "Descargando cambios desde origin/${GIT_BRANCH}..."
-        git pull origin "$GIT_BRANCH"
+        GIT_EDITOR=true git pull --no-edit origin "$GIT_BRANCH"
         ok "Repositorio actualizado."
     else
         warn "Omitiendo git pull (--skip-git)."

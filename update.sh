@@ -9,9 +9,9 @@ source "${SCRIPT_DIR}/scripts/backup-db.sh"
 # Script de Actualización Automática - GeliaNV
 # ==============================================================================
 
-# 1. Obtener cambios de GitHub
+# 1. Obtener cambios de GitHub (sin abrir editor de merge commit)
 echo "Descargando actualizaciones desde el repositorio..."
-git pull origin main
+GIT_EDITOR=true git pull --no-edit origin main
 
 # 2. Sincronizar permisos y excepciones de Git (Preventivo)
 docker exec -i gelianv_app git config --global --add safe.directory /var/www/html
