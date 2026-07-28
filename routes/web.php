@@ -357,6 +357,13 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     Route::middleware(['can:facturas.gestionar_datos_fiscales'])->prefix('facturas/datos-fiscales')->name('facturas.datos_fiscales.')->group(function () {
         Route::get('/', [DatosFiscalesController::class, 'index'])->name('index');
+        Route::get('/plantilla-clientes', [DatosFiscalesController::class, 'plantillaClientes'])->name('plantilla_clientes');
+        Route::post('/importar-clientes', [DatosFiscalesController::class, 'importarClientes'])->name('importar_clientes');
+        Route::get('/plantilla-receptores', [DatosFiscalesController::class, 'plantillaReceptores'])->name('plantilla_receptores');
+        Route::post('/importar-receptores', [DatosFiscalesController::class, 'importarReceptores'])->name('importar_receptores');
+        Route::get('/receptores/buscar', [DatosFiscalesController::class, 'buscarReceptores'])->name('receptores.buscar');
+        Route::post('/receptores', [DatosFiscalesController::class, 'storeReceptor'])->name('receptores.store');
+        Route::put('/receptores/{receptor}', [DatosFiscalesController::class, 'updateReceptor'])->name('receptores.update');
         Route::put('/{cliente}', [DatosFiscalesController::class, 'update'])->name('update');
     });
 
@@ -365,6 +372,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     Route::middleware(['can:facturas.crear'])->prefix('facturas')->name('facturas.')->group(function () {
+        Route::get('/receptores/buscar', [DatosFiscalesController::class, 'buscarReceptores'])->name('receptores.buscar');
         Route::get('/plantilla-fiscales/descargar', [SolicitudFacturaController::class, 'descargarPlantilla'])->name('plantilla_fiscales');
         Route::post('/', [SolicitudFacturaController::class, 'store'])->name('store');
         Route::put('/{factura}/borrador', [SolicitudFacturaController::class, 'actualizarBorrador'])->name('borrador');
@@ -1077,6 +1085,15 @@ Route::middleware(['auth'])->group(function () {
                 Route::post('/bancos', [CatalogoController::class, 'storeBanco'])->name('bancos.store');
                 Route::put('/bancos/{id}', [CatalogoController::class, 'updateBanco'])->name('bancos.update');
                 Route::delete('/bancos/{id}', [CatalogoController::class, 'destroyBanco'])->name('bancos.destroy');
+
+                // Régimen fiscal / Uso CFDI
+                Route::post('/regimenes-fiscales', [CatalogoController::class, 'storeRegimenFiscal'])->name('regimenes_fiscales.store');
+                Route::put('/regimenes-fiscales/{id}', [CatalogoController::class, 'updateRegimenFiscal'])->name('regimenes_fiscales.update');
+                Route::delete('/regimenes-fiscales/{id}', [CatalogoController::class, 'destroyRegimenFiscal'])->name('regimenes_fiscales.destroy');
+
+                Route::post('/usos-cfdi', [CatalogoController::class, 'storeUsoCfdi'])->name('usos_cfdi.store');
+                Route::put('/usos-cfdi/{id}', [CatalogoController::class, 'updateUsoCfdi'])->name('usos_cfdi.update');
+                Route::delete('/usos-cfdi/{id}', [CatalogoController::class, 'destroyUsoCfdi'])->name('usos_cfdi.destroy');
 
                 // Control Pedidos — catálogos
                 Route::middleware(['can:control_pedidos.configurar_catalogos'])->group(function () {

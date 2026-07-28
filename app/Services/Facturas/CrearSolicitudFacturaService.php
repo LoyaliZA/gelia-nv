@@ -6,9 +6,11 @@ use App\Models\AuditoriaSolicitudFactura;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\Cliente;
 use App\Models\EnlaceDatosFiscales;
+use App\Models\ReceptorFiscal;
 use App\Models\SolicitudFactura;
 use App\Models\SolicitudFacturaVoucher;
 use App\Models\User;
+use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -40,7 +42,9 @@ class CrearSolicitudFacturaService
                 : SolicitudFactura::DESTINATARIO_CLIENTE;
 
             $clienteId = null;
+            $cliente = null;
             $datosFiscales = null;
+            $receptorId = null;
 
             if (! empty($datos['numero_cliente'])) {
                 $cliente = Cliente::where('numero_cliente', $datos['numero_cliente'])->first();
@@ -48,6 +52,20 @@ class CrearSolicitudFacturaService
                     $clienteId = $cliente->id;
                     if ($destinatarioTipo === SolicitudFactura::DESTINATARIO_CLIENTE) {
                         $datosFiscales = $this->importarDatosFiscales->datosFiscalesDesdeCliente($cliente);
+                    }
+                }
+            }
+
+            if ($destinatarioTipo === SolicitudFactura::DESTINATARIO_TERCERO && ! empty($datos['receptor_fiscal_id'])) {
+                $receptor = ReceptorFiscal::query()
+                    ->whereKey((int) $datos['receptor_fiscal_id'])
+                    ->where('activo', true)
+                    ->first();
+                if ($receptor) {
+                    $receptorId = $receptor->id;
+                    $datosFiscales = $receptor->aDatosFiscales();
+                    if (empty($datos['razon_social']) || trim((string) $datos['razon_social']) === '' || trim((string) $datos['razon_social']) === 'Pendiente de formulario') {
+                        $datos['razon_social'] = $receptor->nombre_razon_social ?: 'Pendiente de formulario';
                     }
                 }
             }
@@ -66,12 +84,16 @@ class CrearSolicitudFacturaService
             if ($razonSocial === '' && $destinatarioTipo === SolicitudFactura::DESTINATARIO_TERCERO) {
                 $razonSocial = 'Pendiente de formulario';
             }
+            if ($razonSocial !== '' && $razonSocial !== 'Pendiente de formulario') {
+                $razonSocial = ReglasCatalogosFiscales::normalizarRazonSocial($razonSocial);
+            }
 
             $solicitud = SolicitudFactura::create([
                 'folio' => SolicitudFactura::generarFolio(),
                 'vendedor_id' => $vendedorId,
                 'departamento_id' => $departamentoId,
                 'cliente_id' => $clienteId,
+                'receptor_fiscal_id' => $destinatarioTipo === SolicitudFactura::DESTINATARIO_TERCERO ? $receptorId : null,
                 'destinatario_tipo' => $destinatarioTipo,
                 'catalogo_estado_solicitud_id' => $estado->id,
                 'razon_social' => $razonSocial,
@@ -80,6 +102,15 @@ class CrearSolicitudFacturaService
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? null,
                 'campos_fiscales_solicitados' => $datos['campos_fiscales'] ?? null,
             ]);
+
+            if (
+                $destinatarioTipo === SolicitudFactura::DESTINATARIO_TERCERO
+                && $cliente
+                && $receptorId
+                && ! empty($datos['vincular_receptor_cliente'])
+            ) {
+                $cliente->receptoresFiscales()->syncWithoutDetaching([$receptorId]);
+            }
 
             $orden = 1;
             foreach ($datos['vouchers'] ?? [] as $voucher) {
@@ -106,6 +137,7 @@ class CrearSolicitudFacturaService
                 'datos_snapshot' => [
                     'razon_social' => $solicitud->razon_social,
                     'destinatario_tipo' => $destinatarioTipo,
+                    'receptor_fiscal_id' => $receptorId,
                     'vouchers_count' => $orden - 1,
                     'tiene_archivo_fiscal' => (bool) $archivoFiscalPath,
                     'modo' => $modo,
@@ -133,7 +165,7 @@ class CrearSolicitudFacturaService
             }
 
             return [
-                'solicitud' => $solicitud->load(['vendedor', 'estado', 'vouchers', 'cliente', 'enlacesFiscales']),
+                'solicitud' => $solicitud->load(['vendedor', 'estado', 'vouchers', 'cliente', 'receptorFiscal', 'enlacesFiscales']),
                 'enlace_url' => $enlaceUrl,
             ];
         });

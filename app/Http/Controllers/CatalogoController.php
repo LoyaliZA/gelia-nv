@@ -16,7 +16,11 @@ use App\Models\CatalogoHorarioTraspaso;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
 use App\Models\CatalogoBanco;
+use App\Models\CatalogoRegimenFiscal;
+use App\Models\CatalogoUsoCfdi;
 use App\Models\Sucursal;
+use App\Support\DepartamentoLogoAssets;
+use Illuminate\Validation\Rule;
 use App\Models\CatalogoTipoAlmacen;
 use App\Models\CatalogoMarcaProducto;
 use App\Models\Almacen;
@@ -96,17 +100,23 @@ class CatalogoController extends Controller
 
     // --- 4. CATÁLOGO DE DEPARTAMENTOS ---
     public function storeDepartamento(Request $request) {
+        $keys = DepartamentoLogoAssets::keysDisponibles();
         Departamento::create($request->validate([
-            'nombre' => 'required|string|max:255', 
-            'activo' => 'boolean'
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean',
+            'logo_key_claro' => ['nullable', 'string', 'max:64', Rule::in($keys)],
+            'logo_key_oscuro' => ['nullable', 'string', 'max:64', Rule::in($keys)],
         ]));
         return back()->with('success', 'Departamento creado correctamente.');
     }
 
     public function updateDepartamento(Request $request, $id) {
+        $keys = DepartamentoLogoAssets::keysDisponibles();
         Departamento::findOrFail($id)->update($request->validate([
-            'nombre' => 'required|string|max:255', 
-            'activo' => 'boolean'
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean',
+            'logo_key_claro' => ['nullable', 'string', 'max:64', Rule::in($keys)],
+            'logo_key_oscuro' => ['nullable', 'string', 'max:64', Rule::in($keys)],
         ]));
         return back()->with('success', 'Departamento actualizado.');
     }
@@ -869,5 +879,65 @@ class CatalogoController extends Controller
         CatalogoOrigenPedido::findOrFail($id)->delete();
 
         return back()->with('success', 'Origen de pedido eliminado.');
+    }
+
+    // --- RÉGIMEN FISCAL ---
+    public function storeRegimenFiscal(Request $request)
+    {
+        CatalogoRegimenFiscal::create($request->validate([
+            'codigo' => 'required|string|max:10|unique:catalogo_regimen_fiscal,codigo',
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Régimen fiscal registrado.');
+    }
+
+    public function updateRegimenFiscal(Request $request, $id)
+    {
+        CatalogoRegimenFiscal::findOrFail($id)->update($request->validate([
+            'codigo' => 'required|string|max:10|unique:catalogo_regimen_fiscal,codigo,' . $id,
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Régimen fiscal actualizado.');
+    }
+
+    public function destroyRegimenFiscal($id)
+    {
+        CatalogoRegimenFiscal::findOrFail($id)->delete();
+
+        return back()->with('success', 'Régimen fiscal eliminado.');
+    }
+
+    // --- USO CFDI ---
+    public function storeUsoCfdi(Request $request)
+    {
+        CatalogoUsoCfdi::create($request->validate([
+            'codigo' => 'required|string|max:10|unique:catalogo_uso_cfdi,codigo',
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Uso de CFDI registrado.');
+    }
+
+    public function updateUsoCfdi(Request $request, $id)
+    {
+        CatalogoUsoCfdi::findOrFail($id)->update($request->validate([
+            'codigo' => 'required|string|max:10|unique:catalogo_uso_cfdi,codigo,' . $id,
+            'nombre' => 'required|string|max:255',
+            'activo' => 'boolean',
+        ]));
+
+        return back()->with('success', 'Uso de CFDI actualizado.');
+    }
+
+    public function destroyUsoCfdi($id)
+    {
+        CatalogoUsoCfdi::findOrFail($id)->delete();
+
+        return back()->with('success', 'Uso de CFDI eliminado.');
     }
 }

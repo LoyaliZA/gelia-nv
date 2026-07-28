@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { buildSidebarNavigation, collectOpenGroupIdsForUrl } from '../config/sidebarNavigation';
 import SidebarNavLeafLink from './SidebarNavLeafLink';
@@ -6,6 +6,9 @@ import SidebarNavLeafLink from './SidebarNavLeafLink';
 /** Sangría: raíz (caja), nivel 2, nivel 3 */
 const PADDING_LINK = { 1: 'pl-10', 2: 'pl-14', 3: 'pl-16' };
 const PADDING_SUBGROUP = { 1: 'pl-10', 2: 'pl-14' };
+const SCROLL_PAD_PX = 8;
+/** Alineado con --gelia-sidebar-widget-ms (Sidebar.jsx) + margen de transición */
+const EXPAND_SCROLL_WATCH_MS = 360;
 
 function resolveHref(item) {
     if (typeof item?.href === 'function') return item.href();
@@ -21,6 +24,54 @@ function groupHasActiveDescendant(node, url) {
     return false;
 }
 
+/** Delta de scrollTop para revelar el bloque en el scroller (0 = ya visible). */
+export function sidebarExpandScrollDelta(scrollerRect, blockRect, pad = SCROLL_PAD_PX) {
+    const usableHeight = scrollerRect.height - pad * 2;
+
+    if (blockRect.height > usableHeight) {
+        return blockRect.top - scrollerRect.top - pad;
+    }
+    if (blockRect.bottom > scrollerRect.bottom - pad) {
+        return blockRect.bottom - scrollerRect.bottom + pad;
+    }
+    if (blockRect.top < scrollerRect.top + pad) {
+        return blockRect.top - scrollerRect.top - pad;
+    }
+    return 0;
+}
+
+/** Ajusta el scroll del panel para ver el bloque expandido completo (o el tope si no cabe). */
+function ensureBlockVisibleInSidebarScroll(blockEl) {
+    const scroller = blockEl?.closest?.('.gelia-sidebar-access-scroll');
+    if (!scroller || !blockEl) return;
+
+    const delta = sidebarExpandScrollDelta(
+        scroller.getBoundingClientRect(),
+        blockEl.getBoundingClientRect()
+    );
+    if (Math.abs(delta) > 1) scroller.scrollTop += delta;
+}
+
+/** Durante la animación de apertura, mantiene el bloque a la vista; suelta al terminar. */
+function trackExpandScroll(blockEl) {
+    if (!blockEl) return () => {};
+
+    ensureBlockVisibleInSidebarScroll(blockEl);
+
+    if (typeof ResizeObserver === 'undefined') {
+        const t = setTimeout(() => ensureBlockVisibleInSidebarScroll(blockEl), EXPAND_SCROLL_WATCH_MS);
+        return () => clearTimeout(t);
+    }
+
+    const ro = new ResizeObserver(() => ensureBlockVisibleInSidebarScroll(blockEl));
+    ro.observe(blockEl);
+    const t = setTimeout(() => ro.disconnect(), EXPAND_SCROLL_WATCH_MS);
+    return () => {
+        clearTimeout(t);
+        ro.disconnect();
+    };
+}
+
 export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) {
     const tree = useMemo(
         () => buildSidebarNavigation({ can, showAdminMenu }),
@@ -31,6 +82,15 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) 
         const ids = collectOpenGroupIdsForUrl(tree, url);
         return Object.fromEntries([...ids].map((id) => [id, true]));
     });
+
+    const groupRefs = useRef(new Map());
+    const pendingScrollGroupIdRef = useRef(null);
+    const stopExpandScrollRef = useRef(null);
+
+    const setGroupRef = useCallback((id) => (el) => {
+        if (el) groupRefs.current.set(id, el);
+        else groupRefs.current.delete(id);
+    }, []);
 
     useEffect(() => {
         const ids = collectOpenGroupIdsForUrl(tree, url);
@@ -43,8 +103,25 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) 
         });
     }, [url, tree]);
 
+    useEffect(() => () => {
+        stopExpandScrollRef.current?.();
+        stopExpandScrollRef.current = null;
+    }, []);
+
+    useLayoutEffect(() => {
+        const id = pendingScrollGroupIdRef.current;
+        if (!id || !openGroups[id]) return;
+        pendingScrollGroupIdRef.current = null;
+        stopExpandScrollRef.current?.();
+        stopExpandScrollRef.current = trackExpandScroll(groupRefs.current.get(id));
+    }, [openGroups]);
+
     const toggleGroup = useCallback((id) => {
-        setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
+        setOpenGroups((prev) => {
+            const opening = !prev[id];
+            if (opening) pendingScrollGroupIdRef.current = id;
+            return { ...prev, [id]: opening };
+        });
     }, []);
 
     /** Nivel 1: categorías raíz — única fila con caja oscura y chevron */
@@ -54,7 +131,11 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) 
         const hasActiveChild = groupHasActiveDescendant(group, url);
 
         return (
-            <div key={group.id} className="gelia-sidebar-nav-root-block flex flex-col gap-0.5 min-w-0">
+            <div
+                key={group.id}
+                ref={setGroupRef(group.id)}
+                className="gelia-sidebar-nav-root-block flex flex-col gap-0.5 min-w-0"
+            >
                 <button
                     type="button"
                     onClick={() => toggleGroup(group.id)}
@@ -96,7 +177,11 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) 
         const childLinkDepth = depth + 1;
 
         return (
-            <div key={group.id} className="flex flex-col gap-0.5 min-w-0">
+            <div
+                key={group.id}
+                ref={setGroupRef(group.id)}
+                className="flex flex-col gap-0.5 min-w-0"
+            >
                 <button
                     type="button"
                     onClick={() => toggleGroup(group.id)}

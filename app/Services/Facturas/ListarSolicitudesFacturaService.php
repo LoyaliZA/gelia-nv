@@ -16,6 +16,7 @@ class ListarSolicitudesFacturaService
             'departamento:id,nombre',
             'estado:id,nombre',
             'cliente:id,numero_cliente,nombre,rfc,nombre_razon_social',
+            'receptorFiscal:id,codigo_interno,rfc,nombre_razon_social',
             'respondidaPor:id,name',
             'vouchers:id,solicitud_factura_id,path,nombre_original,mime,orden',
             'enlacesFiscales',

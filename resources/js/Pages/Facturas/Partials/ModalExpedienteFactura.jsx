@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, FileSpreadsheet, Download, ChevronLeft, ChevronRight, Copy, Check, Loader2, Receipt, AlertOctagon, RefreshCw } from 'lucide-react';
-import { ACCENT, BTN_PRIMARY, BTN_SECONDARY, esImagenVoucher, esPdfVoucher, urlArchivoFactura, nombreArchivoFacturaPdf } from './facturasStyles';
+import { ACCENT, BTN_PRIMARY, BTN_SECONDARY, esImagenVoucher, esPdfVoucher, urlArchivoFactura, nombreArchivoFacturaPdf, receptorFiscalDeFactura } from './facturasStyles';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 
 const ETIQUETAS_DEFAULT = {
@@ -182,7 +182,14 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                         </div>
                                         <div>
                                             <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1">Razón social a facturar (tercero)</p>
-                                            <p className="text-sm font-black theme-text-main m-0">{factura.razon_social || '—'}</p>
+                                            <p className="text-sm font-black theme-text-main m-0">
+                                                {factura.razon_social || '—'}
+                                                {receptorFiscalDeFactura(factura)?.codigo_interno && (
+                                                    <span className="ml-2 font-mono font-black" style={{ color: ACCENT }}>
+                                                        {receptorFiscalDeFactura(factura).codigo_interno}
+                                                    </span>
+                                                )}
+                                            </p>
                                             <p className="text-[10px] theme-text-muted mt-1 m-0">Solo aplica a esta solicitud; no modifica los fiscales del cliente de cuenta.</p>
                                         </div>
                                     </>

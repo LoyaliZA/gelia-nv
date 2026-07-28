@@ -1,6 +1,6 @@
 import React from 'react';
 import { Receipt, FileText, Paperclip, User, Calendar, Eye, CheckCircle2, XCircle, FileSpreadsheet, Trash2, Download, Edit2 } from 'lucide-react';
-import { ESTADO_BADGE, urlArchivoFactura, nombreArchivoFacturaPdf } from './facturasStyles';
+import { ESTADO_BADGE, urlArchivoFactura, nombreArchivoFacturaPdf, receptorFiscalDeFactura } from './facturasStyles';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { puedePermiso } from '../../../utils/permisos';
 import { nombreEstadoFactura } from './facturasFiltros';
@@ -27,6 +27,7 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
     const cuentaLabel = factura.cliente
         ? `${factura.cliente.numero_cliente} — ${factura.cliente.nombre}`
         : null;
+    const receptorFiscal = esTercero ? receptorFiscalDeFactura(factura) : null;
 
     return (
         <article
@@ -45,6 +46,11 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                             <h3 className="text-sm font-black theme-text-main m-0 leading-snug break-words">{cuentaLabel}</h3>
                             <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
                                 Razón social a facturar: {factura.razon_social || '—'}
+                                {receptorFiscal?.codigo_interno && (
+                                    <span className="ml-2 font-mono font-black" style={{ color: 'var(--color-primario)' }}>
+                                        {receptorFiscal.codigo_interno}
+                                    </span>
+                                )}
                             </p>
                             <p className="text-[10px] font-bold theme-text-muted mt-0.5 m-0">RFC: {rfc}</p>
                         </>

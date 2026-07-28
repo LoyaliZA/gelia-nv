@@ -14,6 +14,8 @@ class Departamento extends Model
     protected $fillable = [
         'nombre',
         'codigo',
+        'logo_key_claro',
+        'logo_key_oscuro',
         'activo',
     ];
 

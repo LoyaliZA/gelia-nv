@@ -16,14 +16,14 @@
                         @foreach($encabezado['logos'] as $index => $logo)
                             @if($index > 0)
                                 <td style="vertical-align:middle; padding:0 16px;">
-                                    <div style="width:1px; height:80px; background:#8B5CF6; opacity:0.5;"></div>
+                                    <div style="width:1px; height:110px; background:#8B5CF6; opacity:0.5;"></div>
                                 </td>
                             @endif
                             <td style="vertical-align:middle;">
                                 @if(!empty($logo['base64']))
                                     <img
                                         src="data:image/png;base64,{{ $logo['base64'] }}"
-                                        style="height:88px; max-width:210px; display:block;"
+                                        style="height:120px; max-width:300px; display:block;"
                                         alt="{{ $logo['alt'] }}"
                                     />
                                 @else

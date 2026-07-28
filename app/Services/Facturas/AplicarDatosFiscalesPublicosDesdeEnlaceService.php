@@ -20,6 +20,7 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
     public function __construct(
         private ValidarEnlaceDatosFiscalesService $validador,
         private GestionarDatosFiscalesClienteService $gestionarDatosFiscales,
+        private GestionarReceptorFiscalService $gestionarReceptor,
     ) {}
 
     /**
@@ -81,6 +82,12 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
                     }
                     $this->gestionarDatosFiscales->actualizar($cliente, $merge);
                 }
+            } elseif ($enlace->destinatario_tipo === SolicitudFactura::DESTINATARIO_TERCERO) {
+                $receptor = $this->gestionarReceptor->upsertDesdeFormulario(
+                    $solicitud->receptor_fiscal_id ? (int) $solicitud->receptor_fiscal_id : null,
+                    $snapshot,
+                );
+                $solicitud->update(['receptor_fiscal_id' => $receptor->id]);
             }
 
             AuditoriaSolicitudFactura::create([
@@ -164,10 +171,10 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
         }
 
         if (isset($datos['rfc'])) {
-            $rfc = strtoupper(preg_replace('/[^A-ZÑ&0-9]/iu', '', $datos['rfc']) ?? '');
-            $rfc = mb_substr($rfc, 0, 13);
-            if (! preg_match('/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/u', $rfc)) {
-                $errores['rfc'] = 'El RFC no tiene un formato válido.';
+            $rfc = ReglasCatalogosFiscales::normalizarRfc($datos['rfc']);
+            $errorRfc = ReglasCatalogosFiscales::errorRfc($rfc);
+            if ($errorRfc !== null) {
+                $errores['rfc'] = $errorRfc;
             } else {
                 $datos['rfc'] = $rfc;
             }

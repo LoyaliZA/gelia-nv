@@ -5,6 +5,7 @@ namespace App\Http\Requests\Facturas;
 use App\Models\EnlaceDatosFiscales;
 use App\Models\SolicitudFactura;
 use App\Services\Facturas\ImportarDatosFiscalesService;
+use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -29,6 +30,12 @@ class ActualizarBorradorFacturaRequest extends FormRequest
                 'string',
                 'max:255',
             ],
+            'receptor_fiscal_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('receptores_fiscales', 'id')->where('activo', true),
+            ],
+            'vincular_receptor_cliente' => ['nullable', 'boolean'],
             'observaciones_vendedor' => ['nullable', 'string', 'max:2000'],
             'archivo_fiscal' => ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
             'eliminar_archivo_fiscal' => ['nullable', 'boolean'],
@@ -46,7 +53,7 @@ class ActualizarBorradorFacturaRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        foreach (['pedir_formulario', 'enviar_ahora', 'eliminar_archivo_fiscal'] as $campo) {
+        foreach (['pedir_formulario', 'enviar_ahora', 'eliminar_archivo_fiscal', 'vincular_receptor_cliente'] as $campo) {
             if ($this->has($campo)) {
                 $this->merge([
                     $campo => filter_var($this->input($campo), FILTER_VALIDATE_BOOLEAN),
@@ -67,6 +74,13 @@ class ActualizarBorradorFacturaRequest extends FormRequest
 
         if ($terceroConForm) {
             $this->merge(['razon_social' => 'Pendiente de formulario']);
+        } elseif ($this->has('razon_social')) {
+            $razon = (string) $this->input('razon_social');
+            if ($razon !== 'Pendiente de formulario') {
+                $this->merge([
+                    'razon_social' => ReglasCatalogosFiscales::normalizarRazonSocial($razon),
+                ]);
+            }
         }
     }
 

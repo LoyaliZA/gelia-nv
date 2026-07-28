@@ -190,7 +190,7 @@ export default function SelectorCatalogoFiscal({
                     });
                 }}
                 className={`${THEME_INPUT} w-full flex items-center justify-between gap-2 text-left cursor-pointer disabled:opacity-50 ${
-                    invalid ? '!border-red-500 focus:!border-red-500 focus:!ring-red-500/30' : ''
+                    invalid ? '!border-orange-500 focus:!border-orange-500 focus:!ring-orange-500/30' : ''
                 }`}
             >
                 <span className={`min-w-0 truncate ${etiqueta ? 'theme-text-main' : 'theme-text-muted'}`}>

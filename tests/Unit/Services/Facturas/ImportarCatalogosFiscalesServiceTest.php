@@ -18,10 +18,12 @@ class ImportarCatalogosFiscalesServiceTest extends TestCase
 
         $this->assertGreaterThanOrEqual(14, $resultado['regimen']);
         $this->assertGreaterThanOrEqual(20, $resultado['uso_cfdi']);
+        $this->assertTrue(CatalogoRegimenFiscal::query()->where('codigo', '601')->exists());
         $this->assertTrue(CatalogoRegimenFiscal::query()->where('codigo', '626')->exists());
         $this->assertTrue(CatalogoUsoCfdi::query()->where('codigo', 'G03')->exists());
+        $this->assertTrue(CatalogoUsoCfdi::query()->where('codigo', 'S01')->exists());
         $this->assertSame(
-            'Régimen Simplificado de Confianza (RESICO) Personas Físicas',
+            'Régimen Simplificado de Confianza',
             CatalogoRegimenFiscal::query()->where('codigo', '626')->value('nombre')
         );
     }

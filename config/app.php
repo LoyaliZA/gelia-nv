@@ -56,6 +56,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Vite Dev Server Port
+    |--------------------------------------------------------------------------
+    |
+    | Puerto del HMR de Vite en local. Debe vivir en config (no env() suelto)
+    | para sobrevivir a php artisan config:cache.
+    |
+    */
+
+    'vite_port' => env('VITE_PORT', '5173'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Public form origin (customer-facing address forms)
     |--------------------------------------------------------------------------
     |

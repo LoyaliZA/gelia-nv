@@ -5,6 +5,7 @@ namespace App\Http\Requests\Facturas;
 use App\Models\EnlaceDatosFiscales;
 use App\Models\SolicitudFactura;
 use App\Services\Facturas\ImportarDatosFiscalesService;
+use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -33,6 +34,12 @@ class StoreSolicitudFacturaRequest extends FormRequest
                 'string',
                 'max:255',
             ],
+            'receptor_fiscal_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('receptores_fiscales', 'id')->where('activo', true),
+            ],
+            'vincular_receptor_cliente' => ['nullable', 'boolean'],
             'observaciones_vendedor' => ['nullable', 'string', 'max:2000'],
             'archivo_fiscal' => ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
             'pedir_formulario' => ['nullable', 'boolean'],
@@ -74,6 +81,19 @@ class StoreSolicitudFacturaRequest extends FormRequest
 
         if ($esBorradorTerceroForm) {
             $this->merge(['razon_social' => 'Pendiente de formulario']);
+        } elseif ($this->has('razon_social')) {
+            $razon = (string) $this->input('razon_social');
+            if ($razon !== 'Pendiente de formulario') {
+                $this->merge([
+                    'razon_social' => ReglasCatalogosFiscales::normalizarRazonSocial($razon),
+                ]);
+            }
+        }
+
+        if ($this->has('vincular_receptor_cliente')) {
+            $this->merge([
+                'vincular_receptor_cliente' => filter_var($this->input('vincular_receptor_cliente'), FILTER_VALIDATE_BOOLEAN),
+            ]);
         }
     }
 

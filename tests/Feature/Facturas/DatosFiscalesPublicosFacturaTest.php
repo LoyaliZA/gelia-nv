@@ -70,8 +70,41 @@ class DatosFiscalesPublicosFacturaTest extends TestCase
     {
         return Departamento::firstOrCreate(
             ['nombre' => 'Ventas Test'],
-            ['activo' => true]
+            ['activo' => true, 'logo_key_claro' => 'aromas_logo_negro', 'logo_key_oscuro' => 'aromas_logo_blanco']
         );
+    }
+
+    public function test_formulario_publico_recibe_branding_del_departamento(): void
+    {
+        $vendedor = $this->vendedor();
+        $cliente = $this->cliente();
+        $depto = $this->departamento();
+        $depto->update([
+            'logo_key_claro' => 'bellaroma_logo_negro',
+            'logo_key_oscuro' => 'bellaroma_logo_blanco',
+        ]);
+
+        $creado = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'pedir_formulario' => true,
+            'accion_formulario' => EnlaceDatosFiscales::ACCION_PRIMERA,
+            'campos_fiscales' => EnlaceDatosFiscales::CAMPOS,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'razon_social' => 'EMPRESA PRUEBA SA DE CV',
+            'numero_cliente' => $cliente->numero_cliente,
+        ], $vendedor->id);
+
+        $enlace = EnlaceDatosFiscales::query()->firstOrFail();
+        $enlace->solicitud->update(['departamento_id' => $depto->id]);
+
+        $this->get('https://form.neobash.site/datos-fiscales/'.$enlace->codigo_publico)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Clientes/DatosFiscales/FormularioPublico', false)
+                ->where('branding.key_claro', 'bellaroma_logo_negro')
+                ->where('branding.key_oscuro', 'bellaroma_logo_blanco')
+                ->where('branding.departamento', 'Ventas Test')
+            );
     }
 
     private function vendedor(): User

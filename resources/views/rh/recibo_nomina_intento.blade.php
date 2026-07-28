@@ -159,7 +159,7 @@
                             @if(!empty($logo['base64']))
                                 <img
                                     src="data:image/png;base64,{{ $logo['base64'] }}"
-                                    style="height:{{ $esHorizontal ? '60px' : '50px' }}; max-width:180px; display:block; filter: grayscale(100%);"
+                                    style="height:{{ $esHorizontal ? '100px' : '90px' }}; max-width:280px; display:block; filter: grayscale(100%);"
                                     alt="{{ $logo['alt'] }}"
                                 />
                             @else

@@ -5,6 +5,7 @@ import { Save, X } from 'lucide-react';
 import {
     THEME_INPUT,
     THEME_LABEL,
+    THEME_TEXTAREA,
     THEME_BTN_PRIMARY,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
@@ -50,22 +51,25 @@ function opcionesParaCampo(catalogos, key, valorActual) {
     return lista;
 }
 
-export default function ModalEditarDatosFiscales({
-    cliente,
+export default function ModalEditarReceptorFiscal({
+    receptor,
     catalogos = { regimen_fiscal: [], uso_cfdi: [] },
     onClose,
 }) {
-    const regimenInicial = cliente.regimen_fiscal || '';
-    const usoInicial = usoCfdiParaRegimen(regimenInicial) || cliente.uso_factura || '';
+    const editando = Boolean(receptor);
+    const regimenInicial = receptor?.regimen_fiscal || '';
+    const usoInicial = usoCfdiParaRegimen(regimenInicial) || receptor?.uso_factura || '';
 
-    const { data, setData, put, processing, errors, setError, clearErrors } = useForm({
-        rfc: cliente.rfc || '',
-        codigo_postal: cliente.codigo_postal || '',
+    const { data, setData, post, put, processing, errors, setError, clearErrors } = useForm({
+        rfc: receptor?.rfc || '',
+        codigo_postal: receptor?.codigo_postal || '',
         regimen_fiscal: regimenInicial,
-        correo_electronico: cliente.correo_electronico || '',
+        correo_electronico: receptor?.correo_electronico || '',
         uso_factura: usoInicial,
-        nombre_razon_social: cliente.nombre_razon_social || '',
-        telefono: cliente.telefono || '',
+        nombre_razon_social: receptor?.nombre_razon_social || '',
+        telefono: receptor?.telefono || '',
+        activo: receptor ? Boolean(receptor.activo) : true,
+        notas: receptor?.notas || '',
     });
 
     const usoBloqueado = esRegimenSueldosSalarios(data.regimen_fiscal);
@@ -99,10 +103,13 @@ export default function ModalEditarDatosFiscales({
             return;
         }
 
-        put(route('facturas.datos_fiscales.update', cliente.id), {
-            preserveScroll: true,
-            onSuccess: () => onClose(),
-        });
+        const opciones = { preserveScroll: true, onSuccess: () => onClose() };
+
+        if (editando) {
+            put(route('facturas.datos_fiscales.receptores.update', receptor.id), opciones);
+        } else {
+            post(route('facturas.datos_fiscales.receptores.store'), opciones);
+        }
     };
 
     return createPortal(
@@ -115,10 +122,10 @@ export default function ModalEditarDatosFiscales({
                 <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                     <div className="min-w-0">
                         <h3 className="text-lg font-black italic uppercase theme-text-main m-0 leading-tight">
-                            Datos fiscales
+                            {editando ? 'Editar receptor' : 'Nuevo receptor'}
                         </h3>
                         <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-1.5 m-0">
-                            {cliente.numero_cliente} — {cliente.nombre}
+                            {editando ? `${receptor.codigo_interno} — receptor fiscal (tercero)` : 'Receptor fiscal (tercero)'}
                         </p>
                     </div>
                     <button
@@ -132,6 +139,19 @@ export default function ModalEditarDatosFiscales({
                 </div>
                 <form onSubmit={guardar} className="flex flex-col flex-1 min-h-0" noValidate>
                     <div className="gelia-modal-body p-5 md:p-6 space-y-4">
+                        {editando && (
+                            <div className="space-y-1.5">
+                                <label className={THEME_LABEL}>Código interno</label>
+                                <input
+                                    type="text"
+                                    value={receptor.codigo_interno}
+                                    disabled
+                                    readOnly
+                                    className={`${THEME_INPUT} opacity-60 cursor-not-allowed`}
+                                />
+                            </div>
+                        )}
+
                         {CAMPOS.map(([key, label]) => {
                             const opciones = opcionesPorCampo[key];
                             const esUsoBloqueado = key === 'uso_factura' && usoBloqueado;
@@ -197,11 +217,35 @@ export default function ModalEditarDatosFiscales({
                                 </div>
                             );
                         })}
+
+                        <div className="space-y-1.5">
+                            <label className={THEME_LABEL}>Notas</label>
+                            <textarea
+                                value={data.notas}
+                                onChange={(e) => setData('notas', e.target.value)}
+                                rows={3}
+                                maxLength={2000}
+                                className={THEME_TEXTAREA}
+                                placeholder="Notas internas del receptor…"
+                            />
+                        </div>
+
+                        <label className="flex items-center gap-3 cursor-pointer pt-1">
+                            <input
+                                type="checkbox"
+                                checked={data.activo}
+                                onChange={(e) => setData('activo', e.target.checked)}
+                                className="w-4 h-4 rounded accent-[var(--color-primario)] cursor-pointer"
+                            />
+                            <span className="text-[10px] font-black uppercase tracking-widest theme-text-main">
+                                Receptor activo
+                            </span>
+                        </label>
                     </div>
                     <div className="gelia-modal-footer p-5 md:p-6">
                         <button type="submit" disabled={processing} className={`${THEME_BTN_PRIMARY} w-full`}>
                             <Save className="w-4 h-4 shrink-0" />
-                            {processing ? 'Guardando…' : 'Guardar cambios'}
+                            {processing ? 'Guardando…' : editando ? 'Guardar cambios' : 'Crear receptor'}
                         </button>
                     </div>
                 </form>

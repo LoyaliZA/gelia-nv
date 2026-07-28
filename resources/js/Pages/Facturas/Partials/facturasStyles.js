@@ -82,3 +82,8 @@ export function esImagenVoucher(voucher) {
     const ref = (voucher.nombre_original || voucher.path || '').toLowerCase();
     return /\.(webp|jpe?g|png|gif)$/.test(ref);
 }
+
+/** Relación receptorFiscal serializada como receptor_fiscal (snake_case) o receptorFiscal. */
+export function receptorFiscalDeFactura(factura) {
+    return factura?.receptor_fiscal || factura?.receptorFiscal || null;
+}

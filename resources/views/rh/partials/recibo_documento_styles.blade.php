@@ -54,19 +54,19 @@
 
     .logo-recibo {
         display: block;
-        height: 88px;
-        max-width: 240px;
+        height: 120px;
+        max-width: 320px;
         filter: grayscale(100%);
     }
 
     body.orientacion-horizontal .logo-recibo {
-        height: 80px;
-        max-width: 220px;
+        height: 110px;
+        max-width: 300px;
     }
 
     body.layout-expandido.orientacion-vertical .logo-recibo {
-        height: 92px;
-        max-width: 260px;
+        height: 128px;
+        max-width: 340px;
     }
 
     body.orientacion-vertical {

@@ -224,6 +224,7 @@ class SolicitudFacturaController extends Controller
             'vendedor:id,name',
             'estado:id,nombre',
             'cliente:id,numero_cliente,nombre,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social,telefono',
+            'receptorFiscal:id,codigo_interno,rfc,nombre_razon_social',
             'vouchers:id,solicitud_factura_id,path,nombre_original,orden,mime',
             'enlacesFiscales',
             'respondidaPor:id,name',

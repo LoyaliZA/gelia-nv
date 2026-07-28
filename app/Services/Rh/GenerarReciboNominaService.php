@@ -135,7 +135,11 @@ class GenerarReciboNominaService
             'esHorizontal' => $esHorizontal,
             'layoutExpandido' => $totalMovimientos <= 12 && ! $modoUltraCompacto,
             'firmaColaboradorBase64' => $firmaColaboradorBase64,
-            'encabezado' => RhReciboAssets::encabezadoParaDepartamento($colaborador->departamento?->nombre, 'negro'),
+            'encabezado' => RhReciboAssets::encabezadoParaDepartamento(
+                $colaborador->departamento?->nombre,
+                'negro',
+                $colaborador->departamento,
+            ),
         ])->setPaper('letter', $orientacion);
 
         return $pdf;

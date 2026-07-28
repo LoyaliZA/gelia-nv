@@ -27,6 +27,8 @@ use App\Models\CatalogoZonaEntrega;
 use App\Models\CatalogoHorarioEntrega;
 use App\Models\CatalogoHorarioTraspaso;
 use App\Models\CatalogoBanco;
+use App\Models\CatalogoRegimenFiscal;
+use App\Models\CatalogoUsoCfdi;
 use App\Models\CatalogoCategoriaActivo;
 use App\Models\CatalogoTipoActivo;
 use App\Models\Sucursal;
@@ -44,6 +46,7 @@ use App\Models\ControlPedidos\CatalogoZonaPedido;
 use App\Models\ControlPedidos\CatalogoReexpedicionPedido;
 use App\Models\CatalogoPorcentajeEscalonamientoLista;
 use App\Models\CatalogoPorcentajeListadoLista;
+use App\Support\DepartamentoLogoAssets;
 use Illuminate\Support\Facades\Auth; // <-- Importante para el usuario en sesión
 use App\Services\Permisos\AsignarPermisosUsuarioService;
 use App\Services\Permisos\ValidarAsignacionPermisosService;
@@ -127,6 +130,16 @@ class AdminController extends Controller
             'reexpedicion_pedido' => CatalogoReexpedicionPedido::with('paqueteria:id,nombre')->orderBy('codigo_postal')->get(),
             'envios_tienda' => CatalogoEnvioTienda::orderBy('nombre')->get(),
             'origenes_pedido' => CatalogoOrigenPedido::orderBy('nombre')->get(),
+            'regimenes_fiscales' => CatalogoRegimenFiscal::orderBy('codigo')->get(),
+            'usos_cfdi' => CatalogoUsoCfdi::orderBy('codigo')->get(),
+            'logos_disponibles' => collect(DepartamentoLogoAssets::disponibles())
+                ->map(fn (array $l) => [
+                    'key' => $l['key'],
+                    'url' => $l['url'],
+                    'label' => $l['label'],
+                ])
+                ->values()
+                ->all(),
         ]);
     }
 

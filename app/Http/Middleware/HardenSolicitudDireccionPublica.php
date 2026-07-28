@@ -130,8 +130,22 @@ class HardenSolicitudDireccionPublica
      */
     private function viteOrigins(): array
     {
-        $port = (string) env('VITE_PORT', '5173');
+        $port = (string) config('app.vite_port', '5173');
         $origins = [];
+
+        // Mismo origen que @vite (public/hot): gana sobre el puerto configurado.
+        $hotPath = public_path('hot');
+        $hotRaw = is_readable($hotPath) ? trim((string) file_get_contents($hotPath)) : null;
+        if (is_string($hotRaw) && $hotRaw !== '') {
+            $hotOrigin = $this->originFromUrl($hotRaw);
+            if ($hotOrigin !== null) {
+                $origins[] = $hotOrigin;
+            }
+            $hotPort = parse_url($hotRaw, PHP_URL_PORT);
+            if ($hotPort) {
+                $port = (string) $hotPort;
+            }
+        }
 
         $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
         if (is_string($appHost) && $appHost !== '') {

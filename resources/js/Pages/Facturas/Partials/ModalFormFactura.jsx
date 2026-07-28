@@ -4,8 +4,9 @@ import { useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { X, Receipt, Search, Download, FileSpreadsheet, AlertOctagon, ExternalLink, RotateCcw, Link2, Copy, Check } from 'lucide-react';
 import ZonaAdjuntoVoucher from './ZonaAdjuntoVoucher';
-import { FACTURA_ACCENT, BTN_PRIMARY, BTN_SECONDARY, urlArchivoFactura, esImagenVoucher, esPdfVoucher } from './facturasStyles';
+import { FACTURA_ACCENT, BTN_PRIMARY, BTN_SECONDARY, urlArchivoFactura, esImagenVoucher, esPdfVoucher, receptorFiscalDeFactura } from './facturasStyles';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
+import { normalizarRazonSocial } from '../../../utils/reglasCatalogosFiscales';
 
 const CAMPOS_FISCALES = [
     { clave: 'rfc', etiqueta: 'RFC' },
@@ -42,6 +43,12 @@ function busquedaClienteDesdeFactura(factura) {
 function clienteTieneFiscales(c) {
     if (!c) return false;
     return !!(String(c.rfc || '').trim() || String(c.nombre_razon_social || '').trim());
+}
+
+function busquedaReceptorDesdeFactura(factura) {
+    const r = receptorFiscalDeFactura(factura);
+    if (!r) return '';
+    return `${r.codigo_interno} — ${r.nombre_razon_social}`;
 }
 
 async function copiarAlPortapapeles(texto) {
@@ -85,6 +92,12 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
     const [mostrarDropdown, setMostrarDropdown] = useState(false);
     const [dragExcel, setDragExcel] = useState(false);
     const [clienteSeleccionado, setClienteSeleccionado] = useState(facturaAEditar?.cliente || null);
+    const [busquedaReceptor, setBusquedaReceptor] = useState(() => busquedaReceptorDesdeFactura(facturaAEditar));
+    const [listaReceptores, setListaReceptores] = useState([]);
+    const [buscandoReceptor, setBuscandoReceptor] = useState(false);
+    const [mostrarDropdownReceptor, setMostrarDropdownReceptor] = useState(false);
+    const [receptorSeleccionado, setReceptorSeleccionado] = useState(() => receptorFiscalDeFactura(facturaAEditar));
+    const [preguntarVinculo, setPreguntarVinculo] = useState(false);
     const [pedirFormulario, setPedirFormulario] = useState(false);
     const [camposSeleccionados, setCamposSeleccionados] = useState(() =>
         facturaAEditar?.campos_fiscales_solicitados?.length
@@ -100,6 +113,8 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
     const excelInputRef = useRef(null);
     const debounceRef = useRef(null);
     const abortBusquedaCliente = useRef(null);
+    const debounceReceptorRef = useRef(null);
+    const abortBusquedaReceptor = useRef(null);
 
     const { data, setData, post, processing, errors, transform } = useForm({
         razon_social: facturaAEditar ? razonSocialDesdeFactura(facturaAEditar) : '',
@@ -107,6 +122,8 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
             ? (facturaAEditar?.cliente?.numero_cliente || facturaAEditar?.datos_fiscales?.numero_cliente || '')
             : '',
         destinatario_tipo: facturaAEditar?.destinatario_tipo || 'cliente',
+        receptor_fiscal_id: facturaAEditar?.receptor_fiscal_id || facturaAEditar?.receptor_fiscal?.id || '',
+        vincular_receptor_cliente: false,
         observaciones_vendedor: facturaAEditar ? (facturaAEditar?.observaciones_vendedor || '') : '',
         archivo_fiscal: null,
         modo: 'pendiente',
@@ -124,6 +141,8 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
             razon_social: razonSocialDesdeFactura(facturaAEditar),
             numero_cliente: facturaAEditar.cliente?.numero_cliente || facturaAEditar.datos_fiscales?.numero_cliente || '',
             destinatario_tipo: facturaAEditar.destinatario_tipo || 'cliente',
+            receptor_fiscal_id: facturaAEditar.receptor_fiscal_id || facturaAEditar.receptor_fiscal?.id || '',
+            vincular_receptor_cliente: false,
             observaciones_vendedor: facturaAEditar.observaciones_vendedor || '',
             archivo_fiscal: null,
             modo: trabajandoBorrador ? 'borrador' : 'pendiente',
@@ -133,6 +152,8 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
         });
         setBusquedaCliente(busquedaClienteDesdeFactura(facturaAEditar));
         setClienteSeleccionado(facturaAEditar.cliente || null);
+        setBusquedaReceptor(busquedaReceptorDesdeFactura(facturaAEditar));
+        setReceptorSeleccionado(receptorFiscalDeFactura(facturaAEditar));
         setVouchers([]);
         setVouchersConservarIds((facturaAEditar.vouchers || []).map(v => v.id));
         setQuitarExcel(false);
@@ -173,6 +194,44 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
     }, [busquedaCliente]);
 
     useEffect(() => {
+        if (data.destinatario_tipo !== 'tercero') {
+            abortBusquedaReceptor.current?.abort();
+            setListaReceptores([]);
+            return;
+        }
+        const q = busquedaReceptor.trim();
+        const clienteId = clienteSeleccionado?.id || null;
+        if (q.length < 2 && !clienteId) {
+            abortBusquedaReceptor.current?.abort();
+            setListaReceptores([]);
+            return;
+        }
+        if (debounceReceptorRef.current) clearTimeout(debounceReceptorRef.current);
+        debounceReceptorRef.current = setTimeout(async () => {
+            abortBusquedaReceptor.current?.abort();
+            const controller = new AbortController();
+            abortBusquedaReceptor.current = controller;
+            setBuscandoReceptor(true);
+            try {
+                const res = await axios.get(route('facturas.receptores.buscar'), {
+                    params: { q, cliente_id: clienteId },
+                    signal: controller.signal,
+                });
+                setListaReceptores(res.data?.data || []);
+            } catch (err) {
+                if (!axios.isCancel(err) && err?.code !== 'ERR_CANCELED') {
+                    setListaReceptores([]);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setBuscandoReceptor(false);
+                }
+            }
+        }, 400);
+        return () => clearTimeout(debounceReceptorRef.current);
+    }, [busquedaReceptor, data.destinatario_tipo, clienteSeleccionado?.id]);
+
+    useEffect(() => {
         const accion = tieneFiscalesCliente && data.destinatario_tipo === 'cliente'
             ? 'update_fields'
             : 'register_first';
@@ -181,6 +240,21 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
             setCamposSeleccionados(CAMPOS_FISCALES.map(c => c.clave));
         }
     }, [tieneFiscalesCliente, data.destinatario_tipo]);
+
+    const verificarVinculoReceptor = async (receptorId, cliente) => {
+        if (!receptorId || !cliente?.id) return;
+        try {
+            const res = await axios.get(route('facturas.receptores.buscar'), {
+                params: { cliente_id: cliente.id },
+            });
+            const vinculados = res.data?.vinculados_ids || [];
+            if (!vinculados.includes(receptorId)) {
+                setPreguntarVinculo(true);
+            }
+        } catch {
+            /* ignore */
+        }
+    };
 
     const seleccionarCliente = (c) => {
         setClienteSeleccionado(c);
@@ -194,6 +268,23 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
         }));
         setBusquedaCliente(`${c.numero_cliente} — ${c.nombre}`);
         setMostrarDropdown(false);
+        if (data.destinatario_tipo === 'tercero' && receptorSeleccionado) {
+            verificarVinculoReceptor(receptorSeleccionado.id, c);
+        }
+    };
+
+    const seleccionarReceptor = (r) => {
+        setReceptorSeleccionado(r);
+        setData(prev => ({
+            ...prev,
+            receptor_fiscal_id: r.id,
+            razon_social: normalizarRazonSocial(r.nombre_razon_social),
+        }));
+        setBusquedaReceptor(`${r.codigo_interno} — ${r.nombre_razon_social}`);
+        setMostrarDropdownReceptor(false);
+        if (clienteSeleccionado) {
+            verificarVinculoReceptor(r.id, clienteSeleccionado);
+        }
     };
 
     const toggleCampo = (clave) => {
@@ -468,6 +559,42 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                         </div>
                     )}
 
+                    {data.destinatario_tipo === 'tercero' && (
+                        <div className="space-y-2 relative">
+                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Receptor fiscal (tercero)_</label>
+                            <div className="relative">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
+                                <input
+                                    type="text"
+                                    value={busquedaReceptor}
+                                    onChange={e => { setBusquedaReceptor(e.target.value); setMostrarDropdownReceptor(true); }}
+                                    onFocus={() => setMostrarDropdownReceptor(true)}
+                                    placeholder="Buscar por código TF, RFC o nombre…"
+                                    className="w-full pl-11 pr-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none"
+                                />
+                            </div>
+                            {mostrarDropdownReceptor && listaReceptores.length > 0 && (
+                                <div className="absolute top-full mt-1 left-0 right-0 z-50 theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                    {listaReceptores.map(r => (
+                                        <button key={r.id} type="button" onClick={() => seleccionarReceptor(r)} className="w-full text-left px-4 py-3 text-xs font-bold theme-text-main hover:bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)] outline-none">
+                                            {r.codigo_interno} — {r.nombre_razon_social}{r.rfc ? ` (${r.rfc})` : ''}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {buscandoReceptor && <p className="text-[10px] theme-text-muted m-0">Buscando…</p>}
+                            {receptorSeleccionado && (
+                                <div className="p-4 rounded-2xl border theme-border theme-element space-y-1">
+                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Receptor fiscal seleccionado</p>
+                                    <p className="text-sm font-black theme-text-main m-0">
+                                        {receptorSeleccionado.codigo_interno} — {receptorSeleccionado.nombre_razon_social}
+                                    </p>
+                                    <p className="text-[10px] theme-text-muted m-0">RFC: {receptorSeleccionado.rfc || '—'}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {clienteSeleccionado && data.destinatario_tipo === 'cliente' && (
                         <div className="p-4 rounded-2xl border theme-border theme-element space-y-2">
                             <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Preview datos fiscales actuales</p>
@@ -494,7 +621,7 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                             <input
                                 required={!(data.destinatario_tipo === 'tercero' && pedirFormulario)}
                                 value={data.razon_social}
-                                onChange={e => setData('razon_social', e.target.value)}
+                                onChange={e => setData('razon_social', normalizarRazonSocial(e.target.value))}
                                 className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none"
                                 placeholder={data.destinatario_tipo === 'tercero' ? 'Nombre fiscal del tercero a facturar' : 'Nombre o razón social a facturar'}
                             />
@@ -713,6 +840,26 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                         </button>
                     </div>
                 </form>
+
+                {preguntarVinculo && (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setPreguntarVinculo(false)}>
+                        <div className="theme-surface border theme-border rounded-2xl p-6 max-w-sm w-full space-y-4" onClick={e => e.stopPropagation()}>
+                            <p className="text-sm font-bold theme-text-main m-0">
+                                ¿Vincular este receptor fiscal al cliente {clienteSeleccionado?.nombre || 'seleccionado'} para reutilizarlo en próximas facturas?
+                            </p>
+                            <div className="flex gap-2 justify-end">
+                                <button type="button" onClick={() => setPreguntarVinculo(false)} className={`${BTN_SECONDARY} !py-2`}>No</button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setData('vincular_receptor_cliente', true); setPreguntarVinculo(false); }}
+                                    className={`${BTN_PRIMARY} !py-2`}
+                                >
+                                    Sí, vincular
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>,
         document.body

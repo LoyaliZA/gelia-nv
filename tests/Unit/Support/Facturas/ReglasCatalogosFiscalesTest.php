@@ -33,4 +33,30 @@ class ReglasCatalogosFiscalesTest extends TestCase
 
         $this->assertSame('G03', $aplicado['uso_factura']);
     }
+
+    public function test_rfc_persona_fisica_requiere_13(): void
+    {
+        $this->assertNull(ReglasCatalogosFiscales::errorRfc('XAXX010101000'));
+        $this->assertSame(
+            'Persona física: el RFC debe tener 13 caracteres.',
+            ReglasCatalogosFiscales::errorRfc('XAXX01010100')
+        );
+    }
+
+    public function test_rfc_empresa_requiere_12(): void
+    {
+        $this->assertNull(ReglasCatalogosFiscales::errorRfc('ABC010101AAA'));
+        $this->assertSame(
+            'Empresa: el RFC debe tener 12 caracteres.',
+            ReglasCatalogosFiscales::errorRfc('ABC010101AAAA')
+        );
+    }
+
+    public function test_rfc_longitud_incompleta(): void
+    {
+        $this->assertSame(
+            'El RFC debe tener 12 caracteres (empresa) o 13 (persona física).',
+            ReglasCatalogosFiscales::errorRfc('ABC010101')
+        );
+    }
 }

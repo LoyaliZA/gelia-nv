@@ -60,6 +60,11 @@ class UpdateDatosFiscalesRequest extends FormRequest
             $merged['correo_electronico'] = mb_strtolower(trim((string) $merged['correo_electronico']));
         }
 
+        if (array_key_exists('nombre_razon_social', $merged)) {
+            $razon = ReglasCatalogosFiscales::normalizarRazonSocial($merged['nombre_razon_social'] ?? null);
+            $merged['nombre_razon_social'] = $razon === '' ? null : $razon;
+        }
+
         if (array_key_exists('telefono', $merged)) {
             $tel = preg_replace('/\D+/', '', (string) $merged['telefono']) ?? '';
             $merged['telefono'] = $tel === '' ? null : $tel;

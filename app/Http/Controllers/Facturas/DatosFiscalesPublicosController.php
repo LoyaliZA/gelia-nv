@@ -9,6 +9,7 @@ use App\Services\Facturas\AplicarDatosFiscalesPublicosDesdeEnlaceService;
 use App\Services\Facturas\ImportarDatosFiscalesService;
 use App\Services\Facturas\ListarCatalogosFiscalesService;
 use App\Services\Facturas\ValidarEnlaceDatosFiscalesService;
+use App\Support\DepartamentoLogoAssets;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -40,11 +41,15 @@ class DatosFiscalesPublicosController extends Controller
             ]);
         }
 
+        $enlace->loadMissing(['solicitud.departamento']);
+        $branding = DepartamentoLogoAssets::brandingPublico($enlace->solicitud?->departamento);
+
         if ($enlace->fueUsado()) {
             return $this->vistaConfirmacion([
                 'aplicado' => true,
                 'ya_utilizado' => true,
                 'motivo' => 'usado',
+                'branding' => $branding,
             ]);
         }
 
@@ -53,6 +58,7 @@ class DatosFiscalesPublicosController extends Controller
                 'aplicado' => false,
                 'enlace_invalido' => true,
                 'motivo' => 'expirado',
+                'branding' => $branding,
             ]);
         }
 
@@ -66,7 +72,7 @@ class DatosFiscalesPublicosController extends Controller
             ]);
         }
 
-        $enlace->loadMissing(['cliente', 'solicitud']);
+        $enlace->loadMissing(['cliente', 'solicitud.departamento']);
         $cliente = $enlace->cliente;
         $clienteResumen = $cliente ? [
             'nombre_enmascarado' => $this->enmascararNombre((string) $cliente->nombre),
@@ -78,6 +84,7 @@ class DatosFiscalesPublicosController extends Controller
             : EnlaceDatosFiscales::CAMPOS;
 
         $etiquetas = app(ImportarDatosFiscalesService::class)->etiquetasParaUi();
+        $branding = DepartamentoLogoAssets::brandingPublico($enlace->solicitud?->departamento);
 
         return Inertia::render('Clientes/DatosFiscales/FormularioPublico', [
             'token' => $token,
@@ -90,6 +97,7 @@ class DatosFiscalesPublicosController extends Controller
                 'etiqueta' => $etiquetas[$clave] ?? $clave,
             ])->values()->all(),
             'catalogos' => $catalogos->activosParaUi(),
+            'branding' => $branding,
         ]);
     }
 
@@ -108,10 +116,16 @@ class DatosFiscalesPublicosController extends Controller
         }
 
         if ($enlace->fueUsado()) {
+            $enlace->loadMissing(['solicitud.departamento']);
+
             return redirect()
                 ->route('datos_fiscales.publicas.confirmacion', ['folio' => 'aplicado'])
-                ->with('ya_utilizado', true);
+                ->with('ya_utilizado', true)
+                ->with('branding', DepartamentoLogoAssets::brandingPublico($enlace->solicitud?->departamento));
         }
+
+        $enlace->loadMissing(['solicitud.departamento']);
+        $branding = DepartamentoLogoAssets::brandingPublico($enlace->solicitud?->departamento);
 
         try {
             $aplicar->ejecutar($token, $request->datosFiscales());
@@ -119,7 +133,8 @@ class DatosFiscalesPublicosController extends Controller
             if (str_contains($e->getMessage(), 'ya fue utilizado')) {
                 return redirect()
                     ->route('datos_fiscales.publicas.confirmacion', ['folio' => 'aplicado'])
-                    ->with('ya_utilizado', true);
+                    ->with('ya_utilizado', true)
+                    ->with('branding', $branding);
             }
 
             throw ValidationException::withMessages([
@@ -129,7 +144,8 @@ class DatosFiscalesPublicosController extends Controller
 
         return redirect()
             ->route('datos_fiscales.publicas.confirmacion', ['folio' => 'aplicado'])
-            ->with('aplicado_ok', true);
+            ->with('aplicado_ok', true)
+            ->with('branding', $branding);
     }
 
     public function confirmacion(Request $request, string $folio): Response
@@ -141,11 +157,13 @@ class DatosFiscalesPublicosController extends Controller
             'motivo' => $folio === 'aplicado'
                 ? ($request->session()->get('ya_utilizado') ? 'usado' : 'ok')
                 : 'invalido',
+            'branding' => $request->session()->get('branding')
+                ?? DepartamentoLogoAssets::brandingPublico(null),
         ]);
     }
 
     /**
-     * @param  array{aplicado?: bool, ya_utilizado?: bool, enlace_invalido?: bool, motivo?: string|null}  $props
+     * @param  array{aplicado?: bool, ya_utilizado?: bool, enlace_invalido?: bool, motivo?: string|null, branding?: array|null}  $props
      */
     private function vistaConfirmacion(array $props): Response
     {
@@ -154,6 +172,7 @@ class DatosFiscalesPublicosController extends Controller
             'ya_utilizado' => (bool) ($props['ya_utilizado'] ?? false),
             'enlace_invalido' => (bool) ($props['enlace_invalido'] ?? false),
             'motivo' => $props['motivo'] ?? null,
+            'branding' => $props['branding'] ?? DepartamentoLogoAssets::brandingPublico(null),
         ]);
     }
 

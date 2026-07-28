@@ -1,19 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Head, useForm } from '@inertiajs/react';
+import { Sun, Moon } from 'lucide-react';
 import {
     geliaCardClass,
     THEME_BTN_PRIMARY,
     THEME_INPUT,
 } from '../../../utils/geliaTheme';
+import { aplicarTemaPublico, leerTemaPublicoInicial } from '../../../utils/aplicarTemaPublico';
 import SelectorCatalogoFiscal from '../../../Components/Facturas/SelectorCatalogoFiscal';
 import {
     esRegimenSueldosSalarios,
     usoCfdiParaRegimen,
     USO_SIN_EFECTOS_FISCALES,
+    normalizarRfc,
+    errorRfc,
+    normalizarRazonSocial,
 } from '../../../utils/reglasCatalogosFiscales';
 
 const LABEL = 'mb-1.5 block text-[9px] font-black uppercase tracking-widest theme-text-muted';
-const INPUT_ERROR = '!border-red-500 focus:!border-red-500 focus:!ring-red-500/30';
+const INPUT_WARN = '!border-orange-500 focus:!border-orange-500 focus:!ring-orange-500/30';
+const CAMPO_WARN = 'rounded-xl border-2 border-orange-500 bg-orange-500/5 p-3';
+const CAMPO_OK = 'rounded-xl border-2 border-transparent p-3';
 
 function opcionesCatalogo(catalogos, clave) {
     if (clave === 'regimen_fiscal') return catalogos?.regimen_fiscal || [];
@@ -31,6 +38,7 @@ export default function FormularioPublico({
     campos = [],
     destinatario_tipo = 'cliente',
     catalogos = { regimen_fiscal: [], uso_cfdi: [] },
+    branding = null,
 }) {
     const initial = { token: token || '' };
     campos.forEach((c) => {
@@ -38,9 +46,16 @@ export default function FormularioPublico({
     });
 
     const { data, setData, post, processing, errors, setError, clearErrors } = useForm(initial);
+    const [isDarkMode, setIsDarkMode] = useState(true);
 
     const usoBloqueado = esRegimenSueldosSalarios(data.regimen_fiscal);
     const tieneUso = campos.some((c) => c.clave === 'uso_factura');
+
+    useEffect(() => {
+        const isDark = leerTemaPublicoInicial();
+        setIsDarkMode(isDark);
+        aplicarTemaPublico(isDark);
+    }, []);
 
     useEffect(() => {
         if (!tieneUso) return;
@@ -49,6 +64,12 @@ export default function FormularioPublico({
             setData('uso_factura', forzado);
         }
     }, [data.regimen_fiscal, data.uso_factura, tieneUso, setData]);
+
+    const toggleTheme = () => {
+        const next = !isDarkMode;
+        setIsDarkMode(next);
+        aplicarTemaPublico(next);
+    };
 
     const enviar = (e) => {
         e.preventDefault();
@@ -67,6 +88,13 @@ export default function FormularioPublico({
             if (campo.clave === 'correo_electronico' && !esCorreoValido(val)) {
                 setError(campo.clave, 'Ingrese un correo electrónico válido.');
                 ok = false;
+            }
+            if (campo.clave === 'rfc') {
+                const msgRfc = errorRfc(val);
+                if (msgRfc) {
+                    setError('rfc', msgRfc);
+                    ok = false;
+                }
             }
             if (campo.clave === 'telefono' && !/^\d{1,10}$/.test(val)) {
                 setError(campo.clave, 'El teléfono solo admite dígitos (máximo 10).');
@@ -87,20 +115,39 @@ export default function FormularioPublico({
 
     return (
         <div
-            className="min-h-screen px-4 py-10 md:py-14"
-            style={{
-                background: 'radial-gradient(ellipse at top, color-mix(in srgb, var(--color-primario) 12%, transparent), var(--color-fondo, #f4f4f5) 55%)',
-            }}
+            className="relative min-h-screen px-4 py-10 md:py-14"
+            style={{ backgroundColor: 'var(--bg-app, #0a0a0a)' }}
         >
             <Head title="Datos fiscales" />
+            <button
+                type="button"
+                onClick={toggleTheme}
+                className="absolute top-4 right-4 md:top-6 md:right-6 z-10 p-2.5 md:p-3 rounded-2xl theme-element border theme-border theme-text-muted hover:text-[var(--color-primario)] transition-all hover:scale-105 outline-none shadow-sm"
+                title={isDarkMode ? 'Modo claro' : 'Modo oscuro'}
+                aria-label={isDarkMode ? 'Activar modo claro' : 'Activar modo oscuro'}
+            >
+                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             <div className={`mx-auto max-w-3xl ${geliaCardClass()} p-6 md:p-10`}>
-                <p className="text-[10px] font-black uppercase tracking-[0.35em] m-0" style={{ color: 'var(--color-primario)' }}>
-                    Gelia NV
-                </p>
-                <h1 className="mt-2 text-3xl md:text-4xl font-black italic tracking-tighter uppercase theme-text-main m-0">
+                {branding?.url_claro ? (
+                    <div className="flex justify-center mb-6">
+                        <img
+                            src={isDarkMode
+                                ? (branding.url_oscuro || branding.url_claro)
+                                : branding.url_claro}
+                            alt={branding.alt || branding.departamento || 'Logo'}
+                            className="h-24 md:h-28 w-auto max-w-[340px] object-contain"
+                        />
+                    </div>
+                ) : (
+                    <p className="text-[10px] font-black uppercase tracking-[0.35em] m-0 text-center" style={{ color: 'var(--color-primario)' }}>
+                        Gelia NV
+                    </p>
+                )}
+                <h1 className="mt-2 text-3xl md:text-4xl font-black italic tracking-tighter uppercase theme-text-main m-0 text-center">
                     Datos fiscales
                 </h1>
-                <p className="mt-3 text-sm theme-text-muted m-0">
+                <p className="mt-3 text-sm theme-text-muted m-0 text-center">
                     Complete la información fiscal solicitada. Al guardar, este enlace se cerrará.
                     {destinatario_tipo === 'tercero'
                         ? ' Los datos se usarán solo para esta factura.'
@@ -130,8 +177,11 @@ export default function FormularioPublico({
                                 const tieneError = Boolean(errors[campo.clave]);
 
                                 return (
-                                    <div key={campo.clave} className={spanAncho ? 'md:col-span-2' : ''}>
-                                        <label className={`${LABEL} ${tieneError ? 'text-red-500' : ''}`}>
+                                    <div
+                                        key={campo.clave}
+                                        className={`${spanAncho ? 'md:col-span-2' : ''} ${tieneError ? CAMPO_WARN : CAMPO_OK}`}
+                                    >
+                                        <label className={`${LABEL} ${tieneError ? 'text-orange-500' : ''}`}>
                                             {campo.etiqueta}
                                         </label>
                                         {esSelect ? (
@@ -167,25 +217,35 @@ export default function FormularioPublico({
                                         ) : (
                                             <input
                                                 type={campo.clave === 'correo_electronico' ? 'email' : 'text'}
-                                                className={`${THEME_INPUT} ${tieneError ? INPUT_ERROR : ''}`}
+                                                className={`${THEME_INPUT} ${tieneError ? INPUT_WARN : ''}`}
                                                 value={data[campo.clave] || ''}
                                                 onChange={(e) => {
                                                     let val = e.target.value;
-                                                    if (campo.clave === 'rfc') val = val.toUpperCase().replace(/[^A-ZÑ&0-9]/gi, '').slice(0, 13);
+                                                    if (campo.clave === 'rfc') val = normalizarRfc(val);
                                                     if (campo.clave === 'codigo_postal') val = val.replace(/\D/g, '').slice(0, 5);
                                                     if (campo.clave === 'correo_electronico') val = val.toLowerCase();
                                                     if (campo.clave === 'telefono') val = val.replace(/\D/g, '').slice(0, 10);
+                                                    if (campo.clave === 'nombre_razon_social') val = normalizarRazonSocial(val);
                                                     setData(campo.clave, val);
                                                     if (errors[campo.clave]) clearErrors(campo.clave);
                                                 }}
                                                 onBlur={() => {
-                                                    if (campo.clave !== 'correo_electronico') return;
-                                                    const val = String(data.correo_electronico || '').trim();
-                                                    if (val && !esCorreoValido(val)) {
-                                                        setError('correo_electronico', 'Ingrese un correo electrónico válido.');
+                                                    if (campo.clave === 'correo_electronico') {
+                                                        const val = String(data.correo_electronico || '').trim();
+                                                        if (val && !esCorreoValido(val)) {
+                                                            setError('correo_electronico', 'Ingrese un correo electrónico válido.');
+                                                        }
+                                                        return;
+                                                    }
+                                                    if (campo.clave === 'rfc') {
+                                                        const val = String(data.rfc || '').trim();
+                                                        if (!val) return;
+                                                        const msgRfc = errorRfc(val);
+                                                        if (msgRfc) setError('rfc', msgRfc);
                                                     }
                                                 }}
                                                 required
+                                                minLength={campo.clave === 'rfc' ? 12 : undefined}
                                                 maxLength={
                                                     campo.clave === 'rfc' ? 13
                                                         : campo.clave === 'codigo_postal' ? 5
@@ -204,7 +264,7 @@ export default function FormularioPublico({
                                             </p>
                                         )}
                                         {tieneError && (
-                                            <p className="mt-1 text-xs text-red-500 font-bold m-0">{errors[campo.clave]}</p>
+                                            <p className="mt-1 text-xs text-orange-600 dark:text-orange-400 font-bold m-0">{errors[campo.clave]}</p>
                                         )}
                                     </div>
                                 );

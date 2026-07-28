@@ -23,6 +23,7 @@ class SolicitudFactura extends Model
         'departamento_id',
         'cliente_id',
         'destinatario_tipo',
+        'receptor_fiscal_id',
         'catalogo_estado_solicitud_id',
         'razon_social',
         'datos_fiscales',
@@ -71,6 +72,11 @@ class SolicitudFactura extends Model
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class, 'cliente_id');
+    }
+
+    public function receptorFiscal(): BelongsTo
+    {
+        return $this->belongsTo(ReceptorFiscal::class, 'receptor_fiscal_id');
     }
 
     public function estado(): BelongsTo

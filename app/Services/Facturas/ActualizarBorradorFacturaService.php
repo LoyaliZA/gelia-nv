@@ -6,9 +6,11 @@ use App\Models\AuditoriaSolicitudFactura;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\Cliente;
 use App\Models\EnlaceDatosFiscales;
+use App\Models\ReceptorFiscal;
 use App\Models\SolicitudFactura;
 use App\Models\SolicitudFacturaVoucher;
 use App\Models\User;
+use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -42,12 +44,18 @@ class ActualizarBorradorFacturaService
                 ? SolicitudFactura::DESTINATARIO_TERCERO
                 : SolicitudFactura::DESTINATARIO_CLIENTE;
 
+            $razonSocial = $datos['razon_social'] ?? $solicitud->razon_social;
+            if (is_string($razonSocial) && $razonSocial !== '' && $razonSocial !== 'Pendiente de formulario') {
+                $razonSocial = ReglasCatalogosFiscales::normalizarRazonSocial($razonSocial);
+            }
+
             $updates = [
                 'destinatario_tipo' => $destinatarioTipo,
-                'razon_social' => $datos['razon_social'] ?? $solicitud->razon_social,
+                'razon_social' => $razonSocial,
                 'observaciones_vendedor' => $datos['observaciones_vendedor'] ?? $solicitud->observaciones_vendedor,
             ];
 
+            $cliente = null;
             if (array_key_exists('numero_cliente', $datos)) {
                 $clienteId = null;
                 $datosFiscales = $solicitud->datos_fiscales;
@@ -62,6 +70,45 @@ class ActualizarBorradorFacturaService
                 }
                 $updates['cliente_id'] = $clienteId;
                 $updates['datos_fiscales'] = $datosFiscales;
+            } else {
+                $cliente = $solicitud->cliente;
+            }
+
+            $receptorId = $solicitud->receptor_fiscal_id;
+            if ($destinatarioTipo === SolicitudFactura::DESTINATARIO_CLIENTE) {
+                $updates['receptor_fiscal_id'] = null;
+                $receptorId = null;
+            } elseif (array_key_exists('receptor_fiscal_id', $datos)) {
+                $receptorId = null;
+                if (! empty($datos['receptor_fiscal_id'])) {
+                    $receptor = ReceptorFiscal::query()
+                        ->whereKey((int) $datos['receptor_fiscal_id'])
+                        ->where('activo', true)
+                        ->first();
+                    if ($receptor) {
+                        $receptorId = $receptor->id;
+                        if (empty($updates['datos_fiscales'])) {
+                            $updates['datos_fiscales'] = $receptor->aDatosFiscales();
+                        }
+                        if (
+                            empty($datos['razon_social'])
+                            || trim((string) ($datos['razon_social'] ?? '')) === ''
+                            || trim((string) ($datos['razon_social'] ?? '')) === 'Pendiente de formulario'
+                        ) {
+                            $updates['razon_social'] = $receptor->nombre_razon_social ?: 'Pendiente de formulario';
+                        }
+                    }
+                }
+                $updates['receptor_fiscal_id'] = $receptorId;
+            }
+
+            if (
+                $destinatarioTipo === SolicitudFactura::DESTINATARIO_TERCERO
+                && $cliente
+                && $receptorId
+                && ! empty($datos['vincular_receptor_cliente'])
+            ) {
+                $cliente->receptoresFiscales()->syncWithoutDetaching([$receptorId]);
             }
 
             if (! empty($datos['eliminar_archivo_fiscal'])) {
