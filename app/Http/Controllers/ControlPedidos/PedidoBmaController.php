@@ -5,14 +5,19 @@ namespace App\Http\Controllers\ControlPedidos;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ControlPedidos\StorePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\UpdatePedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\CompletarEnvioResguardoPedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\ActualizarPedidoBmaService;
+use App\Services\ControlPedidos\AnexarPagoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\CrearPedidoBmaService;
 use App\Services\ControlPedidos\Direcciones\CambiarDireccionPedido;
 use App\Services\ControlPedidos\EliminarPedidoBmaService;
 use App\Services\ControlPedidos\EnviarPedidoBmaService;
+use App\Services\ControlPedidos\LiberarResguardoPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -88,6 +93,45 @@ class PedidoBmaController extends Controller
         ]);
     }
 
+    public function candidatosPrincipal(Request $request): JsonResponse
+    {
+        Gate::authorize('control_pedidos.crear');
+
+        $clienteId = (int) $request->query('cliente_id');
+        $q = trim((string) $request->query('q', ''));
+        if ($clienteId < 1) {
+            return response()->json(['data' => []]);
+        }
+
+        $pedidos = PedidoBma::query()
+            ->with([
+                'estatus:id,fase_ciclo,nombre_visual',
+                'cliente:id,nombre,numero_cliente',
+                'origen:id,nombre,requiere_logistica',
+                'paqueteria:id,nombre',
+            ])
+            ->where('cliente_id', $clienteId)
+            ->whereNull('pedido_principal_id')
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($inner) use ($q) {
+                    $inner->where('folio', 'like', "%{$q}%")
+                        ->orWhere('folio_remision', 'like', "%{$q}%");
+                });
+            })
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get([
+                'id', 'folio', 'folio_remision', 'cliente_id', 'total_mercancia',
+                'estatus_envio', 'catalogo_estatus_pedido_id', 'es_resguardo',
+                'origen_id', 'almacen_id', 'cliente_direccion_id', 'domicilio_entrega',
+                'codigo_postal', 'catalogo_paqueteria_id', 'catalogo_tipo_guia_id',
+                'catalogo_zona_id', 'catalogo_tipo_caja_id', 'envia_a_otra_persona',
+                'envia_otra_persona', 'anexar_remision',
+            ]);
+
+        return response()->json(['data' => $pedidos]);
+    }
+
     public function update(
         UpdatePedidoBmaRequest $request,
         PedidoBma $pedidoBma,
@@ -131,6 +175,31 @@ class PedidoBmaController extends Controller
         return redirect()->back()->with('success', 'Pedido enviado al auxiliar.');
     }
 
+    public function anexarPagoEnvio(
+        AnexarPagoEnvioPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        AnexarPagoEnvioPedidoBmaService $service
+    ): RedirectResponse {
+        $user = Auth::user();
+        if (! $user->can('control_pedidos.auditar')) {
+            $listarService->asegurarAcceso($pedidoBma, $user);
+        }
+
+        try {
+            $service->ejecutar(
+                $pedidoBma,
+                $request->validated(),
+                $request->file('comprobante'),
+                Auth::id()
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Pago de envío anexado. Pendiente de revisión del auxiliar.');
+    }
+
     public function cambiarDireccion(
         Request $request,
         PedidoBma $pedidoBma,
@@ -152,6 +221,33 @@ class PedidoBmaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Dirección del pedido actualizada.');
+    }
+
+    public function completarEnvioResguardo(
+        CompletarEnvioResguardoPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        LiberarResguardoPedidoBmaService $service
+    ): RedirectResponse {
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        if ($pedidoBma->esComplemento()) {
+            return redirect()->back()->with('error', 'Complete el envío desde el pedido principal.');
+        }
+
+        try {
+            $datos = $request->validated();
+            $service->ejecutar(
+                $pedidoBma,
+                Auth::id(),
+                $datos ?: null,
+                $request->file('comprobante')
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Envío del resguardo completado. Anexo pendiente de revisión.');
     }
 
     public function destroy(

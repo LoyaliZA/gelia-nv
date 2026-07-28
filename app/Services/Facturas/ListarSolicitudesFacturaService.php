@@ -15,9 +15,10 @@ class ListarSolicitudesFacturaService
             'vendedor:id,name',
             'departamento:id,nombre',
             'estado:id,nombre',
-            'cliente:id,numero_cliente,nombre,rfc',
+            'cliente:id,numero_cliente,nombre,rfc,nombre_razon_social',
             'respondidaPor:id,name',
             'vouchers:id,solicitud_factura_id,path,nombre_original,mime,orden',
+            'enlacesFiscales',
             'auditorias' => fn ($q) => $q->latest('id')->limit(3),
             'auditorias.usuario:id,name',
             'auditorias.estadoNuevo:id,nombre',
@@ -44,8 +45,10 @@ class ListarSolicitudesFacturaService
         $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
         $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
         $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
+        $idBorrador = CatalogoEstadoSolicitud::idDe('Borrador');
 
         return [
+            'borradores' => $idBorrador ? (clone $query)->where('catalogo_estado_solicitud_id', $idBorrador)->count() : 0,
             'pendientes' => $idPendiente ? (clone $query)->where('catalogo_estado_solicitud_id', $idPendiente)->count() : 0,
             'respondidas_hoy' => $idRespondida
                 ? (clone $query)->where('catalogo_estado_solicitud_id', $idRespondida)
@@ -94,6 +97,15 @@ class ListarSolicitudesFacturaService
                 $query->whereRaw('1 = 0');
             }
 
+            // Encargadas no ven borradores ajenos; solo los propios si también son vendedoras.
+            $idBorrador = CatalogoEstadoSolicitud::idDe('Borrador');
+            if ($idBorrador) {
+                $query->where(function (Builder $q) use ($idBorrador, $usuario) {
+                    $q->where('catalogo_estado_solicitud_id', '!=', $idBorrador)
+                        ->orWhere('vendedor_id', $usuario->id);
+                });
+            }
+
             return;
         }
 
@@ -104,6 +116,7 @@ class ListarSolicitudesFacturaService
     {
         if (!empty($filtros['tab']) && $filtros['tab'] !== 'TODAS') {
             match ($filtros['tab']) {
+                'BORRADORES' => $this->filtrarPorEstado($query, 'Borrador'),
                 'PENDIENTES' => $this->filtrarPorEstado($query, 'Pendiente'),
                 'RESPONDIDAS' => $this->filtrarPorEstado($query, 'Respondida'),
                 'VERIFICADAS' => $this->filtrarPorEstado($query, 'Verificada'),

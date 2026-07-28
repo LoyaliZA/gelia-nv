@@ -43,12 +43,22 @@ class ListarPedidosAuditoriaService
         ]))->count();
         $rechazados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0)->count();
         $resguardos = (clone $base)->where('es_resguardo', true)->count();
+        $envioPendiente = (clone $base)->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION)->count();
+        $pendienteLiberacion = (clone $base)->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_LIBERACION)->count();
+        $anexoPorVerificar = (clone $base)->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_REVISION_ANEXO)->count();
+        $anexoRechazado = (clone $base)->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_ANEXO_RECHAZADO)->count();
+        $consolidados = (clone $base)->whereNull('pedido_principal_id')->whereHas('complementos')->count();
 
         return [
             'pendientes' => $pendientes,
             'aprobados' => $aprobados,
             'rechazados' => $rechazados,
             'resguardos' => $resguardos,
+            'envio_pendiente' => $envioPendiente,
+            'pendiente_liberacion' => $pendienteLiberacion,
+            'anexo_por_verificar' => $anexoPorVerificar,
+            'anexo_rechazado' => $anexoRechazado,
+            'consolidados' => $consolidados,
             'total' => $pendientes + $aprobados + $rechazados,
         ];
     }
@@ -66,6 +76,10 @@ class ListarPedidosAuditoriaService
             'vendedor',
             'estatus',
             'origen',
+            'tipoOperacionEnvio',
+            'anexosEnvio.banco',
+            'anexosEnvio.registradoPor',
+            'anexosEnvio.validadoPor',
             'envioTienda',
             'almacen',
             'banco',
@@ -80,6 +94,8 @@ class ListarPedidosAuditoriaService
             'historial.usuario',
             'historial.estatusAnterior',
             'historial.estatusNuevo',
+            'principal',
+            'complementos',
         ])
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
             ->orderByDesc('created_at');
@@ -114,6 +130,11 @@ class ListarPedidosAuditoriaService
             ])),
             'RECHAZADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0),
             'RESGUARDOS' => $query->where('es_resguardo', true),
+            'ENVIO_PENDIENTE' => $query->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION),
+            'PENDIENTE_LIBERACION' => $query->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_LIBERACION),
+            'ANEXO_POR_VERIFICAR' => $query->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_REVISION_ANEXO),
+            'ANEXO_RECHAZADO' => $query->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_ANEXO_RECHAZADO),
+            'CONSOLIDADOS' => $query->whereNull('pedido_principal_id')->whereHas('complementos'),
             default => null,
         };
     }

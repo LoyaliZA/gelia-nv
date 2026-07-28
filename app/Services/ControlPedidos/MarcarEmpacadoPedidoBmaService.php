@@ -14,64 +14,118 @@ class MarcarEmpacadoPedidoBmaService
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
+        $pedido->loadMissing(['estatus', 'paqueteria', 'origen', 'complementos.estatus', 'complementos.paqueteria', 'complementos.origen']);
+
+        $raiz = $pedido->raizEmpaque()->loadMissing([
+            'estatus', 'paqueteria', 'origen',
+            'complementos.estatus', 'complementos.paqueteria', 'complementos.origen',
+        ]);
+
+        $grupo = collect([$raiz])->merge($raiz->complementos ?? []);
+
+        foreach ($grupo as $miembro) {
+            if (!$miembro->esGestionablePorCedis()) {
+                continue;
+            }
+            $this->assertPuedeEmpacar($miembro);
+        }
+
+        $aEmpacar = $grupo->filter(fn (PedidoBma $p) => $p->esGestionablePorCedis() && $p->puedeMarcarEmpacado());
+
+        if ($aEmpacar->isEmpty()) {
+            throw new \RuntimeException('No hay pedidos del grupo listos para empacar en CEDIS.');
+        }
+
+        foreach ($aEmpacar as $miembro) {
+            $this->assertPuedeEmpacar($miembro);
+        }
+
+        return DB::transaction(function () use ($aEmpacar, $raiz, $usuarioId) {
+            foreach ($aEmpacar as $miembro) {
+                $this->empacarUno(
+                    $miembro->loadMissing(['estatus', 'paqueteria', 'origen']),
+                    $usuarioId,
+                    $raiz->esPrincipalConComplementos() ? $raiz->folio : null
+                );
+            }
+
+            return $raiz->fresh($this->relacionesFresh());
+        });
+    }
+
+    private function assertPuedeEmpacar(PedidoBma $pedido): void
+    {
         if (!$pedido->esGestionablePorCedis()) {
-            throw new \RuntimeException('El pedido no está en la bandeja de CEDIS.');
+            throw new \RuntimeException("El pedido {$pedido->folio} no está en la bandeja de CEDIS.");
         }
 
         if (!$pedido->puedeMarcarEmpacado()) {
-            throw new \RuntimeException('Este pedido no puede marcarse como empacado.');
+            throw new \RuntimeException("El pedido {$pedido->folio} no puede marcarse como empacado.");
         }
 
         if (!$pedido->tienePagoValidado() || !$pedido->tieneRemision()) {
-            throw new \RuntimeException('El pedido debe tener pago validado y remisión adjunta.');
+            throw new \RuntimeException("El pedido {$pedido->folio} debe tener pago validado y remisión adjunta.");
         }
 
-        if ($pedido->es_resguardo) {
-            throw new \RuntimeException('Un pedido en resguardo no puede marcarse como empacado. Libere el resguardo primero.');
+        if ($pedido->es_resguardo && !$pedido->esResguardoComplementario()) {
+            throw new \RuntimeException("El pedido {$pedido->folio} está en resguardo; libérelo primero.");
+        }
+    }
+
+    private function empacarUno(PedidoBma $pedido, int $usuarioId, ?string $folioGrupo = null): PedidoBma
+    {
+        $pedido->loadMissing(['paqueteria', 'origen', 'estatus']);
+        $estatusAnterior = $pedido->estatus;
+
+        $tieneGuia = !empty($pedido->numero_rastreo);
+        $faseDestino = (!$pedido->ofreceRastreo() || $tieneGuia)
+            ? CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO
+            : CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA;
+
+        $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
+
+        if (!$estatusNuevo) {
+            throw new \RuntimeException("No se encontró el estatus {$faseDestino}.");
         }
 
-        return DB::transaction(function () use ($pedido, $usuarioId) {
-            $pedido->loadMissing(['paqueteria', 'origen']);
-            $estatusAnterior = $pedido->estatus;
+        $pedido->update([
+            'catalogo_estatus_pedido_id' => $estatusNuevo->id,
+            'empacado_at' => now(),
+            'empacado_por_id' => $usuarioId,
+            'detalle_incidencia_empaque' => null,
+            'incidencia_empaque_at' => null,
+            'incidencia_empaque_por_id' => null,
+        ]);
 
-            $tieneGuia = !empty($pedido->numero_rastreo);
-            $faseDestino = (!$pedido->ofreceRastreo() || $tieneGuia)
-                ? CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO
-                : CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA;
+        $comentario = $faseDestino === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
+            ? 'Pedido empacado; pendiente de captura de guía.'
+            : ($tieneGuia
+                ? 'Pedido empacado; guía ya asignada, pendiente de envío.'
+                : 'Pedido empacado; pendiente de envío.');
 
-            $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
+        if ($folioGrupo) {
+            $comentario .= " Grupo {$folioGrupo}.";
+        }
 
-            if (!$estatusNuevo) {
-                throw new \RuntimeException("No se encontró el estatus {$faseDestino}.");
-            }
+        $this->historialService->registrarTransicion(
+            $pedido->id,
+            $usuarioId,
+            $estatusAnterior,
+            $estatusNuevo,
+            $comentario
+        );
 
-            $pedido->update([
-                'catalogo_estatus_pedido_id' => $estatusNuevo->id,
-                'empacado_at' => now(),
-                'empacado_por_id' => $usuarioId,
-                'detalle_incidencia_empaque' => null,
-                'incidencia_empaque_at' => null,
-                'incidencia_empaque_por_id' => null,
-            ]);
+        return $pedido->fresh($this->relacionesFresh());
+    }
 
-            $comentario = $faseDestino === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
-                ? 'Pedido empacado; pendiente de captura de guía.'
-                : ($tieneGuia
-                    ? 'Pedido empacado; guía ya asignada, pendiente de envío.'
-                    : 'Pedido empacado; pendiente de envío.');
-
-            $this->historialService->registrarTransicion(
-                $pedido->id,
-                $usuarioId,
-                $estatusAnterior,
-                $estatusNuevo,
-                $comentario
-            );
-
-            return $pedido->fresh([
-                'cliente', 'estatus', 'documentos', 'almacen', 'origen',
-                'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'incidenciaEmpaquePor',
-            ]);
-        });
+    /** @return list<string> */
+    private function relacionesFresh(): array
+    {
+        return [
+            'cliente', 'estatus', 'documentos', 'almacen', 'origen',
+            'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'incidenciaEmpaquePor',
+            'complementos.documentos', 'complementos.estatus', 'complementos.cliente',
+            'principal',
+        ];
     }
 }

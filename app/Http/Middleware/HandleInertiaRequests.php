@@ -102,6 +102,7 @@ class HandleInertiaRequests extends Middleware
                 'reporte_importacion_almacenes' => fn () => $request->session()->get('reporte_importacion_almacenes'),
                 'reporte_importacion_colaboradores' => fn () => $request->session()->get('reporte_importacion_colaboradores'),
                 'enlace_direccion_url' => fn () => $request->session()->get('enlace_direccion_url'),
+                'enlace_fiscal_url' => fn () => $request->session()->get('enlace_fiscal_url'),
             ],
             'woocommerce_sync_activo' => fn () => ($user && $user->can('woocommerce.ver'))
                 ? WoocommerceSyncLog::activo()

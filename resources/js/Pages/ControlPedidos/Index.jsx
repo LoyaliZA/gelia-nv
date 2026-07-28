@@ -12,6 +12,8 @@ import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
 import ModalAlertaPedido from './Partials/ModalAlertaPedido';
 import ModalConfirmarAccion from './Partials/ModalConfirmarAccion';
 import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
+import ModalAnexarPagoEnvio from './Partials/ModalAnexarPagoEnvio';
+import ModalLiberarResguardoAbierto from './Auditar/Partials/ModalLiberarResguardoAbierto';
 import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/pedidosBmaStyles';
 
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
@@ -27,6 +29,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
     const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
+    const [modalAnexo, setModalAnexo] = useState({ abierto: false, pedido: null });
+    const [modalCompletarEnvio, setModalCompletarEnvio] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
 
@@ -128,6 +132,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     onBitacora={abrirBitacora}
                     onEditar={abrirEditar}
                     onEliminar={setPedidoAEliminar}
+                    onAnexarEnvio={(pedido) => setModalAnexo({ abierto: true, pedido })}
+                    onCompletarEnvio={(pedido) => setModalCompletarEnvio({ abierto: true, pedido })}
                 />
             </GeliaPageShell>
 
@@ -138,6 +144,21 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 catalogos={catalogos}
                 direccionesNormalizadas={direcciones_normalizadas}
                 onClose={() => setModalForm({ abierto: false, pedido: null })}
+            />
+            <ModalAnexarPagoEnvio
+                abierto={modalAnexo.abierto}
+                pedido={modalAnexo.pedido}
+                bancos={catalogos.bancos || []}
+                onClose={() => setModalAnexo({ abierto: false, pedido: null })}
+            />
+            <ModalLiberarResguardoAbierto
+                abierto={modalCompletarEnvio.abierto}
+                pedido={modalCompletarEnvio.pedido}
+                bancos={catalogos.bancos || []}
+                routeName="control_pedidos.completar_envio_resguardo"
+                titulo="Completar envío del resguardo"
+                etiquetaConfirmar="Completar y anexar envío"
+                onClose={() => setModalCompletarEnvio({ abierto: false, pedido: null })}
             />
             <ModalDetallePedido
                 abierto={modalDetalle.abierto}

@@ -13,6 +13,7 @@ import { codigoDireccionCliente, labelOpcionDireccion } from './codigoDireccionC
 import {
     calcularTotalCobrar,
     calcCostoSeguro,
+    calcularPesoCobradoGuia,
     paqueteriaTieneCobertura,
     formatearMoneda,
     etiquetaAlmacen,
@@ -90,9 +91,19 @@ function limpiarBorradorLocal() {
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-8 last:border-0';
 
-function formDefaults(pedido = null) {
+function formDefaults(pedido = null, tiposOperacion = []) {
+    const tipoCodigo = pedido?.tipo_operacion_envio?.codigo
+        || tiposOperacion.find((t) => String(t.id) === String(pedido?.tipo_operacion_envio_id))?.codigo
+        || '';
+    let modoResguardo = 'abierto';
+    if (tipoCodigo === 'RESGUARDO_COMPLEMENTARIO') modoResguardo = 'complementario';
+    else if (tipoCodigo === 'RESGUARDO_ABIERTO') modoResguardo = 'abierto';
+
     return {
         origen_id: pedido?.origen_id || '',
+        tipo_operacion_envio_id: pedido?.tipo_operacion_envio_id || '',
+        modo_resguardo: modoResguardo,
+        pedido_principal_id: pedido?.pedido_principal_id || '',
         cliente_id: pedido?.cliente_id || '',
         numero_cliente: pedido?.cliente?.numero_cliente || '',
         folio_remision: pedido?.folio_remision || '',
@@ -151,7 +162,12 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const [dimsCaja, setDimsCaja] = useState({ largo: null, ancho: null, alto: null });
     const [alertaEnvio, setAlertaEnvio] = useState({ abierto: false, mensaje: '' });
     const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
+    const [candidatosPrincipal, setCandidatosPrincipal] = useState([]);
+    const [buscandoPrincipal, setBuscandoPrincipal] = useState(false);
+    const [principalSeleccionado, setPrincipalSeleccionado] = useState(pedido?.principal || null);
+    const [qPrincipal, setQPrincipal] = useState('');
     const temporizadorBusqueda = useRef(null);
+    const temporizadorPrincipal = useRef(null);
     const abortBusqueda = useRef(null);
     const costoReexpedicionAplicado = useRef(0);
     const matchReexpedicionKey = useRef(null);
@@ -161,7 +177,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const [pedidoBdId, setPedidoBdId] = useState(pedido?.id || null);
     const [estadoAuto, setEstadoAuto] = useState({ local: null, bd: null });
 
-    const { data, setData, post, processing, reset, errors, transform } = useForm(formDefaults(pedido));
+    const { data, setData, post, processing, reset, errors, transform } = useForm(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
 
     const puedeAutoguardarBd = !pedido || Boolean(pedido?.estatus?.fase_ciclo === 'BORRADOR' || pedido?.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA');
 
@@ -172,7 +188,14 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         (o) => String(o.id) === String(data.origen_id)
     );
     const requiereLogistica = origenSeleccionado?.requiere_logistica ?? false;
+    const esResguardoAbierto = Boolean(data.es_resguardo) && (data.modo_resguardo || 'abierto') === 'abierto';
+    const esResguardoComplementario = Boolean(data.es_resguardo) && data.modo_resguardo === 'complementario';
+    const esMunicipioDiferido = !data.es_resguardo && Boolean(paqueteriaSeleccionada?.permite_costo_diferido);
+    const logisticaBloqueada = esResguardoComplementario && Boolean(data.pedido_principal_id);
+    const camposEnvioBloqueados = esResguardoAbierto || esResguardoComplementario;
     const tieneCoberturaSeguro = paqueteriaTieneCobertura(paqueteriaSeleccionada?.nombre);
+    const paqueteriasComerciales = (catalogos.paqueterias || []).filter((p) => p.categoria === 'comercial');
+    const paqueteriasLocales = (catalogos.paqueterias || []).filter((p) => p.categoria !== 'comercial');
 
     const totalCobrar = calcularTotalCobrar(
         data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
@@ -187,7 +210,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         if (pedido) {
             pedidoBdIdRef.current = pedido.id;
             setPedidoBdId(pedido.id);
-            setData(formDefaults(pedido));
+            setData(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
             setInfoCliente(pedido.cliente || null);
             setPesoVolumetrico(pedido.peso_volumetrico_kg ?? '');
             setDimsCaja({
@@ -217,7 +240,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             setPedidoBdId(idBd);
             if (borrador) {
                 const { pedido_id: _pid, _nombre_cliente: nombreCli, ...restoBorrador } = borrador;
-                setData({ ...formDefaults(), ...restoBorrador, comprobantes: [], documentos_eliminar: [], enviar: false });
+                setData({ ...formDefaults(null, catalogos.tipos_operacion_envio || []), ...restoBorrador, comprobantes: [], documentos_eliminar: [], enviar: false });
                 if (borrador.cliente_id) {
                     setInfoCliente({
                         id: borrador.cliente_id,
@@ -233,7 +256,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                     setInfoCliente(null);
                 }
             } else {
-                setData(formDefaults());
+                setData(formDefaults(null, catalogos.tipos_operacion_envio || []));
                 setInfoCliente(null);
             }
             setPesoVolumetrico('');
@@ -356,6 +379,17 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             alto: caja?.alto ?? null,
         });
     }, [data.catalogo_tipo_caja_id, catalogos.tipos_caja]);
+
+    useEffect(() => {
+        if (camposEnvioBloqueados) {
+            if (data.peso_cobrado_guia_kg !== '') setData('peso_cobrado_guia_kg', '');
+            return;
+        }
+        const cobrado = calcularPesoCobradoGuia(data.peso_real_kg, pesoVolumetrico);
+        if (String(data.peso_cobrado_guia_kg ?? '') !== String(cobrado)) {
+            setData('peso_cobrado_guia_kg', cobrado);
+        }
+    }, [data.peso_real_kg, pesoVolumetrico, camposEnvioBloqueados]);
 
     useEffect(() => {
         if (!abierto || !requiereLogistica) return;
@@ -502,13 +536,59 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     };
 
     const seleccionarCliente = (cliente) => {
-        setData('numero_cliente', cliente.numero_cliente);
-        setData('cliente_id', cliente.id);
+        setData({
+            ...data,
+            numero_cliente: cliente.numero_cliente,
+            cliente_id: cliente.id,
+            pedido_principal_id: '',
+        });
         setInfoCliente(cliente);
         setMostrarDropdown(false);
         setMsgDireccion('');
+        setPrincipalSeleccionado(null);
+        setCandidatosPrincipal([]);
+        setQPrincipal('');
         cargarDireccionCliente(cliente.id, { silencioso: true });
     };
+
+    const buscarPrincipales = async (termino = '') => {
+        if (!data.cliente_id) {
+            setCandidatosPrincipal([]);
+            return;
+        }
+        setBuscandoPrincipal(true);
+        try {
+            const { data: json } = await axios.get(route('control_pedidos.candidatos_principal'), {
+                params: { cliente_id: data.cliente_id, q: termino || '' },
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            setCandidatosPrincipal(json.data || []);
+        } catch {
+            setCandidatosPrincipal([]);
+        } finally {
+            setBuscandoPrincipal(false);
+        }
+    };
+
+    const aplicarLogisticaDesdePrincipal = (p) => ({
+        pedido_principal_id: p.id,
+        origen_id: p.origen_id || '',
+        almacen_id: p.almacen_id || '',
+        cliente_direccion_id: p.cliente_direccion_id || '',
+        domicilio_entrega: p.domicilio_entrega || '',
+        codigo_postal: p.codigo_postal || '',
+        catalogo_paqueteria_id: p.catalogo_paqueteria_id || '',
+        catalogo_tipo_guia_id: p.catalogo_tipo_guia_id || '',
+        catalogo_zona_id: p.catalogo_zona_id || '',
+        catalogo_tipo_caja_id: p.catalogo_tipo_caja_id || '',
+        envia_a_otra_persona: Boolean(p.envia_a_otra_persona),
+        envia_otra_persona: p.envia_otra_persona || '',
+        anexar_remision: Boolean(p.anexar_remision),
+        costo_envio: '',
+        numero_cajas: '',
+        peso_real_kg: '',
+        peso_cobrado_guia_kg: '',
+    });
 
     const rellenarDireccionManual = () => {
         cargarDireccionCliente(data.cliente_id || infoCliente?.id);
@@ -570,14 +650,21 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const guardar = (enviarPedido = false) => {
         setAlertaEnvio({ abierto: false, mensaje: '' });
 
-        if (enviarPedido) {
+            if (enviarPedido) {
             const comprobantesExistentes = modoEdicion
                 ? (pedido?.documentos || []).filter((d) => !docsEliminar.includes(d.id)).length
                 : 0;
+            if (esResguardoComplementario && !data.pedido_principal_id) {
+                setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el pedido principal a complementar.' });
+                return;
+            }
             const { valido, mensaje } = validarCamposEnvioPedido(data, {
                 comprobantesExistentes,
                 requiereLogistica,
                 direccionesNormalizadas,
+                esMunicipioDiferido,
+                esResguardoAbierto,
+                esResguardoComplementario,
             });
             if (!valido) {
                 setAlertaEnvio({ abierto: true, mensaje });
@@ -713,7 +800,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className={SECCION}>Origen</label>
-                                <select value={data.origen_id} onChange={(e) => setData('origen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                <select value={data.origen_id} disabled={logisticaBloqueada} onChange={(e) => setData('origen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                     <option value="">Seleccionar...</option>
                                     {(catalogos.origenes || []).map((o) => (
                                         <option key={o.id} value={o.id}>{o.nombre}</option>
@@ -721,16 +808,174 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 </select>
                             </div>
                             <div className="flex items-end">
-                                <label className="flex items-center gap-3 cursor-pointer theme-text-main p-3 rounded-xl border theme-border w-full">
+                                <label className="flex items-center gap-3 theme-text-main p-3 rounded-xl border theme-border w-full cursor-pointer">
                                     <input
                                         type="checkbox"
-                                        checked={data.es_resguardo}
-                                        onChange={(e) => setData('es_resguardo', e.target.checked)}
+                                        checked={Boolean(data.es_resguardo)}
+                                        onChange={(e) => {
+                                            const on = e.target.checked;
+                                            if (on) {
+                                                setData({
+                                                    ...data,
+                                                    es_resguardo: true,
+                                                    modo_resguardo: data.modo_resguardo || 'abierto',
+                                                    ...(data.modo_resguardo !== 'complementario' ? {
+                                                        costo_envio: '',
+                                                        numero_cajas: '',
+                                                        peso_real_kg: '',
+                                                        peso_cobrado_guia_kg: '',
+                                                    } : {}),
+                                                });
+                                            } else {
+                                                setData({
+                                                    ...data,
+                                                    es_resguardo: false,
+                                                    modo_resguardo: 'abierto',
+                                                    pedido_principal_id: '',
+                                                });
+                                                setPrincipalSeleccionado(null);
+                                            }
+                                        }}
                                         className="w-4 h-4"
                                     />
                                     <span className="text-sm font-bold">¿Dejar en resguardo?</span>
                                 </label>
                             </div>
+                            {data.es_resguardo && (
+                                <div className="md:col-span-2 space-y-3">
+                                    <label className={SECCION}>Tipo de resguardo</label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setData({
+                                                ...data,
+                                                modo_resguardo: 'abierto',
+                                                es_resguardo: true,
+                                                costo_envio: '',
+                                                numero_cajas: '',
+                                                peso_real_kg: '',
+                                                peso_cobrado_guia_kg: '',
+                                            })}
+                                            className={`text-left p-4 rounded-xl border outline-none transition-colors ${data.modo_resguardo === 'abierto' ? 'border-[var(--color-primario)] bg-[var(--color-primario)]/10' : 'theme-border theme-element'}`}
+                                        >
+                                            <p className="text-sm font-black uppercase theme-text-main m-0">Resguardo abierto</p>
+                                            <p className="text-[11px] theme-text-muted font-bold mt-1 m-0">
+                                                Cliente indeciso: peso, cajas y costo bloqueados hasta liberar.
+                                            </p>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setData({
+                                                ...data,
+                                                modo_resguardo: 'complementario',
+                                                es_resguardo: true,
+                                                costo_envio: '',
+                                                numero_cajas: '',
+                                                peso_real_kg: '',
+                                                peso_cobrado_guia_kg: '',
+                                            })}
+                                            className={`text-left p-4 rounded-xl border outline-none transition-colors ${data.modo_resguardo === 'complementario' ? 'border-[var(--color-primario)] bg-[var(--color-primario)]/10' : 'theme-border theme-element'}`}
+                                        >
+                                            <p className="text-sm font-black uppercase theme-text-main m-0">Resguardo complementario</p>
+                                            <p className="text-[11px] theme-text-muted font-bold mt-1 m-0">
+                                                Hereda logística del principal; solo remisión y pago de esta pieza.
+                                            </p>
+                                        </button>
+                                    </div>
+                                    {esResguardoAbierto && (
+                                        <div className="flex items-start gap-2 p-3 rounded-xl border border-blue-500/40 bg-blue-500/10">
+                                            <AlertTriangle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                                            <p className="text-xs font-bold text-blue-700 dark:text-blue-400 m-0">
+                                                Envío bloqueado hasta completar el resguardo. Peso, cajas y costo se capturan al Completar envío del folio principal.
+                                            </p>
+                                        </div>
+                                    )}
+                                    {esResguardoComplementario && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-start gap-2 p-3 rounded-xl border border-teal-500/40 bg-teal-500/10">
+                                                <AlertTriangle className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                                                <p className="text-xs font-bold text-teal-700 dark:text-teal-400 m-0">
+                                                    {principalSeleccionado
+                                                        ? `Se agregará al folio ${principalSeleccionado.folio} como complemento. Logística heredada del padre; el peso del paquete se captura al completar el envío del principal.`
+                                                        : 'Seleccione el pedido principal (mismo cliente). Se reutilizará su logística; CEDIS verá una sola card.'}
+                                                </p>
+                                            </div>
+                                            {!data.cliente_id && (
+                                                <p className="text-xs font-bold text-amber-600 m-0">Seleccione primero el cliente para buscar el pedido principal.</p>
+                                            )}
+                                            {data.cliente_id && (
+                                                <div className="relative">
+                                                    <label className={SECCION}>Pedido principal *</label>
+                                                    <div className="theme-field-with-icon">
+                                                        <Search className="theme-field-icon w-4 h-4" />
+                                                        <input
+                                                            type="text"
+                                                            value={qPrincipal}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                setQPrincipal(v);
+                                                                if (temporizadorPrincipal.current) clearTimeout(temporizadorPrincipal.current);
+                                                                temporizadorPrincipal.current = setTimeout(() => buscarPrincipales(v), 350);
+                                                            }}
+                                                            onFocus={() => buscarPrincipales(qPrincipal)}
+                                                            placeholder="Buscar folio o remisión..."
+                                                            className={`${THEME_INPUT} w-full py-3`}
+                                                        />
+                                                    </div>
+                                                    {principalSeleccionado && (
+                                                        <p className="text-xs font-bold theme-text-main mt-2 m-0">
+                                                            Principal: {principalSeleccionado.folio}
+                                                            {principalSeleccionado.folio_remision ? ` · ${principalSeleccionado.folio_remision}` : ''}
+                                                        </p>
+                                                    )}
+                                                    {(buscandoPrincipal || candidatosPrincipal.length > 0) && (
+                                                        <div className="absolute z-50 mt-1 w-full theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-2">
+                                                            {buscandoPrincipal ? (
+                                                                <p className="p-3 text-xs theme-text-muted font-bold">Buscando...</p>
+                                                            ) : candidatosPrincipal.map((p) => (
+                                                                <button
+                                                                    key={p.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setPrincipalSeleccionado(p);
+                                                                        setData({
+                                                                            ...data,
+                                                                            ...aplicarLogisticaDesdePrincipal(p),
+                                                                        });
+                                                                        setCandidatosPrincipal([]);
+                                                                        setQPrincipal(p.folio || '');
+                                                                    }}
+                                                                    className="w-full text-left p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold uppercase theme-text-main"
+                                                                >
+                                                                    {p.folio}{p.folio_remision ? ` — ${p.folio_remision}` : ''}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {errors.pedido_principal_id && (
+                                                        <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{errors.pedido_principal_id}</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {!data.es_resguardo && requiereLogistica && esMunicipioDiferido && (
+                                <div className="md:col-span-2 flex items-start gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 m-0">
+                                        Paquetería local/regional: el costo de envío puede anexarse después. Peso, cajas y costo son opcionales al registrar.
+                                    </p>
+                                </div>
+                            )}
+                            {!data.es_resguardo && requiereLogistica && data.catalogo_paqueteria_id && !esMunicipioDiferido && (
+                                <div className="md:col-span-2 flex items-start gap-2 p-3 rounded-xl border theme-border theme-element">
+                                    <p className="text-xs font-bold theme-text-muted m-0">
+                                        Envío comercial: capture peso, cajas y costo al registrar el pedido.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </section>
 
@@ -741,7 +986,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                             <div className="md:col-span-2 relative">
                                 <div className="theme-field-with-icon">
                                     <Search className="theme-field-icon w-4 h-4" />
-                                    <input type="text" value={data.numero_cliente} onChange={(e) => manejarBusquedaCliente(e.target.value)} placeholder="Buscar cliente..." className={`${THEME_INPUT} w-full py-3`} />
+                                    <input type="text" value={data.numero_cliente} disabled={logisticaBloqueada} onChange={(e) => manejarBusquedaCliente(e.target.value)} placeholder="Buscar cliente..." className={`${THEME_INPUT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`} />
                                 </div>
                                 {infoCliente && <p className="text-xs font-bold mt-2 theme-text-main">{infoCliente.nombre}</p>}
                                 {mostrarDropdown && (
@@ -790,7 +1035,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                             </div>
                             <div>
                                 <label className={SECCION}>Almacén de salida</label>
-                                <select value={data.almacen_id} onChange={(e) => setData('almacen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                <select value={data.almacen_id} disabled={logisticaBloqueada} onChange={(e) => setData('almacen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                     <option value="">Seleccionar...</option>
                                     {(catalogos.almacenes || []).map((a) => (
                                         <option key={a.id} value={a.id}>{etiquetaAlmacen(a)}</option>
@@ -808,14 +1053,14 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className={SECCION}>Tipo de caja</label>
-                                <select value={data.catalogo_tipo_caja_id} onChange={(e) => setData('catalogo_tipo_caja_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                <select value={data.catalogo_tipo_caja_id} disabled={logisticaBloqueada} onChange={(e) => setData('catalogo_tipo_caja_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                     <option value="">Seleccionar...</option>
                                     {(catalogos.tipos_caja || []).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className={SECCION}>Peso real (kg)</label>
-                                <input type="number" step="0.0001" min="0" placeholder="0.0000" value={data.peso_real_kg} onChange={(e) => setData('peso_real_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                                <label className={SECCION}>Peso real (kg){esMunicipioDiferido ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
+                                <input type="number" step="0.0001" min="0" placeholder="0.0000" value={camposEnvioBloqueados ? '' : data.peso_real_kg} disabled={camposEnvioBloqueados} onChange={(e) => setData('peso_real_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3 ${camposEnvioBloqueados ? 'opacity-50' : ''}`} />
                             </div>
                             <div>
                                 <label className={SECCION}>Peso volumétrico (kg)</label>
@@ -835,14 +1080,14 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                             </div>
                             <div className={wrapIncorrecto('tipo_guia')}>
                                 <label className={SECCION}>Tipo de guía</label>
-                                <select value={data.catalogo_tipo_guia_id} onChange={(e) => setData('catalogo_tipo_guia_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                <select value={data.catalogo_tipo_guia_id} disabled={logisticaBloqueada} onChange={(e) => setData('catalogo_tipo_guia_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                     <option value="">Seleccionar...</option>
                                     {(catalogos.tipos_guia || []).map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className={SECCION}>Número de cajas</label>
-                                <select value={data.numero_cajas === '' || data.numero_cajas == null ? '' : String(data.numero_cajas)} onChange={(e) => setData('numero_cajas', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                <label className={SECCION}>Número de cajas{esMunicipioDiferido ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
+                                <select value={camposEnvioBloqueados || data.numero_cajas === '' || data.numero_cajas == null ? '' : String(data.numero_cajas)} disabled={camposEnvioBloqueados} onChange={(e) => setData('numero_cajas', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${camposEnvioBloqueados ? 'opacity-50' : ''}`}>
                                     <option value="">Seleccionar...</option>
                                     <option value="0">N/A</option>
                                     {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
@@ -852,7 +1097,16 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                             </div>
                             <div>
                                 <label className={SECCION}>Peso cobrado guía (kg)</label>
-                                <input type="number" step="0.0001" min="0" placeholder="0.0000" value={data.peso_cobrado_guia_kg} onChange={(e) => setData('peso_cobrado_guia_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={camposEnvioBloqueados ? '—' : (data.peso_cobrado_guia_kg !== '' && data.peso_cobrado_guia_kg != null ? data.peso_cobrado_guia_kg : '—')}
+                                    className={`${THEME_INPUT} w-full py-3 opacity-60`}
+                                    title="Mayor entre peso real y peso volumétrico"
+                                />
+                                <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
+                                    Automático: el mayor entre peso real y volumétrico.
+                                </p>
                             </div>
                         </div>
                     </section>
@@ -910,6 +1164,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                         <>
                                             <select
                                                 value={data.cliente_direccion_id}
+                                                disabled={logisticaBloqueada}
                                                 onChange={(e) => {
                                                     const id = e.target.value;
                                                     setData('cliente_direccion_id', id);
@@ -923,7 +1178,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                                         }
                                                     }
                                                 }}
-                                                className={`${THEME_SELECT} w-full py-3`}
+                                                className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
                                             >
                                                 <option value="">Seleccionar dirección de envío…</option>
                                                 {direccionesCliente.map((d) => (
@@ -1047,9 +1302,24 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <div>
                                     <label className={SECCION}>Paquetería</label>
                                     <div className={wrapIncorrecto('paqueteria')}>
-                                    <select value={data.catalogo_paqueteria_id} onChange={(e) => manejarPaqueteria(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                    <select value={data.catalogo_paqueteria_id} disabled={logisticaBloqueada} onChange={(e) => manejarPaqueteria(e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                         <option value="">Seleccionar...</option>
-                                        {(catalogos.paqueterias || []).map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                        {paqueteriasComerciales.length > 0 && (
+                                            <optgroup label="Comercial (FedEx, DHL…)">
+                                                {paqueteriasComerciales.map((p) => (
+                                                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                        {paqueteriasLocales.length > 0 && (
+                                            <optgroup label="Local / Regional (municipio)">
+                                                {paqueteriasLocales.map((p) => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.nombre}{p.permite_costo_diferido ? ' · costo diferido' : ''}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
                                     </select>
                                     </div>
                                 </div>
@@ -1062,12 +1332,12 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                     </div>
                                 )}
                                 <div>
-                                    <label className={SECCION}>Costo de envío</label>
-                                    <InputMoneda value={data.costo_envio} onChange={(v) => setData('costo_envio', v)} className="w-full py-3" placeholder="" />
+                                    <label className={SECCION}>Costo de envío{esMunicipioDiferido ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
+                                    <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} className={`w-full py-3 ${camposEnvioBloqueados ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
                                 </div>
                                 <div>
                                     <label className={SECCION}>Reexpedición</label>
-                                    <select value={data.catalogo_zona_id} onChange={(e) => setData('catalogo_zona_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                    <select value={data.catalogo_zona_id} disabled={logisticaBloqueada} onChange={(e) => setData('catalogo_zona_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                         <option value="">Seleccionar...</option>
                                         {(catalogos.zonas || []).map((z) => <option key={z.id} value={z.id}>{z.nombre}</option>)}
                                     </select>
@@ -1089,8 +1359,8 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                         <span className="text-sm font-bold">Con seguro</span>
                                     </label>
                                 )}
-                                <label className="flex items-center gap-2 theme-text-main cursor-pointer">
-                                    <input type="checkbox" checked={data.envia_a_otra_persona} onChange={(e) => setData('envia_a_otra_persona', e.target.checked)} />
+                                <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? 'opacity-50' : 'cursor-pointer'}`}>
+                                    <input type="checkbox" checked={data.envia_a_otra_persona} disabled={logisticaBloqueada} onChange={(e) => setData('envia_a_otra_persona', e.target.checked)} />
                                     <span className="text-sm font-bold">Enviar a otra persona</span>
                                 </label>
                             </div>
@@ -1169,8 +1439,9 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <label className={SECCION}>Anexar remisión</label>
                                 <select
                                     value={data.anexar_remision ? '1' : '0'}
+                                    disabled={logisticaBloqueada}
                                     onChange={(e) => setData('anexar_remision', e.target.value === '1')}
-                                    className={`${THEME_SELECT} w-full py-3 max-w-xs`}
+                                    className={`${THEME_SELECT} w-full py-3 max-w-xs ${logisticaBloqueada ? 'opacity-50' : ''}`}
                                 >
                                     <option value="0">NO</option>
                                     <option value="1">SÍ</option>
@@ -1212,7 +1483,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                             </button>
                         )}
                         <button type="button" onClick={() => {
-                            setData(formDefaults(pedido));
+                            setData(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
                             setPreviews([]);
                             setInfoCliente(pedido?.cliente || null);
                             setAlertaDireccion(false);

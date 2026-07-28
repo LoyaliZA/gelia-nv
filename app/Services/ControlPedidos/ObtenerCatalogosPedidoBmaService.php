@@ -11,6 +11,7 @@ use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\CatalogoTipoGuiaPedido;
 use App\Models\ControlPedidos\CatalogoReexpedicionPedido;
+use App\Models\ControlPedidos\CatalogoTipoOperacionEnvio;
 use App\Models\ControlPedidos\CatalogoZonaPedido;
 
 class ObtenerCatalogosPedidoBmaService
@@ -19,6 +20,15 @@ class ObtenerCatalogosPedidoBmaService
     {
         return [
             'origenes' => CatalogoOrigenPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'requiere_logistica']),
+            'tipos_operacion_envio' => CatalogoTipoOperacionEnvio::where('activo', true)
+                ->whereIn('codigo', [
+                    CatalogoTipoOperacionEnvio::CODIGO_NORMAL,
+                    CatalogoTipoOperacionEnvio::CODIGO_MUNICIPIO_DIFERIDO,
+                    CatalogoTipoOperacionEnvio::CODIGO_RESGUARDO_ABIERTO,
+                    CatalogoTipoOperacionEnvio::CODIGO_RESGUARDO_COMPLEMENTARIO,
+                ])
+                ->orderBy('orden')
+                ->get(['id', 'codigo', 'nombre', 'descripcion']),
             'estatus' => CatalogoEstatusPedido::where('activo', true)->orderBy('orden')->get(['id', 'codigo_interno', 'nombre_visual', 'color_hex', 'fase_ciclo']),
             'almacenes' => Almacen::where('activo', true)
                 ->where('visible_en_pedidos', true)
@@ -26,7 +36,7 @@ class ObtenerCatalogosPedidoBmaService
                 ->get(['id', 'codigo', 'nombre']),
             'bancos' => CatalogoBanco::where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
             'tipos_caja' => CatalogoTipoCajaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'peso_volumetrico', 'medidas', 'largo', 'ancho', 'alto']),
-            'paqueterias' => CatalogoPaqueteriaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'categoria']),
+            'paqueterias' => CatalogoPaqueteriaPedido::where('activo', true)->orderBy('categoria')->orderBy('nombre')->get(['id', 'nombre', 'categoria', 'permite_costo_diferido']),
             'tipos_guia' => CatalogoTipoGuiaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
             'zonas' => CatalogoZonaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
             'envios_tienda' => CatalogoEnvioTienda::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'es_otro']),

@@ -23,6 +23,7 @@ class CatalogosSeeder extends Seeder
             ['nombre' => 'Verificada', 'descripcion' => 'El auxiliar confirmó que la información es correcta'],
             ['nombre' => 'Incorrecta', 'descripcion' => 'Se encontró una inconsistencia y se requiere corrección'],
             ['nombre' => 'Cancelada', 'descripcion' => 'Solicitud anulada con reversión de cambios si aplica'],
+            ['nombre' => 'Borrador', 'descripcion' => 'Solicitud de factura en borrador, esperando formulario o envío a encargada'],
         ];
 
         foreach ($estados as $estado) {

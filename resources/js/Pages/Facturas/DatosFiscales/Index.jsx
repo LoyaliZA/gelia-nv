@@ -8,7 +8,7 @@ import { BTN_SECONDARY } from '../Partials/facturasStyles';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 
-export default function DatosFiscalesIndex({ clientes, filtros = {} }) {
+export default function DatosFiscalesIndex({ clientes, filtros = {}, catalogos = { regimen_fiscal: [], uso_cfdi: [] } }) {
     const [editando, setEditando] = useState(null);
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [cargando, setCargando] = useState(false);
@@ -160,7 +160,11 @@ export default function DatosFiscalesIndex({ clientes, filtros = {} }) {
             </GeliaPageShell>
 
             {editando && (
-                <ModalEditarDatosFiscales cliente={editando} onClose={() => setEditando(null)} />
+                <ModalEditarDatosFiscales
+                    cliente={editando}
+                    catalogos={catalogos}
+                    onClose={() => setEditando(null)}
+                />
             )}
         </AppLayout>
     );

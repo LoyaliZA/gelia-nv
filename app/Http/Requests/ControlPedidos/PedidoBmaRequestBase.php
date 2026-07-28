@@ -12,6 +12,7 @@ abstract class PedidoBmaRequestBase extends FormRequest
         return [
             'cliente_id' => ['nullable', 'exists:clientes,id'],
             'origen_id' => ['nullable', 'exists:origenes_pedido,id'],
+            'tipo_operacion_envio_id' => ['nullable', 'exists:catalogo_tipos_operacion_envio,id'],
             'numero_cliente' => ['nullable', 'string', 'max:50'],
             'folio_remision' => ['nullable', 'string', 'max:100'],
             'fecha' => ['nullable', 'date'],
@@ -37,6 +38,13 @@ abstract class PedidoBmaRequestBase extends FormRequest
                 Rule::requiredIf(fn () => filter_var($this->input('envia_a_otra_persona'), FILTER_VALIDATE_BOOLEAN)),
             ],
             'es_resguardo' => ['nullable', 'boolean'],
+            'modo_resguardo' => ['nullable', 'in:abierto,complementario'],
+            'pedido_principal_id' => [
+                'nullable',
+                'integer',
+                'exists:pedidos_bma,id',
+                'required_if:modo_resguardo,complementario',
+            ],
             'anexar_remision' => ['nullable', 'boolean'],
             'total_mercancia' => ['nullable', 'numeric', 'min:0'],
             'costo_envio' => ['nullable', 'numeric', 'min:0'],

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Facturas\UpdateDatosFiscalesRequest;
 use App\Models\Cliente;
 use App\Services\Facturas\GestionarDatosFiscalesClienteService;
+use App\Services\Facturas\ListarCatalogosFiscalesService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -14,7 +15,7 @@ use Inertia\Response;
 
 class DatosFiscalesController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, ListarCatalogosFiscalesService $catalogos): Response
     {
         Gate::authorize('facturas.gestionar_datos_fiscales');
 
@@ -40,6 +41,7 @@ class DatosFiscalesController extends Controller
         return Inertia::render('Facturas/DatosFiscales/Index', [
             'clientes' => $query->paginate(20)->withQueryString(),
             'filtros' => $request->only(['q']),
+            'catalogos' => $catalogos->activosParaUi(),
         ]);
     }
 

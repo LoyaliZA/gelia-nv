@@ -12,10 +12,11 @@ class CatalogoPaqueteriaPedido extends Model
     public const CATEGORIA_COMERCIAL = 'comercial';
     public const CATEGORIA_LOCAL_REGIONAL = 'local_regional';
 
-    protected $fillable = ['nombre', 'categoria', 'activo', 'costo_seguro_default'];
+    protected $fillable = ['nombre', 'categoria', 'permite_costo_diferido', 'activo', 'costo_seguro_default'];
 
     protected $casts = [
         'activo' => 'boolean',
+        'permite_costo_diferido' => 'boolean',
         'costo_seguro_default' => 'decimal:2',
     ];
 
@@ -27,5 +28,15 @@ class CatalogoPaqueteriaPedido extends Model
     public function ofreceRastreo(): bool
     {
         return $this->categoria === self::CATEGORIA_COMERCIAL;
+    }
+
+    public function permiteCostoDiferido(): bool
+    {
+        return (bool) $this->permite_costo_diferido;
+    }
+
+    public function esLocalRegional(): bool
+    {
+        return $this->categoria === self::CATEGORIA_LOCAL_REGIONAL;
     }
 }

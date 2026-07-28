@@ -1,5 +1,6 @@
 export const FACTURAS_TABS = [
     { id: 'TODAS', label: 'Todas' },
+    { id: 'BORRADORES', label: 'Borradores' },
     { id: 'PENDIENTES', label: 'Pendientes' },
     { id: 'RESPONDIDAS', label: 'Respondidas' },
     { id: 'VERIFICADAS', label: 'Verificadas' },
@@ -7,6 +8,7 @@ export const FACTURAS_TABS = [
 ];
 
 const TAB_ESTADO_NOMBRE = {
+    BORRADORES: 'Borrador',
     PENDIENTES: 'Pendiente',
     RESPONDIDAS: 'Respondida',
     VERIFICADAS: 'Verificada',

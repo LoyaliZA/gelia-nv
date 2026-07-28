@@ -2,7 +2,10 @@ import React from 'react';
 
 export default function EncabezadoFolioPedido({ pedido, size = 'md', className = '' }) {
     const folioRemision = pedido?.folio_remision || '—';
-    const folioInterno = pedido?.folio;
+    const folioPadre = pedido?.principal?.folio;
+    const folioInterno = folioPadre
+        ? `${folioPadre} · ${pedido.folio}`
+        : pedido?.folio;
     const sizeClass = size === 'lg' ? 'text-xl md:text-2xl' : size === 'sm' ? 'text-sm' : 'text-base';
 
     return (

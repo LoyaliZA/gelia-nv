@@ -6,21 +6,27 @@ import { puedePermiso } from '../../../utils/permisos';
 import { nombreEstadoFactura } from './facturasFiltros';
 import FeedbackResolucionFactura from './FeedbackResolucionFactura';
 
-export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprobar, onReportar, onVerificar, onEliminar, onReparar }) {
+export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprobar, onReportar, onVerificar, onEliminar, onReparar, onEditarBorrador }) {
     const puedeCrear = puedePermiso(auth, 'facturas.crear');
     const puedeResponder = puedePermiso(auth, 'facturas.responder');
     const puedeReportar = puedePermiso(auth, 'facturas.reportar_error');
     const puedeVerificar = puedePermiso(auth, 'facturas.verificar');
     const puedeEliminar = puedePermiso(auth, 'facturas.eliminar');
     const estadoNombre = nombreEstadoFactura(factura) || '—';
+    const esBorrador = estadoNombre === 'Borrador';
     const esPendiente = estadoNombre === 'Pendiente';
     const esIncorrecta = estadoNombre === 'Incorrecta';
     const esRespondida = estadoNombre === 'Respondida';
     const esVerificada = estadoNombre === 'Verificada';
     const puedeReparar = esIncorrecta && puedeCrear && factura.vendedor_id === auth?.user?.id;
+    const puedeEditarBorrador = esBorrador && puedeCrear && (factura.vendedor_id === auth?.user?.id || puedePermiso(auth, 'facturas.eliminar'));
     const puedeDescargarEmitidos = (esRespondida || esVerificada) && (factura.tiene_pdf_emitido || factura.tiene_xml);
     const estadoId = factura.catalogo_estado_solicitud_id ?? factura.estado?.id;
     const rfc = factura.datos_fiscales?.rfc || factura.cliente?.rfc || '—';
+    const esTercero = factura.destinatario_tipo === 'tercero';
+    const cuentaLabel = factura.cliente
+        ? `${factura.cliente.numero_cliente} — ${factura.cliente.nombre}`
+        : null;
 
     return (
         <article
@@ -33,15 +39,45 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                     <p className="text-[10px] font-mono font-black uppercase tracking-widest mb-1 m-0" style={{ color: 'var(--color-primario)' }}>
                         {factura.folio}
                     </p>
-                    <h3 className="text-sm font-black theme-text-main m-0 leading-snug break-words">{factura.razon_social}</h3>
-                    <p className="text-[10px] font-bold theme-text-muted mt-1 m-0">RFC: {rfc}</p>
+                    {esTercero && cuentaLabel ? (
+                        <>
+                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0 mb-0.5">Quién solicita</p>
+                            <h3 className="text-sm font-black theme-text-main m-0 leading-snug break-words">{cuentaLabel}</h3>
+                            <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
+                                Razón social a facturar: {factura.razon_social || '—'}
+                            </p>
+                            <p className="text-[10px] font-bold theme-text-muted mt-0.5 m-0">RFC: {rfc}</p>
+                        </>
+                    ) : (
+                        <>
+                            <h3 className="text-sm font-black theme-text-main m-0 leading-snug break-words">{factura.razon_social}</h3>
+                            <p className="text-[10px] font-bold theme-text-muted mt-1 m-0">RFC: {rfc}</p>
+                        </>
+                    )}
                 </div>
-                <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border shrink-0 ${ESTADO_BADGE[estadoId] || 'theme-element theme-border theme-text-muted'}`}>
-                    {estadoNombre}
-                </span>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border ${ESTADO_BADGE[estadoId] || 'theme-element theme-border theme-text-muted'}`}>
+                        {estadoNombre}
+                    </span>
+                    {esTercero && (
+                        <span className="px-2 py-0.5 rounded-lg text-[8px] font-black uppercase theme-element border theme-border theme-text-muted">
+                            Tercero
+                        </span>
+                    )}
+                </div>
             </div>
 
             <div className="flex flex-wrap gap-2 mb-4">
+                {factura.formulario_enviado_at && !factura.formulario_respondido_at && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20">
+                        Esperando form
+                    </span>
+                )}
+                {factura.formulario_respondido_at && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                        {esBorrador && !factura.tiene_voucher ? 'Form OK · falta voucher' : 'Form respondido'}
+                    </span>
+                )}
                 {factura.tiene_archivo_fiscal && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase theme-element border theme-border">
                         <FileSpreadsheet className="w-3 h-3 shrink-0" style={{ color: 'var(--color-primario)' }} /> Excel
@@ -85,6 +121,15 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                 >
                     <Eye className="w-3.5 h-3.5 shrink-0" /> Expediente
                 </button>
+                {puedeEditarBorrador && (
+                    <button
+                        type="button"
+                        onClick={() => onEditarBorrador?.(factura)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-slate-500/10 text-slate-700 dark:text-slate-300 border border-slate-500/30 outline-none hover:bg-slate-500/20 transition-colors"
+                    >
+                        <Edit2 className="w-3.5 h-3.5 shrink-0" /> Continuar
+                    </button>
+                )}
                 {esPendiente && (
                     <>
                         {puedeResponder && (

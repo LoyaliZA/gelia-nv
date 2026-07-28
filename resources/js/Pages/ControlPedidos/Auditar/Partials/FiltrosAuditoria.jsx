@@ -5,8 +5,13 @@ import { BTN_SECONDARY, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK, TAB
 
 export default function FiltrosAuditoria({ filtros = {}, tabActiva, onTabChange, onBuscar, onActualizar, metricas = {} }) {
     const conteoTab = (tabId) => {
-        const map = {
+            const map = {
             PENDIENTES: metricas.pendientes,
+            ENVIO_PENDIENTE: metricas.envio_pendiente,
+            PENDIENTE_LIBERACION: metricas.pendiente_liberacion,
+            ANEXO_POR_VERIFICAR: metricas.anexo_por_verificar,
+            ANEXO_RECHAZADO: metricas.anexo_rechazado,
+            CONSOLIDADOS: metricas.consolidados,
             RESGUARDOS: metricas.resguardos,
             APROBADOS: metricas.aprobados,
             RECHAZADOS: metricas.rechazados,

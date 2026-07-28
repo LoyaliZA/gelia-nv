@@ -4,14 +4,17 @@ namespace App\Http\Controllers\Facturas;
 
 use App\Events\SolicitudFacturaActualizada;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Facturas\ActualizarBorradorFacturaRequest;
 use App\Http\Requests\Facturas\RepararSolicitudFacturaRequest;
 use App\Http\Requests\Facturas\ResponderSolicitudFacturaRequest;
 use App\Http\Requests\Facturas\StoreSolicitudFacturaRequest;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\SolicitudFactura;
 use App\Models\User;
+use App\Services\Facturas\ActualizarBorradorFacturaService;
 use App\Services\Facturas\CrearSolicitudFacturaService;
 use App\Services\Facturas\EliminarSolicitudFacturaService;
+use App\Services\Facturas\GenerarEnlaceDatosFiscalesService;
 use App\Services\Facturas\GestionarDatosFiscalesClienteService;
 use App\Services\Facturas\ImportarDatosFiscalesService;
 use App\Services\Facturas\ListarSolicitudesFacturaService;
@@ -52,7 +55,7 @@ class SolicitudFacturaController extends Controller
         ]);
     }
 
-    public function store(StoreSolicitudFacturaRequest $request, CrearSolicitudFacturaService $crearService): RedirectResponse
+    public function store(StoreSolicitudFacturaRequest $request, CrearSolicitudFacturaService $crearService): RedirectResponse|JsonResponse
     {
         $datos = $request->validated();
         if ($request->hasFile('archivo_fiscal')) {
@@ -61,8 +64,10 @@ class SolicitudFacturaController extends Controller
         if ($request->hasFile('vouchers')) {
             $datos['vouchers'] = $request->file('vouchers');
         }
+        $datos['pedir_formulario'] = $request->boolean('pedir_formulario');
 
-        $solicitud = $crearService->ejecutar($datos, Auth::id());
+        $resultado = $crearService->ejecutar($datos, Auth::id());
+        $solicitud = $resultado['solicitud'];
 
         event(new SolicitudFacturaActualizada(
             solicitudId: $solicitud->id,
@@ -72,7 +77,111 @@ class SolicitudFacturaController extends Controller
             departamentoId: $solicitud->departamento_id,
         ));
 
-        return redirect()->back()->with('success', 'Solicitud de factura creada correctamente.');
+        $mensaje = ($datos['modo'] ?? '') === 'borrador'
+            ? 'Borrador guardado'.($resultado['enlace_url'] ? '. Enlace listo para compartir.' : '.')
+            : 'Solicitud de factura creada correctamente.';
+
+        if ($request->wantsJson() || $request->header('X-Inertia') === null && $request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'mensaje' => $mensaje,
+                'solicitud' => $solicitud,
+                'enlace_url' => $resultado['enlace_url'],
+            ]);
+        }
+
+        return redirect()->back()->with([
+            'success' => $mensaje,
+            'enlace_fiscal_url' => $resultado['enlace_url'],
+        ]);
+    }
+
+    public function actualizarBorrador(
+        ActualizarBorradorFacturaRequest $request,
+        SolicitudFactura $factura,
+        ActualizarBorradorFacturaService $service
+    ): RedirectResponse|JsonResponse {
+        $datos = $request->validated();
+        $datos['pedir_formulario'] = $request->boolean('pedir_formulario');
+        $datos['enviar_ahora'] = $request->boolean('enviar_ahora');
+        $datos['eliminar_archivo_fiscal'] = $request->boolean('eliminar_archivo_fiscal');
+        $datos['vouchers_conservar'] = $request->input('vouchers_conservar', []);
+        if ($request->hasFile('archivo_fiscal')) {
+            $datos['archivo_fiscal'] = $request->file('archivo_fiscal');
+        }
+        if ($request->hasFile('vouchers')) {
+            $datos['vouchers'] = $request->file('vouchers');
+        }
+
+        try {
+            $resultado = $service->ejecutar($factura, $datos, Auth::user());
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['borrador' => $e->getMessage()]);
+        }
+
+        $solicitud = $resultado['solicitud'];
+
+        event(new SolicitudFacturaActualizada(
+            solicitudId: $solicitud->id,
+            accion: 'actualizada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $solicitud->vendedor_id,
+            departamentoId: $solicitud->departamento_id,
+        ));
+
+        $mensaje = $request->boolean('enviar_ahora')
+            ? 'Solicitud enviada a encargada.'
+            : 'Borrador actualizado.'.($resultado['enlace_url'] ? ' Enlace listo para compartir.' : '');
+
+        if ($request->expectsJson() && ! $request->header('X-Inertia')) {
+            return response()->json([
+                'success' => true,
+                'mensaje' => $mensaje,
+                'solicitud' => $solicitud,
+                'enlace_url' => $resultado['enlace_url'],
+            ]);
+        }
+
+        return redirect()->back()->with([
+            'success' => $mensaje,
+            'enlace_fiscal_url' => $resultado['enlace_url'],
+        ]);
+    }
+
+    public function regenerarEnlaceFiscal(
+        Request $request,
+        SolicitudFactura $factura,
+        GenerarEnlaceDatosFiscalesService $generarEnlace,
+        ListarSolicitudesFacturaService $listarService
+    ): JsonResponse {
+        Gate::authorize('facturas.crear');
+
+        if (! $listarService->usuarioPuedeVer(Auth::user(), $factura)) {
+            abort(403);
+        }
+
+        $idBorrador = CatalogoEstadoSolicitud::idDe('Borrador');
+        if ($idBorrador === null || (int) $factura->catalogo_estado_solicitud_id !== $idBorrador) {
+            throw ValidationException::withMessages(['enlace' => 'Solo se puede regenerar el enlace en borradores.']);
+        }
+
+        $campos = $request->input('campos_fiscales', $factura->campos_fiscales_solicitados);
+        if (! is_array($campos) || $campos === []) {
+            $campos = \App\Models\EnlaceDatosFiscales::CAMPOS;
+        }
+
+        $accion = $request->input('accion_formulario', \App\Models\EnlaceDatosFiscales::ACCION_PRIMERA);
+
+        $resultado = $generarEnlace->ejecutar($factura, [
+            'accion' => $accion,
+            'campos' => $campos,
+            'usuario_id' => Auth::id(),
+        ]);
+
+        return response()->json([
+            'url' => $resultado['url'],
+            'solicitud' => $factura->fresh(['enlacesFiscales', 'estado', 'cliente']),
+        ]);
     }
 
     public function reparar(
@@ -116,6 +225,7 @@ class SolicitudFacturaController extends Controller
             'estado:id,nombre',
             'cliente:id,numero_cliente,nombre,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social,telefono',
             'vouchers:id,solicitud_factura_id,path,nombre_original,orden,mime',
+            'enlacesFiscales',
             'respondidaPor:id,name',
             'auditorias.usuario:id,name',
             'auditorias.estadoNuevo:id,nombre',

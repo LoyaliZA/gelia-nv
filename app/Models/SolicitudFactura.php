@@ -13,14 +13,22 @@ class SolicitudFactura extends Model
 
     protected $table = 'solicitudes_facturas';
 
+    public const DESTINATARIO_CLIENTE = 'cliente';
+
+    public const DESTINATARIO_TERCERO = 'tercero';
+
     protected $fillable = [
         'folio',
         'vendedor_id',
         'departamento_id',
         'cliente_id',
+        'destinatario_tipo',
         'catalogo_estado_solicitud_id',
         'razon_social',
         'datos_fiscales',
+        'campos_fiscales_solicitados',
+        'formulario_enviado_at',
+        'formulario_respondido_at',
         'archivo_fiscal_path',
         'observaciones_vendedor',
         'motivo_respuesta',
@@ -37,6 +45,9 @@ class SolicitudFactura extends Model
 
     protected $casts = [
         'datos_fiscales' => 'array',
+        'campos_fiscales_solicitados' => 'array',
+        'formulario_enviado_at' => 'datetime',
+        'formulario_respondido_at' => 'datetime',
         'respondida_at' => 'datetime',
     ];
 
@@ -75,6 +86,11 @@ class SolicitudFactura extends Model
     public function vouchers(): HasMany
     {
         return $this->hasMany(SolicitudFacturaVoucher::class, 'solicitud_factura_id')->orderBy('orden');
+    }
+
+    public function enlacesFiscales(): HasMany
+    {
+        return $this->hasMany(EnlaceDatosFiscales::class, 'solicitud_factura_id')->orderByDesc('id');
     }
 
     public function auditorias(): HasMany

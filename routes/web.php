@@ -15,7 +15,7 @@ use App\Http\Controllers\Activos\{ActivoController,CategoriaActivoController,Tip
 use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,IncidenciaGerenteController,ReciboRhController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController,ConsolidadoHorasExtraController,BancoTiempoController};
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\Almacenes\{ProductoController as AlmacenProductoController, InventarioController as AlmacenInventarioController, CostoController as AlmacenCostoController, ImportacionAlmacenController};
-use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController};
+use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController,DatosFiscalesPublicosController};
 use App\Http\Controllers\Traspasos\SolicitudTraspasoController;
 use App\Http\Controllers\Traspasos\TraspasoCedisController;
 use App\Http\Controllers\CancelacionesCotizaciones\SolicitudOperativaController;
@@ -50,6 +50,16 @@ Route::middleware(['throttle:30,1', \App\Http\Middleware\HardenSolicitudDireccio
         ->name('direcciones.publicas.form');
     Route::post('/direcciones-envio', [\App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionPublicaController::class, 'store'])
         ->name('direcciones.publicas.store');
+
+    Route::get('/datos-fiscales/confirmacion/{folio}', [DatosFiscalesPublicosController::class, 'confirmacion'])
+        ->name('datos_fiscales.publicas.confirmacion');
+    Route::get('/datos-fiscales/{codigo}', [DatosFiscalesPublicosController::class, 'show'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->name('datos_fiscales.publicas.show');
+    Route::get('/datos-fiscales', [DatosFiscalesPublicosController::class, 'show'])
+        ->name('datos_fiscales.publicas.form');
+    Route::post('/datos-fiscales', [DatosFiscalesPublicosController::class, 'store'])
+        ->name('datos_fiscales.publicas.store');
 });
 
 Route::post('/webhooks/tiendanube', \App\Http\Controllers\TiendanubeWebhookController::class)
@@ -195,6 +205,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/imagenes/importar/{id}', [\App\Http\Controllers\TiendanubeController::class, 'progresoImportImagenes'])->name('imagenes.importar.progreso');
         Route::put('/configuracion', [\App\Http\Controllers\TiendanubeController::class, 'guardarConfiguracion'])->name('configuracion.update')->middleware('can:tiendanube.configurar');
         Route::post('/configuracion/probar-conexion', [\App\Http\Controllers\TiendanubeController::class, 'probarConexion'])->name('configuracion.probar_conexion')->middleware('can:tiendanube.configurar');
+        Route::post('/catalogo/limpiar', [\App\Http\Controllers\TiendanubeController::class, 'limpiarCatalogo'])->name('catalogo.limpiar')->middleware('can:tiendanube.configurar');
         Route::get('/webhooks', [\App\Http\Controllers\TiendanubeController::class, 'listarWebhooks'])->name('webhooks.index')->middleware('can:tiendanube.configurar');
         Route::post('/webhooks/aplicar-recomendados', [\App\Http\Controllers\TiendanubeController::class, 'aplicarWebhooksRecomendados'])->name('webhooks.aplicar_recomendados')->middleware('can:tiendanube.configurar');
         Route::post('/webhooks', [\App\Http\Controllers\TiendanubeController::class, 'crearWebhook'])->name('webhooks.store')->middleware('can:tiendanube.configurar');
@@ -356,6 +367,8 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:facturas.crear'])->prefix('facturas')->name('facturas.')->group(function () {
         Route::get('/plantilla-fiscales/descargar', [SolicitudFacturaController::class, 'descargarPlantilla'])->name('plantilla_fiscales');
         Route::post('/', [SolicitudFacturaController::class, 'store'])->name('store');
+        Route::put('/{factura}/borrador', [SolicitudFacturaController::class, 'actualizarBorrador'])->name('borrador');
+        Route::post('/{factura}/enlace-fiscal', [SolicitudFacturaController::class, 'regenerarEnlaceFiscal'])->name('enlace_fiscal');
         Route::put('/{factura}/reparar', [SolicitudFacturaController::class, 'reparar'])->name('reparar');
     });
 
@@ -459,7 +472,10 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:control_pedidos.crear'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/', [PedidoBmaController::class, 'store'])->name('store');
         Route::post('/autoguardar', [PedidoBmaController::class, 'autoguardar'])->name('autoguardar');
+        Route::get('/candidatos-principal', [PedidoBmaController::class, 'candidatosPrincipal'])->name('candidatos_principal');
+        Route::post('/{pedidoBma}/completar-envio-resguardo', [PedidoBmaController::class, 'completarEnvioResguardo'])->name('completar_envio_resguardo');
         Route::put('/{pedidoBma}/enviar', [PedidoBmaController::class, 'enviar'])->name('enviar');
+        Route::post('/{pedidoBma}/anexar-pago-envio', [PedidoBmaController::class, 'anexarPagoEnvio'])->name('anexar_pago_envio');
         Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
             Route::post('/cliente/{cliente}/enlace-direccion', [DireccionesAuxiliarController::class, 'generarEnlace'])
                 ->name('enlace_direccion');
@@ -487,6 +503,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/aprobar', [PedidoBmaAuditoriaController::class, 'aprobar'])->name('aprobar');
         Route::post('/{pedidoBma}/rechazar', [PedidoBmaAuditoriaController::class, 'rechazar'])->name('rechazar');
         Route::post('/{pedidoBma}/liberar-resguardo', [PedidoBmaAuditoriaController::class, 'liberarResguardo'])->name('liberar_resguardo');
+        Route::post('/{pedidoBma}/anexar-pago-envio', [PedidoBmaAuditoriaController::class, 'anexarPagoEnvio'])->name('anexar_pago_envio');
+        Route::post('/{pedidoBma}/anexo-envio/aprobar', [PedidoBmaAuditoriaController::class, 'aprobarAnexoEnvio'])->name('anexo_envio.aprobar');
+        Route::post('/{pedidoBma}/anexo-envio/rechazar', [PedidoBmaAuditoriaController::class, 'rechazarAnexoEnvio'])->name('anexo_envio.rechazar');
     });
 
     // Submódulo Direcciones (Auxiliar) — sin acceso al módulo Clientes

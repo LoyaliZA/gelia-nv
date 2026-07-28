@@ -578,6 +578,7 @@ class CatalogoController extends Controller
         CatalogoPaqueteriaPedido::create($request->validate([
             'nombre' => 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre',
             'categoria' => 'required|in:comercial,local_regional',
+            'permite_costo_diferido' => 'boolean',
             'activo' => 'boolean',
         ]));
 
@@ -589,6 +590,7 @@ class CatalogoController extends Controller
         CatalogoPaqueteriaPedido::findOrFail($id)->update($request->validate([
             'nombre' => 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre,' . $id,
             'categoria' => 'required|in:comercial,local_regional',
+            'permite_costo_diferido' => 'boolean',
             'activo' => 'boolean',
         ]));
 

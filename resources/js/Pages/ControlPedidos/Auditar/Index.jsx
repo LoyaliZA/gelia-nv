@@ -8,6 +8,7 @@ import FiltrosAuditoria from './Partials/FiltrosAuditoria';
 import TablaAuditoria from './Partials/TablaAuditoria';
 import ModalRevisarPedido from './Partials/ModalRevisarPedido';
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
+import ModalAnexarPagoEnvio from '../Partials/ModalAnexarPagoEnvio';
 
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
 
@@ -18,7 +19,7 @@ const KPI_CONFIG = [
     { key: 'total', label: 'Total recibidas', icon: Inbox, color: 'var(--color-primario)' },
 ];
 
-export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
+export default function Index({ auth, pedidos, metricas = {}, filtros = {}, catalogos = {} }) {
     const { flash } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p)
@@ -27,6 +28,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
         || auth?.user?.roles?.includes('Super admin (admin)');
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'PENDIENTES');
     const [modalRevisar, setModalRevisar] = useState({ abierto: false, pedido: null });
+    const [modalAnexo, setModalAnexo] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
@@ -83,6 +85,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
     };
 
     const abrirRevisar = (pedido) => setModalRevisar({ abierto: true, pedido });
+    const abrirAnexar = (pedido) => setModalAnexo({ abierto: true, pedido });
 
     return (
         <AppLayout auth={auth}>
@@ -100,16 +103,18 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
                             </h1>
                             <p className="text-sm theme-text-muted font-bold mt-2 m-0">Bandeja de entrada para validación antes de Registro General</p>
                         </div>
-                        {can('clientes.direcciones.ver') && (
-                            <button
-                                type="button"
-                                className={`${THEME_BTN_SECONDARY} inline-flex items-center gap-2`}
-                                onClick={() => router.get(route('control_pedidos.direcciones.index'))}
-                            >
-                                <MapPin className="w-4 h-4" />
-                                Gestión de Direcciones
-                            </button>
-                        )}
+                        <div className="flex flex-wrap gap-3">
+                            {can('clientes.direcciones.ver') && (
+                                <button
+                                    type="button"
+                                    className={`${THEME_BTN_SECONDARY} inline-flex items-center gap-2`}
+                                    onClick={() => router.get(route('control_pedidos.direcciones.index'))}
+                                >
+                                    <MapPin className="w-4 h-4" />
+                                    Gestión de Direcciones
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </header>
 
@@ -136,13 +141,25 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
                     />
                 </div>
 
-                <TablaAuditoria pedidos={pedidos} onRevisar={abrirRevisar} />
+                <TablaAuditoria
+                    pedidos={pedidos}
+                    onRevisar={abrirRevisar}
+                    onAnexarEnvio={abrirAnexar}
+                />
             </GeliaPageShell>
 
             <ModalRevisarPedido
                 abierto={modalRevisar.abierto}
                 pedido={modalRevisar.pedido}
+                bancos={catalogos.bancos || []}
                 onClose={() => setModalRevisar({ abierto: false, pedido: null })}
+            />
+            <ModalAnexarPagoEnvio
+                abierto={modalAnexo.abierto}
+                pedido={modalAnexo.pedido}
+                bancos={catalogos.bancos || []}
+                routeName="control_pedidos.auditar.anexar_pago_envio"
+                onClose={() => setModalAnexo({ abierto: false, pedido: null })}
             />
             <ModalAlertaPedido
                 abierto={alerta.abierto}

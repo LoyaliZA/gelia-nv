@@ -4,7 +4,7 @@ import { AlertTriangle, X } from 'lucide-react';
 import { THEME_INPUT } from '../../../utils/geliaTheme';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_LABEL, BTN_PRIMARY, BTN_SECONDARY } from './pedidosBmaStyles';
 
-export default function ModalMotivoRechazo({ abierto, onClose, onConfirm }) {
+export default function ModalMotivoRechazo({ abierto, onClose, onConfirm, titulo = 'Reportar problema' }) {
     const [motivo, setMotivo] = useState('');
     const [error, setError] = useState('');
 
@@ -36,7 +36,7 @@ export default function ModalMotivoRechazo({ abierto, onClose, onConfirm }) {
                     <div>
                         <h2 className="text-lg font-black italic uppercase theme-text-main m-0 flex items-center gap-2">
                             <AlertTriangle className="w-5 h-5 text-orange-500" />
-                            Reportar problema
+                            {titulo}
                         </h2>
                         <p className="text-xs theme-text-muted font-bold mt-1 m-0">El pedido se devolverá a la vendedora</p>
                     </div>

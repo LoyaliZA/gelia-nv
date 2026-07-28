@@ -20,6 +20,11 @@ class FormPublicUrl
         return self::base().'/direcciones-envio/'.ltrim($codigo, '/');
     }
 
+    public static function fiscalShow(string $codigo): string
+    {
+        return self::base().'/datos-fiscales/'.ltrim($codigo, '/');
+    }
+
     public static function host(): ?string
     {
         $host = parse_url(self::base(), PHP_URL_HOST);
