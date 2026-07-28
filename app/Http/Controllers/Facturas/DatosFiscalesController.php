@@ -122,10 +122,23 @@ class DatosFiscalesController extends Controller
             ->limit(20);
 
         if ($q !== '') {
-            $query->where(function ($sub) use ($q) {
+            $tokens = preg_split('/\s+/u', mb_strtoupper($q, 'UTF-8'), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $query->where(function ($sub) use ($q, $tokens) {
                 $sub->where('codigo_interno', 'like', "%{$q}%")
                     ->orWhere('rfc', 'like', "%{$q}%")
                     ->orWhere('nombre_razon_social', 'like', "%{$q}%");
+
+                // Coincidencia por palabras (útil al escribir de a poco).
+                if (count($tokens) >= 1) {
+                    $sub->orWhere(function ($and) use ($tokens) {
+                        foreach ($tokens as $token) {
+                            if (mb_strlen($token) < 2) {
+                                continue;
+                            }
+                            $and->where('nombre_razon_social', 'like', "%{$token}%");
+                        }
+                    });
+                }
             });
         } elseif ($clienteId) {
             $query->whereHas('clientes', fn ($c) => $c->where('clientes.id', $clienteId));

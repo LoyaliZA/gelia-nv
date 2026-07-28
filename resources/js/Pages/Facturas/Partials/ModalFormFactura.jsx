@@ -45,12 +45,6 @@ function clienteTieneFiscales(c) {
     return !!(String(c.rfc || '').trim() || String(c.nombre_razon_social || '').trim());
 }
 
-function busquedaReceptorDesdeFactura(factura) {
-    const r = receptorFiscalDeFactura(factura);
-    if (!r) return '';
-    return `${r.codigo_interno} — ${r.nombre_razon_social}`;
-}
-
 async function copiarAlPortapapeles(texto) {
     if (!texto) return false;
     if (navigator.clipboard?.writeText && window.isSecureContext) {
@@ -92,9 +86,9 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
     const [mostrarDropdown, setMostrarDropdown] = useState(false);
     const [dragExcel, setDragExcel] = useState(false);
     const [clienteSeleccionado, setClienteSeleccionado] = useState(facturaAEditar?.cliente || null);
-    const [busquedaReceptor, setBusquedaReceptor] = useState(() => busquedaReceptorDesdeFactura(facturaAEditar));
     const [listaReceptores, setListaReceptores] = useState([]);
     const [buscandoReceptor, setBuscandoReceptor] = useState(false);
+    const [errorBusquedaReceptor, setErrorBusquedaReceptor] = useState(null);
     const [mostrarDropdownReceptor, setMostrarDropdownReceptor] = useState(false);
     const [receptorSeleccionado, setReceptorSeleccionado] = useState(() => receptorFiscalDeFactura(facturaAEditar));
     const [preguntarVinculo, setPreguntarVinculo] = useState(false);
@@ -152,7 +146,6 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
         });
         setBusquedaCliente(busquedaClienteDesdeFactura(facturaAEditar));
         setClienteSeleccionado(facturaAEditar.cliente || null);
-        setBusquedaReceptor(busquedaReceptorDesdeFactura(facturaAEditar));
         setReceptorSeleccionado(receptorFiscalDeFactura(facturaAEditar));
         setVouchers([]);
         setVouchersConservarIds((facturaAEditar.vouchers || []).map(v => v.id));
@@ -194,16 +187,26 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
     }, [busquedaCliente]);
 
     useEffect(() => {
-        if (data.destinatario_tipo !== 'tercero') {
+        if (data.destinatario_tipo !== 'tercero' || pedirFormulario) {
             abortBusquedaReceptor.current?.abort();
             setListaReceptores([]);
+            setErrorBusquedaReceptor(null);
             return;
         }
-        const q = busquedaReceptor.trim();
+        const q = String(data.razon_social || '').trim();
         const clienteId = clienteSeleccionado?.id || null;
+        if (
+            receptorSeleccionado
+            && normalizarRazonSocial(q) === normalizarRazonSocial(receptorSeleccionado.nombre_razon_social)
+        ) {
+            setListaReceptores([]);
+            setErrorBusquedaReceptor(null);
+            return;
+        }
         if (q.length < 2 && !clienteId) {
             abortBusquedaReceptor.current?.abort();
             setListaReceptores([]);
+            setErrorBusquedaReceptor(null);
             return;
         }
         if (debounceReceptorRef.current) clearTimeout(debounceReceptorRef.current);
@@ -212,24 +215,40 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
             const controller = new AbortController();
             abortBusquedaReceptor.current = controller;
             setBuscandoReceptor(true);
+            setErrorBusquedaReceptor(null);
             try {
-                const res = await axios.get(route('facturas.receptores.buscar'), {
-                    params: { q, cliente_id: clienteId },
+                const url = route('facturas.receptores.buscar');
+                const res = await axios.get(url, {
+                    params: { q: q.length >= 2 ? q : '', cliente_id: clienteId || undefined },
                     signal: controller.signal,
                 });
-                setListaReceptores(res.data?.data || []);
+                const rows = res.data?.data || [];
+                setListaReceptores(rows);
+                setMostrarDropdownReceptor(rows.length > 0);
             } catch (err) {
-                if (!axios.isCancel(err) && err?.code !== 'ERR_CANCELED') {
-                    setListaReceptores([]);
+                if (axios.isCancel(err) || err?.code === 'ERR_CANCELED') {
+                    return;
                 }
+                setListaReceptores([]);
+                const status = err?.response?.status;
+                setErrorBusquedaReceptor(
+                    status === 403
+                        ? 'Sin permiso para buscar terceros.'
+                        : status === 404
+                            ? 'Ruta de búsqueda no disponible (recargue la página).'
+                            : 'No se pudo buscar en el padrón de terceros.'
+                );
             } finally {
                 if (!controller.signal.aborted) {
                     setBuscandoReceptor(false);
                 }
             }
-        }, 400);
-        return () => clearTimeout(debounceReceptorRef.current);
-    }, [busquedaReceptor, data.destinatario_tipo, clienteSeleccionado?.id]);
+        }, 300);
+        return () => {
+            clearTimeout(debounceReceptorRef.current);
+            abortBusquedaReceptor.current?.abort();
+        };
+    }, [data.razon_social, data.destinatario_tipo, clienteSeleccionado?.id, pedirFormulario, receptorSeleccionado]);
 
     useEffect(() => {
         const accion = tieneFiscalesCliente && data.destinatario_tipo === 'cliente'
@@ -280,7 +299,7 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
             receptor_fiscal_id: r.id,
             razon_social: normalizarRazonSocial(r.nombre_razon_social),
         }));
-        setBusquedaReceptor(`${r.codigo_interno} — ${r.nombre_razon_social}`);
+        setListaReceptores([]);
         setMostrarDropdownReceptor(false);
         if (clienteSeleccionado) {
             verificarVinculoReceptor(r.id, clienteSeleccionado);
@@ -559,42 +578,6 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                         </div>
                     )}
 
-                    {data.destinatario_tipo === 'tercero' && (
-                        <div className="space-y-2 relative">
-                            <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Receptor fiscal (tercero)_</label>
-                            <div className="relative">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
-                                <input
-                                    type="text"
-                                    value={busquedaReceptor}
-                                    onChange={e => { setBusquedaReceptor(e.target.value); setMostrarDropdownReceptor(true); }}
-                                    onFocus={() => setMostrarDropdownReceptor(true)}
-                                    placeholder="Buscar por código TF, RFC o nombre…"
-                                    className="w-full pl-11 pr-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none"
-                                />
-                            </div>
-                            {mostrarDropdownReceptor && listaReceptores.length > 0 && (
-                                <div className="absolute top-full mt-1 left-0 right-0 z-50 theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                    {listaReceptores.map(r => (
-                                        <button key={r.id} type="button" onClick={() => seleccionarReceptor(r)} className="w-full text-left px-4 py-3 text-xs font-bold theme-text-main hover:bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)] outline-none">
-                                            {r.codigo_interno} — {r.nombre_razon_social}{r.rfc ? ` (${r.rfc})` : ''}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                            {buscandoReceptor && <p className="text-[10px] theme-text-muted m-0">Buscando…</p>}
-                            {receptorSeleccionado && (
-                                <div className="p-4 rounded-2xl border theme-border theme-element space-y-1">
-                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Receptor fiscal seleccionado</p>
-                                    <p className="text-sm font-black theme-text-main m-0">
-                                        {receptorSeleccionado.codigo_interno} — {receptorSeleccionado.nombre_razon_social}
-                                    </p>
-                                    <p className="text-[10px] theme-text-muted m-0">RFC: {receptorSeleccionado.rfc || '—'}</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
                     {clienteSeleccionado && data.destinatario_tipo === 'cliente' && (
                         <div className="p-4 rounded-2xl border theme-border theme-element space-y-2">
                             <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Preview datos fiscales actuales</p>
@@ -614,18 +597,92 @@ export default function ModalFormFactura({ onClose, onExito, modoEdicion = false
                     )}
 
                     {!(data.destinatario_tipo === 'tercero' && pedirFormulario) && (
-                        <div className="space-y-2">
+                        <div className="space-y-2 relative">
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
                                 {data.destinatario_tipo === 'tercero' ? 'Razón social a facturar (tercero)_' : 'Razón Social_'}
                             </label>
-                            <input
-                                required={!(data.destinatario_tipo === 'tercero' && pedirFormulario)}
-                                value={data.razon_social}
-                                onChange={e => setData('razon_social', normalizarRazonSocialAlEscribir(e.target.value))}
-                                onBlur={() => setData('razon_social', normalizarRazonSocial(data.razon_social))}
-                                className="w-full px-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none"
-                                placeholder={data.destinatario_tipo === 'tercero' ? 'Nombre fiscal del tercero a facturar' : 'Nombre o razón social a facturar'}
-                            />
+                            <div className="relative">
+                                {data.destinatario_tipo === 'tercero' && (
+                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted" />
+                                )}
+                                <input
+                                    required={!(data.destinatario_tipo === 'tercero' && pedirFormulario)}
+                                    value={data.razon_social}
+                                    onChange={(e) => {
+                                        const val = normalizarRazonSocialAlEscribir(e.target.value);
+                                        const coincide = receptorSeleccionado
+                                            && normalizarRazonSocial(val) === normalizarRazonSocial(receptorSeleccionado.nombre_razon_social);
+                                        if (receptorSeleccionado && !coincide) {
+                                            setReceptorSeleccionado(null);
+                                        }
+                                        setData(prev => ({
+                                            ...prev,
+                                            razon_social: val,
+                                            receptor_fiscal_id: coincide ? prev.receptor_fiscal_id : '',
+                                        }));
+                                        if (data.destinatario_tipo === 'tercero') {
+                                            setMostrarDropdownReceptor(true);
+                                        }
+                                    }}
+                                    onFocus={() => {
+                                        if (data.destinatario_tipo === 'tercero' && listaReceptores.length > 0) {
+                                            setMostrarDropdownReceptor(true);
+                                        }
+                                    }}
+                                    onBlur={(e) => setData('razon_social', normalizarRazonSocial(e.target.value))}
+                                    className={`w-full ${data.destinatario_tipo === 'tercero' ? 'pl-11' : 'px-4'} pr-4 py-3 theme-surface border theme-border rounded-xl theme-text-main text-sm font-bold outline-none`}
+                                    placeholder={data.destinatario_tipo === 'tercero'
+                                        ? 'Buscar por razón social, RFC o TF-…'
+                                        : 'Nombre o razón social a facturar'}
+                                    autoComplete="off"
+                                />
+                            </div>
+                            {data.destinatario_tipo === 'tercero' && mostrarDropdownReceptor && listaReceptores.length > 0 && (
+                                <div className="absolute top-full mt-1 left-0 right-0 z-50 theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                    {listaReceptores.map(r => (
+                                        <button
+                                            key={r.id}
+                                            type="button"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => seleccionarReceptor(r)}
+                                            className="w-full text-left px-4 py-3 text-xs font-bold theme-text-main hover:bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)] outline-none"
+                                        >
+                                            {r.codigo_interno} — {r.nombre_razon_social}{r.rfc ? ` (${r.rfc})` : ''}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {data.destinatario_tipo === 'tercero' && buscandoReceptor && (
+                                <p className="text-[10px] theme-text-muted m-0">Buscando en padrón de terceros…</p>
+                            )}
+                            {data.destinatario_tipo === 'tercero' && errorBusquedaReceptor && (
+                                <p className="text-[10px] text-red-500 font-bold m-0">{errorBusquedaReceptor}</p>
+                            )}
+                            {data.destinatario_tipo === 'tercero' && receptorSeleccionado && (
+                                <div className="p-4 rounded-2xl border theme-border theme-element space-y-2">
+                                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                        Preview datos fiscales del tercero
+                                    </p>
+                                    <p className="text-[10px] font-black theme-text-main m-0">
+                                        {receptorSeleccionado.codigo_interno}
+                                    </p>
+                                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 m-0">
+                                        {CAMPOS_FISCALES.map(({ clave, etiqueta }) => (
+                                            <div key={clave}>
+                                                <dt className="text-[9px] font-black uppercase theme-text-muted m-0">{etiqueta}</dt>
+                                                <dd className="text-xs font-bold theme-text-main m-0 break-all">
+                                                    {receptorSeleccionado[clave] || '—'}
+                                                </dd>
+                                            </div>
+                                        ))}
+                                    </dl>
+                                </div>
+                            )}
+                            {data.destinatario_tipo === 'tercero' && !receptorSeleccionado && String(data.razon_social || '').trim().length >= 2 && !buscandoReceptor && (
+                                <p className="text-[10px] theme-text-muted m-0">
+                                    Escriba para buscar un tercero registrado, o deje el nombre si es nuevo.
+                                </p>
+                            )}
                             {errors.razon_social && <p className="text-xs text-red-500">{errors.razon_social}</p>}
                         </div>
                     )}
