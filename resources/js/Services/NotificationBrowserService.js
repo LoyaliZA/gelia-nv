@@ -416,28 +416,54 @@ class NotificationBrowserService {
 
             this.audio.addEventListener('ended', onEnded);
 
-            try {
-                this.audio.currentTime = 0;
-                const playPromise = this.audio.play();
-
-                if (playPromise !== undefined) {
-                    playPromise
-                        .then(() => {
-                            this._audioUnlocked = true;
-                        })
-                        .catch((error) => {
-                            console.warn(
-                                '[NotificationBrowserService] Autoplay bloqueado. El usuario debe interactuar con la página primero.',
-                                error
-                            );
-                            cleanup();
-                        });
-                }
-            } catch (error) {
-                console.error('[NotificationBrowserService] Error al reproducir audio:', error);
-                cleanup();
+            // MediaError es permanente: si la carga inicial falló (típico en pestañas
+            // en segundo plano) el elemento queda mudo para siempre. Recrearlo.
+            if (this.audio.error) {
+                this._recargarAudioTrasError();
+                this.audio.addEventListener('ended', onEnded);
             }
+
+            let reintentado = false;
+
+            const intentarReproducir = () => {
+                try {
+                    this.audio.currentTime = 0;
+                    const playPromise = this.audio.play();
+
+                    if (playPromise !== undefined) {
+                        playPromise
+                            .then(() => {
+                                this._audioUnlocked = true;
+                            })
+                            .catch((error) => {
+                                if (!reintentado && (error?.name === 'NotSupportedError' || this.audio?.error)) {
+                                    reintentado = true;
+                                    this._recargarAudioTrasError();
+                                    this.audio.addEventListener('ended', onEnded);
+                                    intentarReproducir();
+                                    return;
+                                }
+
+                                console.warn(
+                                    '[NotificationBrowserService] No se pudo reproducir el tono de alerta.',
+                                    error
+                                );
+                                cleanup();
+                            });
+                    }
+                } catch (error) {
+                    console.error('[NotificationBrowserService] Error al reproducir audio:', error);
+                    cleanup();
+                }
+            };
+
+            intentarReproducir();
         });
+    }
+
+    /** Reconstruye el elemento de audio cuando quedó en estado de error irrecuperable. */
+    _recargarAudioTrasError() {
+        this._loadAudio(this.currentTonePath);
     }
 
     _speakTextAndWait(text, force = false) {

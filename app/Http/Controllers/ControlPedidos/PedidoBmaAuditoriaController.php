@@ -7,6 +7,7 @@ use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\LiberarResguardoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\RechazarAnexoEnvioPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\RechazarPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SubirRemisionPedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\AnexarPagoEnvioPedidoBmaService;
@@ -18,9 +19,11 @@ use App\Services\ControlPedidos\ListarPedidosAuditoriaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\RechazarAnexoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RechazarPedidoBmaService;
+use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use App\Services\ControlPedidos\ValidarPagoPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -36,10 +39,22 @@ class PedidoBmaAuditoriaController extends Controller
         Gate::authorize('control_pedidos.auditar');
 
         return Inertia::render('ControlPedidos/Auditar/Index', [
+            // Closures: en reload parcial solo se evalúan las props pedidas (only).
+            'pedidos' => fn () => $listarService->ejecutar($request->all()),
+            'metricas' => fn () => $listarService->metricas(),
+            'filtros' => $request->only(['tab', 'q', 'page']),
+            'catalogos' => fn () => $catalogosService->ejecutar(),
+        ]);
+    }
+
+    public function listado(Request $request, ListarPedidosAuditoriaService $listarService): JsonResponse
+    {
+        Gate::authorize('control_pedidos.auditar');
+
+        return response()->json([
             'pedidos' => $listarService->ejecutar($request->all()),
             'metricas' => $listarService->metricas(),
-            'filtros' => $request->all(),
-            'catalogos' => $catalogosService->ejecutar(),
+            'filtros' => $request->only(['tab', 'q', 'page']),
         ]);
     }
 
@@ -108,6 +123,25 @@ class PedidoBmaAuditoriaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Pedido rechazado y devuelto a la vendedora.');
+    }
+
+    public function reportarErrorDatos(
+        ReportarErrorDatosPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ReportarErrorDatosPedidoBmaService $service
+    ): RedirectResponse {
+        try {
+            $service->ejecutar(
+                $pedidoBma->load(['estatus', 'documentos']),
+                Auth::id(),
+                $request->validated('campos_incorrectos'),
+                (string) ($request->validated('detalle') ?? '')
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Error reportado al área correspondiente.');
     }
 
     public function liberarResguardo(

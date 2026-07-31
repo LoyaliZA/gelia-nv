@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw, ChevronDown } from 'lucide-react';
+import { Search, RefreshCw, ChevronDown, Loader2 } from 'lucide-react';
 import { THEME_INPUT, THEME_LABEL } from '../../../../utils/geliaTheme';
 import {
     BTN_SECONDARY,
@@ -12,18 +12,21 @@ import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 export default function FiltrosCedis({
     filtros = {},
     tabActiva,
+    busqueda,
     onTabChange,
     onBuscar,
     onActualizar,
     metricas = {},
     pedidos = null,
     onIrAPagina,
+    buscando = false,
 }) {
     const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
 
     const conteoTab = (tabId) => {
         const map = {
             TODOS: metricas.total,
+            PENDIENTES_PESAJE: metricas.pendientes_pesaje,
             EMPACADOS: metricas.empacados,
             PENDIENTES_ENVIO: metricas.pendientes_envio,
             PENDIENTES_GUIA: metricas.pendientes_guia,
@@ -51,11 +54,19 @@ export default function FiltrosCedis({
                         <input
                             id="cedis-busqueda"
                             type="text"
-                            defaultValue={filtros.q || ''}
+                            value={busqueda ?? filtros.q ?? ''}
                             onChange={(e) => onBuscar(e.target.value)}
                             placeholder="Folio, cliente o número..."
-                            className={`${THEME_INPUT} w-full py-3 text-sm font-bold`}
+                            className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10`}
+                            aria-busy={buscando}
+                            autoComplete="off"
                         />
+                        {buscando && (
+                            <Loader2
+                                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
+                                aria-label="Buscando"
+                            />
+                        )}
                     </div>
                 </div>
                 <button

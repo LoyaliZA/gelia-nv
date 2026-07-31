@@ -12,6 +12,7 @@ class RechazarPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private NotificarPedidoBmaService $notificarService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, string $motivo): PedidoBma
@@ -51,10 +52,23 @@ class RechazarPedidoBmaService
                 'Rechazado por auxiliar: ' . $motivo
             );
 
-            return $pedido->fresh([
+            $pedido = $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'banco', 'almacen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'envioTienda', 'pagoValidadoPor',
+                'vendedor',
             ]);
+
+            $this->notificarService->ejecutar(
+                $pedido,
+                'pedido_rechazado_auxiliar',
+                'Pedido rechazado por auxiliar: '.$motivo,
+                [],
+                $usuarioId,
+                true,
+                ['url' => '/control-pedidos?tab=RECHAZADAS&q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id))]
+            );
+
+            return $pedido;
         });
     }
 

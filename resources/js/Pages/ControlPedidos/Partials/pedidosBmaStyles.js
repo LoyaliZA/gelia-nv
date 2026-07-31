@@ -61,17 +61,28 @@ export const TABS_PEDIDOS = [
     { id: 'RECHAZADAS', label: 'Rechazadas' },
 ];
 
-export const TABS_AUDITORIA = [
+/** Estado del ciclo: filtros principales de la bandeja auxiliar. */
+export const TABS_AUDITORIA_PRINCIPALES = [
     { id: 'PENDIENTES', label: 'Pendientes' },
-    { id: 'ENVIO_PENDIENTE', label: 'Envío pendiente' },
-    { id: 'PENDIENTE_LIBERACION', label: 'Pendiente de liberación' },
-    { id: 'ANEXO_POR_VERIFICAR', label: 'Anexo por verificar' },
-    { id: 'ANEXO_RECHAZADO', label: 'Anexo rechazado' },
-    { id: 'CONSOLIDADOS', label: 'Con complementos' },
-    { id: 'RESGUARDOS', label: 'Pedidos en Resguardo' },
     { id: 'APROBADOS', label: 'Aprobados' },
     { id: 'RECHAZADOS', label: 'Rechazados' },
     { id: 'TODAS', label: 'Todas' },
+];
+
+/** Colas operativas / envío: subfiltros. */
+export const TABS_AUDITORIA_SUBFILTROS = [
+    { id: 'ENVIO_PENDIENTE', label: 'Envío pendiente' },
+    { id: 'PENDIENTE_LIBERACION', label: 'Pendiente liberación' },
+    { id: 'ANEXO_POR_VERIFICAR', label: 'Anexo por verificar' },
+    { id: 'ANEXO_RECHAZADO', label: 'Anexo rechazado' },
+    { id: 'CONSOLIDADOS', label: 'Complementos' },
+    { id: 'RESGUARDOS', label: 'Resguardo' },
+];
+
+export const TABS_AUDITORIA = [
+    ...TABS_AUDITORIA_PRINCIPALES.slice(0, 3),
+    ...TABS_AUDITORIA_SUBFILTROS,
+    TABS_AUDITORIA_PRINCIPALES[3],
 ];
 
 export const LABELS_ESTATUS_ENVIO = {
@@ -82,6 +93,15 @@ export const LABELS_ESTATUS_ENVIO = {
     pendiente_liberacion: 'Pendiente de liberación',
     pendiente_consolidacion: 'Pendiente consolidación',
     consolidado: 'Consolidado',
+    pendiente_pesaje: 'Pendiente de pesaje CEDIS',
+    pesaje_listo: 'Pesaje listo — cotizar envío',
+};
+
+export const LABELS_MOTIVO_REPESAJE = {
+    anexo_piezas: 'Cliente anexó piezas',
+    quita_piezas: 'Cliente quitó piezas',
+    cambio_surtido: 'Cliente cambió el surtido',
+    otro: 'Otro cambio de pedido',
 };
 
 export const badgeEstatusEnvio = (estatusEnvio) => {
@@ -93,6 +113,8 @@ export const badgeEstatusEnvio = (estatusEnvio) => {
         pendiente_liberacion: '#3B82F6',
         pendiente_consolidacion: '#0EA5E9',
         consolidado: '#14B8A6',
+        pendiente_pesaje: '#F97316',
+        pesaje_listo: '#10B981',
     };
     const hex = colores[estatusEnvio] || '#94A3B8';
     return {
@@ -147,6 +169,7 @@ export const anexoEnvioPendienteDe = (pedido) => (
 
 export const TABS_CEDIS = [
     { id: 'TODOS', label: 'Todos' },
+    { id: 'PENDIENTES_PESAJE', label: 'Pendientes de pesaje' },
     { id: 'EMPACADOS', label: 'Empacados' },
     { id: 'PENDIENTES_ENVIO', label: 'Pendientes de Enviar' },
     { id: 'PENDIENTES_GUIA', label: 'Pendientes de Guía' },
@@ -180,6 +203,37 @@ export const badgeErrorDatos = () => ({
     label: 'Error datos',
     ...badgeClaseEstatusPedido({ color_hex: '#EF4444' }),
 });
+
+export const badgeCorregirRemision = () => ({
+    label: 'Corregir remisión',
+    ...badgeClaseEstatusPedido({ color_hex: '#F97316' }),
+});
+
+export const badgeCorregirGuia = () => ({
+    label: 'Corregir guía',
+    ...badgeClaseEstatusPedido({ color_hex: '#EF4444' }),
+});
+
+export const badgePendienteReRevision = () => ({
+    label: 'Re-revisar',
+    ...badgeClaseEstatusPedido({ color_hex: '#22C55E' }),
+});
+
+export const esPendienteReRevision = (pedido) => Boolean(pedido?.pendiente_re_revision);
+
+export const camposIncorrectosDe = (pedido) => (
+    Array.isArray(pedido?.campos_incorrectos) ? pedido.campos_incorrectos : []
+);
+
+export const tieneErrorRemision = (pedido) => {
+    const c = camposIncorrectosDe(pedido);
+    return c.includes('remision') || c.includes('folio_remision');
+};
+
+export const tieneErrorGuiaReportado = (pedido) => {
+    const c = camposIncorrectosDe(pedido);
+    return c.includes('numero_rastreo') || c.includes('guia_pdf');
+};
 
 /** Badge con color del catálogo + etiqueta semántica del estado. */
 export const badgeEstatusPedido = (estatus, { esResguardo = false } = {}) => {
@@ -354,17 +408,23 @@ export const validarCamposEnvioPedido = (data, {
     esMunicipioDiferido = false,
     esResguardoAbierto = false,
     esResguardoComplementario = false,
+    tienePesajeRespondido = false,
 } = {}) => {
     const faltantes = [];
-    const omitePesoCajasCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario;
+    const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario;
+
+    if (requiereLogistica && !esResguardoComplementario && !tienePesajeRespondido) {
+        return {
+            valido: false,
+            faltantes: ['pesaje CEDIS'],
+            mensaje: 'Debe solicitar y recibir el pesaje de CEDIS antes de enviar el pedido al auxiliar.',
+        };
+    }
 
     if (!String(data.folio_remision || '').trim()) faltantes.push('folio de pedido');
     if (!data.cliente_id) faltantes.push('cliente');
     if (!data.origen_id) faltantes.push('origen del pedido');
     if (!data.catalogo_banco_id) faltantes.push('banco');
-    if (!omitePesoCajasCosto && (data.peso_real_kg === '' || data.peso_real_kg == null)) {
-        faltantes.push('peso real');
-    }
     if (!data.almacen_id) faltantes.push('almacén de salida');
     if (Number(data.total_mercancia || 0) <= 0) faltantes.push('total de mercancía');
 
@@ -374,14 +434,20 @@ export const validarCamposEnvioPedido = (data, {
     }
 
     if (requiereLogistica) {
-        if (!data.catalogo_tipo_caja_id) faltantes.push('tipo de caja');
-        if (!omitePesoCajasCosto && (data.numero_cajas === '' || data.numero_cajas == null)) {
-            faltantes.push('número de cajas');
+        if (tienePesajeRespondido) {
+            if (data.peso_real_kg === '' || data.peso_real_kg == null) faltantes.push('peso real (pesaje CEDIS)');
+            if (!data.catalogo_tipo_caja_id) faltantes.push('tipo de caja (pesaje CEDIS)');
+            if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de cajas (pesaje CEDIS)');
+        } else if (!omiteCosto) {
+            if (data.peso_real_kg === '' || data.peso_real_kg == null) faltantes.push('peso real');
+            if (!data.catalogo_tipo_caja_id) faltantes.push('tipo de caja');
+            if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de cajas');
         }
+
         if (!data.catalogo_tipo_guia_id) faltantes.push('tipo de guía');
         if (!data.catalogo_paqueteria_id) faltantes.push('paquetería');
         if (!data.catalogo_zona_id) faltantes.push('reexpedición');
-        if (!omitePesoCajasCosto && (data.costo_envio === '' || data.costo_envio == null)) {
+        if (!omiteCosto && (data.costo_envio === '' || data.costo_envio == null)) {
             faltantes.push('costo de envío');
         }
         if (!String(data.codigo_postal || '').trim()) faltantes.push('código postal');

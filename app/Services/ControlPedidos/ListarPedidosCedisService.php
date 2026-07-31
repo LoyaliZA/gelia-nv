@@ -5,6 +5,8 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 class ListarPedidosCedisService
 {
@@ -20,9 +22,13 @@ class ListarPedidosCedisService
         CatalogoEstatusPedido::FASE_ENVIADO,
     ];
 
-    public function ejecutar(array $filtros = [], bool $paginar = true)
+    public function ejecutar(array $filtros = [], bool $paginar = true): LengthAwarePaginator|Collection
     {
-        $query = $this->queryBase();
+        $tab = strtoupper($filtros['tab'] ?? 'TODOS');
+        $query = $tab === 'PENDIENTES_PESAJE'
+            ? $this->queryPendientesPesaje()
+            : $this->queryBase();
+
         $this->aplicarFiltros($query, $filtros);
 
         return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
@@ -38,6 +44,7 @@ class ListarPedidosCedisService
         $pendientesGuia = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_GUIA'] ?? 0)->count();
         $enviados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0)->count();
         $incorrectas = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0)->count();
+        $pendientesPesaje = $this->queryPendientesPesaje()->count();
 
         return [
             'empacados' => $empacados,
@@ -47,8 +54,33 @@ class ListarPedidosCedisService
             'incorrectas' => $incorrectas,
             'pendientes' => $empacados,
             'incidencias' => $incorrectas,
+            'pendientes_pesaje' => $pendientesPesaje,
             'total' => $empacados + $pendientesEnvio + $pendientesGuia + $enviados + $incorrectas
                 + ((clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENTREGADO'] ?? 0)->count()),
+        ];
+    }
+
+    private function withRelations(): array
+    {
+        return [
+            'cliente',
+            'vendedor',
+            'estatus',
+            'origen',
+            'almacen',
+            'paqueteria',
+            'tipoGuia',
+            'tipoCaja',
+            'cajas.tipoCaja',
+            'documentos',
+            'empacadoPor',
+            'incidenciaEmpaquePor',
+            'resguardoApartadoPor',
+            'direccionVigente',
+            'tipoOperacionEnvio',
+            'complementos.documentos',
+            'complementos.estatus',
+            'complementos.cliente',
         ];
     }
 
@@ -61,25 +93,7 @@ class ListarPedidosCedisService
             $fasesVisibles
         )));
 
-        return PedidoBma::with([
-            'cliente',
-            'vendedor',
-            'estatus',
-            'origen',
-            'almacen',
-            'paqueteria',
-            'tipoGuia',
-            'tipoCaja',
-            'documentos',
-            'empacadoPor',
-            'incidenciaEmpaquePor',
-            'resguardoApartadoPor',
-            'direccionVigente',
-            'tipoOperacionEnvio',
-            'complementos.documentos',
-            'complementos.estatus',
-            'complementos.cliente',
-        ])
+        return PedidoBma::with($this->withRelations())
             ->whereNull('pedido_principal_id')
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
             ->whereNotNull('pago_validado_at')
@@ -87,9 +101,19 @@ class ListarPedidosCedisService
             ->orderByDesc('created_at');
     }
 
+    private function queryPendientesPesaje(): Builder
+    {
+        return PedidoBma::with($this->withRelations())
+            ->whereNull('pedido_principal_id')
+            ->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE)
+            ->whereNull('empacado_at')
+            ->orderByDesc('pesaje_solicitado_at')
+            ->orderByDesc('created_at');
+    }
+
     private function aplicarFiltros(Builder $query, array $filtros): void
     {
-        if (!empty($filtros['q'])) {
+        if (! empty($filtros['q'])) {
             $termino = trim($filtros['q']);
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
@@ -106,6 +130,10 @@ class ListarPedidosCedisService
         }
 
         $tab = strtoupper($filtros['tab'] ?? 'TODOS');
+        if ($tab === 'PENDIENTES_PESAJE') {
+            return;
+        }
+
         $idsPorFase = $this->idsPorFase();
 
         match ($tab) {

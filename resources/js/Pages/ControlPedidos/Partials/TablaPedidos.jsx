@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck } from 'lucide-react';
-import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import {
     badgeEstatusPedido,
@@ -262,7 +261,6 @@ export default function TablaPedidos({
                     </tbody>
                 </table>
             </div>
-            {pedidos?.links && <GeliaPaginacion paginacion={pedidos} />}
             <ModalVistaPreviaDocumento abierto={Boolean(docPreview)} documento={docPreview} onClose={() => setDocPreview(null)} />
         </div>
     );

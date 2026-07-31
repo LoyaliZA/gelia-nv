@@ -72,6 +72,13 @@ return [
             'soporte_respuesta_usuario'   => true,
             'listo_cedis'                 => true,
             'detalle_dano_cedis'          => true,
+            'pedido_error_datos'          => true,
+            'pedido_error_remision'       => true,
+            'pedido_error_guia'           => true,
+            'pedido_guia_retraso'         => true,
+            'pedido_resguardo_apartado'   => true,
+            'pedido_consulta_pesaje'      => true,
+            'pedido_pesaje_listo'         => true,
         ],
     ],
 

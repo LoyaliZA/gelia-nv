@@ -48,6 +48,33 @@ class DireccionesAuxiliarController extends Controller
             'clientes' => $clientes,
             'filtros' => [
                 'q' => $termino,
+                'page' => $request->query('page'),
+            ],
+        ]);
+    }
+
+    public function listado(Request $request): JsonResponse
+    {
+        Gate::authorize('clientes.direcciones.ver');
+
+        $termino = trim((string) $request->query('q', ''));
+
+        $query = Cliente::query()
+            ->select(['id', 'numero_cliente', 'nombre'])
+            ->withCount(['direccionesActivas as direcciones_activas_count']);
+
+        $this->aplicarFiltroCliente($query, $termino);
+
+        $clientes = $query
+            ->orderBy('numero_cliente')
+            ->paginate(20)
+            ->withQueryString();
+
+        return response()->json([
+            'clientes' => $clientes,
+            'filtros' => [
+                'q' => $termino,
+                'page' => $request->query('page'),
             ],
         ]);
     }

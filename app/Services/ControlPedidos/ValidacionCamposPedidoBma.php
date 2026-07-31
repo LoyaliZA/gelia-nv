@@ -3,6 +3,7 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaDocumento;
 
 trait ValidacionCamposPedidoBma
 {
@@ -15,50 +16,70 @@ trait ValidacionCamposPedidoBma
         $esDiferido = $pedido->esMunicipioDiferido();
         $esResguardoAbierto = $pedido->esResguardoAbierto();
         $esComplementario = $pedido->esResguardoComplementario();
-        $omitePesoCajasCosto = $esDiferido || $esResguardoAbierto || $esComplementario;
+        $omiteCosto = $esDiferido || $esResguardoAbierto || $esComplementario;
+        $tienePesaje = $pedido->tienePesajeRespondido();
+
+        if ($requiereLogistica && ! $esComplementario && ! $tienePesaje) {
+            throw new \InvalidArgumentException(
+                'Debe solicitar y recibir el pesaje de CEDIS antes de enviar el pedido al auxiliar.'
+            );
+        }
 
         if (empty(trim((string) ($pedido->folio_remision ?? '')))) {
             $faltantes[] = 'folio de pedido';
         }
-        if (!$pedido->cliente_id) {
+        if (! $pedido->cliente_id) {
             $faltantes[] = 'cliente';
         }
-        if (!$pedido->origen_id) {
+        if (! $pedido->origen_id) {
             $faltantes[] = 'origen del pedido';
         }
-        if (!$pedido->catalogo_banco_id) {
+        if (! $pedido->catalogo_banco_id) {
             $faltantes[] = 'banco';
         }
-        if (!$omitePesoCajasCosto && $pedido->peso_real_kg === null) {
-            $faltantes[] = 'peso real';
-        }
-        if (!$pedido->almacen_id) {
+        if (! $pedido->almacen_id) {
             $faltantes[] = 'almacén de salida';
         }
         if ($pedido->total_mercancia <= 0) {
             $faltantes[] = 'total de mercancía';
         }
-        if ($pedido->documentos()->count() === 0) {
+        if ($pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_COMPROBANTE)->count() === 0) {
             $faltantes[] = 'comprobante de pago';
         }
 
         if ($requiereLogistica) {
-            if (!$pedido->catalogo_tipo_caja_id) {
-                $faltantes[] = 'tipo de caja';
+            if ($tienePesaje) {
+                if ($pedido->peso_real_kg === null) {
+                    $faltantes[] = 'peso real (pesaje CEDIS)';
+                }
+                if (! $pedido->catalogo_tipo_caja_id) {
+                    $faltantes[] = 'tipo de caja (pesaje CEDIS)';
+                }
+                if ($pedido->numero_cajas === null) {
+                    $faltantes[] = 'número de cajas (pesaje CEDIS)';
+                }
+            } elseif (! $omiteCosto) {
+                if ($pedido->peso_real_kg === null) {
+                    $faltantes[] = 'peso real';
+                }
+                if (! $pedido->catalogo_tipo_caja_id) {
+                    $faltantes[] = 'tipo de caja';
+                }
+                if ($pedido->numero_cajas === null) {
+                    $faltantes[] = 'número de cajas';
+                }
             }
-            if (!$omitePesoCajasCosto && $pedido->numero_cajas === null) {
-                $faltantes[] = 'número de cajas';
-            }
-            if (!$pedido->catalogo_tipo_guia_id) {
+
+            if (! $pedido->catalogo_tipo_guia_id) {
                 $faltantes[] = 'tipo de guía';
             }
-            if (!$pedido->catalogo_paqueteria_id) {
+            if (! $pedido->catalogo_paqueteria_id) {
                 $faltantes[] = 'paquetería';
             }
-            if (!$pedido->catalogo_zona_id) {
+            if (! $pedido->catalogo_zona_id) {
                 $faltantes[] = 'reexpedición';
             }
-            if (!$omitePesoCajasCosto && $pedido->costo_envio === null) {
+            if (! $omiteCosto && $pedido->costo_envio === null) {
                 $faltantes[] = 'costo de envío';
             }
             if (empty($pedido->codigo_postal)) {
@@ -69,8 +90,8 @@ trait ValidacionCamposPedidoBma
             }
         }
 
-        if (!empty($faltantes)) {
-            throw new \InvalidArgumentException('Complete los campos requeridos: ' . implode(', ', $faltantes) . '.');
+        if (! empty($faltantes)) {
+            throw new \InvalidArgumentException('Complete los campos requeridos: '.implode(', ', $faltantes).'.');
         }
     }
 

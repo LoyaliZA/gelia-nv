@@ -10,6 +10,8 @@ class AsignarGuiaPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private NotificarPedidoBmaService $notificarService,
+        private AvanzarColaErroresPedidoBmaService $colaErroresService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, string $numeroRastreo, int $usuarioId): PedidoBma
@@ -37,6 +39,8 @@ class AsignarGuiaPedidoBmaService
         return DB::transaction(function () use ($pedido, $guia, $usuarioId, $yaEmpacado) {
             $estatusAnterior = $pedido->estatus;
 
+            $attrsCola = $this->attrsTrasCorregirGuia($pedido, ['numero_rastreo']);
+
             if ($yaEmpacado) {
                 $estatusPendienteEnvio = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO);
 
@@ -44,11 +48,11 @@ class AsignarGuiaPedidoBmaService
                     throw new \RuntimeException('No se encontró el estatus PENDIENTE_DE_ENVIO.');
                 }
 
-                $pedido->update([
+                $pedido->update(array_merge([
                     'numero_rastreo' => $guia,
                     'guia_subida_at' => now(),
                     'catalogo_estatus_pedido_id' => $estatusPendienteEnvio->id,
-                ]);
+                ], $attrsCola));
 
                 $this->historialService->registrarTransicion(
                     $pedido->id,
@@ -57,22 +61,50 @@ class AsignarGuiaPedidoBmaService
                     $estatusPendienteEnvio,
                     "Guía de rastreo asignada: {$guia}"
                 );
-            } else {
-                $pedido->update([
-                    'numero_rastreo' => $guia,
-                    'guia_subida_at' => now(),
-                ]);
 
-                $this->historialService->ejecutar(
-                    $pedido->id,
+                $pedido = $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
+
+                $this->notificarService->ejecutar(
+                    $pedido,
+                    'pedido_guia_asignada',
+                    "Guía de rastreo asignada: {$guia}",
+                    ['control_pedidos.cedis'],
                     $usuarioId,
-                    $estatusAnterior->id,
-                    $estatusAnterior->id,
-                    "Guía de rastreo asignada (pendiente de empaque): {$guia}"
+                    false,
+                    ['url' => '/control-pedidos/cedis?tab=PENDIENTES_ENVIO&q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id))]
                 );
+
+                return $pedido;
             }
+
+            $pedido->update(array_merge([
+                'numero_rastreo' => $guia,
+                'guia_subida_at' => now(),
+            ], $attrsCola));
+
+            $this->historialService->ejecutar(
+                $pedido->id,
+                $usuarioId,
+                $estatusAnterior->id,
+                $estatusAnterior->id,
+                "Guía de rastreo asignada (pendiente de empaque): {$guia}"
+            );
 
             return $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
         });
+    }
+
+    /** @param  list<string>  $camposResueltos */
+    private function attrsTrasCorregirGuia(PedidoBma $pedido, array $camposResueltos): array
+    {
+        if (empty($pedido->campos_incorrectos)) {
+            return [];
+        }
+
+        $restantes = $this->colaErroresService->quitarCampos($pedido, $camposResueltos);
+
+        return $restantes === []
+            ? $this->colaErroresService->attrsColaVacia()
+            : $this->colaErroresService->attrsColaPendiente($restantes);
     }
 }

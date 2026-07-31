@@ -10,6 +10,7 @@ class MarcarEnviadoPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private NotificarPedidoBmaService $notificarService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -49,10 +50,22 @@ class MarcarEnviadoPedidoBmaService
                 'Pedido marcado como enviado; sale a recolección.'
             );
 
-            return $pedido->fresh([
+            $pedido = $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'almacen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'vendedor',
             ]);
+
+            $this->notificarService->ejecutar(
+                $pedido,
+                'pedido_enviado',
+                'Pedido marcado como enviado',
+                [],
+                $usuarioId,
+                true,
+                ['url' => '/control-pedidos?tab=ENVIADOS&q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id))]
+            );
+
+            return $pedido;
         });
     }
 }

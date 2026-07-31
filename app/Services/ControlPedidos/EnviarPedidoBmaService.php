@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
+use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -16,6 +17,8 @@ class EnviarPedidoBmaService
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private CrearSnapshotDireccionPedido $crearSnapshot,
+        private NotificarPedidoBmaService $notificarService,
+        private AvanzarColaErroresPedidoBmaService $colaErroresService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -47,29 +50,68 @@ class EnviarPedidoBmaService
                 $pedido->refresh();
             }
 
-            $pedido->update([
+            $restantes = $this->colaErroresService->quitarDueno(
+                $pedido,
+                CamposIncorrectosPedidoBma::DUENO_VENDEDORA
+            );
+
+            $attrsError = $restantes === []
+                ? $this->colaErroresService->attrsColaVacia()
+                : $this->colaErroresService->attrsColaPendiente($restantes);
+
+            $pedido->update(array_merge([
                 'catalogo_estatus_pedido_id' => $estatusNuevo->id,
                 'estatus_envio' => $this->resolverEstatusEnvioAlEnviar($pedido),
-                'motivo_rechazo' => null,
                 'pago_validado_at' => null,
                 'pago_validado_por_id' => null,
-                'campos_incorrectos' => null,
-                'detalle_error_datos' => null,
-                'error_datos_at' => null,
-                'error_datos_por_id' => null,
-            ]);
+            ], $attrsError));
 
             $this->eliminarRemisiones($pedido);
+
+            $comentario = $restantes === []
+                ? 'Pedido enviado a revisión del auxiliar.'
+                : 'Pedido enviado a revisión del auxiliar. Errores pendientes: '
+                    .implode(', ', CamposIncorrectosPedidoBma::etiquetasDe($restantes));
 
             $this->historialService->registrarTransicion(
                 $pedido->id,
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                'Pedido enviado a revisión del auxiliar.'
+                $comentario
             );
 
-            return $pedido->fresh(['cliente', 'estatus', 'documentos', 'almacen', 'banco', 'direccionVigente']);
+            $pedido = $pedido->fresh(['cliente', 'estatus', 'documentos', 'almacen', 'banco', 'direccionVigente', 'vendedor']);
+
+            $q = urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id));
+
+            // Enviar siempre reinicia remisión/pago: el auxiliar es el siguiente paso operativo.
+            // La cola de guías se notifica al aprobar, no aquí.
+            $mensaje = $restantes === []
+                ? 'Nuevo pedido pendiente de auditoría'
+                : 'Pedido pendiente de auditoría. Errores por resolver: '
+                    .implode(', ', CamposIncorrectosPedidoBma::etiquetasDe($restantes));
+            $tipo = CamposIncorrectosPedidoBma::camposDeDueno(
+                $restantes,
+                CamposIncorrectosPedidoBma::DUENO_AUXILIAR
+            ) !== []
+                ? 'pedido_error_remision'
+                : 'pedido_pendiente_auxiliar';
+
+            $this->notificarService->ejecutar(
+                $pedido,
+                $tipo,
+                $mensaje,
+                ['control_pedidos.auditar'],
+                $usuarioId,
+                false,
+                [
+                    'url' => '/control-pedidos/auditar?tab=PENDIENTES&q='.$q,
+                    'campos_incorrectos' => $restantes,
+                ]
+            );
+
+            return $pedido;
         });
     }
 

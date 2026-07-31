@@ -8,6 +8,7 @@ import {
     badgeAuditoriaSemantico,
     badgeEstatusEnvio,
     badgeConComplementos,
+    badgeCorregirRemision,
     formatearMoneda,
     etiquetaAlmacen,
     formatearFechaNegocio,
@@ -20,11 +21,13 @@ import {
     anexoEnvioPendienteDe,
     puedeAnexarPagoEnvio,
     LABELS_ESTATUS_ENVIO,
+    tieneErrorRemision,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/ModalVistaPreviaDocumento';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import ModalMotivoRechazo from '../../Partials/ModalMotivoRechazo';
+import ModalReportarErrorDatos from '../../Partials/ModalReportarErrorDatos';
 import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
@@ -53,8 +56,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [procesando, setProcesando] = useState(false);
     const [docPreview, setDocPreview] = useState(null);
     const [confirmacion, setConfirmacion] = useState(null);
-    const [motivoRechazoAbierto, setMotivoRechazoAbierto] = useState(false);
     const [motivoAnexoAbierto, setMotivoAnexoAbierto] = useState(false);
+    const [errorDatosAbierto, setErrorDatosAbierto] = useState(false);
     const [liberarCapturaAbierto, setLiberarCapturaAbierto] = useState(false);
     const [cambiarDir, setCambiarDir] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
@@ -64,8 +67,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             setPedido(pedidoInicial);
             setProcesando(false);
             setConfirmacion(null);
-            setMotivoRechazoAbierto(false);
             setMotivoAnexoAbierto(false);
+            setErrorDatosAbierto(false);
             setLiberarCapturaAbierto(false);
             setDocPreview(null);
         }
@@ -77,6 +80,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const badge = badgeAuditoriaSemantico(fase, pedido.es_resguardo);
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
     const badgeComp = badgeConComplementos(pedido);
+    const badgeRemision = tieneErrorRemision(pedido) ? badgeCorregirRemision() : null;
     const esPendiente = fase === 'PENDIENTE_AUXILIAR';
     const puedeLiberarResguardo = Boolean(pedido.es_resguardo) && (esPendiente || fase === 'EN_CEDIS');
     const requiereCapturaLiberacion = Boolean(pedido.es_resguardo)
@@ -178,18 +182,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         }
     };
 
-    const enviarRechazo = (motivo) => {
-        setMotivoRechazoAbierto(false);
-        router.post(route('control_pedidos.auditar.rechazar', pedido.id), { motivo }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setAlerta({ abierto: true, tipo: 'success', titulo: 'Pedido rechazado', mensaje: 'Pedido devuelto a la vendedora.' });
-                onClose();
-            },
-            onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo rechazar el pedido.' }),
-        });
-    };
-
     const enviarRechazoAnexo = (motivo) => {
         setMotivoAnexoAbierto(false);
         setProcesando(true);
@@ -245,7 +237,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         <div className="min-w-0">
                             <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-1">Revisar pedido</p>
                             <EncabezadoFolioPedido pedido={pedido} size="lg" />
-                            <span className={`${badge.className} mt-2 inline-flex`} style={badge.style}>{badge.label}</span>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                                <span className={`${badge.className} inline-flex`} style={badge.style}>{badge.label}</span>
+                                {badgeRemision && (
+                                    <span className={`${badgeRemision.className} inline-flex`} style={badgeRemision.style}>{badgeRemision.label}</span>
+                                )}
+                            </div>
                         </div>
                         <button type="button" onClick={onClose} className="p-2 rounded-full theme-text-muted hover:theme-text-main outline-none shrink-0" aria-label="Cerrar">
                             <X className="w-5 h-5" />
@@ -264,6 +261,16 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 )}
                                 {pedido.es_resguardo && (
                                     <p className="text-xs font-black uppercase text-blue-600 mt-1 m-0">En resguardo — mercancía bloqueada en almacén</p>
+                                )}
+                                {badgeRemision && (
+                                    <div className="mt-3 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 space-y-1">
+                                        <p className="text-sm font-bold text-orange-600 m-0 flex items-center gap-2">
+                                            <AlertTriangle className="w-4 h-4" /> Corregir remisión
+                                        </p>
+                                        <p className="text-sm font-bold theme-text-main m-0">
+                                            {pedido.detalle_error_datos || pedido.motivo_rechazo || 'CEDIS/Delegado reportó error en la remisión. Suba la remisión correcta y apruebe.'}
+                                        </p>
+                                    </div>
                                 )}
                                 {esRechazado && pedido.motivo_rechazo && (
                                     <p className="text-sm text-red-500 font-bold mt-2 m-0 flex items-start gap-2">
@@ -357,8 +364,31 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
                                 <Campo label="Tipo caja" value={pedido.tipo_caja?.nombre} />
                                 <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
+                                <Campo label="N° cajas" value={pedido.numero_cajas} />
                                 <Campo label="Reexpedición" value={pedido.zona?.nombre} />
+                                <Campo label="Pesaje CEDIS" value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
                             </div>
+                            {(pedido.cajas || []).length > 0 && (
+                                <div className="mt-3 space-y-1">
+                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de cajas</p>
+                                    {(pedido.cajas || []).map((c) => (
+                                        <p key={c.id} className="text-xs font-bold theme-text-main m-0">
+                                            {c.tipo_caja?.nombre || 'Caja'}: {c.cantidad}
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
+                            {(pedido.documentos || []).some((d) => d.tipo === 'pdf_pedido') && (
+                                <div className="mt-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setDocPreview((pedido.documentos || []).find((d) => d.tipo === 'pdf_pedido'))}
+                                        className={`${BTN_SECONDARY} text-xs outline-none`}
+                                    >
+                                        Ver PDF del pedido
+                                    </button>
+                                </div>
+                            )}
                             <div className="mt-4 p-4 rounded-xl border theme-border theme-element space-y-2 text-sm">
                                 <div className="flex justify-between theme-text-muted font-bold"><span>Mercancía</span><span>{formatearMoneda(pedido.total_mercancia)}</span></div>
                                 <div className="flex justify-between theme-text-muted font-bold"><span>Envío</span><span>{formatearMoneda(pedido.costo_envio)}</span></div>
@@ -541,8 +571,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         )}
                         {esPendiente && (
                             <>
-                                <button type="button" onClick={() => setMotivoRechazoAbierto(true)} disabled={procesando} className={`${BTN_SECONDARY} theme-element border border-red-500/40 text-red-500 outline-none`}>
-                                    Reportar problema
+                                <button type="button" onClick={() => setErrorDatosAbierto(true)} disabled={procesando} className={`${BTN_SECONDARY} theme-element border border-red-500/40 text-red-500 outline-none`}>
+                                    Reportar error
                                 </button>
                                 <button
                                     type="button"
@@ -569,10 +599,14 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 onClose={() => setConfirmacion(null)}
                 onConfirm={ejecutarConfirmacion}
             />
-            <ModalMotivoRechazo
-                abierto={motivoRechazoAbierto}
-                onClose={() => setMotivoRechazoAbierto(false)}
-                onConfirm={enviarRechazo}
+            <ModalReportarErrorDatos
+                abierto={errorDatosAbierto}
+                pedido={pedido}
+                origen="auditar"
+                onClose={() => {
+                    setErrorDatosAbierto(false);
+                    onClose();
+                }}
             />
             <ModalMotivoRechazo
                 abierto={motivoAnexoAbierto}

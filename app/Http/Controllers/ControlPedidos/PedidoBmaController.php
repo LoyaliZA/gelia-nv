@@ -7,6 +7,8 @@ use App\Http\Requests\ControlPedidos\StorePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\UpdatePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\CompletarEnvioResguardoPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\SolicitarRepesajePedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\SubirPdfPedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\ActualizarPedidoBmaService;
 use App\Services\ControlPedidos\AnexarPagoEnvioPedidoBmaService;
@@ -14,9 +16,12 @@ use App\Services\ControlPedidos\CrearPedidoBmaService;
 use App\Services\ControlPedidos\Direcciones\CambiarDireccionPedido;
 use App\Services\ControlPedidos\EliminarPedidoBmaService;
 use App\Services\ControlPedidos\EnviarPedidoBmaService;
+use App\Services\ControlPedidos\GestionarPdfPedidoBmaService;
 use App\Services\ControlPedidos\LiberarResguardoPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
+use App\Services\ControlPedidos\SolicitarPesajePedidoBmaService;
+use App\Services\ControlPedidos\SolicitarRepesajePedidoBmaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,11 +42,24 @@ class PedidoBmaController extends Controller
         Gate::authorize('control_pedidos.ver_listado');
 
         return Inertia::render('ControlPedidos/Index', [
+            'pedidos' => fn () => $listarService->ejecutar(Auth::user(), $request->all()),
+            'metricas' => fn () => $listarService->metricas(Auth::user()),
+            'filtros' => $request->only(['tab', 'q', 'page']),
+            'catalogos' => fn () => $catalogosService->ejecutar(),
+            'direcciones_normalizadas' => (bool) config('control_pedidos.direcciones_normalizadas'),
+        ]);
+    }
+
+    public function listado(
+        Request $request,
+        ListarPedidosBmaService $listarService
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.ver_listado');
+
+        return response()->json([
             'pedidos' => $listarService->ejecutar(Auth::user(), $request->all()),
             'metricas' => $listarService->metricas(Auth::user()),
-            'filtros' => $request->all(),
-            'catalogos' => $catalogosService->ejecutar(),
-            'direcciones_normalizadas' => (bool) config('control_pedidos.direcciones_normalizadas'),
+            'filtros' => $request->only(['tab', 'q', 'page']),
         ]);
     }
 
@@ -248,6 +266,61 @@ class PedidoBmaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Envío del resguardo completado. Anexo pendiente de revisión.');
+    }
+
+    public function subirPdfPedido(
+        SubirPdfPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        GestionarPdfPedidoBmaService $service
+    ): RedirectResponse {
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $service->subir($pedidoBma->load('estatus'), $request->file('pdf_pedido'));
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'PDF del pedido adjuntado.');
+    }
+
+    public function solicitarPesaje(
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        SolicitarPesajePedidoBmaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $service->ejecutar($pedidoBma->load(['estatus', 'origen']), Auth::id());
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Consulta de pesaje enviada a CEDIS.');
+    }
+
+    public function solicitarRepesaje(
+        SolicitarRepesajePedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        SolicitarRepesajePedidoBmaService $service
+    ): RedirectResponse {
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $service->ejecutar(
+                $pedidoBma->load('estatus'),
+                Auth::id(),
+                (string) $request->validated('motivo')
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Re-pesaje solicitado a CEDIS.');
     }
 
     public function destroy(

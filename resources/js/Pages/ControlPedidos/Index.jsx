@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Plus, FileSpreadsheet, Package, Link2 } from 'lucide-react';
+import { Plus, FileSpreadsheet, Package, Link2, Loader2 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../utils/geliaTheme';
@@ -15,15 +15,29 @@ import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
 import ModalAnexarPagoEnvio from './Partials/ModalAnexarPagoEnvio';
 import ModalLiberarResguardoAbierto from './Auditar/Partials/ModalLiberarResguardoAbierto';
 import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/pedidosBmaStyles';
+import useListadoDiscreto from './Partials/useListadoDiscreto';
 
-const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
+const REFRESCO_LISTADO_MS = 15000;
 
 export default function Index({ auth, pedidos, metricas = {}, filtros = {}, catalogos = {}, direcciones_normalizadas = false }) {
     const { flash } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (permiso) => permisos.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
 
+    const {
+        pedidos: pedidosVista,
+        metricas: metricasVista,
+        cargando,
+        cargar,
+    } = useListadoDiscreto({
+        listadoRoute: 'control_pedidos.listado',
+        indexRoute: 'control_pedidos.index',
+        pedidos,
+        metricas,
+    });
+
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
+    const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [modalForm, setModalForm] = useState({ abierto: false, pedido: null });
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
@@ -33,6 +47,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalCompletarEnvio, setModalCompletarEnvio] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
+    const refrescoPendiente = useRef(false);
 
     useEffect(() => {
         if (flash?.success) {
@@ -42,26 +57,61 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         }
     }, [flash?.success, flash?.error]);
 
+    useEffect(() => {
+        const filas = pedidosVista?.data || [];
+        const refrescar = (m) => {
+            if (!m.abierto || !m.pedido?.id) return m;
+            const fresco = filas.find((p) => p.id === m.pedido.id);
+            return fresco && fresco !== m.pedido ? { ...m, pedido: fresco } : m;
+        };
+        setModalForm(refrescar);
+        setModalDetalle(refrescar);
+    }, [pedidosVista]);
+
+    const modalAbierto = modalForm.abierto
+        || modalDetalle.abierto
+        || modalBitacora.abierto
+        || modalAnexo.abierto
+        || modalCompletarEnvio.abierto
+        || modalLinkDireccion
+        || Boolean(pedidoAEliminar);
+
+    useEffect(() => {
+        const params = {
+            tab: tabActiva,
+            q: busqueda || undefined,
+            page: pedidosVista?.current_page || 1,
+        };
+        const refrescar = () => cargar(params, { silencioso: true });
+
+        if (modalAbierto) {
+            refrescoPendiente.current = true;
+            return undefined;
+        }
+        if (refrescoPendiente.current) {
+            refrescoPendiente.current = false;
+            refrescar();
+        }
+
+        const intervalo = setInterval(refrescar, REFRESCO_LISTADO_MS);
+        return () => clearInterval(intervalo);
+    }, [modalAbierto, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
+
     const onTabChange = (tab) => {
         setTabActiva(tab);
-        router.get(route('control_pedidos.index'), { tab, q: filtros.q || '' }, {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-            only: PROPS_LISTADO,
-        });
+        cargar({ tab, q: busqueda || undefined, page: 1 });
     };
 
     const onBuscar = (valor) => {
+        setBusqueda(valor);
         if (debounceBusqueda.current) clearTimeout(debounceBusqueda.current);
         debounceBusqueda.current = setTimeout(() => {
-            router.get(route('control_pedidos.index'), { tab: tabActiva, q: valor }, {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-                only: PROPS_LISTADO,
-            });
+            cargar({ tab: tabActiva, q: valor || undefined, page: 1 });
         }, 400);
+    };
+
+    const onIrAPagina = (page) => {
+        cargar({ tab: tabActiva, q: busqueda || undefined, page });
     };
 
     const abrirNuevo = () => setModalForm({ abierto: true, pedido: null });
@@ -77,7 +127,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     };
 
     const exportarCsv = () => {
-        window.location.href = route('control_pedidos.exportar', { tab: tabActiva, q: filtros.q || '' });
+        window.location.href = route('control_pedidos.exportar', { tab: tabActiva, q: busqueda || '' });
     };
 
     const etiquetaEliminar = pedidoAEliminar?.folio_remision || pedidoAEliminar?.folio || 'este borrador';
@@ -119,22 +169,33 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     <FiltrosPedidos
                         filtros={filtros}
                         tabActiva={tabActiva}
+                        busqueda={busqueda}
                         onTabChange={onTabChange}
                         onBuscar={onBuscar}
-                        metricas={metricas}
+                        metricas={metricasVista}
+                        pedidos={pedidosVista}
+                        onIrAPagina={onIrAPagina}
+                        buscando={cargando}
                     />
                 </div>
 
-                <TablaPedidos
-                    pedidos={pedidos}
-                    can={can}
-                    onVer={abrirVer}
-                    onBitacora={abrirBitacora}
-                    onEditar={abrirEditar}
-                    onEliminar={setPedidoAEliminar}
-                    onAnexarEnvio={(pedido) => setModalAnexo({ abierto: true, pedido })}
-                    onCompletarEnvio={(pedido) => setModalCompletarEnvio({ abierto: true, pedido })}
-                />
+                <div className="relative min-h-[12rem]">
+                    {cargando && (
+                        <div className="absolute inset-0 z-10 flex items-start justify-center pt-16 pointer-events-none">
+                            <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-label="Cargando pedidos" />
+                        </div>
+                    )}
+                    <TablaPedidos
+                        pedidos={pedidosVista}
+                        can={can}
+                        onVer={abrirVer}
+                        onBitacora={abrirBitacora}
+                        onEditar={abrirEditar}
+                        onEliminar={setPedidoAEliminar}
+                        onAnexarEnvio={(pedido) => setModalAnexo({ abierto: true, pedido })}
+                        onCompletarEnvio={(pedido) => setModalCompletarEnvio({ abierto: true, pedido })}
+                    />
+                </div>
             </GeliaPageShell>
 
             <ModalFormPedido

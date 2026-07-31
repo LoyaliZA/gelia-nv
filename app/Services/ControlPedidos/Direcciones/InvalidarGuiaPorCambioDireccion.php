@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos\Direcciones;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Services\ControlPedidos\NotificarPedidoBmaService;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -13,6 +14,7 @@ class InvalidarGuiaPorCambioDireccion
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historial,
+        private NotificarPedidoBmaService $notificarService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, string $motivo): PedidoBma
@@ -46,7 +48,21 @@ class InvalidarGuiaPorCambioDireccion
                 "Guía invalidada por cambio de dirección. Rastreo anterior: {$rastreoAnterior}. Motivo: {$motivo}"
             );
 
-            return $pedido->fresh();
+            $pedido = $pedido->fresh(['cliente', 'estatus', 'vendedor', 'documentos']);
+
+            if ($estatusNuevo->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA) {
+                $this->notificarService->ejecutar(
+                    $pedido,
+                    'pedido_pendiente_guia',
+                    'Guía invalidada por cambio de dirección; pendiente de nueva guía',
+                    ['control_pedidos.delegado'],
+                    $usuarioId,
+                    false,
+                    ['url' => '/control-pedidos/delegado?tab=PENDIENTES_GUIA&q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id))]
+                );
+            }
+
+            return $pedido;
         });
     }
 }

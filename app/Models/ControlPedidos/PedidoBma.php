@@ -25,6 +25,20 @@ class PedidoBma extends Model
     public const ESTATUS_ENVIO_PENDIENTE_LIBERACION = 'pendiente_liberacion';
     public const ESTATUS_ENVIO_PENDIENTE_CONSOLIDACION = 'pendiente_consolidacion';
     public const ESTATUS_ENVIO_CONSOLIDADO = 'consolidado';
+    public const ESTATUS_ENVIO_PENDIENTE_PESAJE = 'pendiente_pesaje';
+    public const ESTATUS_ENVIO_PESAJE_LISTO = 'pesaje_listo';
+
+    public const MOTIVO_REPESAJE_ANEXO_PIEZAS = 'anexo_piezas';
+    public const MOTIVO_REPESAJE_QUITA_PIEZAS = 'quita_piezas';
+    public const MOTIVO_REPESAJE_CAMBIO_SURTIDO = 'cambio_surtido';
+    public const MOTIVO_REPESAJE_OTRO = 'otro';
+
+    public const MOTIVOS_REPESAJE = [
+        self::MOTIVO_REPESAJE_ANEXO_PIEZAS,
+        self::MOTIVO_REPESAJE_QUITA_PIEZAS,
+        self::MOTIVO_REPESAJE_CAMBIO_SURTIDO,
+        self::MOTIVO_REPESAJE_OTRO,
+    ];
 
     protected $fillable = [
         'folio',
@@ -62,6 +76,10 @@ class PedidoBma extends Model
         'total_mercancia',
         'costo_envio',
         'estatus_envio',
+        'pesaje_solicitado_at',
+        'pesaje_respondido_at',
+        'pesaje_respondido_por_id',
+        'motivo_repesaje',
         'aplica_seguro',
         'costo_seguro',
         'total_a_cobrar',
@@ -94,6 +112,8 @@ class PedidoBma extends Model
         'guia_retraso' => 'boolean',
         'incidencia_empaque_at' => 'datetime',
         'error_datos_at' => 'datetime',
+        'pesaje_solicitado_at' => 'datetime',
+        'pesaje_respondido_at' => 'datetime',
         'campos_incorrectos' => 'array',
         'fecha' => 'date',
         'aplica_seguro' => 'boolean',
@@ -317,6 +337,76 @@ class PedidoBma extends Model
         return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')->orderBy('orden');
     }
 
+    public function cajas(): HasMany
+    {
+        return $this->hasMany(PedidoBmaCaja::class, 'pedido_bma_id')->orderBy('orden');
+    }
+
+    public function pesajeRespondidoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'pesaje_respondido_por_id');
+    }
+
+    public function tienePesajeRespondido(): bool
+    {
+        return $this->pesaje_respondido_at !== null;
+    }
+
+    public function pdfPedido(): HasMany
+    {
+        return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
+            ->where('tipo', PedidoBmaDocumento::TIPO_PDF_PEDIDO)
+            ->orderBy('orden');
+    }
+
+    public function tienePdfPedido(): bool
+    {
+        return $this->pdfPedido()->exists();
+    }
+
+    public function puedeSolicitarPesaje(): bool
+    {
+        if (! $this->esEditablePorVendedora()) {
+            return false;
+        }
+
+        $this->loadMissing('origen');
+        if (! ($this->origen?->requiere_logistica ?? true)) {
+            return false;
+        }
+
+        if ($this->estatus_envio === self::ESTATUS_ENVIO_PENDIENTE_PESAJE) {
+            return false;
+        }
+
+        return ! $this->tienePesajeRespondido();
+    }
+
+    public function puedeResponderPesaje(): bool
+    {
+        return $this->estatus_envio === self::ESTATUS_ENVIO_PENDIENTE_PESAJE
+            && $this->empacado_at === null;
+    }
+
+    public function puedeSolicitarRepesaje(): bool
+    {
+        if ($this->empacado_at !== null) {
+            return false;
+        }
+
+        if (! $this->tienePesajeRespondido()) {
+            return false;
+        }
+
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
+        ], true);
+    }
+
     public function historial(): HasMany
     {
         return $this->hasMany(PedidoBmaHistorialEstado::class, 'pedido_bma_id')->orderByDesc('created_at');
@@ -362,7 +452,9 @@ class PedidoBma extends Model
     public function puedeReportarErrorDatos(): bool
     {
         return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
             CatalogoEstatusPedido::FASE_EN_CEDIS,
+            CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
         ], true);

@@ -12,7 +12,9 @@ class ReportarErrorDatosPedidoBmaRequest extends FormRequest
     {
         $user = $this->user();
 
-        return ($user?->can('control_pedidos.delegado') || $user?->can('control_pedidos.cedis')) ?? false;
+        return ($user?->can('control_pedidos.delegado')
+            || $user?->can('control_pedidos.cedis')
+            || $user?->can('control_pedidos.auditar')) ?? false;
     }
 
     public function rules(): array

@@ -16,6 +16,10 @@ class ConsolidarPedidosEmpaqueService
     ) {}
 
     /**
+     * Consolida pedidos en una operación de empaque.
+     * El detalle multi-caja (`pedido_bma_cajas`) permanece en el pedido principal;
+     * los agregados de cabecera (numero_cajas / peso) se suman para la operación.
+     *
      * @param  list<int>  $pedidoIds
      * @param  array<int|string, int|null>  $piezasPorPedido  pedido_id => cantidad_piezas
      */

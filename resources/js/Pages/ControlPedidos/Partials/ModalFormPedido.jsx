@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, Search, Save, Send, MessageCircle, RotateCcw, ImagePlus, Trash2, AlertTriangle, MapPin, PenLine, Link2, Cloud, HardDrive,
+    X, Search, Save, Send, MessageCircle, RotateCcw, ImagePlus, Trash2, AlertTriangle, MapPin, PenLine, Link2, Cloud, HardDrive, Scale, FileText,
 } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
@@ -25,9 +25,13 @@ import {
     BTN_SECONDARY,
     validarCamposEnvioPedido,
     etiquetaEstatusPedido,
+    LABELS_ESTATUS_ENVIO,
+    LABELS_MOTIVO_REPESAJE,
 } from './pedidosBmaStyles';
 import ModalAlertaPedido from './ModalAlertaPedido';
+import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
+import AvisoOperativoPedido from './AvisoOperativoPedido';
 import { resolverReexpedicionForm } from './resolverReexpedicionForm';
 
 const STORAGE_BORRADOR = 'control_pedidos.borrador_pedido_v2';
@@ -176,6 +180,10 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const autoguardandoBd = useRef(false);
     const [pedidoBdId, setPedidoBdId] = useState(pedido?.id || null);
     const [estadoAuto, setEstadoAuto] = useState({ local: null, bd: null });
+    const [motivoRepesaje, setMotivoRepesaje] = useState('');
+    const [procesandoPesaje, setProcesandoPesaje] = useState(false);
+    const [pdfLocalOk, setPdfLocalOk] = useState(false);
+    const [vistaPrevia, setVistaPrevia] = useState(null);
 
     const { data, setData, post, processing, reset, errors, transform } = useForm(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
 
@@ -193,6 +201,14 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const esMunicipioDiferido = !data.es_resguardo && Boolean(paqueteriaSeleccionada?.permite_costo_diferido);
     const logisticaBloqueada = esResguardoComplementario && Boolean(data.pedido_principal_id);
     const camposEnvioBloqueados = esResguardoAbierto || esResguardoComplementario;
+    const tienePesajeRespondido = Boolean(pedido?.pesaje_respondido_at);
+    const pendientePesaje = pedido?.estatus_envio === 'pendiente_pesaje';
+    const pesoCajasSoloLectura = tienePesajeRespondido || pendientePesaje || camposEnvioBloqueados;
+    const cotizacionHabilitada = !requiereLogistica || esResguardoComplementario || tienePesajeRespondido;
+    const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
+    const pdfPedidoDoc = (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id));
+    const tienePdfPedido = Boolean(pdfPedidoDoc) || pdfLocalOk;
+    const cajasPesaje = pedido?.cajas || [];
     const tieneCoberturaSeguro = paqueteriaTieneCobertura(paqueteriaSeleccionada?.nombre);
     const paqueteriasComerciales = (catalogos.paqueterias || []).filter((p) => p.categoria === 'comercial');
     const paqueteriasLocales = (catalogos.paqueterias || []).filter((p) => p.categoria !== 'comercial');
@@ -204,6 +220,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
 
     useEffect(() => {
         if (!abierto) return;
+        setVistaPrevia(null);
         costoReexpedicionAplicado.current = 0;
         matchReexpedicionKey.current = null;
         ultimoFingerprintBd.current = '';
@@ -226,6 +243,8 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             setDireccionesCliente([]);
             setMostrarExcepcion(false);
             setEstadoAuto({ local: null, bd: null });
+            setMotivoRepesaje('');
+            setPdfLocalOk(false);
             if (pedido.cliente_id) {
                 cargarDireccionCliente(pedido.cliente_id, {
                     silencioso: true,
@@ -274,6 +293,78 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         }
     }, [abierto, pedido?.id]);
 
+    /** Guarda el borrador en BD (sin archivos) y devuelve su id. */
+    const persistirBorradorBd = async () => {
+        autoguardandoBd.current = true;
+        setEstadoAuto((s) => ({ ...s, bd: 'Servidor · guardando…' }));
+        try {
+            const base = serializarBorrador(data);
+            const payload = {};
+            Object.entries(base).forEach(([k, v]) => {
+                if (typeof v === 'boolean') {
+                    payload[k] = v;
+                } else {
+                    payload[k] = v === '' ? null : v;
+                }
+            });
+            payload.pedido_id = pedidoBdIdRef.current || undefined;
+            payload.saldo_a_favor = data.aplica_saldo_favor ? data.saldo_a_favor : 0;
+            payload.comentarios_drive = data.direccion_manual_excepcion && data.motivo_direccion_manual
+                ? `${data.comentarios_drive || ''}\n[Excepción dirección] ${data.motivo_direccion_manual}`.trim()
+                : data.comentarios_drive;
+            payload.enviar = false;
+
+            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+            let url = '/control-pedidos/autoguardar';
+            try {
+                url = route('control_pedidos.autoguardar');
+            } catch {
+                /* ziggy stale */
+            }
+            const { data: res } = await axios.post(url, payload, {
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const eraNuevo = !pedidoBdIdRef.current;
+            pedidoBdIdRef.current = res.id;
+            setPedidoBdId(res.id);
+            ultimoFingerprintBd.current = fingerprintBd(data);
+            if (!modoEdicion) {
+                guardarBorradorLocal({
+                    ...data,
+                    pedido_id: res.id,
+                    _nombre_cliente: infoCliente?.nombre || '',
+                });
+            }
+            setEstadoAuto((s) => ({ ...s, bd: `Servidor · ${res.folio || `#${res.id}`}` }));
+            if (eraNuevo) {
+                router.reload({ only: ['pedidos', 'metricas'], preserveState: true, preserveScroll: true });
+            }
+            return res.id;
+        } finally {
+            autoguardandoBd.current = false;
+        }
+    };
+
+    /** Devuelve el id del pedido en BD, creando el borrador si aún no existe. */
+    const asegurarPedidoEnBd = async () => {
+        if (idPedidoAcciones) return idPedidoAcciones;
+        if (!tieneContenidoParaBd(data)) {
+            setAlertaEnvio({ abierto: true, mensaje: 'Capture al menos el cliente y el folio del pedido antes de continuar.' });
+            return null;
+        }
+        try {
+            return await persistirBorradorBd();
+        } catch (err) {
+            const msg = err?.response?.data?.message || 'No se pudo guardar el borrador en el servidor.';
+            setAlertaEnvio({ abierto: true, mensaje: msg });
+            return null;
+        }
+    };
+
     // Autoguardado localStorage (rápido)
     useEffect(() => {
         if (!abierto || modoEdicion) return;
@@ -302,63 +393,12 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             if (fpNow === ultimoFingerprintBd.current) return;
             if (!tieneContenidoParaBd(data)) return;
 
-            autoguardandoBd.current = true;
-            setEstadoAuto((s) => ({ ...s, bd: 'Servidor · guardando…' }));
             try {
-                const base = serializarBorrador(data);
-                const payload = {};
-                Object.entries(base).forEach(([k, v]) => {
-                    if (typeof v === 'boolean') {
-                        payload[k] = v;
-                    } else {
-                        payload[k] = v === '' ? null : v;
-                    }
-                });
-                payload.pedido_id = pedidoBdIdRef.current || undefined;
-                payload.saldo_a_favor = data.aplica_saldo_favor ? data.saldo_a_favor : 0;
-                payload.comentarios_drive = data.direccion_manual_excepcion && data.motivo_direccion_manual
-                    ? `${data.comentarios_drive || ''}\n[Excepción dirección] ${data.motivo_direccion_manual}`.trim()
-                    : data.comentarios_drive;
-                payload.enviar = false;
-
-                const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
-                let url = '/control-pedidos/autoguardar';
-                try {
-                    url = route('control_pedidos.autoguardar');
-                } catch {
-                    /* ziggy stale */
-                }
-                const { data: res } = await axios.post(url, payload, {
-                    headers: {
-                        Accept: 'application/json',
-                        'X-CSRF-TOKEN': csrf,
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-                const eraNuevo = !pedidoBdIdRef.current;
-                pedidoBdIdRef.current = res.id;
-                setPedidoBdId(res.id);
-                ultimoFingerprintBd.current = fpNow;
-                if (!modoEdicion) {
-                    guardarBorradorLocal({
-                        ...data,
-                        pedido_id: res.id,
-                        _nombre_cliente: infoCliente?.nombre || '',
-                    });
-                }
-                setEstadoAuto((s) => ({
-                    ...s,
-                    bd: `Servidor · ${res.folio || `#${res.id}`}`,
-                }));
-                if (eraNuevo) {
-                    router.reload({ only: ['pedidos', 'metricas'], preserveState: true, preserveScroll: true });
-                }
+                await persistirBorradorBd();
             } catch (err) {
                 const msg = err?.response?.data?.message || 'No se pudo autoguardar en servidor';
-                setEstadoAuto((s) => ({ ...s, bd: `Servidor · error` }));
+                setEstadoAuto((s) => ({ ...s, bd: 'Servidor · error' }));
                 console.warn('[autoguardar pedido]', msg);
-            } finally {
-                autoguardandoBd.current = false;
             }
         }, AUTOSAVE_BD_MS);
 
@@ -647,15 +687,19 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         });
     };
 
-    const guardar = (enviarPedido = false) => {
+    const guardar = (enviarPedido = false, { cerrar = true, alTerminar = null } = {}) => {
         setAlertaEnvio({ abierto: false, mensaje: '' });
 
             if (enviarPedido) {
             const comprobantesExistentes = modoEdicion
-                ? (pedido?.documentos || []).filter((d) => !docsEliminar.includes(d.id)).length
+                ? (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' && !docsEliminar.includes(d.id)).length
                 : 0;
             if (esResguardoComplementario && !data.pedido_principal_id) {
                 setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el pedido principal a complementar.' });
+                return;
+            }
+            if (requiereLogistica && pendientePesaje) {
+                setAlertaEnvio({ abierto: true, mensaje: 'Espere la respuesta de pesaje de CEDIS antes de enviar.' });
                 return;
             }
             const { valido, mensaje } = validarCamposEnvioPedido(data, {
@@ -665,6 +709,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 esMunicipioDiferido,
                 esResguardoAbierto,
                 esResguardoComplementario,
+                tienePesajeRespondido,
             });
             if (!valido) {
                 setAlertaEnvio({ abierto: true, mensaje });
@@ -672,12 +717,19 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             }
         }
 
+        const idDestino = modoEdicion ? pedido.id : pedidoBdIdRef.current;
         const config = {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: (page) => {
                 if (page?.props?.flash?.error) {
                     setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
+                    return;
+                }
+                if (!cerrar) {
+                    setData('comprobantes', []);
+                    setPreviews([]);
+                    alTerminar?.(idDestino);
                     return;
                 }
                 limpiarBorradorLocal();
@@ -687,7 +739,6 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 reset();
             },
         };
-        const idDestino = modoEdicion ? pedido.id : pedidoBdIdRef.current;
         if (idDestino) {
             transform((d) => ({
                 ...d,
@@ -717,9 +768,87 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         window.open(`https://wa.me/?text=${textoWhatsAppPedido(pedido)}`, '_blank');
     };
 
+    const optsPesaje = {
+        preserveScroll: true,
+        onStart: () => setProcesandoPesaje(true),
+        onFinish: () => setProcesandoPesaje(false),
+        onError: (errs) => {
+            const msg = Object.values(errs || {})[0];
+            setAlertaEnvio({ abierto: true, mensaje: typeof msg === 'string' ? msg : 'No se pudo completar la acción de pesaje.' });
+        },
+    };
+
+    const subirPdfPedido = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        const id = await asegurarPedidoEnBd();
+        if (!id) return;
+        const fd = new FormData();
+        fd.append('pdf_pedido', file);
+        router.post(route('control_pedidos.pdf_pedido.store', id), fd, {
+            ...optsPesaje,
+            forceFormData: true,
+            onSuccess: (page) => {
+                if (page?.props?.flash?.error) {
+                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
+                    return;
+                }
+                setPdfLocalOk(true);
+            },
+        });
+    };
+
+    const postSolicitudPesaje = (id) => {
+        router.post(route('control_pedidos.solicitar_pesaje', id), {}, {
+            ...optsPesaje,
+            onSuccess: (page) => {
+                if (page?.props?.flash?.error) {
+                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
+                    return;
+                }
+                onClose();
+            },
+        });
+    };
+
+    const solicitarPesaje = async () => {
+        setAlertaEnvio({ abierto: false, mensaje: '' });
+        if (!tienePdfPedido) {
+            setAlertaEnvio({ abierto: true, mensaje: 'Adjunte el PDF del pedido antes de solicitar el pesaje.' });
+            return;
+        }
+        const id = await asegurarPedidoEnBd();
+        if (!id) return;
+        // Los comprobantes seleccionados solo viven en el formulario: hay que guardarlos
+        // antes de pedir el pesaje, porque el servidor exige al menos uno.
+        if ((data.comprobantes || []).length > 0) {
+            guardar(false, { cerrar: false, alTerminar: postSolicitudPesaje });
+            return;
+        }
+        postSolicitudPesaje(id);
+    };
+
+    const solicitarRepesaje = () => {
+        if (!idPedidoAcciones || !motivoRepesaje) {
+            setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el motivo del re-pesaje (cambio de pedido).' });
+            return;
+        }
+        router.post(route('control_pedidos.solicitar_repesaje', idPedidoAcciones), { motivo: motivoRepesaje }, {
+            ...optsPesaje,
+            onSuccess: (page) => {
+                if (page?.props?.flash?.error) {
+                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
+                    return;
+                }
+                onClose();
+            },
+        });
+    };
+
     if (!abierto) return null;
 
-    const docsExistentes = (pedido?.documentos || []).filter((d) => !docsEliminar.includes(d.id));
+    const docsExistentes = (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' && !docsEliminar.includes(d.id));
     const camposIncorrectos = Array.isArray(pedido?.campos_incorrectos) ? pedido.campos_incorrectos : [];
     const esCampoIncorrecto = (key) => camposIncorrectos.includes(key);
     const wrapIncorrecto = (key) => (esCampoIncorrecto(key)
@@ -734,6 +863,8 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         referencia: 'Referencias',
         codigo_postal: 'Código postal',
         ciudad_estado: 'Ciudad / estado',
+        remision: 'Remisión PDF',
+        folio_remision: 'Folio de remisión',
         numero_rastreo: 'Número de guía',
         guia_pdf: 'PDF de guía',
     };
@@ -1047,20 +1178,108 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
 
                     {requiereLogistica && (
                     <>
-                    {/* 2. Peso y cajas */}
+                    {/* Pesaje CEDIS */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>2. Peso y cajas</p>
+                        <p className={SECCION}>2. Pesaje CEDIS</p>
+                        {pedido?.estatus_envio && LABELS_ESTATUS_ENVIO[pedido.estatus_envio] && (
+                            <p className="text-xs font-bold theme-text-muted mb-3 m-0">
+                                Estado envío: {LABELS_ESTATUS_ENVIO[pedido.estatus_envio]}
+                            </p>
+                        )}
+                        {pendientePesaje && (
+                            <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale} className="mb-4">
+                                Consulta de pesaje enviada. Cuando CEDIS responda podrá cotizar el envío.
+                            </AvisoOperativoPedido>
+                        )}
+                        {tienePesajeRespondido && !pendientePesaje && (
+                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
+                                CEDIS registró el peso y las cajas. Complete dirección y costo de envío.
+                            </AvisoOperativoPedido>
+                        )}
+                        {!tienePesajeRespondido && !pendientePesaje && (
+                            <AvisoOperativoPedido label="Paso requerido" tono="info" icon={Scale} className="mb-4">
+                                Adjunte el PDF del pedido y solicite el pesaje a CEDIS antes de cotizar el envío.
+                            </AvisoOperativoPedido>
+                        )}
+                        <div className="space-y-4">
+                            <div>
+                                <label className={SECCION}>PDF del pedido</label>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                                        <FileText className="w-4 h-4 theme-text-muted" />
+                                        <span className="text-xs font-black uppercase">
+                                            {tienePdfPedido ? 'Reemplazar PDF' : 'Adjuntar PDF'}
+                                        </span>
+                                        <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={subirPdfPedido} disabled={procesandoPesaje} />
+                                    </label>
+                                    {tienePdfPedido && (
+                                        pdfPedidoDoc?.url
+                                            ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVistaPrevia(pdfPedidoDoc)}
+                                                    className="text-xs font-bold underline outline-none"
+                                                    style={{ color: 'var(--color-primario)' }}
+                                                >
+                                                    Ver PDF
+                                                </button>
+                                            )
+                                            : <span className="text-xs font-bold text-emerald-600">PDF adjuntado</span>
+                                    )}
+                                </div>
+                            </div>
+                            {!tienePesajeRespondido && !pendientePesaje && (
+                                <button
+                                    type="button"
+                                    onClick={solicitarPesaje}
+                                    disabled={procesandoPesaje || processing}
+                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
+                                >
+                                    <Scale className="w-4 h-4" /> Solicitar pesaje a CEDIS
+                                </button>
+                            )}
+                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && (
+                                <div className="flex flex-wrap items-end gap-3 p-3 rounded-xl border theme-border">
+                                    <div className="min-w-[200px] flex-1">
+                                        <label className={SECCION}>Re-pesaje (cambio de pedido)</label>
+                                        <select value={motivoRepesaje} onChange={(e) => setMotivoRepesaje(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                            <option value="">Motivo…</option>
+                                            {Object.entries(LABELS_MOTIVO_REPESAJE).map(([k, label]) => (
+                                                <option key={k} value={k}>{label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <button type="button" onClick={solicitarRepesaje} disabled={procesandoPesaje || !motivoRepesaje} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
+                                        <Scale className="w-4 h-4" /> Solicitar re-pesaje
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
+                    {/* 3. Peso y cajas */}
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>3. Peso y cajas {tienePesajeRespondido ? '(CEDIS)' : ''}</p>
+                        {cajasPesaje.length > 0 && (
+                            <div className="mb-4 space-y-1">
+                                {cajasPesaje.map((c) => (
+                                    <p key={c.id} className="text-sm font-bold theme-text-main m-0">
+                                        {c.tipo_caja?.nombre || 'Caja'}: {c.cantidad}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className={SECCION}>Tipo de caja</label>
-                                <select value={data.catalogo_tipo_caja_id} disabled={logisticaBloqueada} onChange={(e) => setData('catalogo_tipo_caja_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
-                                    <option value="">Seleccionar...</option>
+                                <select value={data.catalogo_tipo_caja_id} disabled={logisticaBloqueada || pesoCajasSoloLectura || !tienePesajeRespondido} onChange={(e) => setData('catalogo_tipo_caja_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada || pesoCajasSoloLectura || !tienePesajeRespondido ? 'opacity-50' : ''}`}>
+                                    <option value="">{tienePesajeRespondido ? 'Seleccionar...' : 'Tras pesaje CEDIS...'}</option>
                                     {(catalogos.tipos_caja || []).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className={SECCION}>Peso real (kg){esMunicipioDiferido ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
-                                <input type="number" step="0.0001" min="0" placeholder="0.0000" value={camposEnvioBloqueados ? '' : data.peso_real_kg} disabled={camposEnvioBloqueados} onChange={(e) => setData('peso_real_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3 ${camposEnvioBloqueados ? 'opacity-50' : ''}`} />
+                                <label className={SECCION}>Peso real (kg){tienePesajeRespondido ? ' (CEDIS)' : ''}{camposEnvioBloqueados && !tienePesajeRespondido ? ' (bloqueado)' : ''}</label>
+                                <input type="number" step="0.0001" min="0" placeholder={tienePesajeRespondido ? '0.0000' : '—'} value={camposEnvioBloqueados && !tienePesajeRespondido ? '' : data.peso_real_kg} disabled={pesoCajasSoloLectura || !tienePesajeRespondido} onChange={(e) => setData('peso_real_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3 ${pesoCajasSoloLectura || !tienePesajeRespondido ? 'opacity-50' : ''}`} />
                             </div>
                             <div>
                                 <label className={SECCION}>Peso volumétrico (kg)</label>
@@ -1080,15 +1299,15 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                             </div>
                             <div className={wrapIncorrecto('tipo_guia')}>
                                 <label className={SECCION}>Tipo de guía</label>
-                                <select value={data.catalogo_tipo_guia_id} disabled={logisticaBloqueada} onChange={(e) => setData('catalogo_tipo_guia_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
+                                <select value={data.catalogo_tipo_guia_id} disabled={logisticaBloqueada || !cotizacionHabilitada} onChange={(e) => setData('catalogo_tipo_guia_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada || !cotizacionHabilitada ? 'opacity-50' : ''}`}>
                                     <option value="">Seleccionar...</option>
                                     {(catalogos.tipos_guia || []).map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className={SECCION}>Número de cajas{esMunicipioDiferido ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
-                                <select value={camposEnvioBloqueados || data.numero_cajas === '' || data.numero_cajas == null ? '' : String(data.numero_cajas)} disabled={camposEnvioBloqueados} onChange={(e) => setData('numero_cajas', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${camposEnvioBloqueados ? 'opacity-50' : ''}`}>
-                                    <option value="">Seleccionar...</option>
+                                <label className={SECCION}>Número de cajas{tienePesajeRespondido ? ' (CEDIS)' : ''}{camposEnvioBloqueados && !tienePesajeRespondido ? ' (bloqueado)' : ''}</label>
+                                <select value={(!tienePesajeRespondido && camposEnvioBloqueados) || data.numero_cajas === '' || data.numero_cajas == null ? '' : String(data.numero_cajas)} disabled={pesoCajasSoloLectura || !tienePesajeRespondido} onChange={(e) => setData('numero_cajas', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${pesoCajasSoloLectura || !tienePesajeRespondido ? 'opacity-50' : ''}`}>
+                                    <option value="">{tienePesajeRespondido ? 'Seleccionar...' : 'Tras pesaje…'}</option>
                                     <option value="0">N/A</option>
                                     {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
                                         <option key={n} value={String(n)}>{n}</option>
@@ -1100,7 +1319,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <input
                                     type="text"
                                     readOnly
-                                    value={camposEnvioBloqueados ? '—' : (data.peso_cobrado_guia_kg !== '' && data.peso_cobrado_guia_kg != null ? data.peso_cobrado_guia_kg : '—')}
+                                    value={!tienePesajeRespondido ? '—' : (data.peso_cobrado_guia_kg !== '' && data.peso_cobrado_guia_kg != null ? data.peso_cobrado_guia_kg : '—')}
                                     className={`${THEME_INPUT} w-full py-3 opacity-60`}
                                     title="Mayor entre peso real y peso volumétrico"
                                 />
@@ -1111,10 +1330,10 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                         </div>
                     </section>
 
-                    {/* 3. Dirección de envío */}
+                    {/* 4. Dirección de envío */}
                     <section className={SECCION_WRAP}>
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                            <p className={`${THEME_LABEL} m-0`}>3. Dirección de envío</p>
+                            <p className={`${THEME_LABEL} m-0`}>4. Dirección y cotización de envío</p>
                             {!direccionesNormalizadas && (
                                 <button
                                     type="button"
@@ -1140,10 +1359,10 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <p className="text-xs font-bold theme-text-main m-0">{msgDireccion}</p>
                             </div>
                         )}
-                        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${(esCampoIncorrecto('domicilio') || esCampoIncorrecto('ciudad_estado') || esCampoIncorrecto('referencia') || esCampoIncorrecto('destinatario') || esCampoIncorrecto('telefono')) ? 'rounded-xl ring-2 ring-orange-500/40 bg-orange-500/5 p-3' : ''}`}>
+                        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${!cotizacionHabilitada ? 'opacity-60 pointer-events-none' : ''} ${(esCampoIncorrecto('domicilio') || esCampoIncorrecto('ciudad_estado') || esCampoIncorrecto('referencia') || esCampoIncorrecto('destinatario') || esCampoIncorrecto('telefono')) ? 'rounded-xl ring-2 ring-orange-500/40 bg-orange-500/5 p-3' : ''}`}>
                             <div className={wrapIncorrecto('codigo_postal')}>
                                 <label className={SECCION}>C.P.</label>
-                                <input type="text" placeholder="Código postal" value={data.codigo_postal} onChange={(e) => setData('codigo_postal', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                                <input type="text" placeholder="Código postal" value={data.codigo_postal} disabled={!cotizacionHabilitada} onChange={(e) => setData('codigo_postal', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                             </div>
                             {direccionesNormalizadas && puedeSeleccionar ? (
                                 <div className="md:col-span-2 space-y-3">
@@ -1471,7 +1690,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
 
                     <section className="gelia-modal-footer flex flex-col gap-3 p-5 md:p-6 -mx-5 md:-mx-8 -mb-5 md:-mb-8">
                         <div className="flex flex-wrap gap-3">
-                        <button type="button" onClick={() => guardar(true)} disabled={processing} className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}>
+                        <button type="button" onClick={() => guardar(true)} disabled={processing || pendientePesaje} className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}>
                             <Send className="w-4 h-4" /> Enviar pedido
                         </button>
                         <button type="button" onClick={() => guardar(false)} disabled={processing} className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none`}>
@@ -1532,6 +1751,11 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 titulo="Campos incompletos"
                 mensaje={alertaEnvio.mensaje}
                 onClose={() => setAlertaEnvio({ abierto: false, mensaje: '' })}
+            />
+            <ModalVistaPreviaDocumento
+                abierto={Boolean(vistaPrevia)}
+                documento={vistaPrevia}
+                onClose={() => setVistaPrevia(null)}
             />
         </>
     );

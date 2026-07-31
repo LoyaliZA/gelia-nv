@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Eye } from 'lucide-react';
-import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
     formatearFechaNegocio,
     badgeEstatusPedido,
     badgeRetrasoGuia,
     badgeResguardoSemantico,
+    badgeCorregirGuia,
     BTN_SECONDARY,
+    tieneErrorGuiaReportado,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import ModalDetalleDelegado from './ModalDetalleDelegado';
@@ -17,10 +18,12 @@ function BadgesPedido({ pedido }) {
     const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
     const retraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
     const resguardo = pedido.es_resguardo ? badgeResguardoSemantico() : null;
+    const errorGuia = tieneErrorGuiaReportado(pedido) ? badgeCorregirGuia() : null;
 
     return (
         <div className="flex flex-wrap gap-1.5">
             <span className={badge.className} style={badge.style}>{badge.label}</span>
+            {errorGuia && <span className={errorGuia.className} style={errorGuia.style}>{errorGuia.label}</span>}
             {retraso && <span className={retraso.className} style={retraso.style}>{retraso.label}</span>}
             {resguardo && !pedido.estatus?.fase_ciclo && (
                 <span className={resguardo.className} style={resguardo.style}>{resguardo.label}</span>
@@ -34,7 +37,7 @@ function CardPedidoDelegado({ pedido, onAbrir }) {
         <button
             type="button"
             onClick={() => onAbrir(pedido)}
-            className={`${geliaCardClass()} p-4 space-y-3 text-left w-full outline-none ${pedido.es_resguardo ? 'ring-2 ring-blue-500/40 bg-blue-500/5' : ''} ${pedido.guia_retraso ? 'ring-2 ring-amber-500/30' : ''}`}
+            className={`${geliaCardClass()} p-4 space-y-3 text-left w-full outline-none ${pedido.es_resguardo ? 'ring-2 ring-blue-500/40 bg-blue-500/5' : ''} ${pedido.guia_retraso || tieneErrorGuiaReportado(pedido) ? 'ring-2 ring-amber-500/30' : ''}`}
         >
             <div className="flex items-start justify-between gap-2">
                 <EncabezadoFolioPedido pedido={pedido} size="sm" />
@@ -123,7 +126,6 @@ export default function TablaDelegado({ pedidos, tabActiva = 'PENDIENTES_GUIA' }
                     </tbody>
                 </table>
             </div>
-            {pedidos?.links && <GeliaPaginacion paginator={pedidos} />}
 
             <ModalDetalleDelegado
                 abierto={Boolean(pedidoDetalle)}

@@ -23,6 +23,7 @@ class ListarPedidosBmaService
             'almacen',
             'banco',
             'tipoCaja',
+            'cajas.tipoCaja',
             'paqueteria',
             'tipoGuia',
             'zona',

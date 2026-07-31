@@ -52,6 +52,8 @@ export default function ModalLiberarResguardoAbierto({
 
     const folio = pedido.folio_remision || pedido.folio;
     const nComplementos = (pedido.complementos || []).length;
+    const usaPesajeCedis = Boolean(pedido.pesaje_respondido_at);
+    const cajasPesaje = pedido.cajas || [];
 
     const enviar = (e) => {
         e.preventDefault();
@@ -78,7 +80,9 @@ export default function ModalLiberarResguardoAbierto({
                     <div>
                         <h2 className="text-lg font-black uppercase italic theme-text-main m-0">{titulo}</h2>
                         <p className="text-xs theme-text-muted font-bold mt-1 m-0">
-                            Pedido {folio} · Capture peso, cajas, costo y comprobante de envío
+                            Pedido {folio} · {usaPesajeCedis
+                                ? 'Pesaje CEDIS listo — capture costo y comprobante de envío'
+                                : 'Capture peso, cajas, costo y comprobante de envío'}
                         </p>
                     </div>
                     <button type="button" onClick={onClose} className="p-2 rounded-xl theme-element border theme-border outline-none">
@@ -97,35 +101,51 @@ export default function ModalLiberarResguardoAbierto({
                             </p>
                         </div>
                     )}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className={SECCION}>Peso real (kg) *</label>
-                            <input
-                                type="number"
-                                step="0.0001"
-                                min="0"
-                                value={data.peso_real_kg}
-                                onChange={(e) => setData('peso_real_kg', e.target.value)}
-                                className={`${THEME_INPUT} w-full py-3`}
-                            />
-                            {errors.peso_real_kg && <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{errors.peso_real_kg}</p>}
+                    {usaPesajeCedis ? (
+                        <div className="rounded-xl border theme-border theme-element p-3 space-y-1">
+                            <p className="text-[10px] font-black uppercase theme-text-muted m-0">Pesaje CEDIS (no editable)</p>
+                            <p className="text-sm font-bold theme-text-main m-0">
+                                Peso: {pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : '—'}
+                                {' · '}
+                                Cajas: {pedido.numero_cajas ?? '—'}
+                            </p>
+                            {cajasPesaje.length > 0 && cajasPesaje.map((c) => (
+                                <p key={c.id} className="text-xs theme-text-muted font-bold m-0">
+                                    {c.tipo_caja?.nombre || 'Caja'}: {c.cantidad}
+                                </p>
+                            ))}
                         </div>
-                        <div>
-                            <label className={SECCION}>N° de cajas *</label>
-                            <select
-                                value={data.numero_cajas === '' || data.numero_cajas == null ? '' : String(data.numero_cajas)}
-                                onChange={(e) => setData('numero_cajas', e.target.value)}
-                                className={`${THEME_SELECT} w-full py-3`}
-                            >
-                                <option value="">Seleccionar...</option>
-                                <option value="0">N/A</option>
-                                {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-                                    <option key={n} value={String(n)}>{n}</option>
-                                ))}
-                            </select>
-                            {errors.numero_cajas && <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{errors.numero_cajas}</p>}
+                    ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className={SECCION}>Peso real (kg) *</label>
+                                <input
+                                    type="number"
+                                    step="0.0001"
+                                    min="0"
+                                    value={data.peso_real_kg}
+                                    onChange={(e) => setData('peso_real_kg', e.target.value)}
+                                    className={`${THEME_INPUT} w-full py-3`}
+                                />
+                                {errors.peso_real_kg && <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{errors.peso_real_kg}</p>}
+                            </div>
+                            <div>
+                                <label className={SECCION}>N° de cajas *</label>
+                                <select
+                                    value={data.numero_cajas === '' || data.numero_cajas == null ? '' : String(data.numero_cajas)}
+                                    onChange={(e) => setData('numero_cajas', e.target.value)}
+                                    className={`${THEME_SELECT} w-full py-3`}
+                                >
+                                    <option value="">Seleccionar...</option>
+                                    <option value="0">N/A</option>
+                                    {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                                        <option key={n} value={String(n)}>{n}</option>
+                                    ))}
+                                </select>
+                                {errors.numero_cajas && <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{errors.numero_cajas}</p>}
+                            </div>
                         </div>
-                    </div>
+                    )}
                     <div>
                         <label className={SECCION}>Costo de envío *</label>
                         <InputMoneda value={data.costo_envio} onChange={(v) => setData('costo_envio', v)} className="w-full py-3" />

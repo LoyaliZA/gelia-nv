@@ -249,6 +249,16 @@ export default function ModalDetalleCedis({
                                 <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
                                 <Campo label="Seguro" value={pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : 'No aplica'} />
                             </div>
+                            {(pedido.cajas || []).length > 0 && (
+                                <div className="mt-3 space-y-1">
+                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de cajas (pesaje)</p>
+                                    {(pedido.cajas || []).map((c) => (
+                                        <p key={c.id} className="text-xs font-bold theme-text-main m-0">
+                                            {c.tipo_caja?.nombre || 'Caja'}: {c.cantidad}
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
                             <div className="mt-4 p-4 rounded-xl border theme-border theme-element space-y-2 text-sm">
                                 <div className="flex justify-between theme-text-muted font-bold"><span>Mercancía</span><span>{formatearMoneda(pedido.total_mercancia)}</span></div>
                                 <div className="flex justify-between theme-text-muted font-bold"><span>Envío</span><span>{formatearMoneda(pedido.costo_envio)}</span></div>

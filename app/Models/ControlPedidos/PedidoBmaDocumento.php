@@ -12,6 +12,7 @@ class PedidoBmaDocumento extends Model
     public const TIPO_REMISION = 'remision';
     public const TIPO_GUIA = 'guia';
     public const TIPO_EVIDENCIA_APARTADO = 'evidencia_apartado';
+    public const TIPO_PDF_PEDIDO = 'pdf_pedido';
 
     protected $table = 'pedido_bma_documentos';
 

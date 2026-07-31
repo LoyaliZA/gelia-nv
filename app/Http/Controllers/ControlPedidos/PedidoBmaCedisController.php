@@ -6,15 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ControlPedidos\MarcarResguardoApartadoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarIncidenciaEmpaqueRequest;
+use App\Http\Requests\ControlPedidos\ResponderPesajePedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
 use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
 use App\Services\ControlPedidos\MarcarResguardoApartadoPedidoBmaService;
+use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use App\Services\ControlPedidos\ReportarIncidenciaEmpaqueService;
+use App\Services\ControlPedidos\ResponderPesajePedidoBmaService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -23,14 +27,28 @@ use Inertia\Response;
 
 class PedidoBmaCedisController extends Controller
 {
-    public function index(Request $request, ListarPedidosCedisService $listarService): Response
+    public function index(Request $request, ListarPedidosCedisService $listarService, ObtenerCatalogosPedidoBmaService $catalogosService): Response
     {
         Gate::authorize('control_pedidos.cedis');
 
+        $catalogos = $catalogosService->ejecutar();
+
         return Inertia::render('ControlPedidos/Cedis/Index', [
+            'pedidos' => fn () => $listarService->ejecutar($request->all()),
+            'metricas' => fn () => $listarService->metricas(),
+            'filtros' => $request->only(['tab', 'q', 'page']),
+            'tipos_caja' => $catalogos['tipos_caja'] ?? [],
+        ]);
+    }
+
+    public function listado(Request $request, ListarPedidosCedisService $listarService): JsonResponse
+    {
+        Gate::authorize('control_pedidos.cedis');
+
+        return response()->json([
             'pedidos' => $listarService->ejecutar($request->all()),
             'metricas' => $listarService->metricas(),
-            'filtros' => $request->all(),
+            'filtros' => $request->only(['tab', 'q', 'page']),
         ]);
     }
 
@@ -123,5 +141,26 @@ class PedidoBmaCedisController extends Controller
         }
 
         return redirect()->back()->with('success', 'Resguardo marcado como apartado. Se notificó a quien realizó el pedido.');
+    }
+
+    public function responderPesaje(
+        ResponderPesajePedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ResponderPesajePedidoBmaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.cedis');
+
+        try {
+            $service->ejecutar(
+                $pedidoBma->load('estatus'),
+                Auth::id(),
+                (float) $request->validated('peso_real_kg'),
+                $request->validated('cajas')
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Pesaje registrado. Se notificó a la vendedora.');
     }
 }

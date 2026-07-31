@@ -474,6 +474,7 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     Route::middleware(['can:control_pedidos.ver_listado'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::get('/', [PedidoBmaController::class, 'index'])->name('index');
+        Route::get('/listado', [PedidoBmaController::class, 'listado'])->name('listado');
         Route::get('/exportar', [PedidoBmaController::class, 'exportar'])->middleware('can:control_pedidos.exportar')->name('exportar');
     });
 
@@ -484,6 +485,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/completar-envio-resguardo', [PedidoBmaController::class, 'completarEnvioResguardo'])->name('completar_envio_resguardo');
         Route::put('/{pedidoBma}/enviar', [PedidoBmaController::class, 'enviar'])->name('enviar');
         Route::post('/{pedidoBma}/anexar-pago-envio', [PedidoBmaController::class, 'anexarPagoEnvio'])->name('anexar_pago_envio');
+        Route::post('/{pedidoBma}/pdf-pedido', [PedidoBmaController::class, 'subirPdfPedido'])->name('pdf_pedido.store');
+        Route::post('/{pedidoBma}/solicitar-pesaje', [PedidoBmaController::class, 'solicitarPesaje'])->name('solicitar_pesaje');
+        Route::post('/{pedidoBma}/solicitar-repesaje', [PedidoBmaController::class, 'solicitarRepesaje'])->name('solicitar_repesaje');
         Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
             Route::post('/cliente/{cliente}/enlace-direccion', [DireccionesAuxiliarController::class, 'generarEnlace'])
                 ->name('enlace_direccion');
@@ -505,11 +509,13 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['can:control_pedidos.auditar'])->prefix('control-pedidos/auditar')->name('control_pedidos.auditar.')->group(function () {
         Route::get('/', [PedidoBmaAuditoriaController::class, 'index'])->name('index');
+        Route::get('/listado', [PedidoBmaAuditoriaController::class, 'listado'])->name('listado');
         Route::post('/{pedidoBma}/validar-pago', [PedidoBmaAuditoriaController::class, 'validarPago'])->name('validar_pago');
         Route::post('/{pedidoBma}/remision', [PedidoBmaAuditoriaController::class, 'subirRemision'])->name('remision.store');
         Route::delete('/{pedidoBma}/remision', [PedidoBmaAuditoriaController::class, 'eliminarRemision'])->name('remision.destroy');
         Route::post('/{pedidoBma}/aprobar', [PedidoBmaAuditoriaController::class, 'aprobar'])->name('aprobar');
         Route::post('/{pedidoBma}/rechazar', [PedidoBmaAuditoriaController::class, 'rechazar'])->name('rechazar');
+        Route::post('/{pedidoBma}/reportar-error-datos', [PedidoBmaAuditoriaController::class, 'reportarErrorDatos'])->name('reportar_error_datos');
         Route::post('/{pedidoBma}/liberar-resguardo', [PedidoBmaAuditoriaController::class, 'liberarResguardo'])->name('liberar_resguardo');
         Route::post('/{pedidoBma}/anexar-pago-envio', [PedidoBmaAuditoriaController::class, 'anexarPagoEnvio'])->name('anexar_pago_envio');
         Route::post('/{pedidoBma}/anexo-envio/aprobar', [PedidoBmaAuditoriaController::class, 'aprobarAnexoEnvio'])->name('anexo_envio.aprobar');
@@ -519,6 +525,7 @@ Route::middleware(['auth'])->group(function () {
     // Submódulo Direcciones (Auxiliar) — sin acceso al módulo Clientes
     Route::middleware(['can:clientes.direcciones.ver'])->prefix('control-pedidos/direcciones')->name('control_pedidos.direcciones.')->group(function () {
         Route::get('/', [DireccionesAuxiliarController::class, 'index'])->name('index');
+        Route::get('/listado', [DireccionesAuxiliarController::class, 'listado'])->name('listado');
         Route::get('/buscar-cliente', [DireccionesAuxiliarController::class, 'buscarCliente'])->name('buscar_cliente');
         Route::get('/cliente/{cliente}', [DireccionesAuxiliarController::class, 'cliente'])->name('cliente');
 
@@ -550,16 +557,19 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['can:control_pedidos.cedis'])->prefix('control-pedidos/cedis')->name('control_pedidos.cedis.')->group(function () {
         Route::get('/', [PedidoBmaCedisController::class, 'index'])->name('index');
+        Route::get('/listado', [PedidoBmaCedisController::class, 'listado'])->name('listado');
         Route::post('/{pedidoBma}/marcar-empacado', [PedidoBmaCedisController::class, 'marcarEmpacado'])->name('marcar_empacado');
         Route::post('/{pedidoBma}/marcar-enviado', [PedidoBmaCedisController::class, 'marcarEnviado'])->name('marcar_enviado');
         Route::post('/{pedidoBma}/revertir-empacado', [PedidoBmaCedisController::class, 'revertirEmpacado'])->name('revertir_empacado');
         Route::post('/{pedidoBma}/reportar-incidencia', [PedidoBmaCedisController::class, 'reportarIncidencia'])->name('reportar_incidencia');
         Route::post('/{pedidoBma}/reportar-error-datos', [PedidoBmaCedisController::class, 'reportarErrorDatos'])->name('reportar_error_datos');
         Route::post('/{pedidoBma}/marcar-resguardo-apartado', [PedidoBmaCedisController::class, 'marcarResguardoApartado'])->name('marcar_resguardo_apartado');
+        Route::post('/{pedidoBma}/responder-pesaje', [PedidoBmaCedisController::class, 'responderPesaje'])->name('responder_pesaje');
     });
 
     Route::middleware(['can:control_pedidos.delegado'])->prefix('control-pedidos/delegado')->name('control_pedidos.delegado.')->group(function () {
         Route::get('/', [PedidoBmaDelegadoController::class, 'index'])->name('index');
+        Route::get('/listado', [PedidoBmaDelegadoController::class, 'listado'])->name('listado');
         Route::get('/exportar', [PedidoBmaDelegadoController::class, 'exportar'])->name('exportar');
         Route::post('/importar', [PedidoBmaDelegadoController::class, 'importar'])->name('importar');
         Route::post('/{pedidoBma}/asignar-guia', [PedidoBmaDelegadoController::class, 'asignarGuia'])->name('asignar_guia');

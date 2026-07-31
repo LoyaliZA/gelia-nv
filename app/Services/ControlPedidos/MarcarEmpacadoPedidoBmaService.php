@@ -10,6 +10,7 @@ class MarcarEmpacadoPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private NotificarPedidoBmaService $notificarService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -115,7 +116,33 @@ class MarcarEmpacadoPedidoBmaService
             $comentario
         );
 
-        return $pedido->fresh($this->relacionesFresh());
+        $pedido = $pedido->fresh($this->relacionesFresh());
+
+        $q = urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id));
+
+        if ($faseDestino === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA) {
+            $this->notificarService->ejecutar(
+                $pedido,
+                'pedido_pendiente_guia',
+                'Pedido empacado; pendiente de captura de guía',
+                ['control_pedidos.delegado'],
+                $usuarioId,
+                false,
+                ['url' => '/control-pedidos/delegado?tab=PENDIENTES_GUIA&q='.$q]
+            );
+        } else {
+            $this->notificarService->ejecutar(
+                $pedido,
+                'pedido_pendiente_envio',
+                'Pedido empacado; pendiente de envío',
+                ['control_pedidos.cedis'],
+                $usuarioId,
+                false,
+                ['url' => '/control-pedidos/cedis?tab=PENDIENTES_ENVIO&q='.$q]
+            );
+        }
+
+        return $pedido;
     }
 
     /** @return list<string> */
@@ -125,7 +152,7 @@ class MarcarEmpacadoPedidoBmaService
             'cliente', 'estatus', 'documentos', 'almacen', 'origen',
             'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'incidenciaEmpaquePor',
             'complementos.documentos', 'complementos.estatus', 'complementos.cliente',
-            'principal',
+            'principal', 'vendedor',
         ];
     }
 }

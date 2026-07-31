@@ -9,6 +9,7 @@ import {
     badgeEstatusPedido,
     badgeRetrasoGuia,
     badgeResguardoSemantico,
+    badgeCorregirGuia,
     formatearMoneda,
     etiquetaAlmacen,
     formatearFechaHoraAuditoria,
@@ -18,6 +19,7 @@ import {
     BTN_PRIMARY,
     BTN_SECONDARY,
     guiaPdfDe,
+    tieneErrorGuiaReportado,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
@@ -217,6 +219,7 @@ export default function ModalDetalleDelegado({
     const badgeEstatus = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
     const badgeResguardo = pedido.es_resguardo ? badgeResguardoSemantico() : null;
+    const badgeErrorGuia = tieneErrorGuiaReportado(pedido) ? badgeCorregirGuia() : null;
     const remision = remisionDe(pedido);
     const comprobantes = comprobantesDe(pedido);
     const dir = pedido.direccion_vigente || pedido.direccionVigente;
@@ -259,6 +262,7 @@ export default function ModalDetalleDelegado({
                             )}
                             <div className="flex flex-wrap gap-2 mt-2">
                                 <span className={badgeEstatus.className} style={badgeEstatus.style}>{badgeEstatus.label}</span>
+                                {badgeErrorGuia && <span className={badgeErrorGuia.className} style={badgeErrorGuia.style}>{badgeErrorGuia.label}</span>}
                                 {badgeRetraso && <span className={badgeRetraso.className} style={badgeRetraso.style}>{badgeRetraso.label}</span>}
                                 {badgeResguardo && <span className={badgeResguardo.className} style={badgeResguardo.style}>{badgeResguardo.label}</span>}
                             </div>
@@ -269,6 +273,16 @@ export default function ModalDetalleDelegado({
                     </div>
 
                     <div className="gelia-modal-body p-5 md:p-6 space-y-6 overflow-y-auto">
+                        {badgeErrorGuia && (
+                            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 space-y-1">
+                                <p className="text-sm font-bold text-red-600 m-0 flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4" /> Corregir guía
+                                </p>
+                                <p className="text-sm font-bold theme-text-main m-0">
+                                    {pedido.detalle_error_datos || pedido.motivo_rechazo || 'Se reportó un error grave en la guía. Asigne número y/o PDF correctos.'}
+                                </p>
+                            </div>
+                        )}
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>Identificación</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

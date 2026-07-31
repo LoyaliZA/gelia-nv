@@ -32,18 +32,24 @@ class ActualizarPedidoBmaService
 
             $eraRechazado = $pedido->estatus?->fase_ciclo === 'RECHAZADO_VENDEDORA';
 
+            $attrs = $this->atributosPedidoBase($datos);
+
+            // Peso/cajas vienen de CEDIS: la vendedora no los sobrescribe al editar.
+            if ($pedido->tienePesajeRespondido()) {
+                $attrs['peso_real_kg'] = $pedido->peso_real_kg;
+                $attrs['peso_volumetrico_kg'] = $pedido->peso_volumetrico_kg;
+                $attrs['peso_cobrado_guia_kg'] = $pedido->peso_cobrado_guia_kg;
+                $attrs['catalogo_tipo_caja_id'] = $pedido->catalogo_tipo_caja_id;
+                $attrs['numero_cajas'] = $pedido->numero_cajas;
+            }
+
+            // La cola de errores se avanza al reenviar (EnviarPedidoBmaService), no al editar.
             $pedido->update(array_merge(
-                $this->atributosPedidoBase($datos),
+                $attrs,
                 [
                     'cliente_id' => $clienteId,
                     'motivo_rechazo' => $eraRechazado ? null : $pedido->motivo_rechazo,
-                ],
-                $eraRechazado ? [
-                    'campos_incorrectos' => null,
-                    'detalle_error_datos' => null,
-                    'error_datos_at' => null,
-                    'error_datos_por_id' => null,
-                ] : []
+                ]
             ));
 
             if (!empty($datos['documentos_eliminar']) && is_array($datos['documentos_eliminar'])) {
@@ -54,7 +60,7 @@ class ActualizarPedidoBmaService
                 $this->agregarDocumentos($pedido, $datos['comprobantes']);
             }
 
-            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco']);
+            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja']);
         });
     }
 

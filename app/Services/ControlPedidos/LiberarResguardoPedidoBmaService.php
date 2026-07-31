@@ -12,6 +12,7 @@ class LiberarResguardoPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private NotificarPedidoBmaService $notificarService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, ?array $captura = null, ?UploadedFile $comprobante = null): PedidoBma
@@ -44,21 +45,35 @@ class LiberarResguardoPedidoBmaService
         array $captura,
         ?UploadedFile $comprobante
     ): PedidoBma {
-        $peso = isset($captura['peso_real_kg']) && $captura['peso_real_kg'] !== '' && $captura['peso_real_kg'] !== null
-            ? (float) $captura['peso_real_kg']
-            : null;
-        $cajas = isset($captura['numero_cajas']) && $captura['numero_cajas'] !== '' && $captura['numero_cajas'] !== null
-            ? (int) $captura['numero_cajas']
-            : null;
+        $usaPesaje = $pedido->tienePesajeRespondido();
+
+        $peso = $usaPesaje
+            ? ($pedido->peso_real_kg !== null ? (float) $pedido->peso_real_kg : null)
+            : (isset($captura['peso_real_kg']) && $captura['peso_real_kg'] !== '' && $captura['peso_real_kg'] !== null
+                ? (float) $captura['peso_real_kg']
+                : null);
+        $cajas = $usaPesaje
+            ? ($pedido->numero_cajas !== null ? (int) $pedido->numero_cajas : null)
+            : (isset($captura['numero_cajas']) && $captura['numero_cajas'] !== '' && $captura['numero_cajas'] !== null
+                ? (int) $captura['numero_cajas']
+                : null);
         $costo = isset($captura['costo_envio']) && $captura['costo_envio'] !== '' && $captura['costo_envio'] !== null
             ? (float) $captura['costo_envio']
             : null;
 
         if ($peso === null || $peso < 0) {
-            throw new \InvalidArgumentException('El peso real es obligatorio al liberar el resguardo abierto.');
+            throw new \InvalidArgumentException(
+                $usaPesaje
+                    ? 'El pesaje CEDIS no tiene peso válido; solicite re-pesaje.'
+                    : 'El peso real es obligatorio al liberar el resguardo abierto.'
+            );
         }
         if ($cajas === null || $cajas < 0) {
-            throw new \InvalidArgumentException('El número de cajas es obligatorio al liberar el resguardo abierto.');
+            throw new \InvalidArgumentException(
+                $usaPesaje
+                    ? 'El pesaje CEDIS no tiene cajas válidas; solicite re-pesaje.'
+                    : 'El número de cajas es obligatorio al liberar el resguardo abierto.'
+            );
         }
         if ($costo === null || $costo <= 0) {
             throw new \InvalidArgumentException('El costo de envío debe ser mayor que cero.');
@@ -117,6 +132,8 @@ class LiberarResguardoPedidoBmaService
                     $estatusNuevo,
                     $comentarioHistorial.' Pedido enviado a CEDIS.'
                 );
+
+                $pasoACedis = true;
             } else {
                 $pedido->update($attrs);
 
@@ -129,6 +146,8 @@ class LiberarResguardoPedidoBmaService
                         ? $comentarioHistorial
                         : $comentarioHistorial.' Pedido pendiente de empaque.'
                 );
+
+                $pasoACedis = false;
             }
 
             $ruta = $comprobante->store("pedidos_bma/anexos_envio/{$pedido->id}", 'public');
@@ -144,10 +163,16 @@ class LiberarResguardoPedidoBmaService
                 'registrado_por_id' => $usuarioId,
             ]);
 
-            return $pedido->fresh([
+            $pedido = $pedido->fresh([
                 'cliente', 'estatus', 'origen', 'tipoOperacionEnvio', 'documentos',
-                'almacen', 'banco', 'direccionVigente', 'anexosEnvio.banco',
+                'almacen', 'banco', 'direccionVigente', 'anexosEnvio.banco', 'vendedor',
             ]);
+
+            if ($pasoACedis) {
+                $this->notificarResguardoLiberado($pedido, $usuarioId);
+            }
+
+            return $pedido;
         });
     }
 
@@ -191,19 +216,37 @@ class LiberarResguardoPedidoBmaService
                     $estatusNuevo,
                     'Resguardo liberado; pedido enviado a CEDIS.'
                 );
-            } else {
-                $pedido->update(['es_resguardo' => false]);
 
-                $this->historialService->ejecutar(
-                    $pedido->id,
-                    $usuarioId,
-                    $estatusAnterior->id,
-                    $estatusAnterior->id,
-                    'Resguardo liberado por el auxiliar.'
-                );
+                $pedido = $pedido->fresh(['cliente', 'estatus', 'origen', 'documentos', 'almacen', 'banco', 'direccionVigente', 'vendedor']);
+                $this->notificarResguardoLiberado($pedido, $usuarioId);
+
+                return $pedido;
             }
+
+            $pedido->update(['es_resguardo' => false]);
+
+            $this->historialService->ejecutar(
+                $pedido->id,
+                $usuarioId,
+                $estatusAnterior->id,
+                $estatusAnterior->id,
+                'Resguardo liberado por el auxiliar.'
+            );
 
             return $pedido->fresh(['cliente', 'estatus', 'origen', 'documentos', 'almacen', 'banco', 'direccionVigente']);
         });
+    }
+
+    private function notificarResguardoLiberado(PedidoBma $pedido, int $usuarioId): void
+    {
+        $this->notificarService->ejecutar(
+            $pedido,
+            'pedido_resguardo_liberado',
+            'Resguardo liberado; pedido listo para CEDIS',
+            ['control_pedidos.cedis'],
+            $usuarioId,
+            false,
+            ['url' => '/control-pedidos/cedis?tab=EMPACADOS&q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id))]
+        );
     }
 }

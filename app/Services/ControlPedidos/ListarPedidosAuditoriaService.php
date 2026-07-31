@@ -24,7 +24,40 @@ class ListarPedidosAuditoriaService
         $query = $this->queryBase();
         $this->aplicarFiltros($query, $filtros);
 
-        return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
+        if (! $paginar) {
+            return $query->get()->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p));
+        }
+
+        return $query->paginate(15)->withQueryString()->through(
+            fn (PedidoBma $p) => $this->anexarFlagsVista($p)
+        );
+    }
+
+    private function anexarFlagsVista(PedidoBma $pedido): PedidoBma
+    {
+        $pedido->setAttribute('pendiente_re_revision', $this->esPendienteReRevision($pedido));
+
+        return $pedido;
+    }
+
+    /**
+     * Volvió a PENDIENTE_AUXILIAR tras un rechazo o reporte (no el primer envío desde borrador).
+     */
+    private function esPendienteReRevision(PedidoBma $pedido): bool
+    {
+        if ($pedido->estatus?->fase_ciclo !== CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR) {
+            return false;
+        }
+
+        $ultimaEntrada = $pedido->historial
+            ->filter(fn ($h) => $h->estatusNuevo?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR)
+            ->sortByDesc('id')
+            ->first();
+
+        $faseAnterior = $ultimaEntrada?->estatusAnterior?->fase_ciclo;
+
+        return $faseAnterior !== null
+            && $faseAnterior !== CatalogoEstatusPedido::FASE_BORRADOR;
     }
 
     public function metricas(): array
@@ -84,6 +117,7 @@ class ListarPedidosAuditoriaService
             'almacen',
             'banco',
             'tipoCaja',
+            'cajas.tipoCaja',
             'paqueteria',
             'tipoGuia',
             'zona',

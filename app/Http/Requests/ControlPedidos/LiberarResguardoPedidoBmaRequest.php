@@ -25,9 +25,16 @@ class LiberarResguardoPedidoBmaRequest extends FormRequest
             return [];
         }
 
+        $pesoCajas = $pedido->tienePesajeRespondido()
+            ? ['nullable', 'numeric', 'min:0']
+            : ['required', 'numeric', 'min:0'];
+        $numCajas = $pedido->tienePesajeRespondido()
+            ? ['nullable', 'integer', 'min:0', 'max:999']
+            : ['required', 'integer', 'min:0', 'max:999'];
+
         return [
-            'peso_real_kg' => ['required', 'numeric', 'min:0'],
-            'numero_cajas' => ['required', 'integer', 'min:0', 'max:999'],
+            'peso_real_kg' => $pesoCajas,
+            'numero_cajas' => $numCajas,
             'costo_envio' => ['required', 'numeric', 'gt:0'],
             'catalogo_banco_id' => ['required', 'exists:catalogo_bancos,id'],
             'comentarios' => ['nullable', 'string', 'max:2000'],

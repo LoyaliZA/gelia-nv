@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import {
-    Eye, CheckCircle2, AlertTriangle, FileText, Truck, PackageCheck,
+    Eye, CheckCircle2, AlertTriangle, FileText, Truck, PackageCheck, Scale,
 } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
     badgeEstatusPedido,
     badgeEmpaqueSemantico,
+    badgeEstatusEnvio,
     badgeRetrasoGuia,
     badgeConComplementos,
     complementosDe,
@@ -25,17 +26,21 @@ import BotonGuiaPdf from '../../Partials/BotonGuiaPdf';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
+const pdfPedidoDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido');
 
 function TarjetaPedido({
-    pedido, onVerDetalle, onReportarIncidencia, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento,
+    pedido, onVerDetalle, onResponderPesaje, onReportarIncidencia, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento,
 }) {
     const fase = pedido.estatus?.fase_ciclo;
+    const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
     const badgeEstatus = badgeEstatusPedido(pedido.estatus);
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
+    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
     const badgeComp = badgeConComplementos(pedido);
     const complementos = complementosDe(pedido);
     const remision = remisionDe(pedido);
+    const pdfPedido = pdfPedidoDe(pedido);
     const esIncidencia = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
@@ -66,7 +71,12 @@ function TarjetaPedido({
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <span className={badgeEstatus.className} style={badgeEstatus.style}>{badgeEstatus.label}</span>
-                    <span className={badgeEmpaque.className} style={badgeEmpaque.style}>{badgeEmpaque.label}</span>
+                    {badgeEnvio && (
+                        <span className={badgeEnvio.className} style={badgeEnvio.style}>{badgeEnvio.label}</span>
+                    )}
+                    {!pendientePesaje && (
+                        <span className={badgeEmpaque.className} style={badgeEmpaque.style}>{badgeEmpaque.label}</span>
+                    )}
                     {badgeComp && (
                         <span className={badgeComp.className} style={badgeComp.style}>{badgeComp.label}</span>
                     )}
@@ -75,6 +85,14 @@ function TarjetaPedido({
                     )}
                 </div>
             </div>
+
+            {pendientePesaje && (
+                <AvisoOperativoPedido label="Consulta de pesaje" tono="warning" icon={Scale}>
+                    {pedido.motivo_repesaje
+                        ? `Re-pesaje solicitado (${pedido.motivo_repesaje}). Revise el PDF y registre peso/cajas.`
+                        : 'Revise el PDF del pedido y registre peso y cajas.'}
+                </AvisoOperativoPedido>
+            )}
 
             {complementos.length > 0 && (
                 <div className="rounded-xl border border-teal-500/30 bg-teal-500/5 p-2.5 space-y-1">
@@ -136,6 +154,16 @@ function TarjetaPedido({
             )}
 
             <div className="grid grid-cols-2 gap-2 pt-2 border-t theme-border">
+                {pendientePesaje && (
+                    <button type="button" onClick={() => onResponderPesaje?.(pedido)} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}>
+                        <Scale className="w-4 h-4" /> Responder pesaje
+                    </button>
+                )}
+                {pendientePesaje && pdfPedido && (
+                    <button type="button" onClick={() => onVerDocumento(pdfPedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}>
+                        <FileText className="w-3.5 h-3.5" /> Ver PDF pedido
+                    </button>
+                )}
                 {puedeMarcarEnviado && (
                     <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}>
                         <Truck className="w-4 h-4" /> Marcar enviado
@@ -169,16 +197,18 @@ function TarjetaPedido({
                         <AlertTriangle className="w-3.5 h-3.5" /> Error datos
                     </button>
                 )}
-                <button type="button" onClick={() => onVerDetalle(pedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}>
-                    <Eye className="w-3.5 h-3.5" /> Ver detalle
-                </button>
+                {!pendientePesaje && (
+                    <button type="button" onClick={() => onVerDetalle(pedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}>
+                        <Eye className="w-3.5 h-3.5" /> Ver detalle
+                    </button>
+                )}
             </div>
         </div>
     );
 }
 
 export default function TarjetasCedis({
-    pedidos, onVerDetalle, onReportarIncidencia, onReportarErrorDatos, onMarcarApartado,
+    pedidos, onVerDetalle, onResponderPesaje, onReportarIncidencia, onReportarErrorDatos, onMarcarApartado,
 }) {
     const [confirmacion, setConfirmacion] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
@@ -225,6 +255,7 @@ export default function TarjetasCedis({
                         key={pedido.id}
                         pedido={pedido}
                         onVerDetalle={onVerDetalle}
+                        onResponderPesaje={onResponderPesaje}
                         onReportarIncidencia={onReportarIncidencia}
                         onReportarErrorDatos={onReportarErrorDatos}
                         onMarcarApartado={onMarcarApartado}

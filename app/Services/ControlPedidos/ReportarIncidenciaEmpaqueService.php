@@ -10,6 +10,7 @@ class ReportarIncidenciaEmpaqueService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private NotificarPedidoBmaService $notificarService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, string $detalle): PedidoBma
@@ -42,10 +43,23 @@ class ReportarIncidenciaEmpaqueService
                 "Incidencia de empaque: {$detalle}"
             );
 
-            return $pedido->fresh([
+            $pedido = $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'almacen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'incidenciaEmpaquePor',
+                'vendedor',
             ]);
+
+            $this->notificarService->ejecutar(
+                $pedido,
+                'pedido_incidencia_cedis',
+                'Incidencia de empaque: '.$detalle,
+                ['control_pedidos.auditar'],
+                $usuarioId,
+                true,
+                ['url' => '/control-pedidos/auditar?q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id))]
+            );
+
+            return $pedido;
         });
     }
 }

@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\Storage;
 
 class GestionarGuiaPdfPedidoBmaService
 {
+    public function __construct(
+        private AvanzarColaErroresPedidoBmaService $colaErroresService,
+    ) {}
+
     public function subir(PedidoBma $pedido, UploadedFile $archivo): PedidoBma
     {
         if (!$pedido->puedeGestionarGuiaPdf()) {
@@ -34,6 +38,15 @@ class GestionarGuiaPdfPedidoBmaService
                 'tamano_bytes' => $archivo->getSize(),
                 'orden' => 0,
             ]);
+
+            if (! empty($pedido->campos_incorrectos)) {
+                $restantes = $this->colaErroresService->quitarCampos($pedido, ['guia_pdf']);
+                $pedido->update(
+                    $restantes === []
+                        ? $this->colaErroresService->attrsColaVacia()
+                        : $this->colaErroresService->attrsColaPendiente($restantes)
+                );
+            }
 
             return $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'paqueteria', 'vendedor',

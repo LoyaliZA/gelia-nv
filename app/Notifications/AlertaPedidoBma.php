@@ -30,8 +30,21 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
 
     private const ETIQUETAS_TIPO = [
         'pedido_error_datos' => 'Error de datos en pedido',
+        'pedido_error_remision' => 'Error de remisión en pedido',
+        'pedido_error_guia' => 'Error de guía en pedido',
         'pedido_guia_retraso' => 'Retraso por corrección de guía',
         'pedido_resguardo_apartado' => 'Resguardo apartado',
+        'pedido_consulta_pesaje' => 'Consulta de pesaje',
+        'pedido_pesaje_listo' => 'Pesaje listo',
+        'pedido_pendiente_auxiliar' => 'Pedido pendiente de auditoría',
+        'pedido_aprobado' => 'Pedido aprobado',
+        'pedido_rechazado_auxiliar' => 'Pedido rechazado',
+        'pedido_incidencia_cedis' => 'Incidencia de empaque',
+        'pedido_pendiente_guia' => 'Pedido pendiente de guía',
+        'pedido_pendiente_envio' => 'Pedido pendiente de envío',
+        'pedido_guia_asignada' => 'Guía asignada',
+        'pedido_enviado' => 'Pedido enviado',
+        'pedido_resguardo_liberado' => 'Resguardo liberado',
     ];
 
     public function __construct(PedidoBma $pedido, string $tipoAlerta, string $mensaje, array $extras = [])
@@ -123,9 +136,22 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         $folio = $this->folio();
 
         return match ($this->tipoAlerta) {
-            'pedido_error_datos' => "Atención {$nombre}, se reportó un error de datos en el pedido {$folio}. No enviar hasta corregir.",
+            'pedido_error_datos' => "Atención {$nombre}, se reportó un error de datos en el pedido {$folio}. Corrígelo y reenvía.",
+            'pedido_error_remision' => "Atención {$nombre}, hay un error de remisión en el pedido {$folio}. Corrígelo antes de aprobar.",
+            'pedido_error_guia' => "Atención {$nombre}, hay un error grave de guía en el pedido {$folio}. No enviar hasta corregir.",
             'pedido_guia_retraso' => "Atención {$nombre}, la guía del pedido {$folio} fue corregida y provoca un retraso.",
             'pedido_resguardo_apartado' => "Atención {$nombre}, CEDIS apartó las piezas de tu pedido en resguardo {$folio}.",
+            'pedido_consulta_pesaje' => "Atención {$nombre}, hay una consulta de pesaje pendiente para el pedido {$folio}.",
+            'pedido_pesaje_listo' => "Atención {$nombre}, CEDIS respondió el pesaje del pedido {$folio}. Ya puedes cotizar el envío.",
+            'pedido_pendiente_auxiliar' => "Atención {$nombre}, el pedido {$folio} está pendiente de auditoría.",
+            'pedido_aprobado' => "Atención {$nombre}, el pedido {$folio} fue aprobado.",
+            'pedido_rechazado_auxiliar' => "Atención {$nombre}, tu pedido {$folio} fue rechazado, corrígelo y reenvía.",
+            'pedido_incidencia_cedis' => "Atención {$nombre}, hay una incidencia de empaque en el pedido {$folio}.",
+            'pedido_pendiente_guia' => "Atención {$nombre}, el pedido {$folio} está pendiente de guía.",
+            'pedido_pendiente_envio' => "Atención {$nombre}, el pedido {$folio} está empacado, pendiente de envío.",
+            'pedido_guia_asignada' => "Atención {$nombre}, se asignó guía al pedido {$folio}, pendiente de envío.",
+            'pedido_enviado' => "Atención {$nombre}, tu pedido {$folio} fue marcado como enviado.",
+            'pedido_resguardo_liberado' => "Atención {$nombre}, se liberó el resguardo del pedido {$folio}, listo para CEDIS.",
             default => "{$nombre}, tienes una notificación sobre el pedido {$folio}.",
         };
     }

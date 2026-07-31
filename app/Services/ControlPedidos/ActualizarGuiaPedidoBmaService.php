@@ -11,6 +11,7 @@ class ActualizarGuiaPedidoBmaService
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private AvanzarColaErroresPedidoBmaService $colaErroresService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, string $numeroRastreo, int $usuarioId): PedidoBma
@@ -32,12 +33,20 @@ class ActualizarGuiaPedidoBmaService
         return DB::transaction(function () use ($pedido, $guia, $usuarioId) {
             $anterior = $pedido->numero_rastreo;
 
-            $pedido->update([
+            $attrsCola = [];
+            if (! empty($pedido->campos_incorrectos)) {
+                $restantes = $this->colaErroresService->quitarCampos($pedido, ['numero_rastreo']);
+                $attrsCola = $restantes === []
+                    ? $this->colaErroresService->attrsColaVacia()
+                    : $this->colaErroresService->attrsColaPendiente($restantes);
+            }
+
+            $pedido->update(array_merge([
                 'numero_rastreo' => $guia,
                 'guia_retraso' => true,
                 'guia_corregida_at' => now(),
                 'guia_corregida_por_id' => $usuarioId,
-            ]);
+            ], $attrsCola));
 
             $this->historialService->ejecutar(
                 $pedido->id,

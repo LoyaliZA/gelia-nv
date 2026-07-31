@@ -16,6 +16,7 @@ use App\Services\ControlPedidos\ImportarGuiasPedidoService;
 use App\Services\ControlPedidos\ListarPedidosDelegadoService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -31,9 +32,20 @@ class PedidoBmaDelegadoController extends Controller
         Gate::authorize('control_pedidos.delegado');
 
         return Inertia::render('ControlPedidos/Delegado/Index', [
+            'pedidos' => fn () => $listarService->ejecutar($request->all()),
+            'metricas' => fn () => $listarService->metricas(),
+            'filtros' => $request->only(['tab', 'q', 'page']),
+        ]);
+    }
+
+    public function listado(Request $request, ListarPedidosDelegadoService $listarService): JsonResponse
+    {
+        Gate::authorize('control_pedidos.delegado');
+
+        return response()->json([
             'pedidos' => $listarService->ejecutar($request->all()),
             'metricas' => $listarService->metricas(),
-            'filtros' => $request->all(),
+            'filtros' => $request->only(['tab', 'q', 'page']),
         ]);
     }
 
