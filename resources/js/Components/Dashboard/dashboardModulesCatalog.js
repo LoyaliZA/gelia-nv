@@ -7,7 +7,7 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_contabilidad',
         titulo: 'Contabilidad',
-        subtitulo: 'Pedidos, comisiones y utilidad Bellaroma.',
+        subtitulo: 'Utilidad y comisiones.',
         permiso: 'contabilidad.ver',
         href: () => contabilidadRoutes.index(),
         icon: Calculator,
@@ -18,7 +18,7 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_auto_cobranza',
         titulo: 'Credibox',
-        subtitulo: 'Control de crédito y cobros.',
+        subtitulo: 'Crédito y cobros.',
         permiso: 'cobranza.ver',
         href: () => route('auto-cobranza.index'),
         icon: CreditCard,
@@ -29,7 +29,7 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_usuarios',
         titulo: 'Control de Usuarios',
-        subtitulo: 'Administrar roles y personal.',
+        subtitulo: 'Roles y personal.',
         permiso: 'usuarios.gestionar',
         href: () => route('admin.usuarios'),
         icon: Users,
@@ -98,7 +98,7 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_control_pedidos',
         titulo: 'Registrar pedidos',
-        subtitulo: 'Captura y seguimiento de pedidos BMA.',
+        subtitulo: 'Pedidos BMA.',
         permiso: 'control_pedidos.ver_listado',
         href: () => route('control_pedidos.index'),
         icon: Package,
@@ -120,7 +120,7 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_almacenes_inventarios',
         titulo: 'Inventarios',
-        subtitulo: 'Existencias y ubicaciones por almacén.',
+        subtitulo: 'Existencias por almacén.',
         permisoAny: ['almacenes.inventarios.ver', 'catalogos.gestionar'],
         href: () => route('almacenes.inventarios.index'),
         icon: Boxes,
@@ -153,7 +153,7 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_rh',
         titulo: 'Recursos Humanos',
-        subtitulo: 'Dashboard, colaboradores y horas extra.',
+        subtitulo: 'HE y colaboradores.',
         permiso: 'rh.ver',
         href: () => route('rh.index'),
         icon: Briefcase,
@@ -200,7 +200,7 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_woocommerce',
         titulo: 'Sincronizar Precios',
-        subtitulo: 'WooCommerce y catálogo Bellaroma.',
+        subtitulo: 'Precios WooCommerce.',
         permiso: 'woocommerce.ver',
         href: () => route('woocommerce.index'),
         icon: ShoppingBag,
@@ -222,7 +222,7 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_facturas',
         titulo: 'Facturación',
-        subtitulo: 'Generación y control de facturas.',
+        subtitulo: 'Solicitudes CFDI.',
         permiso: 'facturas.ver_listado',
         href: () => route('facturas.index'),
         icon: Receipt,
@@ -233,7 +233,7 @@ export const DASHBOARD_MODULE_CARDS = [
     {
         id: 'card_traspasos',
         titulo: 'Traspasos',
-        subtitulo: 'Solicitud de traspaso de piezas.',
+        subtitulo: 'Traspaso de piezas.',
         permiso: 'traspasos.ver_listado',
         href: () => route('traspasos.index'),
         icon: ArrowLeftRight,
@@ -247,7 +247,7 @@ export const DASHBOARD_FUNCTION_CARDS = [
     {
         id: 'func_listados',
         titulo: 'Generador de Listados',
-        subtitulo: 'Crea y administra listados personalizados.',
+        subtitulo: 'Listados personalizados.',
         permiso: 'listados.ver',
         href: () => route('listados.index'),
         icon: List,
@@ -269,7 +269,7 @@ export const DASHBOARD_FUNCTION_CARDS = [
     {
         id: 'func_ejercicio_escalonamiento',
         titulo: 'Ejercicio Escalonamiento',
-        subtitulo: 'Simula proyecciones Plata · Oro · Diamante.',
+        subtitulo: 'Proyección Plata · Oro · Diamante.',
         permiso: 'ejercicio_escalonamiento.ver',
         href: () => route('ejercicio_escalonamiento.index'),
         icon: Calculator,

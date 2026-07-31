@@ -1,9 +1,11 @@
 import {
     applyLayoutChange,
     buildDefaultLayout,
+    buildPresetLayout,
     CARD_GRID_PANEL_MIN_H,
     CARD_GRID_PANEL_MIN_W,
     compactLayout,
+    DASHBOARD_PRESETS,
     getCollisions,
     layoutHasCollisions,
     migrateLayoutFromLegacy,
@@ -11,6 +13,7 @@ import {
     PANEL_GRID_MIN_H,
     PANEL_GRID_MIN_W,
     PANEL_IDS,
+    QUEUE_PANEL_IDS,
     rectsOverlap,
     resolveCollisions,
     resolveLayout,
@@ -155,6 +158,71 @@ describe('resolveLayout — mínimo 4×4 en todos los paneles', () => {
         expect(solicitudes.h).toBeGreaterThanOrEqual(PANEL_GRID_MIN_H);
         expect(solicitudes.minW).toBe(PANEL_GRID_MIN_W);
         expect(solicitudes.minH).toBe(PANEL_GRID_MIN_H);
+    });
+
+    it('coloca colas operativas arriba de módulos y funciones', () => {
+        const layout = buildDefaultLayout({
+            hasModulos: true,
+            hasFunciones: true,
+            hasWidgetSolicitudes: true,
+            hasWidgetCancelaciones: false,
+            hasWidgetActivos: false,
+            hasWidgetRh: false,
+            hasWidgetCredibox: true,
+            hasWidgetPedidos: true,
+            hasWidgetFacturas: false,
+            hasWidgetContabilidad: false,
+        });
+        const credibox = layout.find((item) => item.i === PANEL_IDS.CREDIBOX);
+        const pedidos = layout.find((item) => item.i === PANEL_IDS.PEDIDOS);
+        const solicitudes = layout.find((item) => item.i === PANEL_IDS.SOLICITUDES);
+        const modulos = layout.find((item) => item.i === PANEL_IDS.MODULOS);
+        const funciones = layout.find((item) => item.i === PANEL_IDS.FUNCIONES);
+
+        expect(credibox.y).toBe(0);
+        expect(pedidos.y).toBe(0);
+        expect(solicitudes.y).toBeLessThan(modulos.y);
+        expect(modulos.y).toBe(funciones.y);
+        expect(layoutHasCollisions(layout)).toBe(false);
+    });
+
+    it('preset launcher no incluye paneles de cola', () => {
+        const layout = buildPresetLayout(DASHBOARD_PRESETS.LAUNCHER, {
+            hasModulos: true,
+            hasFunciones: true,
+            hasWidgetSolicitudes: true,
+            hasWidgetCancelaciones: true,
+            hasWidgetActivos: true,
+            hasWidgetRh: true,
+            hasWidgetCredibox: true,
+            hasWidgetPedidos: true,
+            hasWidgetFacturas: true,
+            hasWidgetContabilidad: true,
+        });
+        const ids = layout.map((item) => item.i);
+        expect(ids).toEqual([PANEL_IDS.MODULOS, PANEL_IDS.FUNCIONES]);
+        QUEUE_PANEL_IDS.forEach((queueId) => {
+            expect(ids).not.toContain(queueId);
+        });
+    });
+
+    it('preset operativo pone colas con y menor que módulos', () => {
+        const layout = buildPresetLayout(DASHBOARD_PRESETS.OPERATIVO, {
+            hasModulos: true,
+            hasFunciones: false,
+            hasWidgetSolicitudes: true,
+            hasWidgetCancelaciones: false,
+            hasWidgetActivos: false,
+            hasWidgetRh: false,
+            hasWidgetCredibox: true,
+            hasWidgetPedidos: false,
+            hasWidgetFacturas: false,
+            hasWidgetContabilidad: false,
+        });
+        const cola = layout.find((item) => item.i === PANEL_IDS.CREDIBOX);
+        const modulos = layout.find((item) => item.i === PANEL_IDS.MODULOS);
+        expect(cola.y).toBeLessThan(modulos.y);
+        expect(layoutHasCollisions(layout)).toBe(false);
     });
 
     it('define minW/minH 4 en widgets y minH mayor en paneles de tarjetas', () => {

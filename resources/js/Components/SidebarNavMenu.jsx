@@ -72,10 +72,10 @@ function trackExpandScroll(blockEl) {
     };
 }
 
-export default function SidebarNavMenu({ url, can, showAdminMenu, onNavigate }) {
+export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVisible = false, onNavigate }) {
     const tree = useMemo(
-        () => buildSidebarNavigation({ can, showAdminMenu }),
-        [can, showAdminMenu]
+        () => buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible }),
+        [can, showAdminMenu, manualesHubVisible]
     );
 
     const [openGroups, setOpenGroups] = useState(() => {

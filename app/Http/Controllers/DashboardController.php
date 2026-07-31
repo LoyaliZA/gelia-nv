@@ -5,10 +5,17 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\SolicitudTag;
+use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoProceso;
-use App\Models\User;
+use App\Models\CobranzaAlerta;
+use App\Models\CobranzaFactura;
 use App\Services\Activos\AlertasActivosService;
+use App\Services\CancelacionesCotizaciones\ListarSolicitudesOperativasService;
+use App\Services\Contabilidad\ObtenerDashboardContabilidadService;
+use App\Services\ControlPedidos\ListarPedidosBmaService;
+use App\Services\Facturas\ListarSolicitudesFacturaService;
 use App\Services\Rh\ResumenDashboardRhService;
+use App\Services\Solicitudes\ListarSolicitudesService;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -22,19 +29,33 @@ class DashboardController extends Controller
         $estadisticas = [];
         $ultimasSolicitudes = [];
         $ultimasOperativas = [];
+        $metricasSolicitudes = [];
+        $metricasOperativas = [];
+        $metricasCredibox = [];
+        $metricasPedidos = [];
+        $metricasFacturas = [];
+        $metricasContabilidad = [];
         $alertasActivosResumen = [];
         $alertasActivosDestacadas = [];
         $rhWidget = [];
 
-        // Estadísticas operativas (Ejemplo: Vendedores/Asesores)
+        $verWidgetSolicitudes = $user->can('configuracion.ver_auditoria')
+            || $user->can('solicitudes.ver_listado')
+            || $user->can('solicitudes.gestionar');
+
         if ($user->can('solicitudes.crear') || $user->can('solicitudes.gestionar')) {
-            $estadisticas['mis_activas'] = SolicitudTag::where('vendedor_id', $user->id)
-                ->where('catalogo_estado_solicitud_id', '!=', 2) // Asumiendo que 2 es un estado cerrado/finalizado
-                ->count();
-            // ... resto de lógica operativa si la necesitas
+            $idsCerrados = array_values(array_filter([
+                CatalogoEstadoSolicitud::idDe('Respondida'),
+                CatalogoEstadoSolicitud::idDe('Cancelada'),
+            ]));
+
+            $queryMisActivas = SolicitudTag::where('vendedor_id', $user->id);
+            if ($idsCerrados !== []) {
+                $queryMisActivas->whereNotIn('catalogo_estado_solicitud_id', $idsCerrados);
+            }
+            $estadisticas['mis_activas'] = $queryMisActivas->count();
         }
 
-        // Estadísticas administrativas globales
         if ($user->can('usuarios.gestionar') || $user->can('configuracion.ver_auditoria') || $user->can('clientes.carga_masiva')) {
             $mesActual = now()->month;
             $anioActual = now()->year;
@@ -46,13 +67,9 @@ class DashboardController extends Controller
             $estadisticas['cotizado_global'] = SolicitudTag::whereMonth('created_at', $mesActual)
                 ->whereYear('created_at', $anioActual)
                 ->sum('monto_cotizado');
-
-            $estadisticas['usuarios_activos'] = User::count();
         }
 
-        // --- NUEVA LÓGICA: LIVE SOLICITUDES ---
-        // Extraemos las 4 más recientes con sus relaciones (cliente y estado) si el usuario tiene permiso
-        if ($user->can('configuracion.ver_auditoria') || $user->can('solicitudes.gestionar')) {
+        if ($verWidgetSolicitudes) {
             $ultimasSolicitudes = SolicitudTag::with(['cliente', 'estado', 'proceso'])
                 ->whereHas('proceso', function ($q) {
                     $q->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);
@@ -60,6 +77,7 @@ class DashboardController extends Controller
                 ->latest()
                 ->take(4)
                 ->get();
+            $metricasSolicitudes = app(ListarSolicitudesService::class)->metricas($user);
         }
 
         if ($user->can('cancelaciones_cotizaciones.ver_listado')) {
@@ -70,6 +88,7 @@ class DashboardController extends Controller
                 ->latest()
                 ->take(4)
                 ->get();
+            $metricasOperativas = app(ListarSolicitudesOperativasService::class)->metricas($user);
         }
 
         if ($user->can('activos.ver')) {
@@ -91,10 +110,48 @@ class DashboardController extends Controller
             $rhWidget = app(ResumenDashboardRhService::class)->widget();
         }
 
+        if ($user->can('cobranza.ver')) {
+            $hoy = now()->toDateString();
+            $metricasCredibox = [
+                'alertas_pendientes' => CobranzaAlerta::query()->where('estado', 'pendiente')->count(),
+                'saldo_vencido' => round((float) CobranzaFactura::query()
+                    ->where('pagada', false)
+                    ->where('monto', '>', 0)
+                    ->whereDate('fecha_vencimiento', '<', $hoy)
+                    ->sum('monto'), 2),
+            ];
+        }
+
+        if ($user->can('control_pedidos.ver_listado')) {
+            $metricasPedidos = app(ListarPedidosBmaService::class)->metricas($user);
+        }
+
+        if ($user->can('facturas.ver_listado')) {
+            $metricasFacturas = app(ListarSolicitudesFacturaService::class)->metricas($user);
+        }
+
+        if ($user->can('contabilidad.ver')) {
+            $dashRequest = Request::create('/', 'GET', ['filtro' => 'mes']);
+            $kpis = app(ObtenerDashboardContabilidadService::class)->ejecutar($dashRequest)['kpis'] ?? [];
+            $metricasContabilidad = [
+                'ventas' => $kpis['ventas'] ?? 0,
+                'margen' => $kpis['margen'] ?? 0,
+                'ganancias' => $kpis['ganancias'] ?? 0,
+                'perdidas' => $kpis['perdidas'] ?? 0,
+                'utilidad' => round((float) (($kpis['ganancias'] ?? 0) + ($kpis['perdidas'] ?? 0)), 2),
+            ];
+        }
+
         return Inertia::render('Dashboards/Index', [
             'estadisticas' => $estadisticas,
             'ultimas_solicitudes' => $ultimasSolicitudes,
             'ultimas_operativas' => $ultimasOperativas,
+            'metricas_solicitudes' => $metricasSolicitudes,
+            'metricas_operativas' => $metricasOperativas,
+            'metricas_credibox' => $metricasCredibox,
+            'metricas_pedidos' => $metricasPedidos,
+            'metricas_facturas' => $metricasFacturas,
+            'metricas_contabilidad' => $metricasContabilidad,
             'alertas_activos_resumen' => $alertasActivosResumen,
             'alertas_activos_destacadas' => $alertasActivosDestacadas,
             'rh_widget' => $rhWidget,
@@ -107,7 +164,6 @@ class DashboardController extends Controller
      */
     public function actualizarPreferencias(Request $request)
     {
-        // 1. Validamos que recibimos el array con la nomenclatura oficial del frontend
         $request->validate([
             'dashboard_ocultos' => 'sometimes|array',
             'dashboard_layout' => 'nullable|array',
@@ -116,27 +172,27 @@ class DashboardController extends Controller
             'dashboard_layout.*.y' => 'required_with:dashboard_layout|integer|min:0|max:200',
             'dashboard_layout.*.w' => 'required_with:dashboard_layout|integer|min:4|max:24',
             'dashboard_layout.*.h' => 'required_with:dashboard_layout|integer|min:4|max:100',
+            'dashboard_preset' => 'sometimes|string|in:operativo,comercial,launcher',
         ]);
 
         $user = $request->user();
 
-        // 2. Obtenemos la configuración actual directamente con Query Builder
         $configActual = DB::table('configuraciones_usuarios')
             ->where('user_id', $user->id)
             ->first();
 
-        // 3. Decodificamos el JSON existente o creamos un array vacío si es la primera vez
         $temaVisual = $configActual ? (json_decode($configActual->tema_visual ?? '[]', true) ?: []) : [];
 
-        // 4. Tarjetas ocultas y disposición del panel (grid)
         if ($request->has('dashboard_ocultos')) {
             $temaVisual['dashboard_ocultos'] = $request->input('dashboard_ocultos', []);
         }
         if ($request->has('dashboard_layout') && is_array($request->input('dashboard_layout'))) {
             $temaVisual['dashboard_layout'] = $request->input('dashboard_layout');
         }
+        if ($request->has('dashboard_preset')) {
+            $temaVisual['dashboard_preset'] = $request->input('dashboard_preset');
+        }
 
-        // 5. Guardamos o insertamos el JSON actualizado sin tocar colores, layout ni fuentes
         DB::table('configuraciones_usuarios')->updateOrInsert(
             ['user_id' => $user->id],
             [
@@ -145,7 +201,6 @@ class DashboardController extends Controller
             ]
         );
 
-        // 6. Redirigimos de vuelta. Inertia hará una recarga suave y el frontend leerá el nuevo JSON de 'auth'
         return back()->with('success', 'Preferencias del panel guardadas.');
     }
 }

@@ -40,6 +40,56 @@ class ListarSolicitudesService
         return $paginar ? $query->paginate(15)->withQueryString() : $query->get();
     }
 
+    public function metricas(?User $usuario): array
+    {
+        $query = SolicitudTag::query()
+            ->whereHas('proceso', function (Builder $proceso) {
+                $proceso->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);
+            });
+
+        if ($usuario) {
+            $this->aplicarAislamientoDeDatos($query, $usuario);
+        }
+
+        $hoy = now()->toDateString();
+        $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
+        $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+        $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
+        $idCancelada = CatalogoEstadoSolicitud::idDe('Cancelada');
+
+        return self::empaquetarMetricas(
+            (clone $query)->where(function (Builder $q) use ($idPendiente, $idCancelada) {
+                $q->where('catalogo_estado_solicitud_id', $idPendiente)
+                    ->orWhere(function (Builder $sub) use ($idCancelada) {
+                        $sub->whereNotNull('cancelacion_solicitada_at');
+                        if ($idCancelada) {
+                            $sub->where('catalogo_estado_solicitud_id', '!=', $idCancelada);
+                        }
+                    })
+                    ->orWhereHas('consultas', function (Builder $c) {
+                        $c->where('estado', 'pendiente');
+                    });
+            })->count(),
+            $idRespondida
+                ? (clone $query)->where('catalogo_estado_solicitud_id', $idRespondida)
+                    ->whereDate('updated_at', $hoy)->count()
+                : 0,
+            $idIncorrecta
+                ? (clone $query)->where('catalogo_estado_solicitud_id', $idIncorrecta)->count()
+                : 0,
+        );
+    }
+
+    /** Contrato de claves para widgets/dashboard (checkable sin DB). */
+    public static function empaquetarMetricas(int $pendientes, int $respondidasHoy, int $incorrectas): array
+    {
+        return [
+            'pendientes' => $pendientes,
+            'respondidas_hoy' => $respondidasHoy,
+            'incorrectas' => $incorrectas,
+        ];
+    }
+
     private function aplicarAislamientoDeDatos(Builder $query, User $usuario): void
     {
         if ($usuario->hasAnyRole(['Super Admin', 'Administrador'])) {

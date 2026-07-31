@@ -17,66 +17,133 @@ export const PANEL_IDS = {
     CANCELACIONES: 'panel_cancelaciones_cotizaciones',
     ACTIVOS: 'panel_activos',
     RH: 'panel_rh',
+    CREDIBOX: 'panel_credibox',
+    PEDIDOS: 'panel_pedidos_bma',
+    FACTURAS: 'panel_facturas',
+    CONTABILIDAD: 'panel_contabilidad',
 };
 
+export const DASHBOARD_PRESETS = {
+    OPERATIVO: 'operativo',
+    COMERCIAL: 'comercial',
+    LAUNCHER: 'launcher',
+};
+
+export const QUEUE_PANEL_IDS = [
+    PANEL_IDS.CREDIBOX,
+    PANEL_IDS.PEDIDOS,
+    PANEL_IDS.FACTURAS,
+    PANEL_IDS.CONTABILIDAD,
+    PANEL_IDS.SOLICITUDES,
+    PANEL_IDS.CANCELACIONES,
+    PANEL_IDS.ACTIVOS,
+    PANEL_IDS.RH,
+];
+
 /**
- * Disposición inicial que replica el layout anterior (módulos + widgets en fila, funciones abajo).
+ * Disposición: colas operativas arriba, launchers (módulos/funciones) abajo.
  */
-export function buildDefaultLayout({ hasModulos, hasFunciones, hasWidgetSolicitudes, hasWidgetCancelaciones, hasWidgetActivos, hasWidgetRh }) {
+export function buildDefaultLayout(flags) {
+    return buildPresetLayout(DASHBOARD_PRESETS.OPERATIVO, flags);
+}
+
+/**
+ * @param {'operativo'|'comercial'|'launcher'} presetId
+ * @param {object} flags same keys as buildDefaultLayout
+ */
+export function buildPresetLayout(presetId, flags = {}) {
+    const {
+        hasModulos = false,
+        hasFunciones = false,
+        hasWidgetSolicitudes = false,
+        hasWidgetCancelaciones = false,
+        hasWidgetActivos = false,
+        hasWidgetRh = false,
+        hasWidgetCredibox = false,
+        hasWidgetPedidos = false,
+        hasWidgetFacturas = false,
+        hasWidgetContabilidad = false,
+    } = flags;
+
     const layout = [];
-    
-    // 1. Widgets en la parte superior (6x4 cada uno)
     let widgetX = 0;
     let widgetY = 0;
     let maxWidgetY = 0;
 
-    const pushWidget = (id) => {
+    const pushWidget = (id, w = 6, h = 4) => {
         layout.push({
             i: id,
             x: widgetX,
             y: widgetY,
-            w: 6,
-            h: 4,
+            w,
+            h,
             minW: PANEL_GRID_MIN_W,
             minH: PANEL_GRID_MIN_H,
         });
-        widgetX += 6;
+        widgetX += w;
         if (widgetX >= GRID_COLS) {
             widgetX = 0;
+            widgetY += h;
+        }
+        maxWidgetY = Math.max(maxWidgetY, widgetY + (widgetX > 0 ? h : 0));
+    };
+
+    const pushLaunchers = (startY) => {
+        let nextRow = startY;
+        let panelX = 0;
+        const pushPanel = (id) => {
+            layout.push({
+                i: id,
+                x: panelX,
+                y: nextRow,
+                w: 12,
+                h: 8,
+                minW: CARD_GRID_PANEL_MIN_W,
+                minH: CARD_GRID_PANEL_MIN_H,
+            });
+            panelX += 12;
+            if (panelX >= GRID_COLS) {
+                panelX = 0;
+                nextRow += 8;
+            }
+        };
+        if (hasModulos) pushPanel(PANEL_IDS.MODULOS);
+        if (hasFunciones) pushPanel(PANEL_IDS.FUNCIONES);
+    };
+
+    if (presetId === DASHBOARD_PRESETS.LAUNCHER) {
+        pushLaunchers(0);
+        return layout;
+    }
+
+    if (presetId === DASHBOARD_PRESETS.COMERCIAL) {
+        if (hasWidgetSolicitudes) pushWidget(PANEL_IDS.SOLICITUDES, 8, 4);
+        if (hasWidgetCancelaciones) pushWidget(PANEL_IDS.CANCELACIONES, 8, 4);
+        if (hasWidgetContabilidad) pushWidget(PANEL_IDS.CONTABILIDAD, 8, 4);
+        if (widgetX > 0) {
+            widgetX = 0;
             widgetY += 4;
+            maxWidgetY = Math.max(maxWidgetY, widgetY);
         }
-        maxWidgetY = Math.max(maxWidgetY, widgetY + (widgetX > 0 ? 4 : 0));
-    };
+        if (hasWidgetCredibox) pushWidget(PANEL_IDS.CREDIBOX);
+        if (hasWidgetPedidos) pushWidget(PANEL_IDS.PEDIDOS);
+        if (hasWidgetFacturas) pushWidget(PANEL_IDS.FACTURAS);
+        if (hasWidgetActivos) pushWidget(PANEL_IDS.ACTIVOS);
+        if (hasWidgetRh) pushWidget(PANEL_IDS.RH);
+        pushLaunchers(maxWidgetY);
+        return layout;
+    }
 
-    // Orden en el que aparecen de izquierda a derecha
-    if (hasWidgetRh) pushWidget(PANEL_IDS.RH);
-    if (hasWidgetActivos) pushWidget(PANEL_IDS.ACTIVOS);
-    if (hasWidgetCancelaciones) pushWidget(PANEL_IDS.CANCELACIONES);
+    // operativo (default)
+    if (hasWidgetCredibox) pushWidget(PANEL_IDS.CREDIBOX);
+    if (hasWidgetPedidos) pushWidget(PANEL_IDS.PEDIDOS);
+    if (hasWidgetFacturas) pushWidget(PANEL_IDS.FACTURAS);
+    if (hasWidgetContabilidad) pushWidget(PANEL_IDS.CONTABILIDAD);
     if (hasWidgetSolicitudes) pushWidget(PANEL_IDS.SOLICITUDES);
-
-    // 2. Paneles principales debajo de los widgets (12x8 cada uno)
-    let nextRow = maxWidgetY;
-    let panelX = 0;
-
-    const pushPanel = (id) => {
-        layout.push({
-            i: id,
-            x: panelX,
-            y: nextRow,
-            w: 12,
-            h: 8,
-            minW: CARD_GRID_PANEL_MIN_W,
-            minH: CARD_GRID_PANEL_MIN_H,
-        });
-        panelX += 12;
-        if (panelX >= GRID_COLS) {
-            panelX = 0;
-            nextRow += 8;
-        }
-    };
-
-    if (hasModulos) pushPanel(PANEL_IDS.MODULOS);
-    if (hasFunciones) pushPanel(PANEL_IDS.FUNCIONES);
+    if (hasWidgetCancelaciones) pushWidget(PANEL_IDS.CANCELACIONES);
+    if (hasWidgetActivos) pushWidget(PANEL_IDS.ACTIVOS);
+    if (hasWidgetRh) pushWidget(PANEL_IDS.RH);
+    pushLaunchers(maxWidgetY);
 
     return layout;
 }
@@ -169,11 +236,16 @@ function findMinY(item, placed) {
 }
 
 const PANEL_PRIORITY = {
-    [PANEL_IDS.MODULOS]: 0,
-    [PANEL_IDS.SOLICITUDES]: 1,
-    [PANEL_IDS.ACTIVOS]: 2,
-    [PANEL_IDS.RH]: 3,
-    [PANEL_IDS.FUNCIONES]: 4,
+    [PANEL_IDS.CREDIBOX]: 0,
+    [PANEL_IDS.PEDIDOS]: 1,
+    [PANEL_IDS.FACTURAS]: 2,
+    [PANEL_IDS.CONTABILIDAD]: 3,
+    [PANEL_IDS.SOLICITUDES]: 4,
+    [PANEL_IDS.CANCELACIONES]: 5,
+    [PANEL_IDS.ACTIVOS]: 6,
+    [PANEL_IDS.RH]: 7,
+    [PANEL_IDS.MODULOS]: 8,
+    [PANEL_IDS.FUNCIONES]: 9,
 };
 
 function packItems(items) {

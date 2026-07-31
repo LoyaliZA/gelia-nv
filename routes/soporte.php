@@ -5,11 +5,17 @@ use App\Http\Controllers\Soporte\SoporteTicketController;
 use App\Http\Controllers\Soporte\SoporteAgenteController;
 use App\Http\Controllers\Soporte\SoporteConfiguracionController;
 use App\Http\Controllers\Soporte\SoporteBaseConocimientoController;
+use App\Http\Controllers\Soporte\ManualesController;
 
 Route::middleware(['auth', 'verified'])->prefix('soporte')->name('soporte.')->group(function () {
 
     // Base de conocimientos (sugerencias para todos)
     Route::get('/base-conocimiento/sugerencias', [SoporteBaseConocimientoController::class, 'sugerencias'])->name('base_conocimiento.sugerencias');
+
+    // Manuales operativos (visibilidad por permisos de módulo dentro del controller)
+    Route::get('/manuales', [ManualesController::class, 'index'])->name('manuales.index');
+    Route::get('/manuales/{slug}/pdf', [ManualesController::class, 'pdf'])->name('manuales.pdf');
+    Route::get('/manuales/{slug}', [ManualesController::class, 'show'])->name('manuales.show');
 
     // Portal de Usuario Común (Reportador) - Sin permiso especial requerido
     Route::group([], function () {

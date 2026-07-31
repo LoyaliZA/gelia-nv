@@ -181,7 +181,7 @@ function profileMenuHref(item) {
 }
 
 export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left', sidebarMode = 'collapsed', fixedPosition = 'left', useMobileTopBar = false, isMobileViewport = false }) {
-    const { url, props: { auth } } = usePage();
+    const { url, props: { auth, manuales_hub_visible: manualesHubVisible = false } } = usePage();
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMenuClosing, setIsMenuClosing] = useState(false);
@@ -725,6 +725,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                         url={url}
                                         can={can}
                                         showAdminMenu={showAdminMenu}
+                                        manualesHubVisible={Boolean(manualesHubVisible)}
                                         onNavigate={closeMobileMenu}
                                     />
                                 </div>

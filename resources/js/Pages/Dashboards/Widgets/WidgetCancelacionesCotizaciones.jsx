@@ -2,7 +2,7 @@ import React from 'react';
 import { Ban, CheckCircle2, AlertOctagon, CheckSquare, Clock } from 'lucide-react';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
 
-export default function WidgetCancelacionesCotizaciones({ ultimas_operativas = [], variant = 'desktop' }) {
+export default function WidgetCancelacionesCotizaciones({ ultimas_operativas = [], metricas = {}, variant = 'desktop' }) {
     const obtenerEstiloLive = (nombreEstado) => {
         switch (nombreEstado?.toLowerCase()) {
             case 'respondida':
@@ -16,6 +16,10 @@ export default function WidgetCancelacionesCotizaciones({ ultimas_operativas = [
         }
     };
 
+    const pendientes = metricas.pendientes ?? 0;
+    const respondidasHoy = metricas.respondidas_hoy ?? 0;
+    const incorrectas = metricas.incorrectas ?? 0;
+    const hayCola = pendientes > 0 || incorrectas > 0;
     const lista = ultimas_operativas.slice(0, 4);
 
     return (
@@ -25,13 +29,37 @@ export default function WidgetCancelacionesCotizaciones({ ultimas_operativas = [
             icon={Ban}
             href={route('cancelaciones_cotizaciones.index')}
             ctaLabel="Ver solicitudes operativas"
-            minimalCount={lista.length}
-            minimalCountLabel="Recientes"
-            badge={(
-                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-orange-500 bg-orange-500/10 px-2 py-1 rounded-md border border-orange-500/20 shrink-0">
-                    <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse" />
-                    Live
+            minimalCount={pendientes}
+            minimalCountLabel={hayCola ? 'Pendientes' : 'Al día'}
+            badge={hayCola ? (
+                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-orange-600 bg-orange-500/10 px-2 py-1 rounded-md border border-orange-500/20 shrink-0">
+                    <Clock className="w-3 h-3" />
+                    {pendientes} pendientes
                 </span>
+            ) : (
+                <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20 shrink-0">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                    OK
+                </span>
+            )}
+            summary={(
+                <div className="flex flex-wrap gap-2">
+                    {pendientes > 0 && (
+                        <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-orange-500/10 text-orange-600 border border-orange-500/20">
+                            {pendientes} pendientes
+                        </span>
+                    )}
+                    {respondidasHoy > 0 && (
+                        <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                            {respondidasHoy} hoy
+                        </span>
+                    )}
+                    {incorrectas > 0 && (
+                        <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-red-500/10 text-red-600 border border-red-500/20">
+                            {incorrectas} incorrectas
+                        </span>
+                    )}
+                </div>
             )}
         >
             {lista.length > 0 ? (

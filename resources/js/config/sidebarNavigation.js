@@ -34,6 +34,7 @@ import {
     ClipboardCheck,
     Link2,
     MapPin,
+    BookOpen,
 } from 'lucide-react';
 
 import { ADMIN_MODULES, isAdminModuleAllowed, adminModuleHref } from './adminModules';
@@ -50,7 +51,7 @@ function routeHref(name, fallback) {
 }
 
 /** Árbol de navegación del menú lateral (permisos aplicados al renderizar). */
-export function buildSidebarNavigation({ can, showAdminMenu }) {
+export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible = false }) {
     const showReportes = can('solicitudes.exportar');
     const showReporteTraspasos = can('traspasos.reporte_dia');
     const showListados = can('listados.ver');
@@ -449,6 +450,14 @@ export function buildSidebarNavigation({ can, showAdminMenu }) {
             icon: MessageCircle,
             href: () => routeHref('soporte.qa.index', '/soporte/qa'),
             active: (url) => url.startsWith('/soporte/qa'),
+        },
+        manualesHubVisible && {
+            type: 'link',
+            id: 'soporte_manuales',
+            label: 'Manuales',
+            icon: BookOpen,
+            href: () => routeHref('soporte.manuales.index', '/soporte/manuales'),
+            active: (url) => url.startsWith('/soporte/manuales'),
         },
     ].filter(Boolean);
 

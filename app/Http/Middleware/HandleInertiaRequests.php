@@ -11,6 +11,7 @@ use App\Services\PersonalizacionCatalogoService;
 use App\Services\Mensajeria\ListarConversacionesService;
 use App\Services\Presencia\PresenciaUsuarioService;
 use App\Support\PresenciaCatalogo;
+use App\Services\Manuales\ResolverManualesVisiblesService;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -116,6 +117,9 @@ class HandleInertiaRequests extends Middleware
             ))
                 ? ImportacionAlmacenLog::activo()
                 : null,
+            'manuales_hub_visible' => fn () => $user
+                ? app(ResolverManualesVisiblesService::class)->hubVisible($user)
+                : false,
         ];
     }
 }

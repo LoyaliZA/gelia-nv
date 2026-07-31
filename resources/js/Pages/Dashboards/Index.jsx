@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Head, useForm } from '@inertiajs/react';
-import { LayoutDashboard, Activity, Settings2, X, Check, Layers, RotateCcw, Sparkles } from 'lucide-react';
+import { Head, useForm, router } from '@inertiajs/react';
+import { LayoutDashboard, Activity, Settings2, X, Check, Layers, RotateCcw, Sparkles, Clock } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import DashboardLayoutGrid from '../../Components/Dashboard/DashboardLayoutGrid';
 import DashboardMobileView from '../../Components/Dashboard/DashboardMobileView';
@@ -10,17 +10,32 @@ import DashboardToolbar from '../../Components/Dashboard/DashboardToolbar';
 import { useDashboardBreakpoint } from '../../Components/Dashboard/useDashboardBreakpoint';
 import {
     PANEL_IDS,
-    buildDefaultLayout,
+    DASHBOARD_PRESETS,
+    buildPresetLayout,
     optimizeLayout,
     resolveLayout,
 } from '../../Components/Dashboard/dashboardLayoutUtils';
 import DashboardModuleCard from '../../Components/Dashboard/DashboardModuleCard';
 import { DASHBOARD_MODULE_CARDS, DASHBOARD_FUNCTION_CARDS } from '../../Components/Dashboard/dashboardModulesCatalog';
+import { geliaCardClass } from '../../utils/geliaTheme';
+import { formatoMoneda } from '../../utils/formatoMoneda';
 
 import WidgetSolicitudes from './Widgets/WidgetSolicitudes';
 import WidgetCancelacionesCotizaciones from './Widgets/WidgetCancelacionesCotizaciones';
 import WidgetActivos from './Widgets/WidgetActivos';
 import WidgetRh from './Widgets/WidgetRh';
+import WidgetCredibox from './Widgets/WidgetCredibox';
+import WidgetPedidosBma from './Widgets/WidgetPedidosBma';
+import WidgetFacturas from './Widgets/WidgetFacturas';
+import WidgetContabilidad from './Widgets/WidgetContabilidad';
+
+const KPI_STRIP_CONFIG = [
+    { key: 'mis_activas', label: 'Mis solicitudes abiertas', hint: 'TAG · mi cartera', format: 'number' },
+    { key: 'solicitudes_mes', label: 'Solicitudes creadas', hint: 'Este mes · todas', format: 'number' },
+    { key: 'cotizado_global', label: 'Monto cotizado', hint: 'Este mes · suma', format: 'money' },
+];
+
+const PRESET_IDS = Object.values(DASHBOARD_PRESETS);
 
 function buildCardGridPanel({
     variant,
@@ -83,7 +98,26 @@ function buildFuncionesPanel({ variant, funcionesVisibles }) {
     });
 }
 
-export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas_operativas = [], alertas_activos_resumen = {}, alertas_activos_destacadas = [], rh_widget = {} }) {
+function formatKpiValue(value, format) {
+    if (format === 'money') return formatoMoneda(value);
+    return Number(value || 0).toLocaleString('es-MX');
+}
+
+export default function AdminDashboard({
+    auth,
+    estadisticas = {},
+    ultimas_solicitudes = [],
+    ultimas_operativas = [],
+    metricas_solicitudes = {},
+    metricas_operativas = {},
+    metricas_credibox = {},
+    metricas_pedidos = {},
+    metricas_facturas = {},
+    metricas_contabilidad = {},
+    alertas_activos_resumen = {},
+    alertas_activos_destacadas = [],
+    rh_widget = {},
+}) {
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
 
     const [showConfig, setShowConfig] = useState(false);
@@ -92,11 +126,19 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
 
     const dashboardOcultosBD = auth?.tema_visual?.dashboard_ocultos || [];
     const dashboardLayoutBD = auth?.tema_visual?.dashboard_layout || null;
+    const dashboardPresetBD = PRESET_IDS.includes(auth?.tema_visual?.dashboard_preset)
+        ? auth.tema_visual.dashboard_preset
+        : DASHBOARD_PRESETS.OPERATIVO;
 
     const { data, setData, put, processing } = useForm({
         dashboard_ocultos: dashboardOcultosBD,
         dashboard_layout: dashboardLayoutBD,
+        dashboard_preset: dashboardPresetBD,
     });
+
+    const activePreset = PRESET_IDS.includes(data.dashboard_preset)
+        ? data.dashboard_preset
+        : DASHBOARD_PRESETS.OPERATIVO;
 
     const catalogoFunciones = DASHBOARD_FUNCTION_CARDS;
     const catalogoTarjetas = DASHBOARD_MODULE_CARDS;
@@ -114,33 +156,94 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
     const funcionesHabilitadas = catalogoFunciones.filter((func) => can(func.permiso));
     const funcionesVisibles = funcionesHabilitadas.filter((func) => !dashboardOcultosBD.includes(func.id));
 
-    const mostrarWidgetSolicitudes = can('configuracion.ver_auditoria') || can('solicitudes.ver_listado');
+    const mostrarWidgetSolicitudes = can('configuracion.ver_auditoria') || can('solicitudes.ver_listado') || can('solicitudes.gestionar');
     const mostrarWidgetCancelaciones = can('cancelaciones_cotizaciones.ver_listado');
     const mostrarWidgetActivos = can('activos.ver');
     const mostrarWidgetRh = can('rh.ver');
+    const mostrarWidgetCredibox = can('cobranza.ver');
+    const mostrarWidgetPedidos = can('control_pedidos.ver_listado');
+    const mostrarWidgetFacturas = can('facturas.ver_listado');
+    const mostrarWidgetContabilidad = can('contabilidad.ver');
+
+    const kpiItems = useMemo(
+        () => KPI_STRIP_CONFIG.filter((item) => Object.prototype.hasOwnProperty.call(estadisticas, item.key)),
+        [estadisticas]
+    );
+
+    const pendientesAtencion = useMemo(() => {
+        let total = 0;
+        if (mostrarWidgetSolicitudes) total += metricas_solicitudes.pendientes ?? 0;
+        if (mostrarWidgetCancelaciones) total += metricas_operativas.pendientes ?? 0;
+        if (mostrarWidgetActivos) {
+            total += (alertas_activos_resumen.vencidos || 0)
+                + (alertas_activos_resumen.proximos_7 || 0)
+                + (alertas_activos_resumen.mantenimiento || 0);
+        }
+        if (mostrarWidgetRh) {
+            total += (rh_widget.pendientes_he ?? rh_widget.pendientes ?? 0)
+                + (rh_widget.pendientes_incidencias ?? 0);
+        }
+        if (mostrarWidgetCredibox) total += metricas_credibox.alertas_pendientes ?? 0;
+        if (mostrarWidgetPedidos) {
+            total += (metricas_pedidos.pendiente_auxiliar ?? 0) + (metricas_pedidos.en_cedis ?? 0);
+        }
+        if (mostrarWidgetFacturas) total += metricas_facturas.pendientes ?? 0;
+        return total;
+    }, [
+        mostrarWidgetSolicitudes, metricas_solicitudes,
+        mostrarWidgetCancelaciones, metricas_operativas,
+        mostrarWidgetActivos, alertas_activos_resumen,
+        mostrarWidgetRh, rh_widget,
+        mostrarWidgetCredibox, metricas_credibox,
+        mostrarWidgetPedidos, metricas_pedidos,
+        mostrarWidgetFacturas, metricas_facturas,
+    ]);
+
+    const layoutFlags = useMemo(
+        () => ({
+            hasModulos: tarjetasVisibles.length > 0,
+            hasFunciones: funcionesVisibles.length > 0,
+            hasWidgetSolicitudes: mostrarWidgetSolicitudes,
+            hasWidgetCancelaciones: mostrarWidgetCancelaciones,
+            hasWidgetActivos: mostrarWidgetActivos,
+            hasWidgetRh: mostrarWidgetRh,
+            hasWidgetCredibox: mostrarWidgetCredibox,
+            hasWidgetPedidos: mostrarWidgetPedidos,
+            hasWidgetFacturas: mostrarWidgetFacturas,
+            hasWidgetContabilidad: mostrarWidgetContabilidad,
+        }),
+        [
+            tarjetasVisibles.length, funcionesVisibles.length,
+            mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos, mostrarWidgetRh,
+            mostrarWidgetCredibox, mostrarWidgetPedidos, mostrarWidgetFacturas, mostrarWidgetContabilidad,
+        ]
+    );
 
     const visiblePanelIds = useMemo(() => {
         const ids = [];
+        if (activePreset !== DASHBOARD_PRESETS.LAUNCHER) {
+            if (mostrarWidgetCredibox) ids.push(PANEL_IDS.CREDIBOX);
+            if (mostrarWidgetPedidos) ids.push(PANEL_IDS.PEDIDOS);
+            if (mostrarWidgetFacturas) ids.push(PANEL_IDS.FACTURAS);
+            if (mostrarWidgetContabilidad) ids.push(PANEL_IDS.CONTABILIDAD);
+            if (mostrarWidgetSolicitudes) ids.push(PANEL_IDS.SOLICITUDES);
+            if (mostrarWidgetCancelaciones) ids.push(PANEL_IDS.CANCELACIONES);
+            if (mostrarWidgetActivos) ids.push(PANEL_IDS.ACTIVOS);
+            if (mostrarWidgetRh) ids.push(PANEL_IDS.RH);
+        }
         if (tarjetasVisibles.length > 0) ids.push(PANEL_IDS.MODULOS);
         if (funcionesVisibles.length > 0) ids.push(PANEL_IDS.FUNCIONES);
-        if (mostrarWidgetSolicitudes) ids.push(PANEL_IDS.SOLICITUDES);
-        if (mostrarWidgetCancelaciones) ids.push(PANEL_IDS.CANCELACIONES);
-        if (mostrarWidgetActivos) ids.push(PANEL_IDS.ACTIVOS);
-        if (mostrarWidgetRh) ids.push(PANEL_IDS.RH);
         return ids;
-    }, [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos, mostrarWidgetRh]);
+    }, [
+        activePreset,
+        tarjetasVisibles.length, funcionesVisibles.length,
+        mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos, mostrarWidgetRh,
+        mostrarWidgetCredibox, mostrarWidgetPedidos, mostrarWidgetFacturas, mostrarWidgetContabilidad,
+    ]);
 
     const defaultLayout = useMemo(
-        () =>
-            buildDefaultLayout({
-                hasModulos: tarjetasVisibles.length > 0,
-                hasFunciones: funcionesVisibles.length > 0,
-                hasWidgetSolicitudes: mostrarWidgetSolicitudes,
-                hasWidgetCancelaciones: mostrarWidgetCancelaciones,
-                hasWidgetActivos: mostrarWidgetActivos,
-                hasWidgetRh: mostrarWidgetRh,
-            }),
-        [tarjetasVisibles.length, funcionesVisibles.length, mostrarWidgetSolicitudes, mostrarWidgetCancelaciones, mostrarWidgetActivos, mostrarWidgetRh]
+        () => buildPresetLayout(activePreset, layoutFlags),
+        [activePreset, layoutFlags]
     );
 
     const activeLayout = useMemo(
@@ -154,8 +257,12 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
         () => ({
             [PANEL_IDS.MODULOS]: buildModulosPanel({ variant: 'desktop', ...panelArgs }),
             [PANEL_IDS.FUNCIONES]: buildFuncionesPanel({ variant: 'desktop', ...panelArgs }),
-            [PANEL_IDS.SOLICITUDES]: <WidgetSolicitudes ultimas_solicitudes={ultimas_solicitudes} variant="desktop" />,
-            [PANEL_IDS.CANCELACIONES]: <WidgetCancelacionesCotizaciones ultimas_operativas={ultimas_operativas} variant="desktop" />,
+            [PANEL_IDS.SOLICITUDES]: (
+                <WidgetSolicitudes ultimas_solicitudes={ultimas_solicitudes} metricas={metricas_solicitudes} variant="desktop" />
+            ),
+            [PANEL_IDS.CANCELACIONES]: (
+                <WidgetCancelacionesCotizaciones ultimas_operativas={ultimas_operativas} metricas={metricas_operativas} variant="desktop" />
+            ),
             [PANEL_IDS.ACTIVOS]: (
                 <WidgetActivos
                     alertas_resumen={alertas_activos_resumen}
@@ -164,16 +271,28 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
                 />
             ),
             [PANEL_IDS.RH]: <WidgetRh rh_widget={rh_widget} variant="desktop" />,
+            [PANEL_IDS.CREDIBOX]: <WidgetCredibox metricas={metricas_credibox} variant="desktop" />,
+            [PANEL_IDS.PEDIDOS]: <WidgetPedidosBma metricas={metricas_pedidos} variant="desktop" />,
+            [PANEL_IDS.FACTURAS]: <WidgetFacturas metricas={metricas_facturas} variant="desktop" />,
+            [PANEL_IDS.CONTABILIDAD]: <WidgetContabilidad metricas={metricas_contabilidad} variant="desktop" />,
         }),
-        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas, alertas_activos_resumen, alertas_activos_destacadas, rh_widget]
+        [
+            tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas,
+            metricas_solicitudes, metricas_operativas, metricas_credibox, metricas_pedidos,
+            metricas_facturas, metricas_contabilidad, alertas_activos_resumen, alertas_activos_destacadas, rh_widget,
+        ]
     );
 
     const mobilePanels = useMemo(
         () => ({
             [PANEL_IDS.MODULOS]: buildModulosPanel({ variant: 'mobile', ...panelArgs }),
             [PANEL_IDS.FUNCIONES]: buildFuncionesPanel({ variant: 'mobile', ...panelArgs }),
-            [PANEL_IDS.SOLICITUDES]: <WidgetSolicitudes ultimas_solicitudes={ultimas_solicitudes} variant="mobile" />,
-            [PANEL_IDS.CANCELACIONES]: <WidgetCancelacionesCotizaciones ultimas_operativas={ultimas_operativas} variant="mobile" />,
+            [PANEL_IDS.SOLICITUDES]: (
+                <WidgetSolicitudes ultimas_solicitudes={ultimas_solicitudes} metricas={metricas_solicitudes} variant="mobile" />
+            ),
+            [PANEL_IDS.CANCELACIONES]: (
+                <WidgetCancelacionesCotizaciones ultimas_operativas={ultimas_operativas} metricas={metricas_operativas} variant="mobile" />
+            ),
             [PANEL_IDS.ACTIVOS]: (
                 <WidgetActivos
                     alertas_resumen={alertas_activos_resumen}
@@ -182,8 +301,16 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
                 />
             ),
             [PANEL_IDS.RH]: <WidgetRh rh_widget={rh_widget} variant="mobile" />,
+            [PANEL_IDS.CREDIBOX]: <WidgetCredibox metricas={metricas_credibox} variant="mobile" />,
+            [PANEL_IDS.PEDIDOS]: <WidgetPedidosBma metricas={metricas_pedidos} variant="mobile" />,
+            [PANEL_IDS.FACTURAS]: <WidgetFacturas metricas={metricas_facturas} variant="mobile" />,
+            [PANEL_IDS.CONTABILIDAD]: <WidgetContabilidad metricas={metricas_contabilidad} variant="mobile" />,
         }),
-        [tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas, alertas_activos_resumen, alertas_activos_destacadas, rh_widget]
+        [
+            tarjetasVisibles, funcionesVisibles, ultimas_solicitudes, ultimas_operativas,
+            metricas_solicitudes, metricas_operativas, metricas_credibox, metricas_pedidos,
+            metricas_facturas, metricas_contabilidad, alertas_activos_resumen, alertas_activos_destacadas, rh_widget,
+        ]
     );
 
     useEffect(() => {
@@ -222,9 +349,11 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
             onSuccess: (page) => {
                 setEditLayoutMode(false);
                 const saved = page.props.auth?.tema_visual?.dashboard_layout;
-                if (Array.isArray(saved)) {
-                    setData('dashboard_layout', saved);
-                }
+                const savedPreset = page.props.auth?.tema_visual?.dashboard_preset;
+                const next = { ...data };
+                if (Array.isArray(saved)) next.dashboard_layout = saved;
+                if (PRESET_IDS.includes(savedPreset)) next.dashboard_preset = savedPreset;
+                setData(next);
             },
             preserveScroll: true,
         });
@@ -236,7 +365,7 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
     };
 
     const restaurarDisposicionPredeterminada = () => {
-        setData('dashboard_layout', defaultLayout);
+        setData('dashboard_layout', buildPresetLayout(activePreset, layoutFlags));
     };
 
     const onLayoutChange = (newLayout) => {
@@ -249,39 +378,92 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
         if (!editLayoutMode) setEditLayoutMode(true);
     };
 
+    const aplicarPreset = (presetId) => {
+        if (!PRESET_IDS.includes(presetId)) return;
+        const nextLayout = buildPresetLayout(presetId, layoutFlags);
+        const payload = {
+            dashboard_ocultos: data.dashboard_ocultos,
+            dashboard_layout: nextLayout,
+            dashboard_preset: presetId,
+        };
+        setData(payload);
+        router.put(route('dashboard.preferencias'), payload, {
+            preserveScroll: true,
+        });
+    };
+
     const hayPaneles = activeLayout.length > 0;
+    const hayColasVisibles = mostrarWidgetSolicitudes || mostrarWidgetCancelaciones || mostrarWidgetActivos
+        || mostrarWidgetRh || mostrarWidgetCredibox || mostrarWidgetPedidos || mostrarWidgetFacturas;
 
     return (
         <AppLayout auth={auth}>
             <Head title="Dashboard | GELIANV" />
 
             <div className="w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-12 space-y-8 md:space-y-10 min-h-screen relative">
-                <header className="theme-surface border-2 theme-border rounded-[2rem] md:rounded-[3rem] p-6 md:p-8 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10 dashboard-page-reveal">
-                    <div className="space-y-4">
-                        <div className="flex items-center space-x-3">
-                            <span className="h-1.5 w-12 rounded-full" style={{ backgroundColor: 'var(--color-primario)' }}></span>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em]" style={{ color: 'var(--color-primario)' }}>
+                <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10 dashboard-page-reveal">
+                    <div className="flex items-center gap-3 min-w-0 flex-1 theme-surface border theme-border rounded-2xl px-4 py-3 shadow-sm">
+                        <span className="h-1 w-8 rounded-full shrink-0" style={{ backgroundColor: 'var(--color-primario)' }} />
+                        <div className="min-w-0 overflow-visible">
+                            <p className="text-[9px] font-black uppercase tracking-[0.25em] m-0" style={{ color: 'var(--color-primario)' }}>
                                 Gelia NV
                             </p>
+                            <p className="text-lg md:text-xl font-black italic tracking-tight uppercase theme-text-main m-0 pr-1">
+                                Hola,{' '}
+                                <span className="inline-block" style={{ color: 'var(--color-primario)' }}>
+                                    {auth?.user?.name ? auth.user.name.trim().split(' ')[0] : 'Usuario'}
+                                </span>
+                            </p>
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter uppercase theme-text-main leading-none m-0 p-0">
-                            BIENVENIDO,{' '}
-                            <span style={{ color: 'var(--color-primario)' }}>
-                                {auth?.user?.name ? auth.user.name.trim().split(' ')[0] : 'USUARIO'}
-                            </span>
-                        </h1>
                     </div>
 
-                    <div className="flex items-center gap-4 p-4 theme-element border-2 theme-border rounded-2xl shadow-sm w-full md:w-auto">
-                        <div className="w-10 h-10 bg-emerald-500/10 rounded-xl border border-emerald-500/20 flex items-center justify-center shrink-0">
-                            <Activity className="w-5 h-5 text-emerald-500" />
+                    {hayColasVisibles && (
+                        <div
+                            className={`inline-flex items-center gap-2 px-4 py-3 rounded-2xl border text-[9px] font-black uppercase tracking-widest shrink-0 shadow-sm theme-surface ${
+                                pendientesAtencion > 0
+                                    ? 'border-amber-500/30 text-amber-600'
+                                    : 'border-emerald-500/30 text-emerald-500'
+                            }`}
+                        >
+                            {pendientesAtencion > 0 ? (
+                                <>
+                                    <span className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center shrink-0">
+                                        <Clock className="w-3.5 h-3.5" />
+                                    </span>
+                                    {pendientesAtencion} pendientes
+                                </>
+                            ) : (
+                                <>
+                                    <span className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
+                                        <Activity className="w-3.5 h-3.5" />
+                                    </span>
+                                    Al día
+                                </>
+                            )}
                         </div>
-                        <div>
-                            <p className="text-[9px] font-black theme-text-muted uppercase tracking-widest leading-tight">Estado de Servidor_</p>
-                            <p className="text-xs font-black text-emerald-500 italic uppercase leading-tight mt-0.5">Operativo</p>
-                        </div>
-                    </div>
+                    )}
                 </header>
+
+                {kpiItems.length > 0 && (
+                    <section aria-label="Indicadores" className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 dashboard-page-reveal">
+                        {kpiItems.map(({ key, label, hint, format }) => (
+                            <div key={key} className={geliaCardClass('p-4 md:p-5 min-h-[4.5rem] flex flex-col justify-center')}>
+                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">{label}</p>
+                                <p
+                                    className="text-2xl md:text-3xl font-black italic theme-text-main m-0 leading-none tabular-nums mt-2"
+                                    style={{ color: 'var(--color-primario)' }}
+                                >
+                                    {formatKpiValue(estadisticas[key], format)}
+                                </p>
+                                {hint && (
+                                    <p className="text-[9px] font-bold uppercase tracking-widest theme-text-muted m-0 mt-2 opacity-80">
+                                        {hint}
+                                    </p>
+                                )}
+                            </div>
+                        ))}
+                    </section>
+                )}
 
                 {hayPaneles && (
                     <DashboardToolbar
@@ -290,6 +472,8 @@ export default function AdminDashboard({ auth, ultimas_solicitudes = [], ultimas
                         onOrganize={() => setEditLayoutMode(true)}
                         onConfigure={() => setShowConfig(true)}
                         onAutoAdjust={autoAjustarDisposicion}
+                        preset={activePreset}
+                        onPresetChange={aplicarPreset}
                     />
                 )}
 
