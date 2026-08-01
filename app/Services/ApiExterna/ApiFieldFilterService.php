@@ -59,4 +59,18 @@ class ApiFieldFilterService
 
         return $clientes->map(fn (Cliente $cliente) => $this->filtrarCliente($cliente, $slugs))->all();
     }
+
+    /**
+     * Intersecta payload de escritura con slugs habilitados (+ numero_cliente siempre permitido en create/update).
+     *
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    public function filtrarEscritura(array $datos, ApiAplicacion $aplicacion, ApiRecurso $recurso): array
+    {
+        $slugs = $this->slugsHabilitados($aplicacion, $recurso);
+        $permitidos = array_flip(array_merge($slugs, ['numero_cliente']));
+
+        return array_intersect_key($datos, $permitidos);
+    }
 }

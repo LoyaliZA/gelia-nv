@@ -11,34 +11,43 @@ class GestionarReceptorFiscalService
 {
     public function __construct(
         private GenerarCodigoReceptorFiscalService $codigos,
+        private RegistrarAuditoriaDatosFiscalesService $auditoria,
     ) {}
 
     /**
      * @param  array<string, mixed>  $datos
      */
-    public function crear(array $datos): ReceptorFiscal
+    public function crear(array $datos, bool $auditar = true): ReceptorFiscal
     {
         $payload = $this->normalizarPayload($datos);
         $this->assertMinimoIdentidad($payload);
 
-        return DB::transaction(function () use ($payload) {
-            return ReceptorFiscal::query()->create([
+        return DB::transaction(function () use ($payload, $auditar) {
+            $receptor = ReceptorFiscal::query()->create([
                 ...$payload,
                 'codigo_interno' => $this->codigos->siguiente(),
                 'activo' => $payload['activo'] ?? true,
             ]);
+            if ($auditar) {
+                $this->auditoria->receptorCambiado((int) $receptor->id, 'Alta receptor fiscal', array_keys($payload));
+            }
+
+            return $receptor;
         });
     }
 
     /**
      * @param  array<string, mixed>  $datos
      */
-    public function actualizar(ReceptorFiscal $receptor, array $datos): ReceptorFiscal
+    public function actualizar(ReceptorFiscal $receptor, array $datos, bool $auditar = true): ReceptorFiscal
     {
         $payload = $this->normalizarPayload($datos);
 
-        return DB::transaction(function () use ($receptor, $payload) {
+        return DB::transaction(function () use ($receptor, $payload, $auditar) {
             $receptor->update($payload);
+            if ($auditar) {
+                $this->auditoria->receptorCambiado((int) $receptor->id, 'Actualización receptor fiscal', array_keys($payload));
+            }
 
             return $receptor->fresh();
         });

@@ -22,12 +22,12 @@ use App\Services\Facturas\RepararSolicitudFacturaService;
 use App\Services\Facturas\ResponderSolicitudFacturaService;
 use App\Notifications\AlertaFactura;
 use App\Models\AuditoriaSolicitudFactura;
+use App\Support\Facturas\FacturaStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -356,13 +356,13 @@ class SolicitudFacturaController extends Controller
             return response()->json(['datos' => $factura->datos_fiscales, 'etiquetas' => $etiquetas]);
         }
 
-        if (!$factura->archivo_fiscal_path || !Storage::disk('public')->exists($factura->archivo_fiscal_path)) {
+        if (!$factura->archivo_fiscal_path || !FacturaStorage::exists($factura->archivo_fiscal_path)) {
             return response()->json(['datos' => null, 'etiquetas' => $etiquetas]);
         }
 
         try {
             $extension = strtolower(pathinfo($factura->archivo_fiscal_path, PATHINFO_EXTENSION));
-            $rutaAbsoluta = Storage::disk('public')->path($factura->archivo_fiscal_path);
+            $rutaAbsoluta = FacturaStorage::path($factura->archivo_fiscal_path);
             $datos = $importarService->extraerDesdeRuta($rutaAbsoluta, $extension);
             $factura->update(['datos_fiscales' => $datos]);
 
@@ -392,10 +392,10 @@ class SolicitudFacturaController extends Controller
 
         $datos = $factura->datos_fiscales;
 
-        if (empty($datos) && $factura->archivo_fiscal_path && Storage::disk('public')->exists($factura->archivo_fiscal_path)) {
+        if (empty($datos) && $factura->archivo_fiscal_path && FacturaStorage::exists($factura->archivo_fiscal_path)) {
             try {
                 $extension = strtolower(pathinfo($factura->archivo_fiscal_path, PATHINFO_EXTENSION));
-                $rutaAbsoluta = Storage::disk('public')->path($factura->archivo_fiscal_path);
+                $rutaAbsoluta = FacturaStorage::path($factura->archivo_fiscal_path);
                 $datos = $importarService->extraerDesdeRuta($rutaAbsoluta, $extension);
                 $factura->update(['datos_fiscales' => $datos]);
             } catch (ValidationException $e) {
@@ -438,6 +438,14 @@ class SolicitudFacturaController extends Controller
             'XML' => $f->tiene_xml ? 'Sí' : 'No',
             'Fecha' => $f->created_at?->format('Y-m-d H:i'),
         ]);
+
+        app(\App\Services\Facturas\RegistrarAuditoriaDatosFiscalesService::class)->exportSolicitudes(
+            $filas->count(),
+            [
+                'q' => $request->input('q'),
+                'estado' => $request->input('estado'),
+            ]
+        );
 
         return (new FastExcel($filas))->download('solicitudes-facturas-' . now()->format('Y-m-d') . '.xlsx');
     }

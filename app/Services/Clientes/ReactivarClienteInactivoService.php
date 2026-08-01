@@ -4,6 +4,7 @@ namespace App\Services\Clientes;
 
 use App\Models\CatalogoListaDescuento;
 use App\Models\Cliente;
+use App\Services\Solicitudes\EscalonamientoService;
 
 class ReactivarClienteInactivoService
 {
@@ -50,31 +51,13 @@ class ReactivarClienteInactivoService
 
     private function resolverListaPorMonto(float $monto): int
     {
-        $lista = CatalogoListaDescuento::where('activo', true)
-            ->where('nombre', 'not like', '%COLABORADOR%')
-            ->where('nombre', 'not like', '%PLATAFORMAS%')
-            ->where('monto_requerido', '<=', $monto)
-            ->orderBy('monto_requerido', 'desc')
-            ->first();
+        $listas = CatalogoListaDescuento::where('activo', true)->orderByDesc('monto_requerido')->get();
 
-        if ($lista) {
-            return $lista->id;
-        }
-
-        return (int) CatalogoListaDescuento::where('nombre', 'PUBLICO GENERAL')->value('id');
+        return app(EscalonamientoService::class)->resolverListaPorMontoId($monto, $listas);
     }
 
     private function determinarListaPorMonto(float $monto, $listas): int
     {
-        foreach ($listas as $lista) {
-            if (in_array($lista->nombre, ['COLABORADORES', 'PLATAFORMAS'], true)) {
-                continue;
-            }
-            if ($monto >= $lista->monto_requerido) {
-                return $lista->id;
-            }
-        }
-
-        return $listas->firstWhere('nombre', 'PUBLICO GENERAL')->id;
+        return app(EscalonamientoService::class)->resolverListaPorMontoId($monto, $listas);
     }
 }

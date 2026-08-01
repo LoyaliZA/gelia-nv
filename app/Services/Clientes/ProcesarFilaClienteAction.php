@@ -4,6 +4,7 @@ namespace App\Services\Clientes;
 
 use App\Models\CambioListaImportacionCliente;
 use App\Models\Cliente;
+use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Support\Collection;
 
 class ProcesarFilaClienteAction
@@ -432,15 +433,6 @@ class ProcesarFilaClienteAction
 
     private function determinarListaPorMonto(float $monto, $listas): int
     {
-        foreach ($listas as $lista) {
-            if (in_array($lista->nombre, ['COLABORADORES', 'PLATAFORMAS'])) {
-                continue;
-            }
-            if ($monto >= $lista->monto_requerido) {
-                return $lista->id;
-            }
-        }
-
-        return $this->idListaPublicoGeneral($listas);
+        return app(EscalonamientoService::class)->resolverListaPorMontoId($monto, $listas);
     }
 }

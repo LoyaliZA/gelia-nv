@@ -10,6 +10,7 @@ use App\Models\ReceptorFiscal;
 use App\Models\SolicitudFactura;
 use App\Models\SolicitudFacturaVoucher;
 use App\Models\User;
+use App\Support\Facturas\FacturaStorage;
 use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -73,7 +74,7 @@ class CrearSolicitudFacturaService
             $archivoFiscalPath = null;
             if (isset($datos['archivo_fiscal']) && $datos['archivo_fiscal'] instanceof UploadedFile && $datos['archivo_fiscal']->isValid()) {
                 $datosFiscales = $this->importarDatosFiscales->extraer($datos['archivo_fiscal']);
-                $archivoFiscalPath = $datos['archivo_fiscal']->store('facturas/fiscales', 'public');
+                $archivoFiscalPath = $datos['archivo_fiscal']->store('facturas/fiscales', FacturaStorage::storeDisk());
             }
 
             if (! empty($datos['datos_fiscales']) && is_array($datos['datos_fiscales'])) {
@@ -119,7 +120,7 @@ class CrearSolicitudFacturaService
                 }
                 SolicitudFacturaVoucher::create([
                     'solicitud_factura_id' => $solicitud->id,
-                    'path' => $voucher->store("facturas/vouchers/{$solicitud->id}", 'public'),
+                    'path' => $voucher->store("facturas/vouchers/{$solicitud->id}", FacturaStorage::storeDisk()),
                     'nombre_original' => $voucher->getClientOriginalName(),
                     'mime' => $voucher->getMimeType(),
                     'orden' => $orden++,

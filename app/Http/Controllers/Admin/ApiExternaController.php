@@ -249,7 +249,16 @@ class ApiExternaController extends Controller
             'habilitado' => 'required|boolean',
         ]);
 
+        $campo->loadMissing('campo');
         $campo->update($validated);
+
+        if ($campo->campo?->es_sensible) {
+            app(\App\Services\Facturas\RegistrarAuditoriaDatosFiscalesService::class)->apiCampoSensible(
+                (int) $campo->api_aplicacion_id,
+                (string) $campo->campo->slug,
+                (bool) $validated['habilitado']
+            );
+        }
 
         return redirect()->back()->with('success', 'Campo de aplicación actualizado.');
     }

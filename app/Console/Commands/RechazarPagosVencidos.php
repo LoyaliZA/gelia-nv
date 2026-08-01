@@ -10,6 +10,7 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\Cliente;
 use App\Models\User;
 use App\Services\Clientes\RegistrarHistorialMontoClienteService;
+use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -38,7 +39,9 @@ class RechazarPagosVencidos extends Command
             return;
         }
 
-        $listas = CatalogoListaDescuento::orderBy('monto_requerido', 'desc')->get();
+        $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
+            ->orderBy('monto_requerido', 'desc')
+            ->get();
         $encargadas = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
         $contador = 0;
 
@@ -144,12 +147,6 @@ class RechazarPagosVencidos extends Command
 
     private function determinarListaPorMonto(float $monto, $listas): int
     {
-        foreach ($listas as $lista) {
-            if ($lista->nombre === 'COLABORADORES') continue;
-            if ($monto >= $lista->monto_requerido) {
-                return $lista->id;
-            }
-        }
-        return $listas->where('nombre', 'PUBLICO GENERAL')->first()->id ?? 1;
+        return app(EscalonamientoService::class)->resolverListaPorMontoId($monto, $listas);
     }
 }

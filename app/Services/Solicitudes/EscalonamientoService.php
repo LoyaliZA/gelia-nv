@@ -48,6 +48,47 @@ class EscalonamientoService
         return round($faltanteNeto / $multiplicador, 2);
     }
 
+    public function umbralEfectivo(CatalogoListaDescuento $lista): float
+    {
+        return $this->calcularMontoBrutoNecesario(
+            (float) $lista->monto_requerido,
+            $this->obtenerPorcentajeLista($lista)
+        );
+    }
+
+    /**
+     * Lista más alta cuyo umbral efectivo (monto_requerido / (1 − %)) es ≤ $monto.
+     *
+     * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
+     */
+    public function resolverListaPorMonto(float $monto, Collection|array $catalogoListas): ?CatalogoListaDescuento
+    {
+        $listasValidas = $this->filtrarListasValidas($catalogoListas);
+
+        return $listasValidas->first(fn ($l) => $monto >= $this->umbralEfectivo($l));
+    }
+
+    /**
+     * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
+     */
+    public function resolverListaPorMontoId(float $monto, Collection|array $catalogoListas): int
+    {
+        $lista = $this->resolverListaPorMonto($monto, $catalogoListas);
+        if ($lista) {
+            return (int) $lista->id;
+        }
+
+        $pg = collect($catalogoListas)->first(
+            fn ($l) => strtoupper((string) $l->nombre) === 'PUBLICO GENERAL'
+        );
+
+        if ($pg) {
+            return (int) $pg->id;
+        }
+
+        return (int) (CatalogoListaDescuento::where('nombre', 'PUBLICO GENERAL')->value('id') ?? 1);
+    }
+
     /**
      * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
      */
@@ -59,65 +100,66 @@ class EscalonamientoService
         ?float $requisitoListaActual = null
     ): array {
         $listas = collect($catalogoListas);
-
-        $listasValidas = $listas
-            ->filter(fn ($l) => !str_contains(strtoupper($l->nombre), 'COLABORADOR')
-                && !str_contains(strtoupper($l->nombre), 'PLATAFORMAS'))
-            ->sortByDesc(fn ($l) => (float) $l->monto_requerido)
-            ->values();
+        $listasValidas = $this->filtrarListasValidas($listas);
 
         $totalProyectadoBruto = round($montoHistorico + $montoCotizado, 2);
 
-        $listaCalificadaBruto = $this->buscarListaCalificada($listasValidas, $totalProyectadoBruto);
+        $listaCalificadaBruto = $this->buscarListaCalificadaPorCatalogo($listasValidas, $totalProyectadoBruto);
+        $listaCalificadaEfectiva = $this->resolverListaPorMonto($totalProyectadoBruto, $listasValidas);
 
         $requisitoActual = $requisitoListaActual ?? 0;
-        $esAscenso = $listaCalificadaBruto
-            && (float) $listaCalificadaBruto->monto_requerido > $requisitoActual;
+        $esAscenso = $listaCalificadaEfectiva
+            && (float) $listaCalificadaEfectiva->monto_requerido > $requisitoActual;
 
-        // Anticipación: descuento según la lista que alcanza el bruto (independiente de la lista actual del cliente)
-        $listaAnticipada = $listaCalificadaBruto;
-
+        $listaAnticipada = $listaCalificadaEfectiva;
         $porcentajeDescuento = $this->obtenerPorcentajeLista($listaAnticipada);
+        $umbralEfectivoAnticipada = $listaAnticipada ? $this->umbralEfectivo($listaAnticipada) : 0.0;
 
         $montoFinalTentativo = $this->calcularMontoFinalTentativo($montoCotizado, $porcentajeDescuento);
         $totalProyectadoNeto = round($montoHistorico + $montoFinalTentativo, 2);
 
-        $listaCalificadaNeto = $this->buscarListaCalificada($listasValidas, $totalProyectadoNeto);
+        $listaCalificadaNeto = $this->resolverListaPorMonto($totalProyectadoNeto, $listasValidas);
 
-        $listaSiguienteBruto = $this->buscarListaSiguiente($listasValidas, $totalProyectadoBruto);
-        $listaSiguienteNeto = $this->buscarListaSiguiente($listasValidas, $totalProyectadoNeto);
-
-        $faltanteNetoSiguiente = $listaSiguienteNeto
-            ? max(0, round((float) $listaSiguienteNeto->monto_requerido - $totalProyectadoNeto, 2))
-            : 0.0;
-
-        $porcentajeListaSiguiente = $listaSiguienteNeto
-            ? $this->obtenerPorcentajeLista($listas->first(fn ($l) => (int) $l->id === (int) $listaSiguienteNeto->id))
+        $listaSiguienteEfectiva = $this->buscarListaSiguientePorUmbralEfectivo($listasValidas, $totalProyectadoBruto);
+        $porcentajeListaSiguiente = $listaSiguienteEfectiva
+            ? $this->obtenerPorcentajeLista($listaSiguienteEfectiva)
             : $porcentajeDescuento;
 
-        $montoBrutoParaSiguiente = $this->calcularMontoBrutoNecesario(
-            $faltanteNetoSiguiente,
-            $porcentajeListaSiguiente
-        );
+        $umbralEfectivoSiguiente = $listaSiguienteEfectiva
+            ? $this->umbralEfectivo($listaSiguienteEfectiva)
+            : 0.0;
 
-        $mantieneListaAnticipada = true;
-        $faltanteNetoMantener = 0.0;
-        $montoBrutoParaMantener = 0.0;
-        $brutoCalificaNetoNo = false;
+        $faltanteBrutoParaSiguiente = $listaSiguienteEfectiva
+            ? max(0, round($umbralEfectivoSiguiente - $totalProyectadoBruto, 2))
+            : 0.0;
 
-        if ($listaAnticipada) {
-            $umbralAnticipado = (float) $listaAnticipada->monto_requerido;
-            $mantieneListaAnticipada = $totalProyectadoNeto >= $umbralAnticipado;
-            $faltanteNetoMantener = max(0, round($umbralAnticipado - $totalProyectadoNeto, 2));
-            $montoBrutoParaMantener = $this->calcularMontoBrutoNecesario(
-                $faltanteNetoMantener,
-                $porcentajeDescuento
-            );
-            $brutoCalificaNetoNo = $totalProyectadoBruto >= $umbralAnticipado && !$mantieneListaAnticipada;
+        $faltanteNetoSiguiente = $listaSiguienteEfectiva
+            ? max(0, round((float) $listaSiguienteEfectiva->monto_requerido - $totalProyectadoNeto, 2))
+            : 0.0;
+
+        $montoBrutoParaSiguiente = $faltanteBrutoParaSiguiente;
+
+        $casiAlcanzaSiguiente = false;
+        $listaCasiAlcanzada = null;
+        $faltanteBrutoCasi = 0.0;
+        $umbralEfectivoCasi = 0.0;
+
+        if ($listaCalificadaBruto
+            && (!$listaCalificadaEfectiva
+                || (float) $listaCalificadaBruto->monto_requerido > (float) $listaCalificadaEfectiva->monto_requerido)
+        ) {
+            $casiAlcanzaSiguiente = true;
+            $listaCasiAlcanzada = $listaCalificadaBruto;
+            $umbralEfectivoCasi = $this->umbralEfectivo($listaCalificadaBruto);
+            $faltanteBrutoCasi = max(0, round($umbralEfectivoCasi - $totalProyectadoBruto, 2));
         }
 
+        $mantieneListaAnticipada = $listaAnticipada
+            ? $totalProyectadoBruto >= $umbralEfectivoAnticipada
+            : true;
+
         $listaSolicitadaIdEfectivo = $listaSolicitadaId
-            ?: ($esAscenso && $listaCalificadaBruto ? (int) $listaCalificadaBruto->id : null);
+            ?: ($esAscenso && $listaCalificadaEfectiva ? (int) $listaCalificadaEfectiva->id : null);
 
         $desgloseListas = $listasValidas
             ->sortBy(fn ($l) => (float) $l->monto_requerido)
@@ -125,7 +167,8 @@ class EscalonamientoService
                 'id' => $l->id,
                 'nombre' => $l->nombre,
                 'monto_requerido' => (float) $l->monto_requerido,
-                'cubre' => $totalProyectadoNeto >= (float) $l->monto_requerido,
+                'umbral_efectivo' => $this->umbralEfectivo($l),
+                'cubre' => $totalProyectadoBruto >= $this->umbralEfectivo($l),
             ])
             ->values()
             ->all();
@@ -139,32 +182,55 @@ class EscalonamientoService
             'total_proyectado_bruto' => $totalProyectadoBruto,
             'total_proyectado_neto' => $totalProyectadoNeto,
             'lista_calificada_bruto' => $listaCalificadaBruto,
+            'lista_calificada_efectiva' => $listaCalificadaEfectiva,
             'lista_calificada_neto' => $listaCalificadaNeto,
             'lista_anticipada' => $listaAnticipada,
             'lista_solicitada_id_efectivo' => $listaSolicitadaIdEfectivo,
-            'lista_siguiente_bruto' => $listaSiguienteBruto,
-            'lista_siguiente_neto' => $listaSiguienteNeto,
+            'lista_siguiente_bruto' => $listaSiguienteEfectiva,
+            'lista_siguiente_neto' => $listaSiguienteEfectiva,
+            'lista_siguiente_efectiva' => $listaSiguienteEfectiva,
             'faltante_neto_siguiente' => $faltanteNetoSiguiente,
+            'faltante_bruto_para_siguiente' => $faltanteBrutoParaSiguiente,
             'monto_bruto_para_siguiente' => $montoBrutoParaSiguiente,
+            'umbral_efectivo_anticipada' => $umbralEfectivoAnticipada,
+            'umbral_efectivo_siguiente' => $umbralEfectivoSiguiente,
             'mantiene_lista_anticipada' => $mantieneListaAnticipada,
             'mantiene_lista_solicitada' => $mantieneListaAnticipada,
-            'faltante_neto_mantener' => $faltanteNetoMantener,
-            'monto_bruto_para_mantener' => $montoBrutoParaMantener,
-            'bruto_califica_neto_no' => $brutoCalificaNetoNo,
+            'faltante_neto_mantener' => 0.0,
+            'monto_bruto_para_mantener' => $faltanteBrutoCasi,
+            'casi_alcanza_siguiente' => $casiAlcanzaSiguiente,
+            'lista_casi_alcanzada' => $listaCasiAlcanzada,
+            'faltante_bruto_casi' => $faltanteBrutoCasi,
+            'umbral_efectivo_casi' => $umbralEfectivoCasi,
+            // Compat: mismo significado que casi_alcanza_siguiente
+            'bruto_califica_neto_no' => $casiAlcanzaSiguiente,
             'es_ascenso' => $esAscenso,
             'desglose_listas' => $desgloseListas,
         ];
     }
 
-    private function buscarListaCalificada(Collection $listasValidas, float $total): ?CatalogoListaDescuento
+    /**
+     * @param  Collection<int, CatalogoListaDescuento>|array  $catalogoListas
+     * @return Collection<int, CatalogoListaDescuento>
+     */
+    public function filtrarListasValidas(Collection|array $catalogoListas): Collection
+    {
+        return collect($catalogoListas)
+            ->filter(fn ($l) => !str_contains(strtoupper($l->nombre), 'COLABORADOR')
+                && !str_contains(strtoupper($l->nombre), 'PLATAFORMAS'))
+            ->sortByDesc(fn ($l) => (float) $l->monto_requerido)
+            ->values();
+    }
+
+    private function buscarListaCalificadaPorCatalogo(Collection $listasValidas, float $total): ?CatalogoListaDescuento
     {
         return $listasValidas->first(fn ($l) => $total >= (float) $l->monto_requerido);
     }
 
-    private function buscarListaSiguiente(Collection $listasValidas, float $total): ?CatalogoListaDescuento
+    private function buscarListaSiguientePorUmbralEfectivo(Collection $listasValidas, float $total): ?CatalogoListaDescuento
     {
         return $listasValidas
-            ->sortBy(fn ($l) => (float) $l->monto_requerido)
-            ->first(fn ($l) => (float) $l->monto_requerido > $total);
+            ->sortBy(fn ($l) => $this->umbralEfectivo($l))
+            ->first(fn ($l) => $this->umbralEfectivo($l) > $total);
     }
 }

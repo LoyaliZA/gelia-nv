@@ -179,12 +179,13 @@ class CancelarSolicitudService
 
     private function recalcularListaCliente(Cliente $cliente): void
     {
-        $listaCalificada = CatalogoListaDescuento::where('activo', true)
-            ->where('nombre', 'not like', '%COLABORADOR%')
-            ->where('nombre', 'not like', '%PLATAFORMAS%')
-            ->where('monto_requerido', '<=', $cliente->monto_venta_actual)
-            ->orderBy('monto_requerido', 'desc')
-            ->first();
+        $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
+            ->where('activo', true)
+            ->orderByDesc('monto_requerido')
+            ->get();
+
+        $listaCalificada = app(EscalonamientoService::class)
+            ->resolverListaPorMonto((float) $cliente->monto_venta_actual, $listas);
 
         $cliente->lista_actual_id = $listaCalificada ? $listaCalificada->id : null;
     }

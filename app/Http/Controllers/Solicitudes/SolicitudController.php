@@ -14,6 +14,7 @@ use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use App\Services\Solicitudes\ExportarReporteSolicitudesService;
 use App\Services\Clientes\RegistrarHistorialMontoClienteService;
 use App\Services\Clientes\ReactivarClienteInactivoService;
+use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use App\Models\SolicitudTag;
@@ -197,18 +198,22 @@ class SolicitudController extends Controller
                         : (float) $cliente->monto_venta_actual;
                     $totalProyectado = $montoHistoricoBase + (float) $montoFinal;
 
-                    $listaCalificada = CatalogoListaDescuento::where('activo', true)
-                        ->where('nombre', 'not like', '%COLABORADOR%')
-                        ->where('nombre', 'not like', '%PLATAFORMAS%')
-                        ->where('monto_requerido', '<=', $totalProyectado)
-                        ->orderBy('monto_requerido', 'desc')
-                        ->first();
+                    $listasActivas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
+                        ->where('activo', true)
+                        ->orderByDesc('monto_requerido')
+                        ->get();
+                    $escalonamientoSvc = app(EscalonamientoService::class);
+                    $listaCalificada = $escalonamientoSvc->resolverListaPorMonto($totalProyectado, $listasActivas);
 
                     if ($listaCalificada) {
                         // 2. Evaluación de Downgrade (Falta de Pago)
                         if ($solicitud->catalogo_lista_descuento_id) {
-                            $listaSolicitada = CatalogoListaDescuento::find($solicitud->catalogo_lista_descuento_id);
-                            if ($listaSolicitada && $totalProyectado < $listaSolicitada->monto_requerido) {
+                            $listaSolicitada = $listasActivas->firstWhere('id', $solicitud->catalogo_lista_descuento_id)
+                                ?? CatalogoListaDescuento::with('porcentajeEscalonamiento')->find($solicitud->catalogo_lista_descuento_id);
+                            $umbralSolicitada = $listaSolicitada
+                                ? $escalonamientoSvc->umbralEfectivo($listaSolicitada)
+                                : 0.0;
+                            if ($listaSolicitada && $totalProyectado < $umbralSolicitada) {
                                 $mensajeAuditoria = "ALERTA DE PAGO: Pago final de $" . number_format($montoFinal, 2) . " es insuficiente para la lista {$listaSolicitada->nombre}. El cliente califica para: {$listaCalificada->nombre}.";
                                 $estadoNuevoId = $idIncorrecta;
                                 $esAlertaFaltaPago = true;
@@ -333,12 +338,12 @@ class SolicitudController extends Controller
             if ($cliente) {
                 $totalProyectado = ($cliente->monto_venta_actual ?? 0) + $solicitud->monto_cotizado;
 
-                $listaCalificada = CatalogoListaDescuento::where('activo', true)
-                    ->where('nombre', 'not like', '%COLABORADOR%')
-                    ->where('nombre', 'not like', '%PLATAFORMAS%')
-                    ->where('monto_requerido', '<=', $totalProyectado)
-                    ->orderBy('monto_requerido', 'desc')
-                    ->first();
+                $listasActivas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
+                    ->where('activo', true)
+                    ->orderByDesc('monto_requerido')
+                    ->get();
+                $listaCalificada = app(EscalonamientoService::class)
+                    ->resolverListaPorMonto($totalProyectado, $listasActivas);
 
                 if ($listaCalificada) {
                     $solicitud->catalogo_lista_descuento_id = $listaCalificada->id;
@@ -1008,14 +1013,14 @@ class SolicitudController extends Controller
      */
     private function recalcularListaCliente(Cliente $cliente): void
     {
-        $listaCalificada = CatalogoListaDescuento::where('activo', true)
-            ->where('nombre', 'not like', '%COLABORADOR%')
-            ->where('nombre', 'not like', '%PLATAFORMAS%')
-            ->where('monto_requerido', '<=', $cliente->monto_venta_actual)
-            ->orderBy('monto_requerido', 'desc')
-            ->first();
+        $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
+            ->where('activo', true)
+            ->orderByDesc('monto_requerido')
+            ->get();
 
-        // Si no califica para ninguna por el monto (ej. monto 0), se asigna null o se maneja a Público General.
+        $listaCalificada = app(EscalonamientoService::class)
+            ->resolverListaPorMonto((float) $cliente->monto_venta_actual, $listas);
+
         $cliente->lista_actual_id = $listaCalificada ? $listaCalificada->id : null;
     }
 

@@ -60,6 +60,11 @@ class ApiPermisoService
         return $camposGlobales->filter(function (ApiCampoRecurso $campo) use ($overrides) {
             $override = $overrides->get($campo->id);
 
+            // Sensibles: solo con opt-in explícito por aplicación.
+            if ($campo->es_sensible) {
+                return $override !== null && $override->habilitado;
+            }
+
             if ($override === null) {
                 return true;
             }
@@ -70,10 +75,10 @@ class ApiPermisoService
 
     public function sincronizarPermisosAplicacion(ApiAplicacion $aplicacion): void
     {
-        $recursos = ApiRecurso::where('activo', true)->get();
+        $recursos = ApiRecurso::where('activo', true)->with('campos')->get();
 
         foreach ($recursos as $recurso) {
-            $permiso = ApiAplicacionPermiso::firstOrCreate(
+            ApiAplicacionPermiso::firstOrCreate(
                 [
                     'api_aplicacion_id' => $aplicacion->id,
                     'api_recurso_id' => $recurso->id,
@@ -91,7 +96,8 @@ class ApiPermisoService
                         'api_aplicacion_id' => $aplicacion->id,
                         'api_campo_recurso_id' => $campo->id,
                     ],
-                    ['habilitado' => $campo->habilitado_global]
+                    // Apps nuevas: sensibles apagados hasta opt-in en admin.
+                    ['habilitado' => $campo->es_sensible ? false : $campo->habilitado_global]
                 );
             }
         }

@@ -210,11 +210,14 @@ class StoreSolicitudRequest extends FormRequest
                         $requisitoActual
                     );
 
-                    if ($escalonamiento['bruto_califica_neto_no']
+                    if (!empty($escalonamiento['casi_alcanza_siguiente'])
                         && !filter_var($this->input('confirmo_informacion_escalonamiento'), FILTER_VALIDATE_BOOLEAN)) {
+                        $listaCasi = $escalonamiento['lista_casi_alcanzada'];
+                        $nombreCasi = $listaCasi?->nombre ?? 'el siguiente nivel';
+                        $faltante = number_format((float) ($escalonamiento['faltante_bruto_casi'] ?? 0), 2);
                         $validator->errors()->add(
                             'confirmo_informacion_escalonamiento',
-                            'Debes confirmar que informaste al cliente el monto bruto necesario para mantener la lista con el descuento aplicado.'
+                            "Debes confirmar que informaste al cliente que no asciende a {$nombreCasi} y que faltan \${$faltante} brutos para alcanzar ese nivel de forma estable."
                         );
                     }
                 }

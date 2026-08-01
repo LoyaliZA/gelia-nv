@@ -110,4 +110,64 @@ class ApiExternaTest extends TestCase
 
         $response->assertOk();
     }
+
+    public function test_app_nueva_no_recibe_campos_fiscales_sensibles(): void
+    {
+        $lista = \App\Models\CatalogoListaDescuento::create([
+            'nombre' => 'Lista Test',
+            'monto_requerido' => 0,
+            'activo' => true,
+        ]);
+
+        Cliente::create([
+            'numero_cliente' => 'C-FIS-001',
+            'nombre' => 'Cliente Fiscal',
+            'rfc' => 'XAXX010101000',
+            'nombre_razon_social' => 'Razon SA',
+            'lista_actual_id' => $lista->id,
+        ]);
+
+        Sanctum::actingAs($this->aplicacion, ['*']);
+
+        $response = $this->getJson('/api/v1/clientes/C-FIS-001', ['Accept' => 'application/json']);
+
+        $response->assertOk()
+            ->assertJsonPath('data.numero_cliente', 'C-FIS-001')
+            ->assertJsonPath('data.nombre', 'Cliente Fiscal')
+            ->assertJsonMissingPath('data.rfc')
+            ->assertJsonMissingPath('data.nombre_razon_social')
+            ->assertJsonMissingPath('data.regimen_fiscal');
+    }
+
+    public function test_app_con_override_sensible_recibe_rfc(): void
+    {
+        $lista = \App\Models\CatalogoListaDescuento::create([
+            'nombre' => 'Lista Test',
+            'monto_requerido' => 0,
+            'activo' => true,
+        ]);
+
+        Cliente::create([
+            'numero_cliente' => 'C-FIS-002',
+            'nombre' => 'Cliente Con Rfc',
+            'rfc' => 'XAXX010101000',
+            'lista_actual_id' => $lista->id,
+        ]);
+
+        $campoRfc = \App\Models\ApiCampoRecurso::where('slug', 'rfc')->firstOrFail();
+        \App\Models\ApiAplicacionCampo::updateOrCreate(
+            [
+                'api_aplicacion_id' => $this->aplicacion->id,
+                'api_campo_recurso_id' => $campoRfc->id,
+            ],
+            ['habilitado' => true]
+        );
+
+        Sanctum::actingAs($this->aplicacion, ['*']);
+
+        $response = $this->getJson('/api/v1/clientes/C-FIS-002', ['Accept' => 'application/json']);
+
+        $response->assertOk()
+            ->assertJsonPath('data.rfc', 'XAXX010101000');
+    }
 }

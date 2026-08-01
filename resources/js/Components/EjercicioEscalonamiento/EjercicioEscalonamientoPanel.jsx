@@ -28,8 +28,8 @@ const FilaMontoEscalonamiento = ({ etiqueta, valor, destacado = false, valorClas
 );
 
 const TarjetaDesgloseNivel = ({ item, esProyectada }) => {
-    const califica = item.califica_neto;
-    const calificaBrutoSolo = item.califica_bruto && !item.califica_neto;
+    const califica = item.califica_efectivo ?? item.califica_neto;
+    const calificaBrutoSolo = item.califica_bruto && !califica;
 
     return (
         <div className={`rounded-2xl border-2 p-4 md:p-5 flex flex-col gap-3 h-full min-w-0 ${
@@ -47,7 +47,10 @@ const TarjetaDesgloseNivel = ({ item, esProyectada }) => {
                         {item.nombre.replace('MAYOREO ', '')}
                     </p>
                     <p className="text-xs font-bold theme-text-main mt-1 m-0">
-                        Umbral {fmtMontoEscalonamiento(item.monto_requerido)}
+                        Catálogo {fmtMontoEscalonamiento(item.monto_requerido)}
+                    </p>
+                    <p className="text-xs font-bold theme-text-muted mt-0.5 m-0">
+                        Efectivo {fmtMontoEscalonamiento(item.umbral_efectivo ?? item.monto_requerido)}
                     </p>
                 </div>
                 <span className="text-xs font-black tabular-nums px-2.5 py-1 rounded-lg bg-black/10 dark:bg-white/10 theme-text-main shrink-0">
@@ -64,8 +67,8 @@ const TarjetaDesgloseNivel = ({ item, esProyectada }) => {
             <div className="space-y-0.5 pt-1 border-t theme-border flex-1">
                 <FilaMontoEscalonamiento etiqueta="Cotización neta" valor={item.monto_cotizado_neto} compacto />
                 <FilaMontoEscalonamiento
-                    etiqueta="Total neto acum."
-                    valor={item.total_proyectado_neto}
+                    etiqueta="Total bruto acum."
+                    valor={item.total_proyectado_bruto}
                     compacto
                     valorClassName={califica ? 'text-emerald-600 dark:text-emerald-400 font-black' : ''}
                 />
@@ -79,20 +82,17 @@ const TarjetaDesgloseNivel = ({ item, esProyectada }) => {
                         : 'bg-black/5 dark:bg-white/5 theme-text-muted'
             }`}>
                 {califica ? (
-                    <><CheckCircle2 className="w-4 h-4 shrink-0" /> Califica neto</>
+                    <><CheckCircle2 className="w-4 h-4 shrink-0" /> Califica estable</>
                 ) : calificaBrutoSolo ? (
-                    <><AlertTriangle className="w-4 h-4 shrink-0" /> Bruto sí, neto no</>
+                    <><AlertTriangle className="w-4 h-4 shrink-0" /> Casi llega</>
                 ) : (
                     <><AlertTriangle className="w-4 h-4 shrink-0 opacity-70" /> No califica</>
                 )}
             </div>
 
-            {!item.califica_neto && item.faltante_neto > 0 && (
+            {!califica && (item.faltante_bruto || item.monto_bruto_adicional) > 0 && (
                 <p className="text-xs font-bold text-amber-800 dark:text-amber-300 leading-snug m-0">
-                    Faltan {fmtMontoEscalonamiento(item.faltante_neto)} netos
-                    {item.monto_bruto_adicional > 0 && (
-                        <> (~{fmtMontoEscalonamiento(item.monto_bruto_adicional)} bruto)</>
-                    )}
+                    Faltan {fmtMontoEscalonamiento(item.faltante_bruto || item.monto_bruto_adicional)} brutos
                 </p>
             )}
         </div>
@@ -266,9 +266,9 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                 const listaProyectadaId = analisis.listaAnticipada?.id;
                 const tieneCotizacion = cliente.monto_cotizado_input && parseFloat(cliente.monto_cotizado_input) > 0;
                 const mostrarAlertas = tieneCotizacion && (
-                    (analisis.brutoCalificaNetoNo && analisis.listaAnticipada)
-                    || (analisis.mantieneListaAnticipada && analisis.listaAnticipada && !analisis.listaAnticipada.nombre.toUpperCase().includes('PUBLICO'))
-                    || (analisis.listaSiguienteNeto && analisis.faltanteNetoSiguiente > 0 && !analisis.brutoCalificaNetoNo && analisis.listaSiguienteNeto.id !== analisis.listaAnticipada?.id)
+                    (analisis.casiAlcanzaSiguiente && analisis.listaCasiAlcanzada)
+                    || (analisis.mantieneListaAnticipada && analisis.listaAnticipada && !analisis.listaAnticipada.nombre.toUpperCase().includes('PUBLICO') && !analisis.casiAlcanzaSiguiente)
+                    || (analisis.listaSiguienteEfectiva && analisis.faltanteBrutoParaSiguiente > 0 && !analisis.casiAlcanzaSiguiente && analisis.listaSiguienteEfectiva.id !== analisis.listaAnticipada?.id)
                 );
 
                 return (
@@ -377,7 +377,7 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                                         <div className={colNivelesClass}>
                                             <PanelSeccion
                                                 titulo="Desglose Plata · Oro · Diamante"
-                                                subtitulo="Simulación con el % de descuento de cada lista aplicado al monto cotizado"
+                                                subtitulo="Simulación con umbral efectivo (monto_requerido ÷ (1 − %)) por lista"
                                             >
                                                 <div className={gridDesgloseClass}>
                                                     {desgloseNiveles.map(item => (
@@ -400,30 +400,29 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                                             Estado del escalonamiento
                                         </p>
                                         <div className={`grid gap-3 ${isModal ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'}`}>
-                                            {analisis.brutoCalificaNetoNo && analisis.listaAnticipada && (
+                                            {analisis.casiAlcanzaSiguiente && analisis.listaCasiAlcanzada && (
                                                 <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/35 flex gap-2.5 items-start">
                                                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                                     <p className="text-sm font-bold text-amber-900 dark:text-amber-200 leading-snug m-0">
-                                                        Faltan {fmtMontoEscalonamiento(analisis.faltanteNetoMantener)} netos para {analisis.listaAnticipada.nombre.replace('MAYOREO ', '')}
-                                                        {analisis.montoBrutoParaMantener > 0 && (
-                                                            <> (~{fmtMontoEscalonamiento(analisis.montoBrutoParaMantener)} bruto)</>
-                                                        )}
+                                                        No asciende a {analisis.listaCasiAlcanzada.nombre.replace('MAYOREO ', '')}.
+                                                        Faltan {fmtMontoEscalonamiento(analisis.faltanteBrutoCasi)} brutos
+                                                        (umbral {fmtMontoEscalonamiento(analisis.umbralEfectivoCasi)})
                                                     </p>
                                                 </div>
                                             )}
-                                            {analisis.mantieneListaAnticipada && analisis.listaAnticipada && !analisis.listaAnticipada.nombre.toUpperCase().includes('PUBLICO') && (
+                                            {analisis.mantieneListaAnticipada && analisis.listaAnticipada && !analisis.listaAnticipada.nombre.toUpperCase().includes('PUBLICO') && !analisis.casiAlcanzaSiguiente && (
                                                 <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/35 flex gap-2.5 items-center">
                                                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                                                     <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300 m-0">
-                                                        Pago final mantiene {analisis.listaAnticipada.nombre.replace('MAYOREO ', '')}
+                                                        Nivel estable: {analisis.listaAnticipada.nombre.replace('MAYOREO ', '')}
                                                     </p>
                                                 </div>
                                             )}
-                                            {analisis.listaSiguienteNeto && analisis.faltanteNetoSiguiente > 0 && !analisis.brutoCalificaNetoNo && analisis.listaSiguienteNeto.id !== analisis.listaAnticipada?.id && (
+                                            {analisis.listaSiguienteEfectiva && analisis.faltanteBrutoParaSiguiente > 0 && !analisis.casiAlcanzaSiguiente && analisis.listaSiguienteEfectiva.id !== analisis.listaAnticipada?.id && (
                                                 <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/35 flex gap-2.5 items-start">
                                                     <TrendingUp className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                                                     <p className="text-sm font-bold text-blue-900 dark:text-blue-200 leading-snug m-0">
-                                                        Siguiente: {analisis.listaSiguienteNeto.nombre.replace('MAYOREO ', '')}. Faltan {fmtMontoEscalonamiento(analisis.faltanteNetoSiguiente)} netos (~{fmtMontoEscalonamiento(analisis.montoBrutoParaSiguiente)} bruto)
+                                                        Siguiente: {analisis.listaSiguienteEfectiva.nombre.replace('MAYOREO ', '')}. Faltan {fmtMontoEscalonamiento(analisis.faltanteBrutoParaSiguiente)} brutos
                                                     </p>
                                                 </div>
                                             )}

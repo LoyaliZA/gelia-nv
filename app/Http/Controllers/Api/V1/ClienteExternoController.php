@@ -29,13 +29,18 @@ class ClienteExternoController extends Controller
 
         $termino = $request->query('q', '');
         $perPage = min((int) $request->query('per_page', 25), 100);
+        $slugs = $this->fieldFilterService->slugsHabilitados($aplicacion, $recurso);
+        $puedeBuscarRazon = in_array('nombre_razon_social', $slugs, true);
 
         $query = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])
-            ->when($termino, function ($q, $termino) {
-                $q->where(function ($inner) use ($termino) {
+            ->when($termino, function ($q) use ($termino, $puedeBuscarRazon) {
+                $q->where(function ($inner) use ($termino, $puedeBuscarRazon) {
                     $inner->where('numero_cliente', 'like', "%{$termino}%")
-                        ->orWhere('nombre', 'like', "%{$termino}%")
-                        ->orWhere('nombre_razon_social', 'like', "%{$termino}%");
+                        ->orWhere('nombre', 'like', "%{$termino}%");
+
+                    if ($puedeBuscarRazon) {
+                        $inner->orWhere('nombre_razon_social', 'like', "%{$termino}%");
+                    }
                 });
             })
             ->orderBy('numero_cliente');
@@ -86,7 +91,8 @@ class ClienteExternoController extends Controller
         /** @var ApiRecurso $recurso */
         $recurso = $request->attributes->get('api_recurso');
 
-        $cliente = Cliente::create($request->validated());
+        $datos = $this->fieldFilterService->filtrarEscritura($request->validated(), $aplicacion, $recurso);
+        $cliente = Cliente::create($datos);
 
         $slugs = $this->fieldFilterService->slugsHabilitados($aplicacion, $recurso);
 
@@ -108,7 +114,8 @@ class ClienteExternoController extends Controller
             return response()->json(['message' => 'Cliente no encontrado.'], 404);
         }
 
-        $cliente->update($request->validated());
+        $datos = $this->fieldFilterService->filtrarEscritura($request->validated(), $aplicacion, $recurso);
+        $cliente->update($datos);
 
         $slugs = $this->fieldFilterService->slugsHabilitados($aplicacion, $recurso);
 

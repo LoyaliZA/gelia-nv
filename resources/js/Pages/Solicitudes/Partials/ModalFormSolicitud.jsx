@@ -152,29 +152,33 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setData('monto_final_tentativo', analisis.montoFinalTentativo);
         setData('total_proyectado_neto', analisis.totalProyectadoNeto);
 
-        if (analisis.esAscenso && analisis.listaCalificadaBruto) {
-            const reqObjetivo = parseFloat(analisis.listaCalificadaBruto.monto_requerido);
+        if (analisis.esAscenso && analisis.listaCalificadaEfectiva) {
+            const reqObjetivo = parseFloat(analisis.listaCalificadaEfectiva.monto_requerido);
             const listaSeleccionada = buscarListaPorId(listas, data.catalogo_lista_descuento_id);
             const reqSeleccionada = listaSeleccionada ? parseFloat(listaSeleccionada.monto_requerido) : -1;
 
             if (reqObjetivo > reqSeleccionada) {
-                setData('catalogo_lista_descuento_id', String(analisis.listaCalificadaBruto.id));
+                setData('catalogo_lista_descuento_id', String(analisis.listaCalificadaEfectiva.id));
             }
         }
 
-        if (analisis.esAscenso) {
+        if (analisis.casiAlcanzaSiguiente && analisis.listaCasiAlcanzada) {
             setAlertaLista({
-                mensaje: `¡Total proyectado alcanza nivel ${analisis.listaCalificadaBruto.nombre}!`
+                mensaje: `No asciende a ${analisis.listaCasiAlcanzada.nombre}: faltan ${fmtMonto(analisis.faltanteBrutoCasi)} brutos`
+            });
+        } else if (analisis.esAscenso && analisis.listaCalificadaEfectiva) {
+            setAlertaLista({
+                mensaje: `¡Total proyectado alcanza nivel ${analisis.listaCalificadaEfectiva.nombre}!`
             });
         } else if (analisis.listaAnticipada && analisis.mantieneListaAnticipada) {
             setAlertaLista({
-                mensaje: `Pago final mantiene nivel ${analisis.listaAnticipada.nombre}`
+                mensaje: `Nivel estable: ${analisis.listaAnticipada.nombre}`
             });
         } else {
             setAlertaLista(null);
         }
 
-        if (analisis.mantieneListaAnticipada) {
+        if (!analisis.casiAlcanzaSiguiente) {
             setData('confirmo_informacion_escalonamiento', false);
         }
     }, [data.monto_cotizado, data.catalogo_lista_descuento_id, data.catalogo_proceso_id, infoCliente, listas]);
@@ -236,8 +240,8 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     };
 
     const requiereConfirmacionEscalonamiento = analisisFinanciero
-        && analisisFinanciero.listaAnticipada
-        && analisisFinanciero.brutoCalificaNetoNo;
+        && analisisFinanciero.casiAlcanzaSiguiente
+        && analisisFinanciero.listaCasiAlcanzada;
 
     const guardarSolicitud = (e) => {
         e.preventDefault();
@@ -495,11 +499,17 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                         valor={analisisFinanciero.totalProyectadoBruto}
                                                         valorClassName={
                                                             analisisFinanciero.listaAnticipada
-                                                            && analisisFinanciero.totalProyectadoBruto >= parseFloat(analisisFinanciero.listaAnticipada.monto_requerido)
+                                                            && analisisFinanciero.totalProyectadoBruto >= (analisisFinanciero.umbralEfectivoAnticipada || 0)
                                                                 ? 'text-emerald-600 dark:text-emerald-400 font-black text-base'
                                                                 : ''
                                                         }
                                                     />
+                                                    {analisisFinanciero.listaAnticipada && analisisFinanciero.umbralEfectivoAnticipada > 0 && (
+                                                        <FilaMontoEscalonamiento
+                                                            etiqueta={`Umbral efectivo (${analisisFinanciero.listaAnticipada.nombre})`}
+                                                            valor={analisisFinanciero.umbralEfectivoAnticipada}
+                                                        />
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -532,58 +542,58 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
 
                                         {/* Columna derecha: alertas + niveles */}
                                         <div className="space-y-4 md:border-l md:theme-border md:pl-5 lg:pl-8">
-                                            {(analisisFinanciero.brutoCalificaNetoNo && analisisFinanciero.listaAnticipada)
+                                            {(analisisFinanciero.casiAlcanzaSiguiente && analisisFinanciero.listaCasiAlcanzada)
                                                 || (analisisFinanciero.mantieneListaAnticipada
                                                     && analisisFinanciero.listaAnticipada
                                                     && !analisisFinanciero.listaAnticipada.nombre.toUpperCase().includes('PUBLICO'))
-                                                || (analisisFinanciero.listaSiguienteNeto
-                                                    && analisisFinanciero.faltanteNetoSiguiente > 0
-                                                    && !analisisFinanciero.brutoCalificaNetoNo
-                                                    && analisisFinanciero.listaSiguienteNeto.id !== analisisFinanciero.listaAnticipada?.id) ? (
+                                                || (analisisFinanciero.listaSiguienteEfectiva
+                                                    && analisisFinanciero.faltanteBrutoParaSiguiente > 0
+                                                    && !analisisFinanciero.casiAlcanzaSiguiente
+                                                    && analisisFinanciero.listaSiguienteEfectiva.id !== analisisFinanciero.listaAnticipada?.id) ? (
                                                 <div className="space-y-3">
                                                     <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted m-0">Estado del escalonamiento</p>
 
-                                                    {analisisFinanciero.brutoCalificaNetoNo && analisisFinanciero.listaAnticipada && (
+                                                    {analisisFinanciero.casiAlcanzaSiguiente && analisisFinanciero.listaCasiAlcanzada && (
                                                         <div className="p-4 rounded-xl bg-amber-500/10 border-2 border-amber-500/30 flex gap-3 items-start">
                                                             <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                                             <p className="text-sm font-bold text-amber-800 dark:text-amber-300 leading-relaxed m-0">
-                                                                Faltan <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteNetoMantener)}</span> netos para mantener{' '}
-                                                                <span className="font-black">{analisisFinanciero.listaAnticipada.nombre}</span>
-                                                                {analisisFinanciero.montoBrutoParaMantener > 0 && (
-                                                                    <> (~<span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.montoBrutoParaMantener)}</span> bruto adicional)</>
-                                                                )}
-                                                                . Informa al cliente antes de continuar.
+                                                                No asciende a <span className="font-black">{analisisFinanciero.listaCasiAlcanzada.nombre}</span>.
+                                                                Faltan <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoCasi)}</span> brutos
+                                                                (umbral efectivo {fmtMonto(analisisFinanciero.umbralEfectivoCasi)}).
+                                                                Queda en <span className="font-black">{analisisFinanciero.listaAnticipada?.nombre || 'lista actual'}</span>.
+                                                                Informa al cliente antes de continuar.
                                                             </p>
                                                         </div>
                                                     )}
 
                                                     {analisisFinanciero.mantieneListaAnticipada
                                                         && analisisFinanciero.listaAnticipada
-                                                        && !analisisFinanciero.listaAnticipada.nombre.toUpperCase().includes('PUBLICO') && (
+                                                        && !analisisFinanciero.listaAnticipada.nombre.toUpperCase().includes('PUBLICO')
+                                                        && !analisisFinanciero.casiAlcanzaSiguiente && (
                                                         <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex gap-2.5 items-center">
                                                             <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
                                                             <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 m-0">
-                                                                El pago final mantiene la lista {analisisFinanciero.listaAnticipada.nombre}.
+                                                                El monto alcanza de forma estable la lista {analisisFinanciero.listaAnticipada.nombre}.
                                                             </p>
                                                         </div>
                                                     )}
 
-                                                    {analisisFinanciero.listaSiguienteNeto
-                                                        && analisisFinanciero.faltanteNetoSiguiente > 0
-                                                        && !analisisFinanciero.brutoCalificaNetoNo
-                                                        && analisisFinanciero.listaSiguienteNeto.id !== analisisFinanciero.listaAnticipada?.id && (
+                                                    {analisisFinanciero.listaSiguienteEfectiva
+                                                        && analisisFinanciero.faltanteBrutoParaSiguiente > 0
+                                                        && !analisisFinanciero.casiAlcanzaSiguiente
+                                                        && analisisFinanciero.listaSiguienteEfectiva.id !== analisisFinanciero.listaAnticipada?.id && (
                                                         <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 leading-relaxed m-0 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                                                            Faltan <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteNetoSiguiente)}</span> netos (~
-                                                            <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.montoBrutoParaSiguiente)}</span> bruto al{' '}
-                                                            {analisisFinanciero.porcentajeSiguiente.toFixed(2)}% de{' '}
-                                                            <span className="font-black">{analisisFinanciero.listaSiguienteNeto.nombre}</span>) para alcanzar el siguiente nivel.
+                                                            Faltan <span className="font-black tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoParaSiguiente)}</span> brutos
+                                                            (umbral efectivo {fmtMonto(analisisFinanciero.umbralEfectivoSiguiente)} al{' '}
+                                                            {analisisFinanciero.porcentajeSiguiente.toFixed(2)}%) para{' '}
+                                                            <span className="font-black">{analisisFinanciero.listaSiguienteEfectiva.nombre}</span>.
                                                         </p>
                                                     )}
                                                 </div>
                                             ) : null}
 
                                             {analisisFinanciero.desgloseListas?.length > 0 && (
-                                                <div className={`${(analisisFinanciero.brutoCalificaNetoNo || analisisFinanciero.mantieneListaAnticipada) ? 'pt-4 border-t-2 md:border-t-0 md:pt-0 theme-border' : ''}`}>
+                                                <div className={`${(analisisFinanciero.casiAlcanzaSiguiente || analisisFinanciero.mantieneListaAnticipada) ? 'pt-4 border-t-2 md:border-t-0 md:pt-0 theme-border' : ''}`}>
                                                     <p className="text-[11px] font-black uppercase tracking-widest theme-text-muted mb-3 m-0">Niveles de lista</p>
                                                     <div className="space-y-2">
                                                         {analisisFinanciero.desgloseListas.map(item => (
@@ -602,7 +612,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                                     {item.nombre}
                                                                 </span>
                                                                 <span className={`text-sm font-black tabular-nums shrink-0 ${item.cubre ? 'text-emerald-700 dark:text-emerald-400' : 'theme-text-muted'}`}>
-                                                                    {fmtMonto(item.monto_requerido)}
+                                                                    {fmtMonto(item.umbral_efectivo ?? item.monto_requerido)}
                                                                 </span>
                                                             </div>
                                                         ))}
@@ -633,8 +643,9 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                         estaDeshabilitada = true;
                                         textoEstado = '(Nivel actual)';
                                     } else if (analisisFinanciero) {
-                                        const reqLista = parseFloat(lista.monto_requerido);
-                                        if (reqLista > analisisFinanciero.totalProyectadoBruto) {
+                                        const umbralLista = analisisFinanciero.desgloseListas?.find(d => d.id === lista.id)?.umbral_efectivo
+                                            ?? parseFloat(lista.monto_requerido);
+                                        if (umbralLista > analisisFinanciero.totalProyectadoBruto) {
                                             estaDeshabilitada = true;
                                             textoEstado = '(Monto insuficiente)';
                                         }
@@ -655,7 +666,11 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     className="mt-1 shrink-0 w-4 h-4"
                                 />
                                 <span className="text-sm font-bold text-amber-800 dark:text-amber-300 leading-relaxed">
-                                    Confirmo que informé al cliente el monto bruto necesario para mantener/subir de lista considerando el descuento aplicado.
+                                    Confirmo que informé al cliente que no asciende a {analisisFinanciero.listaCasiAlcanzada?.nombre}
+                                    {analisisFinanciero.faltanteBrutoCasi > 0 && (
+                                        <> (faltan {fmtMonto(analisisFinanciero.faltanteBrutoCasi)} brutos)</>
+                                    )}
+                                    {' '}y que permanece en {analisisFinanciero.listaAnticipada?.nombre || 'su lista actual'}.
                                 </span>
                             </label>
                         )}

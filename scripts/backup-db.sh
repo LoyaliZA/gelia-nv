@@ -3,6 +3,7 @@
 #
 # Variables opcionales:
 #   DOCKER_APP_CONTAINER  contenedor PHP (default: gelianv_app)
+#   BACKUP_ENCRYPTION_KEY  si está en el .env del contenedor, db:backup cifra el dump
 
 backup_db_antes_de_migrar() {
     local container="${DOCKER_APP_CONTAINER:-gelianv_app}"
@@ -10,6 +11,7 @@ backup_db_antes_de_migrar() {
     echo "=============================================="
     echo " Respaldo de base de datos (pre-migración)"
     echo " Contenedor: ${container}"
+    echo " Salida: storage/app/backups/*.sql.gz[.enc]"
     echo "=============================================="
 
     if ! docker exec -i "$container" php artisan db:backup; then
@@ -17,6 +19,6 @@ backup_db_antes_de_migrar() {
         exit 1
     fi
 
-    echo "Respaldo completado."
+    echo "Respaldo completado (gzip; cifrado si BACKUP_ENCRYPTION_KEY)."
     echo ""
 }

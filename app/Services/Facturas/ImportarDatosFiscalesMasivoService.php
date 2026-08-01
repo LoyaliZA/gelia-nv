@@ -71,7 +71,7 @@ class ImportarDatosFiscalesMasivoService
 
                 $merge = ReglasCatalogosFiscales::aplicarForzados($merge);
                 $this->validar($merge);
-                $this->gestionar->actualizar($cliente, $merge);
+                $this->gestionar->actualizar($cliente, $merge, auditar: false);
                 $stats['actualizados']++;
             } catch (ValidationException $e) {
                 $mensaje = collect($e->errors())->flatten()->first() ?: $e->getMessage();
@@ -82,6 +82,8 @@ class ImportarDatosFiscalesMasivoService
         }
 
         $stats['errores'] = array_slice($stats['errores'], 0, 50);
+
+        app(RegistrarAuditoriaDatosFiscalesService::class)->importMasivo('clientes', $stats);
 
         return $stats;
     }

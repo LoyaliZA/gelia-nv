@@ -10,10 +10,10 @@ use App\Models\ReceptorFiscal;
 use App\Models\SolicitudFactura;
 use App\Models\SolicitudFacturaVoucher;
 use App\Models\User;
+use App\Support\Facturas\FacturaStorage;
 use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class ActualizarBorradorFacturaService
@@ -113,18 +113,14 @@ class ActualizarBorradorFacturaService
             }
 
             if (! empty($datos['eliminar_archivo_fiscal'])) {
-                if ($solicitud->archivo_fiscal_path) {
-                    Storage::disk('public')->delete($solicitud->archivo_fiscal_path);
-                }
+                FacturaStorage::delete($solicitud->archivo_fiscal_path);
                 $updates['archivo_fiscal_path'] = null;
             }
 
             if (isset($datos['archivo_fiscal']) && $datos['archivo_fiscal'] instanceof UploadedFile && $datos['archivo_fiscal']->isValid()) {
-                if ($solicitud->archivo_fiscal_path) {
-                    Storage::disk('public')->delete($solicitud->archivo_fiscal_path);
-                }
+                FacturaStorage::delete($solicitud->archivo_fiscal_path);
                 $updates['datos_fiscales'] = $this->importarDatosFiscales->extraer($datos['archivo_fiscal']);
-                $updates['archivo_fiscal_path'] = $datos['archivo_fiscal']->store('facturas/fiscales', 'public');
+                $updates['archivo_fiscal_path'] = $datos['archivo_fiscal']->store('facturas/fiscales', FacturaStorage::storeDisk());
             }
 
             $conservar = collect($datos['vouchers_conservar'] ?? [])
@@ -137,7 +133,7 @@ class ActualizarBorradorFacturaService
                 $existentes = $solicitud->vouchers()->get();
                 foreach ($existentes as $voucher) {
                     if (! in_array((int) $voucher->id, $conservar, true)) {
-                        Storage::disk('public')->delete($voucher->path);
+                        FacturaStorage::delete($voucher->path);
                         $voucher->delete();
                     }
                 }
@@ -150,7 +146,7 @@ class ActualizarBorradorFacturaService
                 }
                 SolicitudFacturaVoucher::create([
                     'solicitud_factura_id' => $solicitud->id,
-                    'path' => $voucher->store("facturas/vouchers/{$solicitud->id}", 'public'),
+                    'path' => $voucher->store("facturas/vouchers/{$solicitud->id}", FacturaStorage::storeDisk()),
                     'nombre_original' => $voucher->getClientOriginalName(),
                     'mime' => $voucher->getMimeType(),
                     'orden' => $orden++,

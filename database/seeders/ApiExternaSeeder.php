@@ -24,7 +24,7 @@ class ApiExternaSeeder extends Seeder
         $campos = [
             ['slug' => 'numero_cliente', 'etiqueta' => 'Número de cliente', 'es_sensible' => false, 'orden' => 1],
             ['slug' => 'nombre', 'etiqueta' => 'Nombre', 'es_sensible' => false, 'orden' => 2],
-            ['slug' => 'nombre_razon_social', 'etiqueta' => 'Razón social', 'es_sensible' => false, 'orden' => 3],
+            ['slug' => 'nombre_razon_social', 'etiqueta' => 'Razón social', 'es_sensible' => true, 'orden' => 3],
             ['slug' => 'rfc', 'etiqueta' => 'RFC', 'es_sensible' => true, 'orden' => 4],
             ['slug' => 'codigo_postal', 'etiqueta' => 'Código postal', 'es_sensible' => true, 'orden' => 5],
             ['slug' => 'regimen_fiscal', 'etiqueta' => 'Régimen fiscal', 'es_sensible' => true, 'orden' => 6],

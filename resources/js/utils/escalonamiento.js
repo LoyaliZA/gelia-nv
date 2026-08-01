@@ -32,6 +32,11 @@ export const calcularMontoBrutoNecesario = (faltanteNeto, porcentaje) => {
     return mult <= 0 ? faltanteNeto : Math.round((faltanteNeto / mult) * 100) / 100;
 };
 
+export const umbralEfectivo = (lista) => {
+    if (!lista) return 0;
+    return calcularMontoBrutoNecesario(parseFloat(lista.monto_requerido) || 0, obtenerPorcentajeLista(lista));
+};
+
 export const fmtMontoEscalonamiento = (valor) =>
     `$${Number(valor).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -42,6 +47,11 @@ export const filtrarListasValidas = (catalogoListas) =>
     [...catalogoListas]
         .filter(l => !l.nombre.toUpperCase().includes('COLABORADOR') && !l.nombre.toUpperCase().includes('PLATAFORMAS'))
         .sort((a, b) => parseFloat(b.monto_requerido) - parseFloat(a.monto_requerido));
+
+export const resolverListaPorMonto = (monto, catalogoListas) => {
+    const listasValidas = filtrarListasValidas(catalogoListas);
+    return listasValidas.find(l => monto >= umbralEfectivo(l)) || null;
+};
 
 const NIVELES_MAYORES = ['PLATA', 'ORO', 'DIAMANTE'];
 
@@ -62,53 +72,68 @@ export const evaluarEscalonamiento = (cliente, cotizacion, catalogoListas, lista
     const totalProyectadoBruto = montoHistorico + montoCotizado;
 
     const listaCalificadaBruto = listasValidas.find(l => totalProyectadoBruto >= parseFloat(l.monto_requerido)) || null;
+    const listaCalificadaEfectiva = resolverListaPorMonto(totalProyectadoBruto, listasValidas);
 
     const listaActual = listaActualObj
         ?? catalogoListas.find(l => l.id == cliente?.lista_actual_id || l.nombre === cliente?.lista_actual)
         ?? null;
     const requisitoListaActual = listaActual ? parseFloat(listaActual.monto_requerido || 0) : 0;
-    const esAscenso = listaCalificadaBruto && parseFloat(listaCalificadaBruto.monto_requerido) > requisitoListaActual;
+    const esAscenso = listaCalificadaEfectiva
+        && parseFloat(listaCalificadaEfectiva.monto_requerido) > requisitoListaActual;
 
-    const listaAnticipada = listaCalificadaBruto;
+    const listaAnticipada = listaCalificadaEfectiva;
+    const porcentajeDescuento = obtenerPorcentajeLista(listaAnticipada);
+    const umbralEfectivoAnticipada = listaAnticipada ? umbralEfectivo(listaAnticipada) : 0;
 
     const listaSolicitada = listaSolicitadaId
         ? buscarListaPorId(catalogoListas, listaSolicitadaId)
-        : (esAscenso && listaCalificadaBruto ? listaCalificadaBruto : null);
+        : (esAscenso && listaCalificadaEfectiva ? listaCalificadaEfectiva : null);
 
-    const porcentajeDescuento = obtenerPorcentajeLista(listaAnticipada);
     const montoFinalTentativo = calcularMontoFinalTentativo(montoCotizado, porcentajeDescuento);
     const totalProyectadoNeto = montoHistorico + montoFinalTentativo;
 
-    const listaCalificadaNeto = listasValidas.find(l => totalProyectadoNeto >= parseFloat(l.monto_requerido)) || null;
+    const listaCalificadaNeto = resolverListaPorMonto(totalProyectadoNeto, listasValidas);
 
-    const listasAscendentes = [...listasValidas].sort((a, b) => parseFloat(a.monto_requerido) - parseFloat(b.monto_requerido));
-    const listaSiguienteNeto = listasAscendentes.find(l => parseFloat(l.monto_requerido) > totalProyectadoNeto) || null;
-    const faltanteNetoSiguiente = listaSiguienteNeto
-        ? Math.max(0, parseFloat(listaSiguienteNeto.monto_requerido) - totalProyectadoNeto)
-        : 0;
-    const porcentajeSiguiente = listaSiguienteNeto
-        ? obtenerPorcentajeLista(listaSiguienteNeto)
+    const listasPorUmbral = [...listasValidas].sort((a, b) => umbralEfectivo(a) - umbralEfectivo(b));
+    const listaSiguienteEfectiva = listasPorUmbral.find(l => umbralEfectivo(l) > totalProyectadoBruto) || null;
+    const porcentajeSiguiente = listaSiguienteEfectiva
+        ? obtenerPorcentajeLista(listaSiguienteEfectiva)
         : porcentajeDescuento;
-    const montoBrutoParaSiguiente = calcularMontoBrutoNecesario(faltanteNetoSiguiente, porcentajeSiguiente);
+    const umbralEfectivoSiguiente = listaSiguienteEfectiva ? umbralEfectivo(listaSiguienteEfectiva) : 0;
+    const faltanteBrutoParaSiguiente = listaSiguienteEfectiva
+        ? Math.max(0, umbralEfectivoSiguiente - totalProyectadoBruto)
+        : 0;
+    const faltanteNetoSiguiente = listaSiguienteEfectiva
+        ? Math.max(0, parseFloat(listaSiguienteEfectiva.monto_requerido) - totalProyectadoNeto)
+        : 0;
+    const montoBrutoParaSiguiente = faltanteBrutoParaSiguiente;
 
-    let mantieneListaAnticipada = true;
-    let faltanteNetoMantener = 0;
-    let montoBrutoParaMantener = 0;
-    let brutoCalificaNetoNo = false;
+    let casiAlcanzaSiguiente = false;
+    let listaCasiAlcanzada = null;
+    let faltanteBrutoCasi = 0;
+    let umbralEfectivoCasi = 0;
 
-    if (listaAnticipada) {
-        const umbral = parseFloat(listaAnticipada.monto_requerido);
-        mantieneListaAnticipada = totalProyectadoNeto >= umbral;
-        faltanteNetoMantener = Math.max(0, umbral - totalProyectadoNeto);
-        montoBrutoParaMantener = calcularMontoBrutoNecesario(faltanteNetoMantener, porcentajeDescuento);
-        brutoCalificaNetoNo = totalProyectadoBruto >= umbral && !mantieneListaAnticipada;
+    if (listaCalificadaBruto
+        && (!listaCalificadaEfectiva
+            || parseFloat(listaCalificadaBruto.monto_requerido) > parseFloat(listaCalificadaEfectiva.monto_requerido))
+    ) {
+        casiAlcanzaSiguiente = true;
+        listaCasiAlcanzada = listaCalificadaBruto;
+        umbralEfectivoCasi = umbralEfectivo(listaCalificadaBruto);
+        faltanteBrutoCasi = Math.max(0, umbralEfectivoCasi - totalProyectadoBruto);
     }
 
+    const mantieneListaAnticipada = listaAnticipada
+        ? totalProyectadoBruto >= umbralEfectivoAnticipada
+        : true;
+
+    const listasAscendentes = [...listasValidas].sort((a, b) => parseFloat(a.monto_requerido) - parseFloat(b.monto_requerido));
     const desgloseListas = listasAscendentes.map(l => ({
         id: l.id,
         nombre: l.nombre,
         monto_requerido: parseFloat(l.monto_requerido),
-        cubre: totalProyectadoNeto >= parseFloat(l.monto_requerido),
+        umbral_efectivo: umbralEfectivo(l),
+        cubre: totalProyectadoBruto >= umbralEfectivo(l),
     }));
 
     return {
@@ -120,16 +145,25 @@ export const evaluarEscalonamiento = (cliente, cotizacion, catalogoListas, lista
         totalProyectadoBruto,
         totalProyectadoNeto,
         listaCalificadaBruto,
+        listaCalificadaEfectiva,
         listaCalificadaNeto,
         listaAnticipada,
-        listaSiguienteNeto,
+        listaSiguienteNeto: listaSiguienteEfectiva,
+        listaSiguienteEfectiva,
         faltanteNetoSiguiente,
+        faltanteBrutoParaSiguiente,
         montoBrutoParaSiguiente,
+        umbralEfectivoAnticipada,
+        umbralEfectivoSiguiente,
         mantieneListaAnticipada,
         mantieneListaSolicitada: mantieneListaAnticipada,
-        faltanteNetoMantener,
-        montoBrutoParaMantener,
-        brutoCalificaNetoNo,
+        faltanteNetoMantener: 0,
+        montoBrutoParaMantener: faltanteBrutoCasi,
+        casiAlcanzaSiguiente,
+        listaCasiAlcanzada,
+        faltanteBrutoCasi,
+        umbralEfectivoCasi,
+        brutoCalificaNetoNo: casiAlcanzaSiguiente,
         esAscenso,
         desgloseListas,
         listaSolicitada,
@@ -144,25 +178,30 @@ export const desgloseSimulacionPorLista = (cliente, montoCotizadoInput, catalogo
     return filtrarListasNivelesMayores(catalogoListas).map(lista => {
         const montoRequerido = parseFloat(lista.monto_requerido);
         const porcentajeDescuento = obtenerPorcentajeLista(lista);
+        const umbral = umbralEfectivo(lista);
         const montoCotizadoNeto = calcularMontoFinalTentativo(montoCotizado, porcentajeDescuento);
         const totalProyectadoNeto = montoHistorico + montoCotizadoNeto;
+        const calificaEfectivo = totalProyectadoBruto >= umbral;
         const calificaBruto = totalProyectadoBruto >= montoRequerido;
-        const calificaNeto = totalProyectadoNeto >= montoRequerido;
+        const calificaNeto = calificaEfectivo;
+        const faltanteBruto = Math.max(0, umbral - totalProyectadoBruto);
         const faltanteNeto = Math.max(0, montoRequerido - totalProyectadoNeto);
-        const montoBrutoAdicional = calcularMontoBrutoNecesario(faltanteNeto, porcentajeDescuento);
 
         return {
             id: lista.id,
             nombre: lista.nombre,
             monto_requerido: montoRequerido,
+            umbral_efectivo: umbral,
             porcentaje_descuento: porcentajeDescuento,
             monto_cotizado_neto: montoCotizadoNeto,
             total_proyectado_bruto: totalProyectadoBruto,
             total_proyectado_neto: totalProyectadoNeto,
             califica_bruto: calificaBruto,
             califica_neto: calificaNeto,
+            califica_efectivo: calificaEfectivo,
             faltante_neto: faltanteNeto,
-            monto_bruto_adicional: montoBrutoAdicional,
+            faltante_bruto: faltanteBruto,
+            monto_bruto_adicional: faltanteBruto,
         };
     });
 };

@@ -62,6 +62,54 @@ class ReactivarClienteInactivoTest extends TestCase
         $this->assertEquals($listaPlata, $cliente->fresh()->lista_actual_id);
     }
 
+    public function test_servicio_usa_umbral_efectivo_no_catalogo_crudo(): void
+    {
+        CatalogoListaDescuento::create([
+            'nombre' => 'MAYOREO PLATA',
+            'monto_requerido' => 5001.00,
+            'porcentaje_descuento' => 2.00,
+            'activo' => true,
+        ]);
+        CatalogoListaDescuento::create([
+            'nombre' => 'MAYOREO BRONCE',
+            'monto_requerido' => 0.01,
+            'porcentaje_descuento' => 0.00,
+            'activo' => true,
+        ]);
+        CatalogoListaDescuento::create([
+            'nombre' => 'PUBLICO GENERAL',
+            'monto_requerido' => 0.00,
+            'porcentaje_descuento' => 0.00,
+            'activo' => true,
+        ]);
+
+        $listaPg = $this->idLista('PUBLICO GENERAL');
+        $listaBronce = $this->idLista('MAYOREO BRONCE');
+        $listaPlata = $this->idLista('MAYOREO PLATA');
+
+        $casi = Cliente::create([
+            'numero_cliente' => '709',
+            'nombre' => 'Casi Plata',
+            'lista_actual_id' => $listaPg,
+            'monto_venta_actual' => 0,
+            'es_inactivo' => true,
+        ]);
+        app(ReactivarClienteInactivoService::class)->ejecutar($casi, 5098.0);
+        $casi->save();
+        $this->assertEquals($listaBronce, $casi->fresh()->lista_actual_id);
+
+        $estable = Cliente::create([
+            'numero_cliente' => '710',
+            'nombre' => 'Plata Estable',
+            'lista_actual_id' => $listaPg,
+            'monto_venta_actual' => 0,
+            'es_inactivo' => true,
+        ]);
+        app(ReactivarClienteInactivoService::class)->ejecutar($estable, 5107.0);
+        $estable->save();
+        $this->assertEquals($listaPlata, $estable->fresh()->lista_actual_id);
+    }
+
     public function test_servicio_no_reactiva_si_monto_es_cero(): void
     {
         $this->sincronizarListas();

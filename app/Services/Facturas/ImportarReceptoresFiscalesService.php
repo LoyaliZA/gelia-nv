@@ -53,10 +53,10 @@ class ImportarReceptoresFiscalesService
                 $existente = $this->buscarExistente($datos);
 
                 if ($existente) {
-                    $this->gestionar->actualizar($existente, $datos);
+                    $this->gestionar->actualizar($existente, $datos, auditar: false);
                     $stats['actualizados']++;
                 } else {
-                    $this->gestionar->crear($datos);
+                    $this->gestionar->crear($datos, auditar: false);
                     $stats['creados']++;
                 }
             } catch (ValidationException $e) {
@@ -68,6 +68,12 @@ class ImportarReceptoresFiscalesService
         }
 
         $stats['errores'] = array_slice($stats['errores'], 0, 50);
+
+        app(RegistrarAuditoriaDatosFiscalesService::class)->importMasivo('receptores', [
+            'actualizados' => ($stats['creados'] ?? 0) + ($stats['actualizados'] ?? 0),
+            'omitidos' => $stats['omitidos'] ?? 0,
+            'errores' => $stats['errores'],
+        ]);
 
         return $stats;
     }

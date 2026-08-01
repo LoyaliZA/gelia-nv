@@ -66,8 +66,8 @@ class CrearSolicitudService
                         $listaActualEscalon ? (float) $listaActualEscalon->monto_requerido : 0.0
                     );
 
-                    if ($escalon['es_ascenso'] && $escalon['lista_calificada_bruto']) {
-                        $listaDescuentoId = (int) $escalon['lista_calificada_bruto']->id;
+                    if ($escalon['es_ascenso'] && $escalon['lista_calificada_efectiva']) {
+                        $listaDescuentoId = (int) $escalon['lista_calificada_efectiva']->id;
                     }
 
                     $montoFinalTentativo = $escalon['monto_final_tentativo'];

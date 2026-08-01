@@ -25,8 +25,6 @@ class ClienteApiController extends Controller
             'id',
             'numero_cliente',
             'nombre',
-            'nombre_razon_social',
-            'rfc',
             'es_heredado',
             'es_inactivo',
             'lista_actual_id',
@@ -35,6 +33,8 @@ class ClienteApiController extends Controller
 
         if ($conFiscales) {
             $columnas = array_merge($columnas, [
+                'nombre_razon_social',
+                'rfc',
                 'codigo_postal',
                 'regimen_fiscal',
                 'correo_electronico',
@@ -54,8 +54,6 @@ class ClienteApiController extends Controller
                 'id' => $cliente->id,
                 'numero_cliente' => $cliente->numero_cliente,
                 'nombre' => $cliente->nombre,
-                'nombre_razon_social' => $cliente->nombre_razon_social,
-                'rfc' => $cliente->rfc,
                 'es_heredado' => (bool) $cliente->es_heredado,
                 'es_inactivo' => (bool) $cliente->es_inactivo,
                 'lista_actual_id' => $cliente->lista_actual_id,
@@ -64,6 +62,8 @@ class ClienteApiController extends Controller
             ];
 
             if ($conFiscales) {
+                $fila['nombre_razon_social'] = $cliente->nombre_razon_social;
+                $fila['rfc'] = $cliente->rfc;
                 $fila['codigo_postal'] = $cliente->codigo_postal;
                 $fila['regimen_fiscal'] = $cliente->regimen_fiscal;
                 $fila['correo_electronico'] = $cliente->correo_electronico;

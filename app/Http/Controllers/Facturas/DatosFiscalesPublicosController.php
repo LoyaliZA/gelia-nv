@@ -91,7 +91,6 @@ class DatosFiscalesPublicosController extends Controller
             'enlace_valido' => true,
             'cliente' => $clienteResumen,
             'destinatario_tipo' => $enlace->destinatario_tipo,
-            'accion_permitida' => $enlace->accion_permitida,
             'campos' => collect($campos)->map(fn ($clave) => [
                 'clave' => $clave,
                 'etiqueta' => $etiquetas[$clave] ?? $clave,

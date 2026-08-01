@@ -59,6 +59,7 @@ Route::middleware(['throttle:30,1', \App\Http\Middleware\HardenSolicitudDireccio
     Route::get('/datos-fiscales', [DatosFiscalesPublicosController::class, 'show'])
         ->name('datos_fiscales.publicas.form');
     Route::post('/datos-fiscales', [DatosFiscalesPublicosController::class, 'store'])
+        ->middleware('throttle:10,1')
         ->name('datos_fiscales.publicas.store');
 });
 

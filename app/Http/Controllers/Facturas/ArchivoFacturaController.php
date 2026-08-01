@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Facturas;
 use App\Http\Controllers\Controller;
 use App\Models\SolicitudFactura;
 use App\Services\Facturas\ServirArchivoFacturaService;
+use App\Support\Facturas\FacturaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -25,11 +26,12 @@ class ArchivoFacturaController extends Controller
         $indice = $request->integer('indice', 0);
         $archivo = $servirService->resolverArchivo($factura, $tipo, $indice);
 
-        if (!$archivo || !Storage::disk('public')->exists($archivo['path'])) {
+        if (!$archivo || !FacturaStorage::exists($archivo['path'])) {
             abort(404);
         }
 
-        $mime = $archivo['mime'] ?? Storage::disk('public')->mimeType($archivo['path']);
+        $disk = FacturaStorage::diskFor($archivo['path']);
+        $mime = $archivo['mime'] ?? Storage::disk($disk)->mimeType($archivo['path']);
         if (!$mime || $mime === 'application/octet-stream') {
             $mime = $this->inferirMime($archivo['path'], $tipo);
         }
@@ -42,7 +44,7 @@ class ArchivoFacturaController extends Controller
             default => 'attachment',
         };
 
-        return Storage::disk('public')->response($archivo['path'], $archivo['nombre'], [
+        return Storage::disk($disk)->response($archivo['path'], $archivo['nombre'], [
             'Content-Type' => $mime ?: 'application/octet-stream',
             'Content-Disposition' => "{$disposition}; filename=\"{$archivo['nombre']}\"",
             'Cache-Control' => 'private, max-age=3600',

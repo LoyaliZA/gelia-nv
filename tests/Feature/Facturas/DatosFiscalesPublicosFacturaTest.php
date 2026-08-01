@@ -104,6 +104,13 @@ class DatosFiscalesPublicosFacturaTest extends TestCase
                 ->where('branding.key_claro', 'bellaroma_logo_negro')
                 ->where('branding.key_oscuro', 'bellaroma_logo_blanco')
                 ->where('branding.departamento', 'Ventas Test')
+                ->missing('accion_permitida')
+                ->where('cliente.nombre_enmascarado', fn ($v) => is_string($v) && ! str_contains(strtolower($v), 'rfc'))
+                ->has('cliente.nombre_enmascarado')
+                ->has('cliente.numero_enmascarado')
+                ->missing('cliente.rfc')
+                ->missing('cliente.nombre_razon_social')
+                ->missing('cliente.correo_electronico')
             );
     }
 

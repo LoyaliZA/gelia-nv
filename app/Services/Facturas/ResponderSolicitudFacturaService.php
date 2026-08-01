@@ -7,10 +7,10 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\SolicitudFactura;
 use App\Models\User;
 use App\Notifications\AlertaFactura;
+use App\Support\Facturas\FacturaStorage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Storage;
 
 class ResponderSolicitudFacturaService
 {
@@ -35,26 +35,20 @@ class ResponderSolicitudFacturaService
             }
 
             if (isset($datos['factura_pdf']) && $datos['factura_pdf'] instanceof UploadedFile && $datos['factura_pdf']->isValid()) {
-                if ($solicitud->factura_pdf_path) {
-                    Storage::disk('public')->delete($solicitud->factura_pdf_path);
-                }
-                $updates['factura_pdf_path'] = $datos['factura_pdf']->store("facturas/emitidas/{$solicitud->id}", 'public');
+                FacturaStorage::delete($solicitud->factura_pdf_path);
+                $updates['factura_pdf_path'] = $datos['factura_pdf']->store("facturas/emitidas/{$solicitud->id}", FacturaStorage::storeDisk());
                 $updates['factura_pdf_nombre'] = $datos['factura_pdf']->getClientOriginalName();
             }
 
             if (isset($datos['factura_xml']) && $datos['factura_xml'] instanceof UploadedFile && $datos['factura_xml']->isValid()) {
-                if ($solicitud->factura_xml_path) {
-                    Storage::disk('public')->delete($solicitud->factura_xml_path);
-                }
-                $updates['factura_xml_path'] = $datos['factura_xml']->store("facturas/emitidas/{$solicitud->id}", 'public');
+                FacturaStorage::delete($solicitud->factura_xml_path);
+                $updates['factura_xml_path'] = $datos['factura_xml']->store("facturas/emitidas/{$solicitud->id}", FacturaStorage::storeDisk());
                 $updates['factura_xml_nombre'] = $datos['factura_xml']->getClientOriginalName();
             }
 
             if (isset($datos['evidencia_error']) && $datos['evidencia_error'] instanceof UploadedFile && $datos['evidencia_error']->isValid()) {
-                if ($solicitud->evidencia_error_path) {
-                    Storage::disk('public')->delete($solicitud->evidencia_error_path);
-                }
-                $updates['evidencia_error_path'] = $datos['evidencia_error']->store("facturas/evidencias/{$solicitud->id}", 'public');
+                FacturaStorage::delete($solicitud->evidencia_error_path);
+                $updates['evidencia_error_path'] = $datos['evidencia_error']->store("facturas/evidencias/{$solicitud->id}", FacturaStorage::storeDisk());
             }
 
             $solicitud->update($updates);

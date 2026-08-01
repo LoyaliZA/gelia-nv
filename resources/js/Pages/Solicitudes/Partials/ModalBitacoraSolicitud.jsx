@@ -281,7 +281,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             )}
                             {solicitud?.confirmo_informacion_escalonamiento && (
                                 <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">
-                                    Vendedora confirmó haber informado al cliente sobre el escalonamiento.
+                                    Vendedora confirmó haber informado al cliente que no asciende (umbral efectivo no alcanzado).
                                 </p>
                             )}
                             {solicitud?.evidencia_path && (
