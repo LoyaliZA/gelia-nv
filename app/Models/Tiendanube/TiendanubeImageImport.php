@@ -42,6 +42,42 @@ class TiendanubeImageImport extends Model
         return (int) min(100, round(($this->procesados / $this->total_archivos) * 100));
     }
 
+    /**
+     * @return array{
+     *     matched: int,
+     *     omitidos: int,
+     *     errores: int,
+     *     nombre_invalido: int,
+     *     sku_no_encontrado: int,
+     *     archivo_grande: int,
+     *     error_carga: int
+     * }
+     */
+    public function resumenMotivos(): array
+    {
+        $counts = $this->items()
+            ->selectRaw('motivo, COUNT(*) as total')
+            ->whereNotNull('motivo')
+            ->groupBy('motivo')
+            ->pluck('total', 'motivo');
+
+        $nombreInvalido = (int) ($counts['nombre_invalido'] ?? 0);
+        $skuNoEncontrado = (int) ($counts['sku_no_encontrado'] ?? 0);
+        $archivoGrande = (int) ($counts['archivo_grande'] ?? 0);
+        $errorCarga = (int) ($counts['error_carga'] ?? 0);
+
+        return [
+            'matched' => $this->items()->where('estado', 'ok')->count()
+                + $this->items()->where('estado', 'pendiente')->count(),
+            'omitidos' => $this->items()->where('estado', 'omitido')->count(),
+            'errores' => $this->items()->where('estado', 'error')->count(),
+            'nombre_invalido' => $nombreInvalido,
+            'sku_no_encontrado' => $skuNoEncontrado,
+            'archivo_grande' => $archivoGrande,
+            'error_carga' => $errorCarga,
+        ];
+    }
+
     public static function activo(): ?self
     {
         $import = static::whereIn('estado', ['pendiente', 'en_proceso'])->latest()->first();

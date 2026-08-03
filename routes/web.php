@@ -204,6 +204,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/productos/{id}/imagenes', [\App\Http\Controllers\TiendanubeController::class, 'storeImagen'])->name('productos.imagenes.store')->middleware('can:tiendanube.productos.editar');
         Route::post('/imagenes/importar', [\App\Http\Controllers\TiendanubeController::class, 'importarImagenes'])->name('imagenes.importar')->middleware('can:tiendanube.productos.editar');
         Route::get('/imagenes/importar/{id}', [\App\Http\Controllers\TiendanubeController::class, 'progresoImportImagenes'])->name('imagenes.importar.progreso');
+        Route::get('/imagenes/importar/{id}/reporte', [\App\Http\Controllers\TiendanubeController::class, 'reporteImportImagenes'])->name('imagenes.importar.reporte');
         Route::put('/configuracion', [\App\Http\Controllers\TiendanubeController::class, 'guardarConfiguracion'])->name('configuracion.update')->middleware('can:tiendanube.configurar');
         Route::post('/configuracion/probar-conexion', [\App\Http\Controllers\TiendanubeController::class, 'probarConexion'])->name('configuracion.probar_conexion')->middleware('can:tiendanube.configurar');
         Route::post('/catalogo/limpiar', [\App\Http\Controllers\TiendanubeController::class, 'limpiarCatalogo'])->name('catalogo.limpiar')->middleware('can:tiendanube.configurar');

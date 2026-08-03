@@ -27,8 +27,13 @@ export default function Index({
     const [showCrear, setShowCrear] = useState(false);
     const [detalleId, setDetalleId] = useState(null);
     const [search, setSearch] = useState(filters?.search || '');
+    const [filtroAlertaImagenes, setFiltroAlertaImagenes] = useState(!!filters?.imagenes_alerta);
     const [syncLogId, setSyncLogId] = useState(procesoActivo?.id || null);
     const [imageImportId, setImageImportId] = useState(imageImportActivo?.id || null);
+
+    useEffect(() => {
+        setFiltroAlertaImagenes(!!filters?.imagenes_alerta);
+    }, [filters?.imagenes_alerta]);
 
     useEffect(() => {
         if (procesoActivo?.id) {
@@ -89,9 +94,29 @@ export default function Index({
         };
     }, [showHerramientas, syncLogId, imageImportId]);
 
+    const aplicarFiltros = (overrides = {}) => {
+        const alerta = Object.prototype.hasOwnProperty.call(overrides, 'imagenes_alerta')
+            ? overrides.imagenes_alerta
+            : filtroAlertaImagenes;
+        router.get(
+            route('tiendanube.index'),
+            {
+                search: (overrides.search !== undefined ? overrides.search : search) || undefined,
+                imagenes_alerta: alerta ? 1 : undefined,
+            },
+            { preserveState: true }
+        );
+    };
+
     const buscar = (e) => {
         e.preventDefault();
-        router.get(route('tiendanube.index'), { search: search || undefined }, { preserveState: true });
+        aplicarFiltros();
+    };
+
+    const toggleAlertaImagenes = () => {
+        const next = !filtroAlertaImagenes;
+        setFiltroAlertaImagenes(next);
+        aplicarFiltros({ imagenes_alerta: next });
     };
 
     const reloadLista = () => router.reload({ only: ['productos', 'totales', 'ultimosImportImagenes', 'imageImportActivo'] });
@@ -155,7 +180,7 @@ export default function Index({
                     </div>
                 </header>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className={`${geliaCardClass()} p-5 flex items-center gap-4`}>
                         <Store className="w-8 h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
                         <div>
@@ -174,6 +199,19 @@ export default function Index({
                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Categorías</p>
                         <p className="text-3xl font-black theme-text-main">{totales?.categorias ?? 0}</p>
                     </div>
+                    <button
+                        type="button"
+                        onClick={toggleAlertaImagenes}
+                        className={`${geliaCardClass()} p-5 text-left transition-colors ${
+                            filtroAlertaImagenes ? 'ring-2 ring-amber-500/60' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
+                        }`}
+                    >
+                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Imágenes a revisar</p>
+                        <p className="text-3xl font-black text-amber-600">{totales?.productos_alerta_imagenes ?? 0}</p>
+                        <p className="text-[10px] theme-text-muted mt-1">
+                            {filtroAlertaImagenes ? 'Filtro activo · clic para quitar' : 'Clic para filtrar'}
+                        </p>
+                    </button>
                 </div>
 
                 <div className={`${geliaCardClass()} p-4 md:p-6 space-y-4`}>

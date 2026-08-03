@@ -12,7 +12,8 @@ class TiendanubeProductoWriteService
 {
     public function __construct(
         private TiendanubeApiClient $api,
-        private TiendanubeCatalogoSyncService $sync
+        private TiendanubeCatalogoSyncService $sync,
+        private OptimizarImagenTiendanubeService $optimizarImagen
     ) {}
 
     /**
@@ -112,12 +113,31 @@ class TiendanubeProductoWriteService
         ?int $position = null
     ): TiendanubeProductoImagen {
         $payload = [];
+        $meta = [
+            'width' => null,
+            'height' => null,
+            'requiere_revision' => false,
+            'alerta_pequena' => false,
+            'alerta_no_cuadrada' => false,
+        ];
+        $cleanupPath = null;
 
         if ($srcUrl) {
             $payload['src'] = $srcUrl;
         } elseif ($file) {
-            $payload['attachment'] = base64_encode((string) file_get_contents($file->getRealPath()));
-            $payload['filename'] = $file->getClientOriginalName() ?: ('imagen.'.$file->guessExtension());
+            $opt = $this->optimizarImagen->ejecutar($file);
+            $payload['attachment'] = base64_encode((string) file_get_contents($opt['path']));
+            $payload['filename'] = $opt['filename'];
+            $meta = [
+                'width' => $opt['width'],
+                'height' => $opt['height'],
+                'requiere_revision' => $opt['requiere_revision'],
+                'alerta_pequena' => $opt['alerta_pequena'],
+                'alerta_no_cuadrada' => $opt['alerta_no_cuadrada'],
+            ];
+            if ($opt['cleanup']) {
+                $cleanupPath = $opt['path'];
+            }
         } else {
             throw new RuntimeException('Indica una URL de imagen o un archivo.');
         }
@@ -126,7 +146,13 @@ class TiendanubeProductoWriteService
             $payload['position'] = $position;
         }
 
-        $remote = $this->api->createProductImage($tnProductId, $payload);
+        try {
+            $remote = $this->api->createProductImage($tnProductId, $payload);
+        } finally {
+            if ($cleanupPath && is_file($cleanupPath)) {
+                @unlink($cleanupPath);
+            }
+        }
 
         $imgId = (int) ($remote['id'] ?? 0);
         if ($imgId <= 0) {
@@ -140,6 +166,11 @@ class TiendanubeProductoWriteService
                 'src' => $this->sync->truncateSeo($this->sync->localizedToString($remote['src'] ?? $srcUrl), 2048),
                 'position' => (int) ($remote['position'] ?? $position ?? 1),
                 'alt' => $this->sync->truncateSeo($this->sync->localizedToString($remote['alt'] ?? null), 512),
+                'width' => $meta['width'],
+                'height' => $meta['height'],
+                'requiere_revision' => $meta['requiere_revision'],
+                'alerta_pequena' => $meta['alerta_pequena'],
+                'alerta_no_cuadrada' => $meta['alerta_no_cuadrada'],
             ]
         );
     }

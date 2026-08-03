@@ -106,9 +106,80 @@ class TiendanubeImageImportTest extends TestCase
         $this->assertSame(1, $import->fallidos);
         $item = $import->items()->first();
         $this->assertSame('error', $item->estado);
+        $this->assertSame(TiendanubeImageImportService::MOTIVO_SKU_NO_ENCONTRADO, $item->motivo);
         $this->assertStringContainsString('SKU no encontrado', (string) $item->mensaje);
 
         Http::assertNothingSent();
+    }
+
+    public function test_import_nombre_invalido_omite_con_motivo(): void
+    {
+        Http::fake();
+
+        // Filename solo espacios → parser no obtiene SKU
+        $zip = $this->makeZip([
+            '   .webp' => 'bytes',
+            'NOEXISTE.webp' => 'bytes',
+        ]);
+
+        $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip($zip);
+
+        $omitido = $import->items()->where('estado', 'omitido')->first();
+        $this->assertNotNull($omitido);
+        $this->assertSame(TiendanubeImageImportService::MOTIVO_NOMBRE_INVALIDO, $omitido->motivo);
+
+        $sinSku = $import->items()->where('motivo', TiendanubeImageImportService::MOTIVO_SKU_NO_ENCONTRADO)->first();
+        $this->assertNotNull($sinSku);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_progreso_incluye_resumen_por_motivo(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        $user = User::factory()->create();
+        $user->givePermissionTo('tiendanube.ver');
+
+        Http::fake();
+
+        $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip(
+            $this->makeZip(['FALTANTE.webp' => 'bytes'])
+        );
+
+        $this->actingAs($user)
+            ->getJson(route('tiendanube.imagenes.importar.progreso', $import->id))
+            ->assertOk()
+            ->assertJsonPath('resumen.sku_no_encontrado', 1)
+            ->assertJsonPath('errores_total', 1)
+            ->assertJsonPath('errores.0.motivo', TiendanubeImageImportService::MOTIVO_SKU_NO_ENCONTRADO);
+    }
+
+    public function test_reporte_csv_incluye_omitidos(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        $user = User::factory()->create();
+        $user->givePermissionTo('tiendanube.ver');
+
+        Http::fake();
+
+        $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip(
+            $this->makeZip([
+                '   .webp' => 'bytes',
+                'SINPRODUCTO.webp' => 'bytes',
+            ])
+        );
+
+        $response = $this->actingAs($user)
+            ->get(route('tiendanube.imagenes.importar.reporte', $import->id));
+
+        $response->assertOk();
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('content-type'));
+
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('filename,sku,position,estado,motivo,mensaje,producto_id', $csv);
+        $this->assertStringContainsString('nombre_invalido', $csv);
+        $this->assertStringContainsString('sku_no_encontrado', $csv);
+        $this->assertStringContainsString('SINPRODUCTO.webp', $csv);
     }
 
     public function test_import_position_n_envia_position_2(): void

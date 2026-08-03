@@ -17,6 +17,7 @@ class TiendanubeImageImportItem extends Model
         'position',
         'producto_id',
         'estado',
+        'motivo',
         'mensaje',
         'imagen_tn_id',
     ];

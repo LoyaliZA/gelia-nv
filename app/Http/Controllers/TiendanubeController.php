@@ -30,6 +30,7 @@ class TiendanubeController extends Controller
 
         $config = TiendanubeConfiguracion::obtener();
         $query = $request->input('search');
+        $filtroAlertaImagenes = $request->boolean('imagenes_alerta');
         $procesoActivo = TiendanubeSyncLog::activo();
         $imageImportActivo = TiendanubeImageImport::activo();
 
@@ -44,6 +45,9 @@ class TiendanubeController extends Controller
                         ->orWhereHas('variantes', fn ($v) => $v->where('sku', 'LIKE', "%{$query}%"));
                 });
             })
+            ->when($filtroAlertaImagenes, function ($q) {
+                $q->whereHas('imagenes', fn ($img) => $img->where('requiere_revision', true));
+            })
             ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString()
@@ -56,6 +60,7 @@ class TiendanubeController extends Controller
                     'seo_title' => $p->seo_title,
                     'brand' => $p->brand,
                     'imagen' => $p->imagenes->first()?->src,
+                    'tiene_alerta_imagenes' => $p->imagenes->contains(fn ($img) => (bool) $img->requiere_revision),
                     'synced_at' => $p->synced_at?->toIso8601String(),
                 ];
             });
@@ -78,6 +83,9 @@ class TiendanubeController extends Controller
             'totales' => [
                 'productos' => TiendanubeProducto::count(),
                 'categorias' => TiendanubeCategoria::count(),
+                'productos_alerta_imagenes' => TiendanubeProducto::query()
+                    ->whereHas('imagenes', fn ($img) => $img->where('requiere_revision', true))
+                    ->count(),
             ],
             'procesoActivo' => $procesoActivo,
             'imageImportActivo' => $imageImportActivo,
@@ -87,7 +95,10 @@ class TiendanubeController extends Controller
                 'id' => $c->id,
                 'nombre' => $c->nombreVisible(),
             ]),
-            'filters' => ['search' => $query],
+            'filters' => [
+                'search' => $query,
+                'imagenes_alerta' => $filtroAlertaImagenes,
+            ],
             'permisos' => [
                 'ver' => $user->can('tiendanube.ver'),
                 'configurar' => $user->can('tiendanube.configurar'),
@@ -423,8 +434,7 @@ class TiendanubeController extends Controller
         try {
             $import = $service->iniciarDesdeZip($request->file('zip'), $request->user());
 
-            $matched = $import->items()->where('estado', 'pendiente')->count();
-            $sinSku = $import->items()->whereIn('estado', ['error', 'omitido'])->count();
+            $resumen = $import->resumenMotivos();
 
             return response()->json([
                 'success' => true,
@@ -432,8 +442,11 @@ class TiendanubeController extends Controller
                 'import_id' => $import->id,
                 'preview' => [
                     'total' => $import->total_archivos,
-                    'matched' => $matched,
-                    'sin_match' => $sinSku,
+                    'matched' => $resumen['matched'],
+                    'nombre_invalido' => $resumen['nombre_invalido'],
+                    'sku_no_encontrado' => $resumen['sku_no_encontrado'],
+                    'archivo_grande' => $resumen['archivo_grande'],
+                    'sin_match' => $resumen['omitidos'] + $resumen['errores'],
                 ],
             ], 201);
         } catch (\Throwable $e) {
@@ -448,9 +461,16 @@ class TiendanubeController extends Controller
     {
         Gate::authorize('tiendanube.ver');
 
-        $import = TiendanubeImageImport::with(['items' => function ($q) {
-            $q->whereIn('estado', ['error', 'omitido'])->orderByDesc('id')->limit(30);
-        }])->findOrFail($id);
+        $import = TiendanubeImageImport::findOrFail($id);
+
+        $errores = $import->items()
+            ->whereIn('estado', ['error', 'omitido'])
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get(['filename', 'sku', 'estado', 'motivo', 'mensaje', 'position']);
+
+        $resumen = $import->resumenMotivos();
+        $totalFallidos = $resumen['omitidos'] + $resumen['errores'];
 
         return response()->json([
             'id' => $import->id,
@@ -461,13 +481,51 @@ class TiendanubeController extends Controller
             'fallidos' => $import->fallidos,
             'porcentaje' => $import->progresoPorcentaje(),
             'mensaje_error' => $import->mensaje_error,
-            'errores' => $import->items->map(fn ($i) => [
+            'resumen' => $resumen,
+            'errores_total' => $totalFallidos,
+            'errores' => $errores->map(fn ($i) => [
                 'filename' => $i->filename,
                 'sku' => $i->sku,
                 'estado' => $i->estado,
+                'motivo' => $i->motivo,
                 'mensaje' => $i->mensaje,
+                'position' => $i->position,
             ]),
             'updated_at' => $import->updated_at?->toIso8601String(),
+        ]);
+    }
+
+    public function reporteImportImagenes(int $id)
+    {
+        Gate::authorize('tiendanube.ver');
+
+        $import = TiendanubeImageImport::findOrFail($id);
+
+        $filename = 'tiendanube-import-'.$import->id.'-errores.csv';
+
+        return response()->streamDownload(function () use ($import) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['filename', 'sku', 'position', 'estado', 'motivo', 'mensaje', 'producto_id']);
+
+            $import->items()
+                ->whereIn('estado', ['error', 'omitido'])
+                ->orderBy('id')
+                ->cursor()
+                ->each(function ($item) use ($out) {
+                    fputcsv($out, [
+                        $item->filename,
+                        $item->sku,
+                        $item->position,
+                        $item->estado,
+                        $item->motivo,
+                        $item->mensaje,
+                        $item->producto_id,
+                    ]);
+                });
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 

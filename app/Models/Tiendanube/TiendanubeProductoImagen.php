@@ -19,6 +19,11 @@ class TiendanubeProductoImagen extends Model
         'src',
         'position',
         'alt',
+        'width',
+        'height',
+        'requiere_revision',
+        'alerta_pequena',
+        'alerta_no_cuadrada',
     ];
 
     protected function casts(): array
@@ -26,6 +31,11 @@ class TiendanubeProductoImagen extends Model
         return [
             'producto_id' => 'integer',
             'position' => 'integer',
+            'width' => 'integer',
+            'height' => 'integer',
+            'requiere_revision' => 'boolean',
+            'alerta_pequena' => 'boolean',
+            'alerta_no_cuadrada' => 'boolean',
         ];
     }
 

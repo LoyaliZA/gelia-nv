@@ -52,13 +52,20 @@ export default function TablaProductos({ productos, onSelect }) {
                             <td className="py-3 pr-3 font-mono text-xs">{p.sku || '—'}</td>
                             <td className="py-3 pr-3 text-xs theme-text-muted line-clamp-1 max-w-[200px]">{p.seo_title || '—'}</td>
                             <td className="py-3 pr-3">
-                                <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg ${
-                                    p.published
-                                        ? 'bg-emerald-500/10 text-emerald-600'
-                                        : 'bg-zinc-500/10 theme-text-muted'
-                                }`}>
-                                    {p.published ? 'Publicado' : 'Oculto'}
-                                </span>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg ${
+                                        p.published
+                                            ? 'bg-emerald-500/10 text-emerald-600'
+                                            : 'bg-zinc-500/10 theme-text-muted'
+                                    }`}>
+                                        {p.published ? 'Publicado' : 'Oculto'}
+                                    </span>
+                                    {p.tiene_alerta_imagenes && (
+                                        <span className="text-[10px] font-black uppercase px-2 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                                            Revisar imagen
+                                        </span>
+                                    )}
+                                </div>
                             </td>
                             <td className="py-3 text-right">
                                 <button

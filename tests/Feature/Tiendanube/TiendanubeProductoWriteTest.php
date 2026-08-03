@@ -200,6 +200,95 @@ class TiendanubeProductoWriteTest extends TestCase
         ]);
     }
 
+    public function test_agregar_imagen_por_archivo_guarda_alertas(): void
+    {
+        TiendanubeProducto::create([
+            'id' => 100,
+            'name' => ['es' => 'Prod'],
+            'published' => true,
+        ]);
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/100/images' => Http::response([
+                'id' => 778,
+                'src' => 'https://cdn.tiendanube.com/tiny.webp',
+                'position' => 1,
+                'product_id' => 100,
+                'alt' => null,
+            ], 201),
+        ]);
+
+        $bin = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            true
+        );
+        $path = sys_get_temp_dir().'/tn_upload_'.uniqid('', true).'.png';
+        file_put_contents($path, $bin);
+        $file = new \Illuminate\Http\UploadedFile($path, 'tiny.png', 'image/png', null, true);
+
+        $imagen = app(TiendanubeProductoWriteService::class)->agregarImagen(100, null, $file);
+
+        $this->assertSame(778, $imagen->id);
+        $this->assertTrue($imagen->requiere_revision);
+        $this->assertTrue($imagen->alerta_pequena);
+        $this->assertFalse($imagen->alerta_no_cuadrada);
+        $this->assertSame(1, $imagen->width);
+        $this->assertSame(1, $imagen->height);
+
+        Http::assertSent(function ($request) {
+            $data = $request->data();
+
+            return isset($data['attachment']) && isset($data['filename']);
+        });
+
+        @unlink($path);
+    }
+
+    public function test_index_filtra_productos_con_alerta_imagenes(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        $user = User::factory()->create();
+        $user->givePermissionTo('tiendanube.ver');
+
+        $ok = TiendanubeProducto::create(['id' => 10, 'name' => ['es' => 'OK'], 'published' => true]);
+        $alerta = TiendanubeProducto::create(['id' => 20, 'name' => ['es' => 'Alerta'], 'published' => true]);
+
+        \App\Models\Tiendanube\TiendanubeProductoImagen::create([
+            'id' => 1,
+            'producto_id' => $ok->id,
+            'src' => 'https://cdn.example.com/ok.webp',
+            'position' => 1,
+            'width' => 1280,
+            'height' => 1280,
+            'requiere_revision' => false,
+            'alerta_pequena' => false,
+            'alerta_no_cuadrada' => false,
+        ]);
+        \App\Models\Tiendanube\TiendanubeProductoImagen::create([
+            'id' => 2,
+            'producto_id' => $alerta->id,
+            'src' => 'https://cdn.example.com/bad.webp',
+            'position' => 1,
+            'width' => 900,
+            'height' => 1600,
+            'requiere_revision' => true,
+            'alerta_pequena' => false,
+            'alerta_no_cuadrada' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('tiendanube.index', ['imagenes_alerta' => 1]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Tiendanube/Index', false)
+                ->where('totales.productos_alerta_imagenes', 1)
+                ->where('filters.imagenes_alerta', true)
+                ->has('productos.data', 1)
+                ->where('productos.data.0.id', 20)
+                ->where('productos.data.0.tiene_alerta_imagenes', true)
+            );
+    }
+
     public function test_endpoint_crear_requiere_permiso(): void
     {
         Permission::findOrCreate('tiendanube.ver', 'web');

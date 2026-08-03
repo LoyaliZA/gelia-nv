@@ -14,6 +14,14 @@ use ZipArchive;
 
 class TiendanubeImageImportService
 {
+    public const MOTIVO_NOMBRE_INVALIDO = 'nombre_invalido';
+
+    public const MOTIVO_SKU_NO_ENCONTRADO = 'sku_no_encontrado';
+
+    public const MOTIVO_ARCHIVO_GRANDE = 'archivo_grande';
+
+    public const MOTIVO_ERROR_CARGA = 'error_carga';
+
     private const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
     public function __construct(
@@ -77,6 +85,7 @@ class TiendanubeImageImportService
                     'position' => 1,
                     'producto_id' => null,
                     'estado' => 'omitido',
+                    'motivo' => self::MOTIVO_NOMBRE_INVALIDO,
                     'mensaje' => 'Nombre de archivo no válido (usa SKU.ext o SKU_n.ext).',
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -94,6 +103,7 @@ class TiendanubeImageImportService
                     'position' => $parsed['position'],
                     'producto_id' => null,
                     'estado' => 'error',
+                    'motivo' => self::MOTIVO_ARCHIVO_GRANDE,
                     'mensaje' => 'Archivo >= 10 MB.',
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -112,6 +122,7 @@ class TiendanubeImageImportService
                     'position' => $parsed['position'],
                     'producto_id' => null,
                     'estado' => 'error',
+                    'motivo' => self::MOTIVO_SKU_NO_ENCONTRADO,
                     'mensaje' => 'SKU no encontrado en el catálogo. Sincroniza productos primero.',
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -128,6 +139,7 @@ class TiendanubeImageImportService
                 'position' => $parsed['position'],
                 'producto_id' => $variante->producto_id,
                 'estado' => 'pendiente',
+                'motivo' => null,
                 'mensaje' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -205,6 +217,7 @@ class TiendanubeImageImportService
             } catch (\Throwable $e) {
                 $item->update([
                     'estado' => 'error',
+                    'motivo' => self::MOTIVO_ERROR_CARGA,
                     'mensaje' => $e->getMessage(),
                 ]);
                 $import->increment('fallidos');

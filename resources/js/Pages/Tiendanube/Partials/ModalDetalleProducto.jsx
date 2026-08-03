@@ -107,11 +107,32 @@ export default function ModalDetalleProducto({ productoId, categorias = [], canE
                             <section>
                                 <h3 className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-2">Imágenes</h3>
                                 <div className="flex flex-wrap gap-3">
-                                    {producto.imagenes.map((img) => (
-                                        <a key={img.id} href={img.src} target="_blank" rel="noreferrer">
-                                            <img src={img.src} alt={img.alt || ''} className="w-20 h-20 object-cover rounded-xl border theme-border" />
-                                        </a>
-                                    ))}
+                                    {producto.imagenes.map((img) => {
+                                        const motivos = [];
+                                        if (img.alerta_pequena) motivos.push('<800px');
+                                        if (img.alerta_no_cuadrada) motivos.push('no cuadrada');
+                                        return (
+                                            <div key={img.id} className="w-24 space-y-1">
+                                                <a href={img.src} target="_blank" rel="noreferrer" className="block">
+                                                    <img
+                                                        src={img.src}
+                                                        alt={img.alt || ''}
+                                                        className={`w-20 h-20 object-cover rounded-xl border ${
+                                                            img.requiere_revision ? 'border-amber-500' : 'theme-border'
+                                                        }`}
+                                                    />
+                                                </a>
+                                                <p className="text-[9px] font-mono theme-text-muted">
+                                                    {img.width && img.height ? `${img.width}×${img.height}` : 'sin medida'}
+                                                </p>
+                                                {motivos.length > 0 && (
+                                                    <p className="text-[9px] font-bold uppercase text-amber-600 leading-tight">
+                                                        {motivos.join(' · ')}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </section>
                         )}
