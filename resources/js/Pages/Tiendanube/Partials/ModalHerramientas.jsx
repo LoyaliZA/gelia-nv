@@ -2,7 +2,6 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { RefreshCw, X } from 'lucide-react';
 import PanelSync from './PanelSync';
-import PanelImportImagenes from './PanelImportImagenes';
 import PanelWebhooks from './PanelWebhooks';
 
 export default function ModalHerramientas({
@@ -13,9 +12,6 @@ export default function ModalHerramientas({
     ultimosSyncs,
     syncLogId,
     onSyncStarted,
-    imageImportActivo,
-    ultimosImportImagenes,
-    onImportStarted,
     webhookUrl,
     eventosRecomendados,
 }) {
@@ -31,7 +27,7 @@ export default function ModalHerramientas({
                     <div>
                         <h2 className="text-xl md:text-2xl font-black italic uppercase theme-text-main">Herramientas</h2>
                         <p className="text-xs theme-text-muted mt-1">
-                            Sincronizar catálogo, importar imágenes y gestionar webhooks.
+                            Sincronizar catálogo y gestionar webhooks.
                         </p>
                     </div>
                 </div>
@@ -44,17 +40,6 @@ export default function ModalHerramientas({
                     syncLogId={syncLogId}
                     onSyncStarted={onSyncStarted}
                     credencialesOk={credencialesOk}
-                />
-
-                <div className="border-t theme-border" />
-
-                <PanelImportImagenes
-                    embedded
-                    permisos={permisos}
-                    credencialesOk={credencialesOk}
-                    imageImportActivo={imageImportActivo}
-                    ultimosImportImagenes={ultimosImportImagenes}
-                    onImportStarted={onImportStarted}
                 />
 
                 {permisos.configurar && (

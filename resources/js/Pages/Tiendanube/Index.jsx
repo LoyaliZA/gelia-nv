@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
 import { geliaCardClass } from '../../utils/geliaTheme';
-import { Plus, Settings, RefreshCw, Store, Search } from 'lucide-react';
+import { Plus, Settings, RefreshCw, Store, Search, Images } from 'lucide-react';
 import ModalConfiguracion from './Partials/ModalConfiguracion';
 import ModalHerramientas from './Partials/ModalHerramientas';
 import TablaProductos from './Partials/TablaProductos';
@@ -113,15 +113,9 @@ export default function Index({
         aplicarFiltros();
     };
 
-    const toggleAlertaImagenes = () => {
-        const next = !filtroAlertaImagenes;
-        setFiltroAlertaImagenes(next);
-        aplicarFiltros({ imagenes_alerta: next });
-    };
-
     const reloadLista = () => router.reload({ only: ['productos', 'totales', 'ultimosImportImagenes', 'imageImportActivo'] });
 
-    const canHerramientas = permisos.sincronizar || permisos.editar || permisos.configurar;
+    const canHerramientas = permisos.sincronizar || permisos.configurar;
     const hayProcesoFondo = !!(procesoActivo || imageImportActivo);
 
     return (
@@ -153,6 +147,16 @@ export default function Index({
                                 style={{ backgroundColor: 'var(--color-primario)' }}
                             >
                                 <Plus className="w-4 h-4" /> Nuevo producto
+                            </button>
+                        )}
+                        {permisos.editar && (
+                            <button
+                                type="button"
+                                onClick={() => router.visit(route('tiendanube.imagenes.index'))}
+                                className="px-4 py-2 rounded-xl border theme-border bg-white dark:bg-zinc-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 theme-text-main hover:bg-gray-50 dark:hover:bg-zinc-800"
+                            >
+                                <Images className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
+                                Imágenes
                             </button>
                         )}
                         {canHerramientas && (
@@ -201,16 +205,12 @@ export default function Index({
                     </div>
                     <button
                         type="button"
-                        onClick={toggleAlertaImagenes}
-                        className={`${geliaCardClass()} p-5 text-left transition-colors ${
-                            filtroAlertaImagenes ? 'ring-2 ring-amber-500/60' : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
-                        }`}
+                        onClick={() => router.visit(route('tiendanube.imagenes.index', { imagenes_alerta: 1 }))}
+                        className={`${geliaCardClass()} p-5 text-left transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]`}
                     >
                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Imágenes a revisar</p>
                         <p className="text-3xl font-black text-amber-600">{totales?.productos_alerta_imagenes ?? 0}</p>
-                        <p className="text-[10px] theme-text-muted mt-1">
-                            {filtroAlertaImagenes ? 'Filtro activo · clic para quitar' : 'Clic para filtrar'}
-                        </p>
+                        <p className="text-[10px] theme-text-muted mt-1">Ir a gestionar imágenes</p>
                     </button>
                 </div>
 
@@ -261,17 +261,11 @@ export default function Index({
                     ultimosSyncs={ultimosSyncs}
                     syncLogId={syncLogId}
                     onSyncStarted={(id) => setSyncLogId(id)}
-                    imageImportActivo={imageImportActivo}
-                    ultimosImportImagenes={ultimosImportImagenes}
-                    onImportStarted={(id) => {
-                        setImageImportId(id);
-                        router.reload({ only: ['ultimosImportImagenes', 'imageImportActivo'] });
-                    }}
                     webhookUrl={configuracion?.webhook_url}
                     eventosRecomendados={configuracion?.webhook_events || []}
                     onClose={() => {
                         setShowHerramientas(false);
-                        router.reload({ only: ['productos', 'totales', 'procesoActivo', 'ultimosSyncs', 'imageImportActivo', 'ultimosImportImagenes'] });
+                        router.reload({ only: ['productos', 'totales', 'procesoActivo', 'ultimosSyncs'] });
                     }}
                 />
             )}

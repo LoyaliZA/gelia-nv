@@ -10,6 +10,7 @@ export default function PanelWebhooks({
     embedded = false,
 }) {
     const [webhooks, setWebhooks] = useState([]);
+    const [entregas, setEntregas] = useState([]);
     const [event, setEvent] = useState(eventosRecomendados[0] || 'product/updated');
     const [url, setUrl] = useState(webhookUrl);
     const [loading, setLoading] = useState(false);
@@ -18,6 +19,20 @@ export default function PanelWebhooks({
     const [mensaje, setMensaje] = useState(null);
 
     const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+
+    const cargarEntregas = useCallback(async () => {
+        if (!permisos.configurar) return;
+        try {
+            const res = await fetch(route('tiendanube.webhooks.entregas'), {
+                headers: { Accept: 'application/json' },
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) return;
+            setEntregas(data.entregas || []);
+        } catch {
+            // diagnóstico opcional
+        }
+    }, [permisos.configurar]);
 
     const cargar = useCallback(async () => {
         if (!permisos.configurar || !credencialesOk) return;
@@ -33,16 +48,20 @@ export default function PanelWebhooks({
             }
             setWebhooks(data.webhooks || []);
             if (data.webhook_url) setUrl(data.webhook_url);
+            await cargarEntregas();
         } catch (err) {
             setError(err.message || 'Error al listar webhooks.');
         } finally {
             setLoading(false);
         }
-    }, [permisos.configurar, credencialesOk]);
+    }, [permisos.configurar, credencialesOk, cargarEntregas]);
 
     useEffect(() => {
         cargar();
-    }, [cargar]);
+        if (permisos.configurar && !credencialesOk) {
+            cargarEntregas();
+        }
+    }, [cargar, cargarEntregas, permisos.configurar, credencialesOk]);
 
     useEffect(() => {
         if (webhookUrl) setUrl(webhookUrl);
@@ -149,7 +168,7 @@ export default function PanelWebhooks({
                         Suscripciones en Tiendanube. Receptor público: {webhookUrl || url || '—'}
                     </p>
                     <p className="text-xs theme-text-muted mt-1">
-                        Privacidad (Partners): los 3 campos LGPD usan esta misma URL; no se registran vía API.
+                        Privacidad (Partners) ≠ eventos de producto; el catálogo usa las suscripciones de esta lista.
                     </p>
                 </div>
             </div>
@@ -254,6 +273,55 @@ export default function PanelWebhooks({
                         ))}
                     </tbody>
                 </table>
+            </div>
+
+            <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                        Últimas entregas
+                    </p>
+                    <button
+                        type="button"
+                        onClick={cargarEntregas}
+                        className="text-[10px] font-black uppercase tracking-widest theme-text-muted hover:theme-text-main"
+                    >
+                        Refrescar
+                    </button>
+                </div>
+                <div className="overflow-x-auto border theme-border rounded-xl">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="border-b theme-border text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                                <th className="px-3 py-2">Evento</th>
+                                <th className="px-3 py-2">Recurso</th>
+                                <th className="px-3 py-2">Estado</th>
+                                <th className="px-3 py-2">Cuándo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {entregas.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="px-3 py-4 text-xs theme-text-muted">
+                                        Sin entregas recientes.
+                                    </td>
+                                </tr>
+                            )}
+                            {entregas.map((d) => (
+                                <tr key={d.id} className="border-b theme-border last:border-0">
+                                    <td className="px-3 py-2 font-mono text-xs theme-text-main">{d.event}</td>
+                                    <td className="px-3 py-2 text-xs theme-text-muted">{d.resource_id || '—'}</td>
+                                    <td className="px-3 py-2 text-xs theme-text-main" title={d.error || undefined}>
+                                        {d.status}
+                                        {d.error ? ' · err' : ''}
+                                    </td>
+                                    <td className="px-3 py-2 text-xs theme-text-muted whitespace-nowrap">
+                                        {d.created_at ? new Date(d.created_at).toLocaleString() : '—'}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

@@ -4,10 +4,12 @@ namespace Tests\Feature\Tiendanube;
 
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeProducto;
+use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\User;
 use App\Services\Tiendanube\TiendanubeProductoWriteService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Permission;
@@ -32,6 +34,8 @@ class TiendanubeProductoWriteTest extends TestCase
             'app_id' => '37163',
             'access_token' => Crypt::encryptString('token-test'),
         ])->save();
+
+        config(['queue.default' => 'sync']);
     }
 
     public function test_crear_producto_simple_upsert_espejo(): void
@@ -320,5 +324,136 @@ class TiendanubeProductoWriteTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('producto_id', 301);
+    }
+
+    public function test_agregar_imagen_reemplazar_borra_anteriores(): void
+    {
+        TiendanubeProducto::create(['id' => 100, 'name' => ['es' => 'Prod'], 'published' => true]);
+        TiendanubeProductoImagen::create([
+            'id' => 10,
+            'producto_id' => 100,
+            'src' => 'https://cdn.example.com/old.jpg',
+            'position' => 1,
+        ]);
+        TiendanubeProductoImagen::create([
+            'id' => 11,
+            'producto_id' => 100,
+            'src' => 'https://cdn.example.com/old2.jpg',
+            'position' => 2,
+        ]);
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/100/images/10' => Http::response([], 200),
+            'api.tiendanube.com/v1/8004291/products/100/images/11' => Http::response([], 200),
+            'api.tiendanube.com/v1/8004291/products/100/images' => Http::response([
+                'id' => 99,
+                'src' => 'https://cdn.tiendanube.com/nueva.webp',
+                'position' => 1,
+                'product_id' => 100,
+                'alt' => null,
+            ], 201),
+        ]);
+
+        $png = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            true
+        );
+        $path = sys_get_temp_dir().'/tn_rep_'.uniqid('', true).'.png';
+        file_put_contents($path, $png);
+        $file = new UploadedFile($path, 'SKU.png', 'image/png', null, true);
+
+        $imagen = app(TiendanubeProductoWriteService::class)->agregarImagen(100, null, $file, null, true);
+
+        $this->assertSame(99, $imagen->id);
+        $this->assertSame(1, TiendanubeProductoImagen::where('producto_id', 100)->count());
+        $this->assertDatabaseMissing('tiendanube_producto_imagenes', ['id' => 10]);
+        $this->assertDatabaseMissing('tiendanube_producto_imagenes', ['id' => 11]);
+
+        Http::assertSent(fn ($r) => $r->method() === 'DELETE' && str_contains($r->url(), '/images/10'));
+        Http::assertSent(fn ($r) => $r->method() === 'DELETE' && str_contains($r->url(), '/images/11'));
+        Http::assertSent(fn ($r) => $r->method() === 'POST' && str_ends_with(parse_url($r->url(), PHP_URL_PATH) ?: '', '/images'));
+
+        @unlink($path);
+    }
+
+    public function test_resolver_sku_encontrado_y_no(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        Permission::findOrCreate('tiendanube.productos.editar', 'web');
+        $user = User::factory()->create();
+        $user->givePermissionTo(['tiendanube.ver', 'tiendanube.productos.editar']);
+
+        TiendanubeProducto::create(['id' => 50, 'name' => ['es' => 'Aroma'], 'published' => true]);
+        TiendanubeProductoVariante::create([
+            'id' => 5,
+            'producto_id' => 50,
+            'sku' => 'SKU-OK',
+            'price' => 10,
+        ]);
+        TiendanubeProductoImagen::create([
+            'id' => 7,
+            'producto_id' => 50,
+            'src' => 'https://cdn.example.com/a.webp',
+            'position' => 1,
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('tiendanube.skus.resolver', ['sku' => 'SKU-OK']))
+            ->assertOk()
+            ->assertJsonPath('encontrado', true)
+            ->assertJsonPath('producto_id', 50)
+            ->assertJsonPath('nombre', 'Aroma')
+            ->assertJsonPath('imagen_actual', 'https://cdn.example.com/a.webp');
+
+        $this->actingAs($user)
+            ->getJson(route('tiendanube.skus.resolver', ['sku' => 'NOPE']))
+            ->assertOk()
+            ->assertJsonPath('encontrado', false)
+            ->assertJsonPath('producto_id', null);
+    }
+
+    public function test_store_imagen_reemplazar_via_endpoint(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        Permission::findOrCreate('tiendanube.productos.editar', 'web');
+        $user = User::factory()->create();
+        $user->givePermissionTo(['tiendanube.ver', 'tiendanube.productos.editar']);
+
+        TiendanubeProducto::create(['id' => 100, 'name' => ['es' => 'P'], 'published' => true]);
+        TiendanubeProductoImagen::create([
+            'id' => 1,
+            'producto_id' => 100,
+            'src' => 'https://cdn.example.com/old.jpg',
+            'position' => 1,
+        ]);
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/100/images/1' => Http::response([], 200),
+            'api.tiendanube.com/v1/8004291/products/100/images' => Http::response([
+                'id' => 2,
+                'src' => 'https://cdn.tiendanube.com/new.webp',
+                'position' => 1,
+                'product_id' => 100,
+            ], 201),
+        ]);
+
+        $png = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            true
+        );
+        $file = UploadedFile::fake()->createWithContent('SKU.webp', $png);
+
+        $this->actingAs($user)
+            ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class)
+            ->post(route('tiendanube.productos.imagenes.store', 100), [
+                'file' => $file,
+                'reemplazar' => '1',
+            ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('success', true);
+
+        $this->assertSame(1, TiendanubeProductoImagen::where('producto_id', 100)->count());
+        $this->assertDatabaseHas('tiendanube_producto_imagenes', ['id' => 2, 'producto_id' => 100]);
+        $this->assertDatabaseMissing('tiendanube_producto_imagenes', ['id' => 1]);
     }
 }

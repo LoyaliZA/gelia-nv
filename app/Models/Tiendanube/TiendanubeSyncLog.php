@@ -15,6 +15,8 @@ class TiendanubeSyncLog extends Model
         'total_productos',
         'procesados_categorias',
         'procesados_productos',
+        'eliminados_productos',
+        'eliminados_categorias',
         'mensaje_error',
     ];
 

@@ -125,6 +125,7 @@ export default function PanelImportImagenes({
                     <p className="text-xs theme-text-muted mt-1">
                         ZIP con archivos <code className="font-mono">SKU.webp</code> o{' '}
                         <code className="font-mono">SKU_2.jpg</code>. Se relacionan con el catálogo por SKU.
+                        Cada imagen reemplaza todas las anteriores del producto.
                     </p>
                 </div>
             </div>

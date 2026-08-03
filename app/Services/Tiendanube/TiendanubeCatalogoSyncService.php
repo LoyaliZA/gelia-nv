@@ -41,11 +41,16 @@ class TiendanubeCatalogoSyncService
     {
         $page = 1;
         $total = 0;
+        $idsVistos = [];
 
         do {
             $chunk = $this->api->getCategoriesPage($page);
             foreach ($chunk as $cat) {
+                if (! is_array($cat) || ! isset($cat['id'])) {
+                    continue;
+                }
                 $this->upsertCategoria($cat);
+                $idsVistos[] = (int) $cat['id'];
                 $total++;
             }
             $log->update([
@@ -55,9 +60,12 @@ class TiendanubeCatalogoSyncService
             $page++;
         } while (count($chunk) >= (int) config('tiendanube.per_page', 50));
 
+        $eliminados = $this->pruneCategorias($idsVistos);
+
         $log->update([
             'total_categorias' => $total,
             'procesados_categorias' => $total,
+            'eliminados_categorias' => $eliminados,
         ]);
     }
 
@@ -65,11 +73,16 @@ class TiendanubeCatalogoSyncService
     {
         $page = 1;
         $total = 0;
+        $idsVistos = [];
 
         do {
             $chunk = $this->api->getProductsPage($page);
             foreach ($chunk as $producto) {
+                if (! is_array($producto) || ! isset($producto['id'])) {
+                    continue;
+                }
                 $this->upsertProducto($producto);
+                $idsVistos[] = (int) $producto['id'];
                 $total++;
             }
             $log->update([
@@ -79,10 +92,57 @@ class TiendanubeCatalogoSyncService
             $page++;
         } while (count($chunk) >= (int) config('tiendanube.per_page', 50));
 
+        $eliminados = $this->pruneProductos($idsVistos);
+
         $log->update([
             'total_productos' => $total,
             'procesados_productos' => $total,
+            'eliminados_productos' => $eliminados,
         ]);
+    }
+
+    /**
+     * @param  list<int>  $idsVistos
+     */
+    private function pruneProductos(array $idsVistos): int
+    {
+        $idsVistos = array_values(array_unique(array_filter($idsVistos)));
+
+        $query = TiendanubeProducto::query();
+        if ($idsVistos !== []) {
+            $query->whereNotIn('id', $idsVistos);
+        }
+
+        $ids = $query->pluck('id');
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        TiendanubeProducto::whereIn('id', $ids)->delete();
+
+        return $ids->count();
+    }
+
+    /**
+     * @param  list<int>  $idsVistos
+     */
+    private function pruneCategorias(array $idsVistos): int
+    {
+        $idsVistos = array_values(array_unique(array_filter($idsVistos)));
+
+        $query = TiendanubeCategoria::query();
+        if ($idsVistos !== []) {
+            $query->whereNotIn('id', $idsVistos);
+        }
+
+        $ids = $query->pluck('id');
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        TiendanubeCategoria::whereIn('id', $ids)->delete();
+
+        return $ids->count();
     }
 
     /**

@@ -263,6 +263,56 @@ class TiendanubeWebhookTest extends TestCase
         $this->assertNotNull(TiendanubeConfiguracion::obtener()->access_token);
     }
 
+    public function test_product_deleted_elimina_producto_local(): void
+    {
+        Queue::fake();
+
+        TiendanubeProducto::query()->create([
+            'id' => 1948209,
+            'name' => ['es' => 'A borrar'],
+            'published' => false,
+        ]);
+
+        $this->postSignedWebhook([
+            'store_id' => 8004291,
+            'event' => 'product/deleted',
+            'id' => 1948209,
+        ])->assertOk();
+
+        $delivery = TiendanubeWebhookDelivery::query()->firstOrFail();
+        $this->runDeliveryJob($delivery);
+
+        $this->assertSame('processed', $delivery->fresh()->status);
+        $this->assertDatabaseMissing('tiendanube_productos', ['id' => 1948209]);
+    }
+
+    public function test_listar_entregas_webhook(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        Permission::findOrCreate('tiendanube.configurar', 'web');
+
+        $user = User::factory()->create();
+        $user->givePermissionTo(['tiendanube.ver', 'tiendanube.configurar']);
+
+        TiendanubeWebhookDelivery::query()->create([
+            'store_id' => 8004291,
+            'event' => 'product/deleted',
+            'resource_id' => '999',
+            'payload' => ['event' => 'product/deleted', 'id' => 999],
+            'payload_hash' => hash('sha256', 'x'),
+            'hmac_valid' => true,
+            'status' => 'processed',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('tiendanube.webhooks.entregas'))
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('entregas.0.event', 'product/deleted')
+            ->assertJsonPath('entregas.0.resource_id', '999')
+            ->assertJsonPath('entregas.0.status', 'processed');
+    }
+
     public function test_aplicar_recomendados_crea_solo_faltantes(): void
     {
         $this->withoutMiddleware([

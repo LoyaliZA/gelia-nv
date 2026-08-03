@@ -197,11 +197,13 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     Route::middleware(['can:tiendanube.ver'])->prefix('tiendanube')->name('tiendanube.')->group(function () {
         Route::get('/', [\App\Http\Controllers\TiendanubeController::class, 'index'])->name('index');
+        Route::get('/imagenes', [\App\Http\Controllers\TiendanubeController::class, 'imagenesIndex'])->name('imagenes.index')->middleware('can:tiendanube.productos.editar');
         Route::get('/progreso/{id}', [\App\Http\Controllers\TiendanubeController::class, 'progreso'])->name('progreso');
         Route::get('/productos/{id}', [\App\Http\Controllers\TiendanubeController::class, 'producto'])->name('productos.show');
         Route::post('/productos', [\App\Http\Controllers\TiendanubeController::class, 'storeProducto'])->name('productos.store')->middleware('can:tiendanube.productos.editar');
         Route::put('/productos/{id}', [\App\Http\Controllers\TiendanubeController::class, 'updateProducto'])->name('productos.update')->middleware('can:tiendanube.productos.editar');
         Route::post('/productos/{id}/imagenes', [\App\Http\Controllers\TiendanubeController::class, 'storeImagen'])->name('productos.imagenes.store')->middleware('can:tiendanube.productos.editar');
+        Route::get('/skus/resolver', [\App\Http\Controllers\TiendanubeController::class, 'resolverSku'])->name('skus.resolver')->middleware('can:tiendanube.productos.editar');
         Route::post('/imagenes/importar', [\App\Http\Controllers\TiendanubeController::class, 'importarImagenes'])->name('imagenes.importar')->middleware('can:tiendanube.productos.editar');
         Route::get('/imagenes/importar/{id}', [\App\Http\Controllers\TiendanubeController::class, 'progresoImportImagenes'])->name('imagenes.importar.progreso');
         Route::get('/imagenes/importar/{id}/reporte', [\App\Http\Controllers\TiendanubeController::class, 'reporteImportImagenes'])->name('imagenes.importar.reporte');
@@ -209,6 +211,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/configuracion/probar-conexion', [\App\Http\Controllers\TiendanubeController::class, 'probarConexion'])->name('configuracion.probar_conexion')->middleware('can:tiendanube.configurar');
         Route::post('/catalogo/limpiar', [\App\Http\Controllers\TiendanubeController::class, 'limpiarCatalogo'])->name('catalogo.limpiar')->middleware('can:tiendanube.configurar');
         Route::get('/webhooks', [\App\Http\Controllers\TiendanubeController::class, 'listarWebhooks'])->name('webhooks.index')->middleware('can:tiendanube.configurar');
+        Route::get('/webhooks/entregas', [\App\Http\Controllers\TiendanubeController::class, 'listarEntregasWebhook'])->name('webhooks.entregas')->middleware('can:tiendanube.configurar');
         Route::post('/webhooks/aplicar-recomendados', [\App\Http\Controllers\TiendanubeController::class, 'aplicarWebhooksRecomendados'])->name('webhooks.aplicar_recomendados')->middleware('can:tiendanube.configurar');
         Route::post('/webhooks', [\App\Http\Controllers\TiendanubeController::class, 'crearWebhook'])->name('webhooks.store')->middleware('can:tiendanube.configurar');
         Route::put('/webhooks/{id}', [\App\Http\Controllers\TiendanubeController::class, 'actualizarWebhook'])->name('webhooks.update')->middleware('can:tiendanube.configurar');

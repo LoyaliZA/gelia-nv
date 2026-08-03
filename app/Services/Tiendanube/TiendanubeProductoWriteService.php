@@ -106,12 +106,31 @@ class TiendanubeProductoWriteService
         return $this->sync->upsertProducto($remote);
     }
 
+    public function eliminarTodasLasImagenes(int $tnProductId): void
+    {
+        $imagenes = TiendanubeProductoImagen::where('producto_id', $tnProductId)->get();
+
+        foreach ($imagenes as $imagen) {
+            try {
+                $this->api->deleteProductImage($tnProductId, (int) $imagen->id);
+            } catch (\Throwable) {
+                // Continuar: la imagen puede ya no existir en TN
+            }
+            $imagen->delete();
+        }
+    }
+
     public function agregarImagen(
         int $tnProductId,
         ?string $srcUrl = null,
         ?UploadedFile $file = null,
-        ?int $position = null
+        ?int $position = null,
+        bool $reemplazar = false
     ): TiendanubeProductoImagen {
+        if ($reemplazar) {
+            $this->eliminarTodasLasImagenes($tnProductId);
+        }
+
         $payload = [];
         $meta = [
             'width' => null,

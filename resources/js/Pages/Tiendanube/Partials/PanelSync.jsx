@@ -126,6 +126,12 @@ export default function PanelSync({
                         Productos {progreso?.procesados_productos ?? procesoActivo?.procesados_productos ?? 0}
                         {' / '}
                         {progreso?.total_productos || '…'}
+                        {(progreso?.eliminados_productos > 0 || progreso?.eliminados_categorias > 0) && (
+                            <>
+                                {' · '}
+                                Eliminados {progreso.eliminados_productos || 0} prod / {progreso.eliminados_categorias || 0} cat
+                            </>
+                        )}
                     </p>
                     {progreso?.mensaje_error && (
                         <p className="text-xs font-bold text-red-500">{progreso.mensaje_error}</p>

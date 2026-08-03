@@ -34,6 +34,8 @@ class TiendanubeImageImportTest extends TestCase
 
         Storage::fake('local');
 
+        config(['queue.default' => 'sync']);
+
         TiendanubeConfiguracion::obtener()->fill([
             'store_id' => 8004291,
             'app_id' => '37163',
@@ -226,6 +228,7 @@ class TiendanubeImageImportTest extends TestCase
         $zip = $this->makeZip(['X.webp' => 'b']);
 
         $this->actingAs($user)
+            ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class)
             ->post(route('tiendanube.imagenes.importar'), ['zip' => $zip])
             ->assertForbidden();
 
@@ -234,6 +237,7 @@ class TiendanubeImageImportTest extends TestCase
         Http::fake();
 
         $this->actingAs($user)
+            ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class)
             ->post(route('tiendanube.imagenes.importar'), [
                 'zip' => $this->makeZip(['Y.webp' => 'b']),
             ])

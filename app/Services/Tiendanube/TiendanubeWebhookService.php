@@ -66,9 +66,11 @@ class TiendanubeWebhookService
     }
 
     /**
+     * Crea suscripciones recomendadas faltantes. No lanza por fallo de un evento individual.
+     *
      * @return array{creados: list<array<string, mixed>>, ya_existentes: list<string>, errores: list<array{event: string, message: string}>}
      */
-    public function aplicarRecomendados(?string $url = null): array
+    public function asegurarRecomendados(?string $url = null): array
     {
         $url = $url ?: $this->webhookUrl();
         $this->assertHttpsUrl($url);
@@ -104,6 +106,14 @@ class TiendanubeWebhookService
             'ya_existentes' => $yaExistentes,
             'errores' => $errores,
         ];
+    }
+
+    /**
+     * @return array{creados: list<array<string, mixed>>, ya_existentes: list<string>, errores: list<array{event: string, message: string}>}
+     */
+    public function aplicarRecomendados(?string $url = null): array
+    {
+        return $this->asegurarRecomendados($url);
     }
 
     public function assertHttpsUrl(string $url): void

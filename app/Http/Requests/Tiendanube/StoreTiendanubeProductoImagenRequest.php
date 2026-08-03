@@ -17,6 +17,7 @@ class StoreTiendanubeProductoImagenRequest extends FormRequest
             'src' => ['nullable', 'url', 'max:2048', 'required_without:file'],
             'file' => ['nullable', 'file', 'required_without:src', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp'],
             'position' => ['nullable', 'integer', 'min:1'],
+            'reemplazar' => ['nullable', 'boolean'],
         ];
     }
 }

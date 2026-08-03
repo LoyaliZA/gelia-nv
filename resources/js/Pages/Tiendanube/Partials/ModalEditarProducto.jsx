@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Save } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import EditorDescripcionHtml from './EditorDescripcionHtml';
+import { formatBytes, readImageDimensions } from '../../../utils/tiendanubeImageSku';
 
 function textoIdioma(valor) {
     if (!valor) return '';
@@ -38,6 +39,9 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [imageUrl, setImageUrl] = useState('');
+    const [imageFile, setImageFile] = useState(null);
+    const [imageMeta, setImageMeta] = useState(null);
+    const [permitirVarias, setPermitirVarias] = useState(false);
     const [addingImage, setAddingImage] = useState(false);
 
     const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -49,6 +53,20 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
                 ...prev,
                 categories: has ? prev.categories.filter((c) => c !== id) : [...prev.categories, id],
             };
+        });
+    };
+
+    const onPickFile = async (e) => {
+        const file = e.target.files?.[0] || null;
+        setImageFile(file);
+        setImageMeta(null);
+        if (!file) return;
+        const dims = await readImageDimensions(file);
+        setImageMeta({
+            size: file.size,
+            width: dims.width,
+            height: dims.height,
+            preview: URL.createObjectURL(file),
         });
     };
 
@@ -96,11 +114,43 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
                     'X-CSRF-TOKEN': csrfToken(),
                     Accept: 'application/json',
                 },
-                body: JSON.stringify({ src: imageUrl.trim() }),
+                body: JSON.stringify({
+                    src: imageUrl.trim(),
+                    reemplazar: !permitirVarias,
+                }),
             });
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo subir la imagen.');
             setImageUrl('');
+            onSaved?.(producto.id);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setAddingImage(false);
+        }
+    };
+
+    const agregarImagenFile = async () => {
+        if (!imageFile) return;
+        setAddingImage(true);
+        setError(null);
+        try {
+            const body = new FormData();
+            body.append('file', imageFile);
+            body.append('reemplazar', permitirVarias ? '0' : '1');
+            const res = await fetch(route('tiendanube.productos.imagenes.store', producto.id), {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken(),
+                    Accept: 'application/json',
+                },
+                body,
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo subir la imagen.');
+            if (imageMeta?.preview) URL.revokeObjectURL(imageMeta.preview);
+            setImageFile(null);
+            setImageMeta(null);
             onSaved?.(producto.id);
         } catch (err) {
             setError(err.message);
@@ -217,13 +267,62 @@ export default function ModalEditarProducto({ producto, categorias = [], onClose
                         </div>
                     </div>
 
-                    <div className="pt-2 border-t theme-border">
-                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Agregar imagen (URL)</p>
-                        <div className="flex gap-2">
-                            <input className={inputClass} type="url" placeholder="https://…" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
-                            <button type="button" onClick={agregarImagenUrl} className="px-4 py-2 rounded-xl text-[10px] font-black uppercase border theme-border theme-text-main shrink-0">
-                                Subir
-                            </button>
+                    <div className="pt-2 border-t theme-border space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Imagen del producto</p>
+                            <label className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest theme-text-muted cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={permitirVarias}
+                                    onChange={(e) => setPermitirVarias(e.target.checked)}
+                                    className="rounded border theme-border"
+                                />
+                                Permitir varias
+                            </label>
+                        </div>
+                        <p className="text-[10px] theme-text-muted">
+                            {permitirVarias
+                                ? 'Se agregará sin borrar las existentes.'
+                                : 'Reemplaza todas las imágenes actuales del producto.'}
+                        </p>
+                        <div>
+                            <label className={labelClass}>Archivo</label>
+                            <input
+                                type="file"
+                                accept=".jpg,.jpeg,.png,.gif,.webp,image/*"
+                                onChange={onPickFile}
+                                className="w-full text-xs theme-text-main file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-zinc-100 dark:file:bg-zinc-800"
+                            />
+                            {imageMeta && (
+                                <div className="mt-2 flex items-center gap-3">
+                                    {imageMeta.preview && (
+                                        <img src={imageMeta.preview} alt="" className="w-14 h-14 rounded-lg object-cover border theme-border" />
+                                    )}
+                                    <p className="text-[10px] font-mono theme-text-muted">
+                                        {formatBytes(imageMeta.size)}
+                                        {imageMeta.width && imageMeta.height
+                                            ? ` · ${imageMeta.width}×${imageMeta.height}`
+                                            : ''}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={agregarImagenFile}
+                                        disabled={!imageFile || addingImage}
+                                        className="ml-auto px-4 py-2 rounded-xl text-[10px] font-black uppercase border theme-border theme-text-main shrink-0 disabled:opacity-50"
+                                    >
+                                        Subir archivo
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            <label className={labelClass}>O por URL</label>
+                            <div className="flex gap-2">
+                                <input className={inputClass} type="url" placeholder="https://…" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
+                                <button type="button" onClick={agregarImagenUrl} className="px-4 py-2 rounded-xl text-[10px] font-black uppercase border theme-border theme-text-main shrink-0">
+                                    Subir
+                                </button>
+                            </div>
                         </div>
                     </div>
 

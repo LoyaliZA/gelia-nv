@@ -205,7 +205,8 @@ class TiendanubeImageImportService
                     (int) $item->producto_id,
                     null,
                     $uploaded,
-                    (int) $item->position
+                    (int) $item->position,
+                    true
                 );
 
                 $item->update([

@@ -169,6 +169,11 @@ class TiendanubeApiClient
         return $this->decode($this->client()->post("/products/{$productId}/images", $payload));
     }
 
+    public function deleteProductImage(int $productId, int $imageId): void
+    {
+        $this->assertOk($this->client()->delete("/products/{$productId}/images/{$imageId}"));
+    }
+
     /**
      * @return list<array<string, mixed>>
      */

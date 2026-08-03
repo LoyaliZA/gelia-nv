@@ -10,7 +10,9 @@ use App\Models\Tiendanube\TiendanubeCategoria;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeImageImport;
 use App\Models\Tiendanube\TiendanubeProducto;
+use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\Tiendanube\TiendanubeSyncLog;
+use App\Models\Tiendanube\TiendanubeWebhookDelivery;
 use App\Services\Tiendanube\TiendanubeApiClient;
 use App\Services\Tiendanube\TiendanubeCatalogoWipeService;
 use App\Services\Tiendanube\TiendanubeImageImportService;
@@ -19,6 +21,7 @@ use App\Services\Tiendanube\TiendanubeWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -103,6 +106,82 @@ class TiendanubeController extends Controller
                 'ver' => $user->can('tiendanube.ver'),
                 'configurar' => $user->can('tiendanube.configurar'),
                 'sincronizar' => $user->can('tiendanube.sincronizar'),
+                'editar' => $user->can('tiendanube.productos.editar'),
+            ],
+        ]);
+    }
+
+    public function imagenesIndex(Request $request): Response
+    {
+        Gate::authorize('tiendanube.productos.editar');
+
+        $config = TiendanubeConfiguracion::obtener();
+        $query = $request->input('search');
+        $filtroAlertaImagenes = $request->boolean('imagenes_alerta');
+        $filtroSinImagen = $request->boolean('sin_imagen');
+        $imageImportActivo = TiendanubeImageImport::activo();
+
+        $productos = TiendanubeProducto::query()
+            ->with(['variantes', 'imagenes'])
+            ->when($query, function ($q) use ($query) {
+                $q->where(function ($inner) use ($query) {
+                    $inner->where('id', $query)
+                        ->orWhere('seo_title', 'LIKE', "%{$query}%")
+                        ->orWhere('brand', 'LIKE', "%{$query}%")
+                        ->orWhereHas('variantes', fn ($v) => $v->where('sku', 'LIKE', "%{$query}%"));
+                });
+            })
+            ->when($filtroAlertaImagenes, function ($q) {
+                $q->whereHas('imagenes', fn ($img) => $img->where('requiere_revision', true));
+            })
+            ->when($filtroSinImagen, function ($q) {
+                $q->whereDoesntHave('imagenes');
+            })
+            ->orderByDesc('id')
+            ->paginate(24)
+            ->withQueryString()
+            ->through(function (TiendanubeProducto $p) {
+                $primera = $p->imagenes->sortBy('position')->first();
+
+                return [
+                    'id' => $p->id,
+                    'nombre' => $p->nombreVisible(),
+                    'sku' => $p->skuPrincipal(),
+                    'imagen' => $primera?->src,
+                    'width' => $primera?->width,
+                    'height' => $primera?->height,
+                    'requiere_revision' => (bool) ($primera?->requiere_revision),
+                    'alerta_pequena' => (bool) ($primera?->alerta_pequena),
+                    'alerta_no_cuadrada' => (bool) ($primera?->alerta_no_cuadrada),
+                    'num_imagenes' => $p->imagenes->count(),
+                    'tiene_alerta_imagenes' => $p->imagenes->contains(fn ($img) => (bool) $img->requiere_revision),
+                ];
+            });
+
+        $user = $request->user();
+
+        return Inertia::render('Tiendanube/Imagenes', [
+            'configuracion' => [
+                'credenciales_configuradas' => $config->credencialesConfiguradas(),
+                'store_name' => $config->store_name,
+            ],
+            'productos' => $productos,
+            'totales' => [
+                'productos' => TiendanubeProducto::count(),
+                'sin_imagen' => TiendanubeProducto::query()->whereDoesntHave('imagenes')->count(),
+                'productos_alerta_imagenes' => TiendanubeProducto::query()
+                    ->whereHas('imagenes', fn ($img) => $img->where('requiere_revision', true))
+                    ->count(),
+            ],
+            'imageImportActivo' => $imageImportActivo,
+            'ultimosImportImagenes' => TiendanubeImageImport::orderByDesc('id')->limit(5)->get(),
+            'filters' => [
+                'search' => $query,
+                'imagenes_alerta' => $filtroAlertaImagenes,
+                'sin_imagen' => $filtroSinImagen,
+            ],
+            'permisos' => [
+                'ver' => $user->can('tiendanube.ver'),
                 'editar' => $user->can('tiendanube.productos.editar'),
             ],
         ]);
@@ -266,7 +345,7 @@ class TiendanubeController extends Controller
         }
     }
 
-    public function sincronizar(): JsonResponse
+    public function sincronizar(TiendanubeWebhookService $webhooks): JsonResponse
     {
         Gate::authorize('tiendanube.sincronizar');
 
@@ -283,6 +362,19 @@ class TiendanubeController extends Controller
                 'success' => false,
                 'message' => 'Ya hay una sincronización en curso.',
             ], 409);
+        }
+
+        try {
+            $resultado = $webhooks->asegurarRecomendados();
+            if (($resultado['errores'] ?? []) !== []) {
+                Log::warning('Tiendanube: webhooks recomendados con errores antes del sync', [
+                    'errores' => $resultado['errores'],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Tiendanube: no se pudieron asegurar webhooks antes del sync', [
+                'message' => $e->getMessage(),
+            ]);
         }
 
         $log = TiendanubeSyncLog::create([
@@ -313,6 +405,8 @@ class TiendanubeController extends Controller
             'total_productos' => $log->total_productos,
             'procesados_categorias' => $log->procesados_categorias,
             'procesados_productos' => $log->procesados_productos,
+            'eliminados_productos' => $log->eliminados_productos,
+            'eliminados_categorias' => $log->eliminados_categorias,
             'porcentaje' => $log->progresoPorcentaje(),
             'mensaje_error' => $log->mensaje_error,
             'updated_at' => $log->updated_at?->toIso8601String(),
@@ -403,16 +497,19 @@ class TiendanubeController extends Controller
         TiendanubeProducto::findOrFail($id);
 
         try {
+            $reemplazar = $request->boolean('reemplazar', true);
+
             $imagen = $write->agregarImagen(
                 $id,
                 $request->input('src'),
                 $request->file('file'),
-                $request->filled('position') ? (int) $request->input('position') : null
+                $request->filled('position') ? (int) $request->input('position') : null,
+                $reemplazar
             );
 
             return response()->json([
                 'success' => true,
-                'message' => 'Imagen agregada.',
+                'message' => $reemplazar ? 'Imagen reemplazada.' : 'Imagen agregada.',
                 'imagen' => $imagen,
             ], 201);
         } catch (\Throwable $e) {
@@ -421,6 +518,49 @@ class TiendanubeController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    public function resolverSku(Request $request): JsonResponse
+    {
+        Gate::authorize('tiendanube.productos.editar');
+
+        $sku = trim((string) $request->query('sku', ''));
+        if ($sku === '') {
+            return response()->json([
+                'sku' => '',
+                'encontrado' => false,
+                'producto_id' => null,
+                'nombre' => null,
+                'imagen_actual' => null,
+            ]);
+        }
+
+        $variante = TiendanubeProductoVariante::query()
+            ->with(['producto.imagenes'])
+            ->where('sku', $sku)
+            ->orderBy('id')
+            ->first();
+
+        if (! $variante || ! $variante->producto) {
+            return response()->json([
+                'sku' => $sku,
+                'encontrado' => false,
+                'producto_id' => null,
+                'nombre' => null,
+                'imagen_actual' => null,
+            ]);
+        }
+
+        $producto = $variante->producto;
+        $primera = $producto->imagenes->sortBy('position')->first();
+
+        return response()->json([
+            'sku' => $sku,
+            'encontrado' => true,
+            'producto_id' => $producto->id,
+            'nombre' => $producto->nombreVisible(),
+            'imagen_actual' => $primera?->src,
+        ]);
     }
 
     public function importarImagenes(Request $request, TiendanubeImageImportService $service): JsonResponse
@@ -546,6 +686,21 @@ class TiendanubeController extends Controller
                 'message' => $e->getMessage(),
             ], 400);
         }
+    }
+
+    public function listarEntregasWebhook(): JsonResponse
+    {
+        Gate::authorize('tiendanube.configurar');
+
+        $entregas = TiendanubeWebhookDelivery::query()
+            ->latest('id')
+            ->limit(20)
+            ->get(['id', 'event', 'resource_id', 'status', 'error', 'created_at']);
+
+        return response()->json([
+            'success' => true,
+            'entregas' => $entregas,
+        ]);
     }
 
     public function crearWebhook(Request $request, TiendanubeWebhookService $webhooks): JsonResponse
