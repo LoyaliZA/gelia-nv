@@ -72,10 +72,10 @@ function trackExpandScroll(blockEl) {
     };
 }
 
-export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVisible = false, onNavigate }) {
+export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVisible = false, geliaAiVisible = false, onNavigate }) {
     const tree = useMemo(
-        () => buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible }),
-        [can, showAdminMenu, manualesHubVisible]
+        () => buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible, geliaAiVisible }),
+        [can, showAdminMenu, manualesHubVisible, geliaAiVisible]
     );
 
     const [openGroups, setOpenGroups] = useState(() => {

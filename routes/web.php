@@ -9,7 +9,8 @@ use App\Http\Controllers\Reportes\ReporteTraspasosDiaController;
 use App\Http\Controllers\Api\{CotizacionEntregaController,ClienteApiController};
 use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\MapaLogisticoController;
-use App\Http\Controllers\Admin\{AuditoriaListaDescuentoController,PersonalizacionController,ConfiguracionSistemaController,MonitoreoMensajeriaController};
+use App\Http\Controllers\Admin\{AuditoriaListaDescuentoController,PersonalizacionController,ConfiguracionSistemaController,MonitoreoMensajeriaController,GeliaAiAccesoController};
+use App\Http\Controllers\GeliaAi\GeliaAiController;
 use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\{ActivoController,CategoriaActivoController,TipoActivoController};
 use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,IncidenciaGerenteController,ReciboRhController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController,ConsolidadoHorasExtraController,BancoTiempoController};
@@ -109,6 +110,20 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/push/vapid-public-key', [\App\Http\Controllers\WebPushController::class, 'vapidPublicKey'])->name('push.vapid');
     Route::post('/push/subscribe', [\App\Http\Controllers\WebPushController::class, 'subscribe'])->name('push.subscribe');
     Route::delete('/push/unsubscribe', [\App\Http\Controllers\WebPushController::class, 'unsubscribe'])->name('push.unsubscribe');
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: ASISTENTE GELIA AI (fase 1: consulta + ayuda)
+    // ══════════════════════════════════════════════════════════════════════
+    Route::prefix('gelia-ai')->name('gelia_ai.')->group(function () {
+        Route::get('/', [GeliaAiController::class, 'index'])->name('index');
+        Route::post('/chat', [GeliaAiController::class, 'chat'])->middleware('throttle:30,1')->name('chat');
+        Route::post('/archivos', [GeliaAiController::class, 'subirArchivos'])->middleware('throttle:20,1')->name('archivos.store');
+        Route::post('/acciones/ejecutar', [GeliaAiController::class, 'ejecutarAccion'])->middleware('throttle:20,1')->name('acciones.ejecutar');
+        Route::get('/conversaciones', [GeliaAiController::class, 'conversaciones'])->name('conversaciones.index');
+        Route::post('/conversaciones', [GeliaAiController::class, 'storeConversacion'])->name('conversaciones.store');
+        Route::get('/conversaciones/{conversacion}', [GeliaAiController::class, 'showConversacion'])->name('conversaciones.show');
+        Route::delete('/conversaciones/{conversacion}', [GeliaAiController::class, 'destroyConversacion'])->name('conversaciones.destroy');
+    });
 
     // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: MENSAJERÍA INTERNA
@@ -948,6 +963,12 @@ Route::middleware(['auth'])->group(function () {
             Route::put('/{configuracion}', [ConfiguracionSistemaController::class, 'update'])->name('update');
             Route::delete('/{configuracion}', [ConfiguracionSistemaController::class, 'destroy'])->name('destroy');
             Route::post('/test-mail', [ConfiguracionSistemaController::class, 'testMail'])->name('test_mail');
+        });
+
+        Route::middleware(['can:gelia_ai.gestionar_acceso'])->prefix('gelia-ai')->name('gelia_ai.')->group(function () {
+            Route::get('/acceso', [GeliaAiAccesoController::class, 'index'])->name('acceso.index');
+            Route::put('/acceso', [GeliaAiAccesoController::class, 'update'])->name('acceso.update');
+            Route::get('/usuarios', [GeliaAiAccesoController::class, 'buscarUsuarios'])->name('usuarios');
         });
 
         // --- Monitoreo de Mensajería ---

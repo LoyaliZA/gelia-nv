@@ -47,6 +47,13 @@
     animation-delay: var(--delay);
 }
 
+/* Los filtros en <polygon> se recortan si el SVG no permite overflow visible. */
+svg:has(.animate-sparkle),
+svg:has(.animate-fluid-sparkle),
+svg:has(.animate-pulse-glow) {
+    overflow: visible;
+}
+
 @keyframes gelia-logo-fluid-rise {
     0%, 100% { transform: translateY(100px); }
     50%, 80% { transform: translateY(0); }

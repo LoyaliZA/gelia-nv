@@ -12,6 +12,7 @@ use App\Services\Mensajeria\ListarConversacionesService;
 use App\Services\Presencia\PresenciaUsuarioService;
 use App\Support\PresenciaCatalogo;
 use App\Services\Manuales\ResolverManualesVisiblesService;
+use App\Services\GeliaAi\ResolverAccesoGeliaAi;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -119,6 +120,9 @@ class HandleInertiaRequests extends Middleware
                 : null,
             'manuales_hub_visible' => fn () => $user
                 ? app(ResolverManualesVisiblesService::class)->hubVisible($user)
+                : false,
+            'gelia_ai_visible' => fn () => $user
+                ? app(ResolverAccesoGeliaAi::class)->puedeUsar($user)
                 : false,
         ];
     }

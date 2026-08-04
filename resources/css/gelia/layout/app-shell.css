@@ -245,6 +245,12 @@ body {
     .gelia-app-shell[data-sidebar-layout='float-right'] {
         --gelia-main-inset-block-start: 5.5rem;
     }
+
+    /* Chat inmersivo (GELIA / mensajería): sin franjas arriba/abajo del body */
+    .gelia-app-shell[data-page-fullscreen='true'] {
+        --gelia-main-inset-block-start: 0px;
+        --gelia-main-inset-block-end: 0px;
+    }
 }
 
 

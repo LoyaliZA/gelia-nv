@@ -39,7 +39,28 @@ class IniciarImportacionAlmacenService
 
         $validated = $request->validate($rules);
 
-        $tempPath = $validated['file_path'];
+        return $this->ejecutarDesdeRuta(
+            $request->user()->id,
+            $tipo,
+            $validated['file_path'],
+            $validated['mapping'],
+            isset($validated['almacen_id']) ? (int) $validated['almacen_id'] : null,
+            conservarOrigen: false,
+        );
+    }
+
+    /**
+     * @param  array<string, string>  $mapping
+     * @return array{log_id: int}
+     */
+    public function ejecutarDesdeRuta(
+        int $userId,
+        string $tipo,
+        string $tempPath,
+        array $mapping,
+        ?int $almacenId = null,
+        bool $conservarOrigen = false,
+    ): array {
         if (! str_starts_with($tempPath, 'temp/')) {
             throw ValidationException::withMessages([
                 'file_path' => 'Ruta de archivo temporal inválida.',
@@ -52,12 +73,18 @@ class IniciarImportacionAlmacenService
             ]);
         }
 
+        if (in_array($tipo, ['inventarios', 'costos'], true) && ! $almacenId) {
+            throw ValidationException::withMessages([
+                'almacen_id' => 'Almacén requerido.',
+            ]);
+        }
+
         $log = ImportacionAlmacenLog::create([
-            'user_id' => $request->user()->id,
+            'user_id' => $userId,
             'tipo' => $tipo,
-            'almacen_id' => $validated['almacen_id'] ?? null,
+            'almacen_id' => $almacenId,
             'archivo_ruta' => '',
-            'mapping' => $validated['mapping'],
+            'mapping' => $mapping,
             'estado' => 'pendiente',
             'payload' => ['offset' => 0],
         ]);
@@ -65,7 +92,11 @@ class IniciarImportacionAlmacenService
         $extension = pathinfo($tempPath, PATHINFO_EXTENSION) ?: 'csv';
         $destino = "importaciones_almacenes/{$log->id}/source.{$extension}";
         Storage::makeDirectory(dirname($destino));
-        Storage::move($tempPath, $destino);
+        if ($conservarOrigen) {
+            Storage::copy($tempPath, $destino);
+        } else {
+            Storage::move($tempPath, $destino);
+        }
 
         $log->update(['archivo_ruta' => $destino]);
 

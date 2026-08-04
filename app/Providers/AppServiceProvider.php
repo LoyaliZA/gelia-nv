@@ -41,7 +41,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(\App\Services\GeliaAi\Acciones\AccionRegistry::class, function ($app) {
+            return new \App\Services\GeliaAi\Acciones\AccionRegistry([
+                $app->make(\App\Services\GeliaAi\Acciones\ImportarCostosAccion::class),
+                $app->make(\App\Services\GeliaAi\Acciones\ImportarInventariosAccion::class),
+                $app->make(\App\Services\GeliaAi\Acciones\GenerarListadoAccion::class),
+            ]);
+        });
     }
 
     /**

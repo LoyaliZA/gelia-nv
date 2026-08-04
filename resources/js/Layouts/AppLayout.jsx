@@ -362,6 +362,8 @@ export default function AppLayout({ children, fullScreen = false }) {
     });
 
     const isMensajeriaFull = fullScreen || url.startsWith('/mensajeria');
+    const isGeliaAiFull = url.startsWith('/gelia-ai');
+    const isPageFullscreen = isMensajeriaFull || isGeliaAiFull || fullScreen;
 
     const [isMobileViewport, setIsMobileViewport] = useState(() => {
         if (typeof window === 'undefined') return false;
@@ -377,16 +379,23 @@ export default function AppLayout({ children, fullScreen = false }) {
     const mensajeriaImmersivaMovil = isMensajeriaFull && isMobileViewport;
     const useMobileTopBar = isMobileViewport && mobileSidebarLayout === MOBILE_SIDEBAR_LAYOUT_TOPBAR;
 
+    /* En GELIA el sidebar a la izquierda tapa historial; a la derecha tapaba Acceso (ya en Admin). */
+    const geliaForceSidebarRight = isGeliaAiFull && !isMobileViewport;
+    const effectiveSidebarLayout = geliaForceSidebarRight
+        ? (sidebarLayout === 'fixed' ? 'fixed' : 'floating_right')
+        : sidebarLayout;
+    const effectiveFixedPosition = geliaForceSidebarRight ? 'right' : fixedPosition;
+
     const shellSidebarLayout = isMobileViewport
         ? (useMobileTopBar ? 'mobile-topbar' : 'mobile-bottom')
-        : sidebarLayout === 'fixed'
+        : effectiveSidebarLayout === 'fixed'
             ? 'fixed'
-            : sidebarLayout === 'floating_right'
+            : effectiveSidebarLayout === 'floating_right'
                 ? 'float-right'
                 : 'float-left';
 
-    const shellSidebarEdge = ['left', 'right', 'top', 'bottom'].includes(fixedPosition)
-        ? fixedPosition
+    const shellSidebarEdge = ['left', 'right', 'top', 'bottom'].includes(effectiveFixedPosition)
+        ? effectiveFixedPosition
         : 'left';
 
     const openMobileSidebar = useCallback(() => {
@@ -548,8 +557,8 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     const mainClassName = [
         'gelia-app-main transition-all duration-500 bg-transparent',
-        isMensajeriaFull
-            ? `gelia-app-main--fullscreen gelia-mensajeria-main box-border w-full max-w-none min-w-0 p-0 overflow-hidden h-dvh max-h-dvh${mensajeriaImmersivaMovil ? ' gelia-mensajeria-main--immersive' : ''}`
+        isPageFullscreen
+            ? `gelia-app-main--fullscreen box-border w-full max-w-none min-w-0 p-0 h-dvh max-h-dvh${isGeliaAiFull ? ' overflow-visible gelia-ai-main' : ' overflow-hidden'}${isMensajeriaFull ? ' gelia-mensajeria-main' : ''}${mensajeriaImmersivaMovil ? ' gelia-mensajeria-main--immersive' : ''}`
             : 'gelia-app-main--default',
         mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive-main' : '',
     ].filter(Boolean).join(' ');
@@ -560,12 +569,12 @@ export default function AppLayout({ children, fullScreen = false }) {
                 className="gelia-app-shell min-h-dvh text-gray-950 dark:text-gray-100 transition-colors duration-500"
                 data-sidebar-layout={shellSidebarLayout}
                 data-sidebar-edge={shellSidebarEdge}
-                data-page-fullscreen={isMensajeriaFull ? 'true' : 'false'}
+                data-page-fullscreen={isPageFullscreen ? 'true' : 'false'}
                 data-content-density={contentDensityMode}
                 data-immersive-mobile={mensajeriaImmersivaMovil ? 'true' : 'false'}
                 style={{
                     backgroundColor: 'var(--bg-app)',
-                    backgroundImage: 'var(--bg-actual)',
+                    backgroundImage: isGeliaAiFull ? 'none' : 'var(--bg-actual)',
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                     backgroundAttachment: 'fixed',
@@ -624,14 +633,14 @@ export default function AppLayout({ children, fullScreen = false }) {
                     toggleTheme={toggleTheme}
                     user={auth?.user}
                     permissions={auth?.user?.permissions || []}
-                    layout={sidebarLayout}
+                    layout={effectiveSidebarLayout}
                     sidebarMode={sidebarMode}
-                    fixedPosition={fixedPosition}
+                    fixedPosition={effectiveFixedPosition}
                     useMobileTopBar={useMobileTopBar}
                     isMobileViewport={isMobileViewport}
                 />
 
-                <div className={`gelia-app-body gelia-ui-scale ${GELIA_PREVENT_OVERFLOW_X} ${isMensajeriaFull ? 'h-dvh overflow-hidden' : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
+                <div className={`gelia-app-body gelia-ui-scale ${GELIA_PREVENT_OVERFLOW_X} ${isPageFullscreen ? (isGeliaAiFull ? 'h-dvh overflow-x-hidden overflow-y-visible' : 'h-dvh overflow-hidden') : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
                     {needsPrompt && !promptDismissed && (
                         <div className="sticky top-0 z-[9000] border-b theme-border theme-surface px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                             <p className="text-sm theme-text-main m-0">
@@ -668,12 +677,12 @@ export default function AppLayout({ children, fullScreen = false }) {
                     <main className={mainClassName}>
                         <div
                             key={url}
-                            className={`gelia-app-content ${GELIA_PREVENT_OVERFLOW_X} ${isMensajeriaFull ? 'h-full' : ''}`}
+                            className={`gelia-app-content ${GELIA_PREVENT_OVERFLOW_X} ${isPageFullscreen ? 'h-full' : ''}`}
                         >
                             <div
-                                className={`gelia-app-content-inner ${GELIA_PREVENT_OVERFLOW_X} ${isMensajeriaFull ? 'h-full max-w-none' : ''}`}
+                                className={`gelia-app-content-inner ${GELIA_PREVENT_OVERFLOW_X} ${isPageFullscreen ? 'h-full max-w-none' : ''}`}
                             >
-                                <div className={isMensajeriaFull ? 'h-full' : 'animate-page-reveal'}>
+                                <div className={isPageFullscreen ? 'h-full' : 'animate-page-reveal'}>
                                     {children}
                                 </div>
                             </div>

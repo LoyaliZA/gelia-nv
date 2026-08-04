@@ -166,6 +166,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'soporte.administrar': 'Permite administrar SLA y catálogos de soporte.',
     'mensajeria.monitorear': 'Permite monitorear la mensajería del sistema.',
     'mensajeria.eliminar': 'Permite eliminar mensajes de mensajería.',
+    'gelia_ai.gestionar_acceso': 'Permite configurar quién puede usar el asistente GELIA.',
     'rh.ver': 'Permite acceder al módulo de Recursos Humanos.',
     'rh.colaboradores.crear': 'Permite dar de alta colaboradores.',
     'rh.colaboradores.editar': 'Permite editar colaboradores.',
@@ -872,6 +873,14 @@ export const SUBMODULOS_UI_POR_MODULO = {
             permisos: ['configuracion_sistema.gestionar'],
         },
     ],
+    gelia_ai: [
+        {
+            id: 'acceso',
+            label: 'GELIA',
+            descripcion: 'Acceso al asistente',
+            permisos: ['gelia_ai.gestionar_acceso'],
+        },
+    ],
     sistema: [
         {
             id: 'auditorias',
@@ -1060,6 +1069,7 @@ export const SECCIONES_SIDEBAR_PERMISOS = [
             'sistema',
             'configuracion',
             'configuracion_sistema',
+            'gelia_ai',
             'mensajeria',
         ],
     },
@@ -1096,6 +1106,7 @@ export const ETIQUETAS_MODULO_UI = {
     sistema: 'Auditorías de sistema',
     configuracion: 'Auditoría de solicitudes',
     configuracion_sistema: 'Configuración del sistema',
+    gelia_ai: 'GELIA',
     mensajeria: 'Mensajería',
 };
 

@@ -35,6 +35,7 @@ import {
     Link2,
     MapPin,
     BookOpen,
+    Bot,
 } from 'lucide-react';
 
 import { ADMIN_MODULES, isAdminModuleAllowed, adminModuleHref } from './adminModules';
@@ -51,7 +52,7 @@ function routeHref(name, fallback) {
 }
 
 /** Árbol de navegación del menú lateral (permisos aplicados al renderizar). */
-export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible = false }) {
+export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible = false, geliaAiVisible = false }) {
     const showReportes = can('solicitudes.exportar');
     const showReporteTraspasos = can('traspasos.reporte_dia');
     const showListados = can('listados.ver');
@@ -514,7 +515,15 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
                     href: () => routeHref('mensajeria.index', '/mensajeria'),
                     active: (url) => url.startsWith('/mensajeria'),
                 },
-            ],
+                geliaAiVisible && {
+                    type: 'link',
+                    id: 'gelia_ai',
+                    label: 'GELIA',
+                    icon: Bot,
+                    href: () => routeHref('gelia_ai.index', '/gelia-ai'),
+                    active: (url) => url.startsWith('/gelia-ai'),
+                },
+            ].filter(Boolean),
         },
         operacionesChildren.length > 0 && {
             type: 'group',

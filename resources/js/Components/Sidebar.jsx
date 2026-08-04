@@ -181,7 +181,7 @@ function profileMenuHref(item) {
 }
 
 export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, layout = 'floating_left', sidebarMode = 'collapsed', fixedPosition = 'left', useMobileTopBar = false, isMobileViewport = false }) {
-    const { url, props: { auth, manuales_hub_visible: manualesHubVisible = false } } = usePage();
+    const { url, props: { auth, manuales_hub_visible: manualesHubVisible = false, gelia_ai_visible: geliaAiVisible = false } } = usePage();
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isMenuClosing, setIsMenuClosing] = useState(false);
@@ -726,6 +726,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                         can={can}
                                         showAdminMenu={showAdminMenu}
                                         manualesHubVisible={Boolean(manualesHubVisible)}
+                                        geliaAiVisible={Boolean(geliaAiVisible)}
                                         onNavigate={closeMobileMenu}
                                     />
                                 </div>

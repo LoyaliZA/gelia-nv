@@ -1,9 +1,23 @@
 import {
-    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Store, Calculator, Boxes, DollarSign, ArrowLeftRight
+    Users, UserPlus, FolderTree, Database, FileSignature, Package, Map, List, Ban, Briefcase, CreditCard, FileSpreadsheet, Receipt, ShoppingBag, Store, Calculator, Boxes, DollarSign, ArrowLeftRight, Bot
 } from 'lucide-react';
 import { contabilidadRoutes } from '../../Pages/Contabilidad/contabilidadRoutes';
 
 export const DASHBOARD_MODULE_CARDS = [
+    {
+        id: 'card_gelia_ai',
+        titulo: 'GELIA',
+        subtitulo: 'Asistente de ayuda y consultas.',
+        accesoGeliaAi: true,
+        href: () => route('gelia_ai.index'),
+        icon: Bot,
+        borderClass: '',
+        borderStyle: { borderColor: 'var(--color-primario)' },
+        iconWrapClass: '',
+        iconWrapStyle: { backgroundColor: 'color-mix(in srgb, var(--color-primario) 15%, transparent)' },
+        iconClass: '',
+        iconStyle: { color: 'var(--color-primario)' },
+    },
     {
         id: 'card_contabilidad',
         titulo: 'Contabilidad',

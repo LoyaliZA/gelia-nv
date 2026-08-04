@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Head, useForm, router } from '@inertiajs/react';
+import { Head, useForm, router, usePage } from '@inertiajs/react';
 import { LayoutDashboard, Activity, Settings2, X, Check, Layers, RotateCcw, Sparkles, Clock } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import DashboardLayoutGrid from '../../Components/Dashboard/DashboardLayoutGrid';
@@ -118,6 +118,7 @@ export default function AdminDashboard({
     alertas_activos_destacadas = [],
     rh_widget = {},
 }) {
+    const { gelia_ai_visible: geliaAiVisible = false } = usePage().props;
     const can = (permiso) => auth?.user?.permissions?.includes(permiso) || auth?.user?.roles?.includes('Super Admin');
 
     const [showConfig, setShowConfig] = useState(false);
@@ -144,6 +145,9 @@ export default function AdminDashboard({
     const catalogoTarjetas = DASHBOARD_MODULE_CARDS;
 
     const tarjetaPermitida = (tarjeta) => {
+        if (tarjeta.accesoGeliaAi) {
+            return Boolean(geliaAiVisible);
+        }
         if (tarjeta.permisoAny?.length) {
             return tarjeta.permisoAny.some((permiso) => can(permiso));
         }

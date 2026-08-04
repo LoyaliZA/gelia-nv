@@ -11,6 +11,7 @@ import {
     Settings,
     ShoppingBag,
     LifeBuoy,
+    Bot,
 } from 'lucide-react';
 
 /** Módulos del panel de administración (sidebar + /admin). */
@@ -122,6 +123,15 @@ export const ADMIN_MODULES = [
         routeName: 'admin.configuracion_sistema.index',
         icon: Settings,
         permission: 'configuracion_sistema.gestionar',
+    },
+    {
+        id: 'gelia_ai_acceso',
+        title: 'Acceso GELIA',
+        description: 'Quién puede usar el asistente: general, usuarios o solo Super Admin.',
+        path: '/admin/gelia-ai/acceso',
+        routeName: 'admin.gelia_ai.acceso.index',
+        icon: Bot,
+        permission: 'gelia_ai.gestionar_acceso',
     },
     {
         id: 'soporte_gestion',
