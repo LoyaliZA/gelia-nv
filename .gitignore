@@ -26,3 +26,4 @@ Homestead.yaml
 Thumbs.db
 /Implementaciones
 /documentacion
+/scripts/backup-snapshot-local.sh
