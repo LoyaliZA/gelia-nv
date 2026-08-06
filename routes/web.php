@@ -2,20 +2,22 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\{LoginController,RegistroController};
-use App\Http\Controllers\{DashboardController,AdminController,CatalogoController,ClienteController,LimpiezaClientesController,AutoCobranzaController,ProfileController};
+use App\Http\Controllers\{DashboardController,AdminController,CatalogoController,CatalogoProductoEspecificacionesController,ClienteController,LimpiezaClientesController,AutoCobranzaController,ProfileController};
 use App\Http\Controllers\Solicitudes\SolicitudController;
 use App\Http\Controllers\Reportes\ReporteSolicitudesController;
 use App\Http\Controllers\Reportes\ReporteTraspasosDiaController;
 use App\Http\Controllers\Api\{CotizacionEntregaController,ClienteApiController};
 use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\MapaLogisticoController;
-use App\Http\Controllers\Admin\{AuditoriaListaDescuentoController,PersonalizacionController,ConfiguracionSistemaController,MonitoreoMensajeriaController,GeliaAiAccesoController};
+use App\Http\Controllers\Admin\{AuditoriaListaDescuentoController,PersonalizacionController,ConfiguracionSistemaController,MonitoreoMensajeriaController,GeliaAiAccesoController,GeliaAiUsoController};
 use App\Http\Controllers\GeliaAi\GeliaAiController;
 use App\Http\Controllers\AromasListasController;
 use App\Http\Controllers\Activos\{ActivoController,CategoriaActivoController,TipoActivoController};
 use App\Http\Controllers\Rh\{ColaboradorController,ConfiguracionRhController,CatalogoPuestoController,CatalogoTipoFaltaController,CatalogoBonoController,CatalogoReglaIncidenciaController,DashboardRhController,HorasExtraController,DeduccionController,IncidenciaGerenteController,ReciboRhController,PeriodoPagoController,PrestamoPagoFijoController,SalidaPersonalController,ConsolidadoDeduccionesController,ConsolidadoHorasExtraController,BancoTiempoController};
 use App\Http\Controllers\ProductoController;
-use App\Http\Controllers\Almacenes\{ProductoController as AlmacenProductoController, InventarioController as AlmacenInventarioController, CostoController as AlmacenCostoController, ImportacionAlmacenController};
+use App\Http\Controllers\Almacenes\{InventarioController as AlmacenInventarioController, CostoController as AlmacenCostoController, ImportacionAlmacenController};
+use App\Http\Controllers\GestionInterna\ProductoController as GestionInternaProductoController;
+use App\Http\Controllers\Reportes\ReporteVentasController;
 use App\Http\Controllers\Facturas\{SolicitudFacturaController,DatosFiscalesController,ArchivoFacturaController,DatosFiscalesPublicosController};
 use App\Http\Controllers\Traspasos\SolicitudTraspasoController;
 use App\Http\Controllers\Traspasos\TraspasoCedisController;
@@ -636,21 +638,10 @@ Route::middleware(['auth'])->group(function () {
 
 
     // ══════════════════════════════════════════════════════════════════════
-    // MÓDULO: ALMACENES (Productos · Inventarios · Costos)
+    // MÓDULO: ALMACENES (Inventarios · Costos) — Productos vive en Gestión Interna
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('almacenes')->name('almacenes.')->group(function () {
-        Route::middleware(['role_or_permission:almacenes.productos.ver|catalogos.gestionar'])->prefix('productos')->name('productos.')->group(function () {
-            Route::get('/', [AlmacenProductoController::class, 'index'])->name('index');
-            Route::get('/buscar', [AlmacenProductoController::class, 'buscar'])
-                ->middleware('role_or_permission:almacenes.productos.ver|almacenes.inventarios.ver|almacenes.costos.ver|catalogos.gestionar')
-                ->name('buscar');
-            Route::post('/', [AlmacenProductoController::class, 'store'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('store');
-            Route::put('/{producto}', [AlmacenProductoController::class, 'update'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('update');
-            Route::delete('/{producto}', [AlmacenProductoController::class, 'destroy'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('destroy');
-            Route::get('/plantilla-importacion', [AlmacenProductoController::class, 'descargarPlantillaImportacion'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('plantilla_importacion');
-            Route::post('/import-preview', [AlmacenProductoController::class, 'importPreview'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('import_preview');
-            Route::post('/import-iniciar', [AlmacenProductoController::class, 'importIniciar'])->middleware('role_or_permission:almacenes.productos.gestionar|catalogos.gestionar')->name('import_iniciar');
-        });
+        Route::permanentRedirect('/productos', '/gestion-interna/productos');
 
         Route::middleware(['role_or_permission:almacenes.inventarios.ver|catalogos.gestionar'])->prefix('inventarios')->name('inventarios.')->group(function () {
             Route::get('/', [AlmacenInventarioController::class, 'index'])->name('index');
@@ -674,21 +665,21 @@ Route::middleware(['auth'])->group(function () {
 
         Route::prefix('importaciones')->name('importaciones.')->group(function () {
             Route::get('/progreso/{id}', [ImportacionAlmacenController::class, 'progreso'])
-                ->middleware('role_or_permission:almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar')
+                ->middleware('role_or_permission:gestion_interna.productos.gestionar|gestion_interna.productos.importar|almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar|reportes.ventas.importar')
                 ->name('progreso');
             Route::get('/activo', [ImportacionAlmacenController::class, 'activo'])
-                ->middleware('role_or_permission:almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar')
+                ->middleware('role_or_permission:gestion_interna.productos.gestionar|gestion_interna.productos.importar|almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar|reportes.ventas.importar')
                 ->name('activo');
             Route::delete('/{id}/cancelar', [ImportacionAlmacenController::class, 'cancelar'])
-                ->middleware('role_or_permission:almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar')
+                ->middleware('role_or_permission:gestion_interna.productos.gestionar|gestion_interna.productos.importar|almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar|reportes.ventas.importar')
                 ->name('cancelar');
             Route::post('/{id}/continuar', [ImportacionAlmacenController::class, 'continuar'])
-                ->middleware('role_or_permission:almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar')
+                ->middleware('role_or_permission:gestion_interna.productos.gestionar|gestion_interna.productos.importar|almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar|reportes.ventas.importar')
                 ->name('continuar');
         });
 
         Route::get('/importaciones/reporte-errores/{token}', [ImportacionAlmacenController::class, 'descargarReporteErrores'])
-            ->middleware('role_or_permission:almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar')
+            ->middleware('role_or_permission:gestion_interna.productos.gestionar|gestion_interna.productos.importar|almacenes.productos.gestionar|almacenes.inventarios.importar|almacenes.costos.importar|catalogos.gestionar|reportes.ventas.importar')
             ->name('importaciones.reporte_errores');
     });
 
@@ -969,6 +960,9 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/acceso', [GeliaAiAccesoController::class, 'index'])->name('acceso.index');
             Route::put('/acceso', [GeliaAiAccesoController::class, 'update'])->name('acceso.update');
             Route::get('/usuarios', [GeliaAiAccesoController::class, 'buscarUsuarios'])->name('usuarios');
+            Route::get('/uso', [GeliaAiUsoController::class, 'index'])->name('uso.index');
+            Route::get('/uso/turnos', [GeliaAiUsoController::class, 'turnos'])->name('uso.turnos');
+            Route::get('/uso/conversaciones/{conversacion}', [GeliaAiUsoController::class, 'conversacion'])->name('uso.conversacion');
         });
 
         // --- Monitoreo de Mensajería ---
@@ -1203,6 +1197,18 @@ Route::middleware(['auth'])->group(function () {
                 Route::put('/categorias-producto/{id}', [CatalogoController::class, 'updateCategoriaProducto'])->name('categorias_producto.update');
                 Route::delete('/categorias-producto/{id}', [CatalogoController::class, 'destroyCategoriaProducto'])->name('categorias_producto.destroy');
 
+                // Especificaciones universales de producto
+                Route::post('/atributos-producto', [CatalogoProductoEspecificacionesController::class, 'storeAtributo'])->name('atributos_producto.store');
+                Route::put('/atributos-producto/{id}', [CatalogoProductoEspecificacionesController::class, 'updateAtributo'])->name('atributos_producto.update');
+                Route::delete('/atributos-producto/{id}', [CatalogoProductoEspecificacionesController::class, 'destroyAtributo'])->name('atributos_producto.destroy');
+                Route::post('/unidades-medida', [CatalogoProductoEspecificacionesController::class, 'storeUnidad'])->name('unidades_medida.store');
+                Route::put('/unidades-medida/{id}', [CatalogoProductoEspecificacionesController::class, 'updateUnidad'])->name('unidades_medida.update');
+                Route::delete('/unidades-medida/{id}', [CatalogoProductoEspecificacionesController::class, 'destroyUnidad'])->name('unidades_medida.destroy');
+                Route::post('/notas-olfativas', [CatalogoProductoEspecificacionesController::class, 'storeNotaOlfativa'])->name('notas_olfativas.store');
+                Route::put('/notas-olfativas/{id}', [CatalogoProductoEspecificacionesController::class, 'updateNotaOlfativa'])->name('notas_olfativas.update');
+                Route::delete('/notas-olfativas/{id}', [CatalogoProductoEspecificacionesController::class, 'destroyNotaOlfativa'])->name('notas_olfativas.destroy');
+                Route::put('/extensiones-producto/{id}', [CatalogoProductoEspecificacionesController::class, 'updateExtensionProducto'])->name('extensiones_producto.update');
+
                 // Tipos de Activo
                 Route::post('/tipos-activo', [TipoActivoController::class, 'store'])->name('tipos_activo.store')->middleware('can:activos.configurar_tipos');
                 Route::put('/tipos-activo/{id}', [TipoActivoController::class, 'update'])->name('tipos_activo.update')->middleware('can:activos.configurar_tipos');
@@ -1276,20 +1282,44 @@ Route::middleware(['auth'])->group(function () {
     // ══════════════════════════════════════════════════════════════════════
     // GESTIÓN INTERNA
     // ══════════════════════════════════════════════════════════════════════
-    Route::middleware(['can:gestion_interna.directorio.ver'])->prefix('gestion-interna')->name('gestion_interna.')->group(function () {
-        Route::get('/directorio', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'index'])->name('directorio.index');
-        
-        Route::post('/directorio/correos', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'storeCorreo'])->name('directorio.correos.store');
-        Route::put('/directorio/correos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'updateCorreo'])->name('directorio.correos.update');
-        Route::delete('/directorio/correos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'destroyCorreo'])->name('directorio.correos.destroy');
-        
-        Route::post('/directorio/telefonos', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'storeTelefono'])->name('directorio.telefonos.store');
-        Route::put('/directorio/telefonos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'updateTelefono'])->name('directorio.telefonos.update');
-        Route::delete('/directorio/telefonos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'destroyTelefono'])->name('directorio.telefonos.destroy');
-        
-        Route::post('/directorio/extensiones', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'storeExtension'])->name('directorio.extensiones.store');
-        Route::put('/directorio/extensiones/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'updateExtension'])->name('directorio.extensiones.update');
-        Route::delete('/directorio/extensiones/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'destroyExtension'])->name('directorio.extensiones.destroy');
+    Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
+        Route::middleware(['role_or_permission:gestion_interna.productos.ver|catalogos.gestionar|almacenes.productos.ver'])->prefix('productos')->name('productos.')->group(function () {
+            Route::get('/', [GestionInternaProductoController::class, 'index'])->name('index');
+            Route::get('/buscar', [GestionInternaProductoController::class, 'buscar'])
+                ->middleware('role_or_permission:gestion_interna.productos.ver|almacenes.productos.ver|almacenes.inventarios.ver|almacenes.costos.ver|catalogos.gestionar|reportes.ventas.ver')
+                ->name('buscar');
+            Route::get('/plantilla-importacion', [GestionInternaProductoController::class, 'descargarPlantillaImportacion'])->middleware('role_or_permission:gestion_interna.productos.importar|gestion_interna.productos.gestionar|catalogos.gestionar')->name('plantilla_importacion');
+            Route::post('/import-preview', [GestionInternaProductoController::class, 'importPreview'])->middleware('role_or_permission:gestion_interna.productos.importar|gestion_interna.productos.gestionar|catalogos.gestionar')->name('import_preview');
+            Route::post('/import-iniciar', [GestionInternaProductoController::class, 'importIniciar'])->middleware('role_or_permission:gestion_interna.productos.importar|gestion_interna.productos.gestionar|catalogos.gestionar')->name('import_iniciar');
+            Route::get('/{producto}/ficha', [GestionInternaProductoController::class, 'ficha'])->name('ficha');
+            Route::post('/', [GestionInternaProductoController::class, 'store'])->middleware('role_or_permission:gestion_interna.productos.gestionar|catalogos.gestionar')->name('store');
+            Route::put('/{producto}', [GestionInternaProductoController::class, 'update'])->middleware('role_or_permission:gestion_interna.productos.gestionar|catalogos.gestionar')->name('update');
+            Route::delete('/{producto}', [GestionInternaProductoController::class, 'destroy'])->middleware('role_or_permission:gestion_interna.productos.gestionar|catalogos.gestionar')->name('destroy');
+        });
+
+        Route::middleware(['can:gestion_interna.directorio.ver'])->group(function () {
+            Route::get('/directorio', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'index'])->name('directorio.index');
+
+            Route::post('/directorio/correos', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'storeCorreo'])->name('directorio.correos.store');
+            Route::put('/directorio/correos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'updateCorreo'])->name('directorio.correos.update');
+            Route::delete('/directorio/correos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'destroyCorreo'])->name('directorio.correos.destroy');
+
+            Route::post('/directorio/telefonos', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'storeTelefono'])->name('directorio.telefonos.store');
+            Route::put('/directorio/telefonos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'updateTelefono'])->name('directorio.telefonos.update');
+            Route::delete('/directorio/telefonos/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'destroyTelefono'])->name('directorio.telefonos.destroy');
+
+            Route::post('/directorio/extensiones', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'storeExtension'])->name('directorio.extensiones.store');
+            Route::put('/directorio/extensiones/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'updateExtension'])->name('directorio.extensiones.update');
+            Route::delete('/directorio/extensiones/{id}', [App\Http\Controllers\GestionInterna\DirectorioController::class, 'destroyExtension'])->name('directorio.extensiones.destroy');
+        });
+    });
+
+    // Reportes: Ventas (grupo principal; solicitudes/traspasos ya existen)
+    Route::middleware(['role_or_permission:reportes.ventas.ver'])->prefix('reportes/ventas')->name('reportes.ventas.')->group(function () {
+        Route::get('/', [ReporteVentasController::class, 'index'])->name('index');
+        Route::get('/plantilla-importacion', [ReporteVentasController::class, 'descargarPlantilla'])->middleware('can:reportes.ventas.importar')->name('plantilla_importacion');
+        Route::post('/import-preview', [ReporteVentasController::class, 'importPreview'])->middleware('can:reportes.ventas.importar')->name('import_preview');
+        Route::post('/import-iniciar', [ReporteVentasController::class, 'importIniciar'])->middleware('can:reportes.ventas.importar')->name('import_iniciar');
     });
 
     // ══════════════════════════════════════════════════════════════════════

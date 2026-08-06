@@ -10,6 +10,7 @@ use App\Models\Producto;
 use App\Models\ProductoCosto;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -27,6 +28,9 @@ class ImportacionAlmacenAsyncTest extends TestCase
         parent::setUp();
 
         foreach ([
+            'gestion_interna.productos.ver',
+            'gestion_interna.productos.gestionar',
+            'gestion_interna.productos.importar',
             'almacenes.productos.gestionar',
             'almacenes.inventarios.importar',
             'almacenes.costos.importar',
@@ -36,7 +40,9 @@ class ImportacionAlmacenAsyncTest extends TestCase
 
         $this->usuario = User::factory()->create();
         $this->usuario->givePermissionTo([
-            'almacenes.productos.gestionar',
+            'gestion_interna.productos.ver',
+            'gestion_interna.productos.gestionar',
+            'gestion_interna.productos.importar',
             'almacenes.inventarios.importar',
             'almacenes.costos.importar',
         ]);
@@ -48,7 +54,7 @@ class ImportacionAlmacenAsyncTest extends TestCase
 
         $tempPath = $this->crearArchivoTemporalProductos();
 
-        $response = $this->actingAs($this->usuario)->postJson(route('almacenes.productos.import_iniciar'), [
+        $response = $this->actingAs($this->usuario)->postJson(route('gestion_interna.productos.import_iniciar'), [
             'file_path' => $tempPath,
             'mapping' => [
                 'sku' => 'sku',
@@ -228,6 +234,77 @@ class ImportacionAlmacenAsyncTest extends TestCase
         $this->assertDatabaseHas('importaciones_almacen_logs', [
             'id' => $log->id,
             'estado' => 'cancelado',
+        ]);
+    }
+
+    public function test_iniciar_inventarios_conserva_mapping_de_costos(): void
+    {
+        Queue::fake();
+        $almacen = $this->crearAlmacen();
+
+        $contenido = "SKU,Descripcion,Existencia,Costo,Precio\nT001,Test,5,12.5,99\n";
+        $path = 'temp/import_inv_cost_' . Str::uuid() . '.csv';
+        Storage::put($path, $contenido);
+
+        $request = Request::create('/almacenes/inventarios/import-iniciar', 'POST', [
+            'file_path' => $path,
+            'almacen_id' => $almacen->id,
+            'mapping' => [
+                'sku' => 'SKU',
+                'descripcion' => 'Descripcion',
+                'existencia' => 'Existencia',
+                'costo' => 'Costo',
+                'precio_venta' => 'Precio',
+            ],
+        ]);
+        $request->setUserResolver(fn () => $this->usuario);
+
+        $resultado = app(\App\Services\Almacenes\IniciarImportacionAlmacenService::class)
+            ->ejecutar($request, 'inventarios');
+
+        $log = ImportacionAlmacenLog::findOrFail($resultado['log_id']);
+        $this->assertSame('Costo', $log->mapping['costo'] ?? null);
+        $this->assertSame('Precio', $log->mapping['precio_venta'] ?? null);
+    }
+
+    public function test_job_inventarios_con_costo_crea_producto_costos(): void
+    {
+        $almacen = $this->crearAlmacen();
+        $csv = "SKU,Descripcion,Existencia,Costo,Precio\nINVCOST1,Prod Costo,3,15.25,40.00\n";
+        $persistente = 'importaciones_almacenes/invcost/source.csv';
+        Storage::put($persistente, $csv);
+
+        $log = ImportacionAlmacenLog::create([
+            'user_id' => $this->usuario->id,
+            'tipo' => 'inventarios',
+            'almacen_id' => $almacen->id,
+            'archivo_ruta' => $persistente,
+            'mapping' => [
+                'sku' => 'SKU',
+                'descripcion' => 'Descripcion',
+                'existencia' => 'Existencia',
+                'costo' => 'Costo',
+                'precio_venta' => 'Precio',
+            ],
+            'estado' => 'pendiente',
+        ]);
+
+        $job = new ImportarAlmacenCatalogoJob($log->id, 0);
+        $job->handle(
+            app(\App\Services\Almacenes\LeerFilasImportacionAlmacenService::class),
+            app(\App\Services\Almacenes\ProcesarFilaProductoImportacionService::class),
+            app(\App\Services\Almacenes\ProcesarFilaInventarioImportacionService::class),
+            app(\App\Services\Almacenes\ProcesarFilaCostoImportacionService::class),
+            app(\App\Services\Almacenes\FinalizarImportacionAlmacenAsyncService::class),
+        );
+
+        $producto = Producto::where('sku', 'INVCOST1')->first();
+        $this->assertNotNull($producto);
+        $this->assertDatabaseHas('producto_costos', [
+            'producto_id' => $producto->id,
+            'almacen_id' => $almacen->id,
+            'costo' => '15.25',
+            'precio_venta' => '40.00',
         ]);
     }
 

@@ -3,6 +3,7 @@ import { Head } from '@inertiajs/react';
 import {
     Building2, MapPin, ListTree, Tags, Activity, UserCheck, Map, Clock, Percent,
     TrendingUp, Landmark, Package, Warehouse, Boxes, Truck, Box, FileText, Receipt, Search,
+    Ruler, Flower2, Puzzle,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import { geliaCardClass, THEME_INPUT } from '../../utils/geliaTheme';
@@ -26,6 +27,10 @@ import TablaTiposAlmacen from './Partials/Catalogos/TablaTiposAlmacen';
 import TablaMarcasProducto from './Partials/Catalogos/TablaMarcasProducto';
 import TablaAlmacenes from './Partials/Catalogos/TablaAlmacenes';
 import TablaCategoriasProducto from './Partials/Catalogos/TablaCategoriasProducto';
+import TablaAtributosProducto from './Partials/Catalogos/TablaAtributosProducto';
+import TablaUnidadesMedida from './Partials/Catalogos/TablaUnidadesMedida';
+import TablaNotasOlfativas from './Partials/Catalogos/TablaNotasOlfativas';
+import TablaExtensionesProducto from './Partials/Catalogos/TablaExtensionesProducto';
 import TablaEstatusPedidos from './Partials/Catalogos/TablaEstatusPedidos';
 import TablaCatalogoPedidoGenerico from './Partials/Catalogos/TablaCatalogoPedidoGenerico';
 import TablaTiposCajaPedido from './Partials/Catalogos/TablaTiposCajaPedido';
@@ -92,6 +97,8 @@ export default function Catalogos({
     zonas_entrega, horarios_entrega, horarios_traspaso = [], porcentajes_escalonamiento = [], porcentajes_listado = [],
     bancos = [], tipos_activo = [], categorias_activo = [],
     sucursales = [], tipos_almacen = [], marcas_producto = [], almacenes = [], categorias_producto = [],
+    atributos_producto = [], unidades_medida = [], notas_olfativas = [],
+    extensiones_producto = [], perfumeria_en_uso = false,
     estatus_pedidos = [], paqueterias_pedido = [], tipos_caja_pedido = [],
     tipos_guia_pedido = [], zonas_pedido = [], reexpedicion_pedido = [], envios_tienda = [], origenes_pedido = [],
     regimenes_fiscales = [], usos_cfdi = [],
@@ -111,6 +118,10 @@ export default function Catalogos({
         { id: 'almacenes', label: 'Almacenes', icon: Boxes },
         { id: 'marcas_producto', label: 'Marcas', icon: Tags },
         { id: 'categorias_producto', label: 'Categorías Producto', icon: Package },
+        { id: 'atributos_producto', label: 'Atributos Producto', icon: ListTree },
+        { id: 'unidades_medida', label: 'Unidades Medida', icon: Ruler },
+        { id: 'extensiones_producto', label: 'Extensiones', icon: Puzzle },
+        ...(perfumeria_en_uso ? [{ id: 'notas_olfativas', label: 'Notas Olfativas', icon: Flower2 }] : []),
         { id: 'procesos', label: 'Procesos', icon: ListTree },
         { id: 'listas', label: 'Listas', icon: Tags },
         { id: 'porcentajes_escalonamiento', label: 'Escalonamiento', icon: TrendingUp },
@@ -243,7 +254,17 @@ export default function Catalogos({
                             {tabActiva === 'tipos_almacen' && <TablaTiposAlmacen datos={f(tipos_almacen)} />}
                             {tabActiva === 'almacenes' && <TablaAlmacenes datos={f(almacenes)} sucursales={sucursales} tipos_almacen={tipos_almacen} />}
                             {tabActiva === 'marcas_producto' && <TablaMarcasProducto datos={f(marcas_producto)} />}
-                            {tabActiva === 'categorias_producto' && <TablaCategoriasProducto datos={f(categorias_producto)} />}
+                            {tabActiva === 'categorias_producto' && (
+                                <TablaCategoriasProducto
+                                    datos={f(categorias_producto)}
+                                    atributos={atributos_producto}
+                                    extensiones={extensiones_producto}
+                                />
+                            )}
+                            {tabActiva === 'atributos_producto' && <TablaAtributosProducto datos={f(atributos_producto)} />}
+                            {tabActiva === 'unidades_medida' && <TablaUnidadesMedida datos={f(unidades_medida)} />}
+                            {tabActiva === 'extensiones_producto' && <TablaExtensionesProducto datos={f(extensiones_producto)} />}
+                            {tabActiva === 'notas_olfativas' && perfumeria_en_uso && <TablaNotasOlfativas datos={f(notas_olfativas)} />}
                             {tabActiva === 'procesos' && <TablaProcesos datos={f(procesos)} />}
                             {tabActiva === 'listas' && <TablaListas datos={f(listas)} />}
                             {tabActiva === 'porcentajes_escalonamiento' && <TablaPorcentajesEscalonamiento datos={f(porcentajes_escalonamiento)} listas={listas} />}

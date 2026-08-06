@@ -156,7 +156,14 @@ export default function Index({ auth, costos, sucursales, almacenes, filtros }) 
                             </thead>
                             <tbody>
                                 {lista.length === 0 ? (
-                                    <tr><td colSpan={6} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin costos registrados</td></tr>
+                                    <tr>
+                                        <td colSpan={6} className="px-4 py-16 text-center theme-text-muted text-sm">
+                                            <p className="font-bold uppercase m-0 mb-2">Sin costos registrados</p>
+                                            <p className="text-[11px] m-0 max-w-md mx-auto">
+                                                Costos es independiente de Inventarios. Usa Importar con un archivo de SKU + costo/precio para este almacén (los productos deben existir en el catálogo).
+                                            </p>
+                                        </td>
+                                    </tr>
                                 ) : lista.map((c) => (
                                     <tr key={c.id} className="border-b theme-border hover:bg-black/5 dark:hover:bg-white/5">
                                         <td className="px-4 py-3">

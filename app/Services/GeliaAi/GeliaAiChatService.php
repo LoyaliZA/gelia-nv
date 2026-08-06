@@ -2,6 +2,7 @@
 
 namespace App\Services\GeliaAi;
 
+use App\Models\Producto;
 use App\Models\User;
 use App\Services\GeliaAi\Acciones\AccionRegistry;
 use App\Services\GeliaAi\Knowledge\ModulosKnowledge;
@@ -56,16 +57,26 @@ class GeliaAiChatService
         $toolChoice = null;
         $mode = 'tools';
         $propuesta = null;
+        $facts = null;
 
         $codigo = $tieneArchivos ? null : $this->extraerCodigoProducto($mensaje);
         if ($codigo !== null) {
-            $facts = $this->inventarioTool->ejecutar($user, ['q' => $codigo, 'limit' => 1]);
+            $facts = $this->inventarioTool->ejecutar($user, ['q' => $codigo, 'limit' => 1, 'con_precios' => true]);
             $facts = $this->sanitizer->limpiar($facts);
             $system .= "\nDatos stock (JSON): ".json_encode($facts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $mode = 'prefetch_inventario';
         } elseif (! $intencionOperativa && ($modulo = $this->detectarModuloAyuda($mensaje))) {
             $system .= "\nHechos módulo:\n".$this->knowledge->fragmento($modulo);
             $mode = 'prefetch_ayuda';
+        } elseif (! $tieneArchivos && (
+            $this->pareceConsultaStock($mensaje, $historial)
+            || Producto::tokensBusqueda($mensaje) !== []
+        )) {
+            // Prefetch: evita tools+2 rondas en nombre de producto / stock (logs: 8 chars → 1111 tokens).
+            $facts = $this->inventarioTool->ejecutar($user, ['q' => $mensaje, 'limit' => 3, 'con_precios' => true]);
+            $facts = $this->sanitizer->limpiar($facts);
+            $system .= "\nDatos stock (JSON): ".json_encode($facts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $mode = 'prefetch_inventario';
         } elseif ($tieneArchivos) {
             // Evidencia: con ayuda+inventario el modelo distrae y en ronda 2 ya no puede proponer.
             $tools = $this->acciones->schemasParaTools();
@@ -74,15 +85,16 @@ class GeliaAiChatService
                 'function' => ['name' => 'proponer_accion_operativa'],
             ];
             $mode = 'tools_archivos';
-        } else {
+        } elseif ($intencionOperativa) {
             $tools = [
                 $this->ayudaTool->schema(),
                 $this->inventarioTool->schema(),
+                ...$this->acciones->schemasParaTools(),
             ];
-            if ($intencionOperativa) {
-                $tools = array_merge($tools, $this->acciones->schemasParaTools());
-                $mode = 'tools_operativo';
-            }
+            $mode = 'tools_operativo';
+        } else {
+            // Saludos / sin tokens buscables: 1 ronda, sin schemas de tools.
+            $mode = 'chat_corto';
         }
 
         $messages = [
@@ -122,7 +134,7 @@ class GeliaAiChatService
             }
 
             $toolCalls = $msg['tool_calls'] ?? null;
-            $contentRaw = (string) ($msg['content'] ?? '');
+
             if (is_array($toolCalls) && $toolCalls !== [] && $round < $maxRounds && $activeTools) {
                 $messages[] = [
                     'role' => 'assistant',
@@ -130,7 +142,16 @@ class GeliaAiChatService
                     'tool_calls' => $toolCalls,
                 ];
 
+                $yaBuscoInventario = false;
                 foreach ($toolCalls as $call) {
+                    $toolName = (string) ($call['function']['name'] ?? '');
+                    // Una sola búsqueda de inventario por ronda (el modelo a veces dispara 3 en paralelo).
+                    if ($toolName === $this->inventarioTool->name()) {
+                        if ($yaBuscoInventario) {
+                            continue;
+                        }
+                        $yaBuscoInventario = true;
+                    }
                     $toolResult = $this->ejecutarToolCall($user, $call, $resumenes);
                     if (($toolResult['_propuesta'] ?? null) !== null) {
                         $propuesta = $toolResult['_propuesta'];
@@ -187,20 +208,54 @@ class GeliaAiChatService
 
     private function systemPrompt(bool $operativo = false): string
     {
-        $base = 'Eres GELIA (Gelia). Español, breve. Explica listados/solicitudes; reporta stock solo con datos dados. No inventes existencias ni datos fiscales.';
+        $base = 'Eres GELIA (Gelia). Español, breve. Explica listados/solicitudes; reporta stock/precio/ficha solo con datos dados. No inventes existencias, costos, datos fiscales, atributos, notas olfativas, productos relacionados ni rankings de ventas.';
+        $stock = ' En stock: si n>0, SIEMPRE lista los items (nombre+SKU+s+p) aunque exacto=false; nunca digas n=0 si items no está vacío. Si sugerir=true, lista coincidencias y pregunta cuál. Si n=0, pide otro nombre o SKU. Claves JSON: s=stock (e/d, tipo almacén), p=precios (co/pv), attrs=atributos, ext=extensiones (solo claves presentes; p.ej. ext.perfumeria.notas), rel=relacionados, ven=ventas, cont=contenido. Extensiones son opcionales por categoría: si ext no trae perfumeria, no menciones notas olfativas. Si falta attrs/cont dilo; no inventes. Prioriza almacén con contexto=true; si no hay en PDV pero sí en otro almacén, dilo. Si rel tiene hermanos, puedes mencionarlos sin inventar su stock.';
         if ($operativo) {
-            return $base.' Puedes proponer importar costos/inventarios o generar listado; nunca ejecutes sin confirmación del usuario. Otras FO: solo guía al módulo.';
+            return $base.$stock.' Puedes proponer importar costos/inventarios o generar listado; nunca ejecutes sin confirmación del usuario. Otras FO: solo guía al módulo.';
         }
 
-        return $base.' No modifiques registros.';
+        return $base.$stock.' No modifiques registros.';
     }
 
     private function detectarIntencionOperativa(string $mensaje): bool
     {
         $m = mb_strtolower($mensaje);
 
+        // "costo/precio" solos = consulta de producto, no importación.
         return (bool) preg_match(
-            '/\b(importar|importe|generar?\s+lista|listado|resurtido|costos?|inventarios?|existencias?|sub[ií]|archivo|excel|csv)\b/u',
+            '/\b(importar|importe|generar?\s+lista|listado|resurtido|sub[ií]|archivo|excel|csv)\b/u',
+            $m
+        );
+    }
+
+    /**
+     * @param  list<array{role: string, content: string}>  $historial
+     */
+    private function pareceConsultaStock(string $mensaje, array $historial = []): bool
+    {
+        if ($this->mensajePareceStock($mensaje)) {
+            return true;
+        }
+
+        // Continuación corta tras una pregunta de stock ("y el de 50ml?", "mandarin sky").
+        if (mb_strlen(trim($mensaje)) < 3) {
+            return false;
+        }
+        foreach (array_reverse($historial) as $turn) {
+            if (($turn['role'] ?? '') === 'user' && $this->mensajePareceStock((string) ($turn['content'] ?? ''))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function mensajePareceStock(string $mensaje): bool
+    {
+        $m = mb_strtolower($mensaje);
+
+        return (bool) preg_match(
+            '/\b(cu[aá]nt[oa]s?|quedan?|stock|existencia|existencias|inventario|disponibles?)\b/u',
             $m
         );
     }
@@ -268,6 +323,12 @@ class GeliaAiChatService
         if (str_contains($m, 'inventario') || str_contains($m, 'almacen') || str_contains($m, 'almacén')) {
             return 'inventario';
         }
+        if (str_contains($m, 'producto')) {
+            return 'productos';
+        }
+        if (str_contains($m, 'venta') || str_contains($m, 'reporte')) {
+            return 'ventas';
+        }
 
         return null;
     }
@@ -318,6 +379,9 @@ class GeliaAiChatService
                 ];
             }
         } else {
+            if ($name === $this->inventarioTool->name()) {
+                $args['con_precios'] = true;
+            }
             $result = match ($name) {
                 $this->ayudaTool->name() => $this->ayudaTool->ejecutar($user, $args),
                 $this->inventarioTool->name() => $this->inventarioTool->ejecutar($user, $args),

@@ -168,6 +168,9 @@ export default function AppLayout({ children, fullScreen = false }) {
     const permisosAlmacen = auth?.user?.permissions ?? [];
     const canViewImportacionAlmacen = esSuperAdmin
         || permisosAlmacen.includes('almacenes.productos.gestionar')
+        || permisosAlmacen.includes('gestion_interna.productos.gestionar')
+        || permisosAlmacen.includes('gestion_interna.productos.importar')
+        || permisosAlmacen.includes('reportes.ventas.importar')
         || permisosAlmacen.includes('almacenes.inventarios.importar')
         || permisosAlmacen.includes('almacenes.costos.importar')
         || permisosAlmacen.includes('catalogos.gestionar');

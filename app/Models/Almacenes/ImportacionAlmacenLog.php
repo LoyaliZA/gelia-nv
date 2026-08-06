@@ -120,6 +120,7 @@ class ImportacionAlmacenLog extends Model
             'productos' => 'Importación de productos',
             'inventarios' => 'Importación de inventario',
             'costos' => 'Importación de costos',
+            'ventas' => 'Importación de ventas',
             default => 'Importación de almacén',
         };
     }

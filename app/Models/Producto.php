@@ -16,8 +16,10 @@ class Producto extends Model
         'folio',
         'categoria_id',
         'marca_id',
+        'tipo_producto_id',
         'sku',
         'descripcion',
+        'descripcion_corta',
         'codigo_barras',
         'peso',
         'imagen_path',
@@ -50,6 +52,36 @@ class Producto extends Model
     public function marca(): BelongsTo
     {
         return $this->belongsTo(CatalogoMarcaProducto::class, 'marca_id');
+    }
+
+    public function tipoProducto(): BelongsTo
+    {
+        return $this->belongsTo(TipoProducto::class, 'tipo_producto_id');
+    }
+
+    public function atributoValores(): HasMany
+    {
+        return $this->hasMany(ProductoAtributoValor::class);
+    }
+
+    public function relaciones(): HasMany
+    {
+        return $this->hasMany(ProductoRelacion::class, 'producto_id');
+    }
+
+    public function notasOlfativas(): HasMany
+    {
+        return $this->hasMany(ProductoNotaOlfativa::class);
+    }
+
+    public function contenidos(): HasMany
+    {
+        return $this->hasMany(ProductoContenido::class);
+    }
+
+    public function ventasAlmacen(): HasMany
+    {
+        return $this->hasMany(ProductoVentaAlmacen::class);
     }
 
     public function inventarios(): HasMany
@@ -85,6 +117,39 @@ class Producto extends Model
         return ltrim(trim($sku), '0') ?: '0';
     }
 
+    /**
+     * Palabras útiles para coincidencia parcial (AND en descripción).
+     * Compacta "100 ml" → "100ml"; omite partículas cortas.
+     *
+     * @return list<string>
+     */
+    public static function tokensBusqueda(string $texto): array
+    {
+        $texto = mb_strtolower(trim($texto), 'UTF-8');
+        if ($texto === '') {
+            return [];
+        }
+
+        $texto = preg_replace('/(\d+)\s*(ml|mls|g|gr|oz|kg)\b/u', '$1$2', $texto) ?? $texto;
+        $texto = preg_replace('/[^\p{L}\p{N}\s\-]/u', ' ', $texto) ?? $texto;
+        $raw = preg_split('/\s+/u', $texto, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        $stop = [
+            'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'unos', 'unas',
+            'y', 'o', 'a', 'en', 'con', 'por', 'para', 'al', 'vs', 'the', 'of',
+        ];
+
+        $out = [];
+        foreach ($raw as $t) {
+            if (mb_strlen($t) < 2 || in_array($t, $stop, true)) {
+                continue;
+            }
+            $out[$t] = $t;
+        }
+
+        return array_values($out);
+    }
+
     public function scopeBuscarPorTexto(Builder $query, string $texto): Builder
     {
         $texto = trim($texto);
@@ -93,16 +158,26 @@ class Producto extends Model
         }
 
         $sku = self::normalizarSku($texto);
+        $tokens = self::tokensBusqueda($texto);
         $driver = DB::connection()->getDriverName();
         $castFolio = in_array($driver, ['pgsql', 'sqlite'], true)
             ? 'CAST(folio AS TEXT)'
             : 'CAST(folio AS CHAR)';
 
-        return $query->where(function (Builder $q) use ($texto, $sku, $castFolio) {
+        return $query->where(function (Builder $q) use ($texto, $sku, $castFolio, $tokens) {
             $q->where('sku', 'like', "%{$sku}%")
                 ->orWhere('descripcion', 'like', "%{$texto}%")
                 ->orWhere('codigo_barras', 'like', "%{$texto}%")
                 ->orWhereRaw("{$castFolio} LIKE ?", ["%{$texto}%"]);
+
+            // Frase no contigua: ARMAF … MANDARIN SKY (palabras AND en descripción).
+            if (count($tokens) >= 2) {
+                $q->orWhere(function (Builder $and) use ($tokens) {
+                    foreach ($tokens as $token) {
+                        $and->where('descripcion', 'like', "%{$token}%");
+                    }
+                });
+            }
         });
     }
 }

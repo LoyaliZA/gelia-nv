@@ -168,6 +168,8 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                                     <EncabezadoOrdenable columna="existencia" etiqueta="Existencia" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="apartado" etiqueta="Apartado" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="disponible" etiqueta="Disponible" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
+                                    <th className="px-4 py-4 text-right text-[10px] font-black uppercase tracking-widest theme-text-muted">Costo</th>
+                                    <th className="px-4 py-4 text-right text-[10px] font-black uppercase tracking-widest theme-text-muted">P. Venta</th>
                                     <EncabezadoOrdenable columna="transito_oc" etiqueta="Tráns. OC" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     <EncabezadoOrdenable columna="transito_ot" etiqueta="Tráns. OT" sortActual={filtros?.sort} dirActual={filtros?.dir} onOrdenar={handleOrdenar} alineacion="right" />
                                     {puedeGestionar && <th className="px-4 py-4 text-right">Acciones</th>}
@@ -175,7 +177,7 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                             </thead>
                             <tbody>
                                 {lista.length === 0 ? (
-                                    <tr><td colSpan={9} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin registros de inventario</td></tr>
+                                    <tr><td colSpan={11} className="px-4 py-16 text-center theme-text-muted text-sm font-bold uppercase">Sin registros de inventario</td></tr>
                                 ) : lista.map((inv) => (
                                     <tr key={inv.id} className="border-b theme-border hover:bg-black/5 dark:hover:bg-white/5">
                                         <td className="px-4 py-3">
@@ -187,6 +189,8 @@ export default function Index({ auth, inventarios, sucursales, almacenes, filtro
                                         <td className="px-4 py-3 text-right font-bold">{mostrarCantidad(inv.existencia)}</td>
                                         <td className="px-4 py-3 text-right font-bold">{mostrarCantidad(inv.apartado)}</td>
                                         <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">{mostrarCantidad(inv.disponible)}</td>
+                                        <td className="px-4 py-3 text-right font-bold text-red-500">{inv.costo_valor != null && inv.costo_valor !== '' ? Number(inv.costo_valor).toFixed(2) : '—'}</td>
+                                        <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">{inv.precio_venta_valor != null && inv.precio_venta_valor !== '' ? Number(inv.precio_venta_valor).toFixed(2) : '—'}</td>
                                         <td className="px-4 py-3 text-right text-[11px]">{mostrarCantidad(inv.transito_oc)}</td>
                                         <td className="px-4 py-3 text-right text-[11px]">{mostrarCantidad(inv.transito_ot)}</td>
                                         {puedeGestionar && (

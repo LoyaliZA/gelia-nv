@@ -118,8 +118,14 @@ export const DESCRIPCIONES_PERMISOS = {
     'contabilidad.exportar': 'Permite exportar reportes de contabilidad en Excel y PDF.',
     'contabilidad.historial.editar_emergencia': 'Permite ediciones de emergencia en historial de lotes pagados.',
     'almacenes.ver': 'Permiso legacy del grupo Almacenes. No otorga acceso a Productos, Inventarios ni Costos; use los permisos específicos de cada submódulo.',
-    'almacenes.productos.ver': 'Permite acceder a la vista de catálogo maestro de productos (SKU, descripción, marca, categoría y código de barras).',
-    'almacenes.productos.gestionar': 'Permite crear, editar y eliminar productos en el catálogo maestro.',
+    'almacenes.productos.ver': 'Legacy: preferir gestion_interna.productos.ver. Catálogo maestro de productos.',
+    'almacenes.productos.gestionar': 'Legacy: preferir gestion_interna.productos.gestionar.',
+    'gestion_interna.productos.ver': 'Permite ver el catálogo maestro de productos en Gestión Interna.',
+    'gestion_interna.productos.gestionar': 'Permite crear, editar y eliminar productos (ficha, atributos, relaciones).',
+    'gestion_interna.productos.importar': 'Permite importar el catálogo de productos.',
+    'gestion_interna.catalogos_producto.gestionar': 'Permite administrar catálogos de atributos/unidades de producto.',
+    'reportes.ventas.ver': 'Permite consultar ventas importadas por producto y almacén.',
+    'reportes.ventas.importar': 'Permite importar snapshots de ventas desde el ERP.',
     'almacenes.inventarios.ver': 'Permite consultar existencias, apartados, disponible, tránsitos, mínimos/máximos y ubicación por almacén.',
     'almacenes.inventarios.gestionar': 'Permite crear, editar y eliminar registros de inventario por producto y almacén.',
     'almacenes.inventarios.importar': 'Permite importar inventarios de forma masiva mediante el asistente de carga.',
@@ -773,10 +779,29 @@ export const SUBMODULOS_UI_POR_MODULO = {
     ],
     gestion_interna: [
         {
+            id: 'productos',
+            label: 'Productos',
+            descripcion: 'Catálogo maestro universal',
+            permisos: [
+                'gestion_interna.productos.ver',
+                'gestion_interna.productos.gestionar',
+                'gestion_interna.productos.importar',
+                'gestion_interna.catalogos_producto.gestionar',
+            ],
+        },
+        {
             id: 'directorio',
             label: 'Directorio',
             descripcion: 'Directorio interno',
             permisos: ['gestion_interna.directorio.ver', 'gestion_interna.directorio.gestionar'],
+        },
+    ],
+    reportes: [
+        {
+            id: 'ventas',
+            label: 'Ventas',
+            descripcion: 'Ventas importadas por producto/almacén',
+            permisos: ['reportes.ventas.ver', 'reportes.ventas.importar'],
         },
     ],
     almacenes: [
@@ -788,8 +813,8 @@ export const SUBMODULOS_UI_POR_MODULO = {
         },
         {
             id: 'productos',
-            label: 'Productos',
-            descripcion: 'Catálogo maestro de productos',
+            label: 'Productos (legacy)',
+            descripcion: 'Permisos legacy; el módulo vive en Gestión Interna',
             permisos: ['almacenes.productos.ver', 'almacenes.productos.gestionar'],
         },
         {

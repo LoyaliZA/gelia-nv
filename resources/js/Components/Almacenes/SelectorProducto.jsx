@@ -49,7 +49,7 @@ export default function SelectorProducto({ value, onChange, productoInicial, dis
                 params.set('q', termino.trim());
             }
 
-            const resp = await fetch(`${route('almacenes.productos.buscar')}?${params}`, {
+            const resp = await fetch(`${route('gestion_interna.productos.buscar')}?${params}`, {
                 signal: controller.signal,
                 headers: { Accept: 'application/json' },
             });

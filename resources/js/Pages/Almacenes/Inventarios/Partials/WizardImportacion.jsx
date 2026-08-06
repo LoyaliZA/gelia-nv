@@ -147,7 +147,7 @@ export default function WizardImportacion({ almacenes, onClose }) {
                     )}
                     {step === 3 && (
                         <div className="space-y-6">
-                            <p className="text-[11px] font-bold theme-text-muted">Se importarán productos, existencias y costos (si se mapearon) al almacén seleccionado.</p>
+                            <p className="text-[11px] font-bold theme-text-muted">Se importarán productos (únicos por SKU), existencias del almacén y, si mapeas costo/precio, también Almacenes→Costos de ese almacén.</p>
                             <button onClick={processImport} disabled={loading} className={`${THEME_BTN_PRIMARY} w-full py-3 flex justify-center gap-2`}>
                                 {loading ? 'Procesando...' : <><ArrowRight className="w-4 h-4" /> Procesar importación</>}
                             </button>

@@ -18,6 +18,9 @@ class ImportacionAlmacenController extends Controller
 
         if (! $user->can('catalogos.gestionar')
             && ! $user->can('almacenes.productos.gestionar')
+            && ! $user->can('gestion_interna.productos.gestionar')
+            && ! $user->can('gestion_interna.productos.importar')
+            && ! $user->can('reportes.ventas.importar')
             && ! $user->can('almacenes.inventarios.importar')
             && ! $user->can('almacenes.costos.importar')) {
             abort(403);
@@ -145,6 +148,9 @@ class ImportacionAlmacenController extends Controller
         $user = request()->user();
         if ($user->can('catalogos.gestionar')
             || $user->can('almacenes.productos.gestionar')
+            || $user->can('gestion_interna.productos.gestionar')
+            || $user->can('gestion_interna.productos.importar')
+            || $user->can('reportes.ventas.importar')
             || $user->can('almacenes.inventarios.importar')
             || $user->can('almacenes.costos.importar')) {
             return;
@@ -158,6 +164,9 @@ class ImportacionAlmacenController extends Controller
         $user = request()->user();
         if ($user->can('catalogos.gestionar')
             || $user->can('almacenes.productos.gestionar')
+            || $user->can('gestion_interna.productos.gestionar')
+            || $user->can('gestion_interna.productos.importar')
+            || $user->can('reportes.ventas.importar')
             || $user->can('almacenes.inventarios.importar')
             || $user->can('almacenes.costos.importar')) {
             return;

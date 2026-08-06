@@ -465,18 +465,50 @@ class CatalogoController extends Controller
 
     // --- 16. CATEGORÍAS DE PRODUCTO ---
     public function storeCategoriaProducto(Request $request, NormalizarTextoImportacionService $normalizador) {
-        $data = $request->validate(['nombre' => 'required|string|max:255|unique:catalogo_categoria_productos,nombre']);
+        $data = $request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_categoria_productos,nombre',
+            'atributo_ids' => 'nullable|array',
+            'atributo_ids.*' => 'integer|exists:atributos,id',
+            'extensiones' => 'nullable|array',
+            'extensiones.*.codigo' => 'required_with:extensiones|string|exists:extensiones_producto,codigo',
+            'extensiones.*.habilitada' => 'boolean',
+            'extensiones.*.heredable' => 'boolean',
+        ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
+        $atributoIds = array_values(array_unique(array_map('intval', $data['atributo_ids'] ?? [])));
+        $extensiones = $data['extensiones'] ?? [];
+        unset($data['atributo_ids'], $data['extensiones']);
         $categoria = CatalogoCategoriaProducto::create($data);
+        $this->sincronizarAtributosCategoria($categoria->id, $atributoIds);
+        $this->sincronizarExtensionesCategoria($categoria->id, $extensiones);
         app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('creado', 'categoria_producto', $categoria->id, $categoria->nombre);
         return back()->with('success', 'Categoría registrada.');
     }
 
     public function updateCategoriaProducto(Request $request, $id, NormalizarTextoImportacionService $normalizador) {
-        $data = $request->validate(['nombre' => 'required|string|max:255|unique:catalogo_categoria_productos,nombre,' . $id]);
+        $data = $request->validate([
+            'nombre' => 'required|string|max:255|unique:catalogo_categoria_productos,nombre,' . $id,
+            'atributo_ids' => 'nullable|array',
+            'atributo_ids.*' => 'integer|exists:atributos,id',
+            'extensiones' => 'nullable|array',
+            'extensiones.*.codigo' => 'required_with:extensiones|string|exists:extensiones_producto,codigo',
+            'extensiones.*.habilitada' => 'boolean',
+            'extensiones.*.heredable' => 'boolean',
+        ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
+        $atributoIds = array_key_exists('atributo_ids', $data)
+            ? array_values(array_unique(array_map('intval', $data['atributo_ids'] ?? [])))
+            : null;
+        $extensiones = array_key_exists('extensiones', $data) ? ($data['extensiones'] ?? []) : null;
+        unset($data['atributo_ids'], $data['extensiones']);
         $categoria = CatalogoCategoriaProducto::findOrFail($id);
         $categoria->update($data);
+        if ($atributoIds !== null) {
+            $this->sincronizarAtributosCategoria($categoria->id, $atributoIds);
+        }
+        if ($extensiones !== null) {
+            $this->sincronizarExtensionesCategoria($categoria->id, $extensiones);
+        }
         app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('actualizado', 'categoria_producto', $categoria->id, $categoria->nombre);
         return back()->with('success', 'Categoría actualizada.');
     }
@@ -486,6 +518,49 @@ class CatalogoController extends Controller
         app(RegistrarAuditoriaAlmacenService::class)->catalogoCrud('eliminado', 'categoria_producto', $categoria->id, $categoria->nombre);
         $categoria->delete();
         return back()->with('success', 'Categoría eliminada.');
+    }
+
+    private function sincronizarAtributosCategoria(int $categoriaId, array $atributoIds): void
+    {
+        \App\Models\CategoriaAtributo::query()->where('categoria_id', $categoriaId)->delete();
+        foreach ($atributoIds as $orden => $atributoId) {
+            \App\Models\CategoriaAtributo::create([
+                'categoria_id' => $categoriaId,
+                'atributo_id' => $atributoId,
+                'requerido' => false,
+                'heredable' => true,
+                'orden' => $orden + 1,
+            ]);
+        }
+    }
+
+    /** @param  list<array{codigo:string,habilitada?:bool,heredable?:bool}>  $items */
+    private function sincronizarExtensionesCategoria(int $categoriaId, array $items): void
+    {
+        $porCodigo = \App\Models\ExtensionProducto::query()->get()->keyBy('codigo');
+        $kept = [];
+        foreach ($items as $item) {
+            $codigo = (string) ($item['codigo'] ?? '');
+            $ext = $porCodigo->get($codigo);
+            if (! $ext) {
+                continue;
+            }
+            $row = \App\Models\CategoriaExtension::query()->updateOrCreate(
+                ['categoria_id' => $categoriaId, 'extension_id' => $ext->id],
+                [
+                    'habilitada' => (bool) ($item['habilitada'] ?? true),
+                    'heredable' => (bool) ($item['heredable'] ?? true),
+                ]
+            );
+            $kept[] = $row->id;
+        }
+        \App\Models\CategoriaExtension::query()
+            ->where('categoria_id', $categoriaId)
+            ->when($kept !== [], fn ($q) => $q->whereNotIn('id', $kept), fn ($q) => $q)
+            ->delete();
+
+        app(\App\Services\Productos\ResolverExtensionesProductoService::class)
+            ->invalidarCacheCategoria($categoriaId);
     }
 
     // --- IMPORTACIÓN MASIVA CATÁLOGOS ALMACÉN ---

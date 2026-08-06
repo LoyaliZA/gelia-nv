@@ -12,6 +12,7 @@ import {
     ShoppingBag,
     LifeBuoy,
     Bot,
+    ChartNoAxesColumn,
 } from 'lucide-react';
 
 /** Módulos del panel de administración (sidebar + /admin). */
@@ -131,6 +132,15 @@ export const ADMIN_MODULES = [
         path: '/admin/gelia-ai/acceso',
         routeName: 'admin.gelia_ai.acceso.index',
         icon: Bot,
+        permission: 'gelia_ai.gestionar_acceso',
+    },
+    {
+        id: 'gelia_ai_uso',
+        title: 'Uso GELIA',
+        description: 'Tokens por usuario, modos y turnos caros para auditar el asistente.',
+        path: '/admin/gelia-ai/uso',
+        routeName: 'admin.gelia_ai.uso.index',
+        icon: ChartNoAxesColumn,
         permission: 'gelia_ai.gestionar_acceso',
     },
     {

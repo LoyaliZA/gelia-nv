@@ -121,7 +121,21 @@ class AdminController extends Controller
             'tipos_almacen' => CatalogoTipoAlmacen::orderBy('nombre')->get(),
             'marcas_producto' => CatalogoMarcaProducto::orderBy('nombre')->get(),
             'almacenes' => Almacen::with(['sucursal', 'tipoAlmacen'])->orderBy('nombre')->get(),
-            'categorias_producto' => CatalogoCategoriaProducto::orderBy('nombre')->get(),
+            'categorias_producto' => CatalogoCategoriaProducto::with([
+                'categoriaAtributos:id,categoria_id,atributo_id,orden',
+                'categoriaExtensiones.extension:id,codigo,nombre,habilitada',
+            ])->orderBy('nombre')->get(),
+            'atributos_producto' => \App\Models\Atributo::with(['opciones' => fn ($q) => $q->orderBy('orden')])
+                ->orderBy('nombre')
+                ->get(),
+            'unidades_medida' => \App\Models\UnidadMedida::orderBy('dimension')->orderBy('nombre')->get(),
+            'extensiones_producto' => \App\Models\ExtensionProducto::query()
+                ->withCount(['categoriaExtensiones as categorias_asignadas_count' => fn ($q) => $q->where('habilitada', true)])
+                ->orderBy('nombre')
+                ->get(),
+            'notas_olfativas' => \App\Models\NotaOlfativa::orderBy('nombre')->get(),
+            'perfumeria_en_uso' => app(\App\Services\Productos\ResolverExtensionesProductoService::class)
+                ->algunaCategoriaUsa('perfumeria'),
             'estatus_pedidos' => CatalogoEstatusPedido::orderBy('orden')->get(),
             'paqueterias_pedido' => CatalogoPaqueteriaPedido::orderBy('nombre')->get(),
             'tipos_caja_pedido' => CatalogoTipoCajaPedido::orderBy('nombre')->get(),

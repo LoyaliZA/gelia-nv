@@ -13,4 +13,14 @@ class ProductoTest extends TestCase
         $this->assertSame('0', Producto::normalizarSku('000'));
         $this->assertSame('ABC', Producto::normalizarSku('  ABC  '));
     }
+
+    public function test_tokens_busqueda_compacta_ml_y_omite_particulas(): void
+    {
+        $this->assertSame(
+            ['armaf', 'mandarin', 'sky', '100ml'],
+            Producto::tokensBusqueda('Armaf mandarin Sky de 100 ml')
+        );
+        $this->assertSame(['zeta'], Producto::tokensBusqueda('Zeta'));
+        $this->assertSame([], Producto::tokensBusqueda(' de  '));
+    }
 }
