@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaAnexoEnvio;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class AnexarPagoEnvioPedidoBmaService
 {
@@ -59,7 +60,8 @@ class AnexarPagoEnvioPedidoBmaService
                 sprintf(
                     'Anexo de pago de envío por $%s. Pendiente de revisión del auxiliar.',
                     number_format($monto, 2, '.', ',')
-                )
+                ),
+                AccionesHistorialPedidoBma::ANEXO_PAGO_ENVIO
             );
 
             return $anexo->load(['banco', 'registradoPor']);

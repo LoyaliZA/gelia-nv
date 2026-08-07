@@ -109,9 +109,10 @@ export default function ModalLiberarResguardoAbierto({
                                 {' · '}
                                 Cajas: {pedido.numero_cajas ?? '—'}
                             </p>
-                            {cajasPesaje.length > 0 && cajasPesaje.map((c) => (
-                                <p key={c.id} className="text-xs theme-text-muted font-bold m-0">
-                                    {c.tipo_caja?.nombre || 'Caja'}: {c.cantidad}
+                            {cajasPesaje.length > 0 && [...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                <p key={c.id || idx} className="text-xs theme-text-muted font-bold m-0">
+                                    Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
+                                    {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
                                 </p>
                             ))}
                         </div>

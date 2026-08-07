@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCaja;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class ResponderPesajePedidoBmaService
 {
@@ -15,9 +16,16 @@ class ResponderPesajePedidoBmaService
     ) {}
 
     /**
-     * @param  list<array{catalogo_tipo_caja_id:int, cantidad:int}>  $lineasCaja
+     * @param  list<array{
+     *   catalogo_tipo_caja_id:int|string,
+     *   largo:float|int|string,
+     *   ancho:float|int|string,
+     *   alto:float|int|string,
+     *   peso_real_kg:float|int|string,
+     *   peso_volumetrico_kg:float|int|string
+     * }>  $lineasCaja
      */
-    public function ejecutar(PedidoBma $pedido, int $usuarioId, float $pesoRealKg, array $lineasCaja): PedidoBma
+    public function ejecutar(PedidoBma $pedido, int $usuarioId, array $lineasCaja): PedidoBma
     {
         $pedido->loadMissing('estatus');
 
@@ -25,13 +33,9 @@ class ResponderPesajePedidoBmaService
             throw new \RuntimeException('Este pedido no está pendiente de pesaje.');
         }
 
-        if ($pesoRealKg < 0) {
-            throw new \InvalidArgumentException('El peso real no puede ser negativo.');
-        }
-
         $lineas = $this->normalizarLineas($lineasCaja);
         if ($lineas === []) {
-            throw new \InvalidArgumentException('Debe indicar al menos una caja con cantidad mayor a cero.');
+            throw new \InvalidArgumentException('Debe indicar al menos un envío con tipo de caja y pesos.');
         }
 
         $tipos = CatalogoTipoCajaPedido::query()
@@ -43,34 +47,46 @@ class ResponderPesajePedidoBmaService
             throw new \InvalidArgumentException('Una o más cajas del catálogo no existen.');
         }
 
-        return DB::transaction(function () use ($pedido, $usuarioId, $pesoRealKg, $lineas, $tipos) {
+        return DB::transaction(function () use ($pedido, $usuarioId, $lineas, $tipos) {
             PedidoBmaCaja::where('pedido_bma_id', $pedido->id)->delete();
 
-            $numeroCajas = 0;
-            $pesoVolumetrico = 0.0;
+            $pesoRealTotal = 0.0;
+            $pesoVolumetricoTotal = 0.0;
+            $pesoCobradoTotal = 0.0;
             $cajaPrincipalId = null;
             $maxVol = -1.0;
             $orden = 0;
 
             foreach ($lineas as $linea) {
                 $tipo = $tipos->get($linea['catalogo_tipo_caja_id']);
-                $cantidad = $linea['cantidad'];
-                $volUnit = (float) ($tipo->peso_volumetrico ?? 0);
+                $pesoReal = $linea['peso_real_kg'];
+                $pesoVol = $linea['peso_volumetrico_kg'];
+                $pesoCobrado = PedidoBma::calcularPesoCobradoGuia($pesoReal, $pesoVol);
 
                 PedidoBmaCaja::create([
                     'pedido_bma_id' => $pedido->id,
                     'catalogo_tipo_caja_id' => $tipo->id,
-                    'cantidad' => $cantidad,
-                    'orden' => $orden++,
+                    'cantidad' => 1,
+                    'orden' => $orden,
+                    'largo' => $linea['largo'],
+                    'ancho' => $linea['ancho'],
+                    'alto' => $linea['alto'],
+                    'peso_real_kg' => $pesoReal,
+                    'peso_volumetrico_kg' => $pesoVol,
+                    'peso_cobrado_kg' => $pesoCobrado,
+                    'catalogo_tipo_guia_id' => null,
                 ]);
 
-                $numeroCajas += $cantidad;
-                $pesoVolumetrico += $volUnit * $cantidad;
+                $pesoRealTotal += $pesoReal;
+                $pesoVolumetricoTotal += $pesoVol;
+                $pesoCobradoTotal += (float) $pesoCobrado;
 
-                if ($volUnit > $maxVol) {
-                    $maxVol = $volUnit;
+                if ($pesoVol > $maxVol) {
+                    $maxVol = $pesoVol;
                     $cajaPrincipalId = $tipo->id;
                 }
+
+                $orden++;
             }
 
             if ($cajaPrincipalId === null) {
@@ -78,11 +94,12 @@ class ResponderPesajePedidoBmaService
             }
 
             $estatus = $pedido->estatus;
+            $numeroCajas = count($lineas);
 
             $pedido->update([
-                'peso_real_kg' => $pesoRealKg,
-                'peso_volumetrico_kg' => round($pesoVolumetrico, 4),
-                'peso_cobrado_guia_kg' => PedidoBma::calcularPesoCobradoGuia($pesoRealKg, $pesoVolumetrico),
+                'peso_real_kg' => round($pesoRealTotal, 4),
+                'peso_volumetrico_kg' => round($pesoVolumetricoTotal, 4),
+                'peso_cobrado_guia_kg' => round($pesoCobradoTotal, 4),
                 'numero_cajas' => $numeroCajas,
                 'catalogo_tipo_caja_id' => $cajaPrincipalId,
                 'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
@@ -96,10 +113,11 @@ class ResponderPesajePedidoBmaService
                 $estatus->id,
                 $estatus->id,
                 sprintf(
-                    'Pesaje CEDIS respondido: %.4f kg, %d caja(s).',
-                    $pesoRealKg,
+                    'Pesaje CEDIS respondido: %.4f kg cobrados, %d envío(s).',
+                    $pesoCobradoTotal,
                     $numeroCajas
-                )
+                ),
+                AccionesHistorialPedidoBma::RESPUESTA_PESAJE
             );
 
             $this->notificarService->ejecutar(
@@ -113,35 +131,52 @@ class ResponderPesajePedidoBmaService
             );
 
             return $pedido->fresh([
-                'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'tipoCaja',
+                'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'cajas.tipoGuia', 'tipoCaja', 'tipoGuia',
                 'pesajeRespondidoPor',
             ]);
         });
     }
 
     /**
-     * @param  list<array{catalogo_tipo_caja_id?:mixed, cantidad?:mixed}>  $lineasCaja
-     * @return list<array{catalogo_tipo_caja_id:int, cantidad:int}>
+     * @param  list<array<string, mixed>>  $lineasCaja
+     * @return list<array{
+     *   catalogo_tipo_caja_id:int,
+     *   largo:float,
+     *   ancho:float,
+     *   alto:float,
+     *   peso_real_kg:float,
+     *   peso_volumetrico_kg:float
+     * }>
      */
     private function normalizarLineas(array $lineasCaja): array
     {
         $out = [];
         foreach ($lineasCaja as $linea) {
             $tipoId = (int) ($linea['catalogo_tipo_caja_id'] ?? 0);
-            $cantidad = (int) ($linea['cantidad'] ?? 0);
-            if ($tipoId <= 0 || $cantidad <= 0) {
+            $pesoReal = isset($linea['peso_real_kg']) ? (float) $linea['peso_real_kg'] : null;
+            $pesoVol = isset($linea['peso_volumetrico_kg']) ? (float) $linea['peso_volumetrico_kg'] : null;
+            $largo = isset($linea['largo']) ? (float) $linea['largo'] : null;
+            $ancho = isset($linea['ancho']) ? (float) $linea['ancho'] : null;
+            $alto = isset($linea['alto']) ? (float) $linea['alto'] : null;
+
+            if ($tipoId <= 0 || $pesoReal === null || $pesoVol === null
+                || $largo === null || $ancho === null || $alto === null) {
                 continue;
             }
-            if (isset($out[$tipoId])) {
-                $out[$tipoId]['cantidad'] += $cantidad;
-            } else {
-                $out[$tipoId] = [
-                    'catalogo_tipo_caja_id' => $tipoId,
-                    'cantidad' => $cantidad,
-                ];
+            if ($pesoReal < 0 || $pesoVol < 0 || $largo < 0 || $ancho < 0 || $alto < 0) {
+                continue;
             }
+
+            $out[] = [
+                'catalogo_tipo_caja_id' => $tipoId,
+                'largo' => round($largo, 2),
+                'ancho' => round($ancho, 2),
+                'alto' => round($alto, 2),
+                'peso_real_kg' => round($pesoReal, 4),
+                'peso_volumetrico_kg' => round($pesoVol, 4),
+            ];
         }
 
-        return array_values($out);
+        return $out;
     }
 }

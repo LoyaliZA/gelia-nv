@@ -727,6 +727,7 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                         showAdminMenu={showAdminMenu}
                                         manualesHubVisible={Boolean(manualesHubVisible)}
                                         geliaAiVisible={Boolean(geliaAiVisible)}
+                                        saldosFavorPendientes={Number(auth?.saldos_favor_pendientes || 0)}
                                         onNavigate={closeMobileMenu}
                                     />
                                 </div>

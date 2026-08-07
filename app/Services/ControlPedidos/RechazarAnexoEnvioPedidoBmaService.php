@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaAnexoEnvio;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class RechazarAnexoEnvioPedidoBmaService
 {
@@ -49,7 +50,8 @@ class RechazarAnexoEnvioPedidoBmaService
                 $usuarioId,
                 $pedido->catalogo_estatus_pedido_id,
                 $pedido->catalogo_estatus_pedido_id,
-                'Anexo de pago de envío rechazado: '.$motivo
+                'Anexo de pago de envío rechazado: '.$motivo,
+                AccionesHistorialPedidoBma::RECHAZAR_ANEXO
             );
 
             return $pedido->fresh([

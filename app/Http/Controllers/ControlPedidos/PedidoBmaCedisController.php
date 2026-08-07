@@ -14,7 +14,6 @@ use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
 use App\Services\ControlPedidos\MarcarResguardoApartadoPedidoBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
-use App\Services\ControlPedidos\ReportarIncidenciaEmpaqueService;
 use App\Services\ControlPedidos\ResponderPesajePedidoBmaService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
@@ -94,15 +93,20 @@ class PedidoBmaCedisController extends Controller
     public function reportarIncidencia(
         ReportarIncidenciaEmpaqueRequest $request,
         PedidoBma $pedidoBma,
-        ReportarIncidenciaEmpaqueService $service
+        ReportarErrorDatosPedidoBmaService $service
     ): RedirectResponse {
         try {
-            $service->ejecutar($pedidoBma, Auth::id(), $request->validated('detalle'));
+            $service->ejecutar(
+                $pedidoBma->load(['estatus', 'documentos']),
+                Auth::id(),
+                ['empaque'],
+                (string) $request->validated('detalle')
+            );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Incidencia reportada correctamente.');
+        return redirect()->back()->with('success', 'Error reportado correctamente.');
     }
 
     public function reportarErrorDatos(
@@ -154,7 +158,6 @@ class PedidoBmaCedisController extends Controller
             $service->ejecutar(
                 $pedidoBma->load('estatus'),
                 Auth::id(),
-                (float) $request->validated('peso_real_kg'),
                 $request->validated('cajas')
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {

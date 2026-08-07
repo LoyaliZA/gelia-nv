@@ -25,9 +25,11 @@ class ListarPedidosCedisService
     public function ejecutar(array $filtros = [], bool $paginar = true): LengthAwarePaginator|Collection
     {
         $tab = strtoupper($filtros['tab'] ?? 'TODOS');
-        $query = $tab === 'PENDIENTES_PESAJE'
-            ? $this->queryPendientesPesaje()
-            : $this->queryBase();
+        $query = match ($tab) {
+            'PENDIENTES_PESAJE' => $this->queryPendientesPesaje(),
+            'TODOS', '' => $this->queryTodos(),
+            default => $this->queryBase(),
+        };
 
         $this->aplicarFiltros($query, $filtros);
 
@@ -45,6 +47,7 @@ class ListarPedidosCedisService
         $enviados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0)->count();
         $incorrectas = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0)->count();
         $pendientesPesaje = $this->queryPendientesPesaje()->count();
+        $entregados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENTREGADO'] ?? 0)->count();
 
         return [
             'empacados' => $empacados,
@@ -56,7 +59,7 @@ class ListarPedidosCedisService
             'incidencias' => $incorrectas,
             'pendientes_pesaje' => $pendientesPesaje,
             'total' => $empacados + $pendientesEnvio + $pendientesGuia + $enviados + $incorrectas
-                + ((clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENTREGADO'] ?? 0)->count()),
+                + $entregados + $pendientesPesaje,
         ];
     }
 
@@ -71,33 +74,57 @@ class ListarPedidosCedisService
             'paqueteria',
             'tipoGuia',
             'tipoCaja',
-            'cajas.tipoCaja',
+            'cajas.tipoCaja', 'cajas.tipoGuia',
             'documentos',
             'empacadoPor',
             'incidenciaEmpaquePor',
             'resguardoApartadoPor',
+            'errores.reportadoPor',
+            'errores.corregidoPor',
             'direccionVigente',
             'tipoOperacionEnvio',
+            'historial.usuario',
+            'historial.estatusAnterior',
+            'historial.estatusNuevo',
             'complementos.documentos',
             'complementos.estatus',
             'complementos.cliente',
         ];
     }
 
+    /** Bandeja CEDIS post-remisión (sin pendientes de pesaje). */
     private function queryBase(): Builder
     {
-        $idsPorFase = $this->idsPorFase();
-        $fasesVisibles = array_merge(self::FASES_PENDIENTES, self::FASES_EMPACADOS);
-        $idsVisibles = array_values(array_filter(array_map(
-            fn (string $fase) => $idsPorFase[$fase] ?? null,
-            $fasesVisibles
-        )));
+        $idsVisibles = $this->idsEstatusVisibles();
 
         return PedidoBma::with($this->withRelations())
             ->whereNull('pedido_principal_id')
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
             ->whereNotNull('pago_validado_at')
             ->whereHas('remision')
+            ->orderByDesc('created_at');
+    }
+
+    /** TODOS = bandeja CEDIS + pendientes de pesaje. */
+    private function queryTodos(): Builder
+    {
+        $idsVisibles = $this->idsEstatusVisibles();
+        $estatusPesaje = PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE;
+
+        return PedidoBma::with($this->withRelations())
+            ->whereNull('pedido_principal_id')
+            ->where(function (Builder $q) use ($idsVisibles, $estatusPesaje) {
+                $q->where(function (Builder $bandeja) use ($idsVisibles) {
+                    $bandeja->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
+                        ->whereNotNull('pago_validado_at')
+                        ->whereHas('remision');
+                })->orWhere(function (Builder $pesaje) use ($estatusPesaje) {
+                    $pesaje->where('estatus_envio', $estatusPesaje)
+                        ->whereNull('empacado_at');
+                });
+            })
+            ->orderByRaw('CASE WHEN estatus_envio = ? THEN 0 ELSE 1 END', [$estatusPesaje])
+            ->orderByDesc('pesaje_solicitado_at')
             ->orderByDesc('created_at');
     }
 
@@ -130,7 +157,7 @@ class ListarPedidosCedisService
         }
 
         $tab = strtoupper($filtros['tab'] ?? 'TODOS');
-        if ($tab === 'PENDIENTES_PESAJE') {
+        if ($tab === 'PENDIENTES_PESAJE' || $tab === 'TODOS' || $tab === '') {
             return;
         }
 
@@ -145,6 +172,17 @@ class ListarPedidosCedisService
             'PENDIENTES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0),
             default => null,
         };
+    }
+
+    private function idsEstatusVisibles(): array
+    {
+        $idsPorFase = $this->idsPorFase();
+        $fasesVisibles = array_merge(self::FASES_PENDIENTES, self::FASES_EMPACADOS);
+
+        return array_values(array_filter(array_map(
+            fn (string $fase) => $idsPorFase[$fase] ?? null,
+            $fasesVisibles
+        )));
     }
 
     private function idsPorFase(): array

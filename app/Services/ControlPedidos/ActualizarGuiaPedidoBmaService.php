@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class ActualizarGuiaPedidoBmaService
 {
@@ -35,7 +36,12 @@ class ActualizarGuiaPedidoBmaService
 
             $attrsCola = [];
             if (! empty($pedido->campos_incorrectos)) {
-                $restantes = $this->colaErroresService->quitarCampos($pedido, ['numero_rastreo']);
+                $restantes = $this->colaErroresService->quitarCampos(
+                    $pedido,
+                    ['numero_rastreo'],
+                    $usuarioId,
+                    'Número de guía corregido'
+                );
                 $attrsCola = $restantes === []
                     ? $this->colaErroresService->attrsColaVacia()
                     : $this->colaErroresService->attrsColaPendiente($restantes);
@@ -53,7 +59,8 @@ class ActualizarGuiaPedidoBmaService
                 $usuarioId,
                 $pedido->catalogo_estatus_pedido_id,
                 $pedido->catalogo_estatus_pedido_id,
-                "Guía de rastreo corregida (provoca retraso): {$anterior} → {$guia}"
+                "Guía de rastreo corregida (provoca retraso): {$anterior} → {$guia}",
+                AccionesHistorialPedidoBma::ACTUALIZAR_GUIA
             );
 
             $pedido = $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos']);

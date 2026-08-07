@@ -10,12 +10,15 @@ class CamposIncorrectosPedidoBma
 
     public const DUENO_AUXILIAR = 'auxiliar';
 
+    public const DUENO_CEDIS = 'cedis';
+
     public const DUENO_GUIAS = 'guias';
 
     /** Prioridad de atención: más temprano primero. */
     public const PRIORIDAD_DUENOS = [
         self::DUENO_VENDEDORA,
         self::DUENO_AUXILIAR,
+        self::DUENO_CEDIS,
         self::DUENO_GUIAS,
     ];
 
@@ -28,11 +31,46 @@ class CamposIncorrectosPedidoBma
         'referencia',
         'codigo_postal',
         'ciudad_estado',
+        'origen',
+        'cliente',
+        'fecha',
+        'banco',
+        'almacen',
+        'es_resguardo',
+        'modo_resguardo',
+        'total_mercancia',
+        'costo_envio',
+        'costo_seguro',
+        'total_a_cobrar',
+        'aplica_seguro',
+        'saldo_a_favor',
+        'reexpedicion',
+        'cliente_proporciona_guia',
+        'anexar_remision',
+        'comentarios_drive',
+        'comprobantes',
+        'pagos',
+        'envio_tienda',
     ];
 
     public const CAMPOS_AUXILIAR = [
         'remision',
         'folio_remision',
+        'pago_validado',
+        'anexo_envio',
+    ];
+
+    public const CAMPOS_CEDIS = [
+        'empaque',
+        'producto_faltante',
+        'producto_danado',
+        'inventario',
+        'tipo_caja',
+        'numero_cajas',
+        'peso_real',
+        'peso_volumetrico',
+        'peso_cobrado',
+        'apartado_resguardo',
     ];
 
     public const CAMPOS_GUIAS = [
@@ -43,17 +81,62 @@ class CamposIncorrectosPedidoBma
     public const ALLOWLIST = [
         ...self::CAMPOS_VENDEDORA,
         ...self::CAMPOS_AUXILIAR,
+        ...self::CAMPOS_CEDIS,
         ...self::CAMPOS_GUIAS,
+    ];
+
+    /** Solo aplican si el origen requiere logística (envío foráneo / paquetería). */
+    public const CAMPOS_SOLO_LOGISTICA = [
+        'paqueteria',
+        'tipo_guia',
+        'referencia',
+        'codigo_postal',
+        'ciudad_estado',
+        'domicilio',
+        'destinatario',
+        'telefono',
+        'costo_envio',
+        'costo_seguro',
+        'aplica_seguro',
+        'reexpedicion',
+        'cliente_proporciona_guia',
+        'tipo_caja',
+        'numero_cajas',
+        'peso_real',
+        'peso_volumetrico',
+        'peso_cobrado',
+        ...self::CAMPOS_GUIAS,
+    ];
+
+    /** Solo aplican si el origen NO requiere logística (tienda / PDV). */
+    public const CAMPOS_SOLO_TIENDA = [
+        'envio_tienda',
+    ];
+
+    /** Solo aplican si el pedido está en resguardo. */
+    public const CAMPOS_SOLO_RESGUARDO = [
+        'apartado_resguardo',
+        'modo_resguardo',
     ];
 
     /** Campos de envío / guía que invalidan la guía capturada. */
     public const INVALIDAN_GUIA = [
-        ...self::CAMPOS_VENDEDORA,
+        'domicilio',
+        'destinatario',
+        'telefono',
+        'paqueteria',
+        'tipo_guia',
+        'referencia',
+        'codigo_postal',
+        'ciudad_estado',
+        'cliente_proporciona_guia',
+        'envio_tienda',
         ...self::CAMPOS_GUIAS,
     ];
 
     public const INVALIDAN_REMISION = [
-        ...self::CAMPOS_AUXILIAR,
+        'remision',
+        'folio_remision',
     ];
 
     public const ETIQUETAS = [
@@ -65,8 +148,40 @@ class CamposIncorrectosPedidoBma
         'referencia' => 'Referencias',
         'codigo_postal' => 'Código postal',
         'ciudad_estado' => 'Ciudad / estado',
+        'origen' => 'Origen',
+        'cliente' => 'Cliente',
+        'fecha' => 'Fecha',
+        'banco' => 'Banco',
+        'almacen' => 'Almacén de salida',
+        'es_resguardo' => 'Resguardo',
+        'modo_resguardo' => 'Tipo de resguardo',
+        'total_mercancia' => 'Total mercancía',
+        'costo_envio' => 'Costo de envío',
+        'costo_seguro' => 'Costo de seguro',
+        'total_a_cobrar' => 'Total a cobrar',
+        'aplica_seguro' => 'Aplica seguro',
+        'saldo_a_favor' => 'Saldo a favor',
+        'reexpedicion' => 'Reexpedición',
+        'cliente_proporciona_guia' => 'Guía del cliente',
+        'anexar_remision' => 'Anexar remisión',
+        'comentarios_drive' => 'Comentarios Drive / almacén',
+        'comprobantes' => 'Comprobantes',
+        'pagos' => 'Pagos / exhibición',
+        'envio_tienda' => 'Envío de tienda',
         'remision' => 'Remisión PDF',
         'folio_remision' => 'Folio de remisión',
+        'pago_validado' => 'Validación de pago',
+        'anexo_envio' => 'Anexo de envío',
+        'empaque' => 'Empaque',
+        'producto_faltante' => 'Producto faltante',
+        'producto_danado' => 'Producto dañado',
+        'inventario' => 'Inventario',
+        'tipo_caja' => 'Tipo de caja',
+        'numero_cajas' => 'Número de cajas',
+        'peso_real' => 'Peso real',
+        'peso_volumetrico' => 'Peso volumétrico',
+        'peso_cobrado' => 'Peso cobrado',
+        'apartado_resguardo' => 'Apartado de resguardo',
         'numero_rastreo' => 'Número de guía',
         'guia_pdf' => 'PDF de guía',
     ];
@@ -74,6 +189,52 @@ class CamposIncorrectosPedidoBma
     public static function filtrar(array $campos): array
     {
         return array_values(array_unique(array_intersect($campos, self::ALLOWLIST)));
+    }
+
+    /**
+     * Allowlist según capacidades del origen / pedido (no por nombre de origen).
+     *
+     * @return list<string>
+     */
+    public static function allowlistParaPedido(?\App\Models\ControlPedidos\PedidoBma $pedido): array
+    {
+        $pedido?->loadMissing('origen');
+        $requiereLogistica = (bool) ($pedido?->origen?->requiere_logistica ?? true);
+        $esResguardo = (bool) ($pedido?->es_resguardo ?? false);
+
+        return self::allowlistParaContexto($requiereLogistica, $esResguardo);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function allowlistParaContexto(bool $requiereLogistica, bool $esResguardo = false): array
+    {
+        $excluir = [];
+
+        if ($requiereLogistica) {
+            $excluir = array_merge($excluir, self::CAMPOS_SOLO_TIENDA);
+        } else {
+            $excluir = array_merge($excluir, self::CAMPOS_SOLO_LOGISTICA);
+        }
+
+        if (! $esResguardo) {
+            $excluir = array_merge($excluir, self::CAMPOS_SOLO_RESGUARDO);
+        }
+
+        return array_values(array_diff(self::ALLOWLIST, $excluir));
+    }
+
+    /**
+     * @param  list<string>  $campos
+     * @return list<string>
+     */
+    public static function filtrarParaPedido(array $campos, ?\App\Models\ControlPedidos\PedidoBma $pedido): array
+    {
+        return array_values(array_unique(array_intersect(
+            self::filtrar($campos),
+            self::allowlistParaPedido($pedido)
+        )));
     }
 
     public static function invalidanGuia(array $campos): bool
@@ -94,6 +255,9 @@ class CamposIncorrectosPedidoBma
         if (in_array($campo, self::CAMPOS_AUXILIAR, true)) {
             return self::DUENO_AUXILIAR;
         }
+        if (in_array($campo, self::CAMPOS_CEDIS, true)) {
+            return self::DUENO_CEDIS;
+        }
         if (in_array($campo, self::CAMPOS_GUIAS, true)) {
             return self::DUENO_GUIAS;
         }
@@ -102,7 +266,7 @@ class CamposIncorrectosPedidoBma
     }
 
     /**
-     * Dueño más temprano en la cola (prioridad vendedora → auxiliar → guías).
+     * Dueño más temprano en la cola (prioridad vendedora → auxiliar → cedis → guías).
      *
      * @param  list<string>  $campos
      */
@@ -127,6 +291,7 @@ class CamposIncorrectosPedidoBma
         $grupo = match ($dueno) {
             self::DUENO_VENDEDORA => self::CAMPOS_VENDEDORA,
             self::DUENO_AUXILIAR => self::CAMPOS_AUXILIAR,
+            self::DUENO_CEDIS => self::CAMPOS_CEDIS,
             self::DUENO_GUIAS => self::CAMPOS_GUIAS,
             default => [],
         };
@@ -173,6 +338,14 @@ class CamposIncorrectosPedidoBma
                 'tipo_alerta' => 'pedido_error_remision',
                 'url_path' => '/control-pedidos/auditar?tab=PENDIENTES',
                 'etiqueta' => 'auxiliar',
+            ],
+            self::DUENO_CEDIS => [
+                'fase' => CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
+                'permisos' => ['control_pedidos.cedis'],
+                'incluir_vendedora' => false,
+                'tipo_alerta' => 'pedido_error_cedis',
+                'url_path' => '/control-pedidos/cedis?tab=INCORRECTAS',
+                'etiqueta' => 'CEDIS',
             ],
             self::DUENO_GUIAS => [
                 'fase' => CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,

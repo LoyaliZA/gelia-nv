@@ -98,7 +98,7 @@ class PedidoBmaDelegadoController extends Controller
         GestionarGuiaPdfPedidoBmaService $service
     ): RedirectResponse {
         try {
-            $service->subir($pedidoBma->load('estatus'), $request->file('guia_pdf'));
+            $service->subir($pedidoBma->load('estatus'), $request->file('guia_pdf'), Auth::id());
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
@@ -111,7 +111,7 @@ class PedidoBmaDelegadoController extends Controller
         GestionarGuiaPdfPedidoBmaService $service
     ): RedirectResponse {
         try {
-            $service->eliminar($pedidoBma->load('estatus'));
+            $service->eliminar($pedidoBma->load('estatus'), Auth::id());
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

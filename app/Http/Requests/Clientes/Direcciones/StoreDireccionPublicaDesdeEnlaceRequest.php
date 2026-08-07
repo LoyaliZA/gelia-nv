@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Clientes\Direcciones;
 
+use App\Support\Clientes\Direcciones\ReglasValidacionDireccion;
 use App\Support\Clientes\Direcciones\SanitizarEntradaDireccionPublica;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -63,27 +64,22 @@ class StoreDireccionPublicaDesdeEnlaceRequest extends FormRequest
             $sanitizados['anexa_remision'] = filter_var($this->input('anexa_remision'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
         }
 
+        if ($this->has('domicilio_irregular')) {
+            $sanitizados['domicilio_irregular'] = filter_var($this->input('domicilio_irregular'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+        }
+
         $this->merge($sanitizados);
     }
 
     public function rules(): array
     {
-        return [
+        $irregular = $this->boolean('domicilio_irregular');
+
+        return array_merge([
             'token' => ['required', 'string', 'min:8', 'max:64', 'regex:/^[A-Za-z0-9]+$/'],
             'nombres_destinatario' => ['required', 'string', 'max:120', 'regex:/^[\p{L}\p{M}\s\'\.\-]+$/u'],
             'apellidos_destinatario' => ['required', 'string', 'max:120', 'regex:/^[\p{L}\p{M}\s\'\.\-]+$/u'],
             'telefono_destinatario' => ['nullable', 'string', 'max:30', 'regex:/^[\d+\-\s()]+$/'],
-            'calle' => ['required', 'string', 'max:255'],
-            'numero_exterior' => ['nullable', 'string', 'max:30'],
-            'numero_interior' => ['nullable', 'string', 'max:30'],
-            'colonia' => ['required', 'string', 'max:255'],
-            'codigo_postal' => ['required', 'string', 'regex:/^\d{5}$/'],
-            'municipio' => ['required', 'string', 'max:255'],
-            'ciudad' => ['nullable', 'string', 'max:255'],
-            'estado' => ['required', 'string', 'max:255'],
-            'pais' => ['nullable', 'string', 'max:255'],
-            'referencias' => ['nullable', 'string', 'max:2000'],
-            'indicaciones_entrega' => ['nullable', 'string', 'max:2000'],
             'etiqueta_opcion' => ['required', Rule::in(self::ETIQUETAS)],
             'etiqueta_personalizada' => [
                 Rule::requiredIf(fn () => $this->input('etiqueta_opcion') === 'Otro'),
@@ -92,11 +88,13 @@ class StoreDireccionPublicaDesdeEnlaceRequest extends FormRequest
                 'max:100',
             ],
             'anexa_remision' => ['required', 'boolean'],
-        ];
+        ], ReglasValidacionDireccion::domicilioPublico($irregular));
     }
 
     public function withValidator(Validator $validator): void
     {
+        ReglasValidacionDireccion::afterIrregular($validator, $this->boolean('domicilio_irregular'));
+
         $validator->after(function (Validator $validator) {
             foreach ([
                 'nombres_destinatario',
@@ -136,17 +134,18 @@ class StoreDireccionPublicaDesdeEnlaceRequest extends FormRequest
             'apellidos_destinatario' => $validated['apellidos_destinatario'],
             'nombre_destinatario' => $nombreCompleto,
             'telefono_destinatario' => $validated['telefono_destinatario'] ?? null,
-            'calle' => $validated['calle'],
+            'calle' => $validated['calle'] ?? null,
             'numero_exterior' => $validated['numero_exterior'] ?? null,
             'numero_interior' => $validated['numero_interior'] ?? null,
-            'colonia' => $validated['colonia'],
-            'codigo_postal' => $validated['codigo_postal'],
-            'municipio' => $validated['municipio'],
+            'colonia' => $validated['colonia'] ?? null,
+            'codigo_postal' => $validated['codigo_postal'] ?? null,
+            'municipio' => $validated['municipio'] ?? null,
             'ciudad' => $validated['ciudad'] ?? null,
             'estado' => $validated['estado'],
             'pais' => $validated['pais'] ?? 'México',
             'referencias' => $validated['referencias'] ?? null,
             'indicaciones_entrega' => $validated['indicaciones_entrega'] ?? null,
+            'domicilio_irregular' => (bool) ($validated['domicilio_irregular'] ?? false),
             'etiqueta' => $etiqueta,
             'tipo_direccion' => 'envio',
             'anexa_remision' => (bool) $validated['anexa_remision'],

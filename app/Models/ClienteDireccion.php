@@ -25,6 +25,8 @@ class ClienteDireccion extends Model
 
     public const ORIGEN_INTERNAL = 'internal';
 
+    public const ORIGEN_IMPORT_CATALOGO = 'import_catalogo';
+
     public const TIPO_ENVIO = 'envio';
 
     public const TIPO_OCURRE = 'ocurre';
@@ -53,6 +55,7 @@ class ClienteDireccion extends Model
         'pais',
         'referencias',
         'indicaciones_entrega',
+        'domicilio_irregular',
         'anexa_remision',
         'es_principal',
         'esta_activa',
@@ -69,6 +72,7 @@ class ClienteDireccion extends Model
     protected $casts = [
         'es_principal' => 'boolean',
         'esta_activa' => 'boolean',
+        'domicilio_irregular' => 'boolean',
         'anexa_remision' => 'boolean',
         'numero_direccion' => 'integer',
         'version' => 'integer',

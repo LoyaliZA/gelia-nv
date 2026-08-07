@@ -17,6 +17,7 @@ trait ValidacionCamposPedidoBma
         $esResguardoAbierto = $pedido->esResguardoAbierto();
         $esComplementario = $pedido->esResguardoComplementario();
         $omiteCosto = $esDiferido || $esResguardoAbierto || $esComplementario;
+        $guiaCliente = (bool) $pedido->cliente_proporciona_guia;
         $tienePesaje = $pedido->tienePesajeRespondido();
 
         if ($requiereLogistica && ! $esComplementario && ! $tienePesaje) {
@@ -58,6 +59,24 @@ trait ValidacionCamposPedidoBma
                 if ($pedido->numero_cajas === null) {
                     $faltantes[] = 'número de cajas (pesaje CEDIS)';
                 }
+
+                $pedido->loadMissing('cajas');
+                if ($pedido->cajas->isEmpty()) {
+                    $faltantes[] = 'detalle de envíos (pesaje CEDIS)';
+                } else {
+                    foreach ($pedido->cajas as $idx => $caja) {
+                        $n = $idx + 1;
+                        if (! $caja->catalogo_tipo_caja_id) {
+                            $faltantes[] = "tipo de caja (Envío {$n})";
+                        }
+                        if ($caja->peso_real_kg === null) {
+                            $faltantes[] = "peso real (Envío {$n})";
+                        }
+                        if ($caja->peso_volumetrico_kg === null) {
+                            $faltantes[] = "peso volumétrico (Envío {$n})";
+                        }
+                    }
+                }
             } elseif (! $omiteCosto) {
                 if ($pedido->peso_real_kg === null) {
                     $faltantes[] = 'peso real';
@@ -70,23 +89,25 @@ trait ValidacionCamposPedidoBma
                 }
             }
 
-            if (! $pedido->catalogo_tipo_guia_id) {
-                $faltantes[] = 'tipo de guía';
-            }
-            if (! $pedido->catalogo_paqueteria_id) {
-                $faltantes[] = 'paquetería';
-            }
-            if (! $pedido->catalogo_zona_id) {
-                $faltantes[] = 'reexpedición';
-            }
-            if (! $omiteCosto && $pedido->costo_envio === null) {
-                $faltantes[] = 'costo de envío';
-            }
-            if (empty($pedido->codigo_postal)) {
-                $faltantes[] = 'código postal';
-            }
-            if (empty($pedido->domicilio_entrega)) {
-                $faltantes[] = 'domicilio de entrega';
+            if (! $guiaCliente) {
+                if (! $pedido->catalogo_tipo_guia_id) {
+                    $faltantes[] = 'tipo de guía';
+                }
+                if (! $pedido->catalogo_paqueteria_id) {
+                    $faltantes[] = 'paquetería';
+                }
+                if (! $pedido->catalogo_zona_id) {
+                    $faltantes[] = 'reexpedición';
+                }
+                if (! $omiteCosto && $pedido->costo_envio === null) {
+                    $faltantes[] = 'costo de envío';
+                }
+                if (empty($pedido->codigo_postal)) {
+                    $faltantes[] = 'código postal';
+                }
+                if (empty($pedido->domicilio_entrega)) {
+                    $faltantes[] = 'domicilio de entrega';
+                }
             }
         }
 

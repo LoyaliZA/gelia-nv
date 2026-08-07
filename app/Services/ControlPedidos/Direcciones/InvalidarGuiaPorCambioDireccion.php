@@ -9,6 +9,7 @@ use App\Services\ControlPedidos\NotificarPedidoBmaService;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class InvalidarGuiaPorCambioDireccion
 {
@@ -45,7 +46,8 @@ class InvalidarGuiaPorCambioDireccion
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                "Guía invalidada por cambio de dirección. Rastreo anterior: {$rastreoAnterior}. Motivo: {$motivo}"
+                "Guía invalidada por cambio de dirección. Rastreo anterior: {$rastreoAnterior}. Motivo: {$motivo}",
+                AccionesHistorialPedidoBma::INVALIDAR_GUIA
             );
 
             $pedido = $pedido->fresh(['cliente', 'estatus', 'vendedor', 'documentos']);

@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class AsignarGuiaPedidoBmaService
 {
@@ -39,7 +40,7 @@ class AsignarGuiaPedidoBmaService
         return DB::transaction(function () use ($pedido, $guia, $usuarioId, $yaEmpacado) {
             $estatusAnterior = $pedido->estatus;
 
-            $attrsCola = $this->attrsTrasCorregirGuia($pedido, ['numero_rastreo']);
+            $attrsCola = $this->attrsTrasCorregirGuia($pedido, ['numero_rastreo'], $usuarioId);
 
             if ($yaEmpacado) {
                 $estatusPendienteEnvio = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO);
@@ -59,7 +60,8 @@ class AsignarGuiaPedidoBmaService
                     $usuarioId,
                     $estatusAnterior,
                     $estatusPendienteEnvio,
-                    "Guía de rastreo asignada: {$guia}"
+                    "Guía de rastreo asignada: {$guia}",
+                    AccionesHistorialPedidoBma::ASIGNACION_GUIA
                 );
 
                 $pedido = $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
@@ -87,7 +89,8 @@ class AsignarGuiaPedidoBmaService
                 $usuarioId,
                 $estatusAnterior->id,
                 $estatusAnterior->id,
-                "Guía de rastreo asignada (pendiente de empaque): {$guia}"
+                "Guía de rastreo asignada (pendiente de empaque): {$guia}",
+                AccionesHistorialPedidoBma::ASIGNACION_GUIA
             );
 
             return $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
@@ -95,13 +98,18 @@ class AsignarGuiaPedidoBmaService
     }
 
     /** @param  list<string>  $camposResueltos */
-    private function attrsTrasCorregirGuia(PedidoBma $pedido, array $camposResueltos): array
+    private function attrsTrasCorregirGuia(PedidoBma $pedido, array $camposResueltos, int $usuarioId): array
     {
         if (empty($pedido->campos_incorrectos)) {
             return [];
         }
 
-        $restantes = $this->colaErroresService->quitarCampos($pedido, $camposResueltos);
+        $restantes = $this->colaErroresService->quitarCampos(
+            $pedido,
+            $camposResueltos,
+            $usuarioId,
+            'Número de guía corregido'
+        );
 
         return $restantes === []
             ? $this->colaErroresService->attrsColaVacia()

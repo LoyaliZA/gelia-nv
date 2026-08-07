@@ -75,6 +75,8 @@ return [
             'pedido_error_datos'          => true,
             'pedido_error_remision'       => true,
             'pedido_error_guia'           => true,
+            'pedido_error_cedis'          => true,
+            'pedido_error_estado'         => true,
             'pedido_guia_retraso'         => true,
             'pedido_resguardo_apartado'   => true,
             'pedido_consulta_pesaje'      => true,

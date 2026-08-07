@@ -41,6 +41,14 @@ class VersionadorDireccion
                 'pais' => $datos['pais'] ?? $direccionActual->pais,
                 'referencias' => $datos['referencias'] ?? $direccionActual->referencias,
                 'indicaciones_entrega' => $datos['indicaciones_entrega'] ?? $direccionActual->indicaciones_entrega,
+                'domicilio_irregular' => array_key_exists('domicilio_irregular', $datos)
+                    ? (bool) $datos['domicilio_irregular']
+                    : (bool) $direccionActual->domicilio_irregular,
+                'anexa_remision' => array_key_exists('anexa_remision', $datos)
+                    ? (bool) $datos['anexa_remision']
+                    : (bool) $direccionActual->anexa_remision,
+                'nombres_destinatario' => $datos['nombres_destinatario'] ?? $direccionActual->nombres_destinatario,
+                'apellidos_destinatario' => $datos['apellidos_destinatario'] ?? $direccionActual->apellidos_destinatario,
                 'es_principal' => $direccionActual->es_principal,
                 'esta_activa' => true,
                 'estado_verificacion' => $datos['estado_verificacion'] ?? ClienteDireccion::ESTADO_PENDING,

@@ -60,7 +60,7 @@ export default function DiagramaMaestro() {
                 </h2>
                 <p className="text-sm theme-text-muted m-0 mt-2 leading-relaxed">
                     Vista de punta a punta: qué hace cada cargo, qué provoca cada acción y adónde va el pedido
-                    cuando hay rechazo, error de datos o incidencia.
+                    cuando hay rechazo o error reportado.
                 </p>
             </div>
 
@@ -68,14 +68,14 @@ export default function DiagramaMaestro() {
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
                 <Lane title="1 · Vendedora · Registrar">
                     <Node>Crear / autoguardar → <strong>BORRADOR</strong></Node>
-                    <Arrow label="Si origen requiere logística" />
-                    <Node tone="mute">Solicitar pesaje CEDIS → pendiente_pesaje</Node>
+                    <Arrow label="PDF o foto del pedido (sin comprobante)" />
+                    <Node tone="mute">Solicitar pesaje → <strong>PESAJE_PENDIENTE</strong></Node>
                     <Arrow label="CEDIS responde" />
-                    <Node tone="ok">pesaje_listo (peso / cajas / tipo caja)</Node>
-                    <Arrow label="Campos + comprobante OK" />
+                    <Node tone="ok">pesaje_listo (peso / cajas). Si agrega piezas: 2º PDF/foto + re-pesaje</Node>
+                    <Arrow label="Comprobante + cotización OK" />
                     <Node tone="ok">Enviar → <strong>PENDIENTE_AUXILIAR</strong></Node>
                     <p className="text-[9px] theme-text-muted m-0 pt-1 leading-relaxed">
-                        Al enviar: limpia remisión y pago validado; notifica auxiliar.
+                        Pre-venta: conservar borrador o eliminar si el cliente no compra. Al enviar: limpia remisión y pago validado; notifica auxiliar.
                     </p>
                 </Lane>
 
@@ -123,6 +123,7 @@ export default function DiagramaMaestro() {
                 <div className="flex flex-wrap items-center gap-2 min-w-max">
                     {[
                         'BORRADOR',
+                        'PESAJE_PENDIENTE',
                         'PENDIENTE_AUXILIAR',
                         'EN_CEDIS',
                         'PENDIENTE_DE_GUIA*',
@@ -174,7 +175,7 @@ export default function DiagramaMaestro() {
                         </p>
                     </div>
                     <div className={geliaCardClass('p-4 space-y-2')}>
-                        <Node tone="warn">Incidencia de empaque</Node>
+                        <Node tone="warn">Error CEDIS / empaque</Node>
                         <p className="text-xs theme-text-muted m-0 leading-relaxed">
                             EN_CEDIS → <strong className="theme-text-main">INCIDENCIA_CEDIS</strong>.
                             Notifica auxiliar y vendedora. El pedido sigue pudiendo empacarse después.
@@ -192,7 +193,7 @@ export default function DiagramaMaestro() {
                         <p className="text-xs theme-text-muted m-0 leading-relaxed">
                             Campos incompletos, sin pesaje, sin pago/remisión al aprobar, resguardo al empacar, o envío sin guía cuando corresponde:
                             <strong className="theme-text-main"> no cambian fase</strong> — muestran <code className="text-[10px]">flash.error</code> / modal de alerta.
-                            Reportar error de datos / rechazo / incidencia sí cambian fase y escriben historial.
+                            Reportar error / rechazo sí cambian fase y escriben historial.
                         </p>
                     </div>
                 </div>

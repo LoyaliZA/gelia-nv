@@ -1,7 +1,9 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, X } from 'lucide-react';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, BTN_PRIMARY, BTN_SECONDARY } from './pedidosBmaStyles';
+import { Download, ExternalLink, X } from 'lucide-react';
+import {
+    THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, BTN_PRIMARY, BTN_SECONDARY, deferModalAction,
+} from './pedidosBmaStyles';
 
 const esPdf = (doc) => {
     const nombre = String(doc?.nombre_original || doc?.url || '').toLowerCase();
@@ -21,8 +23,17 @@ export default function ModalVistaPreviaDocumento({ abierto, documento, onClose 
     const titulo = documento.nombre_original || 'Vista previa';
     const pdf = esPdf(documento);
 
+    const cerrar = (e) => {
+        e?.stopPropagation?.();
+        deferModalAction(onClose);
+    };
+
     return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+        <div
+            className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`}
+            style={{ zIndex: 'calc(var(--gelia-z-modal) + 20)' }}
+            onClick={cerrar}
+        >
             <div
                 className={`${THEME_MODAL_SHELL} max-w-5xl w-full flex flex-col`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)' }}
@@ -30,7 +41,7 @@ export default function ModalVistaPreviaDocumento({ abierto, documento, onClose 
             >
                 <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                     <h2 className="text-lg font-black italic uppercase theme-text-main m-0 truncate">{titulo}</h2>
-                    <button type="button" onClick={onClose} className="p-2 rounded-full theme-text-muted hover:theme-text-main outline-none shrink-0" aria-label="Cerrar">
+                    <button type="button" onClick={cerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-full theme-text-muted hover:theme-text-main outline-none shrink-0 inline-flex items-center justify-center" aria-label="Cerrar">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -50,10 +61,7 @@ export default function ModalVistaPreviaDocumento({ abierto, documento, onClose 
                         />
                     )}
                 </div>
-                <div className="gelia-modal-footer p-5 md:p-6 flex flex-col-reverse sm:flex-row justify-end gap-3 border-t theme-border">
-                    <button type="button" onClick={onClose} className={`${BTN_SECONDARY} w-full sm:w-auto min-h-[44px]`}>
-                        Cerrar
-                    </button>
+                <div className="gelia-modal-footer p-4 md:p-6 flex flex-col sm:flex-row-reverse sm:flex-wrap justify-end gap-3 border-t theme-border">
                     <a
                         href={documento.url}
                         download={documento.nombre_original || undefined}
@@ -62,6 +70,18 @@ export default function ModalVistaPreviaDocumento({ abierto, documento, onClose 
                         <Download className="w-4 h-4 shrink-0" />
                         Descargar
                     </a>
+                    <a
+                        href={documento.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${BTN_SECONDARY} w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2`}
+                    >
+                        <ExternalLink className="w-4 h-4 shrink-0" />
+                        Abrir en pestaña
+                    </a>
+                    <button type="button" onClick={cerrar} className={`${BTN_SECONDARY} w-full sm:w-auto min-h-[44px]`}>
+                        Cerrar
+                    </button>
                 </div>
             </div>
         </div>,

@@ -22,7 +22,8 @@ class ImportacionAlmacenController extends Controller
             && ! $user->can('gestion_interna.productos.importar')
             && ! $user->can('reportes.ventas.importar')
             && ! $user->can('almacenes.inventarios.importar')
-            && ! $user->can('almacenes.costos.importar')) {
+            && ! $user->can('almacenes.costos.importar')
+            && ! $user->can('clientes.direcciones.crear')) {
             abort(403);
         }
 

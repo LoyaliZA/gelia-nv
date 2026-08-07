@@ -12,9 +12,16 @@ const LABEL = 'mb-1.5 block text-[9px] font-black uppercase tracking-widest them
 const TITULO_SEC = 'text-[10px] font-black uppercase tracking-[0.2em] theme-text-main m-0';
 const ETIQUETAS = ['Casa', 'Trabajo', 'Local', 'Otro'];
 
+const TITULOS = {
+    register_first_address: 'Registrar dirección de envío',
+    add_address: 'Añadir dirección de envío',
+    update_address: 'Actualizar dirección de envío',
+};
+
 export default function FormularioPublico({
     token,
     cliente,
+    accion_permitida = null,
 }) {
     const { data, setData, post, processing, errors } = useForm({
         token: token || '',
@@ -35,16 +42,17 @@ export default function FormularioPublico({
         etiqueta_opcion: 'Casa',
         etiqueta_personalizada: '',
         anexa_remision: false,
+        domicilio_irregular: false,
     });
+
+    const irregular = Boolean(data.domicilio_irregular);
+    const titulo = TITULOS[accion_permitida] || 'Dirección de envío';
 
     const enviar = (e) => {
         e.preventDefault();
         if (!data.token) return;
         post(route('direcciones.publicas.store'), {
             preserveScroll: true,
-            onFinish: () => {
-                // Tras éxito el servidor redirige a confirmación y cierra el enlace.
-            },
         });
     };
 
@@ -58,13 +66,13 @@ export default function FormularioPublico({
                 background: 'radial-gradient(ellipse at top, color-mix(in srgb, var(--color-primario) 12%, transparent), var(--color-fondo, #f4f4f5) 55%)',
             }}
         >
-            <Head title="Datos de envío" />
+            <Head title={titulo} />
             <div className={`mx-auto max-w-3xl ${geliaCardClass()} p-6 md:p-10`}>
                 <p className="text-[10px] font-black uppercase tracking-[0.35em] m-0" style={{ color: 'var(--color-primario)' }}>
                     Gelia NV
                 </p>
                 <h1 className="mt-2 text-3xl md:text-4xl font-black italic tracking-tighter uppercase theme-text-main m-0">
-                    Dirección de envío
+                    {titulo}
                 </h1>
                 <p className="mt-3 text-sm theme-text-muted m-0">
                     Complete los datos de entrega. Al guardar, su dirección quedará registrada y este enlace se cerrará.
@@ -114,8 +122,29 @@ export default function FormularioPublico({
 
                     <section className={seccion}>
                         <h2 className={TITULO_SEC}>Domicilio</h2>
-                        <Campo label="Calle" error={errors.calle}>
-                            <input className={THEME_INPUT} value={data.calle} onChange={(e) => setData('calle', e.target.value)} required maxLength={255} />
+                        <label className="flex items-start gap-2 text-sm font-bold theme-text-main">
+                            <input
+                                type="checkbox"
+                                className="mt-1"
+                                checked={irregular}
+                                onChange={(e) => setData('domicilio_irregular', e.target.checked)}
+                            />
+                            <span>
+                                Domicilio irregular / sin calle formal
+                                <span className="block text-[10px] font-bold theme-text-muted mt-0.5">
+                                    Use esta opción si es “domicilio conocido”, calle sin nombre o datos incompletos. Las referencias pasan a ser obligatorias.
+                                </span>
+                            </span>
+                        </label>
+                        <Campo label={irregular ? 'Calle (opcional)' : 'Calle'} error={errors.calle}>
+                            <input
+                                className={THEME_INPUT}
+                                value={data.calle}
+                                onChange={(e) => setData('calle', e.target.value)}
+                                required={!irregular}
+                                maxLength={255}
+                                placeholder={irregular ? 'Ej. Domicilio conocido, sin nombre…' : undefined}
+                            />
                         </Campo>
                         <div className="grid gap-4 md:grid-cols-3">
                             <Campo label="No. exterior" error={errors.numero_exterior}>
@@ -124,35 +153,47 @@ export default function FormularioPublico({
                             <Campo label="No. interior" error={errors.numero_interior}>
                                 <input className={THEME_INPUT} value={data.numero_interior} onChange={(e) => setData('numero_interior', e.target.value)} maxLength={30} />
                             </Campo>
-                            <Campo label="Código postal" error={errors.codigo_postal}>
-                                <input className={THEME_INPUT} value={data.codigo_postal} onChange={(e) => setCp(e.target.value)} inputMode="numeric" maxLength={5} pattern="\d{5}" required />
+                            <Campo label={irregular ? 'Código postal (opcional)' : 'Código postal'} error={errors.codigo_postal}>
+                                <input
+                                    className={THEME_INPUT}
+                                    value={data.codigo_postal}
+                                    onChange={(e) => setCp(e.target.value)}
+                                    inputMode="numeric"
+                                    maxLength={5}
+                                    pattern={irregular ? undefined : '\\d{5}'}
+                                    required={!irregular}
+                                />
                             </Campo>
                         </div>
                         <div className="grid gap-4 md:grid-cols-2">
-                            <Campo label="Colonia" error={errors.colonia}>
-                                <input className={THEME_INPUT} value={data.colonia} onChange={(e) => setData('colonia', e.target.value)} required maxLength={255} />
+                            <Campo label={irregular ? 'Colonia (opcional)' : 'Colonia'} error={errors.colonia}>
+                                <input className={THEME_INPUT} value={data.colonia} onChange={(e) => setData('colonia', e.target.value)} required={!irregular} maxLength={255} />
                             </Campo>
-                            <Campo label="Municipio" error={errors.municipio}>
-                                <input className={THEME_INPUT} value={data.municipio} onChange={(e) => setData('municipio', e.target.value)} required maxLength={255} />
+                            <Campo label={irregular ? 'Municipio (o ciudad)' : 'Municipio'} error={errors.municipio}>
+                                <input className={THEME_INPUT} value={data.municipio} onChange={(e) => setData('municipio', e.target.value)} required={!irregular} maxLength={255} />
                             </Campo>
-                            <Campo label="Ciudad" error={errors.ciudad}>
+                            <Campo label={irregular ? 'Ciudad (o municipio)' : 'Ciudad'} error={errors.ciudad}>
                                 <input className={THEME_INPUT} value={data.ciudad} onChange={(e) => setData('ciudad', e.target.value)} maxLength={255} />
                             </Campo>
                             <Campo label="Estado" error={errors.estado}>
                                 <input className={THEME_INPUT} value={data.estado} onChange={(e) => setData('estado', e.target.value)} required maxLength={255} />
                             </Campo>
                         </div>
-                        <Campo label="Referencias del domicilio" error={errors.referencias}>
+                        <Campo label={irregular ? 'Referencias del domicilio *' : 'Referencias del domicilio'} error={errors.referencias}>
                             <textarea
                                 className={THEME_TEXTAREA}
                                 value={data.referencias}
                                 onChange={(e) => setData('referencias', e.target.value)}
                                 maxLength={2000}
                                 rows={3}
-                                placeholder="Ej. Portón negro, entre calles X y Y, frente al Oxxo…"
+                                required={irregular}
+                                minLength={irregular ? 10 : undefined}
+                                placeholder="Ej. Portón negro, entre calles X y Y, frente al Oxxo, domicilio conocido…"
                             />
                             <span className="mt-1 block text-[10px] theme-text-muted font-bold">
-                                Cómo encontrar el domicilio (fachada, calles, puntos de referencia).
+                                {irregular
+                                    ? 'Obligatorio: explique cómo ubicar el domicilio (mín. 10 caracteres).'
+                                    : 'Cómo encontrar el domicilio (fachada, calles, puntos de referencia).'}
                             </span>
                         </Campo>
                     </section>
@@ -175,8 +216,8 @@ export default function FormularioPublico({
                     </section>
 
                     <section className={seccion}>
-                        <h2 className={TITULO_SEC}>Remisión</h2>
-                        <Campo label="¿Anexar remisión?" error={errors.anexa_remision}>
+                        <h2 className={TITULO_SEC}>Nota de compra</h2>
+                        <Campo label="¿Deseas que la nota de compra vaya dentro de tu envío?" error={errors.anexa_remision}>
                             <select
                                 className={THEME_SELECT}
                                 value={data.anexa_remision ? '1' : '0'}

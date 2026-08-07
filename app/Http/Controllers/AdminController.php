@@ -317,6 +317,7 @@ class AdminController extends Controller
             'departamentos' => 'nullable|array',
             'areas' => 'nullable|array',
             'area_id' => 'nullable|integer|exists:areas,id',
+            'departamento_id' => 'nullable|integer|exists:departamentos,id',
             'gerentes' => 'nullable|array',
             'roles_asignados' => 'array',
             'permisos_individuales' => 'array',
@@ -336,6 +337,7 @@ class AdminController extends Controller
         );
 
         $areaPrincipalId = $this->resolverAreaPrincipal($data);
+        $departamentoPrincipalId = $this->resolverDepartamentoPrincipal($data);
 
         $usuario = User::create([
             'name' => $data['name'],
@@ -348,6 +350,7 @@ class AdminController extends Controller
             'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
             'catalogo_sexo_id' => $data['catalogo_sexo_id'] ?? null,
             'area_id' => $areaPrincipalId,
+            'departamento_id' => $departamentoPrincipalId,
         ]);
 
         if (isset($data['departamentos'])) $usuario->departamentos()->sync($data['departamentos']);
@@ -426,6 +429,7 @@ class AdminController extends Controller
             'departamentos' => 'nullable|array',
             'areas' => 'nullable|array',
             'area_id' => 'nullable|integer|exists:areas,id',
+            'departamento_id' => 'nullable|integer|exists:departamentos,id',
             'gerentes' => 'nullable|array',
             'roles_asignados' => 'array',
             'permisos_individuales' => 'array',
@@ -469,6 +473,7 @@ class AdminController extends Controller
         $data['permisos_individuales'] = $permisosFinales;
 
         $areaPrincipalId = $this->resolverAreaPrincipal($data);
+        $departamentoPrincipalId = $this->resolverDepartamentoPrincipal($data);
 
         $user->update([
             'name' => $data['name'],
@@ -480,6 +485,7 @@ class AdminController extends Controller
             'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
             'catalogo_sexo_id' => $data['catalogo_sexo_id'] ?? null,
             'area_id' => $areaPrincipalId,
+            'departamento_id' => $departamentoPrincipalId,
         ]);
 
         if ($request->filled('password')) {
@@ -823,6 +829,40 @@ class AdminController extends Controller
         }
 
         return $areaId;
+    }
+
+    private function resolverDepartamentoPrincipal(array $data): ?int
+    {
+        $deptos = collect($data['departamentos'] ?? [])
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $deptoId = isset($data['departamento_id']) && $data['departamento_id'] !== ''
+            ? (int) $data['departamento_id']
+            : null;
+
+        if ($deptoId !== null && !$deptos->contains($deptoId)) {
+            throw ValidationException::withMessages([
+                'departamento_id' => 'El departamento principal debe estar incluido en los departamentos asignados.',
+            ]);
+        }
+
+        if ($deptoId === null && $deptos->count() === 1) {
+            return $deptos->first();
+        }
+
+        if ($deptos->count() > 1 && $deptoId === null) {
+            throw ValidationException::withMessages([
+                'departamento_id' => 'Selecciona el departamento principal cuando el colaborador tiene varios departamentos asignados.',
+            ]);
+        }
+
+        if ($deptos->isEmpty()) {
+            return null;
+        }
+
+        return $deptoId;
     }
 
     private function sincronizarAreaRhColaborador(User $usuario, ?int $areaId): void

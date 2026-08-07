@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\Cliente;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -13,13 +14,17 @@ class ActualizarPedidoBmaService
 {
     use ResuelveDatosPedidoBma;
 
+    public function __construct(
+        private SincronizarAplicacionesPedidoSafService $safPedido,
+    ) {}
+
     public function ejecutar(PedidoBma $pedido, array $datos, int $usuarioId): PedidoBma
     {
         if (!$pedido->esEditablePorVendedora()) {
             throw new \RuntimeException('Este pedido no puede editarse en su estado actual.');
         }
 
-        return DB::transaction(function () use ($pedido, $datos) {
+        return DB::transaction(function () use ($pedido, $datos, $usuarioId) {
             $clienteId = $pedido->cliente_id;
             if (!empty($datos['cliente_id'])) {
                 $clienteId = (int) $datos['cliente_id'];
@@ -60,7 +65,11 @@ class ActualizarPedidoBmaService
                 $this->agregarDocumentos($pedido, $datos['comprobantes']);
             }
 
-            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja']);
+            if (array_key_exists('saf_aplicaciones', $datos)) {
+                $this->safPedido->reservarParaPedido($pedido->fresh(), $datos['saf_aplicaciones'] ?? [], $usuarioId);
+            }
+
+            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja', 'cajas.tipoGuia']);
         });
     }
 

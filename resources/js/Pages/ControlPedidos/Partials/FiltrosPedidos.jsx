@@ -21,8 +21,10 @@ export default function FiltrosPedidos({
         const map = {
             TODAS: metricas.todas,
             BORRADORES: metricas.borradores,
+            PESAJE_PENDIENTE: metricas.pesaje_pendiente,
             PENDIENTE_AUXILIAR: metricas.pendiente_auxiliar,
             EN_CEDIS: metricas.en_cedis,
+            PENDIENTE_GUIA_CLIENTE: metricas.pendiente_guia_cliente,
             ENVIADOS: metricas.enviados,
             RECHAZADAS: metricas.rechazadas,
         };

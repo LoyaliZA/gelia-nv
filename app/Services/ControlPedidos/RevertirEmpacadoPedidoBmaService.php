@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class RevertirEmpacadoPedidoBmaService
 {
@@ -38,7 +39,8 @@ class RevertirEmpacadoPedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                'Empaque revertido; pedido devuelto a pendiente.'
+                'Empaque revertido; pedido devuelto a pendiente.',
+                AccionesHistorialPedidoBma::REVERTIR_EMPAQUE
             );
 
             return $pedido->fresh([

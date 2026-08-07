@@ -48,6 +48,7 @@ class GestionDireccionesClienteService
                 'pais' => $d->pais,
                 'referencias' => $d->referencias,
                 'indicaciones_entrega' => $d->indicaciones_entrega,
+                'domicilio_irregular' => (bool) $d->domicilio_irregular,
                 'anexa_remision' => (bool) $d->anexa_remision,
                 'direccion_resumida' => FormatearDireccionEstructurada::resumida($d),
                 'es_principal' => $d->es_principal,
@@ -88,6 +89,7 @@ class GestionDireccionesClienteService
             'pais' => $direccion->pais,
             'referencias' => $direccion->referencias,
             'indicaciones_entrega' => $direccion->indicaciones_entrega,
+            'domicilio_irregular' => (bool) $direccion->domicilio_irregular,
             'version' => $direccion->version,
         ];
     }
@@ -182,6 +184,9 @@ class GestionDireccionesClienteService
                 'pais' => $datos['pais'] ?? $direccion->pais,
                 'referencias' => $datos['referencias'] ?? $direccion->referencias,
                 'indicaciones_entrega' => $datos['indicaciones_entrega'] ?? $direccion->indicaciones_entrega,
+                'domicilio_irregular' => array_key_exists('domicilio_irregular', $datos)
+                    ? (bool) $datos['domicilio_irregular']
+                    : $direccion->domicilio_irregular,
                 'anexa_remision' => array_key_exists('anexa_remision', $datos)
                     ? (bool) $datos['anexa_remision']
                     : $direccion->anexa_remision,
@@ -372,6 +377,7 @@ class GestionDireccionesClienteService
             'pais' => $datos['pais'] ?? null,
             'referencias' => $datos['referencias'] ?? null,
             'indicaciones_entrega' => $datos['indicaciones_entrega'] ?? null,
+            'domicilio_irregular' => (bool) ($datos['domicilio_irregular'] ?? false),
             'anexa_remision' => (bool) ($datos['anexa_remision'] ?? false),
             'es_principal' => $esPrincipal,
             'esta_activa' => true,

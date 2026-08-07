@@ -6,13 +6,14 @@ import GeliaPageShell from '../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import FiltrosPedidos from './Partials/FiltrosPedidos';
 import TablaPedidos from './Partials/TablaPedidos';
-import ModalFormPedido from './Partials/ModalFormPedido';
+import ModalFormPedido, { hayBorradorPedidoLocal } from './Partials/ModalFormPedido';
 import ModalDetallePedido from './Partials/ModalDetallePedido';
 import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
 import ModalAlertaPedido from './Partials/ModalAlertaPedido';
 import ModalConfirmarAccion from './Partials/ModalConfirmarAccion';
 import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
 import ModalAnexarPagoEnvio from './Partials/ModalAnexarPagoEnvio';
+import ModalCargarGuiaCliente from './Partials/ModalCargarGuiaCliente';
 import ModalLiberarResguardoAbierto from './Auditar/Partials/ModalLiberarResguardoAbierto';
 import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/pedidosBmaStyles';
 import useListadoDiscreto from './Partials/useListadoDiscreto';
@@ -38,24 +39,28 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
-    const [modalForm, setModalForm] = useState({ abierto: false, pedido: null });
+    const [modalForm, setModalForm] = useState({ abierto: false, pedido: null, recuperarBorrador: false });
+    const [confirmarBorradorNuevo, setConfirmarBorradorNuevo] = useState(false);
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
     const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
     const [modalAnexo, setModalAnexo] = useState({ abierto: false, pedido: null });
     const [modalCompletarEnvio, setModalCompletarEnvio] = useState({ abierto: false, pedido: null });
+    const [modalCargarGuia, setModalCargarGuia] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
     const refrescoPendiente = useRef(false);
 
     useEffect(() => {
+        // Con el borrador abierto, el feedback va en el propio formulario (evitar alerta Index + click-through).
+        if (modalForm.abierto) return;
         if (flash?.success) {
             setAlerta({ abierto: true, tipo: 'success', titulo: 'Operación exitosa', mensaje: flash.success });
         } else if (flash?.error) {
             setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: flash.error });
         }
-    }, [flash?.success, flash?.error]);
+    }, [flash?.success, flash?.error, modalForm.abierto]);
 
     useEffect(() => {
         const filas = pedidosVista?.data || [];
@@ -73,7 +78,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         || modalBitacora.abierto
         || modalAnexo.abierto
         || modalCompletarEnvio.abierto
+        || modalCargarGuia.abierto
         || modalLinkDireccion
+        || confirmarBorradorNuevo
         || Boolean(pedidoAEliminar);
 
     useEffect(() => {
@@ -114,8 +121,22 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         cargar({ tab: tabActiva, q: busqueda || undefined, page });
     };
 
-    const abrirNuevo = () => setModalForm({ abierto: true, pedido: null });
-    const abrirEditar = (pedido) => setModalForm({ abierto: true, pedido });
+    const abrirNuevo = () => {
+        if (hayBorradorPedidoLocal()) {
+            setConfirmarBorradorNuevo(true);
+            return;
+        }
+        setModalForm({ abierto: true, pedido: null, recuperarBorrador: false });
+    };
+    const abrirNuevoLimpio = () => {
+        setConfirmarBorradorNuevo(false);
+        setModalForm({ abierto: true, pedido: null, recuperarBorrador: false });
+    };
+    const abrirNuevoConBorrador = () => {
+        setConfirmarBorradorNuevo(false);
+        setModalForm({ abierto: true, pedido: null, recuperarBorrador: true });
+    };
+    const abrirEditar = (pedido) => setModalForm({ abierto: true, pedido, recuperarBorrador: false });
     const abrirVer = (pedido) => setModalDetalle({ abierto: true, pedido });
     const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
 
@@ -194,18 +215,22 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         onEliminar={setPedidoAEliminar}
                         onAnexarEnvio={(pedido) => setModalAnexo({ abierto: true, pedido })}
                         onCompletarEnvio={(pedido) => setModalCompletarEnvio({ abierto: true, pedido })}
+                        onCargarGuia={(pedido) => setModalCargarGuia({ abierto: true, pedido })}
                     />
                 </div>
             </GeliaPageShell>
 
-            <ModalFormPedido
-                key={modalForm.pedido?.id ?? 'new'}
-                abierto={modalForm.abierto}
-                pedido={modalForm.pedido}
-                catalogos={catalogos}
-                direccionesNormalizadas={direcciones_normalizadas}
-                onClose={() => setModalForm({ abierto: false, pedido: null })}
-            />
+            {modalForm.abierto ? (
+                <ModalFormPedido
+                    key={modalForm.pedido?.id ?? (modalForm.recuperarBorrador ? 'new-draft' : 'new-clean')}
+                    abierto
+                    pedido={modalForm.pedido}
+                    recuperarBorrador={modalForm.recuperarBorrador}
+                    catalogos={catalogos}
+                    direccionesNormalizadas={direcciones_normalizadas}
+                    onClose={() => setModalForm({ abierto: false, pedido: null, recuperarBorrador: false })}
+                />
+            ) : null}
             <ModalAnexarPagoEnvio
                 abierto={modalAnexo.abierto}
                 pedido={modalAnexo.pedido}
@@ -220,6 +245,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 titulo="Completar envío del resguardo"
                 etiquetaConfirmar="Completar y anexar envío"
                 onClose={() => setModalCompletarEnvio({ abierto: false, pedido: null })}
+            />
+            <ModalCargarGuiaCliente
+                abierto={modalCargarGuia.abierto}
+                pedido={modalCargarGuia.pedido}
+                onClose={() => setModalCargarGuia({ abierto: false, pedido: null })}
             />
             <ModalDetallePedido
                 abierto={modalDetalle.abierto}
@@ -239,6 +269,17 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 variante="danger"
                 onClose={() => setPedidoAEliminar(null)}
                 onConfirm={confirmarEliminar}
+            />
+            <ModalConfirmarAccion
+                abierto={confirmarBorradorNuevo}
+                titulo="Borrador en curso"
+                mensaje="Hay un pedido en borrador. ¿Desea continuar con ese borrador o iniciar uno nuevo en limpio? El borrador previo se conserva en la lista si ya se guardó en el servidor."
+                etiquetaConfirmar="Iniciar limpio"
+                etiquetaAlternativa="Continuar borrador"
+                variante="primary"
+                onClose={() => setConfirmarBorradorNuevo(false)}
+                onConfirm={abrirNuevoLimpio}
+                onAlternativa={abrirNuevoConBorrador}
             />
             <ModalGenerarLinkDireccion
                 abierto={modalLinkDireccion}

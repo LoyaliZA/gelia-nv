@@ -5,6 +5,8 @@ namespace App\Models\ControlPedidos;
 use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\Cliente;
+use App\Models\SaldosAFavor\PedidoBmaPago;
+use App\Models\SaldosAFavor\SafPedidoAplicacion;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -81,6 +83,7 @@ class PedidoBma extends Model
         'pesaje_respondido_por_id',
         'motivo_repesaje',
         'aplica_seguro',
+        'cliente_proporciona_guia',
         'costo_seguro',
         'total_a_cobrar',
         'catalogo_estatus_pedido_id',
@@ -117,6 +120,7 @@ class PedidoBma extends Model
         'campos_incorrectos' => 'array',
         'fecha' => 'date',
         'aplica_seguro' => 'boolean',
+        'cliente_proporciona_guia' => 'boolean',
         'es_resguardo' => 'boolean',
         'resguardo_apartado_at' => 'datetime',
         'anexar_remision' => 'boolean',
@@ -171,6 +175,16 @@ class PedidoBma extends Model
     public function anexosEnvio(): HasMany
     {
         return $this->hasMany(PedidoBmaAnexoEnvio::class, 'pedido_bma_id')->orderByDesc('created_at');
+    }
+
+    public function pagosExhibicion(): HasMany
+    {
+        return $this->hasMany(PedidoBmaPago::class, 'pedido_bma_id')->orderBy('numero_exhibicion');
+    }
+
+    public function safAplicaciones(): HasMany
+    {
+        return $this->hasMany(SafPedidoAplicacion::class, 'pedido_bma_id');
     }
 
     public function anexoEnvioPendiente(): HasOne
@@ -364,9 +378,25 @@ class PedidoBma extends Model
         return $this->pdfPedido()->exists();
     }
 
+    public function anexoPiezas(): HasMany
+    {
+        return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
+            ->where('tipo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS)
+            ->orderBy('orden');
+    }
+
+    public function tieneAnexoPiezas(): bool
+    {
+        return $this->anexoPiezas()->exists();
+    }
+
     public function puedeSolicitarPesaje(): bool
     {
-        if (! $this->esEditablePorVendedora()) {
+        $fase = $this->estatus?->fase_ciclo;
+        if (! in_array($fase, [
+            CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
+        ], true)) {
             return false;
         }
 
@@ -400,6 +430,7 @@ class PedidoBma extends Model
 
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
             CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
             CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
             CatalogoEstatusPedido::FASE_EN_CEDIS,
@@ -407,9 +438,27 @@ class PedidoBma extends Model
         ], true);
     }
 
+    public function puedeEliminarPreVenta(): bool
+    {
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+        ], true);
+    }
+
+    public function puedeVolverABorrador(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE;
+    }
+
     public function historial(): HasMany
     {
         return $this->hasMany(PedidoBmaHistorialEstado::class, 'pedido_bma_id')->orderByDesc('created_at');
+    }
+
+    public function errores(): HasMany
+    {
+        return $this->hasMany(PedidoBmaError::class, 'pedido_bma_id')->orderByDesc('reportado_at');
     }
 
     public function pagoValidadoPor(): BelongsTo
@@ -490,6 +539,7 @@ class PedidoBma extends Model
     {
         return $this->empacado_at !== null && in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
             CatalogoEstatusPedido::FASE_ENTREGADO,
             CatalogoEstatusPedido::FASE_ENVIADO,
@@ -505,9 +555,18 @@ class PedidoBma extends Model
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_EN_CEDIS,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
             CatalogoEstatusPedido::FASE_ENVIADO,
         ], true);
+    }
+
+    public function puedeCargarGuiaCliente(): bool
+    {
+        return (bool) $this->cliente_proporciona_guia
+            && empty($this->numero_rastreo)
+            && ! $this->es_resguardo
+            && $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE;
     }
 
     public function guiaBloqueadaPorResguardo(): bool
@@ -524,7 +583,7 @@ class PedidoBma extends Model
 
     public function puedeAsignarGuia(): bool
     {
-        if ($this->es_resguardo || !empty($this->numero_rastreo)) {
+        if ($this->es_resguardo || !empty($this->numero_rastreo) || $this->cliente_proporciona_guia) {
             return false;
         }
 
@@ -561,6 +620,7 @@ class PedidoBma extends Model
 
         return in_array($fase, [
             CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
             CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
         ], true);
     }
@@ -568,6 +628,11 @@ class PedidoBma extends Model
     public function esBorrador(): bool
     {
         return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_BORRADOR;
+    }
+
+    public function esPesajePendiente(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE;
     }
 
     public function esGestionablePorCedis(): bool
@@ -580,6 +645,10 @@ class PedidoBma extends Model
 
     public function ofreceRastreo(): bool
     {
+        if ($this->cliente_proporciona_guia) {
+            return true;
+        }
+
         if ($this->paqueteria) {
             return $this->paqueteria->ofreceRastreo();
         }
@@ -613,6 +682,7 @@ class PedidoBma extends Model
     {
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
             CatalogoEstatusPedido::FASE_ENTREGADO,
         ], true) && empty($this->numero_rastreo);

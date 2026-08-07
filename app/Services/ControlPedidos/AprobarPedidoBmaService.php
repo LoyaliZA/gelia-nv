@@ -4,8 +4,10 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class AprobarPedidoBmaService
 {
@@ -13,6 +15,7 @@ class AprobarPedidoBmaService
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
         private AvanzarColaErroresPedidoBmaService $colaErroresService,
+        private SincronizarAplicacionesPedidoSafService $safPedido,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -30,18 +33,21 @@ class AprobarPedidoBmaService
         }
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
+            $this->safPedido->aplicarReservasPedido($pedido, $usuarioId);
+
             $estatusAnterior = $pedido->estatus;
 
             $restantes = $this->colaErroresService->quitarDueno(
                 $pedido,
-                CamposIncorrectosPedidoBma::DUENO_AUXILIAR
+                CamposIncorrectosPedidoBma::DUENO_AUXILIAR,
+                $usuarioId,
+                'Remisión / datos de auxiliar corregidos al aprobar'
             );
 
-            $hayGuiaPendiente = CamposIncorrectosPedidoBma::duenoActivo($restantes)
-                === CamposIncorrectosPedidoBma::DUENO_GUIAS;
+            $siguiente = CamposIncorrectosPedidoBma::duenoActivo($restantes);
 
-            if ($hayGuiaPendiente) {
-                $faseDestino = $this->colaErroresService->faseParaGuiasPendientes($pedido);
+            if ($siguiente !== null) {
+                $faseDestino = $this->colaErroresService->faseParaDuenoPendiente($pedido, $siguiente);
                 $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
                 if (! $estatusNuevo) {
                     throw new \RuntimeException("No se encontró el estatus {$faseDestino}.");
@@ -51,16 +57,16 @@ class AprobarPedidoBmaService
                     'catalogo_estatus_pedido_id' => $estatusNuevo->id,
                 ], $this->colaErroresService->attrsColaPendiente($restantes)));
 
-                $comentario = $faseDestino === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
-                    ? 'Pedido aprobado; error de guía pendiente — enviado a corrección de guía.'
-                    : 'Pedido aprobado y enviado a CEDIS; error de guía pendiente de corrección.';
+                $etiqueta = CamposIncorrectosPedidoBma::destinoPara($siguiente)['etiqueta'];
+                $comentario = "Pedido aprobado; error pendiente de {$etiqueta}.";
 
                 $this->historialService->registrarTransicion(
                     $pedido->id,
                     $usuarioId,
                     $estatusAnterior,
                     $estatusNuevo,
-                    $comentario
+                    $comentario,
+                    AccionesHistorialPedidoBma::APROBACION
                 );
 
                 $pedido = $pedido->fresh([
@@ -99,7 +105,8 @@ class AprobarPedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                $comentario
+                $comentario,
+                AccionesHistorialPedidoBma::APROBACION
             );
 
             $pedido = $pedido->fresh([

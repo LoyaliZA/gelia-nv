@@ -12,6 +12,7 @@ import {
     Layers,
     CreditCard,
     Receipt,
+    Wallet,
     Settings,
     Package,
     Wrench,
@@ -52,7 +53,7 @@ function routeHref(name, fallback) {
 }
 
 /** Árbol de navegación del menú lateral (permisos aplicados al renderizar). */
-export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible = false, geliaAiVisible = false }) {
+export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible = false, geliaAiVisible = false, saldosFavorPendientes = 0 }) {
     const showReportes = can('solicitudes.exportar');
     const showReporteTraspasos = can('traspasos.reporte_dia');
     const showVentas = can('reportes.ventas.ver');
@@ -177,6 +178,23 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: CreditCard,
             href: () => routeHref('auto-cobranza.index', '/auto-cobranza'),
             active: (url) => url.startsWith('/auto-cobranza'),
+        },
+        can('saldos_favor.ver') && {
+            type: 'link',
+            id: 'saldos_favor',
+            label: 'Saldos a favor',
+            icon: Wallet,
+            href: () => routeHref('saldos_favor.index', '/saldos-favor'),
+            active: (url) => url.startsWith('/saldos-favor') && !url.startsWith('/saldos-favor/caja'),
+            badge: saldosFavorPendientes > 0 ? saldosFavorPendientes : undefined,
+        },
+        can('saldos_favor.caja') && {
+            type: 'link',
+            id: 'saldos_favor_caja',
+            label: 'Caja · saldos',
+            icon: Store,
+            href: () => routeHref('saldos_favor.caja.index', '/saldos-favor/caja'),
+            active: (url) => url.startsWith('/saldos-favor/caja'),
         },
     ].filter(Boolean);
 

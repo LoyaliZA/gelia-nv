@@ -270,7 +270,48 @@ class SolicitudDireccionPublicaTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('Clientes/Direcciones/FormularioPublico', false)
                 ->where('enlace_valido', true)
-                ->where('token', $resultado['token']));
+                ->where('token', $resultado['token'])
+                ->where('accion_permitida', SolicitudDireccion::ACCION_PRIMERA));
+    }
+
+    public function test_aplicar_formulario_notifica_vendedora(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+
+        $vendedor = User::factory()->create();
+        $cliente = Cliente::create([
+            'numero_cliente' => '04951',
+            'nombre' => 'Cliente Con Vendedora',
+            'lista_actual_id' => $this->lista()->id,
+            'monto_venta_actual' => 0,
+            'telefono' => '5511111111',
+            'correo_electronico' => 'vend@example.com',
+            'vendedor_id' => $vendedor->id,
+        ]);
+
+        $resultado = app(GenerarEnlaceDireccionService::class)->ejecutar($cliente, [
+            'horas' => 24,
+            'accion' => SolicitudDireccion::ACCION_PRIMERA,
+            'usuario_id' => $vendedor->id,
+        ]);
+
+        app(AplicarDireccionPublicaDesdeEnlaceService::class)->ejecutar($resultado['token'], [
+            'nombres_destinatario' => 'Ana',
+            'apellidos_destinatario' => 'Prueba',
+            'nombre_destinatario' => 'Ana Prueba',
+            'calle' => 'Calle Sol',
+            'colonia' => 'Centro',
+            'codigo_postal' => '06000',
+            'municipio' => 'CDMX',
+            'estado' => 'CDMX',
+            'etiqueta' => 'Casa',
+            'anexa_remision' => false,
+        ]);
+
+        \Illuminate\Support\Facades\Notification::assertSentTo(
+            $vendedor,
+            \App\Notifications\AlertaDireccion::class
+        );
     }
 
     public function test_enlace_usado_muestra_confirmacion_y_no_formulario(): void

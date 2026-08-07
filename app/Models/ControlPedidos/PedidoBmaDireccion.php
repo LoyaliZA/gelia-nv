@@ -41,12 +41,14 @@ class PedidoBmaDireccion extends Model
         'pais',
         'referencias',
         'indicaciones_entrega',
+        'domicilio_irregular',
         'domicilio_legacy',
         'origen',
     ];
 
     protected $casts = [
         'es_vigente' => 'boolean',
+        'domicilio_irregular' => 'boolean',
         'version_snapshot' => 'integer',
         'numero_direccion' => 'integer',
         'cambiado_en' => 'datetime',

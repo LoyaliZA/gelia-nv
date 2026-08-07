@@ -5,14 +5,17 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class RechazarPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private SincronizarAplicacionesPedidoSafService $safPedido,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, string $motivo): PedidoBma
@@ -27,6 +30,8 @@ class RechazarPedidoBmaService
         }
 
         return DB::transaction(function () use ($pedido, $usuarioId, $motivo) {
+            $this->safPedido->liberarReservasPendientes($pedido, $usuarioId);
+
             $estatusAnterior = $pedido->estatus;
             $estatusRechazado = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA)
                 ?? CatalogoEstatusPedido::porCodigo('NARANJA');
@@ -49,7 +54,8 @@ class RechazarPedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusRechazado,
-                'Rechazado por auxiliar: ' . $motivo
+                'Rechazado por auxiliar: ' . $motivo,
+                AccionesHistorialPedidoBma::RECHAZO
             );
 
             $pedido = $pedido->fresh([

@@ -139,6 +139,132 @@ class Mejoras26DireccionesTest extends TestCase
         $this->assertTrue($adicional->anexa_remision);
     }
 
+    public function test_update_address_sin_direccion_id_falla(): void
+    {
+        $cliente = $this->crearCliente();
+        app(GestionDireccionesClienteService::class)->crearPrimeraDireccion($cliente->id, [
+            'nombre_destinatario' => 'Ana',
+            'calle' => 'Calle 1',
+            'colonia' => 'Centro',
+            'codigo_postal' => '06000',
+            'municipio' => 'CDMX',
+            'estado' => 'CDMX',
+        ], ['verificar' => true]);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+
+        app(GenerarEnlaceDireccionService::class)->ejecutar($cliente, [
+            'accion' => SolicitudDireccion::ACCION_ACTUALIZAR,
+        ]);
+    }
+
+    public function test_update_adicional_no_toca_contenido_principal(): void
+    {
+        $user = User::factory()->create();
+        $cliente = $this->crearCliente();
+        $gestion = app(GestionDireccionesClienteService::class);
+
+        $principal = $gestion->crearPrimeraDireccion($cliente->id, [
+            'nombre_destinatario' => 'Principal',
+            'calle' => 'Calle Principal',
+            'colonia' => 'Centro',
+            'codigo_postal' => '06000',
+            'municipio' => 'CDMX',
+            'estado' => 'CDMX',
+        ], ['verificar' => true]);
+
+        $adicional = $gestion->crearDireccionAdicional($cliente->id, [
+            'nombre_destinatario' => 'Adicional',
+            'calle' => 'Calle Extra',
+            'colonia' => 'Roma',
+            'codigo_postal' => '06700',
+            'municipio' => 'CDMX',
+            'estado' => 'CDMX',
+        ], ['verificar' => true]);
+
+        $enlace = app(GenerarEnlaceDireccionService::class)->ejecutar($cliente, [
+            'accion' => SolicitudDireccion::ACCION_ACTUALIZAR,
+            'direccion_id' => $adicional->id,
+            'usuario_id' => $user->id,
+        ]);
+
+        app(AplicarDireccionPublicaDesdeEnlaceService::class)->ejecutar($enlace['token'], [
+            'nombres_destinatario' => 'Nueva',
+            'apellidos_destinatario' => 'Extra',
+            'nombre_destinatario' => 'Nueva Extra',
+            'calle' => 'Calle Extra Nueva',
+            'colonia' => 'Roma',
+            'codigo_postal' => '06700',
+            'municipio' => 'CDMX',
+            'estado' => 'CDMX',
+            'etiqueta' => 'Trabajo',
+            'anexa_remision' => false,
+        ]);
+
+        $this->assertSame('Calle Principal', $principal->fresh()->calle);
+        $this->assertSame('Calle Extra Nueva', $adicional->fresh()->calle);
+        $this->assertTrue($principal->fresh()->es_principal);
+        $this->assertFalse($adicional->fresh()->es_principal);
+    }
+
+    public function test_notifica_vendedora_al_aplicar_formulario_publico(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+
+        $vendedor = User::factory()->create();
+        $cliente = $this->crearCliente(['vendedor_id' => $vendedor->id]);
+
+        $enlace = app(GenerarEnlaceDireccionService::class)->ejecutar($cliente, [
+            'accion' => SolicitudDireccion::ACCION_PRIMERA,
+            'usuario_id' => $vendedor->id,
+        ]);
+
+        app(AplicarDireccionPublicaDesdeEnlaceService::class)->ejecutar($enlace['token'], [
+            'nombres_destinatario' => 'Ana',
+            'apellidos_destinatario' => 'Prueba',
+            'nombre_destinatario' => 'Ana Prueba',
+            'calle' => 'Calle Sol',
+            'colonia' => 'Centro',
+            'codigo_postal' => '06000',
+            'municipio' => 'CDMX',
+            'estado' => 'CDMX',
+            'etiqueta' => 'Casa',
+            'anexa_remision' => false,
+        ]);
+
+        \Illuminate\Support\Facades\Notification::assertSentTo(
+            $vendedor,
+            \App\Notifications\AlertaDireccion::class
+        );
+    }
+
+    public function test_domicilio_irregular_desde_enlace(): void
+    {
+        $user = User::factory()->create();
+        $cliente = $this->crearCliente();
+
+        $enlace = app(GenerarEnlaceDireccionService::class)->ejecutar($cliente, [
+            'accion' => SolicitudDireccion::ACCION_PRIMERA,
+            'usuario_id' => $user->id,
+        ]);
+
+        $direccion = app(AplicarDireccionPublicaDesdeEnlaceService::class)->ejecutar($enlace['token'], [
+            'nombres_destinatario' => 'Ana',
+            'apellidos_destinatario' => 'Prueba',
+            'nombre_destinatario' => 'Ana Prueba',
+            'estado' => 'Jalisco',
+            'municipio' => 'Tonalá',
+            'referencias' => 'Domicilio conocido a un lado de la plaza principal',
+            'domicilio_irregular' => true,
+            'etiqueta' => 'Casa',
+            'anexa_remision' => false,
+        ]);
+
+        $this->assertTrue($direccion->domicilio_irregular);
+        $this->assertNull($direccion->calle);
+        $this->assertStringContainsString('Domicilio conocido', (string) $direccion->referencias);
+    }
+
     public function test_sanitiza_inyeccion_y_html_malicioso(): void
     {
         $limpio = SanitizarEntradaDireccionPublica::texto('<script>alert(1)</script>Calle Unión');

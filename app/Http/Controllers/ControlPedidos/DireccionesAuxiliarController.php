@@ -11,12 +11,14 @@ use App\Services\Clientes\Direcciones\AprobarSolicitudDireccionService;
 use App\Services\Clientes\Direcciones\GenerarEnlaceDireccionService;
 use App\Services\Clientes\Direcciones\GestionDireccionesClienteService;
 use App\Services\Clientes\Direcciones\ValidarEnlaceDireccionService;
+use App\Support\Clientes\Direcciones\ReglasValidacionDireccion;
 use App\Support\Clientes\FormatearDireccionEstructurada;
 use App\Support\FormPublicUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -145,6 +147,7 @@ class DireccionesAuxiliarController extends Controller
                 'pais' => $d->pais,
                 'referencias' => $d->referencias,
                 'indicaciones_entrega' => $d->indicaciones_entrega,
+                'domicilio_irregular' => (bool) $d->domicilio_irregular,
                 'resumen' => FormatearDireccionEstructurada::resumida($d),
                 'es_principal' => $d->es_principal,
                 'esta_activa' => $d->esta_activa,
@@ -285,7 +288,12 @@ class DireccionesAuxiliarController extends Controller
 
         $validated = $request->validate([
             'accion' => ['nullable', 'string', 'in:register_first_address,add_address,update_address'],
-            'direccion_id' => ['nullable', 'integer', 'exists:cliente_direcciones,id'],
+            'direccion_id' => [
+                Rule::requiredIf(fn () => $request->input('accion') === SolicitudDireccion::ACCION_ACTUALIZAR),
+                'nullable',
+                'integer',
+                'exists:cliente_direcciones,id',
+            ],
             'horas' => ['nullable', 'integer', 'min:1', 'max:720'],
         ]);
 
@@ -478,24 +486,17 @@ class DireccionesAuxiliarController extends Controller
 
     private function validarDatosDireccion(Request $request): array
     {
-        return $request->validate([
-            'nombre_destinatario' => ['required', 'string', 'max:255'],
-            'telefono_destinatario' => ['nullable', 'string', 'max:30'],
-            'calle' => ['required', 'string', 'max:255'],
-            'numero_exterior' => ['nullable', 'string', 'max:30'],
-            'numero_interior' => ['nullable', 'string', 'max:30'],
-            'colonia' => ['required', 'string', 'max:255'],
-            'codigo_postal' => ['required', 'regex:/^\d{5}$/'],
-            'municipio' => ['required', 'string', 'max:255'],
-            'ciudad' => ['nullable', 'string', 'max:255'],
-            'estado' => ['required', 'string', 'max:255'],
-            'pais' => ['nullable', 'string', 'max:255'],
-            'referencias' => ['nullable', 'string'],
-            'indicaciones_entrega' => ['nullable', 'string'],
-            'etiqueta' => ['nullable', 'string', 'max:100'],
-            'tipo_direccion' => ['nullable', 'string', 'max:50'],
+        $irregular = $request->boolean('domicilio_irregular');
+        $rules = array_merge(ReglasValidacionDireccion::internas($irregular), [
             'es_principal' => ['nullable', 'boolean'],
             'verificar' => ['nullable', 'boolean'],
         ]);
+
+        $validator = validator($request->all(), $rules);
+        ReglasValidacionDireccion::afterIrregular($validator, $irregular);
+        $datos = $validator->validate();
+        $datos['domicilio_irregular'] = $irregular;
+
+        return $datos;
     }
 }

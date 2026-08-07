@@ -14,15 +14,15 @@ class SubirPdfPedidoBmaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'pdf_pedido' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+            'pdf_pedido' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
         ];
     }
 
     public function messages(): array
     {
         return [
-            'pdf_pedido.required' => 'Debe seleccionar el PDF del pedido.',
-            'pdf_pedido.mimes' => 'El archivo debe ser un PDF.',
+            'pdf_pedido.required' => 'Debe seleccionar el PDF o una foto del pedido.',
+            'pdf_pedido.mimes' => 'El archivo debe ser un PDF o una imagen (JPG, PNG o WEBP).',
         ];
     }
 }

@@ -62,6 +62,9 @@ class ListarPedidosDelegadoService
             'direccionVigente',
             'guiaCorregidaPor',
             'errorDatosPor',
+            'historial.usuario',
+            'historial.estatusAnterior',
+            'historial.estatusNuevo',
         ];
     }
 
@@ -69,6 +72,7 @@ class ListarPedidosDelegadoService
     {
         return PedidoBma::with($this->withRelaciones())
             ->whereNotNull('pago_validado_at')
+            ->where('cliente_proporciona_guia', false)
             ->whereHas('remision')
             ->where(function (Builder $q) {
                 $q->whereHas('paqueteria', function (Builder $p) {

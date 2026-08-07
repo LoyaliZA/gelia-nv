@@ -104,10 +104,27 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                     ? formatearFechaHoraAuditoria(pedido.resguardo_apartado_at)
                                     : (pedido.es_resguardo ? 'Pendiente' : '—')}
                             />
-                            <Campo label="Anexar remisión" value={pedido.anexar_remision ? 'Sí' : 'No'} />
+                            <Campo label="Nota de compra en el envío" value={pedido.anexar_remision ? 'Sí' : 'No'} />
                             <Campo label="C.P." value={pedido.codigo_postal} />
                             <Campo label="Total a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} />
                         </div>
+                        {(pedido.cajas || []).length > 0 && (
+                            <div className="mt-4 space-y-3">
+                                <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
+                                {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                    <div key={c.id || idx} className="space-y-1">
+                                        <p className="text-xs font-black theme-text-main m-0">Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}</p>
+                                        <div className="grid grid-cols-2 gap-1 text-xs">
+                                            <p className="m-0 theme-text-muted font-bold">Largo: <span className="theme-text-main">{c.largo != null ? `${c.largo} cm` : '—'}</span></p>
+                                            <p className="m-0 theme-text-muted font-bold">Ancho: <span className="theme-text-main">{c.ancho != null ? `${c.ancho} cm` : '—'}</span></p>
+                                            <p className="m-0 theme-text-muted font-bold">Alto: <span className="theme-text-main">{c.alto != null ? `${c.alto} cm` : '—'}</span></p>
+                                            <p className="m-0 theme-text-muted font-bold">Real: <span className="theme-text-main">{c.peso_real_kg != null ? `${c.peso_real_kg} kg` : '—'}</span></p>
+                                            <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{c.peso_cobrado_kg != null ? `${c.peso_cobrado_kg} kg` : '—'}</span></p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                         <div className="mt-4 space-y-3">
                             <div className="flex items-center justify-between gap-2">
                                 <p className="text-[9px] font-black uppercase theme-text-muted m-0">Domicilio de envío</p>

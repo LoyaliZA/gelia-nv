@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, AlertTriangle } from 'lucide-react';
+import { Eye, AlertTriangle, History } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
     badgeAuditoriaSemantico,
@@ -22,6 +22,7 @@ function CardAuditoria({
     esRechazado,
     esIncidenciaCedis,
     onRevisar,
+    onBitacora,
 }) {
     const reRevision = Boolean(badgeReRevision);
 
@@ -95,14 +96,21 @@ function CardAuditoria({
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Corregir remisión
                 </p>
             )}
-            <button type="button" onClick={() => onRevisar(pedido)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border theme-border theme-element text-xs font-black uppercase outline-none hover:border-[var(--color-primario)]">
-                <Eye className="w-4 h-4" /> Revisar
-            </button>
+            <div className="flex gap-1.5">
+                {onBitacora && (
+                    <button type="button" onClick={() => onBitacora(pedido)} className="shrink-0 px-3 py-2.5 rounded-xl border theme-border theme-element outline-none hover:border-purple-500" title="Bitácora">
+                        <History className="w-4 h-4" />
+                    </button>
+                )}
+                <button type="button" onClick={() => onRevisar(pedido)} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border theme-border theme-element text-xs font-black uppercase outline-none hover:border-[var(--color-primario)]">
+                    <Eye className="w-4 h-4" /> Revisar
+                </button>
+            </div>
         </div>
     );
 }
 
-export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
+export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBitacora }) {
     const items = pedidos?.data || [];
 
     if (items.length === 0) {
@@ -131,6 +139,7 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
                             esRechazado={fase === 'RECHAZADO_VENDEDORA'}
                             esIncidenciaCedis={fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque)}
                             onRevisar={onRevisar}
+                            onBitacora={onBitacora}
                         />
                     );
                 })}
@@ -231,6 +240,11 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
                                             <button type="button" onClick={() => onRevisar(pedido)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border theme-border theme-element text-[10px] font-black uppercase outline-none hover:border-[var(--color-primario)]">
                                                 <Eye className="w-4 h-4" /> Revisar
                                             </button>
+                                            {onBitacora && (
+                                                <button type="button" onClick={() => onBitacora(pedido)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border theme-border theme-element outline-none hover:border-purple-500" title="Bitácora">
+                                                    <History className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

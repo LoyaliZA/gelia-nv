@@ -5,14 +5,17 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaAnexoEnvio;
+use App\Services\SaldosAFavor\ReconciliarTotalPedidoSafService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class LiberarResguardoPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private ReconciliarTotalPedidoSafService $reconciliarSaf,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, ?array $captura = null, ?UploadedFile $comprobante = null): PedidoBma
@@ -91,6 +94,7 @@ class LiberarResguardoPedidoBmaService
         return DB::transaction(function () use ($pedido, $usuarioId, $enPendienteAuxiliar, $captura, $comprobante, $peso, $cajas, $costo) {
             $estatusAnterior = $pedido->estatus;
             $listoParaCedis = $pedido->tienePagoValidado() && $pedido->tieneRemision();
+            $totalAntes = (float) ($pedido->total_a_cobrar ?? 0) + (float) ($pedido->saldo_a_favor ?? 0);
             $mercancia = (float) $pedido->total_mercancia;
             $seguro = (bool) $pedido->aplica_seguro;
             $costoSeguro = (float) ($pedido->costo_seguro ?? 0);
@@ -125,17 +129,34 @@ class LiberarResguardoPedidoBmaService
                 $attrs['catalogo_estatus_pedido_id'] = $estatusNuevo->id;
                 $pedido->update($attrs);
 
+                $this->reconciliarSaf->handle(
+                    $pedido->fresh(),
+                    $totalAntes,
+                    $usuarioId,
+                    'envio_a_resguardo',
+                    'Reconciliación tras liberar resguardo con captura'
+                );
+
                 $this->historialService->registrarTransicion(
                     $pedido->id,
                     $usuarioId,
                     $estatusAnterior,
                     $estatusNuevo,
-                    $comentarioHistorial.' Pedido enviado a CEDIS.'
+                    $comentarioHistorial.' Pedido enviado a CEDIS.',
+                    AccionesHistorialPedidoBma::LIBERAR_RESGUARDO
                 );
 
                 $pasoACedis = true;
             } else {
                 $pedido->update($attrs);
+
+                $this->reconciliarSaf->handle(
+                    $pedido->fresh(),
+                    $totalAntes,
+                    $usuarioId,
+                    'envio_a_resguardo',
+                    'Reconciliación tras liberar resguardo con captura'
+                );
 
                 $this->historialService->ejecutar(
                     $pedido->id,
@@ -144,7 +165,8 @@ class LiberarResguardoPedidoBmaService
                     $estatusAnterior->id,
                     $enPendienteAuxiliar
                         ? $comentarioHistorial
-                        : $comentarioHistorial.' Pedido pendiente de empaque.'
+                        : $comentarioHistorial.' Pedido pendiente de empaque.',
+                    AccionesHistorialPedidoBma::LIBERAR_RESGUARDO
                 );
 
                 $pasoACedis = false;
@@ -190,7 +212,8 @@ class LiberarResguardoPedidoBmaService
                     $usuarioId,
                     $estatusAnterior->id,
                     $estatusAnterior->id,
-                    'Resguardo liberado. Pedido pendiente de empaque.'
+                    'Resguardo liberado. Pedido pendiente de empaque.',
+                    AccionesHistorialPedidoBma::LIBERAR_RESGUARDO
                 );
 
                 return $pedido->fresh(['cliente', 'estatus', 'origen', 'documentos', 'almacen', 'banco', 'direccionVigente']);
@@ -214,7 +237,8 @@ class LiberarResguardoPedidoBmaService
                     $usuarioId,
                     $estatusAnterior,
                     $estatusNuevo,
-                    'Resguardo liberado; pedido enviado a CEDIS.'
+                    'Resguardo liberado; pedido enviado a CEDIS.',
+                    AccionesHistorialPedidoBma::LIBERAR_RESGUARDO
                 );
 
                 $pedido = $pedido->fresh(['cliente', 'estatus', 'origen', 'documentos', 'almacen', 'banco', 'direccionVigente', 'vendedor']);
@@ -230,7 +254,8 @@ class LiberarResguardoPedidoBmaService
                 $usuarioId,
                 $estatusAnterior->id,
                 $estatusAnterior->id,
-                'Resguardo liberado por el auxiliar.'
+                'Resguardo liberado por el auxiliar.',
+                AccionesHistorialPedidoBma::LIBERAR_RESGUARDO
             );
 
             return $pedido->fresh(['cliente', 'estatus', 'origen', 'documentos', 'almacen', 'banco', 'direccionVigente']);

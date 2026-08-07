@@ -8,6 +8,15 @@ import {
     GELIA_SEGMENT_TABS_TRACK,
 } from '../../../utils/geliaTheme';
 
+/**
+ * Diferir cierre/acción de modal apilado para que el mismo clic no atraviese
+ * al overlay padre (p. ej. borrador de pedido) tras desmontar el portal.
+ */
+export const deferModalAction = (fn, ms = 50) => {
+    if (typeof fn !== 'function') return;
+    window.setTimeout(fn, ms);
+};
+
 export const badgeClaseEstatusPedido = (estatus) => {
     const hex = estatus?.color_hex || '#94A3B8';
     return {
@@ -23,22 +32,24 @@ export const badgeClaseEstatusPedido = (estatus) => {
 /** Etiquetas de negocio (no nombres de color como AMARILLO/AZUL). */
 export const LABELS_ESTATUS_POR_FASE = {
     BORRADOR: 'Borrador',
+    PESAJE_PENDIENTE: 'Pesaje pendiente',
     PENDIENTE_AUXILIAR: 'Pendiente Auxiliar',
     EN_CEDIS: 'En CEDIS',
     RECHAZADO_VENDEDORA: 'Rechazado',
-    INCIDENCIA_CEDIS: 'Incidencia CEDIS',
+    INCIDENCIA_CEDIS: 'Error CEDIS',
     EN_RUTA: 'En ruta',
     PENDIENTE_DE_GUIA: 'Pendiente de guía',
+    PENDIENTE_GUIA_CLIENTE: 'Pendiente de guía del cliente',
     PENDIENTE_DE_ENVIO: 'Pendiente de envío',
     ENTREGADO: 'Entregado',
     ENVIADO: 'Enviado',
 };
 
-/** Resguardo solo etiqueta el estado cuando el pedido ya está en flujo (no borrador/rechazado). */
+/** Resguardo solo etiqueta el estado cuando el pedido ya está en flujo (no pre-venta/rechazado). */
 export const etiquetaResguardoVisible = (estatus, esResguardo = false) => {
     if (!esResguardo) return false;
     const fase = estatus?.fase_ciclo;
-    return Boolean(fase) && fase !== 'BORRADOR' && fase !== 'RECHAZADO_VENDEDORA';
+    return Boolean(fase) && !['BORRADOR', 'PESAJE_PENDIENTE', 'RECHAZADO_VENDEDORA'].includes(fase);
 };
 
 export const etiquetaEstatusPedido = (estatus, { esResguardo = false } = {}) => {
@@ -55,8 +66,10 @@ export const etiquetaEstatusPedido = (estatus, { esResguardo = false } = {}) => 
 export const TABS_PEDIDOS = [
     { id: 'TODAS', label: 'Todas' },
     { id: 'BORRADORES', label: 'Borradores' },
+    { id: 'PESAJE_PENDIENTE', label: 'Pesaje pendiente' },
     { id: 'PENDIENTE_AUXILIAR', label: 'Pendiente Auxiliar' },
     { id: 'EN_CEDIS', label: 'En CEDIS' },
+    { id: 'PENDIENTE_GUIA_CLIENTE', label: 'Guía del cliente' },
     { id: 'ENVIADOS', label: 'Enviados' },
     { id: 'RECHAZADAS', label: 'Rechazadas' },
 ];
@@ -95,6 +108,74 @@ export const LABELS_ESTATUS_ENVIO = {
     consolidado: 'Consolidado',
     pendiente_pesaje: 'Pendiente de pesaje CEDIS',
     pesaje_listo: 'Pesaje listo — cotizar envío',
+};
+
+/** Revisión de exhibición (pedido_bma_pagos.estado_revision). */
+export const LABELS_ESTADO_REVISION_PAGO = {
+    pendiente: 'Pendiente',
+    confirmado: 'Confirmado',
+    con_diferencia: 'Con diferencia',
+};
+
+/** Resumen calculado de pago del pedido (no columna DB). */
+export const LABELS_ESTADO_PAGO_PEDIDO = {
+    sin_pago: 'Sin pago',
+    parcialmente_pagado: 'Parcialmente pagado',
+    sobrepagado: 'Sobrepagado',
+    cubierto_pendiente_revision: 'Cubierto · pendiente de revisión',
+    pagado_revisado: 'Pagado y revisado',
+};
+
+export const LABELS_FORMA_PAGO = {
+    transferencia: 'Transferencia',
+    efectivo: 'Efectivo',
+    tarjeta: 'Tarjeta',
+    otro: 'Otro',
+};
+
+/** Aplicaciones SAF en pedido (saf_aplicaciones.estado). */
+export const LABELS_ESTADO_SAF_APLICACION = {
+    reservado: 'Reservado',
+    aplicado: 'Aplicado',
+    liberado: 'Liberado',
+};
+
+/** Etiqueta humana para códigos snake_case; fallback: espacios + capitalizar. */
+export const etiquetaCodigo = (codigo, mapa = {}) => {
+    if (codigo == null || codigo === '') return '—';
+    const key = String(codigo);
+    if (mapa[key]) return mapa[key];
+    return key
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+export const badgeEstadoRevisionPago = (estado) => {
+    const colores = {
+        pendiente: '#EAB308',
+        confirmado: '#22C55E',
+        con_diferencia: '#F97316',
+    };
+    const hex = colores[estado] || '#94A3B8';
+    return {
+        label: etiquetaCodigo(estado, LABELS_ESTADO_REVISION_PAGO),
+        ...badgeClaseEstatusPedido({ color_hex: hex }),
+    };
+};
+
+export const badgeEstadoPagoPedido = (estado) => {
+    const colores = {
+        sin_pago: '#94A3B8',
+        parcialmente_pagado: '#F59E0B',
+        sobrepagado: '#8B5CF6',
+        cubierto_pendiente_revision: '#EAB308',
+        pagado_revisado: '#22C55E',
+    };
+    const hex = colores[estado] || '#94A3B8';
+    return {
+        label: etiquetaCodigo(estado, LABELS_ESTADO_PAGO_PEDIDO),
+        ...badgeClaseEstatusPedido({ color_hex: hex }),
+    };
 };
 
 export const LABELS_MOTIVO_REPESAJE = {
@@ -170,11 +251,11 @@ export const anexoEnvioPendienteDe = (pedido) => (
 export const TABS_CEDIS = [
     { id: 'TODOS', label: 'Todos' },
     { id: 'PENDIENTES_PESAJE', label: 'Pendientes de pesaje' },
-    { id: 'EMPACADOS', label: 'Empacados' },
+    { id: 'EMPACADOS', label: 'Por empacar' },
     { id: 'PENDIENTES_ENVIO', label: 'Pendientes de Enviar' },
     { id: 'PENDIENTES_GUIA', label: 'Pendientes de Guía' },
     { id: 'ENVIADOS', label: 'Enviados' },
-    { id: 'INCORRECTAS', label: 'Incorrectas' },
+    { id: 'INCORRECTAS', label: 'Errores CEDIS' },
 ];
 
 export const TABS_DELEGADO = [
@@ -215,7 +296,7 @@ export const badgeCorregirGuia = () => ({
 });
 
 export const badgePendienteReRevision = () => ({
-    label: 'Re-revisar',
+    label: 'Revisar nuevamente',
     ...badgeClaseEstatusPedido({ color_hex: '#22C55E' }),
 });
 
@@ -255,6 +336,7 @@ export const badgeAuditoriaSemantico = (fase, esResguardo = false) => {
         EN_CEDIS: { hex: '#22C55E', label: 'Aprobado' },
         INCIDENCIA_CEDIS: { hex: '#22C55E', label: 'Aprobado' },
         PENDIENTE_DE_GUIA: { hex: '#22C55E', label: 'Aprobado' },
+        PENDIENTE_GUIA_CLIENTE: { hex: '#22C55E', label: 'Aprobado' },
         PENDIENTE_DE_ENVIO: { hex: '#22C55E', label: 'Aprobado' },
         ENTREGADO: { hex: '#22C55E', label: 'Aprobado' },
         ENVIADO: { hex: '#22C55E', label: 'Aprobado' },
@@ -276,6 +358,7 @@ export const badgeEmpaqueSemantico = (fase, esResguardo = false, resguardoAparta
         EN_CEDIS: { hex: '#EAB308', label: 'Pendiente de Empaque' },
         INCIDENCIA_CEDIS: { hex: '#F97316', label: 'Error reportado' },
         PENDIENTE_DE_GUIA: { hex: '#A855F7', label: 'Esperando Guía' },
+        PENDIENTE_GUIA_CLIENTE: { hex: '#C026D3', label: 'Guía del cliente' },
         PENDIENTE_DE_ENVIO: { hex: '#0EA5E9', label: 'Pendiente de envío' },
         ENTREGADO: { hex: '#22C55E', label: 'Empacado' },
         ENVIADO: { hex: '#22C55E', label: 'Empacado' },
@@ -288,13 +371,17 @@ export const badgeEmpaqueSemantico = (fase, esResguardo = false, resguardoAparta
 };
 
 export const esPedidoEmpacadoCedis = (fase) =>
-    ['PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO', 'ENTREGADO', 'ENVIADO'].includes(fase);
+    ['PENDIENTE_DE_GUIA', 'PENDIENTE_GUIA_CLIENTE', 'PENDIENTE_DE_ENVIO', 'ENTREGADO', 'ENVIADO'].includes(fase);
 
 export const guiaPdfDe = (pedido) => {
     const doc = (pedido?.documentos || []).find((d) => d.tipo === 'guia');
     if (!doc) return null;
 
-    const url = doc.url || (doc.ruta_archivo ? `/storage/${doc.ruta_archivo}` : null);
+    const url = doc.url
+        || (doc.id && pedido?.id
+            ? route('control_pedidos.documentos.show', { pedidoBma: pedido.id, documento: doc.id })
+            : null)
+        || (doc.ruta_archivo ? `/storage/${doc.ruta_archivo}` : null);
     if (!url) return null;
 
     return { ...doc, url };
@@ -304,6 +391,11 @@ export const tieneGuiaPdfDisponible = (pedido) => Boolean(guiaPdfDe(pedido));
 
 export const tieneGuiaLista = (pedido) =>
     ['PENDIENTE_DE_ENVIO', 'ENVIADO'].includes(pedido?.estatus?.fase_ciclo) && Boolean(pedido?.numero_rastreo);
+
+export const puedeCargarGuiaCliente = (pedido) =>
+    Boolean(pedido?.cliente_proporciona_guia)
+    && !pedido?.numero_rastreo
+    && pedido?.estatus?.fase_ciclo === 'PENDIENTE_GUIA_CLIENTE';
 
 export const badgeGuiaLista = () => ({
     className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/40 bg-emerald-500/15 text-emerald-600',
@@ -388,6 +480,43 @@ export const calcSeguroPedido = (nombrePaqueteria, envio, totalMercancia) => ({
     costo_seguro: calcCostoSeguro(nombrePaqueteria, envio, totalMercancia),
 });
 
+/** Etiqueta de costo según categoría de paquetería (comercial vs local/taxi). */
+export const etiquetaCostoEnvio = (paqueteria) => {
+    if (!paqueteria) return 'Costo de envío';
+    if (paqueteria.categoria === 'comercial' || paqueteriaTieneCobertura(paqueteria.nombre)) {
+        return 'Costo de envío';
+    }
+    return 'Costo de transporte / taxi';
+};
+
+/**
+ * Cotización lista para pedir comprobante (Opción 1: sin paso de aceptación).
+ * Sin logística: basta mercancía > 0. Con logística: pesaje/habilitación + campos de envío.
+ */
+export const esCotizacionLista = ({
+    requiereLogistica = true,
+    cotizacionHabilitada = false,
+    guiaCliente = false,
+    esResguardoComplementario = false,
+    omiteCosto = false,
+    catalogo_paqueteria_id = '',
+    catalogo_tipo_guia_id = '',
+    catalogo_zona_id = '',
+    costo_envio = '',
+    total_mercancia = 0,
+} = {}) => {
+    if (!requiereLogistica) {
+        return Number(total_mercancia || 0) > 0;
+    }
+    if (!cotizacionHabilitada) return false;
+    if (guiaCliente || esResguardoComplementario) return true;
+    if (!catalogo_paqueteria_id) return false;
+    if (!omiteCosto && (costo_envio === '' || costo_envio == null)) return false;
+    if (!catalogo_tipo_guia_id) return false;
+    if (!catalogo_zona_id) return false;
+    return true;
+};
+
 export const textoWhatsAppPedido = (pedido) => {
     const identificador = pedido.folio_remision || pedido.folio;
     const lineas = [
@@ -412,6 +541,7 @@ export const validarCamposEnvioPedido = (data, {
 } = {}) => {
     const faltantes = [];
     const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario;
+    const guiaCliente = Boolean(data.cliente_proporciona_guia);
 
     if (requiereLogistica && !esResguardoComplementario && !tienePesajeRespondido) {
         return {
@@ -444,21 +574,23 @@ export const validarCamposEnvioPedido = (data, {
             if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de cajas');
         }
 
-        if (!data.catalogo_tipo_guia_id) faltantes.push('tipo de guía');
-        if (!data.catalogo_paqueteria_id) faltantes.push('paquetería');
-        if (!data.catalogo_zona_id) faltantes.push('reexpedición');
-        if (!omiteCosto && (data.costo_envio === '' || data.costo_envio == null)) {
-            faltantes.push('costo de envío');
-        }
-        if (!String(data.codigo_postal || '').trim()) faltantes.push('código postal');
-        if (direccionesNormalizadas) {
-            const tieneDir = String(data.cliente_direccion_id || '').trim();
-            const excepcion = Boolean(data.direccion_manual_excepcion) && String(data.domicilio_entrega || '').trim();
-            if (!tieneDir && !excepcion) {
-                faltantes.push('dirección de envío verificada o excepción manual');
+        if (!guiaCliente) {
+            if (!data.catalogo_tipo_guia_id) faltantes.push('tipo de guía');
+            if (!data.catalogo_paqueteria_id) faltantes.push('paquetería');
+            if (!data.catalogo_zona_id) faltantes.push('reexpedición');
+            if (!omiteCosto && (data.costo_envio === '' || data.costo_envio == null)) {
+                faltantes.push('costo de envío');
             }
-        } else if (!String(data.domicilio_entrega || '').trim()) {
-            faltantes.push('domicilio de entrega');
+            if (!String(data.codigo_postal || '').trim()) faltantes.push('código postal');
+            if (direccionesNormalizadas) {
+                const tieneDir = String(data.cliente_direccion_id || '').trim();
+                const excepcion = Boolean(data.direccion_manual_excepcion) && String(data.domicilio_entrega || '').trim();
+                if (!tieneDir && !excepcion) {
+                    faltantes.push('dirección de envío verificada o excepción manual');
+                }
+            } else if (!String(data.domicilio_entrega || '').trim()) {
+                faltantes.push('domicilio de entrega');
+            }
         }
     }
 

@@ -5,8 +5,11 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Models\User;
 use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
+use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -27,11 +30,20 @@ class EnviarPedidoBmaService
             throw new \RuntimeException('Solo se pueden enviar pedidos en borrador o rechazados.');
         }
 
+        $actor = User::find($usuarioId);
+        if (! $actor || ! VisibilidadPedidoBma::puedeMutarComoVendedora($actor, $pedido)) {
+            throw new \RuntimeException('Solo la vendedora que creó el pedido puede reenviarlo o corregir sus errores.');
+        }
+
         $this->validarCamposRequeridos($pedido);
 
         if (config('control_pedidos.direcciones_normalizadas')) {
             $pedido->loadMissing('origen');
-            if ($pedido->origen?->requiere_logistica && ! $pedido->cliente_direccion_id) {
+            if (
+                $pedido->origen?->requiere_logistica
+                && ! $pedido->cliente_proporciona_guia
+                && ! $pedido->cliente_direccion_id
+            ) {
                 throw new \InvalidArgumentException('Debe seleccionar una dirección de envío verificada.');
             }
         }
@@ -52,7 +64,9 @@ class EnviarPedidoBmaService
 
             $restantes = $this->colaErroresService->quitarDueno(
                 $pedido,
-                CamposIncorrectosPedidoBma::DUENO_VENDEDORA
+                CamposIncorrectosPedidoBma::DUENO_VENDEDORA,
+                $usuarioId,
+                'Datos de vendedora corregidos al reenviar'
             );
 
             $attrsError = $restantes === []
@@ -78,7 +92,8 @@ class EnviarPedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                $comentario
+                $comentario,
+                AccionesHistorialPedidoBma::ENVIO_AUXILIAR
             );
 
             $pedido = $pedido->fresh(['cliente', 'estatus', 'documentos', 'almacen', 'banco', 'direccionVigente', 'vendedor']);

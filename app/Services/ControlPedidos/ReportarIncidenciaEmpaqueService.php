@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class ReportarIncidenciaEmpaqueService
 {
@@ -40,7 +41,8 @@ class ReportarIncidenciaEmpaqueService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                "Incidencia de empaque: {$detalle}"
+                "Incidencia de empaque: {$detalle}",
+                AccionesHistorialPedidoBma::INCIDENCIA
             );
 
             $pedido = $pedido->fresh([

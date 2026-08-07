@@ -27,6 +27,11 @@ use App\Http\Controllers\ControlPedidos\PedidoBmaAuditoriaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaCedisController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaDelegadoController;
 use App\Http\Controllers\ControlPedidos\DireccionesAuxiliarController;
+use App\Http\Controllers\ControlPedidos\PedidoBmaSaldosPagosController;
+use App\Http\Controllers\SaldosAFavor\SaldosAFavorController;
+use App\Http\Controllers\SaldosAFavor\CajaSaldosAFavorController;
+use App\Http\Controllers\SaldosAFavor\MigrarSaldosAFavorController;
+use App\Http\Controllers\Clientes\Direcciones\ImportarDireccionesController;
 use App\Http\Controllers\Mensajeria\{ConversacionController,MensajeController,AdjuntoMensajeController};
 use App\Http\Controllers\WebPushController;
 use App\Http\Controllers\GestionInterna\DirectorioController;
@@ -500,20 +505,44 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/exportar', [PedidoBmaController::class, 'exportar'])->middleware('can:control_pedidos.exportar')->name('exportar');
     });
 
+    // Descarga autenticada de documentos (visibilidad por VisibilidadPedidoBma::puedeConsultar).
+    Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::get('/pedidos/{pedidoBma}/documentos/{documento}', [PedidoBmaController::class, 'documento'])
+            ->name('documentos.show');
+    });
+
     Route::middleware(['can:control_pedidos.crear'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/', [PedidoBmaController::class, 'store'])->name('store');
         Route::post('/autoguardar', [PedidoBmaController::class, 'autoguardar'])->name('autoguardar');
         Route::get('/candidatos-principal', [PedidoBmaController::class, 'candidatosPrincipal'])->name('candidatos_principal');
         Route::post('/{pedidoBma}/completar-envio-resguardo', [PedidoBmaController::class, 'completarEnvioResguardo'])->name('completar_envio_resguardo');
+        Route::post('/{pedidoBma}/cargar-guia-cliente', [PedidoBmaController::class, 'cargarGuiaCliente'])->name('cargar_guia_cliente');
         Route::put('/{pedidoBma}/enviar', [PedidoBmaController::class, 'enviar'])->name('enviar');
         Route::post('/{pedidoBma}/anexar-pago-envio', [PedidoBmaController::class, 'anexarPagoEnvio'])->name('anexar_pago_envio');
         Route::post('/{pedidoBma}/pdf-pedido', [PedidoBmaController::class, 'subirPdfPedido'])->name('pdf_pedido.store');
+        Route::post('/{pedidoBma}/anexo-piezas', [PedidoBmaController::class, 'subirAnexoPiezas'])->name('anexo_piezas.store');
         Route::post('/{pedidoBma}/solicitar-pesaje', [PedidoBmaController::class, 'solicitarPesaje'])->name('solicitar_pesaje');
         Route::post('/{pedidoBma}/solicitar-repesaje', [PedidoBmaController::class, 'solicitarRepesaje'])->name('solicitar_repesaje');
+        Route::post('/{pedidoBma}/volver-borrador', [PedidoBmaController::class, 'volverBorrador'])->name('volver_borrador');
+        Route::post('/actualizar-campos-direccion', [PedidoBmaController::class, 'actualizarCamposDireccion'])->name('actualizar_campos_direccion');
         Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
             Route::post('/cliente/{cliente}/enlace-direccion', [DireccionesAuxiliarController::class, 'generarEnlace'])
                 ->name('enlace_direccion');
         });
+        Route::get('/cliente/{cliente}/saldo-favor', [PedidoBmaSaldosPagosController::class, 'cuentaCliente'])
+            ->name('cliente.saldo_favor');
+        Route::post('/{pedidoBma}/pagos', [PedidoBmaSaldosPagosController::class, 'registrarPago'])->name('pagos.store');
+        Route::get('/{pedidoBma}/pagos', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->name('pagos.resumen');
+        Route::post('/{pedidoBma}/generar-saldo-excedente', [PedidoBmaSaldosPagosController::class, 'generarSaldoExcedente'])
+            ->name('generar_saldo_excedente');
+    });
+
+    Route::middleware(['can:control_pedidos.auditar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::post('/pagos/{pago}/revisar', [PedidoBmaSaldosPagosController::class, 'revisarPago'])->name('pagos.revisar');
+        Route::get('/{pedidoBma}/pagos-auditoria', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->name('pagos.resumen_auditoria');
+        Route::post('/{pedidoBma}/pagos-auditoria', [PedidoBmaSaldosPagosController::class, 'registrarPago'])->name('pagos.store_auditoria');
+        Route::post('/{pedidoBma}/generar-saldo-excedente-auditoria', [PedidoBmaSaldosPagosController::class, 'generarSaldoExcedente'])
+            ->name('generar_saldo_excedente_auditoria');
     });
 
     // crear | editar se valida en UpdatePedidoBmaRequest (borradores autoguardados)
@@ -552,6 +581,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/cliente/{cliente}', [DireccionesAuxiliarController::class, 'cliente'])->name('cliente');
 
         Route::middleware(['can:clientes.direcciones.crear'])->group(function () {
+            Route::get('/plantilla-importacion', [ImportarDireccionesController::class, 'plantilla'])->name('plantilla_importacion');
+            Route::post('/importar', [ImportarDireccionesController::class, 'importar'])->name('importar');
             Route::post('/cliente/{cliente}/direcciones', [DireccionesAuxiliarController::class, 'store'])->name('store');
         });
         Route::middleware(['can:clientes.direcciones.editar'])->group(function () {
@@ -599,6 +630,54 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/guia-pdf', [PedidoBmaDelegadoController::class, 'subirGuiaPdf'])->name('guia_pdf.store');
         Route::delete('/{pedidoBma}/guia-pdf', [PedidoBmaDelegadoController::class, 'eliminarGuiaPdf'])->name('guia_pdf.destroy');
         Route::post('/{pedidoBma}/reportar-error-datos', [PedidoBmaDelegadoController::class, 'reportarErrorDatos'])->name('reportar_error_datos');
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO: SALDOS A FAVOR
+    // ══════════════════════════════════════════════════════════════════════
+    Route::middleware(['can:saldos_favor.ver'])->prefix('saldos-favor')->name('saldos_favor.')->group(function () {
+        Route::get('/', [SaldosAFavorController::class, 'index'])->name('index');
+        Route::get('/buscar-cliente', [SaldosAFavorController::class, 'buscarCliente'])->name('buscar_cliente');
+        Route::get('/cuenta/{cliente}', [SaldosAFavorController::class, 'cuenta'])->name('cuenta');
+        Route::get('/api/cuenta/{cliente}', [SaldosAFavorController::class, 'apiCuenta'])->name('api.cuenta');
+        Route::get('/api/sugerir/{cliente}', [SaldosAFavorController::class, 'apiSugerir'])->name('api.sugerir');
+    });
+
+    Route::middleware(['can:saldos_favor.generar'])->prefix('saldos-favor')->name('saldos_favor.')->group(function () {
+        Route::post('/generar', [SaldosAFavorController::class, 'generar'])->name('generar');
+    });
+
+    Route::middleware(['can:saldos_favor.revisar'])->prefix('saldos-favor')->name('saldos_favor.')->group(function () {
+        Route::post('/creditos/{credito}/revisar', [SaldosAFavorController::class, 'revisar'])->name('revisar');
+        Route::post('/pagos/{pago}/revisar', [SaldosAFavorController::class, 'revisarPago'])->name('pagos.revisar');
+    });
+
+    Route::middleware(['can:saldos_favor.ajustar'])->prefix('saldos-favor')->name('saldos_favor.')->group(function () {
+        Route::post('/creditos/{credito}/ajustar', [SaldosAFavorController::class, 'ajustar'])->name('ajustar');
+        Route::post('/creditos/{credito}/reactivar', [SaldosAFavorController::class, 'reactivar'])->name('reactivar');
+        Route::post('/creditos/{credito}/revertir-aplicacion', [SaldosAFavorController::class, 'revertirAplicacion'])->name('revertir_aplicacion');
+        Route::post('/incidencias/{incidencia}/resolver', [SaldosAFavorController::class, 'resolverIncidencia'])->name('incidencias.resolver');
+    });
+
+    Route::middleware(['can:saldos_favor.cancelar'])->prefix('saldos-favor')->name('saldos_favor.')->group(function () {
+        Route::post('/creditos/{credito}/cancelar', [SaldosAFavorController::class, 'cancelar'])->name('cancelar');
+    });
+
+    Route::middleware(['can:saldos_favor.caja'])->prefix('saldos-favor/caja')->name('saldos_favor.caja.')->group(function () {
+        Route::get('/', [CajaSaldosAFavorController::class, 'index'])->name('index');
+        Route::post('/generar', [CajaSaldosAFavorController::class, 'generarCredito'])->name('generar');
+        Route::post('/aplicar', [CajaSaldosAFavorController::class, 'aplicar'])->name('aplicar');
+        Route::get('/comprobante/{comprobante}', [CajaSaldosAFavorController::class, 'comprobante'])->name('comprobante');
+        Route::get('/comprobante/{comprobante}/imprimir', [CajaSaldosAFavorController::class, 'imprimir'])->name('imprimir');
+        Route::get('/comprobante/{comprobante}/descargar', [CajaSaldosAFavorController::class, 'descargar'])->name('descargar');
+        Route::post('/comprobante/{comprobante}/firmar', [CajaSaldosAFavorController::class, 'marcarFirmado'])->name('firmar');
+        Route::post('/preferencia', [CajaSaldosAFavorController::class, 'guardarPreferencia'])->name('preferencia');
+    });
+
+    Route::middleware(['can:saldos_favor.migrar'])->prefix('saldos-favor/migrar')->name('saldos_favor.migrar.')->group(function () {
+        Route::get('/', [MigrarSaldosAFavorController::class, 'index'])->name('index');
+        Route::post('/preview', [MigrarSaldosAFavorController::class, 'preview'])->name('preview');
+        Route::post('/importar', [MigrarSaldosAFavorController::class, 'importar'])->name('importar');
     });
 
     // --- Nuevo Módulo: Interfaz de Entregas ---

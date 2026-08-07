@@ -5,12 +5,14 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class MarcarEmpacadoPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private AvanzarColaErroresPedidoBmaService $colaErroresService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -79,9 +81,13 @@ class MarcarEmpacadoPedidoBmaService
         $estatusAnterior = $pedido->estatus;
 
         $tieneGuia = !empty($pedido->numero_rastreo);
-        $faseDestino = (!$pedido->ofreceRastreo() || $tieneGuia)
-            ? CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO
-            : CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA;
+        if ($pedido->cliente_proporciona_guia && ! $tieneGuia) {
+            $faseDestino = CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE;
+        } elseif (! $pedido->ofreceRastreo() || $tieneGuia) {
+            $faseDestino = CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO;
+        } else {
+            $faseDestino = CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA;
+        }
 
         $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
 
@@ -89,20 +95,24 @@ class MarcarEmpacadoPedidoBmaService
             throw new \RuntimeException("No se encontró el estatus {$faseDestino}.");
         }
 
-        $pedido->update([
+        $attrs = [
             'catalogo_estatus_pedido_id' => $estatusNuevo->id,
             'empacado_at' => now(),
             'empacado_por_id' => $usuarioId,
             'detalle_incidencia_empaque' => null,
             'incidencia_empaque_at' => null,
             'incidencia_empaque_por_id' => null,
-        ]);
+        ];
 
-        $comentario = $faseDestino === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
-            ? 'Pedido empacado; pendiente de captura de guía.'
-            : ($tieneGuia
+        $pedido->update(array_merge($attrs, $this->attrsColaTrasEmpacar($pedido, $usuarioId)));
+
+        $comentario = match ($faseDestino) {
+            CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE => 'Pedido empacado; pendiente de guía del cliente.',
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA => 'Pedido empacado; pendiente de captura de guía.',
+            default => $tieneGuia
                 ? 'Pedido empacado; guía ya asignada, pendiente de envío.'
-                : 'Pedido empacado; pendiente de envío.');
+                : 'Pedido empacado; pendiente de envío.',
+        };
 
         if ($folioGrupo) {
             $comentario .= " Grupo {$folioGrupo}.";
@@ -113,7 +123,8 @@ class MarcarEmpacadoPedidoBmaService
             $usuarioId,
             $estatusAnterior,
             $estatusNuevo,
-            $comentario
+            $comentario,
+            AccionesHistorialPedidoBma::EMPAQUE
         );
 
         $pedido = $pedido->fresh($this->relacionesFresh());
@@ -130,6 +141,8 @@ class MarcarEmpacadoPedidoBmaService
                 false,
                 ['url' => '/control-pedidos/delegado?tab=PENDIENTES_GUIA&q='.$q]
             );
+        } elseif ($faseDestino === CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE) {
+            // La vendedora carga la guía; no notificar a Delegado.
         } else {
             $this->notificarService->ejecutar(
                 $pedido,
@@ -143,6 +156,25 @@ class MarcarEmpacadoPedidoBmaService
         }
 
         return $pedido;
+    }
+
+    /** @return array<string, mixed> */
+    private function attrsColaTrasEmpacar(PedidoBma $pedido, int $usuarioId): array
+    {
+        if (empty($pedido->campos_incorrectos)) {
+            return [];
+        }
+
+        $restantes = $this->colaErroresService->quitarDueno(
+            $pedido,
+            \App\Support\ControlPedidos\CamposIncorrectosPedidoBma::DUENO_CEDIS,
+            $usuarioId,
+            'Error CEDIS resuelto al empacar'
+        );
+
+        return $restantes === []
+            ? $this->colaErroresService->attrsColaVacia()
+            : $this->colaErroresService->attrsColaPendiente($restantes);
     }
 
     /** @return list<string> */

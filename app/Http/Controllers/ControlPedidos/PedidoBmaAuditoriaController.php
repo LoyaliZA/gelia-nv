@@ -63,12 +63,29 @@ class PedidoBmaAuditoriaController extends Controller
         Gate::authorize('control_pedidos.auditar');
 
         try {
-            $service->ejecutar($pedidoBma, Auth::id());
+            $resultado = $service->ejecutar($pedidoBma, Auth::id());
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Pago validado correctamente.');
+        $redirect = redirect()->back()->with('success', 'Pago validado correctamente.');
+        $excedente = (float) ($resultado['resumen']['excedente'] ?? 0);
+        if ($excedente > 0.01) {
+            $redirect->with('saf_excedente', [
+                'pedido_bma_id' => $pedidoBma->id,
+                'folio' => $pedidoBma->folio,
+                'excedente' => $excedente,
+                'mensaje' => sprintf(
+                    'Hay un excedente de $%s. Puede generar saldo a favor desde exhibiciones.',
+                    number_format($excedente, 2, '.', ',')
+                ),
+            ]);
+        }
+        if (! empty($resultado['incidencia_id'])) {
+            $redirect->with('warning', 'Pago validado con faltante: se abrió incidencia SAF para revisión.');
+        }
+
+        return $redirect;
     }
 
     public function subirRemision(
@@ -77,7 +94,7 @@ class PedidoBmaAuditoriaController extends Controller
         GestionarRemisionPedidoBmaService $service
     ): RedirectResponse {
         try {
-            $service->subir($pedidoBma, $request->file('remision'));
+            $service->subir($pedidoBma, $request->file('remision'), Auth::id());
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
@@ -90,7 +107,7 @@ class PedidoBmaAuditoriaController extends Controller
         Gate::authorize('control_pedidos.auditar');
 
         try {
-            $service->eliminar($pedidoBma);
+            $service->eliminar($pedidoBma, Auth::id());
         } catch (\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

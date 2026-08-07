@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { MapPin, Search, ClipboardList, ClipboardCheck, Loader2 } from 'lucide-react';
+import { MapPin, Search, ClipboardList, ClipboardCheck, Loader2, Upload } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
+import ModalImportarCatalogo from '../../../Components/Catalogos/ModalImportarCatalogo';
 import {
     geliaCardClass,
     THEME_BTN_PRIMARY,
@@ -11,6 +12,39 @@ import {
     THEME_INPUT,
 } from '../../../utils/geliaTheme';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
+
+const IMPORT_DIRECCIONES_CONFIG = {
+    titulo: 'Importar Direcciones',
+    rutaPlantilla: 'control_pedidos.direcciones.plantilla_importacion',
+    rutaImportar: 'control_pedidos.direcciones.importar',
+    columnas: [
+        { key: 'numero_cliente', label: 'numero_cliente', requerido: true, nota: 'Debe existir en clientes' },
+        { key: 'es_principal', label: 'es_principal', requerido: true, nota: '1/0 o si/no — principal vs adicional' },
+        { key: 'nombre_destinatario', label: 'nombre_destinatario', requerido: true },
+        { key: 'telefono_destinatario', label: 'telefono_destinatario', requerido: false },
+        { key: 'calle', label: 'calle', requerido: true, nota: 'Opcional si domicilio_irregular=1' },
+        { key: 'numero_exterior', label: 'numero_exterior', requerido: false },
+        { key: 'numero_interior', label: 'numero_interior', requerido: false },
+        { key: 'colonia', label: 'colonia', requerido: true, nota: 'Opcional si domicilio_irregular=1' },
+        { key: 'codigo_postal', label: 'codigo_postal', requerido: true, nota: '5 dígitos; opcional si irregular' },
+        { key: 'municipio', label: 'municipio', requerido: true, nota: 'O ciudad si irregular' },
+        { key: 'ciudad', label: 'ciudad', requerido: false },
+        { key: 'estado', label: 'estado', requerido: true },
+        { key: 'pais', label: 'pais', requerido: false, nota: 'Por defecto México' },
+        { key: 'referencias', label: 'referencias', requerido: false, nota: 'Obligatorias si domicilio_irregular=1' },
+        { key: 'indicaciones_entrega', label: 'indicaciones_entrega', requerido: false },
+        { key: 'etiqueta', label: 'etiqueta', requerido: false },
+        { key: 'tipo_direccion', label: 'tipo_direccion', requerido: false, nota: 'envio / ocurre / sucursal' },
+        { key: 'domicilio_irregular', label: 'domicilio_irregular', requerido: false, nota: '1/0 — domicilio conocido / sin calle formal (no es “adicional”)' },
+        { key: 'anexa_remision', label: 'anexa_remision', requerido: false, nota: '1/0 — nota de compra en el envío' },
+    ],
+    notas: [
+        'Una fila = una dirección. Varias filas del mismo numero_cliente = principal + adicionales.',
+        'es_principal e domicilio_irregular son independientes.',
+        'Si ya existe principal y la fila pide principal, se crea como adicional (aviso en reporte).',
+        'Duplicados exactos se omiten. Cliente inexistente se omite.',
+    ],
+};
 
 export default function Index({ clientes = { data: [] }, filtros = {} }) {
     const { auth } = usePage().props;
@@ -30,6 +64,7 @@ export default function Index({ clientes = { data: [] }, filtros = {} }) {
     });
 
     const [q, setQ] = useState(filtros.q || '');
+    const [modalImportar, setModalImportar] = useState(false);
     const debounce = useRef(null);
     const skipPrimeraCarga = useRef(true);
 
@@ -70,6 +105,16 @@ export default function Index({ clientes = { data: [] }, filtros = {} }) {
                             </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
+                            {can('clientes.direcciones.crear') && (
+                                <button
+                                    type="button"
+                                    className={`${THEME_BTN_PRIMARY} inline-flex items-center gap-2`}
+                                    onClick={() => setModalImportar(true)}
+                                >
+                                    <Upload className="w-4 h-4" />
+                                    Importar
+                                </button>
+                            )}
                             {can('control_pedidos.auditar') && (
                                 <button
                                     type="button"
@@ -184,6 +229,13 @@ export default function Index({ clientes = { data: [] }, filtros = {} }) {
                     </div>
                 </div>
             </GeliaPageShell>
+
+            {modalImportar && (
+                <ModalImportarCatalogo
+                    config={IMPORT_DIRECCIONES_CONFIG}
+                    onClose={() => setModalImportar(false)}
+                />
+            )}
         </AppLayout>
     );
 }

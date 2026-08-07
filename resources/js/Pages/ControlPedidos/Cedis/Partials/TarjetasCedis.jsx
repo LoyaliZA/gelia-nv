@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { router } from '@inertiajs/react';
 import {
-    Eye, CheckCircle2, AlertTriangle, FileText, Truck, PackageCheck, Scale,
+    Eye, CheckCircle2, AlertTriangle, FileText, Truck, PackageCheck, Scale, History,
 } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
-    badgeEstatusPedido,
     badgeEmpaqueSemantico,
     badgeEstatusEnvio,
     badgeRetrasoGuia,
@@ -27,13 +26,13 @@ import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 const pdfPedidoDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido');
+const anexoPiezasDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'anexo_piezas');
 
 function TarjetaPedido({
-    pedido, onVerDetalle, onResponderPesaje, onReportarIncidencia, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento,
+    pedido, onVerDetalle, onResponderPesaje, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento, onBitacora,
 }) {
     const fase = pedido.estatus?.fase_ciclo;
     const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
-    const badgeEstatus = badgeEstatusPedido(pedido.estatus);
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
@@ -41,17 +40,18 @@ function TarjetaPedido({
     const complementos = complementosDe(pedido);
     const remision = remisionDe(pedido);
     const pdfPedido = pdfPedidoDe(pedido);
-    const esIncidencia = fase === 'INCIDENCIA_CEDIS';
+    const anexoPiezas = anexoPiezasDe(pedido);
+    const esErrorCedis = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
-    const puedeErrorDatos = ['EN_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
+    const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const tieneGuiaPdf = tieneGuiaPdfDisponible(pedido);
     const requiereLogistica = pedido.origen?.requiere_logistica ?? true;
 
     return (
-        <div className={`${geliaCardClass()} p-4 space-y-3 ${esIncidencia ? 'ring-1 ring-orange-500/40' : ''} ${pedido.guia_retraso ? 'ring-1 ring-amber-500/40' : ''}`}>
+        <div className={`${geliaCardClass()} p-4 space-y-3 ${esErrorCedis ? 'ring-1 ring-orange-500/40' : ''} ${pedido.guia_retraso ? 'ring-1 ring-amber-500/40' : ''}`}>
             {pedido.origen?.nombre && (
                 <p className="text-sm font-black uppercase tracking-widest text-center py-2 px-3 rounded-xl bg-[var(--color-primario)]/10 m-0" style={{ color: 'var(--color-primario)' }}>
                     ORIGEN: {pedido.origen.nombre}
@@ -70,12 +70,11 @@ function TarjetaPedido({
                     )}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className={badgeEstatus.className} style={badgeEstatus.style}>{badgeEstatus.label}</span>
-                    {badgeEnvio && (
-                        <span className={badgeEnvio.className} style={badgeEnvio.style}>{badgeEnvio.label}</span>
-                    )}
                     {!pendientePesaje && (
                         <span className={badgeEmpaque.className} style={badgeEmpaque.style}>{badgeEmpaque.label}</span>
+                    )}
+                    {badgeEnvio && (
+                        <span className={badgeEnvio.className} style={badgeEnvio.style}>{badgeEnvio.label}</span>
                     )}
                     {badgeComp && (
                         <span className={badgeComp.className} style={badgeComp.style}>{badgeComp.label}</span>
@@ -89,8 +88,8 @@ function TarjetaPedido({
             {pendientePesaje && (
                 <AvisoOperativoPedido label="Consulta de pesaje" tono="warning" icon={Scale}>
                     {pedido.motivo_repesaje
-                        ? `Re-pesaje solicitado (${pedido.motivo_repesaje}). Revise el PDF y registre peso/cajas.`
-                        : 'Revise el PDF del pedido y registre peso y cajas.'}
+                        ? `Re-pesaje solicitado (${pedido.motivo_repesaje}). Revise el PDF/foto y registre peso/cajas.`
+                        : 'Revise el PDF o foto del pedido y registre peso y cajas.'}
                 </AvisoOperativoPedido>
             )}
 
@@ -104,6 +103,16 @@ function TarjetaPedido({
                     ))}
                 </div>
             )}
+
+            <AvisoOperativoPedido
+                label="Nota de compra en el envío"
+                tono={pedido.anexar_remision ? 'success' : 'warning'}
+                icon={FileText}
+            >
+                {pedido.anexar_remision
+                    ? 'Incluir nota de compra en el paquete'
+                    : 'No incluir nota de compra (dropshipping)'}
+            </AvisoOperativoPedido>
 
             <div className="grid grid-cols-2 gap-2 text-[10px] font-bold theme-text-muted uppercase">
                 <div>
@@ -130,9 +139,9 @@ function TarjetaPedido({
                 )}
             </div>
 
-            {esIncidencia && pedido.detalle_incidencia_empaque && (
-                <AvisoOperativoPedido label="Incidencia" tono="danger" icon={AlertTriangle}>
-                    {pedido.detalle_incidencia_empaque}
+            {esErrorCedis && (pedido.detalle_incidencia_empaque || pedido.detalle_error_datos) && (
+                <AvisoOperativoPedido label="Error reportado" tono="danger" icon={AlertTriangle}>
+                    {pedido.detalle_incidencia_empaque || pedido.detalle_error_datos}
                 </AvisoOperativoPedido>
             )}
 
@@ -155,51 +164,56 @@ function TarjetaPedido({
 
             <div className="grid grid-cols-2 gap-2 pt-2 border-t theme-border">
                 {pendientePesaje && (
-                    <button type="button" onClick={() => onResponderPesaje?.(pedido)} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}>
+                    <button type="button" onClick={() => onResponderPesaje?.(pedido)} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <Scale className="w-4 h-4" /> Responder pesaje
                     </button>
                 )}
                 {pendientePesaje && pdfPedido && (
-                    <button type="button" onClick={() => onVerDocumento(pdfPedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}>
-                        <FileText className="w-3.5 h-3.5" /> Ver PDF pedido
+                    <button type="button" onClick={() => onVerDocumento(pdfPedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`}>
+                        <FileText className="w-3.5 h-3.5" /> Ver PDF / foto pedido
+                    </button>
+                )}
+                {pendientePesaje && anexoPiezas && (
+                    <button type="button" onClick={() => onVerDocumento(anexoPiezas)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`}>
+                        <FileText className="w-3.5 h-3.5" /> Ver piezas adicionales
                     </button>
                 )}
                 {puedeMarcarEnviado && (
-                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}>
+                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <Truck className="w-4 h-4" /> Marcar enviado
                     </button>
                 )}
                 {puedeEmpacar && (
-                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'empacar', pedido })} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}>
+                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'empacar', pedido })} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <CheckCircle2 className="w-4 h-4" /> {complementos.length ? 'Empacar grupo' : 'Marcar empacado'}
                     </button>
                 )}
                 {puedeApartar && (
-                    <button type="button" onClick={() => onMarcarApartado?.(pedido)} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3`}>
+                    <button type="button" onClick={() => onMarcarApartado?.(pedido)} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <PackageCheck className="w-4 h-4" /> Marcar apartado
                     </button>
                 )}
+                {esEmpacado && tieneGuiaPdf && (
+                    <BotonGuiaPdf pedido={pedido} onVerPdf={onVerDocumento} compact className="w-full justify-center py-2.5 min-h-[40px] col-span-2 sm:col-span-1" />
+                )}
                 {remision && (
-                    <button type="button" onClick={() => onVerDocumento(remision)} className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}>
+                    <button type="button" onClick={() => onVerDocumento(remision)} className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`}>
                         <FileText className="w-3.5 h-3.5" /> Remisión
                     </button>
                 )}
-                {esEmpacado && tieneGuiaPdf && (
-                    <BotonGuiaPdf pedido={pedido} onVerPdf={onVerDocumento} compact className="w-full justify-center py-2.5" />
-                )}
-                {fase === 'EN_CEDIS' && (
-                    <button type="button" onClick={() => onReportarIncidencia(pedido)} className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] border border-orange-500/40 text-orange-600 outline-none py-2.5`}>
-                        <AlertTriangle className="w-3.5 h-3.5" /> Incidencia
-                    </button>
-                )}
-                {puedeErrorDatos && (
-                    <button type="button" onClick={() => onReportarErrorDatos?.(pedido)} className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] border border-orange-500/40 text-orange-600 outline-none py-2.5`}>
-                        <AlertTriangle className="w-3.5 h-3.5" /> Error datos
+                {puedeReportarError && (
+                    <button type="button" onClick={() => onReportarErrorDatos?.(pedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] border border-orange-500/40 text-orange-600 outline-none py-2.5 min-h-[40px]`}>
+                        <AlertTriangle className="w-3.5 h-3.5" /> Reportar error
                     </button>
                 )}
                 {!pendientePesaje && (
-                    <button type="button" onClick={() => onVerDetalle(pedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5`}>
+                    <button type="button" onClick={() => onVerDetalle(pedido)} className={`${BTN_SECONDARY} ${onBitacora ? '' : 'col-span-2 '}flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`}>
                         <Eye className="w-3.5 h-3.5" /> Ver detalle
+                    </button>
+                )}
+                {onBitacora && (
+                    <button type="button" onClick={() => onBitacora(pedido)} className={`${BTN_SECONDARY} ${pendientePesaje ? 'col-span-2 ' : ''}flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`} title="Bitácora">
+                        <History className="w-3.5 h-3.5" /> Bitácora
                     </button>
                 )}
             </div>
@@ -208,7 +222,7 @@ function TarjetaPedido({
 }
 
 export default function TarjetasCedis({
-    pedidos, onVerDetalle, onResponderPesaje, onReportarIncidencia, onReportarErrorDatos, onMarcarApartado,
+    pedidos, onVerDetalle, onResponderPesaje, onReportarErrorDatos, onMarcarApartado, onBitacora,
 }) {
     const [confirmacion, setConfirmacion] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
@@ -256,11 +270,11 @@ export default function TarjetasCedis({
                         pedido={pedido}
                         onVerDetalle={onVerDetalle}
                         onResponderPesaje={onResponderPesaje}
-                        onReportarIncidencia={onReportarIncidencia}
                         onReportarErrorDatos={onReportarErrorDatos}
                         onMarcarApartado={onMarcarApartado}
                         onSolicitarConfirmacion={setConfirmacion}
                         onVerDocumento={setDocPreview}
+                        onBitacora={onBitacora}
                     />
                 ))}
             </div>

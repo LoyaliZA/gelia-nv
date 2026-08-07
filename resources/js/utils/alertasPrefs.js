@@ -32,6 +32,8 @@ export const ALERTAS_TIPOS = {
     pedido_error_datos: 'Error de datos (pedido)',
     pedido_error_remision: 'Error de remisión (pedido)',
     pedido_error_guia: 'Error de guía (pedido)',
+    pedido_error_cedis: 'Error CEDIS (pedido)',
+    pedido_error_estado: 'Estado de error (pedido)',
     pedido_guia_retraso: 'Retraso por corrección de guía',
     pedido_resguardo_apartado: 'Resguardo apartado (CEDIS)',
     pedido_consulta_pesaje: 'Consulta de pesaje (CEDIS)',
@@ -39,7 +41,7 @@ export const ALERTAS_TIPOS = {
     pedido_pendiente_auxiliar: 'Pedido pendiente de auditoría',
     pedido_aprobado: 'Pedido aprobado',
     pedido_rechazado_auxiliar: 'Pedido rechazado (auxiliar)',
-    pedido_incidencia_cedis: 'Incidencia de empaque (CEDIS)',
+    pedido_incidencia_cedis: 'Error de empaque (CEDIS)',
     pedido_pendiente_guia: 'Pedido pendiente de guía',
     pedido_pendiente_envio: 'Pedido pendiente de envío',
     pedido_guia_asignada: 'Guía asignada (pedido)',
@@ -47,6 +49,12 @@ export const ALERTAS_TIPOS = {
     pedido_resguardo_liberado: 'Resguardo liberado (CEDIS)',
     listo_cedis: 'Traspaso listo para CEDIS',
     detalle_dano_cedis: 'Detalle o daño CEDIS (traspaso)',
+    'saldos_favor.pendiente_revision': 'Saldo a favor pendiente de revisión',
+    'saldos_favor.incidencia': 'Incidencia de saldo a favor',
+    'saldos_favor.proximo_vencer': 'Saldo a favor próximo a vencer',
+    'saldos_favor.vencido': 'Saldo a favor vencido',
+    'saldos_favor.reserva_liberada': 'Reserva de saldo liberada',
+    'saldos_favor.comprobante_pdv': 'Comprobante PDV de saldo a favor',
 };
 
 export const MENSAJERIA_TIPO_ALERTA = 'mensaje_nuevo';

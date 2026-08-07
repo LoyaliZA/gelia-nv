@@ -34,15 +34,19 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
         Notification::fake();
     }
 
-    public function test_dueno_activo_prioriza_vendedora_auxiliar_guias(): void
+    public function test_dueno_activo_prioriza_vendedora_auxiliar_cedis_guias(): void
     {
         $this->assertSame(
             CamposIncorrectosPedidoBma::DUENO_VENDEDORA,
-            CamposIncorrectosPedidoBma::duenoActivo(['guia_pdf', 'domicilio', 'remision'])
+            CamposIncorrectosPedidoBma::duenoActivo(['guia_pdf', 'domicilio', 'remision', 'empaque'])
         );
         $this->assertSame(
             CamposIncorrectosPedidoBma::DUENO_AUXILIAR,
-            CamposIncorrectosPedidoBma::duenoActivo(['guia_pdf', 'remision'])
+            CamposIncorrectosPedidoBma::duenoActivo(['guia_pdf', 'remision', 'empaque'])
+        );
+        $this->assertSame(
+            CamposIncorrectosPedidoBma::DUENO_CEDIS,
+            CamposIncorrectosPedidoBma::duenoActivo(['guia_pdf', 'empaque', 'peso_real'])
         );
         $this->assertSame(
             CamposIncorrectosPedidoBma::DUENO_GUIAS,
@@ -104,6 +108,126 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
         );
         $this->assertSame(['numero_rastreo', 'guia_pdf'], $actualizado->campos_incorrectos);
         $this->assertNull($actualizado->numero_rastreo);
+        $this->assertTrue((bool) $actualizado->guia_retraso);
+    }
+
+    public function test_reportar_empaque_va_a_error_cedis_y_abre_bitacora(): void
+    {
+        $pedido = $this->crearPedidoAprobadoCedis();
+
+        $actualizado = app(ReportarErrorDatosPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['estatus', 'documentos']),
+            $this->usuario->id,
+            ['empaque', 'producto_faltante'],
+            'Falta una pieza'
+        );
+
+        $this->assertSame(
+            CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
+            $actualizado->fresh('estatus')->estatus->fase_ciclo
+        );
+        $this->assertEqualsCanonicalizing(['empaque', 'producto_faltante'], $actualizado->campos_incorrectos);
+        $this->assertSame('Falta una pieza', $actualizado->detalle_incidencia_empaque);
+
+        $errores = \App\Models\ControlPedidos\PedidoBmaError::query()
+            ->where('pedido_bma_id', $actualizado->id)
+            ->get();
+        $this->assertCount(1, $errores);
+        $this->assertSame(CamposIncorrectosPedidoBma::DUENO_CEDIS, $errores->first()->responsable_dueno);
+        $this->assertSame(\App\Models\ControlPedidos\PedidoBmaError::ESTATUS_ABIERTO, $errores->first()->estatus);
+    }
+
+    public function test_allowlist_acepta_campos_nuevos_y_rechaza_basura(): void
+    {
+        $filtrados = CamposIncorrectosPedidoBma::filtrar([
+            'costo_envio', 'peso_cobrado', 'hack', 'pagos', 'foo',
+        ]);
+        $this->assertEqualsCanonicalizing(['costo_envio', 'peso_cobrado', 'pagos'], $filtrados);
+    }
+
+    public function test_allowlist_por_capacidad_logistica_vs_tienda(): void
+    {
+        $conLogistica = CamposIncorrectosPedidoBma::allowlistParaContexto(true, false);
+        $this->assertContains('paqueteria', $conLogistica);
+        $this->assertContains('numero_rastreo', $conLogistica);
+        $this->assertContains('peso_real', $conLogistica);
+        $this->assertNotContains('envio_tienda', $conLogistica);
+        $this->assertNotContains('apartado_resguardo', $conLogistica);
+
+        $tienda = CamposIncorrectosPedidoBma::allowlistParaContexto(false, false);
+        $this->assertContains('envio_tienda', $tienda);
+        $this->assertContains('empaque', $tienda);
+        $this->assertContains('pagos', $tienda);
+        $this->assertNotContains('paqueteria', $tienda);
+        $this->assertNotContains('guia_pdf', $tienda);
+        $this->assertNotContains('peso_cobrado', $tienda);
+
+        $resguardo = CamposIncorrectosPedidoBma::allowlistParaContexto(true, true);
+        $this->assertContains('apartado_resguardo', $resguardo);
+        $this->assertContains('modo_resguardo', $resguardo);
+    }
+
+    public function test_filtrar_para_pedido_tienda_descarta_logistica(): void
+    {
+        $origenTienda = CatalogoOrigenPedido::firstOrCreate(
+            ['nombre' => 'Tienda Local Test'],
+            ['requiere_logistica' => false, 'activo' => true]
+        );
+        $pedido = $this->crearPedidoAprobadoCedis(['origen_id' => $origenTienda->id]);
+
+        $filtrados = CamposIncorrectosPedidoBma::filtrarParaPedido(
+            ['paqueteria', 'envio_tienda', 'empaque', 'guia_pdf'],
+            $pedido->fresh('origen')
+        );
+
+        $this->assertEqualsCanonicalizing(['envio_tienda', 'empaque'], $filtrados);
+    }
+
+    public function test_cerrar_bitacora_al_reenviar_vendedora(): void
+    {
+        config(['control_pedidos.direcciones_normalizadas' => false]);
+
+        $pedido = $this->crearPedidoPendienteEnvio();
+        $reportado = app(ReportarErrorDatosPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['estatus', 'documentos']),
+            $this->usuario->id,
+            ['domicilio', 'remision'],
+            'Cola parcial'
+        );
+
+        $this->assertSame(1, \App\Models\ControlPedidos\PedidoBmaError::query()
+            ->where('pedido_bma_id', $reportado->id)
+            ->where('responsable_dueno', CamposIncorrectosPedidoBma::DUENO_VENDEDORA)
+            ->where('estatus', 'abierto')
+            ->count());
+
+        $reportado->update(['pesaje_respondido_at' => now()]);
+        $this->asegurarCajasPesaje($reportado);
+        PedidoBmaDocumento::create([
+            'pedido_bma_id' => $reportado->id,
+            'tipo' => PedidoBmaDocumento::TIPO_COMPROBANTE,
+            'ruta_archivo' => 'pedidos_bma/comprobantes/x.jpg',
+            'nombre_original' => 'c.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamano_bytes' => 10,
+            'orden' => 1,
+        ]);
+
+        app(EnviarPedidoBmaService::class)->ejecutar(
+            $reportado->fresh(['estatus', 'origen', 'documentos', 'comprobantes', 'cliente', 'cajas']),
+            $this->usuario->id
+        );
+
+        $this->assertSame(0, \App\Models\ControlPedidos\PedidoBmaError::query()
+            ->where('pedido_bma_id', $reportado->id)
+            ->where('responsable_dueno', CamposIncorrectosPedidoBma::DUENO_VENDEDORA)
+            ->where('estatus', 'abierto')
+            ->count());
+        $this->assertSame(1, \App\Models\ControlPedidos\PedidoBmaError::query()
+            ->where('pedido_bma_id', $reportado->id)
+            ->where('responsable_dueno', CamposIncorrectosPedidoBma::DUENO_VENDEDORA)
+            ->where('estatus', 'corregido')
+            ->count());
     }
 
     public function test_reportar_solo_domicilio_va_a_vendedora(): void
@@ -121,6 +245,7 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
             $actualizado->fresh('estatus')->estatus->fase_ciclo
         );
+        $this->assertTrue((bool) $actualizado->guia_retraso);
     }
 
     public function test_cascada_domicilio_remision_guia(): void
@@ -147,9 +272,10 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
 
         // Reenvío exige pesaje respondido (flujo logístico).
         $reportado->update(['pesaje_respondido_at' => now()]);
+        $this->asegurarCajasPesaje($reportado);
 
         $enviado = app(EnviarPedidoBmaService::class)->ejecutar(
-            $reportado->fresh(['estatus', 'origen', 'documentos', 'comprobantes', 'cliente']),
+            $reportado->fresh(['estatus', 'origen', 'documentos', 'comprobantes', 'cliente', 'cajas']),
             $this->usuario->id
         );
 
@@ -252,6 +378,23 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             ['remision'],
             ''
         );
+    }
+
+    private function asegurarCajasPesaje(PedidoBma $pedido): void
+    {
+        if (DB::table('pedido_bma_cajas')->where('pedido_bma_id', $pedido->id)->exists()) {
+            return;
+        }
+
+        DB::table('pedido_bma_cajas')->insert([
+            'pedido_bma_id' => $pedido->id,
+            'catalogo_tipo_caja_id' => DB::table('catalogo_tipos_caja_pedido')->value('id'),
+            'peso_real_kg' => 2,
+            'peso_volumetrico_kg' => 1.5,
+            'orden' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     private function crearPedidoPendienteAuxiliar(): PedidoBma
@@ -401,7 +544,7 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
                 ['codigo_interno' => 'BORRADOR', 'nombre_visual' => 'Borrador', 'fase_ciclo' => 'BORRADOR', 'color_hex' => '#94A3B8', 'orden' => 1],
                 ['codigo_interno' => 'AZUL_1', 'nombre_visual' => 'AZUL ①', 'fase_ciclo' => 'PENDIENTE_AUXILIAR', 'color_hex' => '#3B82F6', 'orden' => 2],
                 ['codigo_interno' => 'AMARILLO', 'nombre_visual' => 'AMARILLO', 'fase_ciclo' => 'EN_CEDIS', 'color_hex' => '#EAB308', 'orden' => 3],
-                ['codigo_interno' => 'ROJO', 'nombre_visual' => 'Incidencia', 'fase_ciclo' => 'INCIDENCIA_CEDIS', 'color_hex' => '#EF4444', 'orden' => 4],
+                ['codigo_interno' => 'ROJO', 'nombre_visual' => 'Error CEDIS', 'fase_ciclo' => 'INCIDENCIA_CEDIS', 'color_hex' => '#EF4444', 'orden' => 4],
                 ['codigo_interno' => 'NARANJA', 'nombre_visual' => 'Rechazado', 'fase_ciclo' => 'RECHAZADO_VENDEDORA', 'color_hex' => '#F97316', 'orden' => 5],
                 ['codigo_interno' => 'PENDIENTE_GUIA', 'nombre_visual' => 'Pendiente de guía', 'fase_ciclo' => 'PENDIENTE_DE_GUIA', 'color_hex' => '#A855F7', 'orden' => 7],
                 ['codigo_interno' => 'PENDIENTE_ENVIO', 'nombre_visual' => 'Pendiente de envío', 'fase_ciclo' => 'PENDIENTE_DE_ENVIO', 'color_hex' => '#0EA5E9', 'orden' => 10],

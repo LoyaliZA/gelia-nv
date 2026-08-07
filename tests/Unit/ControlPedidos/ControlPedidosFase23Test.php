@@ -58,7 +58,8 @@ class ControlPedidosFase23Test extends TestCase
 
         $actualizado = app(GestionarGuiaPdfPedidoBmaService::class)->subir(
             $pedido->fresh('estatus'),
-            $archivo
+            $archivo,
+            $this->usuario->id
         );
 
         $this->assertTrue($actualizado->tieneGuiaPdf());
@@ -93,7 +94,8 @@ class ControlPedidosFase23Test extends TestCase
 
         app(GestionarGuiaPdfPedidoBmaService::class)->subir(
             $pedido->fresh('estatus'),
-            $archivo
+            $archivo,
+            $this->usuario->id
         );
 
         $pendienteEnvio = app(AsignarGuiaPedidoBmaService::class)->ejecutar(
@@ -152,7 +154,8 @@ class ControlPedidosFase23Test extends TestCase
 
         app(GestionarGuiaPdfPedidoBmaService::class)->subir(
             $pedido->fresh('estatus'),
-            $archivo
+            $archivo,
+            $this->usuario->id
         );
     }
 
@@ -169,7 +172,8 @@ class ControlPedidosFase23Test extends TestCase
 
         $actualizado = app(GestionarGuiaPdfPedidoBmaService::class)->subir(
             $pedido->fresh('estatus'),
-            $archivo
+            $archivo,
+            $this->usuario->id
         );
 
         $this->assertTrue($actualizado->tieneGuiaPdf());

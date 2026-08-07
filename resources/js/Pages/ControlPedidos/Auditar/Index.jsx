@@ -9,6 +9,7 @@ import TablaAuditoria from './Partials/TablaAuditoria';
 import ModalRevisarPedido from './Partials/ModalRevisarPedido';
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 import ModalAnexarPagoEnvio from '../Partials/ModalAnexarPagoEnvio';
+import ModalBitacoraPedido from '../Partials/ModalBitacoraPedido';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 const KPI_CONFIG = [
@@ -42,6 +43,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [modalRevisar, setModalRevisar] = useState({ abierto: false, pedido: null });
     const [modalAnexo, setModalAnexo] = useState({ abierto: false, pedido: null });
+    const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
@@ -55,8 +57,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     }, [flash?.success, flash?.error]);
 
     useEffect(() => {
-        modalAbiertoRef.current = modalRevisar.abierto || modalAnexo.abierto;
-    }, [modalRevisar.abierto, modalAnexo.abierto]);
+        modalAbiertoRef.current = modalRevisar.abierto || modalAnexo.abierto || modalBitacora.abierto;
+    }, [modalRevisar.abierto, modalAnexo.abierto, modalBitacora.abierto]);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -92,6 +94,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
     const abrirRevisar = (pedido) => setModalRevisar({ abierto: true, pedido });
     const abrirAnexar = (pedido) => setModalAnexo({ abierto: true, pedido });
+    const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
 
     return (
         <AppLayout auth={auth}>
@@ -165,6 +168,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         pedidos={pedidosVista}
                         onRevisar={abrirRevisar}
                         onAnexarEnvio={abrirAnexar}
+                        onBitacora={abrirBitacora}
                     />
                 </div>
             </GeliaPageShell>
@@ -174,6 +178,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 pedido={modalRevisar.pedido}
                 bancos={catalogos.bancos || []}
                 onClose={() => setModalRevisar({ abierto: false, pedido: null })}
+            />
+            <ModalBitacoraPedido
+                abierto={modalBitacora.abierto}
+                pedido={modalBitacora.pedido}
+                onClose={() => setModalBitacora({ abierto: false, pedido: null })}
             />
             <ModalAnexarPagoEnvio
                 abierto={modalAnexo.abierto}

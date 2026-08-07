@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck } from 'lucide-react';
+import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck, Truck } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import {
     badgeEstatusPedido,
@@ -12,24 +12,38 @@ import {
     tieneGuiaPdfDisponible,
     puedeAnexarPagoEnvio,
     puedeCompletarEnvioResguardo,
+    puedeCargarGuiaCliente,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import BotonGuiaPdf from './BotonGuiaPdf';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 
 function AccionesPedido({
-    pedido, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio,
+    pedido, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
     puedeEditar, puedeEliminar, compact = false,
 }) {
     const btnClass = compact ? 'p-2.5' : 'p-2';
-    const puedeAnexar = puedeAnexarPagoEnvio(pedido) && (can('control_pedidos.crear') || can('control_pedidos.auditar'));
-    const puedeCompletar = puedeCompletarEnvioResguardo(pedido)
+    const puedeMutar = Boolean(pedido.puede_editar ?? pedido.puede_mutar);
+    const puedeAnexar = puedeMutar
+        && puedeAnexarPagoEnvio(pedido)
+        && (can('control_pedidos.crear') || can('control_pedidos.auditar'));
+    const puedeCompletar = puedeMutar
+        && puedeCompletarEnvioResguardo(pedido)
         && (can('control_pedidos.crear') || can('control_pedidos.editar'))
         && onCompletarEnvio;
+    const puedeCargar = puedeMutar
+        && puedeCargarGuiaCliente(pedido)
+        && (can('control_pedidos.crear') || can('control_pedidos.editar'))
+        && onCargarGuia;
     return (
         <div className={`flex ${compact ? 'flex-wrap' : 'justify-end'} gap-1.5`}>
             {tieneGuiaPdfDisponible(pedido) && onVerGuia && (
                 <BotonGuiaPdf pedido={pedido} onVerPdf={onVerGuia} compact className="!px-3 !py-2" />
+            )}
+            {puedeCargar && (
+                <button type="button" onClick={() => onCargarGuia(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-fuchsia-500`} title="Cargar guía">
+                    <Truck className="w-4 h-4 text-fuchsia-600" />
+                </button>
             )}
             {puedeCompletar && (
                 <button type="button" onClick={() => onCompletarEnvio(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-teal-500`} title="Completar envío del resguardo">
@@ -65,7 +79,7 @@ function AccionesPedido({
     );
 }
 
-function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, puedeEditar, puedeEliminar }) {
+function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia, puedeEditar, puedeEliminar }) {
     const guiaLista = tieneGuiaLista(pedido);
     const badgeGuia = badgeGuiaLista();
 
@@ -121,6 +135,7 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                 onVerGuia={onVerGuia}
                 onAnexarEnvio={onAnexarEnvio}
                 onCompletarEnvio={onCompletarEnvio}
+                onCargarGuia={onCargarGuia}
                 puedeEditar={puedeEditar}
                 puedeEliminar={puedeEliminar}
                 compact
@@ -138,16 +153,23 @@ export default function TablaPedidos({
     onBitacora,
     onAnexarEnvio,
     onCompletarEnvio,
+    onCargarGuia,
 }) {
     const [docPreview, setDocPreview] = useState(null);
     const items = pedidos?.data || [];
 
+    const puedeMutarPedido = (pedido) => Boolean(pedido.puede_editar ?? pedido.puede_mutar);
+
     const puedeEditar = (pedido) => {
         const fase = pedido.estatus?.fase_ciclo;
-        return can('control_pedidos.editar') && ['BORRADOR', 'RECHAZADO_VENDEDORA'].includes(fase);
+        return puedeMutarPedido(pedido)
+            && can('control_pedidos.editar')
+            && ['BORRADOR', 'PESAJE_PENDIENTE', 'RECHAZADO_VENDEDORA'].includes(fase);
     };
 
-    const puedeEliminar = (pedido) => can('control_pedidos.eliminar') && pedido.estatus?.fase_ciclo === 'BORRADOR';
+    const puedeEliminar = (pedido) => puedeMutarPedido(pedido)
+        && can('control_pedidos.eliminar')
+        && ['BORRADOR', 'PESAJE_PENDIENTE'].includes(pedido.estatus?.fase_ciclo);
 
     if (items.length === 0) {
         return (
@@ -175,6 +197,7 @@ export default function TablaPedidos({
                         onVerGuia={setDocPreview}
                         onAnexarEnvio={onAnexarEnvio}
                         onCompletarEnvio={onCompletarEnvio}
+                        onCargarGuia={onCargarGuia}
                         puedeEditar={puedeEditar}
                         puedeEliminar={puedeEliminar}
                     />
@@ -251,6 +274,7 @@ export default function TablaPedidos({
                                             onVerGuia={setDocPreview}
                                             onAnexarEnvio={onAnexarEnvio}
                                             onCompletarEnvio={onCompletarEnvio}
+                                            onCargarGuia={onCargarGuia}
                                             puedeEditar={puedeEditar}
                                             puedeEliminar={puedeEliminar}
                                         />

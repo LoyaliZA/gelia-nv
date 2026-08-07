@@ -34,6 +34,7 @@ const CAMPOS_VACIOS = {
     tipo_direccion: 'envio',
     verificar: true,
     es_principal: false,
+    domicilio_irregular: false,
 };
 
 function badgeVerificacion(estado) {
@@ -102,6 +103,7 @@ export default function FichaCliente({ cliente, direcciones = [], enlaces = [], 
             tipo_direccion: d.tipo_direccion || 'envio',
             verificar: true,
             es_principal: Boolean(d.es_principal),
+            domicilio_irregular: Boolean(d.domicilio_irregular),
         });
         form.clearErrors();
         setEditId(d.id);
@@ -398,17 +400,31 @@ export default function FichaCliente({ cliente, direcciones = [], enlaces = [], 
                             </button>
                         </div>
                         <form onSubmit={guardar} className="grid gap-3 md:grid-cols-2">
+                            <label className="md:col-span-2 flex items-start gap-2 text-sm font-bold theme-text-main">
+                                <input
+                                    type="checkbox"
+                                    className="mt-1"
+                                    checked={Boolean(form.data.domicilio_irregular)}
+                                    onChange={(e) => form.setData('domicilio_irregular', e.target.checked)}
+                                />
+                                <span>
+                                    Domicilio irregular / sin calle formal
+                                    <span className="block text-[10px] font-bold theme-text-muted mt-0.5">
+                                        Relaja calle, colonia y CP; exige referencias y municipio o ciudad.
+                                    </span>
+                                </span>
+                            </label>
                             {[
                                 ['etiqueta', 'Etiqueta'],
                                 ['nombre_destinatario', 'Destinatario *'],
                                 ['telefono_destinatario', 'Teléfono'],
-                                ['calle', 'Calle *'],
+                                ['calle', form.data.domicilio_irregular ? 'Calle' : 'Calle *'],
                                 ['numero_exterior', 'Exterior'],
                                 ['numero_interior', 'Interior'],
-                                ['colonia', 'Colonia *'],
-                                ['codigo_postal', 'CP *'],
-                                ['municipio', 'Municipio *'],
-                                ['ciudad', 'Ciudad'],
+                                ['colonia', form.data.domicilio_irregular ? 'Colonia' : 'Colonia *'],
+                                ['codigo_postal', form.data.domicilio_irregular ? 'CP' : 'CP *'],
+                                ['municipio', form.data.domicilio_irregular ? 'Municipio (o ciudad)' : 'Municipio *'],
+                                ['ciudad', form.data.domicilio_irregular ? 'Ciudad (o municipio)' : 'Ciudad'],
                                 ['estado', 'Estado *'],
                                 ['pais', 'País'],
                             ].map(([key, label]) => (
@@ -438,8 +454,11 @@ export default function FichaCliente({ cliente, direcciones = [], enlaces = [], 
                                 </select>
                             </label>
                             <label className="md:col-span-2 block text-sm">
-                                <span className="mb-1 block text-[9px] font-black uppercase tracking-widest theme-text-muted">Referencias del domicilio</span>
+                                <span className="mb-1 block text-[9px] font-black uppercase tracking-widest theme-text-muted">
+                                    {form.data.domicilio_irregular ? 'Referencias del domicilio *' : 'Referencias del domicilio'}
+                                </span>
                                 <textarea className={THEME_TEXTAREA} value={form.data.referencias} onChange={(e) => form.setData('referencias', e.target.value)} rows={3} placeholder="Cómo encontrar el domicilio…" />
+                                {form.errors.referencias && <span className="text-xs text-red-600">{form.errors.referencias}</span>}
                             </label>
                             <label className="md:col-span-2 block text-sm">
                                 <span className="mb-1 block text-[9px] font-black uppercase tracking-widest theme-text-muted">Indicaciones de entrega</span>

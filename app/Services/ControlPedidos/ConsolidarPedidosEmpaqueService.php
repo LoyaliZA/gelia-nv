@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\OperacionEmpaque;
 use App\Models\ControlPedidos\OperacionEmpaqueMiembro;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class ConsolidarPedidosEmpaqueService
 {
@@ -91,7 +92,8 @@ class ConsolidarPedidosEmpaqueService
                     $usuarioId,
                     $estatusId,
                     $estatusId,
-                    "Incluido en operación de empaque {$operacion->folio_operacion}."
+                    "Incluido en operación de empaque {$operacion->folio_operacion}.",
+                    AccionesHistorialPedidoBma::CONSOLIDACION
                 );
             }
 

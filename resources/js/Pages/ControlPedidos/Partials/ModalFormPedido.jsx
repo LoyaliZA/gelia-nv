@@ -3,18 +3,19 @@ import { createPortal } from 'react-dom';
 import { useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, Search, Save, Send, MessageCircle, RotateCcw, ImagePlus, Trash2, AlertTriangle, MapPin, PenLine, Link2, Cloud, HardDrive, Scale, FileText,
+    X, Search, Save, Send, MessageCircle, RotateCcw, ImagePlus, Trash2, AlertTriangle, PenLine, Link2, Cloud, HardDrive, Scale, FileText,
 } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
-import DireccionPedidoResumen from './DireccionPedidoResumen';
 import { codigoDireccionCliente, labelOpcionDireccion } from './codigoDireccionCliente';
 import {
     calcularTotalCobrar,
     calcCostoSeguro,
     calcularPesoCobradoGuia,
     paqueteriaTieneCobertura,
+    etiquetaCostoEnvio,
+    esCotizacionLista,
     formatearMoneda,
     etiquetaAlmacen,
     textoWhatsAppPedido,
@@ -32,7 +33,15 @@ import ModalAlertaPedido from './ModalAlertaPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
+import CamposDireccionPedido, {
+    CAMPOS_DIRECCION_VACIOS,
+    camposDesdeDireccion,
+    resumirCamposDireccion,
+} from './CamposDireccionPedido';
 import { resolverReexpedicionForm } from './resolverReexpedicionForm';
+import ModalConfirmarAccion from './ModalConfirmarAccion';
+import SeccionPagosExhibicion from './SeccionPagosExhibicion';
+import { CAMPOS_ERROR_DATOS } from './ModalReportarErrorDatos';
 
 const STORAGE_BORRADOR = 'control_pedidos.borrador_pedido_v2';
 /** Autoguardado local: rápido, no satura red. */
@@ -62,6 +71,13 @@ function tieneContenidoParaBd(data) {
         || data.catalogo_paqueteria_id
         || data.almacen_id
     );
+}
+
+/** Hay un borrador local con datos útiles (para preguntar al abrir Nuevo pedido). */
+export function hayBorradorPedidoLocal() {
+    const borrador = leerBorradorLocal();
+    if (!borrador) return false;
+    return Boolean(borrador.pedido_id) || tieneContenidoParaBd(borrador);
 }
 
 function leerBorradorLocal() {
@@ -129,7 +145,11 @@ function formDefaults(pedido = null, tiposOperacion = []) {
         costo_envio: pedido?.costo_envio ?? '',
         aplica_saldo_favor: Number(pedido?.saldo_a_favor || 0) > 0,
         saldo_a_favor: pedido?.saldo_a_favor ?? '',
+        saf_aplicaciones: (pedido?.saf_aplicaciones || [])
+            .filter((a) => a.estado !== 'liberado')
+            .map((a) => ({ saf_credito_id: a.saf_credito_id, monto: a.monto, folio: a.credito?.folio })),
         aplica_seguro: pedido?.aplica_seguro || false,
+        cliente_proporciona_guia: pedido?.cliente_proporciona_guia || false,
         costo_seguro: pedido?.costo_seguro ?? '',
         envia_a_otra_persona: pedido?.envia_a_otra_persona || false,
         envia_otra_persona: pedido?.envia_otra_persona || '',
@@ -143,7 +163,14 @@ function formDefaults(pedido = null, tiposOperacion = []) {
     };
 }
 
-export default function ModalFormPedido({ abierto, onClose, pedido = null, catalogos = {}, direccionesNormalizadas = false }) {
+export default function ModalFormPedido({
+    abierto,
+    onClose,
+    pedido = null,
+    catalogos = {},
+    direccionesNormalizadas = false,
+    recuperarBorrador = false,
+}) {
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
@@ -163,8 +190,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const [previews, setPreviews] = useState([]);
     const [docsEliminar, setDocsEliminar] = useState([]);
     const [pesoVolumetrico, setPesoVolumetrico] = useState(pedido?.peso_volumetrico_kg ?? '');
-    const [dimsCaja, setDimsCaja] = useState({ largo: null, ancho: null, alto: null });
-    const [alertaEnvio, setAlertaEnvio] = useState({ abierto: false, mensaje: '' });
+    const [alertaEnvio, setAlertaEnvio] = useState({ abierto: false, mensaje: '', tipo: 'error' });
     const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
     const [candidatosPrincipal, setCandidatosPrincipal] = useState([]);
     const [buscandoPrincipal, setBuscandoPrincipal] = useState(false);
@@ -178,16 +204,54 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const pedidoBdIdRef = useRef(pedido?.id || null);
     const ultimoFingerprintBd = useRef('');
     const autoguardandoBd = useRef(false);
+    const ignoreOverlayCloseUntil = useRef(0);
     const [pedidoBdId, setPedidoBdId] = useState(pedido?.id || null);
     const [estadoAuto, setEstadoAuto] = useState({ local: null, bd: null });
     const [motivoRepesaje, setMotivoRepesaje] = useState('');
     const [procesandoPesaje, setProcesandoPesaje] = useState(false);
     const [pdfLocalOk, setPdfLocalOk] = useState(false);
     const [vistaPrevia, setVistaPrevia] = useState(null);
+    const [camposDireccion, setCamposDireccion] = useState({ ...CAMPOS_DIRECCION_VACIOS });
+    const [direccionSucia, setDireccionSucia] = useState(false);
+    const [guardandoDireccion, setGuardandoDireccion] = useState(false);
+    const [confirmarActualizarDir, setConfirmarActualizarDir] = useState(false);
+    const [sinDireccionPrincipal, setSinDireccionPrincipal] = useState(false);
+    const [safCuenta, setSafCuenta] = useState(null);
+    const [cargandoSaf, setCargandoSaf] = useState(false);
+    const [saldoGeneradoExcedente, setSaldoGeneradoExcedente] = useState(0);
 
     const { data, setData, post, processing, reset, errors, transform } = useForm(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
 
-    const puedeAutoguardarBd = !pedido || Boolean(pedido?.estatus?.fase_ciclo === 'BORRADOR' || pedido?.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA');
+    const saldoFavorCalculado = (data.saf_aplicaciones || []).reduce((acc, i) => acc + (Number(i.monto) || 0), 0)
+        || (data.aplica_saldo_favor ? Number(data.saldo_a_favor || 0) : 0);
+
+    useEffect(() => {
+        if (!data.cliente_id) {
+            setSafCuenta(null);
+            return undefined;
+        }
+        let cancelado = false;
+        setCargandoSaf(true);
+        axios.get(route('control_pedidos.cliente.saldo_favor', data.cliente_id), {
+            headers: { Accept: 'application/json' },
+        }).then((res) => {
+            if (!cancelado) setSafCuenta(res.data);
+        }).catch(() => {
+            if (!cancelado) setSafCuenta(null);
+        }).finally(() => {
+            if (!cancelado) setCargandoSaf(false);
+        });
+        return () => { cancelado = true; };
+    }, [data.cliente_id]);
+
+    const puedeAutoguardarBd = !pedido || ['BORRADOR', 'PESAJE_PENDIENTE', 'RECHAZADO_VENDEDORA'].includes(pedido?.estatus?.fase_ciclo);
+    const fasePedido = pedido?.estatus?.fase_ciclo;
+    const puedeVolverBorrador = fasePedido === 'PESAJE_PENDIENTE';
+    const leyendaContinuarBorrador = puedeVolverBorrador ? (
+        <AvisoOperativoPedido label="Para continuar" tono="warning" icon={RotateCcw} className="mb-4">
+            Conserve como borrador para completar el pedido: use el botón naranja «Conservar como borrador» en la sección de pesaje y luego retome el folio.
+        </AvisoOperativoPedido>
+    ) : null;
 
     const paqueteriaSeleccionada = (catalogos.paqueterias || []).find(
         (p) => String(p.id) === String(data.catalogo_paqueteria_id)
@@ -203,11 +267,34 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const camposEnvioBloqueados = esResguardoAbierto || esResguardoComplementario;
     const tienePesajeRespondido = Boolean(pedido?.pesaje_respondido_at);
     const pendientePesaje = pedido?.estatus_envio === 'pendiente_pesaje';
+    const guiaCliente = Boolean(data.cliente_proporciona_guia);
     const pesoCajasSoloLectura = tienePesajeRespondido || pendientePesaje || camposEnvioBloqueados;
     const cotizacionHabilitada = !requiereLogistica || esResguardoComplementario || tienePesajeRespondido;
+    const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario;
+    const cotizacionLista = esCotizacionLista({
+        requiereLogistica,
+        cotizacionHabilitada,
+        guiaCliente,
+        esResguardoComplementario,
+        omiteCosto,
+        catalogo_paqueteria_id: data.catalogo_paqueteria_id,
+        catalogo_tipo_guia_id: data.catalogo_tipo_guia_id,
+        catalogo_zona_id: data.catalogo_zona_id,
+        costo_envio: data.costo_envio,
+        total_mercancia: data.total_mercancia,
+    });
+    const labelCostoEnvio = etiquetaCostoEnvio(paqueteriaSeleccionada);
     const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
     const pdfPedidoDoc = (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id));
+    const anexoPiezasDoc = (pedido?.documentos || []).find((d) => d.tipo === 'anexo_piezas' && !docsEliminar.includes(d.id));
     const tienePdfPedido = Boolean(pdfPedidoDoc) || pdfLocalOk;
+    const tieneAnexoPiezas = Boolean(anexoPiezasDoc);
+    const labelSoportePedido = (doc) => {
+        const mime = String(doc?.mime_type || '');
+        const nombre = String(doc?.nombre_original || '').toLowerCase();
+        if (mime.startsWith('image/') || /\.(jpe?g|png|webp)$/.test(nombre)) return 'Ver foto';
+        return 'Ver PDF';
+    };
     const cajasPesaje = pedido?.cajas || [];
     const tieneCoberturaSeguro = paqueteriaTieneCobertura(paqueteriaSeleccionada?.nombre);
     const paqueteriasComerciales = (catalogos.paqueterias || []).filter((p) => p.categoria === 'comercial');
@@ -215,8 +302,17 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
 
     const totalCobrar = calcularTotalCobrar(
         data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
-        data.aplica_saldo_favor ? data.saldo_a_favor : 0
+        saldoFavorCalculado
     );
+
+    const modalAnidadoAbierto = confirmarActualizarDir || alertaEnvio.abierto || Boolean(vistaPrevia) || modalLinkDireccion;
+
+    useEffect(() => {
+        // Tras cerrar un modal hijo, ignorar clics al overlay del borrador un instante.
+        if (!modalAnidadoAbierto) {
+            ignoreOverlayCloseUntil.current = Date.now() + 400;
+        }
+    }, [modalAnidadoAbierto]);
 
     useEffect(() => {
         if (!abierto) return;
@@ -230,11 +326,6 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             setData(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
             setInfoCliente(pedido.cliente || null);
             setPesoVolumetrico(pedido.peso_volumetrico_kg ?? '');
-            setDimsCaja({
-                largo: pedido.tipo_caja?.largo ?? null,
-                ancho: pedido.tipo_caja?.ancho ?? null,
-                alto: pedido.tipo_caja?.alto ?? null,
-            });
             setAlertaDireccion(false);
             setMsgDireccion('');
             setDocsEliminar([]);
@@ -252,7 +343,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                     direccionId: pedido.cliente_direccion_id,
                 });
             }
-        } else {
+        } else if (recuperarBorrador) {
             const borrador = leerBorradorLocal();
             const idBd = borrador?.pedido_id || null;
             pedidoBdIdRef.current = idBd;
@@ -279,7 +370,6 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 setInfoCliente(null);
             }
             setPesoVolumetrico('');
-            setDimsCaja({ largo: null, ancho: null, alto: null });
             setAlertaDireccion(false);
             setMsgDireccion('');
             setPreviews([]);
@@ -289,9 +379,29 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 setDireccionesCliente([]);
             }
             setMostrarExcepcion(Boolean(borrador?.direccion_manual_excepcion));
+            setMotivoRepesaje('');
+            setPdfLocalOk(false);
             setEstadoAuto({ local: borrador ? 'Borrador local recuperado' : null, bd: idBd ? `Borrador #${idBd}` : null });
+        } else {
+            // Nuevo pedido en limpio: no reutilizar borrador local ni el id en BD.
+            limpiarBorradorLocal();
+            pedidoBdIdRef.current = null;
+            setPedidoBdId(null);
+            setData(formDefaults(null, catalogos.tipos_operacion_envio || []));
+            setInfoCliente(null);
+            setPesoVolumetrico('');
+            setAlertaDireccion(false);
+            setMsgDireccion('');
+            setPreviews([]);
+            setDocsEliminar([]);
+            setAlertaEnvio({ abierto: false, mensaje: '' });
+            setDireccionesCliente([]);
+            setMostrarExcepcion(false);
+            setMotivoRepesaje('');
+            setPdfLocalOk(false);
+            setEstadoAuto({ local: null, bd: null });
         }
-    }, [abierto, pedido?.id]);
+    }, [abierto, pedido?.id, recuperarBorrador]);
 
     /** Guarda el borrador en BD (sin archivos) y devuelve su id. */
     const persistirBorradorBd = async () => {
@@ -308,7 +418,12 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 }
             });
             payload.pedido_id = pedidoBdIdRef.current || undefined;
-            payload.saldo_a_favor = data.aplica_saldo_favor ? data.saldo_a_favor : 0;
+            payload.saldo_a_favor = data.aplica_saldo_favor
+                ? ((data.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || data.saldo_a_favor || 0)
+                : 0;
+            payload.saf_aplicaciones = data.aplica_saldo_favor
+                ? (data.saf_aplicaciones || []).filter((i) => Number(i.monto) > 0)
+                : [];
             payload.comentarios_drive = data.direccion_manual_excepcion && data.motivo_direccion_manual
                 ? `${data.comentarios_drive || ''}\n[Excepción dirección] ${data.motivo_direccion_manual}`.trim()
                 : data.comentarios_drive;
@@ -353,7 +468,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const asegurarPedidoEnBd = async () => {
         if (idPedidoAcciones) return idPedidoAcciones;
         if (!tieneContenidoParaBd(data)) {
-            setAlertaEnvio({ abierto: true, mensaje: 'Capture al menos el cliente y el folio del pedido antes de continuar.' });
+            setAlertaEnvio({ abierto: true, mensaje: 'Capture al menos el origen y el cliente antes de continuar.' });
             return null;
         }
         try {
@@ -406,30 +521,32 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     }, [data, abierto, puedeAutoguardarBd, processing, modoEdicion, infoCliente?.nombre]);
 
     useEffect(() => {
+        if (pedido?.pesaje_respondido_at) {
+            setPesoVolumetrico(pedido.peso_volumetrico_kg ?? '');
+            return;
+        }
         if (!data.catalogo_tipo_caja_id) {
             setPesoVolumetrico('');
-            setDimsCaja({ largo: null, ancho: null, alto: null });
             return;
         }
         const caja = (catalogos.tipos_caja || []).find((c) => String(c.id) === String(data.catalogo_tipo_caja_id));
         setPesoVolumetrico(caja?.peso_volumetrico ?? '');
-        setDimsCaja({
-            largo: caja?.largo ?? null,
-            ancho: caja?.ancho ?? null,
-            alto: caja?.alto ?? null,
-        });
-    }, [data.catalogo_tipo_caja_id, catalogos.tipos_caja]);
+    }, [data.catalogo_tipo_caja_id, catalogos.tipos_caja, pedido?.pesaje_respondido_at, pedido?.peso_volumetrico_kg]);
 
     useEffect(() => {
         if (camposEnvioBloqueados) {
             if (data.peso_cobrado_guia_kg !== '') setData('peso_cobrado_guia_kg', '');
             return;
         }
+        // Tras pesaje CEDIS el cobrado es suma de max por envío; no recalcular con agregados.
+        if (pedido?.pesaje_respondido_at) {
+            return;
+        }
         const cobrado = calcularPesoCobradoGuia(data.peso_real_kg, pesoVolumetrico);
         if (String(data.peso_cobrado_guia_kg ?? '') !== String(cobrado)) {
             setData('peso_cobrado_guia_kg', cobrado);
         }
-    }, [data.peso_real_kg, pesoVolumetrico, camposEnvioBloqueados]);
+    }, [data.peso_real_kg, pesoVolumetrico, camposEnvioBloqueados, pedido?.pesaje_respondido_at]);
 
     useEffect(() => {
         if (!abierto || !requiereLogistica) return;
@@ -471,6 +588,12 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             return;
         }
 
+        if (data.cliente_proporciona_guia) {
+            setData('costo_seguro', 0);
+            setData('aplica_seguro', false);
+            return;
+        }
+
         const paq = (catalogos.paqueterias || []).find((p) => String(p.id) === String(data.catalogo_paqueteria_id));
         const costo = calcCostoSeguro(paq?.nombre, data.costo_envio, data.total_mercancia);
         setData('costo_seguro', costo);
@@ -478,7 +601,18 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         if (!paqueteriaTieneCobertura(paq?.nombre)) {
             setData('aplica_seguro', false);
         }
-    }, [data.catalogo_paqueteria_id, data.costo_envio, data.total_mercancia, catalogos.paqueterias]);
+    }, [data.catalogo_paqueteria_id, data.costo_envio, data.total_mercancia, data.cliente_proporciona_guia, catalogos.paqueterias]);
+
+    const marcarGuiaCliente = (checked) => {
+        setData('cliente_proporciona_guia', checked);
+        if (checked) {
+            setData('costo_envio', '');
+            setData('aplica_seguro', false);
+            setData('costo_seguro', 0);
+            setData('catalogo_tipo_guia_id', '');
+            setData('catalogo_zona_id', '');
+        }
+    };
 
     const fetchClientes = async (term) => {
         const limpio = term.trim();
@@ -502,10 +636,32 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         }
     };
 
+    const aplicarDireccionSeleccionada = (dir, { marcarAlerta = false } = {}) => {
+        if (!dir) {
+            setCamposDireccion({ ...CAMPOS_DIRECCION_VACIOS });
+            setDireccionSucia(false);
+            setData('cliente_direccion_id', '');
+            setData('domicilio_entrega', '');
+            setData('codigo_postal', '');
+            return;
+        }
+        const campos = camposDesdeDireccion(dir);
+        setCamposDireccion(campos);
+        setDireccionSucia(false);
+        setData('cliente_direccion_id', dir.id);
+        setData('domicilio_entrega', dir.direccion_resumida || resumirCamposDireccion(campos));
+        setData('codigo_postal', dir.codigo_postal || '');
+        setData('direccion_manual_excepcion', false);
+        if (dir.anexa_remision) {
+            setData('anexar_remision', true);
+        }
+        if (marcarAlerta) setAlertaDireccion(true);
+    };
+
     const cargarDireccionCliente = async (clienteId, { silencioso = false, conservarSeleccion = false, direccionId = null } = {}) => {
         if (!clienteId) {
             if (!silencioso) {
-                setMsgDireccion('Seleccione un cliente primero para rellenar la dirección.');
+                setMsgDireccion('Seleccione un cliente primero para cargar la dirección.');
                 setAlertaDireccion(false);
             }
             return;
@@ -513,55 +669,100 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
 
         setCargandoDireccion(true);
         setMsgDireccion('');
+        setSinDireccionPrincipal(false);
         try {
             const response = await axios.get(`/api/clientes/id/${clienteId}/direccion-envio`);
-            const usarNormalizadas = direccionesNormalizadas || response.data?.direcciones_normalizadas;
-            if (usarNormalizadas) {
-                const dirs = response.data?.direcciones || [];
-                setDireccionesCliente(dirs);
-                const idSeleccion = conservarSeleccion
-                    ? (direccionId || data.cliente_direccion_id)
-                    : null;
-                const seleccionada = idSeleccion
-                    ? dirs.find((d) => String(d.id) === String(idSeleccion))
-                    : null;
-                const principal = seleccionada || dirs.find((d) => d.es_principal) || dirs[0];
-                if (principal) {
-                    setData('cliente_direccion_id', principal.id);
-                    setData('domicilio_entrega', principal.direccion_resumida || '');
-                    setData('codigo_postal', principal.codigo_postal || '');
-                    if (principal.anexa_remision) {
-                        setData('anexar_remision', true);
-                    }
-                    setAlertaDireccion(!conservarSeleccion);
-                    setMsgDireccion('');
+            const dirs = response.data?.direcciones || [];
+            setDireccionesCliente(dirs);
+
+            const idSeleccion = conservarSeleccion
+                ? (direccionId || data.cliente_direccion_id)
+                : null;
+            const seleccionada = idSeleccion
+                ? dirs.find((d) => String(d.id) === String(idSeleccion))
+                : null;
+            const principal = dirs.find((d) => d.es_principal) || null;
+            const tienePrincipal = Boolean(principal) || Boolean(response.data?.tiene_direccion_principal);
+
+            if (!tienePrincipal) {
+                setSinDireccionPrincipal(true);
+                setAlertaDireccion(false);
+                if (!seleccionada) {
+                    aplicarDireccionSeleccionada(null);
                 } else {
-                    setData('cliente_direccion_id', '');
-                    setAlertaDireccion(false);
-                    if (!silencioso) {
-                        setMsgDireccion('Este cliente no tiene direcciones verificadas. Solicite el registro o use excepción autorizada.');
-                    }
+                    aplicarDireccionSeleccionada(seleccionada);
                 }
-            } else if (response.data?.tiene_direccion) {
-                setDireccionesCliente([]);
-                setData('domicilio_entrega', response.data.domicilio_entrega || '');
-                setData('codigo_postal', response.data.codigo_postal || '');
-                setAlertaDireccion(true);
+                if (!silencioso) {
+                    setMsgDireccion('Este cliente no tiene una dirección principal registrada. Debe registrar los datos de dirección antes de continuar.');
+                }
+                return;
+            }
+
+            setSinDireccionPrincipal(false);
+            const elegida = seleccionada || principal;
+            if (elegida) {
+                aplicarDireccionSeleccionada(elegida, { marcarAlerta: !conservarSeleccion });
                 setMsgDireccion('');
             } else {
-                setDireccionesCliente([]);
-                setAlertaDireccion(false);
+                aplicarDireccionSeleccionada(null);
                 if (!silencioso) {
-                    setMsgDireccion('Este cliente no tiene dirección registrada. Capture los datos manualmente.');
+                    setMsgDireccion('Este cliente no tiene direcciones verificadas. Solicite el registro de dirección.');
                 }
             }
         } catch {
             setAlertaDireccion(false);
+            setDireccionesCliente([]);
+            setSinDireccionPrincipal(true);
+            aplicarDireccionSeleccionada(null);
             if (!silencioso) {
-                setMsgDireccion('No se pudo obtener la dirección del cliente. Capture los datos manualmente.');
+                setMsgDireccion('No se pudo obtener la dirección del cliente. Registre una dirección en el catálogo.');
             }
         } finally {
             setCargandoDireccion(false);
+        }
+    };
+
+    const onCambiarCamposDireccion = (nuevos) => {
+        setCamposDireccion(nuevos);
+        setDireccionSucia(true);
+        setData('codigo_postal', nuevos.codigo_postal || '');
+        setData('domicilio_entrega', resumirCamposDireccion(nuevos));
+    };
+
+    const descartarCambiosDireccion = () => {
+        const actual = direccionesCliente.find((d) => String(d.id) === String(data.cliente_direccion_id));
+        aplicarDireccionSeleccionada(actual || null);
+    };
+
+    const confirmarGuardarDireccion = async () => {
+        setConfirmarActualizarDir(false);
+        if (!data.cliente_id || !data.cliente_direccion_id) {
+            setAlertaEnvio({ abierto: true, mensaje: 'Seleccione un cliente y una dirección del catálogo.' });
+            return;
+        }
+        setGuardandoDireccion(true);
+        try {
+            const res = await axios.post(route('control_pedidos.actualizar_campos_direccion'), {
+                cliente_id: data.cliente_id,
+                cliente_direccion_id: data.cliente_direccion_id,
+                pedido_id: idPedidoAcciones || null,
+                motivo: 'Actualización de campos de dirección desde el formulario de pedido.',
+                ...camposDireccion,
+            });
+            const nueva = res.data?.direccion;
+            if (nueva) {
+                setDireccionesCliente((prev) => {
+                    const sinVieja = prev.filter((d) => String(d.id) !== String(data.cliente_direccion_id));
+                    return [nueva, ...sinVieja];
+                });
+                aplicarDireccionSeleccionada(nueva);
+            }
+            setAlertaEnvio({ abierto: true, mensaje: res.data?.message || 'Dirección actualizada.', tipo: 'success' });
+        } catch (err) {
+            const msg = err?.response?.data?.message || 'No se pudo actualizar la dirección.';
+            setAlertaEnvio({ abierto: true, mensaje: msg, tipo: 'error' });
+        } finally {
+            setGuardandoDireccion(false);
         }
     };
 
@@ -630,10 +831,6 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         peso_cobrado_guia_kg: '',
     });
 
-    const rellenarDireccionManual = () => {
-        cargarDireccionCliente(data.cliente_id || infoCliente?.id);
-    };
-
     const manejarPaqueteria = (id) => {
         setData('catalogo_paqueteria_id', id);
         const paq = (catalogos.paqueterias || []).find((p) => String(p.id) === String(id));
@@ -652,6 +849,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const manejarArchivos = (e) => agregarArchivos(e.target.files);
 
     const handlePaste = (e) => {
+        if (!cotizacionLista) return;
         const items = e.clipboardData?.items;
         if (!items) return;
         const pasted = [];
@@ -744,7 +942,12 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 ...d,
                 _method: 'put',
                 enviar: enviarPedido,
-                saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0,
+                saldo_a_favor: d.aplica_saldo_favor
+                    ? ((d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || d.saldo_a_favor || 0)
+                    : 0,
+                saf_aplicaciones: d.aplica_saldo_favor
+                    ? (d.saf_aplicaciones || []).filter((i) => Number(i.monto) > 0)
+                    : [],
                 comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
                     ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
                     : d.comentarios_drive,
@@ -754,7 +957,12 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             transform((d) => ({
                 ...d,
                 enviar: enviarPedido,
-                saldo_a_favor: d.aplica_saldo_favor ? d.saldo_a_favor : 0,
+                saldo_a_favor: d.aplica_saldo_favor
+                    ? ((d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || d.saldo_a_favor || 0)
+                    : 0,
+                saf_aplicaciones: d.aplica_saldo_favor
+                    ? (d.saf_aplicaciones || []).filter((i) => Number(i.monto) > 0)
+                    : [],
                 comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
                     ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
                     : d.comentarios_drive,
@@ -769,12 +977,13 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     };
 
     const optsPesaje = {
+        preserveState: true,
         preserveScroll: true,
         onStart: () => setProcesandoPesaje(true),
         onFinish: () => setProcesandoPesaje(false),
         onError: (errs) => {
             const msg = Object.values(errs || {})[0];
-            setAlertaEnvio({ abierto: true, mensaje: typeof msg === 'string' ? msg : 'No se pudo completar la acción de pesaje.' });
+            setAlertaEnvio({ abierto: true, mensaje: typeof msg === 'string' ? msg : 'No se pudo completar la acción de pesaje.', tipo: 'error' });
         },
     };
 
@@ -791,10 +1000,38 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             forceFormData: true,
             onSuccess: (page) => {
                 if (page?.props?.flash?.error) {
-                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
+                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error, tipo: 'error' });
                     return;
                 }
                 setPdfLocalOk(true);
+                setAlertaEnvio({
+                    abierto: true,
+                    mensaje: page?.props?.flash?.success || 'PDF o foto del pedido adjuntado.',
+                    tipo: 'success',
+                });
+            },
+        });
+    };
+
+    const subirAnexoPiezas = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !idPedidoAcciones) return;
+        const fd = new FormData();
+        fd.append('anexo_piezas', file);
+        router.post(route('control_pedidos.anexo_piezas.store', idPedidoAcciones), fd, {
+            ...optsPesaje,
+            forceFormData: true,
+            onSuccess: (page) => {
+                if (page?.props?.flash?.error) {
+                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error, tipo: 'error' });
+                    return;
+                }
+                setAlertaEnvio({
+                    abierto: true,
+                    mensaje: page?.props?.flash?.success || 'Anexo de piezas adicionales adjuntado.',
+                    tipo: 'success',
+                });
             },
         });
     };
@@ -803,29 +1040,32 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
         router.post(route('control_pedidos.solicitar_pesaje', id), {}, {
             ...optsPesaje,
             onSuccess: (page) => {
-                if (page?.props?.flash?.error) {
-                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
+                const err = page?.props?.flash?.error;
+                if (err) {
+                    setAlertaEnvio({ abierto: true, mensaje: err, tipo: 'error' });
                     return;
                 }
-                onClose();
+                setAlertaEnvio({
+                    abierto: true,
+                    mensaje: page?.props?.flash?.success || 'Consulta de pesaje enviada a CEDIS.',
+                    tipo: 'success',
+                });
             },
         });
     };
 
     const solicitarPesaje = async () => {
         setAlertaEnvio({ abierto: false, mensaje: '' });
+        if (!data.cliente_id) {
+            setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el cliente antes de solicitar el pesaje.' });
+            return;
+        }
         if (!tienePdfPedido) {
-            setAlertaEnvio({ abierto: true, mensaje: 'Adjunte el PDF del pedido antes de solicitar el pesaje.' });
+            setAlertaEnvio({ abierto: true, mensaje: 'Adjunte el PDF o una foto del pedido antes de solicitar el pesaje.' });
             return;
         }
         const id = await asegurarPedidoEnBd();
         if (!id) return;
-        // Los comprobantes seleccionados solo viven en el formulario: hay que guardarlos
-        // antes de pedir el pesaje, porque el servidor exige al menos uno.
-        if ((data.comprobantes || []).length > 0) {
-            guardar(false, { cerrar: false, alTerminar: postSolicitudPesaje });
-            return;
-        }
         postSolicitudPesaje(id);
     };
 
@@ -834,19 +1074,45 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el motivo del re-pesaje (cambio de pedido).' });
             return;
         }
+        if (motivoRepesaje === 'anexo_piezas' && !tieneAnexoPiezas) {
+            setAlertaEnvio({ abierto: true, mensaje: 'Adjunte el PDF o foto de las piezas adicionales antes de solicitar el re-pesaje.' });
+            return;
+        }
         router.post(route('control_pedidos.solicitar_repesaje', idPedidoAcciones), { motivo: motivoRepesaje }, {
             ...optsPesaje,
             onSuccess: (page) => {
-                if (page?.props?.flash?.error) {
-                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
+                const err = page?.props?.flash?.error;
+                if (err) {
+                    setAlertaEnvio({ abierto: true, mensaje: err, tipo: 'error' });
                     return;
                 }
-                onClose();
+                setAlertaEnvio({
+                    abierto: true,
+                    mensaje: page?.props?.flash?.success || 'Re-pesaje solicitado a CEDIS.',
+                    tipo: 'success',
+                });
             },
         });
     };
 
-    if (!abierto) return null;
+    const volverABorrador = () => {
+        if (!idPedidoAcciones) return;
+        router.post(route('control_pedidos.volver_borrador', idPedidoAcciones), {}, {
+            ...optsPesaje,
+            onSuccess: (page) => {
+                const err = page?.props?.flash?.error;
+                if (err) {
+                    setAlertaEnvio({ abierto: true, mensaje: err, tipo: 'error' });
+                    return;
+                }
+                setAlertaEnvio({
+                    abierto: true,
+                    mensaje: page?.props?.flash?.success || 'Pedido conservado como borrador.',
+                    tipo: 'success',
+                });
+            },
+        });
+    };
 
     const docsExistentes = (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' && !docsEliminar.includes(d.id));
     const camposIncorrectos = Array.isArray(pedido?.campos_incorrectos) ? pedido.campos_incorrectos : [];
@@ -854,23 +1120,19 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
     const wrapIncorrecto = (key) => (esCampoIncorrecto(key)
         ? 'rounded-xl ring-2 ring-orange-500/70 bg-orange-500/10 p-2'
         : '');
-    const etiquetasIncorrectas = {
-        domicilio: 'Domicilio',
-        destinatario: 'Destinatario',
-        telefono: 'Teléfono',
-        paqueteria: 'Paquetería',
-        tipo_guia: 'Tipo de guía',
-        referencia: 'Referencias',
-        codigo_postal: 'Código postal',
-        ciudad_estado: 'Ciudad / estado',
-        remision: 'Remisión PDF',
-        folio_remision: 'Folio de remisión',
-        numero_rastreo: 'Número de guía',
-        guia_pdf: 'PDF de guía',
+    const etiquetasIncorrectas = Object.fromEntries(
+        CAMPOS_ERROR_DATOS.map((c) => [c.id, c.label])
+    );
+
+    const cerrarOverlayBorrador = (e) => {
+        if (e.target !== e.currentTarget) return;
+        if (modalAnidadoAbierto) return;
+        if (Date.now() < ignoreOverlayCloseUntil.current) return;
+        onClose();
     };
 
-    const modal = createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+    const modal = abierto ? createPortal(
+        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={cerrarOverlayBorrador}>
             <div
                 className={`${THEME_MODAL_SHELL} max-w-4xl w-full flex flex-col text-left ${data.es_resguardo ? 'ring-2 ring-blue-500/50' : ''}`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)', ...(data.es_resguardo ? { backgroundColor: 'color-mix(in srgb, #3B82F6 6%, var(--color-surface))' } : {}) }}
@@ -925,9 +1187,9 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                         </div>
                     )}
 
-                    {/* 0. Origen y resguardo */}
+                    {/* 1. Origen y cliente */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>Origen del pedido</p>
+                        <p className={SECCION}>1. Origen y cliente</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className={SECCION}>Origen</label>
@@ -938,7 +1200,252 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                     ))}
                                 </select>
                             </div>
-                            <div className="flex items-end">
+                            <div className="relative">
+                                <label className={SECCION}>Número de cliente</label>
+                                <div className="theme-field-with-icon">
+                                    <Search className="theme-field-icon w-4 h-4" />
+                                    <input type="text" value={data.numero_cliente} disabled={logisticaBloqueada} onChange={(e) => manejarBusquedaCliente(e.target.value)} placeholder="Buscar cliente..." className={`${THEME_INPUT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`} />
+                                </div>
+                                {infoCliente && <p className="text-xs font-bold mt-2 theme-text-main">{infoCliente.nombre}</p>}
+                                {mostrarDropdown && (
+                                    <div className="absolute z-50 mt-1 w-full theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-2">
+                                        {buscandoCliente ? <p className="p-3 text-xs theme-text-muted font-bold">Buscando...</p> : listaClientes.map((c) => (
+                                            <button key={c.id} type="button" onClick={() => seleccionarCliente(c)} className="w-full text-left p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold uppercase theme-text-main">
+                                                {c.numero_cliente} — {c.nombre}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+
+                    {requiereLogistica && (
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>2. Pesaje CEDIS</p>
+                        {pedido?.estatus_envio && LABELS_ESTATUS_ENVIO[pedido.estatus_envio] && (
+                            <p className="text-xs font-bold theme-text-muted mb-3 m-0">
+                                Estado envío: {LABELS_ESTATUS_ENVIO[pedido.estatus_envio]}
+                            </p>
+                        )}
+                        {pendientePesaje && (
+                            <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale} className="mb-4">
+                                Consulta de pesaje enviada. Cuando CEDIS responda verá aquí el peso, medidas y cajas.
+                            </AvisoOperativoPedido>
+                        )}
+                        {tienePesajeRespondido && !pendientePesaje && (
+                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
+                                CEDIS registró el peso y las cajas. Complete la cotización (paquetería y costos); el comprobante de pago se solicita después. Si agrega piezas, suba un segundo PDF/foto y solicite re-pesaje.
+                            </AvisoOperativoPedido>
+                        )}
+                        {!tienePesajeRespondido && !pendientePesaje && (
+                            <AvisoOperativoPedido label="Paso requerido" tono="info" icon={Scale} className="mb-4">
+                                Adjunte el PDF o una foto del pedido y solicite el pesaje. No se requiere comprobante de pago en este paso.
+                            </AvisoOperativoPedido>
+                        )}
+                        <div className="space-y-4">
+                            <div>
+                                <label className={SECCION}>PDF o foto del pedido</label>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                                        <FileText className="w-4 h-4 theme-text-muted" />
+                                        <span className="text-xs font-black uppercase">
+                                            {tienePdfPedido ? 'Reemplazar archivo' : 'Adjuntar PDF o foto'}
+                                        </span>
+                                        <input type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirPdfPedido} disabled={procesandoPesaje} />
+                                    </label>
+                                    {tienePdfPedido && (
+                                        pdfPedidoDoc?.url
+                                            ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVistaPrevia(pdfPedidoDoc)}
+                                                    className="text-xs font-bold underline outline-none"
+                                                    style={{ color: 'var(--color-primario)' }}
+                                                >
+                                                    {labelSoportePedido(pdfPedidoDoc)}
+                                                </button>
+                                            )
+                                            : <span className="text-xs font-bold text-emerald-600">Archivo adjuntado</span>
+                                    )}
+                                </div>
+                            </div>
+                            {!tienePesajeRespondido && !pendientePesaje && (
+                                <button
+                                    type="button"
+                                    onClick={solicitarPesaje}
+                                    disabled={procesandoPesaje || processing || !data.cliente_id}
+                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
+                                >
+                                    <Scale className="w-4 h-4" /> Solicitar pesaje a CEDIS
+                                </button>
+                            )}
+                            {!data.cliente_id && !tienePesajeRespondido && !pendientePesaje && (
+                                <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione el cliente para poder solicitar el pesaje.</p>
+                            )}
+                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && (
+                                <div className="space-y-3 p-3 rounded-xl border theme-border">
+                                    <div>
+                                        <label className={SECCION}>Piezas adicionales (PDF o foto)</label>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                                                <ImagePlus className="w-4 h-4 theme-text-muted" />
+                                                <span className="text-xs font-black uppercase">
+                                                    {tieneAnexoPiezas ? 'Reemplazar anexo' : 'Adjuntar anexo'}
+                                                </span>
+                                                <input type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirAnexoPiezas} disabled={procesandoPesaje} />
+                                            </label>
+                                            {anexoPiezasDoc?.url && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVistaPrevia(anexoPiezasDoc)}
+                                                    className="text-xs font-bold underline outline-none"
+                                                    style={{ color: 'var(--color-primario)' }}
+                                                >
+                                                    {labelSoportePedido(anexoPiezasDoc)}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-end gap-3">
+                                        <div className="min-w-[200px] flex-1">
+                                            <label className={SECCION}>Re-pesaje (cambio de pedido)</label>
+                                            <select value={motivoRepesaje} onChange={(e) => setMotivoRepesaje(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                                <option value="">Motivo…</option>
+                                                {Object.entries(LABELS_MOTIVO_REPESAJE).map(([k, label]) => (
+                                                    <option key={k} value={k}>{label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <button type="button" onClick={solicitarRepesaje} disabled={procesandoPesaje || !motivoRepesaje} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
+                                            <Scale className="w-4 h-4" /> Solicitar re-pesaje
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            {puedeVolverBorrador && (
+                                <div className="mt-2 p-4 rounded-xl border-2 border-orange-500/50 bg-orange-500/10 space-y-4">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 m-0">
+                                        Indicador · Pedido en pesaje
+                                    </p>
+                                    <p className="text-sm font-bold theme-text-main m-0 leading-snug pb-1">
+                                        Conserve el pedido como borrador para poder completarlo después (datos, pago y envío).
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={volverABorrador}
+                                        disabled={procesandoPesaje || processing}
+                                        className={`${BTN_PRIMARY} w-full sm:w-auto flex items-center justify-center gap-2 outline-none min-h-[48px] px-6 mt-1 text-sm font-black uppercase tracking-widest ring-2 ring-orange-400/60`}
+                                        style={{ backgroundColor: '#EA580C' }}
+                                    >
+                                        <RotateCcw className="w-5 h-5" /> Conservar como borrador
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {tienePesajeRespondido && (
+                            <div className="mt-6 pt-6 border-t theme-border space-y-4">
+                                <p className={SECCION}>Peso, medidas y envíos (CEDIS)</p>
+                                {cajasPesaje.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {[...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                            <div key={c.id || idx} className="p-4 rounded-xl border theme-border theme-element space-y-2">
+                                                <p className="text-sm font-black theme-text-main m-0">Envío {idx + 1}</p>
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                                                    <p className="m-0 theme-text-muted font-bold">Tipo: <span className="theme-text-main">{c.tipo_caja?.nombre || '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Largo: <span className="theme-text-main">{c.largo != null ? `${c.largo} cm` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Ancho: <span className="theme-text-main">{c.ancho != null ? `${c.ancho} cm` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Alto: <span className="theme-text-main">{c.alto != null ? `${c.alto} cm` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Real: <span className="theme-text-main">{c.peso_real_kg != null ? `${c.peso_real_kg} kg` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Vol.: <span className="theme-text-main">{c.peso_volumetrico_kg != null ? `${c.peso_volumetrico_kg} kg` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{c.peso_cobrado_kg != null ? `${c.peso_cobrado_kg} kg` : '—'}</span></p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : null}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={SECCION}>Núm. envíos</label>
+                                        <input type="text" readOnly value={data.numero_cajas ?? cajasPesaje.length ?? '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
+                                    </div>
+                                    <div>
+                                        <label className={SECCION}>Peso real total (kg)</label>
+                                        <input type="text" readOnly value={data.peso_real_kg !== '' && data.peso_real_kg != null ? data.peso_real_kg : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
+                                    </div>
+                                    <div>
+                                        <label className={SECCION}>Peso volumétrico total (kg)</label>
+                                        <input type="text" readOnly value={pesoVolumetrico !== '' && pesoVolumetrico != null ? pesoVolumetrico : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
+                                    </div>
+                                    <div>
+                                        <label className={SECCION}>Peso cobrado guía total (kg)</label>
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={data.peso_cobrado_guia_kg !== '' && data.peso_cobrado_guia_kg != null ? data.peso_cobrado_guia_kg : '—'}
+                                            className={`${THEME_INPUT} w-full py-3 opacity-60`}
+                                            title="Suma del mayor entre peso real y volumétrico de cada envío"
+                                        />
+                                        <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
+                                            Suma por envío del mayor entre real y volumétrico.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </section>
+                    )}
+
+                    {/* 3. Datos generales */}
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{requiereLogistica ? '3. Datos generales' : '2. Datos generales'}</p>
+                        {leyendaContinuarBorrador}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className={SECCION}>Folio de Pedido *</label>
+                                <input
+                                    type="text"
+                                    value={data.folio_remision}
+                                    onChange={(e) => setData('folio_remision', e.target.value)}
+                                    placeholder="Número de folio del pedido..."
+                                    className={`${THEME_INPUT} w-full py-3`}
+                                />
+                            </div>
+                            <div>
+                                <label className={SECCION}>Folio interno</label>
+                                <input type="text" readOnly value={pedido?.folio || 'Se asignará al guardar'} className={`${THEME_INPUT} w-full py-3 text-[11px] opacity-50`} />
+                            </div>
+                            <div>
+                                <label className={SECCION}>Status</label>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={etiquetaEstatusPedido(pedido?.estatus, { esResguardo: pedido?.es_resguardo }) || 'Borrador'}
+                                    className={`${THEME_INPUT} w-full py-3 opacity-60`}
+                                />
+                            </div>
+                            <div>
+                                <label className={SECCION}>Fecha</label>
+                                <input type="date" value={data.fecha} onChange={(e) => setData('fecha', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                            </div>
+                            <div>
+                                <label className={SECCION}>Banco</label>
+                                <select value={data.catalogo_banco_id} onChange={(e) => setData('catalogo_banco_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                    <option value="">Banco de recepción...</option>
+                                    {(catalogos.bancos || []).map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className={SECCION}>Almacén de salida</label>
+                                <select value={data.almacen_id} disabled={logisticaBloqueada} onChange={(e) => setData('almacen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
+                                    <option value="">Seleccionar...</option>
+                                    {(catalogos.almacenes || []).map((a) => (
+                                        <option key={a.id} value={a.id}>{etiquetaAlmacen(a)}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex items-end md:col-span-2">
                                 <label className="flex items-center gap-3 theme-text-main p-3 rounded-xl border theme-border w-full cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -1110,416 +1617,211 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                         </div>
                     </section>
 
-                    {/* 1. Datos generales y cliente */}
-                    <section className={SECCION_WRAP}>
-                        <p className={SECCION}>1. Datos generales y cliente</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="md:col-span-2 relative">
-                                <div className="theme-field-with-icon">
-                                    <Search className="theme-field-icon w-4 h-4" />
-                                    <input type="text" value={data.numero_cliente} disabled={logisticaBloqueada} onChange={(e) => manejarBusquedaCliente(e.target.value)} placeholder="Buscar cliente..." className={`${THEME_INPUT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`} />
-                                </div>
-                                {infoCliente && <p className="text-xs font-bold mt-2 theme-text-main">{infoCliente.nombre}</p>}
-                                {mostrarDropdown && (
-                                    <div className="absolute z-50 mt-1 w-full theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-2">
-                                        {buscandoCliente ? <p className="p-3 text-xs theme-text-muted font-bold">Buscando...</p> : listaClientes.map((c) => (
-                                            <button key={c.id} type="button" onClick={() => seleccionarCliente(c)} className="w-full text-left p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold uppercase theme-text-main">
-                                                {c.numero_cliente} — {c.nombre}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            <div>
-                                <label className={SECCION}>Folio de Pedido *</label>
-                                <input
-                                    type="text"
-                                    value={data.folio_remision}
-                                    onChange={(e) => setData('folio_remision', e.target.value)}
-                                    placeholder="Número de folio del pedido..."
-                                    className={`${THEME_INPUT} w-full py-3`}
-                                />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Folio interno</label>
-                                <input type="text" readOnly value={pedido?.folio || 'Se asignará al guardar'} className={`${THEME_INPUT} w-full py-3 text-[11px] opacity-50`} />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Status</label>
-                                <input
-                                    type="text"
-                                    readOnly
-                                    value={etiquetaEstatusPedido(pedido?.estatus, { esResguardo: pedido?.es_resguardo }) || 'Borrador'}
-                                    className={`${THEME_INPUT} w-full py-3 opacity-60`}
-                                />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Fecha</label>
-                                <input type="date" value={data.fecha} onChange={(e) => setData('fecha', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Banco</label>
-                                <select value={data.catalogo_banco_id} onChange={(e) => setData('catalogo_banco_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
-                                    <option value="">Banco de recepción...</option>
-                                    {(catalogos.bancos || []).map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className={SECCION}>Almacén de salida</label>
-                                <select value={data.almacen_id} disabled={logisticaBloqueada} onChange={(e) => setData('almacen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
-                                    <option value="">Seleccionar...</option>
-                                    {(catalogos.almacenes || []).map((a) => (
-                                        <option key={a.id} value={a.id}>{etiquetaAlmacen(a)}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    </section>
-
                     {requiereLogistica && (
                     <>
-                    {/* Pesaje CEDIS */}
-                    <section className={SECCION_WRAP}>
-                        <p className={SECCION}>2. Pesaje CEDIS</p>
-                        {pedido?.estatus_envio && LABELS_ESTATUS_ENVIO[pedido.estatus_envio] && (
-                            <p className="text-xs font-bold theme-text-muted mb-3 m-0">
-                                Estado envío: {LABELS_ESTATUS_ENVIO[pedido.estatus_envio]}
-                            </p>
-                        )}
-                        {pendientePesaje && (
-                            <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale} className="mb-4">
-                                Consulta de pesaje enviada. Cuando CEDIS responda podrá cotizar el envío.
-                            </AvisoOperativoPedido>
-                        )}
-                        {tienePesajeRespondido && !pendientePesaje && (
-                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
-                                CEDIS registró el peso y las cajas. Complete dirección y costo de envío.
-                            </AvisoOperativoPedido>
-                        )}
-                        {!tienePesajeRespondido && !pendientePesaje && (
-                            <AvisoOperativoPedido label="Paso requerido" tono="info" icon={Scale} className="mb-4">
-                                Adjunte el PDF del pedido y solicite el pesaje a CEDIS antes de cotizar el envío.
-                            </AvisoOperativoPedido>
-                        )}
-                        <div className="space-y-4">
-                            <div>
-                                <label className={SECCION}>PDF del pedido</label>
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
-                                        <FileText className="w-4 h-4 theme-text-muted" />
-                                        <span className="text-xs font-black uppercase">
-                                            {tienePdfPedido ? 'Reemplazar PDF' : 'Adjuntar PDF'}
-                                        </span>
-                                        <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={subirPdfPedido} disabled={procesandoPesaje} />
-                                    </label>
-                                    {tienePdfPedido && (
-                                        pdfPedidoDoc?.url
-                                            ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setVistaPrevia(pdfPedidoDoc)}
-                                                    className="text-xs font-bold underline outline-none"
-                                                    style={{ color: 'var(--color-primario)' }}
-                                                >
-                                                    Ver PDF
-                                                </button>
-                                            )
-                                            : <span className="text-xs font-bold text-emerald-600">PDF adjuntado</span>
-                                    )}
-                                </div>
-                            </div>
-                            {!tienePesajeRespondido && !pendientePesaje && (
-                                <button
-                                    type="button"
-                                    onClick={solicitarPesaje}
-                                    disabled={procesandoPesaje || processing}
-                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
-                                >
-                                    <Scale className="w-4 h-4" /> Solicitar pesaje a CEDIS
-                                </button>
-                            )}
-                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && (
-                                <div className="flex flex-wrap items-end gap-3 p-3 rounded-xl border theme-border">
-                                    <div className="min-w-[200px] flex-1">
-                                        <label className={SECCION}>Re-pesaje (cambio de pedido)</label>
-                                        <select value={motivoRepesaje} onChange={(e) => setMotivoRepesaje(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
-                                            <option value="">Motivo…</option>
-                                            {Object.entries(LABELS_MOTIVO_REPESAJE).map(([k, label]) => (
-                                                <option key={k} value={k}>{label}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <button type="button" onClick={solicitarRepesaje} disabled={procesandoPesaje || !motivoRepesaje} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
-                                        <Scale className="w-4 h-4" /> Solicitar re-pesaje
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </section>
-
-                    {/* 3. Peso y cajas */}
-                    <section className={SECCION_WRAP}>
-                        <p className={SECCION}>3. Peso y cajas {tienePesajeRespondido ? '(CEDIS)' : ''}</p>
-                        {cajasPesaje.length > 0 && (
-                            <div className="mb-4 space-y-1">
-                                {cajasPesaje.map((c) => (
-                                    <p key={c.id} className="text-sm font-bold theme-text-main m-0">
-                                        {c.tipo_caja?.nombre || 'Caja'}: {c.cantidad}
-                                    </p>
-                                ))}
-                            </div>
-                        )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className={SECCION}>Tipo de caja</label>
-                                <select value={data.catalogo_tipo_caja_id} disabled={logisticaBloqueada || pesoCajasSoloLectura || !tienePesajeRespondido} onChange={(e) => setData('catalogo_tipo_caja_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada || pesoCajasSoloLectura || !tienePesajeRespondido ? 'opacity-50' : ''}`}>
-                                    <option value="">{tienePesajeRespondido ? 'Seleccionar...' : 'Tras pesaje CEDIS...'}</option>
-                                    {(catalogos.tipos_caja || []).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className={SECCION}>Peso real (kg){tienePesajeRespondido ? ' (CEDIS)' : ''}{camposEnvioBloqueados && !tienePesajeRespondido ? ' (bloqueado)' : ''}</label>
-                                <input type="number" step="0.0001" min="0" placeholder={tienePesajeRespondido ? '0.0000' : '—'} value={camposEnvioBloqueados && !tienePesajeRespondido ? '' : data.peso_real_kg} disabled={pesoCajasSoloLectura || !tienePesajeRespondido} onChange={(e) => setData('peso_real_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3 ${pesoCajasSoloLectura || !tienePesajeRespondido ? 'opacity-50' : ''}`} />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Peso volumétrico (kg)</label>
-                                <input type="text" readOnly value={pesoVolumetrico !== '' ? pesoVolumetrico : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Largo (cm)</label>
-                                <input type="text" readOnly value={dimsCaja.largo != null ? dimsCaja.largo : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Ancho (cm)</label>
-                                <input type="text" readOnly value={dimsCaja.ancho != null ? dimsCaja.ancho : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Alto (cm)</label>
-                                <input type="text" readOnly value={dimsCaja.alto != null ? dimsCaja.alto : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
-                            </div>
-                            <div className={wrapIncorrecto('tipo_guia')}>
-                                <label className={SECCION}>Tipo de guía</label>
-                                <select value={data.catalogo_tipo_guia_id} disabled={logisticaBloqueada || !cotizacionHabilitada} onChange={(e) => setData('catalogo_tipo_guia_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada || !cotizacionHabilitada ? 'opacity-50' : ''}`}>
-                                    <option value="">Seleccionar...</option>
-                                    {(catalogos.tipos_guia || []).map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className={SECCION}>Número de cajas{tienePesajeRespondido ? ' (CEDIS)' : ''}{camposEnvioBloqueados && !tienePesajeRespondido ? ' (bloqueado)' : ''}</label>
-                                <select value={(!tienePesajeRespondido && camposEnvioBloqueados) || data.numero_cajas === '' || data.numero_cajas == null ? '' : String(data.numero_cajas)} disabled={pesoCajasSoloLectura || !tienePesajeRespondido} onChange={(e) => setData('numero_cajas', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${pesoCajasSoloLectura || !tienePesajeRespondido ? 'opacity-50' : ''}`}>
-                                    <option value="">{tienePesajeRespondido ? 'Seleccionar...' : 'Tras pesaje…'}</option>
-                                    <option value="0">N/A</option>
-                                    {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-                                        <option key={n} value={String(n)}>{n}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className={SECCION}>Peso cobrado guía (kg)</label>
-                                <input
-                                    type="text"
-                                    readOnly
-                                    value={!tienePesajeRespondido ? '—' : (data.peso_cobrado_guia_kg !== '' && data.peso_cobrado_guia_kg != null ? data.peso_cobrado_guia_kg : '—')}
-                                    className={`${THEME_INPUT} w-full py-3 opacity-60`}
-                                    title="Mayor entre peso real y peso volumétrico"
-                                />
-                                <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                                    Automático: el mayor entre peso real y volumétrico.
-                                </p>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* 4. Dirección de envío */}
+                    {/* Dirección de envío */}
                     <section className={SECCION_WRAP}>
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                            <p className={`${THEME_LABEL} m-0`}>4. Dirección y cotización de envío</p>
-                            {!direccionesNormalizadas && (
+                            <p className={`${THEME_LABEL} m-0`}>4. Dirección de envío{guiaCliente ? ' (opcional)' : ''}</p>
+                            {can('clientes.direcciones.generar_enlace') && infoCliente?.id && (
                                 <button
                                     type="button"
-                                    onClick={rellenarDireccionManual}
-                                    disabled={cargandoDireccion || !(data.cliente_id || infoCliente?.id)}
-                                    className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none disabled:opacity-50 shrink-0`}
-                                    title={!(data.cliente_id || infoCliente?.id) ? 'Seleccione un cliente primero' : 'Rellenar con la dirección del cliente'}
+                                    className={`${BTN_SECONDARY} inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest py-2 px-3`}
+                                    onClick={() => setModalLinkDireccion(true)}
                                 >
-                                    <MapPin className="w-4 h-4" />
-                                    {cargandoDireccion ? 'Cargando...' : 'Rellenar dirección'}
+                                    <Link2 className="w-3.5 h-3.5" />
+                                    Link de dirección
                                 </button>
                             )}
                         </div>
-                        {alertaDireccion && !direccionesNormalizadas && (
+                        {leyendaContinuarBorrador}
+                        {(msgDireccion || sinDireccionPrincipal) && (
                             <div className="mb-4 p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex items-start gap-3">
                                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                                <p className="text-xs font-bold theme-text-main m-0">Se cargó la dirección del cliente. Verifique que los datos sean correctos; puede editarlos manualmente.</p>
-                            </div>
-                        )}
-                        {msgDireccion && !alertaDireccion && (
-                            <div className="mb-4 p-4 rounded-xl border theme-border theme-element flex items-start gap-3">
-                                <AlertTriangle className="w-5 h-5 theme-text-muted shrink-0 mt-0.5" />
-                                <p className="text-xs font-bold theme-text-main m-0">{msgDireccion}</p>
-                            </div>
-                        )}
-                        <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${!cotizacionHabilitada ? 'opacity-60 pointer-events-none' : ''} ${(esCampoIncorrecto('domicilio') || esCampoIncorrecto('ciudad_estado') || esCampoIncorrecto('referencia') || esCampoIncorrecto('destinatario') || esCampoIncorrecto('telefono')) ? 'rounded-xl ring-2 ring-orange-500/40 bg-orange-500/5 p-3' : ''}`}>
-                            <div className={wrapIncorrecto('codigo_postal')}>
-                                <label className={SECCION}>C.P.</label>
-                                <input type="text" placeholder="Código postal" value={data.codigo_postal} disabled={!cotizacionHabilitada} onChange={(e) => setData('codigo_postal', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
-                            </div>
-                            {direccionesNormalizadas && puedeSeleccionar ? (
-                                <div className="md:col-span-2 space-y-3">
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <label className={`${SECCION} m-0`}>Seleccionar dirección de envío</label>
-                                        {can('clientes.direcciones.generar_enlace') && infoCliente?.id && (
-                                            <button
-                                                type="button"
-                                                className={`${BTN_SECONDARY} inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest py-2 px-3`}
-                                                onClick={() => setModalLinkDireccion(true)}
-                                            >
-                                                <Link2 className="w-3.5 h-3.5" />
-                                                Link de dirección
-                                            </button>
-                                        )}
-                                    </div>
-                                    {direccionesCliente.length > 0 && !mostrarExcepcion ? (
-                                        <>
-                                            <select
-                                                value={data.cliente_direccion_id}
-                                                disabled={logisticaBloqueada}
-                                                onChange={(e) => {
-                                                    const id = e.target.value;
-                                                    setData('cliente_direccion_id', id);
-                                                    setData('direccion_manual_excepcion', false);
-                                                    const sel = direccionesCliente.find((d) => String(d.id) === String(id));
-                                                    if (sel) {
-                                                        setData('domicilio_entrega', sel.direccion_resumida || '');
-                                                        setData('codigo_postal', sel.codigo_postal || '');
-                                                        if (sel.anexa_remision) {
-                                                            setData('anexar_remision', true);
-                                                        }
-                                                    }
-                                                }}
-                                                className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
-                                            >
-                                                <option value="">Seleccionar dirección de envío…</option>
-                                                {direccionesCliente.map((d) => (
-                                                    <option key={d.id} value={d.id}>
-                                                        {labelOpcionDireccion(data.numero_cliente || infoCliente?.numero_cliente, d)}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            {direccionesCliente.find((d) => String(d.id) === String(data.cliente_direccion_id)) && (
-                                                <DireccionPedidoResumen
-                                                    direccion={direccionesCliente.find((d) => String(d.id) === String(data.cliente_direccion_id))}
-                                                    codigoDireccion={codigoDireccionCliente(
-                                                        data.numero_cliente || infoCliente?.numero_cliente,
-                                                        direccionesCliente.find((d) => String(d.id) === String(data.cliente_direccion_id))?.numero_direccion,
-                                                    )}
-                                                />
-                                            )}
-                                        </>
-                                    ) : null}
-
-                                    {(direccionesCliente.length === 0 || mostrarExcepcion) && (
-                                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
-                                            <p className="text-xs font-bold theme-text-main m-0">
-                                                {direccionesCliente.length === 0
-                                                    ? 'Este cliente no tiene direcciones verificadas.'
-                                                    : 'Captura de excepción manual autorizada.'}
-                                            </p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {can('clientes.direcciones.generar_enlace') && infoCliente?.id && (
-                                                    <button
-                                                        type="button"
-                                                        className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs`}
-                                                        onClick={() => setModalLinkDireccion(true)}
-                                                    >
-                                                        <Link2 className="w-3.5 h-3.5" />
-                                                        Generar link de dirección
-                                                    </button>
-                                                )}
-                                                {puedeManual && !mostrarExcepcion && (
-                                                    <button
-                                                        type="button"
-                                                        className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs`}
-                                                        onClick={() => {
-                                                            setMostrarExcepcion(true);
-                                                            setData('direccion_manual_excepcion', true);
-                                                            setData('cliente_direccion_id', '');
-                                                        }}
-                                                    >
-                                                        <PenLine className="w-3.5 h-3.5" />
-                                                        Usar dirección manual
-                                                    </button>
-                                                )}
-                                            </div>
-                                            {(mostrarExcepcion || (puedeManual && direccionesCliente.length === 0)) && (
-                                                <div className="space-y-2">
-                                                    <textarea
-                                                        placeholder="Domicilio completo (excepción manual)…"
-                                                        value={data.domicilio_entrega}
-                                                        onChange={(e) => {
-                                                            setData('domicilio_entrega', e.target.value);
-                                                            setData('direccion_manual_excepcion', true);
-                                                            setData('cliente_direccion_id', '');
-                                                        }}
-                                                        className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`}
-                                                    />
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Motivo de la excepción (requerido al enviar)"
-                                                        value={data.motivo_direccion_manual}
-                                                        onChange={(e) => setData('motivo_direccion_manual', e.target.value)}
-                                                        className={`${THEME_INPUT} w-full py-3`}
-                                                    />
-                                                    {direccionesCliente.length > 0 && (
-                                                        <button
-                                                            type="button"
-                                                            className="text-xs underline theme-text-muted"
-                                                            onClick={() => {
-                                                                setMostrarExcepcion(false);
-                                                                setData('direccion_manual_excepcion', false);
-                                                            }}
-                                                        >
-                                                            Volver al selector
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                    {direccionesCliente.length > 0 && !mostrarExcepcion && puedeManual && (
+                                <div className="min-w-0 space-y-2">
+                                    <p className="text-xs font-bold theme-text-main m-0">
+                                        {msgDireccion || 'Este cliente no tiene una dirección principal registrada. Debe registrar los datos de dirección.'}
+                                    </p>
+                                    {can('clientes.direcciones.generar_enlace') && infoCliente?.id && (
                                         <button
                                             type="button"
-                                            className="text-xs underline theme-text-muted"
-                                            onClick={() => {
-                                                setMostrarExcepcion(true);
-                                                setData('direccion_manual_excepcion', true);
-                                                setData('cliente_direccion_id', '');
-                                            }}
+                                            className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs`}
+                                            onClick={() => setModalLinkDireccion(true)}
                                         >
-                                            Usar excepción manual en su lugar
+                                            <Link2 className="w-3.5 h-3.5" />
+                                            Generar link para registrar dirección
                                         </button>
                                     )}
                                 </div>
-                            ) : (
-                                <div className="md:col-span-2">
-                                    <label className={SECCION}>Domicilio de entrega</label>
-                                    <textarea placeholder="Calle, colonia, municipio, estado..." value={data.domicilio_entrega} onChange={(e) => setData('domicilio_entrega', e.target.value)} className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`} />
+                            </div>
+                        )}
+                        <div className={`space-y-4 ${!cotizacionHabilitada ? 'opacity-60 pointer-events-none' : ''} ${(esCampoIncorrecto('domicilio') || esCampoIncorrecto('ciudad_estado') || esCampoIncorrecto('referencia') || esCampoIncorrecto('destinatario') || esCampoIncorrecto('telefono')) ? 'rounded-xl ring-2 ring-orange-500/40 bg-orange-500/5 p-3' : ''}`}>
+                            {puedeSeleccionar && !mostrarExcepcion && (
+                                <div className="space-y-3">
+                                    <label className={`${SECCION} m-0`}>Seleccionar dirección del catálogo</label>
+                                    <select
+                                        value={data.cliente_direccion_id}
+                                        disabled={logisticaBloqueada || cargandoDireccion}
+                                        onChange={(e) => {
+                                            const id = e.target.value;
+                                            const sel = direccionesCliente.find((d) => String(d.id) === String(id));
+                                            aplicarDireccionSeleccionada(sel || null);
+                                        }}
+                                        className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
+                                    >
+                                        <option value="">{cargandoDireccion ? 'Cargando…' : 'Seleccionar dirección de envío…'}</option>
+                                        {direccionesCliente.map((d) => (
+                                            <option key={d.id} value={d.id}>
+                                                {labelOpcionDireccion(data.numero_cliente || infoCliente?.numero_cliente, d)}
+                                                {d.es_principal ? ' · Principal' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {data.cliente_direccion_id && (
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                                {codigoDireccionCliente(
+                                                    data.numero_cliente || infoCliente?.numero_cliente,
+                                                    direccionesCliente.find((d) => String(d.id) === String(data.cliente_direccion_id))?.numero_direccion,
+                                                )}
+                                                {direccionSucia ? ' · cambios sin guardar' : ''}
+                                            </p>
+                                            <CamposDireccionPedido
+                                                valores={camposDireccion}
+                                                onChange={onCambiarCamposDireccion}
+                                                disabled={logisticaBloqueada}
+                                                sucio={direccionSucia}
+                                                guardando={guardandoDireccion}
+                                                puedeEditar={can('clientes.direcciones.editar')}
+                                                onGuardar={() => setConfirmarActualizarDir(true)}
+                                                onDescartar={descartarCambiosDireccion}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
+                            )}
+
+                            {(direccionesCliente.length === 0 || mostrarExcepcion) && (
+                                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                                    <p className="text-xs font-bold theme-text-main m-0">
+                                        {mostrarExcepcion
+                                            ? 'Captura de excepción manual autorizada.'
+                                            : 'Sin direcciones verificadas en el catálogo. Registre una dirección o use excepción autorizada.'}
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {can('clientes.direcciones.generar_enlace') && infoCliente?.id && (
+                                            <button
+                                                type="button"
+                                                className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs`}
+                                                onClick={() => setModalLinkDireccion(true)}
+                                            >
+                                                <Link2 className="w-3.5 h-3.5" />
+                                                Generar link de dirección
+                                            </button>
+                                        )}
+                                        {puedeManual && !mostrarExcepcion && (
+                                            <button
+                                                type="button"
+                                                className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs`}
+                                                onClick={() => {
+                                                    setMostrarExcepcion(true);
+                                                    setData('direccion_manual_excepcion', true);
+                                                    setData('cliente_direccion_id', '');
+                                                    setCamposDireccion({ ...CAMPOS_DIRECCION_VACIOS });
+                                                }}
+                                            >
+                                                <PenLine className="w-3.5 h-3.5" />
+                                                Usar dirección manual
+                                            </button>
+                                        )}
+                                    </div>
+                                    {(mostrarExcepcion || (puedeManual && direccionesCliente.length === 0)) && (
+                                        <div className="space-y-2">
+                                            <textarea
+                                                placeholder="Domicilio completo (excepción manual)…"
+                                                value={data.domicilio_entrega}
+                                                onChange={(e) => {
+                                                    setData('domicilio_entrega', e.target.value);
+                                                    setData('direccion_manual_excepcion', true);
+                                                    setData('cliente_direccion_id', '');
+                                                }}
+                                                className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`}
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="C.P."
+                                                value={data.codigo_postal}
+                                                onChange={(e) => setData('codigo_postal', e.target.value)}
+                                                className={`${THEME_INPUT} w-full py-3`}
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Motivo de la excepción (requerido al enviar)"
+                                                value={data.motivo_direccion_manual}
+                                                onChange={(e) => setData('motivo_direccion_manual', e.target.value)}
+                                                className={`${THEME_INPUT} w-full py-3`}
+                                            />
+                                            {direccionesCliente.length > 0 && (
+                                                <button
+                                                    type="button"
+                                                    className="text-xs underline theme-text-muted"
+                                                    onClick={() => {
+                                                        setMostrarExcepcion(false);
+                                                        setData('direccion_manual_excepcion', false);
+                                                    }}
+                                                >
+                                                    Volver al selector
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {direccionesCliente.length > 0 && !mostrarExcepcion && puedeManual && (
+                                <button
+                                    type="button"
+                                    className="text-xs underline theme-text-muted"
+                                    onClick={() => {
+                                        setMostrarExcepcion(true);
+                                        setData('direccion_manual_excepcion', true);
+                                        setData('cliente_direccion_id', '');
+                                        setCamposDireccion({ ...CAMPOS_DIRECCION_VACIOS });
+                                    }}
+                                >
+                                    Usar excepción manual en su lugar
+                                </button>
                             )}
                         </div>
                     </section>
 
-                    {/* 4. Envío y costos (logística) */}
+                    {/* 5. Envío y costos (logística) */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>4. Envío y costos</p>
+                        <p className={SECCION}>5. Envío y costos</p>
+                        {leyendaContinuarBorrador}
                         <div className="space-y-4">
+                            <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? 'opacity-50' : 'cursor-pointer'} p-4 rounded-xl border theme-border theme-element`}>
+                                <input
+                                    type="checkbox"
+                                    checked={guiaCliente}
+                                    disabled={logisticaBloqueada}
+                                    onChange={(e) => marcarGuiaCliente(e.target.checked)}
+                                />
+                                <span className="text-sm font-bold">El cliente utilizará su propia guía.</span>
+                            </label>
+                            {guiaCliente && (
+                                <div className="flex items-start gap-2 p-3 rounded-xl border border-sky-500/40 bg-sky-500/10">
+                                    <p className="text-xs font-bold text-sky-700 dark:text-sky-400 m-0">
+                                        No se cobra envío ni seguro de la empresa. Tras el empaque, usted cargará la guía del cliente.
+                                    </p>
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className={SECCION}>Total mercancía</label>
                                     <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
                                 </div>
                                 <div>
-                                    <label className={SECCION}>Paquetería</label>
+                                    <label className={SECCION}>Paquetería{guiaCliente ? ' (opcional)' : ''}</label>
                                     <div className={wrapIncorrecto('paqueteria')}>
                                     <select value={data.catalogo_paqueteria_id} disabled={logisticaBloqueada} onChange={(e) => manejarPaqueteria(e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                         <option value="">Seleccionar...</option>
@@ -1542,7 +1844,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                     </select>
                                     </div>
                                 </div>
-                                {!tieneCoberturaSeguro && data.catalogo_paqueteria_id && (
+                                {!guiaCliente && !tieneCoberturaSeguro && data.catalogo_paqueteria_id && (
                                     <div id="seg-warn" className="md:col-span-2 flex items-start gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
                                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                         <p className="text-xs font-bold text-amber-700 dark:text-amber-400 m-0">
@@ -1550,10 +1852,22 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                         </p>
                                     </div>
                                 )}
+                                {!guiaCliente && (
                                 <div>
-                                    <label className={SECCION}>Costo de envío{esMunicipioDiferido ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
+                                    <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
                                     <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} className={`w-full py-3 ${camposEnvioBloqueados ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
                                 </div>
+                                )}
+                                {!guiaCliente && (
+                                <div className={wrapIncorrecto('tipo_guia')}>
+                                    <label className={SECCION}>Tipo de guía</label>
+                                    <select value={data.catalogo_tipo_guia_id} disabled={logisticaBloqueada || !cotizacionHabilitada} onChange={(e) => setData('catalogo_tipo_guia_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada || !cotizacionHabilitada ? 'opacity-50' : ''}`}>
+                                        <option value="">{cotizacionHabilitada ? 'Seleccionar...' : 'Tras pesaje CEDIS...'}</option>
+                                        {(catalogos.tipos_guia || []).map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                                    </select>
+                                </div>
+                                )}
+                                {!guiaCliente && (
                                 <div>
                                     <label className={SECCION}>Reexpedición</label>
                                     <select value={data.catalogo_zona_id} disabled={logisticaBloqueada} onChange={(e) => setData('catalogo_zona_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
@@ -1561,21 +1875,43 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                         {(catalogos.zonas || []).map((z) => <option key={z.id} value={z.id}>{z.nombre}</option>)}
                                     </select>
                                 </div>
+                                )}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-xl border theme-border theme-element">
                                 <label className="flex items-center gap-2 theme-text-main cursor-pointer">
-                                    <input type="checkbox" checked={data.aplica_saldo_favor} onChange={(e) => setData('aplica_saldo_favor', e.target.checked)} />
+                                    <input
+                                        type="checkbox"
+                                        checked={data.aplica_saldo_favor}
+                                        onChange={(e) => {
+                                            const on = e.target.checked;
+                                            setData('aplica_saldo_favor', on);
+                                            if (!on) {
+                                                setData('saf_aplicaciones', []);
+                                                setData('saldo_a_favor', '');
+                                            } else if (safCuenta?.creditos_usables?.length && (!data.saf_aplicaciones || data.saf_aplicaciones.length === 0)) {
+                                                // sugerencia FIFO se carga al activar si hay cuenta
+                                            }
+                                        }}
+                                    />
                                     <span className="text-sm font-bold">Saldo a favor</span>
+                                    {safCuenta && (
+                                        <span className="text-xs text-emerald-600 font-semibold">
+                                            Disp. {formatearMoneda(safCuenta.disponible)}
+                                        </span>
+                                    )}
+                                    {cargandoSaf && <span className="text-xs theme-text-muted">Consultando…</span>}
                                 </label>
-                                {tieneCoberturaSeguro && (
+                                {!guiaCliente && tieneCoberturaSeguro && (
                                     <label className="flex items-center gap-2 theme-text-main cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={data.aplica_seguro}
                                             onChange={(e) => setData('aplica_seguro', e.target.checked)}
                                         />
-                                        <span className="text-sm font-bold">Con seguro</span>
+                                        <span className="text-sm font-bold">
+                                            {data.aplica_seguro ? 'Con seguro' : 'Sin seguro'}
+                                        </span>
                                     </label>
                                 )}
                                 <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? 'opacity-50' : 'cursor-pointer'}`}>
@@ -1584,15 +1920,50 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 </label>
                             </div>
 
-                            {(data.aplica_saldo_favor || data.aplica_seguro || data.envia_a_otra_persona || tieneCoberturaSeguro) && (
+                            {(data.aplica_saldo_favor || (!guiaCliente && data.aplica_seguro) || data.envia_a_otra_persona || (!guiaCliente && tieneCoberturaSeguro)) && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {data.aplica_saldo_favor && (
-                                        <div>
-                                            <label className={SECCION}>Monto saldo a favor</label>
-                                            <InputMoneda value={data.saldo_a_favor} onChange={(v) => setData('saldo_a_favor', v)} className="w-full py-3" />
+                                        <div className="md:col-span-2 space-y-2">
+                                            <label className={SECCION}>Saldos a favor a aplicar (vence primero)</label>
+                                            {(safCuenta?.creditos_usables || []).length === 0 ? (
+                                                <div className="text-xs theme-text-muted">
+                                                    {data.cliente_id
+                                                        ? 'El cliente no tiene saldo disponible en el libro. Puede capturar un monto manual temporal.'
+                                                        : 'Seleccione un cliente para consultar su saldo.'}
+                                                    <div className="mt-2">
+                                                        <InputMoneda value={data.saldo_a_favor} onChange={(v) => setData('saldo_a_favor', v)} className="w-full py-3" />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                (safCuenta.creditos_usables || []).map((c) => {
+                                                    const actual = (data.saf_aplicaciones || []).find((a) => String(a.saf_credito_id) === String(c.id));
+                                                    return (
+                                                        <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 border theme-border rounded-lg p-2">
+                                                            <div className="text-xs">
+                                                                <div className="font-bold">{c.folio}</div>
+                                                                <div className="theme-text-muted">{c.canal_origen || '—'} · vence {c.fecha_vencimiento} · {formatearMoneda(c.monto_disponible)}</div>
+                                                            </div>
+                                                            <InputMoneda
+                                                                value={actual?.monto ?? ''}
+                                                                onChange={(v) => {
+                                                                    const monto = v;
+                                                                    const resto = (data.saf_aplicaciones || []).filter((a) => String(a.saf_credito_id) !== String(c.id));
+                                                                    const next = Number(monto) > 0
+                                                                        ? [...resto, { saf_credito_id: c.id, monto, folio: c.folio }]
+                                                                        : resto;
+                                                                    setData('saf_aplicaciones', next);
+                                                                    setData('saldo_a_favor', next.reduce((a, i) => a + (Number(i.monto) || 0), 0));
+                                                                }}
+                                                                className="w-36 py-2"
+                                                            />
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                            <div className="text-sm font-bold text-emerald-700">Total saldo: {formatearMoneda(saldoFavorCalculado)}</div>
                                         </div>
                                     )}
-                                    {tieneCoberturaSeguro && (
+                                    {!guiaCliente && tieneCoberturaSeguro && (
                                         <div>
                                             <label className={SECCION}>Costo de seguro (calculado)</label>
                                             <InputMoneda value={data.costo_seguro} onChange={() => {}} readOnly className="w-full py-3 opacity-80" />
@@ -1611,9 +1982,10 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                     </>
                     )}
 
-                    {/* 5. Evidencias y comentarios */}
+                    {/* 6. Evidencias y comentarios */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>{requiereLogistica ? '5. Evidencias y comentarios' : '2. Evidencias y comentarios'}</p>
+                        <p className={SECCION}>{requiereLogistica ? '6. Evidencias y comentarios' : '3. Evidencias y comentarios'}</p>
+                        {leyendaContinuarBorrador}
                         <div className="space-y-4">
                             {!requiereLogistica && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1623,29 +1995,58 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                     </div>
                                 </div>
                             )}
+                            <SeccionPagosExhibicion
+                                pedidoId={idPedidoAcciones}
+                                bancos={catalogos.bancos || []}
+                                puedeRegistrar={Boolean(idPedidoAcciones) && cotizacionLista}
+                                puedeGenerarSaldo={cotizacionLista && (can('saldos_favor.generar') || can('control_pedidos.crear'))}
+                                onResumenChange={(r) => setSaldoGeneradoExcedente(Number(r?.excedente || 0))}
+                                mensajeBloqueo={!cotizacionLista
+                                    ? (requiereLogistica && !tienePesajeRespondido && !esResguardoComplementario
+                                        ? 'Complete el pesaje CEDIS y la cotización antes de registrar pagos.'
+                                        : 'Complete la cotización (paquetería y costos) antes de registrar pagos.')
+                                    : null}
+                            />
                             <div>
                                 <label className={SECCION}>Evidencias / Comprobantes</label>
-                                <p className="text-[10px] theme-text-muted font-bold mb-3 -mt-1">Adjunte archivos o use Ctrl+V para pegar capturas.</p>
-                                <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
-                                    <ImagePlus className="w-4 h-4 theme-text-muted" />
-                                    <span className="text-xs font-black uppercase">Adjuntar comprobantes</span>
-                                    <input type="file" accept="image/*" multiple className="hidden" onChange={manejarArchivos} />
-                                </label>
+                                <p className="text-[10px] theme-text-muted font-bold mb-3 -mt-1">
+                                    {cotizacionLista
+                                        ? 'Requeridos al enviar al auxiliar. Adjunte archivos o use Ctrl+V.'
+                                        : (requiereLogistica && !tienePesajeRespondido && !esResguardoComplementario
+                                            ? 'Se solicitan después del pesaje CEDIS y de completar la cotización.'
+                                            : 'Se solicitan después de completar la cotización (paquetería y costos).')}
+                                </p>
+                                {cotizacionLista ? (
+                                    <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                                        <ImagePlus className="w-4 h-4 theme-text-muted" />
+                                        <span className="text-xs font-black uppercase">Adjuntar comprobantes</span>
+                                        <input type="file" accept="image/*" multiple className="hidden" onChange={manejarArchivos} />
+                                    </label>
+                                ) : (
+                                    <div className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl w-fit theme-element theme-text-muted opacity-60">
+                                        <ImagePlus className="w-4 h-4" />
+                                        <span className="text-xs font-black uppercase">Adjuntar comprobantes</span>
+                                    </div>
+                                )}
                                 <div className="flex flex-wrap gap-3 mt-3">
                                     {docsExistentes.map((doc) => (
                                         <div key={doc.id} className="relative w-20 h-20 rounded-xl overflow-hidden border theme-border">
                                             <img src={doc.url} alt={doc.nombre_original} className="w-full h-full object-cover" />
-                                            <button type="button" onClick={() => toggleEliminarDoc(doc.id)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg outline-none">
-                                                <Trash2 className="w-3 h-3" />
-                                            </button>
+                                            {cotizacionLista && (
+                                                <button type="button" onClick={() => toggleEliminarDoc(doc.id)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg outline-none">
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                     {previews.map((p, i) => (
                                         <div key={p.url} className="relative w-20 h-20 rounded-xl overflow-hidden border theme-border">
                                             <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
-                                            <button type="button" onClick={() => quitarPreviewNuevo(i)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg outline-none">
-                                                <Trash2 className="w-3 h-3" />
-                                            </button>
+                                            {cotizacionLista && (
+                                                <button type="button" onClick={() => quitarPreviewNuevo(i)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg outline-none">
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -1655,7 +2056,7 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                                 <textarea placeholder="Notas adicionales..." value={data.comentarios_drive} onChange={(e) => setData('comentarios_drive', e.target.value)} className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`} />
                             </div>
                             <div>
-                                <label className={SECCION}>Anexar remisión</label>
+                                <label className={SECCION}>Nota de compra en el envío</label>
                                 <select
                                     value={data.anexar_remision ? '1' : '0'}
                                     disabled={logisticaBloqueada}
@@ -1671,19 +2072,26 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
 
                     {/* Desglose de montos */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>{requiereLogistica ? '6. Desglose de montos' : '3. Desglose de montos'}</p>
+                        <p className={SECCION}>{requiereLogistica ? '7. Desglose de montos' : '4. Desglose de montos'}</p>
+                        {leyendaContinuarBorrador}
                         <div className="space-y-2 text-sm">
-                            <div className="flex justify-between theme-text-muted font-bold"><span>Total mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
-                            <div className="flex justify-between theme-text-muted font-bold"><span>Envío</span><span>{formatearMoneda(data.costo_envio)}</span></div>
-                            {data.aplica_seguro && (
-                                <div className="flex justify-between theme-text-muted font-bold"><span>Seguro</span><span>{formatearMoneda(data.costo_seguro)}</span></div>
-                            )}
-                            {data.aplica_saldo_favor && (
-                                <div className="flex justify-between text-emerald-600 font-bold"><span>Saldo a favor</span><span>- {formatearMoneda(data.saldo_a_favor)}</span></div>
-                            )}
+                            <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
+                            <div className="flex justify-between theme-text-muted font-bold"><span>{labelCostoEnvio}</span><span>{formatearMoneda(guiaCliente ? 0 : data.costo_envio)}</span></div>
+                            <div className="flex justify-between theme-text-muted font-bold">
+                                <span>Costo del seguro</span>
+                                <span>{data.aplica_seguro ? formatearMoneda(data.costo_seguro) : formatearMoneda(0)}</span>
+                            </div>
+                            <div className="flex justify-between text-emerald-600 font-bold">
+                                <span>Saldo a favor aplicado</span>
+                                <span>- {formatearMoneda(data.aplica_saldo_favor ? saldoFavorCalculado : 0)}</span>
+                            </div>
+                            <div className="flex justify-between text-emerald-600 font-bold">
+                                <span>Saldo a favor generado</span>
+                                <span>{formatearMoneda(saldoGeneradoExcedente)}</span>
+                            </div>
                         </div>
                         <div className="mt-4 p-4 rounded-2xl border-2" style={{ borderColor: 'var(--color-primario)' }}>
-                            <p className="text-[10px] font-black uppercase theme-text-muted m-0">Total final</p>
+                            <p className="text-[10px] font-black uppercase theme-text-muted m-0">Total final del pedido</p>
                             <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(totalCobrar)}</p>
                         </div>
                     </section>
@@ -1726,14 +2134,17 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
             </div>
         </div>,
         document.body
-    );
+    ) : null;
 
     return (
         <>
             {modal}
             <ModalGenerarLinkDireccion
-                abierto={modalLinkDireccion}
-                onClose={() => setModalLinkDireccion(false)}
+                abierto={Boolean(abierto) && modalLinkDireccion}
+                onClose={() => {
+                    ignoreOverlayCloseUntil.current = Date.now() + 400;
+                    setModalLinkDireccion(false);
+                }}
                 clientePreseleccionado={infoCliente?.id ? infoCliente : null}
                 onEnlaceGenerado={() => {
                     if (infoCliente?.id) {
@@ -1746,16 +2157,40 @@ export default function ModalFormPedido({ abierto, onClose, pedido = null, catal
                 }}
             />
             <ModalAlertaPedido
-                abierto={alertaEnvio.abierto}
-                tipo="error"
-                titulo="Campos incompletos"
+                abierto={Boolean(abierto) && alertaEnvio.abierto}
+                tipo={alertaEnvio.tipo || 'error'}
+                titulo={alertaEnvio.tipo === 'success' ? 'Listo' : 'Campos incompletos'}
                 mensaje={alertaEnvio.mensaje}
-                onClose={() => setAlertaEnvio({ abierto: false, mensaje: '' })}
+                onClose={() => {
+                    ignoreOverlayCloseUntil.current = Date.now() + 400;
+                    setAlertaEnvio({ abierto: false, mensaje: '', tipo: 'error' });
+                }}
             />
             <ModalVistaPreviaDocumento
-                abierto={Boolean(vistaPrevia)}
+                abierto={Boolean(abierto) && Boolean(vistaPrevia)}
                 documento={vistaPrevia}
-                onClose={() => setVistaPrevia(null)}
+                onClose={() => {
+                    ignoreOverlayCloseUntil.current = Date.now() + 400;
+                    setVistaPrevia(null);
+                }}
+            />
+            <ModalConfirmarAccion
+                abierto={Boolean(abierto) && confirmarActualizarDir}
+                titulo="Actualizar dirección"
+                mensaje={(() => {
+                    const sel = direccionesCliente.find((d) => String(d.id) === String(data.cliente_direccion_id));
+                    if (sel?.es_principal) {
+                        return 'Está actualizando la dirección PRINCIPAL del catálogo del cliente (nueva versión + auditoría). Si el pedido ya existe, también se guardará un snapshot. Si solo necesita una excepción para este pedido, use «dirección manual» en su lugar. ¿Confirmar?';
+                    }
+                    return 'Se creará una nueva versión de la dirección en el catálogo del cliente, con auditoría. Si el pedido ya existe, también se guardará un snapshot. ¿Confirmar?';
+                })()}
+                etiquetaConfirmar="Confirmar actualización"
+                variante="primary"
+                onClose={() => {
+                    ignoreOverlayCloseUntil.current = Date.now() + 400;
+                    setConfirmarActualizarDir(false);
+                }}
+                onConfirm={confirmarGuardarDireccion}
             />
         </>
     );
