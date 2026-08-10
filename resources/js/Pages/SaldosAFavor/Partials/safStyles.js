@@ -11,10 +11,25 @@ import {
 
 export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
 export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-secondary--compact`;
+export const BTN_BACK =
+    'inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest theme-text-main theme-surface rounded-xl px-3 py-2 border theme-border hover:opacity-90 transition-opacity';
 export { THEME_INPUT, THEME_LABEL, THEME_SELECT, THEME_TEXTAREA, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL };
 
 export const fmtMoneda = (n) =>
     new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(n || 0));
+
+/** @param {string|null|undefined} value */
+export const fmtFecha = (value) => {
+    if (!value) return '—';
+    // ponytail: date-only Y-m-d parsed as UTC midnight can shift day in MX; upgrade if timezone rules get stricter
+    const raw = String(value);
+    const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const d = dateOnly
+        ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+        : new Date(raw);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+};
 
 export const FLASH_OK =
     'rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-700 dark:text-emerald-300';
@@ -22,8 +37,8 @@ export const FLASH_ERR =
     'rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-bold text-rose-700 dark:text-rose-300';
 
 export const TH =
-    'px-3 py-2.5 text-[10px] font-black uppercase tracking-widest theme-text-muted text-left';
-export const TD = 'px-3 py-2.5 text-sm theme-text-main border-t theme-border';
+    'px-2 py-2 text-[10px] font-black uppercase tracking-widest theme-text-muted text-left';
+export const TD = 'px-2 py-2 text-sm theme-text-main border-t theme-border break-words';
 
 export const LABEL_ESTADO_FIN = {
     disponible: 'Disponible',

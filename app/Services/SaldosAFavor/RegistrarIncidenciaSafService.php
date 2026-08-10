@@ -42,13 +42,18 @@ class RegistrarIncidenciaSafService
             $descripcion = trim($descripcion."\n\n[Resolución] ".$nota);
         }
 
-        $incidencia->update([
+        $updated = $incidencia->update([
             'descripcion' => $descripcion,
             'estado' => SafIncidencia::ESTADO_RESUELTA,
             'resuelto_por_id' => $usuarioId,
             'resuelto_at' => now(),
         ]);
 
-        return $incidencia->fresh();
+        if (! $updated) {
+            throw new \RuntimeException('No se pudo resolver la incidencia.');
+        }
+
+        // Evitar fresh(): puede devolver null y romper el return type (500).
+        return $incidencia;
     }
 }

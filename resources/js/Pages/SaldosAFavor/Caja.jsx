@@ -6,6 +6,7 @@ import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import {
+    BTN_BACK,
     BTN_PRIMARY,
     BTN_SECONDARY,
     FLASH_ERR,
@@ -19,6 +20,7 @@ import {
     THEME_LABEL,
     THEME_SELECT,
     THEME_TEXTAREA,
+    fmtFecha,
     fmtMoneda,
 } from './Partials/safStyles';
 
@@ -150,7 +152,7 @@ export default function Caja({
             <Head title="Caja · Saldos a favor" />
             <GeliaPageShell className="space-y-6">
                 <div>
-                    <Link href={route('saldos_favor.index')} className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                    <Link href={route('saldos_favor.index')} className={BTN_BACK}>
                         <ArrowLeft className="w-3.5 h-3.5" /> Saldos a favor
                     </Link>
                 </div>
@@ -252,7 +254,7 @@ export default function Caja({
                                             <div className="min-w-0">
                                                 <div className="font-bold theme-text-main">{c.folio}</div>
                                                 <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">
-                                                    {LABEL_CANAL[c.canal_origen] || c.canal_origen} · vence {c.fecha_vencimiento} · {fmtMoneda(c.monto_disponible)}
+                                                    {LABEL_CANAL[c.canal_origen] || c.canal_origen} · vence {fmtFecha(c.fecha_vencimiento)} · {fmtMoneda(c.monto_disponible)}
                                                 </div>
                                             </div>
                                             <input
@@ -328,18 +330,18 @@ export default function Caja({
                     </div>
                 )}
 
-                <div className={geliaCardClass('overflow-x-auto')}>
+                <div className={geliaCardClass('overflow-hidden')}>
                     <div className="px-4 py-3 border-b theme-border">
                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Mis comprobantes de hoy</p>
                     </div>
-                    <table className="min-w-full">
+                    <table className="table-fixed w-full">
                         <thead className="theme-element">
                             <tr>
-                                <th className={TH}>Folio</th>
-                                <th className={TH}>Cliente</th>
-                                <th className={TH}>Monto</th>
-                                <th className={TH}>Estado</th>
-                                <th className={TH} />
+                                <th className={`${TH} w-[22%]`}>Folio</th>
+                                <th className={`${TH} w-[30%]`}>Cliente</th>
+                                <th className={`${TH} w-[18%]`}>Monto</th>
+                                <th className={`${TH} w-[18%]`}>Estado</th>
+                                <th className={`${TH} w-[12%]`} />
                             </tr>
                         </thead>
                         <tbody>

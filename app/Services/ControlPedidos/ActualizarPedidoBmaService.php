@@ -39,6 +39,11 @@ class ActualizarPedidoBmaService
 
             $attrs = $this->atributosPedidoBase($datos);
 
+            // No borrar tipo de pedido si el form/autoguard manda origen vacío.
+            if (empty($attrs['origen_id']) && $pedido->origen_id) {
+                $attrs['origen_id'] = $pedido->origen_id;
+            }
+
             // Peso/cajas vienen de CEDIS: la vendedora no los sobrescribe al editar.
             if ($pedido->tienePesajeRespondido()) {
                 $attrs['peso_real_kg'] = $pedido->peso_real_kg;

@@ -69,21 +69,35 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         const refrescar = (m) => {
             if (!m.abierto || !m.pedido?.id) return m;
             const fresco = filas.find((p) => p.id === m.pedido.id);
-            return fresco && fresco !== m.pedido ? { ...m, pedido: fresco } : m;
+            if (!fresco) return m;
+            // Misma fila del listado: actualizar si cambió algo relevante de CEDIS/servidor.
+            if (
+                fresco.updated_at === m.pedido.updated_at
+                && fresco.pesaje_respondido_at === m.pedido.pesaje_respondido_at
+                && fresco.estatus_envio === m.pedido.estatus_envio
+                && fresco.catalogo_estatus_pedido_id === m.pedido.catalogo_estatus_pedido_id
+                && Number(fresco.peso_real_kg) === Number(m.pedido.peso_real_kg)
+                && Number(fresco.numero_cajas) === Number(m.pedido.numero_cajas)
+            ) {
+                return m;
+            }
+            return { ...m, pedido: fresco };
         };
         setModalForm(refrescar);
         setModalDetalle(refrescar);
     }, [pedidosVista]);
 
-    const modalAbierto = modalForm.abierto
-        || modalDetalle.abierto
+    // Con el formulario abierto sí seguimos refrescando el listado (CEDIS → modal).
+    // Pausamos solo overlays que no necesitan sync en vivo.
+    const pausarPollingListado = modalDetalle.abierto
         || modalBitacora.abierto
         || modalAnexo.abierto
         || modalCompletarEnvio.abierto
         || modalCargarGuia.abierto
         || modalLinkDireccion
         || confirmarBorradorNuevo
-        || Boolean(pedidoAEliminar);
+        || Boolean(pedidoAEliminar)
+        || Boolean(pedidoACancelar);
 
     useEffect(() => {
         const params = {
@@ -93,7 +107,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         };
         const refrescar = () => cargar(params, { silencioso: true });
 
-        if (modalAbierto) {
+        if (pausarPollingListado) {
             refrescoPendiente.current = true;
             return undefined;
         }
@@ -104,7 +118,23 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
         const intervalo = setInterval(refrescar, REFRESCO_LISTADO_MS);
         return () => clearInterval(intervalo);
-    }, [modalAbierto, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
+    }, [pausarPollingListado, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
+
+    // Notificación en vivo (pesaje listo, errores CEDIS, etc.): refrescar al instante si el modal está abierto.
+    useEffect(() => {
+        const onNotification = (e) => {
+            const pedidoId = Number(e.detail?.pedido_bma_id);
+            const tipo = String(e.detail?.tipo || '');
+            if (!pedidoId || !tipo.startsWith('pedido_')) return;
+            if (!modalForm.abierto || Number(modalForm.pedido?.id) !== pedidoId) return;
+            cargar(
+                { tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 },
+                { silencioso: true }
+            );
+        };
+        window.addEventListener('notification-received', onNotification);
+        return () => window.removeEventListener('notification-received', onNotification);
+    }, [modalForm.abierto, modalForm.pedido?.id, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
 
     const onTabChange = (tab) => {
         setTabActiva(tab);

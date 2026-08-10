@@ -111,6 +111,32 @@ class AppServiceProvider extends ServiceProvider
             return $user->hasRole('Super Admin') ? true : null;
         });
 
+        // Spatie cache (tabla `cache` en MySQL) sobrevive a sail down/up.
+        // Si los IDs de permissions cambian y la caché no se limpia, can() falla para todos menos Super Admin.
+        $this->app->booted(function () {
+            try {
+                $sample = \Spatie\Permission\Models\Permission::query()
+                    ->orderByDesc('id')
+                    ->first(['id', 'name', 'guard_name']);
+                if (! $sample) {
+                    return;
+                }
+                $fromCache = \Spatie\Permission\Models\Permission::findByName(
+                    $sample->name,
+                    $sample->guard_name
+                );
+                if ((int) $fromCache->id === (int) $sample->id) {
+                    return;
+                }
+                app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+            } catch (\Throwable $e) {
+                try {
+                    app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+                } catch (\Throwable) {
+                }
+            }
+        });
+
         // 3. Registro de Observadores
         SolicitudTag::observe(SolicitudTagObserver::class);
         

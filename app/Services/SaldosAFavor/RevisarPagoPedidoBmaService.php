@@ -19,6 +19,13 @@ class RevisarPagoPedidoBmaService
             throw new InvalidArgumentException('Estado de revisión no válido.');
         }
 
+        if (in_array($estadoRevision, [
+            PedidoBmaPago::REVISION_CON_OBSERVACIONES,
+            PedidoBmaPago::REVISION_RECHAZADO,
+        ], true) && ! filled($observaciones)) {
+            throw new InvalidArgumentException('Debe indicar observaciones para este estado.');
+        }
+
         $anterior = $pago->estado_revision;
         $pago->update([
             'estado_revision' => $estadoRevision,

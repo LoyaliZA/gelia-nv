@@ -6,6 +6,7 @@ import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import {
+    BTN_BACK,
     BTN_PRIMARY,
     BTN_SECONDARY,
     FLASH_OK,
@@ -45,7 +46,7 @@ export default function Migrar({ auth }) {
             <Head title="Migrar saldos a favor" />
             <GeliaPageShell className="space-y-6">
                 <div>
-                    <Link href={route('saldos_favor.index')} className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                    <Link href={route('saldos_favor.index')} className={BTN_BACK}>
                         <ArrowLeft className="w-3.5 h-3.5" /> Saldos a favor
                     </Link>
                 </div>

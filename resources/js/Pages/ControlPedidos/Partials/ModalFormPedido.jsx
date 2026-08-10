@@ -120,7 +120,7 @@ function formDefaults(pedido = null, tiposOperacion = []) {
     else if (tipoCodigo === 'RESGUARDO_ABIERTO') modoResguardo = 'abierto';
 
     return {
-        origen_id: pedido?.origen_id || '',
+        origen_id: pedido?.origen_id ?? pedido?.origen?.id ?? '',
         tipo_operacion_envio_id: pedido?.tipo_operacion_envio_id || '',
         modo_resguardo: modoResguardo,
         pedido_principal_id: pedido?.pedido_principal_id || '',
@@ -203,6 +203,7 @@ export default function ModalFormPedido({
     const matchReexpedicionKey = useRef(null);
     const pedidoBdIdRef = useRef(pedido?.id || null);
     const ultimoFingerprintBd = useRef('');
+    const ultimoSyncCedis = useRef('');
     const autoguardandoBd = useRef(false);
     const ignoreOverlayCloseUntil = useRef(0);
     const [pedidoBdId, setPedidoBdId] = useState(pedido?.id || null);
@@ -254,8 +255,10 @@ export default function ModalFormPedido({
         (p) => String(p.id) === String(data.catalogo_paqueteria_id)
     );
     const origenSeleccionado = (catalogos.origenes || []).find(
-        (o) => String(o.id) === String(data.origen_id)
-    );
+        (o) => String(o.id) === String(data.origen_id || pedido?.origen_id || pedido?.origen?.id || '')
+    ) || (pedido?.origen && String(pedido.origen.id) === String(data.origen_id || pedido?.origen_id || pedido?.origen?.id || '')
+        ? pedido.origen
+        : null);
     const requiereLogistica = origenSeleccionado?.requiere_logistica ?? false;
     const esResguardoAbierto = Boolean(data.es_resguardo) && (data.modo_resguardo || 'abierto') === 'abierto';
     const esResguardoComplementario = Boolean(data.es_resguardo) && data.modo_resguardo === 'complementario';
@@ -284,10 +287,13 @@ export default function ModalFormPedido({
     const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
 
     // Sin tipo elegido: solo Tipo + Cliente. Con Envío: pesaje primero; resto tras «Continuar pedido».
-    const tieneTipo = Boolean(data.origen_id);
-    const enfocadoEnPesaje = tieneTipo && requiereLogistica && puedeVolverBorrador;
-    const mostrarPesaje = tieneTipo && requiereLogistica;
-    const mostrarRestoPedido = tieneTipo && (!requiereLogistica || (cotizacionHabilitada && !enfocadoEnPesaje));
+    const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id);
+    const enfocadoEnPesaje = (requiereLogistica && puedeVolverBorrador)
+        || (puedeVolverBorrador && (tienePesajeRespondido || pendientePesaje));
+    // Pesaje listo/pendiente debe verse aunque falte origen en el form (p. ej. fila sin origen_id).
+    const mostrarPesaje = (tieneTipo && requiereLogistica) || tienePesajeRespondido || pendientePesaje;
+    const mostrarRestoPedido = Boolean(data.origen_id) && (!requiereLogistica || (cotizacionHabilitada && !enfocadoEnPesaje));
+
     const mostrarLogisticaPostPesaje = mostrarPesaje && mostrarRestoPedido;
     const mostrarPagosYCierre = mostrarRestoPedido;
     // «Enviar» solo tras Continuar pedido (o flujo sin pesaje). Deshabilitado si faltan datos.
@@ -354,10 +360,22 @@ export default function ModalFormPedido({
         costoReexpedicionAplicado.current = 0;
         matchReexpedicionKey.current = null;
         ultimoFingerprintBd.current = '';
+        ultimoSyncCedis.current = '';
         if (pedido) {
             pedidoBdIdRef.current = pedido.id;
             setPedidoBdId(pedido.id);
             setData(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
+            ultimoSyncCedis.current = [
+                pedido.updated_at,
+                pedido.pesaje_respondido_at,
+                pedido.estatus_envio,
+                pedido.peso_real_kg,
+                pedido.peso_volumetrico_kg,
+                pedido.peso_cobrado_guia_kg,
+                pedido.numero_cajas,
+                pedido.catalogo_estatus_pedido_id,
+                (pedido.cajas || []).map((c) => `${c.id}:${c.peso_kg ?? ''}`).join(','),
+            ].join('|');
             setInfoCliente(pedido.cliente || null);
             setPesoVolumetrico(pedido.peso_volumetrico_kg ?? '');
             setAlertaDireccion(false);
@@ -436,6 +454,71 @@ export default function ModalFormPedido({
             setEstadoAuto({ local: null, bd: null });
         }
     }, [abierto, pedido?.id, recuperarBorrador]);
+
+    // Autocarga cuando CEDIS (u otro proceso) actualiza el mismo pedido con el modal abierto.
+    useEffect(() => {
+        if (!abierto || !pedido?.id) return;
+        const fp = [
+            pedido.updated_at,
+            pedido.pesaje_respondido_at,
+            pedido.estatus_envio,
+            pedido.peso_real_kg,
+            pedido.peso_volumetrico_kg,
+            pedido.peso_cobrado_guia_kg,
+            pedido.numero_cajas,
+            pedido.catalogo_estatus_pedido_id,
+            (pedido.cajas || []).map((c) => `${c.id}:${c.peso_kg ?? ''}`).join(','),
+        ].join('|');
+        if (!ultimoSyncCedis.current) {
+            ultimoSyncCedis.current = fp;
+            return;
+        }
+        if (fp === ultimoSyncCedis.current) return;
+        ultimoSyncCedis.current = fp;
+
+        // Inertia setData(object) REEMPLAZA todo el form; hay que mergear con updater.
+        const origenId = pedido.origen_id ?? pedido.origen?.id ?? null;
+        setData((prev) => ({
+            ...prev,
+            ...(origenId ? { origen_id: origenId } : {}),
+            peso_real_kg: pedido.peso_real_kg ?? '',
+            numero_cajas: pedido.numero_cajas ?? '',
+            peso_cobrado_guia_kg: pedido.peso_cobrado_guia_kg ?? '',
+            catalogo_tipo_caja_id: pedido.catalogo_tipo_caja_id || '',
+            costo_envio: pedido.costo_envio ?? prev.costo_envio ?? '',
+            catalogo_paqueteria_id: pedido.catalogo_paqueteria_id || prev.catalogo_paqueteria_id || '',
+            catalogo_tipo_guia_id: pedido.catalogo_tipo_guia_id || prev.catalogo_tipo_guia_id || '',
+        }));
+        if (pedido.pesaje_respondido_at) {
+            setPesoVolumetrico(pedido.peso_volumetrico_kg ?? '');
+        }
+        setEstadoAuto((s) => ({ ...s, bd: 'Actualizado desde servidor' }));
+    }, [
+        abierto,
+        pedido?.id,
+        pedido?.updated_at,
+        pedido?.pesaje_respondido_at,
+        pedido?.estatus_envio,
+        pedido?.peso_real_kg,
+        pedido?.peso_volumetrico_kg,
+        pedido?.peso_cobrado_guia_kg,
+        pedido?.numero_cajas,
+        pedido?.catalogo_estatus_pedido_id,
+        pedido?.cajas,
+        pedido?.catalogo_tipo_caja_id,
+        pedido?.costo_envio,
+        pedido?.catalogo_paqueteria_id,
+        pedido?.catalogo_tipo_guia_id,
+        setData,
+    ]);
+
+    // Si el form abrió sin tipo pero el pedido sí lo trae, hidratar (evita ocultar pesaje/continuar).
+    useEffect(() => {
+        if (!abierto || !pedido?.id || data.origen_id) return;
+        const origenId = pedido.origen_id ?? pedido.origen?.id;
+        if (!origenId) return;
+        setData('origen_id', origenId);
+    }, [abierto, pedido?.id, pedido?.origen_id, pedido?.origen?.id, data.origen_id, setData]);
 
     /** Guarda el borrador en BD (sin archivos) y devuelve su id. */
     const persistirBorradorBd = async () => {

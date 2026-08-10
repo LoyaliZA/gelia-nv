@@ -6,6 +6,7 @@ import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import {
+    BTN_BACK,
     BTN_PRIMARY,
     BTN_SECONDARY,
     FLASH_OK,
@@ -21,6 +22,7 @@ import {
     THEME_MODAL_SHELL,
     THEME_SELECT,
     THEME_TEXTAREA,
+    fmtFecha,
     fmtMoneda,
     groupMotivosByCategoria,
 } from './Partials/safStyles';
@@ -83,7 +85,7 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                 <div>
                     <Link
                         href={route('saldos_favor.index')}
-                        className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest theme-text-muted hover:opacity-80"
+                        className={BTN_BACK}
                     >
                         <ArrowLeft className="w-3.5 h-3.5" /> Saldos a favor
                     </Link>
@@ -105,22 +107,23 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                     <KPI label="Vencido" valor={cuenta.vencido} tone="text-rose-600 dark:text-rose-400" />
                 </div>
 
-                <div className={geliaCardClass('overflow-x-auto')}>
+                <div className={geliaCardClass('overflow-hidden')}>
                     <div className="px-4 py-3 border-b theme-border">
                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Saldos a favor</p>
                     </div>
-                    <table className="min-w-full">
+                    <table className="table-fixed w-full">
                         <thead className="theme-element">
                             <tr>
-                                <th className={TH}>Folio</th>
-                                <th className={TH}>Origen</th>
-                                <th className={TH}>Motivo / Doc</th>
-                                <th className={TH}>Original</th>
-                                <th className={TH}>Disponible</th>
-                                <th className={TH}>Reservado</th>
-                                <th className={TH}>Estados</th>
-                                <th className={TH}>Vence</th>
-                                <th className={TH} />
+                                <th className={`${TH} w-[12%]`}>Folio</th>
+                                <th className={`${TH} w-[10%]`}>Origen</th>
+                                <th className={`${TH} w-[14%]`}>Motivo / Doc</th>
+                                <th className={`${TH} w-[9%]`}>Original</th>
+                                <th className={`${TH} w-[9%]`}>Disponible</th>
+                                <th className={`${TH} w-[8%]`}>Reservado</th>
+                                <th className={`${TH} w-[10%]`}>Estados</th>
+                                <th className={`${TH} w-[9%]`}>Emisión</th>
+                                <th className={`${TH} w-[9%]`}>Vence</th>
+                                <th className={`${TH} w-[10%]`} />
                             </tr>
                         </thead>
                         <tbody>
@@ -141,23 +144,26 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                                             {LABEL_ESTADO_REV[c.estado_revision] || c.estado_revision}
                                         </div>
                                     </td>
-                                    <td className={TD}>{c.fecha_vencimiento}</td>
-                                    <td className={`${TD} text-right whitespace-nowrap space-x-2`}>
-                                        {can('saldos_favor.revisar') && (
-                                            <button type="button" className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--color-primario)' }} onClick={() => abrir(c, 'revisar')}>Revisar</button>
-                                        )}
-                                        {can('saldos_favor.ajustar') && (
-                                            <button type="button" className="text-[10px] font-black uppercase tracking-wide text-amber-700" onClick={() => abrir(c, 'ajustar')}>Ajustar</button>
-                                        )}
-                                        {can('saldos_favor.ajustar') && c.estado_financiero === 'vencido' && Number(c.monto_disponible) > 0 && (
-                                            <button type="button" className="text-[10px] font-black uppercase tracking-wide text-emerald-700" onClick={() => abrir(c, 'reactivar')}>Reactivar</button>
-                                        )}
-                                        {can('saldos_favor.ajustar') && Number(c.monto_aplicado) > 0 && (
-                                            <button type="button" className="text-[10px] font-black uppercase tracking-wide text-sky-700" onClick={() => abrir(c, 'revertir')}>Revertir</button>
-                                        )}
-                                        {can('saldos_favor.cancelar') && c.estado_financiero !== 'cancelado' && (
-                                            <button type="button" className="text-[10px] font-black uppercase tracking-wide text-rose-700" onClick={() => abrir(c, 'cancelar')}>Cancelar</button>
-                                        )}
+                                    <td className={TD}>{fmtFecha(c.fecha_generacion)}</td>
+                                    <td className={TD}>{fmtFecha(c.fecha_vencimiento)}</td>
+                                    <td className={TD}>
+                                        <div className="flex flex-col items-end gap-1">
+                                            {can('saldos_favor.revisar') && (
+                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--color-primario)' }} onClick={() => abrir(c, 'revisar')}>Revisar</button>
+                                            )}
+                                            {can('saldos_favor.ajustar') && (
+                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide text-amber-700" onClick={() => abrir(c, 'ajustar')}>Ajustar</button>
+                                            )}
+                                            {can('saldos_favor.ajustar') && c.estado_financiero === 'vencido' && Number(c.monto_disponible) > 0 && (
+                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide text-emerald-700" onClick={() => abrir(c, 'reactivar')}>Reactivar</button>
+                                            )}
+                                            {can('saldos_favor.ajustar') && Number(c.monto_aplicado) > 0 && (
+                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide text-sky-700" onClick={() => abrir(c, 'revertir')}>Revertir</button>
+                                            )}
+                                            {can('saldos_favor.cancelar') && c.estado_financiero !== 'cancelado' && (
+                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide text-rose-700" onClick={() => abrir(c, 'cancelar')}>Cancelar</button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -165,25 +171,25 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                     </table>
                 </div>
 
-                <div className={geliaCardClass('overflow-x-auto')}>
+                <div className={geliaCardClass('overflow-hidden')}>
                     <div className="px-4 py-3 border-b theme-border">
                         <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Bitácora reciente</p>
                     </div>
-                    <table className="min-w-full">
+                    <table className="table-fixed w-full">
                         <thead className="theme-element">
                             <tr>
-                                <th className={TH}>Fecha</th>
-                                <th className={TH}>Saldo</th>
-                                <th className={TH}>Tipo</th>
-                                <th className={TH}>Monto</th>
-                                <th className={TH}>Saldo</th>
-                                <th className={TH}>Usuario</th>
+                                <th className={`${TH} w-[18%]`}>Fecha</th>
+                                <th className={`${TH} w-[14%]`}>Saldo</th>
+                                <th className={`${TH} w-[16%]`}>Tipo</th>
+                                <th className={`${TH} w-[14%]`}>Monto</th>
+                                <th className={`${TH} w-[22%]`}>Saldo</th>
+                                <th className={`${TH} w-[16%]`}>Usuario</th>
                             </tr>
                         </thead>
                         <tbody>
                             {movimientos.map((m) => (
                                 <tr key={m.id}>
-                                    <td className={TD}>{m.created_at}</td>
+                                    <td className={TD}>{fmtFecha(m.created_at)}</td>
                                     <td className={`${TD} font-bold`}>{m.credito?.folio}</td>
                                     <td className={TD}>{m.tipo}</td>
                                     <td className={TD}>{fmtMoneda(m.monto)}</td>
