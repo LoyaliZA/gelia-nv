@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\GestionInterna\StoreProductoRequest;
 use App\Http\Requests\GestionInterna\UpdateProductoRequest;
 use App\Models\Atributo;
+use App\Models\Almacen;
 use App\Models\CanalComercial;
 use App\Models\CatalogoCategoriaProducto;
 use App\Models\CatalogoMarcaProducto;
 use App\Models\FaseOlfativa;
+use App\Models\Inventario;
 use App\Models\NotaOlfativa;
 use App\Models\Producto;
 use App\Models\TipoProducto;
@@ -99,6 +101,8 @@ class ProductoController extends Controller
     public function buscar(Request $request): JsonResponse
     {
         $perPage = min(50, max(10, (int) $request->input('per_page', 25)));
+        $almacenId = (int) $request->input('almacen_id', 0);
+        $almacen = null;
 
         $query = Producto::query()
             ->where('activo', true)
@@ -108,9 +112,63 @@ class ProductoController extends Controller
             $query->buscarPorTexto($busqueda);
         }
 
-        return response()->json(
-            $query->paginate($perPage, ['id', 'sku', 'descripcion', 'folio', 'codigo_barras'])
-        );
+        if ($almacenId > 0) {
+            $almacen = Almacen::query()->find($almacenId);
+            if (! $almacen || ! $almacen->activo) {
+                return response()->json([
+                    'message' => 'Almacén no válido o inactivo.',
+                    'data' => [],
+                ], 422);
+            }
+            if (! $almacen->permite_busqueda_productos) {
+                return response()->json([
+                    'message' => 'Este almacén no permite búsqueda de productos.',
+                    'data' => [],
+                    'almacen' => [
+                        'id' => $almacen->id,
+                        'codigo' => $almacen->codigo,
+                        'nombre' => $almacen->nombre,
+                    ],
+                ], 422);
+            }
+
+            $query->whereHas(
+                'inventarios',
+                fn ($q) => $q->where('almacen_id', $almacenId)
+            );
+        }
+
+        $paginator = $query->paginate($perPage, ['id', 'sku', 'descripcion', 'folio', 'codigo_barras']);
+
+        if ($almacenId > 0 && $almacen) {
+            $ids = $paginator->getCollection()->pluck('id');
+            $invMap = Inventario::query()
+                ->where('almacen_id', $almacenId)
+                ->whereIn('producto_id', $ids)
+                ->get()
+                ->keyBy('producto_id');
+
+            $paginator->setCollection(
+                $paginator->getCollection()->map(function (Producto $p) use ($invMap, $almacenId, $almacen) {
+                    $inv = $invMap->get($p->id);
+
+                    return [
+                        'id' => $p->id,
+                        'sku' => $p->sku,
+                        'descripcion' => $p->descripcion,
+                        'folio' => $p->folio,
+                        'codigo_barras' => $p->codigo_barras,
+                        'almacen_id' => $almacenId,
+                        'almacen_codigo' => $almacen->codigo,
+                        'almacen_nombre' => $almacen->nombre,
+                        'existencia' => $inv !== null ? (float) $inv->existencia : null,
+                        'disponible' => $inv !== null ? (float) $inv->disponible : null,
+                    ];
+                })
+            );
+        }
+
+        return response()->json($paginator);
     }
 
     public function store(

@@ -76,13 +76,10 @@ class PedidoBmaAuditoriaController extends Controller
                 'folio' => $pedidoBma->folio,
                 'excedente' => $excedente,
                 'mensaje' => sprintf(
-                    'Hay un excedente de $%s. Puede generar saldo a favor desde exhibiciones.',
+                    'Hay un excedente de $%s. El saldo a favor se genera al registrar/enviar el pedido (no en auditoría).',
                     number_format($excedente, 2, '.', ',')
                 ),
             ]);
-        }
-        if (! empty($resultado['incidencia_id'])) {
-            $redirect->with('warning', 'Pago validado con faltante: se abrió incidencia SAF para revisión.');
         }
 
         return $redirect;

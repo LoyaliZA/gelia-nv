@@ -35,7 +35,7 @@ export default function ModalAnexarPagoEnvio({
         setPreviewNombre('');
         setData({
             monto: '',
-            catalogo_banco_id: pedido?.catalogo_banco_id || '',
+            catalogo_banco_id: '',
             comentarios: '',
             comprobante: null,
         });

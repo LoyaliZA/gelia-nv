@@ -205,11 +205,11 @@ class EndurecerSaldosAFavorTest extends TestCase
 
         $this->actingAs($this->user)
             ->post(route('saldos_favor.pagos.revisar', $pago), [
-                'estado_revision' => 'confirmado',
+                'estado_revision' => 'verificado',
             ])
             ->assertRedirect();
 
-        $this->assertSame(PedidoBmaPago::REVISION_CONFIRMADO, $pago->fresh()->estado_revision);
+        $this->assertSame(PedidoBmaPago::REVISION_VERIFICADO, $pago->fresh()->estado_revision);
     }
 
     public function test_caja_aplica_vincula_comprobante_en_movimiento(): void

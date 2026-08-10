@@ -9,6 +9,7 @@ import TablaPedidos from './Partials/TablaPedidos';
 import ModalFormPedido, { hayBorradorPedidoLocal } from './Partials/ModalFormPedido';
 import ModalDetallePedido from './Partials/ModalDetallePedido';
 import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
+import ModalCancelarPedido from './Partials/ModalCancelarPedido';
 import ModalAlertaPedido from './Partials/ModalAlertaPedido';
 import ModalConfirmarAccion from './Partials/ModalConfirmarAccion';
 import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
@@ -44,6 +45,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
+    const [pedidoACancelar, setPedidoACancelar] = useState(null);
     const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
     const [modalAnexo, setModalAnexo] = useState({ abierto: false, pedido: null });
     const [modalCompletarEnvio, setModalCompletarEnvio] = useState({ abierto: false, pedido: null });
@@ -213,6 +215,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         onBitacora={abrirBitacora}
                         onEditar={abrirEditar}
                         onEliminar={setPedidoAEliminar}
+                        onCancelar={setPedidoACancelar}
                         onAnexarEnvio={(pedido) => setModalAnexo({ abierto: true, pedido })}
                         onCompletarEnvio={(pedido) => setModalCompletarEnvio({ abierto: true, pedido })}
                         onCargarGuia={(pedido) => setModalCargarGuia({ abierto: true, pedido })}
@@ -260,6 +263,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 abierto={modalBitacora.abierto}
                 pedido={modalBitacora.pedido}
                 onClose={() => setModalBitacora({ abierto: false, pedido: null })}
+            />
+            <ModalCancelarPedido
+                abierto={Boolean(pedidoACancelar)}
+                pedido={pedidoACancelar}
+                onClose={() => setPedidoACancelar(null)}
             />
             <ModalConfirmarAccion
                 abierto={Boolean(pedidoAEliminar)}

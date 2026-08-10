@@ -211,33 +211,38 @@ class Fase2SaldosAFavorTest extends TestCase
         ]);
     }
 
-    public function test_validar_pago_faltante_abre_incidencia_y_excedente_en_resumen(): void
+    public function test_validar_pago_exige_cobertura_y_acepta_excedente(): void
     {
         $pedido = $this->pedidoStub(['total_a_cobrar' => 1000]);
         PedidoBmaPago::create([
             'pedido_bma_id' => $pedido->id,
             'numero_exhibicion' => 1,
             'monto' => 400,
+            'ruta_archivo' => 'pedidos_bma/pagos/parcial.jpg',
             'estado_revision' => PedidoBmaPago::REVISION_PENDIENTE,
             'capturado_por_id' => $this->user->id,
         ]);
 
-        $resultado = app(ValidarPagoPedidoBmaService::class)->ejecutar($pedido, $this->user->id);
-        $this->assertNotNull($resultado['incidencia_id']);
-        $this->assertGreaterThan(0.01, $resultado['resumen']['pendiente']);
-        $this->assertNotNull($pedido->fresh()->pago_validado_at);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('cubrir el total');
+        app(ValidarPagoPedidoBmaService::class)->ejecutar($pedido, $this->user->id);
+    }
 
+    public function test_validar_pago_con_excedente_ok(): void
+    {
         $pedido2 = $this->pedidoStub(['total_a_cobrar' => 500, 'folio' => 'BMA-F2-EXC-'.uniqid()]);
         PedidoBmaPago::create([
             'pedido_bma_id' => $pedido2->id,
             'numero_exhibicion' => 1,
             'monto' => 700,
+            'ruta_archivo' => 'pedidos_bma/pagos/exc.jpg',
             'estado_revision' => PedidoBmaPago::REVISION_PENDIENTE,
             'capturado_por_id' => $this->user->id,
         ]);
         $res2 = app(ValidarPagoPedidoBmaService::class)->ejecutar($pedido2, $this->user->id);
         $this->assertEquals(200.0, (float) $res2['resumen']['excedente']);
         $this->assertNull($res2['incidencia_id']);
+        $this->assertNotNull($pedido2->fresh()->pago_validado_at);
     }
 
     public function test_evidencia_firmada_caja_sin_duplicar_aplicacion(): void

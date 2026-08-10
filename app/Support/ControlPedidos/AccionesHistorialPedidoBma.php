@@ -39,6 +39,11 @@ final class AccionesHistorialPedidoBma
     public const RESGUARDO = 'resguardo';
     public const LIBERAR_RESGUARDO = 'liberar_resguardo';
     public const CAMBIO_DIRECCION = 'cambio_direccion';
+    public const ALTA_EXHIBICION_PAGO = 'alta_exhibicion_pago';
+    public const EDICION_EXHIBICION_PAGO = 'edicion_exhibicion_pago';
+    public const BAJA_EXHIBICION_PAGO = 'baja_exhibicion_pago';
+    public const REVISION_EXHIBICION_PAGO = 'revision_exhibicion_pago';
+    public const CANCELACION = 'cancelacion';
 
     /** @var array<string, string> */
     public const ETIQUETAS = [
@@ -74,6 +79,11 @@ final class AccionesHistorialPedidoBma
         self::RESGUARDO => 'Resguardo / apartado',
         self::LIBERAR_RESGUARDO => 'Liberación de resguardo',
         self::CAMBIO_DIRECCION => 'Cambio de dirección',
+        self::ALTA_EXHIBICION_PAGO => 'Alta de exhibición de pago',
+        self::EDICION_EXHIBICION_PAGO => 'Edición de exhibición de pago',
+        self::BAJA_EXHIBICION_PAGO => 'Baja de exhibición de pago',
+        self::REVISION_EXHIBICION_PAGO => 'Revisión de exhibición de pago',
+        self::CANCELACION => 'Cancelación del pedido',
     ];
 
     public static function etiqueta(?string $accion): ?string

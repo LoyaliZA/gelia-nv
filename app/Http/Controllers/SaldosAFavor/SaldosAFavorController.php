@@ -20,6 +20,7 @@ use App\Services\SaldosAFavor\ReactivarCreditoSafService;
 use App\Services\SaldosAFavor\RegistrarIncidenciaSafService;
 use App\Services\SaldosAFavor\RevertirAplicacionSafService;
 use App\Services\SaldosAFavor\RevisarCreditoSafService;
+use App\Services\SaldosAFavor\RevisarPagoPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -135,7 +136,7 @@ class SaldosAFavorController extends Controller
                 ->whereIn('id', SafCredito::query()->select('generado_por_id')->whereNotNull('generado_por_id'))
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'formas_pago' => PedidoBmaPago::FORMAS_PAGO,
+            'formas_pago' => PedidoBmaPago::formasPagoCatalogo(),
         ]);
     }
 
@@ -234,16 +235,16 @@ class SaldosAFavorController extends Controller
     public function revisarPago(Request $request, PedidoBmaPago $pago): RedirectResponse
     {
         $datos = $request->validate([
-            'estado_revision' => ['required', 'in:pendiente,confirmado,con_diferencia'],
+            'estado_revision' => ['required', 'in:'.implode(',', PedidoBmaPago::ESTADOS_REVISION)],
             'observaciones' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $pago->update([
-            'estado_revision' => $datos['estado_revision'],
-            'observaciones' => $datos['observaciones'] ?? $pago->observaciones,
-            'revisado_por_id' => Auth::id(),
-            'revisado_at' => now(),
-        ]);
+        app(RevisarPagoPedidoBmaService::class)->handle(
+            $pago,
+            $datos['estado_revision'],
+            Auth::id(),
+            $datos['observaciones'] ?? null
+        );
 
         return back()->with('success', 'Exhibición actualizada.');
     }

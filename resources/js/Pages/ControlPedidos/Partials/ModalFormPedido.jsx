@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, Search, Save, Send, MessageCircle, RotateCcw, ImagePlus, Trash2, AlertTriangle, PenLine, Link2, Cloud, HardDrive, Scale, FileText,
+    X, Search, Save, Send, RotateCcw, ImagePlus, Trash2, AlertTriangle, PenLine, Link2, Cloud, HardDrive, Scale, FileText, ArrowRight,
 } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
@@ -18,7 +18,6 @@ import {
     esCotizacionLista,
     formatearMoneda,
     etiquetaAlmacen,
-    textoWhatsAppPedido,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
     THEME_LABEL,
@@ -33,6 +32,7 @@ import ModalAlertaPedido from './ModalAlertaPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
+import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
 import CamposDireccionPedido, {
     CAMPOS_DIRECCION_VACIOS,
     camposDesdeDireccion,
@@ -219,6 +219,7 @@ export default function ModalFormPedido({
     const [safCuenta, setSafCuenta] = useState(null);
     const [cargandoSaf, setCargandoSaf] = useState(false);
     const [saldoGeneradoExcedente, setSaldoGeneradoExcedente] = useState(0);
+    const [pagoResumen, setPagoResumen] = useState(null);
 
     const { data, setData, post, processing, reset, errors, transform } = useForm(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
 
@@ -247,11 +248,7 @@ export default function ModalFormPedido({
     const puedeAutoguardarBd = !pedido || ['BORRADOR', 'PESAJE_PENDIENTE', 'RECHAZADO_VENDEDORA'].includes(pedido?.estatus?.fase_ciclo);
     const fasePedido = pedido?.estatus?.fase_ciclo;
     const puedeVolverBorrador = fasePedido === 'PESAJE_PENDIENTE';
-    const leyendaContinuarBorrador = puedeVolverBorrador ? (
-        <AvisoOperativoPedido label="Para continuar" tono="warning" icon={RotateCcw} className="mb-4">
-            Conserve como borrador para completar el pedido: use el botón naranja «Conservar como borrador» en la sección de pesaje y luego retome el folio.
-        </AvisoOperativoPedido>
-    ) : null;
+    const puedeContinuarPedido = puedeVolverBorrador && Boolean(pedido?.pesaje_respondido_at);
 
     const paqueteriaSeleccionada = (catalogos.paqueterias || []).find(
         (p) => String(p.id) === String(data.catalogo_paqueteria_id)
@@ -285,6 +282,43 @@ export default function ModalFormPedido({
     });
     const labelCostoEnvio = etiquetaCostoEnvio(paqueteriaSeleccionada);
     const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
+
+    // Sin tipo elegido: solo Tipo + Cliente. Con Envío: pesaje primero; resto tras «Continuar pedido».
+    const tieneTipo = Boolean(data.origen_id);
+    const enfocadoEnPesaje = tieneTipo && requiereLogistica && puedeVolverBorrador;
+    const mostrarPesaje = tieneTipo && requiereLogistica;
+    const mostrarRestoPedido = tieneTipo && (!requiereLogistica || (cotizacionHabilitada && !enfocadoEnPesaje));
+    const mostrarLogisticaPostPesaje = mostrarPesaje && mostrarRestoPedido;
+    const mostrarPagosYCierre = mostrarRestoPedido;
+    // «Enviar» solo tras Continuar pedido (o flujo sin pesaje). Deshabilitado si faltan datos.
+    const mostrarEnviarPedido = mostrarRestoPedido;
+    const validacionEnvio = validarCamposEnvioPedido(data, {
+        requiereLogistica,
+        direccionesNormalizadas,
+        esMunicipioDiferido,
+        esResguardoAbierto,
+        esResguardoComplementario,
+        tienePesajeRespondido,
+        pagoPendiente: idPedidoAcciones ? (pagoResumen?.pendiente ?? null) : null,
+    });
+    const enviarPedidoListo = validacionEnvio.valido
+        && !(esResguardoComplementario && !data.pedido_principal_id)
+        && !pendientePesaje;
+
+    const cambiarTipoPedido = (nuevoId) => {
+        if (String(nuevoId) === String(data.origen_id)) return;
+        const hayDatos = Boolean(data.cliente_id)
+            || Number(data.total_mercancia || 0) > 0
+            || Boolean(data.folio_remision)
+            || Boolean(idPedidoAcciones);
+        if (hayDatos && data.origen_id) {
+            const ok = window.confirm(
+                'Cambiar el tipo de pedido puede ocultar secciones del flujo (p. ej. pesaje o envío). Los datos ya capturados se conservan. ¿Continuar?'
+            );
+            if (!ok) return;
+        }
+        setData('origen_id', nuevoId);
+    };
     const pdfPedidoDoc = (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id));
     const anexoPiezasDoc = (pedido?.documentos || []).find((d) => d.tipo === 'anexo_piezas' && !docsEliminar.includes(d.id));
     const tienePdfPedido = Boolean(pdfPedidoDoc) || pdfLocalOk;
@@ -889,9 +923,6 @@ export default function ModalFormPedido({
         setAlertaEnvio({ abierto: false, mensaje: '' });
 
             if (enviarPedido) {
-            const comprobantesExistentes = modoEdicion
-                ? (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' && !docsEliminar.includes(d.id)).length
-                : 0;
             if (esResguardoComplementario && !data.pedido_principal_id) {
                 setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el pedido principal a complementar.' });
                 return;
@@ -901,13 +932,13 @@ export default function ModalFormPedido({
                 return;
             }
             const { valido, mensaje } = validarCamposEnvioPedido(data, {
-                comprobantesExistentes,
                 requiereLogistica,
                 direccionesNormalizadas,
                 esMunicipioDiferido,
                 esResguardoAbierto,
                 esResguardoComplementario,
                 tienePesajeRespondido,
+                pagoPendiente: idPedidoAcciones ? (pagoResumen?.pendiente ?? null) : null,
             });
             if (!valido) {
                 setAlertaEnvio({ abierto: true, mensaje });
@@ -969,11 +1000,6 @@ export default function ModalFormPedido({
             }));
             post(route('control_pedidos.store'), config);
         }
-    };
-
-    const compartirWhatsApp = () => {
-        if (!pedido) return;
-        window.open(`https://wa.me/?text=${textoWhatsAppPedido(pedido)}`, '_blank');
     };
 
     const optsPesaje = {
@@ -1060,6 +1086,10 @@ export default function ModalFormPedido({
             setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el cliente antes de solicitar el pesaje.' });
             return;
         }
+        if (Number(data.total_mercancia || 0) <= 0) {
+            setAlertaEnvio({ abierto: true, mensaje: 'Indique el total de mercancía (productos) antes de solicitar el pesaje.' });
+            return;
+        }
         if (!tienePdfPedido) {
             setAlertaEnvio({ abierto: true, mensaje: 'Adjunte el PDF o una foto del pedido antes de solicitar el pesaje.' });
             return;
@@ -1095,7 +1125,7 @@ export default function ModalFormPedido({
         });
     };
 
-    const volverABorrador = () => {
+    const continuarPedido = () => {
         if (!idPedidoAcciones) return;
         router.post(route('control_pedidos.volver_borrador', idPedidoAcciones), {}, {
             ...optsPesaje,
@@ -1107,7 +1137,7 @@ export default function ModalFormPedido({
                 }
                 setAlertaEnvio({
                     abierto: true,
-                    mensaje: page?.props?.flash?.success || 'Pedido conservado como borrador.',
+                    mensaje: page?.props?.flash?.success || 'Pedido listo para continuar.',
                     tipo: 'success',
                 });
             },
@@ -1187,21 +1217,37 @@ export default function ModalFormPedido({
                         </div>
                     )}
 
-                    {/* 1. Origen y cliente */}
+                    {/* 1. Tipo + cliente; el resto depende del flujo (pesaje o datos del pedido) */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>1. Origen y cliente</p>
+                        <p className={SECCION}>1. Tipo de pedido y cliente</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className={SECCION}>Origen</label>
-                                <select value={data.origen_id} disabled={logisticaBloqueada} onChange={(e) => setData('origen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
+                                <label className={SECCION}>Tipo de pedido *</label>
+                                <select
+                                    value={data.origen_id}
+                                    disabled={logisticaBloqueada}
+                                    onChange={(e) => cambiarTipoPedido(e.target.value)}
+                                    className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
+                                >
                                     <option value="">Seleccionar...</option>
                                     {(catalogos.origenes || []).map((o) => (
                                         <option key={o.id} value={o.id}>{o.nombre}</option>
                                     ))}
                                 </select>
+                                {origenSeleccionado ? (
+                                    <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
+                                        {requiereLogistica
+                                            ? 'Envío: a continuación solicite el pesaje; el resto del pedido se abre con «Continuar pedido».'
+                                            : 'Tienda/mostrador: sin pesaje ni datos de guía.'}
+                                    </p>
+                                ) : (
+                                    <p className="text-[10px] font-bold text-amber-600 mt-1.5 m-0">
+                                        Seleccione Tipo de pedido (Tienda o Envío) para mostrar el resto del formulario.
+                                    </p>
+                                )}
                             </div>
                             <div className="relative">
-                                <label className={SECCION}>Número de cliente</label>
+                                <label className={SECCION}>Número de cliente *</label>
                                 <div className="theme-field-with-icon">
                                     <Search className="theme-field-icon w-4 h-4" />
                                     <input type="text" value={data.numero_cliente} disabled={logisticaBloqueada} onChange={(e) => manejarBusquedaCliente(e.target.value)} placeholder="Buscar cliente..." className={`${THEME_INPUT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`} />
@@ -1217,10 +1263,16 @@ export default function ModalFormPedido({
                                     </div>
                                 )}
                             </div>
+                            {tieneTipo && !requiereLogistica && (
+                                <div>
+                                    <label className={SECCION}>Total mercancía *</label>
+                                    <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
+                                </div>
+                            )}
                         </div>
                     </section>
 
-                    {requiereLogistica && (
+                    {mostrarPesaje && (
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>2. Pesaje CEDIS</p>
                         {pedido?.estatus_envio && LABELS_ESTATUS_ENVIO[pedido.estatus_envio] && (
@@ -1230,20 +1282,36 @@ export default function ModalFormPedido({
                         )}
                         {pendientePesaje && (
                             <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale} className="mb-4">
-                                Consulta de pesaje enviada. Cuando CEDIS responda verá aquí el peso, medidas y cajas.
+                                Consulta de pesaje enviada. Cuando CEDIS responda verá aquí el peso, medidas y detalle físico.
                             </AvisoOperativoPedido>
                         )}
-                        {tienePesajeRespondido && !pendientePesaje && (
+                        {tienePesajeRespondido && !pendientePesaje && puedeContinuarPedido && (
+                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
+                                Revise la respuesta de CEDIS y pulse «Continuar pedido» para reanudar el flujo (datos, dirección, costos y pagos).
+                            </AvisoOperativoPedido>
+                        )}
+                        {tienePesajeRespondido && !pendientePesaje && !puedeContinuarPedido && (
                             <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
                                 CEDIS registró el peso y las cajas. Complete la cotización (paquetería y costos); el comprobante de pago se solicita después. Si agrega piezas, suba un segundo PDF/foto y solicite re-pesaje.
                             </AvisoOperativoPedido>
                         )}
                         {!tienePesajeRespondido && !pendientePesaje && (
                             <AvisoOperativoPedido label="Paso requerido" tono="info" icon={Scale} className="mb-4">
-                                Adjunte el PDF o una foto del pedido y solicite el pesaje. No se requiere comprobante de pago en este paso.
+                                Indique el total, adjunte el PDF o foto del pedido y solicite el pesaje. No se requiere comprobante de pago en este paso.
                             </AvisoOperativoPedido>
                         )}
                         <div className="space-y-4">
+                            {!tienePesajeRespondido && !pendientePesaje && (
+                                <div className="max-w-md">
+                                    <label className={SECCION}>Total mercancía *</label>
+                                    <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
+                                </div>
+                            )}
+                            {(tienePesajeRespondido || pendientePesaje) && Number(data.total_mercancia || 0) > 0 && (
+                                <p className="text-xs font-bold theme-text-muted m-0">
+                                    Total mercancía: {formatearMoneda(data.total_mercancia)}
+                                </p>
+                            )}
                             <div>
                                 <label className={SECCION}>PDF o foto del pedido</label>
                                 <div className="flex flex-wrap items-center gap-3">
@@ -1274,7 +1342,7 @@ export default function ModalFormPedido({
                                 <button
                                     type="button"
                                     onClick={solicitarPesaje}
-                                    disabled={procesandoPesaje || processing || !data.cliente_id}
+                                    disabled={procesandoPesaje || processing || !data.cliente_id || Number(data.total_mercancia || 0) <= 0}
                                     className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
                                 >
                                     <Scale className="w-4 h-4" /> Solicitar pesaje a CEDIS
@@ -1283,7 +1351,10 @@ export default function ModalFormPedido({
                             {!data.cliente_id && !tienePesajeRespondido && !pendientePesaje && (
                                 <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione el cliente para poder solicitar el pesaje.</p>
                             )}
-                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && (
+                            {data.cliente_id && Number(data.total_mercancia || 0) <= 0 && !tienePesajeRespondido && !pendientePesaje && (
+                                <p className="text-[10px] font-bold text-amber-600 m-0">Indique el total de mercancía para poder solicitar el pesaje.</p>
+                            )}
+                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && (
                                 <div className="space-y-3 p-3 rounded-xl border theme-border">
                                     <div>
                                         <label className={SECCION}>Piezas adicionales (PDF o foto)</label>
@@ -1323,32 +1394,19 @@ export default function ModalFormPedido({
                                     </div>
                                 </div>
                             )}
-                            {puedeVolverBorrador && (
-                                <div className="mt-2 p-4 rounded-xl border-2 border-orange-500/50 bg-orange-500/10 space-y-4">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 m-0">
-                                        Indicador · Pedido en pesaje
-                                    </p>
-                                    <p className="text-sm font-bold theme-text-main m-0 leading-snug pb-1">
-                                        Conserve el pedido como borrador para poder completarlo después (datos, pago y envío).
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={volverABorrador}
-                                        disabled={procesandoPesaje || processing}
-                                        className={`${BTN_PRIMARY} w-full sm:w-auto flex items-center justify-center gap-2 outline-none min-h-[48px] px-6 mt-1 text-sm font-black uppercase tracking-widest ring-2 ring-orange-400/60`}
-                                        style={{ backgroundColor: '#EA580C' }}
-                                    >
-                                        <RotateCcw className="w-5 h-5" /> Conservar como borrador
-                                    </button>
-                                </div>
-                            )}
                         </div>
 
                         {tienePesajeRespondido && (
                             <div className="mt-6 pt-6 border-t theme-border space-y-4">
-                                <p className={SECCION}>Peso, medidas y envíos (CEDIS)</p>
+                                <p className={SECCION}>Respuesta de pesaje y detalles</p>
+                                <SeccionRevisionFisicaPedido
+                                    pedido={pedido}
+                                    onVerDoc={setVistaPrevia}
+                                    titulo="Revisión física CEDIS"
+                                />
                                 {cajasPesaje.length > 0 ? (
                                     <div className="space-y-3">
+                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
                                         {[...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
                                             <div key={c.id || idx} className="p-4 rounded-xl border theme-border theme-element space-y-2">
                                                 <p className="text-sm font-black theme-text-main m-0">Envío {idx + 1}</p>
@@ -1387,20 +1445,35 @@ export default function ModalFormPedido({
                                             className={`${THEME_INPUT} w-full py-3 opacity-60`}
                                             title="Suma del mayor entre peso real y volumétrico de cada envío"
                                         />
-                                        <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                                            Suma por envío del mayor entre real y volumétrico.
-                                        </p>
                                     </div>
                                 </div>
+                                {puedeContinuarPedido && (
+                                    <div className="mt-2 p-4 rounded-xl border-2 border-orange-500/50 bg-orange-500/10 space-y-4">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 m-0">
+                                            Siguiente paso
+                                        </p>
+                                        <p className="text-sm font-bold theme-text-main m-0 leading-snug pb-1">
+                                            Continúe el pedido para capturar datos generales, dirección, costos y pagos.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={continuarPedido}
+                                            disabled={procesandoPesaje || processing}
+                                            className={`${BTN_PRIMARY} w-full sm:w-auto flex items-center justify-center gap-2 outline-none min-h-[48px] px-6 mt-1 text-sm font-black uppercase tracking-widest ring-2 ring-orange-400/60`}
+                                            style={{ backgroundColor: '#EA580C' }}
+                                        >
+                                            <ArrowRight className="w-5 h-5" /> Continuar pedido
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </section>
                     )}
 
-                    {/* 3. Datos generales */}
+                    {mostrarRestoPedido && (
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{requiereLogistica ? '3. Datos generales' : '2. Datos generales'}</p>
-                        {leyendaContinuarBorrador}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className={SECCION}>Folio de Pedido *</label>
@@ -1429,13 +1502,12 @@ export default function ModalFormPedido({
                                 <label className={SECCION}>Fecha</label>
                                 <input type="date" value={data.fecha} onChange={(e) => setData('fecha', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                             </div>
-                            <div>
-                                <label className={SECCION}>Banco</label>
-                                <select value={data.catalogo_banco_id} onChange={(e) => setData('catalogo_banco_id', e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
-                                    <option value="">Banco de recepción...</option>
-                                    {(catalogos.bancos || []).map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
-                                </select>
-                            </div>
+                            {requiereLogistica && (
+                                <div>
+                                    <label className={SECCION}>Total mercancía *</label>
+                                    <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
+                                </div>
+                            )}
                             <div>
                                 <label className={SECCION}>Almacén de salida</label>
                                 <select value={data.almacen_id} disabled={logisticaBloqueada} onChange={(e) => setData('almacen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
@@ -1445,7 +1517,7 @@ export default function ModalFormPedido({
                                     ))}
                                 </select>
                             </div>
-                            <div className="flex items-end md:col-span-2">
+                            <div className="md:col-span-2">
                                 <label className="flex items-center gap-3 theme-text-main p-3 rounded-xl border theme-border w-full cursor-pointer">
                                     <input
                                         type="checkbox"
@@ -1520,6 +1592,10 @@ export default function ModalFormPedido({
                                             </p>
                                         </button>
                                     </div>
+                                </div>
+                            )}
+                            {data.es_resguardo && (
+                                <div className="md:col-span-2 space-y-3">
                                     {esResguardoAbierto && (
                                         <div className="flex items-start gap-2 p-3 rounded-xl border border-blue-500/40 bg-blue-500/10">
                                             <AlertTriangle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
@@ -1617,7 +1693,10 @@ export default function ModalFormPedido({
                         </div>
                     </section>
 
-                    {requiereLogistica && (
+                    )}
+
+
+                    {mostrarLogisticaPostPesaje && (
                     <>
                     {/* Dirección de envío */}
                     <section className={SECCION_WRAP}>
@@ -1634,7 +1713,6 @@ export default function ModalFormPedido({
                                 </button>
                             )}
                         </div>
-                        {leyendaContinuarBorrador}
                         {(msgDireccion || sinDireccionPrincipal) && (
                             <div className="mb-4 p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex items-start gap-3">
                                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -1797,7 +1875,6 @@ export default function ModalFormPedido({
                     {/* 5. Envío y costos (logística) */}
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>5. Envío y costos</p>
-                        {leyendaContinuarBorrador}
                         <div className="space-y-4">
                             <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? 'opacity-50' : 'cursor-pointer'} p-4 rounded-xl border theme-border theme-element`}>
                                 <input
@@ -1816,10 +1893,6 @@ export default function ModalFormPedido({
                                 </div>
                             )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className={SECCION}>Total mercancía</label>
-                                    <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
-                                </div>
                                 <div>
                                     <label className={SECCION}>Paquetería{guiaCliente ? ' (opcional)' : ''}</label>
                                     <div className={wrapIncorrecto('paqueteria')}>
@@ -1982,75 +2055,43 @@ export default function ModalFormPedido({
                     </>
                     )}
 
-                    {/* 6. Evidencias y comentarios */}
+                    {mostrarPagosYCierre && (
+                    <>
+                    {/* Pagos y comentarios */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>{requiereLogistica ? '6. Evidencias y comentarios' : '3. Evidencias y comentarios'}</p>
-                        {leyendaContinuarBorrador}
+                        <p className={SECCION}>{requiereLogistica ? '6. Pagos y comentarios' : '3. Pagos y comentarios'}</p>
                         <div className="space-y-4">
-                            {!requiereLogistica && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className={SECCION}>Total mercancía</label>
-                                        <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
-                                    </div>
-                                </div>
-                            )}
                             <SeccionPagosExhibicion
                                 pedidoId={idPedidoAcciones}
                                 bancos={catalogos.bancos || []}
+                                formasPago={catalogos.formas_pago || []}
                                 puedeRegistrar={Boolean(idPedidoAcciones) && cotizacionLista}
-                                puedeGenerarSaldo={cotizacionLista && (can('saldos_favor.generar') || can('control_pedidos.crear'))}
-                                onResumenChange={(r) => setSaldoGeneradoExcedente(Number(r?.excedente || 0))}
+                                puedeGenerarSaldo={false}
+                                onResumenChange={(r) => {
+                                    setPagoResumen(r);
+                                    setSaldoGeneradoExcedente(Number(r?.excedente || 0));
+                                }}
                                 mensajeBloqueo={!cotizacionLista
                                     ? (requiereLogistica && !tienePesajeRespondido && !esResguardoComplementario
                                         ? 'Complete el pesaje CEDIS y la cotización antes de registrar pagos.'
                                         : 'Complete la cotización (paquetería y costos) antes de registrar pagos.')
                                     : null}
                             />
-                            <div>
-                                <label className={SECCION}>Evidencias / Comprobantes</label>
-                                <p className="text-[10px] theme-text-muted font-bold mb-3 -mt-1">
-                                    {cotizacionLista
-                                        ? 'Requeridos al enviar al auxiliar. Adjunte archivos o use Ctrl+V.'
-                                        : (requiereLogistica && !tienePesajeRespondido && !esResguardoComplementario
-                                            ? 'Se solicitan después del pesaje CEDIS y de completar la cotización.'
-                                            : 'Se solicitan después de completar la cotización (paquetería y costos).')}
-                                </p>
-                                {cotizacionLista ? (
-                                    <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
-                                        <ImagePlus className="w-4 h-4 theme-text-muted" />
-                                        <span className="text-xs font-black uppercase">Adjuntar comprobantes</span>
-                                        <input type="file" accept="image/*" multiple className="hidden" onChange={manejarArchivos} />
-                                    </label>
-                                ) : (
-                                    <div className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl w-fit theme-element theme-text-muted opacity-60">
-                                        <ImagePlus className="w-4 h-4" />
-                                        <span className="text-xs font-black uppercase">Adjuntar comprobantes</span>
+                            {docsExistentes.length > 0 && (
+                                <div>
+                                    <label className={SECCION}>Comprobantes anteriores (solo consulta)</label>
+                                    <p className="text-[10px] theme-text-muted font-bold mb-3 -mt-1">
+                                        Los nuevos comprobantes se adjuntan en cada exhibición de pago.
+                                    </p>
+                                    <div className="flex flex-wrap gap-3 mt-3">
+                                        {docsExistentes.map((doc) => (
+                                            <div key={doc.id} className="relative w-20 h-20 rounded-xl overflow-hidden border theme-border">
+                                                <img src={doc.url} alt={doc.nombre_original} className="w-full h-full object-cover" />
+                                            </div>
+                                        ))}
                                     </div>
-                                )}
-                                <div className="flex flex-wrap gap-3 mt-3">
-                                    {docsExistentes.map((doc) => (
-                                        <div key={doc.id} className="relative w-20 h-20 rounded-xl overflow-hidden border theme-border">
-                                            <img src={doc.url} alt={doc.nombre_original} className="w-full h-full object-cover" />
-                                            {cotizacionLista && (
-                                                <button type="button" onClick={() => toggleEliminarDoc(doc.id)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg outline-none">
-                                                    <Trash2 className="w-3 h-3" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {previews.map((p, i) => (
-                                        <div key={p.url} className="relative w-20 h-20 rounded-xl overflow-hidden border theme-border">
-                                            <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
-                                            {cotizacionLista && (
-                                                <button type="button" onClick={() => quitarPreviewNuevo(i)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg outline-none">
-                                                    <Trash2 className="w-3 h-3" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    ))}
                                 </div>
-                            </div>
+                            )}
                             <div>
                                 <label className={SECCION}>Comentarios para Drive / Almacén</label>
                                 <textarea placeholder="Notas adicionales..." value={data.comentarios_drive} onChange={(e) => setData('comentarios_drive', e.target.value)} className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`} />
@@ -2073,7 +2114,6 @@ export default function ModalFormPedido({
                     {/* Desglose de montos */}
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{requiereLogistica ? '7. Desglose de montos' : '4. Desglose de montos'}</p>
-                        {leyendaContinuarBorrador}
                         <div className="space-y-2 text-sm">
                             <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
                             <div className="flex justify-between theme-text-muted font-bold"><span>{labelCostoEnvio}</span><span>{formatearMoneda(guiaCliente ? 0 : data.costo_envio)}</span></div>
@@ -2095,20 +2135,25 @@ export default function ModalFormPedido({
                             <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(totalCobrar)}</p>
                         </div>
                     </section>
+                    </>
+                    )}
 
                     <section className="gelia-modal-footer flex flex-col gap-3 p-5 md:p-6 -mx-5 md:-mx-8 -mb-5 md:-mb-8">
                         <div className="flex flex-wrap gap-3">
-                        <button type="button" onClick={() => guardar(true)} disabled={processing || pendientePesaje} className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}>
-                            <Send className="w-4 h-4" /> Enviar pedido
-                        </button>
+                        {mostrarEnviarPedido && (
+                            <button
+                                type="button"
+                                onClick={() => guardar(true)}
+                                disabled={processing || !enviarPedidoListo}
+                                title={!enviarPedidoListo ? (validacionEnvio.mensaje || 'Complete los datos necesarios para enviar') : undefined}
+                                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 disabled:cursor-not-allowed`}
+                            >
+                                <Send className="w-4 h-4" /> Enviar pedido
+                            </button>
+                        )}
                         <button type="button" onClick={() => guardar(false)} disabled={processing} className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none`}>
                             <Save className="w-4 h-4" /> Guardar borrador
                         </button>
-                        {modoEdicion && (
-                            <button type="button" onClick={compartirWhatsApp} className={`${BTN_SECONDARY} theme-element border theme-border flex items-center gap-2 outline-none`}>
-                                <MessageCircle className="w-4 h-4" /> WhatsApp
-                            </button>
-                        )}
                         <button type="button" onClick={() => {
                             setData(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
                             setPreviews([]);

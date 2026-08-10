@@ -228,7 +228,7 @@ trait ResuelveDatosPedidoBma
                 ? (int) $datos['pedido_principal_id']
                 : null,
             'almacen_id' => $datos['almacen_id'] ?? null,
-            'catalogo_banco_id' => $datos['catalogo_banco_id'] ?? null,
+            // Banco receptor vive en exhibiciones; no persistir banco general desde el form.
             'catalogo_tipo_caja_id' => $datos['catalogo_tipo_caja_id'] ?? null,
             'numero_cajas' => isset($datos['numero_cajas']) && $datos['numero_cajas'] !== ''
                 ? (int) $datos['numero_cajas']

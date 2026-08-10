@@ -38,7 +38,7 @@ export const GRUPOS_ERROR_DATOS = [
             { id: 'referencia', label: 'Referencias' },
             { id: 'codigo_postal', label: 'Código postal' },
             { id: 'ciudad_estado', label: 'Ciudad / estado' },
-            { id: 'origen', label: 'Origen' },
+            { id: 'origen', label: 'Tipo de pedido' },
             { id: 'cliente', label: 'Cliente' },
             { id: 'fecha', label: 'Fecha' },
             { id: 'banco', label: 'Banco' },

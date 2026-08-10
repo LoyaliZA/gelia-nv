@@ -4,6 +4,8 @@ import { Camera, AlertTriangle, Flashlight, FlashlightOff, X } from 'lucide-reac
 import { cargarHtml5Qrcode } from './cargarHtml5Qrcode';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_SECONDARY } from '@/utils/geliaTheme';
 
+const DEBOUNCE_CONTINUO_MS = 1200;
+
 function esperarDom() {
     return new Promise((resolve) => {
         requestAnimationFrame(() => requestAnimationFrame(resolve));
@@ -72,18 +74,23 @@ export default function ModalEscanearCodigo({
     onEscaneado,
     titulo = 'Escanear código',
     descripcion = 'Apunta la cámara al código QR o de barras del producto.',
+    continuo = false,
 }) {
     const hostRef = useRef(null);
     const escanerRef = useRef(null);
     const onEscaneadoRef = useRef(onEscaneado);
+    const continuoRef = useRef(continuo);
+    const ultimoCodigoRef = useRef({ valor: '', at: 0 });
     const scannerId = useId().replace(/:/g, '');
     const [error, setError] = useState(null);
     const [iniciando, setIniciando] = useState(true);
     const [flashActivo, setFlashActivo] = useState(false);
     const [soportaFlash, setSoportaFlash] = useState(false);
+    const [ultimoLeido, setUltimoLeido] = useState('');
     const flashActivoRef = useRef(false);
 
     onEscaneadoRef.current = onEscaneado;
+    continuoRef.current = continuo;
 
     useEffect(() => {
         flashActivoRef.current = flashActivo;
@@ -93,6 +100,8 @@ export default function ModalEscanearCodigo({
         if (!abierto) return undefined;
 
         let cancelado = false;
+        ultimoCodigoRef.current = { valor: '', at: 0 };
+        setUltimoLeido('');
 
         const iniciar = async () => {
             setError(null);
@@ -148,6 +157,18 @@ export default function ModalEscanearCodigo({
                         if (cancelado) return;
                         const valor = texto.trim();
                         if (!valor) return;
+
+                        if (continuoRef.current) {
+                            const ahora = Date.now();
+                            const prev = ultimoCodigoRef.current;
+                            if (prev.valor === valor && ahora - prev.at < DEBOUNCE_CONTINUO_MS) {
+                                return;
+                            }
+                            ultimoCodigoRef.current = { valor, at: ahora };
+                            setUltimoLeido(valor);
+                            onEscaneadoRef.current?.(valor);
+                            return;
+                        }
 
                         cancelado = true;
                         if (flashActivoRef.current) {
@@ -205,7 +226,11 @@ export default function ModalEscanearCodigo({
                     </button>
                 </div>
                 <div className="p-5 space-y-4">
-                    <p className="text-sm theme-text-muted m-0">{descripcion}</p>
+                    <p className="text-sm theme-text-muted m-0">
+                        {continuo
+                            ? `${descripcion} Puede escanear varios códigos seguidos; cierre cuando termine.`
+                            : descripcion}
+                    </p>
                     <div className="rounded-2xl overflow-hidden border theme-border bg-black/90 min-h-[220px] relative">
                         <div ref={hostRef} className="w-full min-h-[220px]" />
                         {iniciando && (
@@ -216,6 +241,11 @@ export default function ModalEscanearCodigo({
                             </div>
                         )}
                     </div>
+                    {continuo && ultimoLeido && (
+                        <p className="text-xs font-bold theme-text-main m-0 px-3 py-2 rounded-xl border theme-border theme-element">
+                            Último leído: <span className="font-mono">{ultimoLeido}</span>
+                        </p>
+                    )}
                     {error && (
                         <div className="flex items-start gap-2 px-4 py-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-sm">
                             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -233,7 +263,9 @@ export default function ModalEscanearCodigo({
                             {flashActivo ? <><FlashlightOff className="w-4 h-4" /> Apagar flash</> : <><Flashlight className="w-4 h-4" /> Encender flash</>}
                         </button>
                     ) : <span />}
-                    <button type="button" onClick={onCerrar} className={THEME_BTN_SECONDARY}>Cancelar</button>
+                    <button type="button" onClick={onCerrar} className={THEME_BTN_SECONDARY}>
+                        {continuo ? 'Listo' : 'Cancelar'}
+                    </button>
                 </div>
             </div>
         </div>,

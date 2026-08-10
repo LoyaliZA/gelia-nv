@@ -3,7 +3,6 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
-use App\Models\ControlPedidos\PedidoBmaDocumento;
 
 trait ValidacionCamposPedidoBma
 {
@@ -35,17 +34,11 @@ trait ValidacionCamposPedidoBma
         if (! $pedido->origen_id) {
             $faltantes[] = 'origen del pedido';
         }
-        if (! $pedido->catalogo_banco_id) {
-            $faltantes[] = 'banco';
-        }
         if (! $pedido->almacen_id) {
             $faltantes[] = 'almacén de salida';
         }
         if ($pedido->total_mercancia <= 0) {
             $faltantes[] = 'total de mercancía';
-        }
-        if ($pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_COMPROBANTE)->count() === 0) {
-            $faltantes[] = 'comprobante de pago';
         }
 
         if ($requiereLogistica) {

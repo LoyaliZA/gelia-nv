@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck, Truck } from 'lucide-react';
+import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck, Truck, Ban, Download } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import {
     badgeEstatusPedido,
@@ -9,20 +9,24 @@ import {
     formatearFechaNegocio,
     tieneGuiaLista,
     badgeGuiaLista,
+    badgeObservacionesCedis,
+    badgeSinExistencias,
+    pedidoTieneSinExistencias,
     tieneGuiaPdfDisponible,
     puedeAnexarPagoEnvio,
     puedeCompletarEnvioResguardo,
     puedeCargarGuiaCliente,
+    textoFuentesPagoCompacto,
+    guiaPdfDe,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
-import BotonGuiaPdf from './BotonGuiaPdf';
+import BotonAccionCubico from './BotonAccionCubico';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 
 function AccionesPedido({
-    pedido, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
-    puedeEditar, puedeEliminar, compact = false,
+    pedido, can, onVer, onEditar, onEliminar, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+    puedeEditar, puedeEliminar, puedeCancelar, compact = false,
 }) {
-    const btnClass = compact ? 'p-2.5' : 'p-2';
     const puedeMutar = Boolean(pedido.puede_editar ?? pedido.puede_mutar);
     const puedeAnexar = puedeMutar
         && puedeAnexarPagoEnvio(pedido)
@@ -35,53 +39,73 @@ function AccionesPedido({
         && puedeCargarGuiaCliente(pedido)
         && (can('control_pedidos.crear') || can('control_pedidos.editar'))
         && onCargarGuia;
+    const guiaPdf = tieneGuiaPdfDisponible(pedido) && onVerGuia ? guiaPdfDe(pedido) : null;
+
+    const items = [];
+    if (guiaPdf) {
+        items.push(
+            <BotonAccionCubico key="guia" icon={Download} label="Guía PDF" onClick={() => onVerGuia(guiaPdf)} conLabel={compact} />
+        );
+    }
+    if (puedeCargar) {
+        items.push(
+            <BotonAccionCubico key="cargar" icon={Truck} label="Cargar guía" onClick={() => onCargarGuia(pedido)} tone="fuchsia" conLabel={compact} />
+        );
+    }
+    if (puedeCompletar) {
+        items.push(
+            <BotonAccionCubico key="completar" icon={PackageCheck} label="Completar envío" onClick={() => onCompletarEnvio(pedido)} tone="teal" conLabel={compact} />
+        );
+    }
+    if (puedeAnexar && onAnexarEnvio) {
+        items.push(
+            <BotonAccionCubico key="anexar" icon={Receipt} label="Anexar pago" onClick={() => onAnexarEnvio(pedido)} tone="amber" conLabel={compact} />
+        );
+    }
+    if (can('control_pedidos.ver_detalle')) {
+        items.push(
+            <BotonAccionCubico key="ver" icon={Eye} label="Ver" onClick={() => onVer(pedido)} conLabel={compact} />
+        );
+    }
+    if (onBitacora) {
+        items.push(
+            <BotonAccionCubico key="bitacora" icon={History} label="Bitácora" onClick={() => onBitacora(pedido)} tone="purple" conLabel={compact} />
+        );
+    }
+    if (puedeEditar(pedido)) {
+        items.push(
+            <BotonAccionCubico key="editar" icon={Edit2} label="Editar" onClick={() => onEditar(pedido)} conLabel={compact} />
+        );
+    }
+    if (puedeCancelar?.(pedido) && onCancelar) {
+        items.push(
+            <BotonAccionCubico key="cancelar" icon={Ban} label="Cancelar" onClick={() => onCancelar(pedido)} tone="warn" conLabel={compact} />
+        );
+    }
+    if (puedeEliminar(pedido)) {
+        items.push(
+            <BotonAccionCubico key="eliminar" icon={Trash2} label="Eliminar" onClick={() => onEliminar(pedido)} tone="danger" conLabel={compact} />
+        );
+    }
+
+    if (items.length === 0) return null;
+
     return (
-        <div className={`flex ${compact ? 'flex-wrap' : 'justify-end'} gap-1.5`}>
-            {tieneGuiaPdfDisponible(pedido) && onVerGuia && (
-                <BotonGuiaPdf pedido={pedido} onVerPdf={onVerGuia} compact className="!px-3 !py-2" />
-            )}
-            {puedeCargar && (
-                <button type="button" onClick={() => onCargarGuia(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-fuchsia-500`} title="Cargar guía">
-                    <Truck className="w-4 h-4 text-fuchsia-600" />
-                </button>
-            )}
-            {puedeCompletar && (
-                <button type="button" onClick={() => onCompletarEnvio(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-teal-500`} title="Completar envío del resguardo">
-                    <PackageCheck className="w-4 h-4 text-teal-600" />
-                </button>
-            )}
-            {puedeAnexar && onAnexarEnvio && (
-                <button type="button" onClick={() => onAnexarEnvio(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-amber-500`} title="Anexar pago de envío">
-                    <Receipt className="w-4 h-4 text-amber-600" />
-                </button>
-            )}
-            {can('control_pedidos.ver_detalle') && (
-                <button type="button" onClick={() => onVer(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-[var(--color-primario)]`} title="Ver">
-                    <Eye className="w-4 h-4 theme-text-main" />
-                </button>
-            )}
-            {onBitacora && (
-                <button type="button" onClick={() => onBitacora(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-purple-500`} title="Bitácora">
-                    <History className="w-4 h-4 theme-text-main" />
-                </button>
-            )}
-            {puedeEditar(pedido) && (
-                <button type="button" onClick={() => onEditar(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:border-[var(--color-primario)]`} title="Editar">
-                    <Edit2 className="w-4 h-4 theme-text-main" />
-                </button>
-            )}
-            {puedeEliminar(pedido) && (
-                <button type="button" onClick={() => onEliminar(pedido)} className={`${btnClass} theme-element border theme-border rounded-xl outline-none hover:bg-red-500/10 hover:border-red-500`} title="Eliminar">
-                    <Trash2 className="w-4 h-4 text-red-500" />
-                </button>
-            )}
+        <div className={compact
+            ? 'grid grid-cols-2 gap-2'
+            : 'flex justify-end gap-1.5 overflow-visible'
+        }
+        >
+            {items}
         </div>
     );
 }
 
-function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEditar, onEliminar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia, puedeEditar, puedeEliminar }) {
+function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEditar, onEliminar, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia, puedeEditar, puedeEliminar, puedeCancelar }) {
     const guiaLista = tieneGuiaLista(pedido);
     const badgeGuia = badgeGuiaLista();
+    const badgeObs = pedido.tiene_observaciones_fisicas ? badgeObservacionesCedis() : null;
+    const badgeSinEx = pedidoTieneSinExistencias(pedido) ? badgeSinExistencias() : null;
 
     return (
         <div className={`${geliaCardClass()} p-4 space-y-3 ${esRechazado ? 'ring-1 ring-red-500/30' : ''}`}>
@@ -100,6 +124,12 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                     {badgeEnvio && (
                         <span className={badgeEnvio.className} style={badgeEnvio.style}>{badgeEnvio.label}</span>
                     )}
+                    {badgeObs && (
+                        <span className={badgeObs.className}>{badgeObs.label}</span>
+                    )}
+                    {badgeSinEx && (
+                        <span className={badgeSinEx.className}>{badgeSinEx.label}</span>
+                    )}
                     {guiaLista && (
                         <span className={badgeGuia.className}>{badgeGuia.label}</span>
                     )}
@@ -112,7 +142,10 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
             <div className="flex flex-wrap gap-2 text-[10px] font-bold theme-text-muted uppercase">
                 <span>{etiquetaAlmacen(pedido.almacen)}</span>
                 <span>·</span>
-                <span>{pedido.banco?.nombre || '—'}</span>
+                {(() => {
+                    const f = textoFuentesPagoCompacto(pedido.fuentes_pago);
+                    return <span title={f.completo || undefined}>{f.texto}</span>;
+                })()}
             </div>
             <p className="text-lg font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(pedido.total_a_cobrar)}</p>
             {guiaLista && pedido.numero_rastreo && (
@@ -131,6 +164,7 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                 onVer={onVer}
                 onEditar={onEditar}
                 onEliminar={onEliminar}
+                onCancelar={onCancelar}
                 onBitacora={onBitacora}
                 onVerGuia={onVerGuia}
                 onAnexarEnvio={onAnexarEnvio}
@@ -138,6 +172,7 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                 onCargarGuia={onCargarGuia}
                 puedeEditar={puedeEditar}
                 puedeEliminar={puedeEliminar}
+                puedeCancelar={puedeCancelar}
                 compact
             />
         </div>
@@ -150,6 +185,7 @@ export default function TablaPedidos({
     onVer,
     onEditar,
     onEliminar,
+    onCancelar,
     onBitacora,
     onAnexarEnvio,
     onCompletarEnvio,
@@ -170,6 +206,10 @@ export default function TablaPedidos({
     const puedeEliminar = (pedido) => puedeMutarPedido(pedido)
         && can('control_pedidos.eliminar')
         && ['BORRADOR', 'PESAJE_PENDIENTE'].includes(pedido.estatus?.fase_ciclo);
+
+    const puedeCancelar = (pedido) => Boolean(pedido.puede_cancelar)
+        && can('control_pedidos.cancelar')
+        && pedido.estatus?.fase_ciclo !== 'CANCELADO';
 
     if (items.length === 0) {
         return (
@@ -193,6 +233,7 @@ export default function TablaPedidos({
                         onVer={onVer}
                         onEditar={onEditar}
                         onEliminar={onEliminar}
+                        onCancelar={onCancelar}
                         onBitacora={onBitacora}
                         onVerGuia={setDocPreview}
                         onAnexarEnvio={onAnexarEnvio}
@@ -200,6 +241,7 @@ export default function TablaPedidos({
                         onCargarGuia={onCargarGuia}
                         puedeEditar={puedeEditar}
                         puedeEliminar={puedeEliminar}
+                        puedeCancelar={puedeCancelar}
                     />
                 ))}
             </div>
@@ -225,6 +267,8 @@ export default function TablaPedidos({
                             const esRechazado = pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA';
                             const guiaLista = tieneGuiaLista(pedido);
                             const badgeGuia = badgeGuiaLista();
+                            const badgeObs = pedido.tiene_observaciones_fisicas ? badgeObservacionesCedis() : null;
+                            const badgeSinEx = pedidoTieneSinExistencias(pedido) ? badgeSinExistencias() : null;
                             return (
                                 <tr key={pedido.id} className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${esRechazado ? 'bg-red-500/5' : ''}`}>
                                     <td className="px-5 py-4">
@@ -243,7 +287,9 @@ export default function TablaPedidos({
                                         <p className="text-[9px] theme-text-muted m-0">{pedido.cliente?.numero_cliente}</p>
                                     </td>
                                     <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase">{etiquetaAlmacen(pedido.almacen)}</td>
-                                    <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase">{pedido.banco?.nombre || '—'}</td>
+                                    <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase" title={textoFuentesPagoCompacto(pedido.fuentes_pago).completo || undefined}>
+                                        {textoFuentesPagoCompacto(pedido.fuentes_pago).texto}
+                                    </td>
                                     <td className="px-5 py-4 text-sm font-black" style={{ color: 'var(--color-primario)' }}>
                                         {formatearMoneda(pedido.total_a_cobrar)}
                                     </td>
@@ -254,6 +300,12 @@ export default function TablaPedidos({
                                         {badgeEnvio && (
                                             <span className={`${badgeEnvio.className} mt-1.5 block w-fit`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
                                         )}
+                                        {badgeObs && (
+                                            <span className={`${badgeObs.className} mt-1.5 block w-fit`}>{badgeObs.label}</span>
+                                        )}
+                                        {badgeSinEx && (
+                                            <span className={`${badgeSinEx.className} mt-1.5 block w-fit`}>{badgeSinEx.label}</span>
+                                        )}
                                         {guiaLista && (
                                             <span className={`${badgeGuia.className} mt-1.5 block w-fit`}>{badgeGuia.label}</span>
                                         )}
@@ -263,13 +315,14 @@ export default function TablaPedidos({
                                             </p>
                                         )}
                                     </td>
-                                    <td className="px-5 py-4">
+                                    <td className="px-5 py-4 text-right overflow-visible">
                                         <AccionesPedido
                                             pedido={pedido}
                                             can={can}
                                             onVer={onVer}
                                             onEditar={onEditar}
                                             onEliminar={onEliminar}
+                                            onCancelar={onCancelar}
                                             onBitacora={onBitacora}
                                             onVerGuia={setDocPreview}
                                             onAnexarEnvio={onAnexarEnvio}
@@ -277,6 +330,7 @@ export default function TablaPedidos({
                                             onCargarGuia={onCargarGuia}
                                             puedeEditar={puedeEditar}
                                             puedeEliminar={puedeEliminar}
+                                            puedeCancelar={puedeCancelar}
                                         />
                                     </td>
                                 </tr>

@@ -56,7 +56,7 @@ class ControlPedidosHandoffAlertasTest extends TestCase
             'pedido_pendiente_auxiliar' => 'pendiente de auditoría',
             'pedido_aprobado' => 'fue aprobado',
             'pedido_rechazado_auxiliar' => 'fue rechazado',
-            'pedido_incidencia_cedis' => 'incidencia de empaque',
+            'pedido_incidencia_cedis' => 'error de empaque',
             'pedido_pendiente_guia' => 'pendiente de guía',
             'pedido_pendiente_envio' => 'pendiente de envío',
             'pedido_guia_asignada' => 'se asignó guía',
@@ -78,19 +78,19 @@ class ControlPedidosHandoffAlertasTest extends TestCase
 
     public function test_enviar_notifica_pendiente_auxiliar(): void
     {
-        $this->expectNotificar('pedido_pendiente_auxiliar', ['control_pedidos.auditar'], false);
+        $this->expectNotificar('pedido_pendiente_auxiliar', ['control_pedidos.auditar'], false, $this->vendedora->id);
 
         $pedido = $this->crearPedidoBorradorListoParaEnviar();
 
         app(EnviarPedidoBmaService::class)->ejecutar(
             $pedido->fresh(['estatus', 'origen', 'documentos', 'comprobantes']),
-            $this->actor->id
+            $this->vendedora->id
         );
     }
 
     public function test_aprobar_notifica_cedis_y_vendedora(): void
     {
-        $this->expectNotificar('pedido_aprobado', ['control_pedidos.cedis'], true);
+        $this->expectNotificar('pedido_aprobado', ['control_pedidos.cedis'], true, $this->actor->id);
 
         $pedido = $this->crearPedidoPendienteAuxiliar();
 
@@ -102,7 +102,7 @@ class ControlPedidosHandoffAlertasTest extends TestCase
 
     public function test_rechazar_notifica_vendedora(): void
     {
-        $this->expectNotificar('pedido_rechazado_auxiliar', [], true);
+        $this->expectNotificar('pedido_rechazado_auxiliar', [], true, $this->actor->id);
 
         $pedido = $this->crearPedidoPendienteAuxiliar();
 
@@ -115,7 +115,7 @@ class ControlPedidosHandoffAlertasTest extends TestCase
 
     public function test_empacar_notifica_pendiente_guia(): void
     {
-        $this->expectNotificar('pedido_pendiente_guia', ['control_pedidos.delegado'], false);
+        $this->expectNotificar('pedido_pendiente_guia', ['control_pedidos.delegado'], false, $this->actor->id);
 
         $pedido = $this->crearPedidoEnCedis([
             'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
@@ -130,8 +130,9 @@ class ControlPedidosHandoffAlertasTest extends TestCase
     /**
      * @param  list<string>  $permisos
      */
-    private function expectNotificar(string $tipo, array $permisos, bool $incluirVendedora): void
+    private function expectNotificar(string $tipo, array $permisos, bool $incluirVendedora, ?int $excluirId = null): void
     {
+        $excluirEsperado = $excluirId ?? $this->actor->id;
         $mock = Mockery::mock(NotificarPedidoBmaService::class);
         $mock->shouldReceive('ejecutar')
             ->once()
@@ -142,11 +143,11 @@ class ControlPedidosHandoffAlertasTest extends TestCase
                 array $perms,
                 ?int $excluirUsuarioId,
                 bool $incluirVend,
-            ) use ($tipo, $permisos, $incluirVendedora) {
+            ) use ($tipo, $permisos, $incluirVendedora, $excluirEsperado) {
                 return $tipoAlerta === $tipo
                     && $perms === $permisos
                     && $incluirVend === $incluirVendedora
-                    && $excluirUsuarioId === $this->actor->id
+                    && $excluirUsuarioId === $excluirEsperado
                     && $pedido->id > 0;
             });
 
@@ -180,6 +181,20 @@ class ControlPedidosHandoffAlertasTest extends TestCase
             'mime_type' => 'image/jpeg',
             'tamano_bytes' => 100,
             'orden' => 1,
+        ]);
+
+        $pedido->update(['total_a_cobrar' => 1000, 'saldo_a_favor' => 0]);
+
+        \App\Models\SaldosAFavor\PedidoBmaPago::create([
+            'pedido_bma_id' => $pedido->id,
+            'numero_exhibicion' => 1,
+            'monto' => 1000,
+            'ruta_archivo' => 'pedidos_bma/pagos/test.jpg',
+            'nombre_original' => 'pago.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamano_bytes' => 100,
+            'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_PENDIENTE,
+            'capturado_por_id' => $this->vendedora->id,
         ]);
 
         return $pedido->fresh();

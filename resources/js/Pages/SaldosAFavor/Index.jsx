@@ -383,11 +383,14 @@ export default function Index({
                                 <td className={`${TD} text-right whitespace-nowrap space-x-2`}>
                                     {can('saldos_favor.revisar') && (
                                         <>
-                                            <button type="button" className="text-xs font-black uppercase text-emerald-700" onClick={() => revisarPago(p.id, 'confirmado')}>
-                                                Confirmar
+                                            <button type="button" className="text-xs font-black uppercase text-emerald-700" onClick={() => revisarPago(p.id, 'verificado')}>
+                                                Verificar
                                             </button>
-                                            <button type="button" className="text-xs font-black uppercase text-amber-700" onClick={() => revisarPago(p.id, 'con_diferencia')}>
-                                                Diferencia
+                                            <button type="button" className="text-xs font-black uppercase text-amber-700" onClick={() => revisarPago(p.id, 'con_observaciones')}>
+                                                Observaciones
+                                            </button>
+                                            <button type="button" className="text-xs font-black uppercase text-rose-700" onClick={() => revisarPago(p.id, 'rechazado')}>
+                                                Rechazar
                                             </button>
                                         </>
                                     )}

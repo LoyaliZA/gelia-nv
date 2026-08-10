@@ -56,7 +56,7 @@ const comprobantesDe = (pedido) => (pedido?.documentos || []).filter((d) => d.ti
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 
 export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoInicial, bancos = [] }) {
-    const { auth, flash } = usePage().props;
+    const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
     const [pedido, setPedido] = useState(pedidoInicial);
@@ -68,9 +68,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [liberarCapturaAbierto, setLiberarCapturaAbierto] = useState(false);
     const [cambiarDir, setCambiarDir] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
-    const safExcedente = flash?.saf_excedente && Number(flash.saf_excedente.pedido_bma_id) === Number(pedidoInicial?.id)
-        ? flash.saf_excedente
-        : null;
 
     useEffect(() => {
         if (abierto && pedidoInicial) {
@@ -271,7 +268,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     Estado actual: <span style={{ color: badge.style?.color }}>{badge.label}</span>
                                 </p>
                                 {pedido.origen?.nombre && (
-                                    <p className="text-xs font-black uppercase text-blue-600 mt-2 m-0">Origen: {pedido.origen.nombre}</p>
+                                    <p className="text-xs font-black uppercase text-blue-600 mt-2 m-0">Tipo: {pedido.origen.nombre}</p>
                                 )}
                                 {pedido.es_resguardo && (
                                     <p className="text-xs font-black uppercase text-blue-600 mt-1 m-0">En resguardo — mercancía bloqueada en almacén</p>
@@ -333,8 +330,14 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <Campo label="Fecha pedido" value={formatearFechaNegocio(pedido.fecha)} />
                                 <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
-                                <Campo label="Origen" value={pedido.origen?.nombre} />
-                                <Campo label="Banco" value={pedido.banco?.nombre} />
+                                <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
+                                <Campo
+                                    label="Pagos / bancos"
+                                    value={(pedido.fuentes_pago?.length
+                                        ? pedido.fuentes_pago
+                                        : (pedido.banco?.nombre ? [pedido.banco.nombre] : [])
+                                    ).join(', ') || '—'}
+                                />
                                 <Campo label="Nota de compra en el envío" value={pedido.anexar_remision ? 'Sí' : 'No'} />
                                 <Campo label="Saldo a favor" value={Number(pedido.saldo_a_favor) > 0 ? formatearMoneda(pedido.saldo_a_favor) : '—'} />
                                 <Campo label="N° de cajas" value={pedido.numero_cajas} />
@@ -345,8 +348,14 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>3. Pago del cliente</p>
                             <div className="grid grid-cols-2 gap-4 mb-4">
-                                <Campo label="Monto pagado" value={formatearMoneda(pedido.total_a_cobrar)} />
-                                <Campo label="Método de pago" value={pedido.banco?.nombre} />
+                                <Campo label="Monto a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} />
+                                <Campo
+                                    label="Fuentes de pago"
+                                    value={(pedido.fuentes_pago?.length
+                                        ? pedido.fuentes_pago
+                                        : (pedido.banco?.nombre ? [pedido.banco.nombre] : [])
+                                    ).join(', ') || '—'}
+                                />
                             </div>
                             {comprobantes.length > 0 ? (
                                 <div className="flex flex-wrap gap-2 mb-4">
@@ -361,7 +370,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <button
                                     type="button"
                                     onClick={validarPago}
-                                    disabled={procesando || pagoValidado || comprobantes.length === 0}
+                                    disabled={procesando || pagoValidado}
                                     className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
                                 >
                                     <CheckCircle2 className="w-4 h-4" />
@@ -384,19 +393,16 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 </div>
                             )}
                             <div className="mt-4">
-                                {safExcedente && (
-                                    <div className="mb-3 rounded-xl border theme-border theme-element px-3 py-2 text-sm font-bold theme-text-main">
-                                        {safExcedente.mensaje || `Excedente detectado: ${formatearMoneda(safExcedente.excedente)}. Genere saldo a favor abajo.`}
-                                    </div>
-                                )}
                                 <SeccionPagosExhibicion
                                     pedidoId={pedido.id}
                                     bancos={bancos}
-                                    puedeRegistrar={esPendiente}
-                                    puedeGenerarSaldo={esPendiente || Boolean(safExcedente)}
+                                    puedeRegistrar={false}
+                                    puedeRevisar={esPendiente}
+                                    puedeGenerarSaldo={false}
                                     rutaResumen="control_pedidos.pagos.resumen_auditoria"
-                                    rutaStore="control_pedidos.pagos.store_auditoria"
-                                    rutaExcedente="control_pedidos.generar_saldo_excedente_auditoria"
+                                    mensajeBloqueo={esPendiente
+                                        ? 'Revise cada exhibición. La cobertura no sustituye la verificación.'
+                                        : null}
                                 />
                             </div>
                         </section>
@@ -457,10 +463,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <div className="flex justify-between text-emerald-600 font-bold">
                                     <span>Saldo a favor aplicado</span>
                                     <span>- {formatearMoneda(pedido.saldo_a_favor)}</span>
-                                </div>
-                                <div className="flex justify-between text-emerald-600 font-bold">
-                                    <span>Saldo a favor generado</span>
-                                    <span>{formatearMoneda(safExcedente?.excedente || 0)}</span>
                                 </div>
                                 <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
                                     <span>Total final del pedido</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>

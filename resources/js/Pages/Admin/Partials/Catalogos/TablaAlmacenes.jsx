@@ -13,7 +13,7 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
     const [modalImportar, setModalImportar] = useState(false);
     const [itemActual, setItemActual] = useState(null);
     const { data, setData, post, put, processing, reset, errors } = useForm({
-        codigo: '', nombre: '', sucursal_id: '', tipo_almacen_id: '', activo: true, visible_en_pedidos: false, visible_en_traspasos: false,
+        codigo: '', nombre: '', sucursal_id: '', tipo_almacen_id: '', activo: true, visible_en_pedidos: false, visible_en_traspasos: false, permite_busqueda_productos: true,
     });
 
     const abrirNuevo = () => { setItemActual(null); reset(); setModalAbierto(true); };
@@ -27,6 +27,7 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
             activo: item.activo ?? true,
             visible_en_pedidos: item.visible_en_pedidos ?? false,
             visible_en_traspasos: item.visible_en_traspasos ?? false,
+            permite_busqueda_productos: item.permite_busqueda_productos ?? true,
         });
         setModalAbierto(true);
     };
@@ -48,7 +49,7 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
                 </div>
             </div>
             <table className="w-full">
-                <thead><tr className="border-b theme-border text-[9px] font-black uppercase theme-text-muted"><th className="px-6 py-3 text-left">Código / Nombre</th><th className="px-6 py-3 text-left">Sucursal</th><th className="px-6 py-3 text-left">Tipo</th><th className="px-6 py-3 text-left">Pedidos</th><th className="px-6 py-3 text-left">Traspasos</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead>
+                <thead><tr className="border-b theme-border text-[9px] font-black uppercase theme-text-muted"><th className="px-6 py-3 text-left">Código / Nombre</th><th className="px-6 py-3 text-left">Sucursal</th><th className="px-6 py-3 text-left">Tipo</th><th className="px-6 py-3 text-left">Pedidos</th><th className="px-6 py-3 text-left">Traspasos</th><th className="px-6 py-3 text-left">Búsqueda</th><th className="px-6 py-3 text-right">Acciones</th></tr></thead>
                 <tbody>
                     {datos.map((item) => (
                         <tr key={item.id} className="border-b theme-border">
@@ -63,6 +64,11 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
                             <td className="px-6 py-4">
                                 <span className={`inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase ${item.visible_en_traspasos ? 'bg-emerald-500/10 text-emerald-600' : 'theme-text-muted'}`}>
                                     {item.visible_en_traspasos ? 'Visible' : 'Oculto'}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4">
+                                <span className={`inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase ${item.permite_busqueda_productos !== false ? 'bg-sky-500/10 text-sky-600' : 'theme-text-muted'}`}>
+                                    {item.permite_busqueda_productos !== false ? 'Permitida' : 'Bloqueada'}
                                 </span>
                             </td>
                             <td className="px-6 py-4 text-right">
@@ -91,6 +97,7 @@ export default function TablaAlmacenes({ datos = [], sucursales = [], tipos_alma
                             <label className="flex gap-2 items-center"><input type="checkbox" checked={data.activo} onChange={(e) => setData('activo', e.target.checked)} /><span className="font-bold text-sm theme-text-main">Activo</span></label>
                             <label className="flex gap-2 items-center"><input type="checkbox" checked={data.visible_en_pedidos} onChange={(e) => setData('visible_en_pedidos', e.target.checked)} /><span className="font-bold text-sm theme-text-main">Visible en Gestión de pedidos</span></label>
                             <label className="flex gap-2 items-center"><input type="checkbox" checked={data.visible_en_traspasos} onChange={(e) => setData('visible_en_traspasos', e.target.checked)} /><span className="font-bold text-sm theme-text-main">Visible en Traspasos</span></label>
+                            <label className="flex gap-2 items-center"><input type="checkbox" checked={data.permite_busqueda_productos} onChange={(e) => setData('permite_busqueda_productos', e.target.checked)} /><span className="font-bold text-sm theme-text-main">Permite búsqueda de productos (CEDIS)</span></label>
                             {errors.codigo && <p className="text-xs text-red-500 dark:text-red-400">{errors.codigo}</p>}
                             <button type="submit" className="w-full py-3 text-white rounded-xl font-black uppercase" style={{ backgroundColor: 'var(--color-primario)' }}><Save className="w-4 h-4 inline" /> Guardar</button>
                         </form>

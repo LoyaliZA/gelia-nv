@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\User;
 use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
+use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
@@ -22,6 +23,7 @@ class EnviarPedidoBmaService
         private CrearSnapshotDireccionPedido $crearSnapshot,
         private NotificarPedidoBmaService $notificarService,
         private AvanzarColaErroresPedidoBmaService $colaErroresService,
+        private RegistrarPagoPedidoBmaService $pagosService,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -36,6 +38,8 @@ class EnviarPedidoBmaService
         }
 
         $this->validarCamposRequeridos($pedido);
+        $this->pagosService->assertCubiertoParaEnviar($pedido);
+        $this->pagosService->generarExcedenteSiAplica($pedido, $usuarioId);
 
         if (config('control_pedidos.direcciones_normalizadas')) {
             $pedido->loadMissing('origen');
