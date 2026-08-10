@@ -42,7 +42,7 @@ export default function ModalLiberarResguardoAbierto({
             peso_real_kg: '',
             numero_cajas: '',
             costo_envio: '',
-            catalogo_banco_id: pedido?.catalogo_banco_id || '',
+            catalogo_banco_id: '',
             comentarios: '',
             comprobante: null,
         });

@@ -122,6 +122,10 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
 
     private function construirTitulo(): string
     {
+        if ($this->tipoAlerta === 'pedido_pesaje_listo' && ! empty($this->extras['con_observaciones_fisicas'])) {
+            return 'Pesaje con observaciones: '.$this->folio();
+        }
+
         $etiqueta = self::ETIQUETAS_TIPO[$this->tipoAlerta] ?? 'Notificación de pedido';
 
         return "{$etiqueta}: {$this->folio()}";
@@ -146,7 +150,9 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
             'pedido_guia_retraso' => "Atención {$nombre}, la guía del pedido {$folio} fue corregida y provoca un retraso.",
             'pedido_resguardo_apartado' => "Atención {$nombre}, CEDIS apartó las piezas de tu pedido en resguardo {$folio}.",
             'pedido_consulta_pesaje' => "Atención {$nombre}, hay una consulta de pesaje pendiente para el pedido {$folio}.",
-            'pedido_pesaje_listo' => "Atención {$nombre}, CEDIS respondió el pesaje del pedido {$folio}. Ya puedes cotizar el envío.",
+            'pedido_pesaje_listo' => ! empty($this->extras['con_observaciones_fisicas'])
+                ? "Atención {$nombre}, CEDIS respondió el pesaje del pedido {$folio} con observaciones. Revísalas antes de cotizar el envío."
+                : "Atención {$nombre}, CEDIS respondió el pesaje del pedido {$folio}. Ya puedes cotizar el envío.",
             'pedido_pendiente_auxiliar' => "Atención {$nombre}, el pedido {$folio} está pendiente de auditoría.",
             'pedido_aprobado' => "Atención {$nombre}, el pedido {$folio} fue aprobado.",
             'pedido_rechazado_auxiliar' => "Atención {$nombre}, tu pedido {$folio} fue rechazado, corrígelo y reenvía.",

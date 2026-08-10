@@ -67,7 +67,8 @@ class ListarPedidosCedisService
     {
         return [
             'cliente',
-            'vendedor',
+            'vendedor.departamento:id,nombre',
+            'vendedor.departamentos:id,nombre',
             'estatus',
             'origen',
             'almacen',
@@ -76,6 +77,7 @@ class ListarPedidosCedisService
             'tipoCaja',
             'cajas.tipoCaja', 'cajas.tipoGuia',
             'documentos',
+            'revisionesProducto',
             'empacadoPor',
             'incidenciaEmpaquePor',
             'resguardoApartadoPor',

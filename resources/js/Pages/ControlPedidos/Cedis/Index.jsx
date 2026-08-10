@@ -23,7 +23,7 @@ const KPI_CONFIG = [
     { key: 'incorrectas', label: 'Errores CEDIS', tab: 'INCORRECTAS', icon: CheckCircle2, color: '#F97316' },
 ];
 
-export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipos_caja = [] }) {
+export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipos_caja = [], almacenes_busqueda = [] }) {
     const { flash } = usePage().props;
     const {
         pedidos: pedidosVista,
@@ -194,6 +194,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
                 abierto={modalPesaje.abierto}
                 pedido={modalPesaje.pedido}
                 tiposCaja={tipos_caja}
+                almacenesBusqueda={almacenes_busqueda}
                 onClose={() => setModalPesaje({ abierto: false, pedido: null })}
             />
             <ModalReportarErrorDatos

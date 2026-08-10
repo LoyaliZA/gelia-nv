@@ -11,6 +11,7 @@ export default function InputConEscanner({
     label = '',
     readOnly = false,
     multiline = false,
+    escaneoContinuo = false,
 }) {
     const [modalAbierto, setModalAbierto] = useState(false);
 
@@ -48,11 +49,14 @@ export default function InputConEscanner({
             <ModalEscanearCodigo
                 abierto={modalAbierto}
                 onCerrar={() => setModalAbierto(false)}
+                continuo={escaneoContinuo}
                 titulo={label ? `Escanear ${label}` : 'Escanear código'}
                 descripcion={`Apunta la cámara al código de barras o QR${label ? ` del campo ${label}` : ''}.`}
                 onEscaneado={(codigo) => {
                     onChange({ target: { value: codigo } });
-                    setModalAbierto(false);
+                    if (!escaneoContinuo) {
+                        setModalAbierto(false);
+                    }
                 }}
             />
         </>

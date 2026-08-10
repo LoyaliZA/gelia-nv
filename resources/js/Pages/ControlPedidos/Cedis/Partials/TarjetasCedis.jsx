@@ -15,10 +15,11 @@ import {
     formatearFechaNegocio,
     formatearFechaHoraAuditoria,
     BTN_PRIMARY,
-    BTN_SECONDARY,
     tieneGuiaPdfDisponible,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
+import BotonAccionCubico from '../../Partials/BotonAccionCubico';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import ModalVistaPreviaDocumento from '../../Partials/ModalVistaPreviaDocumento';
 import BotonGuiaPdf from '../../Partials/BotonGuiaPdf';
@@ -63,13 +64,10 @@ function TarjetaPedido({
                     <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
                         {formatearFechaNegocio(pedido.fecha)}
                     </p>
-                    {pedido.vendedor?.name && (
-                        <p className="text-[9px] theme-text-muted font-bold mt-1 m-0">
-                            Capturado por: {pedido.vendedor.name}
-                        </p>
-                    )}
+                    <BloqueVendedorPedido pedido={pedido} variante="nombre" />
                 </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                <div className="flex flex-col items-end gap-1.5 shrink-0 max-w-[50%]">
+                    <BloqueVendedorPedido pedido={pedido} variante="etiquetas" className="mt-0 justify-end" />
                     {!pendientePesaje && (
                         <span className={badgeEmpaque.className} style={badgeEmpaque.style}>{badgeEmpaque.label}</span>
                     )}
@@ -162,60 +160,59 @@ function TarjetaPedido({
                 </AvisoOperativoPedido>
             )}
 
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t theme-border">
+            <div className="pt-2 border-t theme-border space-y-2">
                 {pendientePesaje && (
-                    <button type="button" onClick={() => onResponderPesaje?.(pedido)} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
+                    <button type="button" onClick={() => onResponderPesaje?.(pedido)} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <Scale className="w-4 h-4" /> Responder pesaje
                     </button>
                 )}
-                {pendientePesaje && pdfPedido && (
-                    <button type="button" onClick={() => onVerDocumento(pdfPedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`}>
-                        <FileText className="w-3.5 h-3.5" /> Ver PDF / foto pedido
-                    </button>
-                )}
-                {pendientePesaje && anexoPiezas && (
-                    <button type="button" onClick={() => onVerDocumento(anexoPiezas)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`}>
-                        <FileText className="w-3.5 h-3.5" /> Ver piezas adicionales
-                    </button>
-                )}
                 {puedeMarcarEnviado && (
-                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
+                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <Truck className="w-4 h-4" /> Marcar enviado
                     </button>
                 )}
                 {puedeEmpacar && (
-                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'empacar', pedido })} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
+                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'empacar', pedido })} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <CheckCircle2 className="w-4 h-4" /> {complementos.length ? 'Empacar grupo' : 'Marcar empacado'}
                     </button>
                 )}
                 {puedeApartar && (
-                    <button type="button" onClick={() => onMarcarApartado?.(pedido)} className={`${BTN_PRIMARY} col-span-2 flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
+                    <button type="button" onClick={() => onMarcarApartado?.(pedido)} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <PackageCheck className="w-4 h-4" /> Marcar apartado
                     </button>
                 )}
-                {esEmpacado && tieneGuiaPdf && (
-                    <BotonGuiaPdf pedido={pedido} onVerPdf={onVerDocumento} compact className="w-full justify-center py-2.5 min-h-[40px] col-span-2 sm:col-span-1" />
-                )}
-                {remision && (
-                    <button type="button" onClick={() => onVerDocumento(remision)} className={`${BTN_SECONDARY} flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`}>
-                        <FileText className="w-3.5 h-3.5" /> Remisión
-                    </button>
-                )}
-                {puedeReportarError && (
-                    <button type="button" onClick={() => onReportarErrorDatos?.(pedido)} className={`${BTN_SECONDARY} col-span-2 flex items-center justify-center gap-1.5 text-[10px] border border-orange-500/40 text-orange-600 outline-none py-2.5 min-h-[40px]`}>
-                        <AlertTriangle className="w-3.5 h-3.5" /> Reportar error
-                    </button>
-                )}
-                {!pendientePesaje && (
-                    <button type="button" onClick={() => onVerDetalle(pedido)} className={`${BTN_SECONDARY} ${onBitacora ? '' : 'col-span-2 '}flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`}>
-                        <Eye className="w-3.5 h-3.5" /> Ver detalle
-                    </button>
-                )}
-                {onBitacora && (
-                    <button type="button" onClick={() => onBitacora(pedido)} className={`${BTN_SECONDARY} ${pendientePesaje ? 'col-span-2 ' : ''}flex items-center justify-center gap-1.5 text-[10px] outline-none py-2.5 min-h-[40px]`} title="Bitácora">
-                        <History className="w-3.5 h-3.5" /> Bitácora
-                    </button>
-                )}
+                <div className="grid grid-cols-2 gap-2">
+                    {pendientePesaje && pdfPedido && (
+                        <BotonAccionCubico icon={FileText} label="PDF pedido" onClick={() => onVerDocumento(pdfPedido)} conLabel />
+                    )}
+                    {pendientePesaje && anexoPiezas && (
+                        <BotonAccionCubico icon={FileText} label="Piezas extra" onClick={() => onVerDocumento(anexoPiezas)} conLabel />
+                    )}
+                    {esEmpacado && tieneGuiaPdf && (
+                        <div className="col-span-2 sm:col-span-1 [&_button]:w-full [&_button]:min-h-[44px]">
+                            <BotonGuiaPdf pedido={pedido} onVerPdf={onVerDocumento} compact className="w-full justify-center py-2.5 min-h-[44px]" />
+                        </div>
+                    )}
+                    {remision && (
+                        <BotonAccionCubico icon={FileText} label="Remisión" onClick={() => onVerDocumento(remision)} conLabel />
+                    )}
+                    {puedeReportarError && (
+                        <BotonAccionCubico icon={AlertTriangle} label="Reportar" onClick={() => onReportarErrorDatos?.(pedido)} tone="warn" conLabel className="col-span-2" />
+                    )}
+                    {!pendientePesaje && (
+                        <BotonAccionCubico icon={Eye} label="Detalle" onClick={() => onVerDetalle(pedido)} conLabel />
+                    )}
+                    {onBitacora && (
+                        <BotonAccionCubico
+                            icon={History}
+                            label="Bitácora"
+                            onClick={() => onBitacora(pedido)}
+                            tone="purple"
+                            conLabel
+                            className={pendientePesaje && !pdfPedido && !anexoPiezas ? 'col-span-2' : ''}
+                        />
+                    )}
+                </div>
             </div>
         </div>
     );

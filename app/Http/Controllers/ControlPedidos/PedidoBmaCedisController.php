@@ -7,6 +7,7 @@ use App\Http\Requests\ControlPedidos\MarcarResguardoApartadoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarIncidenciaEmpaqueRequest;
 use App\Http\Requests\ControlPedidos\ResponderPesajePedidoBmaRequest;
+use App\Models\Almacen;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
@@ -37,6 +38,11 @@ class PedidoBmaCedisController extends Controller
             'metricas' => fn () => $listarService->metricas(),
             'filtros' => $request->only(['tab', 'q', 'page']),
             'tipos_caja' => $catalogos['tipos_caja'] ?? [],
+            'almacenes_busqueda' => Almacen::query()
+                ->where('activo', true)
+                ->where('permite_busqueda_productos', true)
+                ->orderBy('nombre')
+                ->get(['id', 'codigo', 'nombre']),
         ]);
     }
 
@@ -158,7 +164,21 @@ class PedidoBmaCedisController extends Controller
             $service->ejecutar(
                 $pedidoBma->load('estatus'),
                 Auth::id(),
-                $request->validated('cajas')
+                $request->validated('cajas'),
+                [
+                    'estado_fisico_general' => $request->validated('estado_fisico_general'),
+                    'comentario_fisico_general' => $request->validated('comentario_fisico_general'),
+                    'evidencias_generales' => $request->file('evidencias_generales', []),
+                    'evidencias_envios' => $request->file('evidencias_envios', []),
+                    'revisiones' => collect($request->validated('revisiones') ?? [])->map(function (array $rev, int $i) use ($request) {
+                        $files = $request->file("revisiones.{$i}.evidencias") ?? [];
+
+                        return [
+                            ...$rev,
+                            'evidencias' => is_array($files) ? $files : ($files ? [$files] : []),
+                        ];
+                    })->all(),
+                ]
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());

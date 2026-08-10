@@ -432,6 +432,7 @@ class CatalogoController extends Controller
             'activo' => 'boolean',
             'visible_en_pedidos' => 'boolean',
             'visible_en_traspasos' => 'boolean',
+            'permite_busqueda_productos' => 'boolean',
         ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
         $almacen = Almacen::create($data);
@@ -448,6 +449,7 @@ class CatalogoController extends Controller
             'activo' => 'boolean',
             'visible_en_pedidos' => 'boolean',
             'visible_en_traspasos' => 'boolean',
+            'permite_busqueda_productos' => 'boolean',
         ]);
         $data['nombre'] = $normalizador->texto($data['nombre']);
         $almacen = Almacen::findOrFail($id);

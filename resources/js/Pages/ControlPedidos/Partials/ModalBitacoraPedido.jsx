@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, History, Paperclip } from 'lucide-react';
 import {
@@ -8,6 +8,7 @@ import {
     THEME_MODAL_SHELL,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
+import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 
 function labelEstatus(estatus) {
     if (!estatus) return '—';
@@ -24,9 +25,26 @@ function contextoActor(h) {
 }
 
 export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
-    if (!abierto || !pedido) return null;
+    const [docPreview, setDocPreview] = useState(null);
 
-    const historial = pedido.historial || [];
+    const historial = pedido?.historial || [];
+
+    const evidencias = useMemo(() => historial
+        .filter((h) => h.evidencia_ruta || h.evidenciaRuta)
+        .map((h) => {
+            const ruta = h.evidencia_ruta || h.evidenciaRuta;
+            return {
+                id: `hist-${h.id}`,
+                url: `/storage/${ruta}`,
+                nombre_original: h.evidencia_nombre || h.evidenciaNombre || 'Evidencia',
+                tipo: 'evidencia_bitacora',
+                comentario: labelAccion(h),
+                autor: h.usuario,
+                created_at: h.created_at,
+            };
+        }), [historial]);
+
+    if (!abierto || !pedido) return null;
 
     return createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
@@ -67,6 +85,7 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
                                 const evidenciaNombre = h.evidencia_nombre || h.evidenciaNombre || 'Ver archivo';
                                 const accionLabel = labelAccion(h);
                                 const comentarioEsAccion = h.comentarios && h.comentarios === accionLabel;
+                                const idxEvidencia = evidencias.findIndex((d) => d.id === `hist-${h.id}`);
 
                                 return (
                                     <div key={h.id} className="p-4 rounded-xl border theme-border theme-element">
@@ -105,16 +124,15 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
                                         ) : null}
 
                                         {evidenciaRuta ? (
-                                            <a
-                                                href={`/storage/${evidenciaRuta}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold uppercase"
+                                            <button
+                                                type="button"
+                                                onClick={() => setDocPreview({ indice: Math.max(idxEvidencia, 0) })}
+                                                className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold uppercase outline-none"
                                                 style={{ color: 'var(--color-primario)' }}
                                             >
                                                 <Paperclip className="w-3 h-3" />
                                                 {evidenciaNombre}
-                                            </a>
+                                            </button>
                                         ) : null}
                                     </div>
                                 );
@@ -123,6 +141,13 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
                     )}
                 </div>
             </div>
+            <ModalVistaPreviaDocumento
+                abierto={Boolean(docPreview)}
+                documentos={evidencias}
+                indice={docPreview?.indice || 0}
+                onClose={() => setDocPreview(null)}
+                onChangeIndice={(i) => setDocPreview({ indice: i })}
+            />
         </div>,
         document.body
     );

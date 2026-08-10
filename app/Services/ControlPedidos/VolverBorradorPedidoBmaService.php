@@ -50,7 +50,7 @@ class VolverBorradorPedidoBmaService
                 $usuarioId,
                 $estatusAnterior->id,
                 $estatusNuevo->id,
-                'Pedido conservado como borrador (pre-venta).',
+                'Pedido listo para continuar (pre-venta).',
                 AccionesHistorialPedidoBma::VOLVER_BORRADOR
             );
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ControlPedidos\CancelarPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\StorePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\UpdatePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
@@ -20,6 +21,7 @@ use App\Services\ControlPedidos\CargarGuiaClientePedidoBmaService;
 use App\Services\ControlPedidos\CrearPedidoBmaService;
 use App\Services\ControlPedidos\Direcciones\ActualizarCamposDireccionPedidoService;
 use App\Services\ControlPedidos\Direcciones\CambiarDireccionPedido;
+use App\Services\ControlPedidos\CancelarPedidoBmaService;
 use App\Services\ControlPedidos\EliminarPedidoBmaService;
 use App\Services\ControlPedidos\EnviarPedidoBmaService;
 use App\Services\ControlPedidos\GestionarPdfPedidoBmaService;
@@ -462,7 +464,7 @@ class PedidoBmaController extends Controller
             );
         }
 
-        return redirect()->back()->with('success', 'Pedido conservado como borrador.');
+        return redirect()->back()->with('success', 'Pedido listo para continuar.');
     }
 
     /**
@@ -530,6 +532,38 @@ class PedidoBmaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Pedido eliminado.');
+    }
+
+    public function cancelar(
+        CancelarPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        CancelarPedidoBmaService $cancelarService
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.cancelar');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $cancelarService->ejecutar($pedidoBma, Auth::id(), $request->validated());
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Pedido cancelado. Se liberaron reservas pendientes.');
+    }
+
+    public function previewCancelacion(
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        CancelarPedidoBmaService $cancelarService
+    ): \Illuminate\Http\JsonResponse {
+        Gate::authorize('control_pedidos.cancelar');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        return response()->json([
+            'preview' => $cancelarService->preview($pedidoBma),
+            'motivos' => CancelarPedidoBmaService::MOTIVOS,
+        ]);
     }
 
     public function exportar(Request $request, ListarPedidosBmaService $listarService): StreamedResponse

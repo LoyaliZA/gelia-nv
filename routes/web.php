@@ -533,6 +533,8 @@ Route::middleware(['auth'])->group(function () {
             ->name('cliente.saldo_favor');
         Route::post('/{pedidoBma}/pagos', [PedidoBmaSaldosPagosController::class, 'registrarPago'])->name('pagos.store');
         Route::get('/{pedidoBma}/pagos', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->name('pagos.resumen');
+        Route::post('/pagos/{pago}', [PedidoBmaSaldosPagosController::class, 'actualizarPago'])->name('pagos.update');
+        Route::delete('/pagos/{pago}', [PedidoBmaSaldosPagosController::class, 'eliminarPago'])->name('pagos.destroy');
         Route::post('/{pedidoBma}/generar-saldo-excedente', [PedidoBmaSaldosPagosController::class, 'generarSaldoExcedente'])
             ->name('generar_saldo_excedente');
     });
@@ -540,9 +542,6 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:control_pedidos.auditar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/pagos/{pago}/revisar', [PedidoBmaSaldosPagosController::class, 'revisarPago'])->name('pagos.revisar');
         Route::get('/{pedidoBma}/pagos-auditoria', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->name('pagos.resumen_auditoria');
-        Route::post('/{pedidoBma}/pagos-auditoria', [PedidoBmaSaldosPagosController::class, 'registrarPago'])->name('pagos.store_auditoria');
-        Route::post('/{pedidoBma}/generar-saldo-excedente-auditoria', [PedidoBmaSaldosPagosController::class, 'generarSaldoExcedente'])
-            ->name('generar_saldo_excedente_auditoria');
     });
 
     // crear | editar se valida en UpdatePedidoBmaRequest (borradores autoguardados)
@@ -552,6 +551,11 @@ Route::middleware(['auth'])->group(function () {
 
     Route::middleware(['can:control_pedidos.eliminar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::delete('/{pedidoBma}', [PedidoBmaController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::middleware(['can:control_pedidos.cancelar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::get('/{pedidoBma}/cancelar/preview', [PedidoBmaController::class, 'previewCancelacion'])->name('cancelar.preview');
+        Route::post('/{pedidoBma}/cancelar', [PedidoBmaController::class, 'cancelar'])->name('cancelar');
     });
 
     Route::middleware(['can:control_pedidos.direccion.cambiar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
@@ -1362,11 +1366,13 @@ Route::middleware(['auth'])->group(function () {
     // GESTIÓN INTERNA
     // ══════════════════════════════════════════════════════════════════════
     Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
+        // Lookup catálogo (CEDIS pesaje + almacén); fuera del grupo "ver productos" para no bloquear CEDIS.
+        Route::get('/productos/buscar', [GestionInternaProductoController::class, 'buscar'])
+            ->middleware('role_or_permission:gestion_interna.productos.ver|almacenes.productos.ver|almacenes.inventarios.ver|almacenes.costos.ver|catalogos.gestionar|reportes.ventas.ver|control_pedidos.cedis')
+            ->name('productos.buscar');
+
         Route::middleware(['role_or_permission:gestion_interna.productos.ver|catalogos.gestionar|almacenes.productos.ver'])->prefix('productos')->name('productos.')->group(function () {
             Route::get('/', [GestionInternaProductoController::class, 'index'])->name('index');
-            Route::get('/buscar', [GestionInternaProductoController::class, 'buscar'])
-                ->middleware('role_or_permission:gestion_interna.productos.ver|almacenes.productos.ver|almacenes.inventarios.ver|almacenes.costos.ver|catalogos.gestionar|reportes.ventas.ver')
-                ->name('buscar');
             Route::get('/plantilla-importacion', [GestionInternaProductoController::class, 'descargarPlantillaImportacion'])->middleware('role_or_permission:gestion_interna.productos.importar|gestion_interna.productos.gestionar|catalogos.gestionar')->name('plantilla_importacion');
             Route::post('/import-preview', [GestionInternaProductoController::class, 'importPreview'])->middleware('role_or_permission:gestion_interna.productos.importar|gestion_interna.productos.gestionar|catalogos.gestionar')->name('import_preview');
             Route::post('/import-iniciar', [GestionInternaProductoController::class, 'importIniciar'])->middleware('role_or_permission:gestion_interna.productos.importar|gestion_interna.productos.gestionar|catalogos.gestionar')->name('import_iniciar');

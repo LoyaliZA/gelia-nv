@@ -35,12 +35,15 @@ export const LABEL_ESTADO_FIN = {
 
 export const LABEL_ESTADO_REV = {
     pendiente: 'Pendiente',
-    confirmado: 'Confirmado',
+    en_revision: 'En revisión',
+    verificado: 'Verificado',
+    con_observaciones: 'Con observaciones',
+    rechazado: 'Rechazado',
+    confirmado: 'Verificado',
     revisado: 'Revisado',
-    con_diferencia: 'Con diferencia',
+    con_diferencia: 'Con observaciones',
     requiere_correccion: 'Requiere corrección',
     ajustado: 'Ajustado',
-    rechazado: 'Rechazado',
 };
 
 export const LABEL_CANAL = {
@@ -60,6 +63,7 @@ export const LABEL_CATEGORIA_MOTIVO = {
 
 export const FORMAS_PAGO_LABEL = {
     transferencia: 'Transferencia',
+    deposito: 'Depósito',
     efectivo: 'Efectivo',
     tarjeta: 'Tarjeta',
     otro: 'Otro',

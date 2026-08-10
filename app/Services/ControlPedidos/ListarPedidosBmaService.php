@@ -29,6 +29,7 @@ class ListarPedidosBmaService
             'tipoGuia',
             'zona',
             'documentos',
+            'revisionesProducto',
             'direccionVigente',
             'historial.usuario',
             'historial.estatusAnterior',
@@ -74,6 +75,7 @@ class ListarPedidosBmaService
             'pendiente_guia_cliente' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_GUIA_CLIENTE'] ?? 0)->count(),
             'enviados' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0)->count(),
             'rechazadas' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0)->count(),
+            'obs_cedis' => (clone $base)->where('tiene_observaciones_fisicas', true)->count(),
         ];
     }
 
@@ -85,6 +87,8 @@ class ListarPedidosBmaService
 
         $pedido->setAttribute('puede_editar', $puedeEditar);
         $pedido->setAttribute('puede_mutar', $puedeEditar);
+        $pedido->setAttribute('puede_cancelar', $pedido->puedeCancelarDirecto());
+        $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());
 
         return $pedido;
     }
@@ -109,6 +113,7 @@ class ListarPedidosBmaService
         match ($tab) {
             'BORRADORES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['BORRADOR'] ?? 0),
             'PESAJE_PENDIENTE' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PESAJE_PENDIENTE'] ?? 0),
+            'OBS_CEDIS' => $query->where('tiene_observaciones_fisicas', true),
             'PENDIENTE_AUXILIAR' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0),
             'EN_CEDIS' => $query->whereIn('catalogo_estatus_pedido_id', array_filter([
                 $idsPorFase['EN_CEDIS'] ?? null,

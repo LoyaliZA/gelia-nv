@@ -213,6 +213,21 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             'orden' => 1,
         ]);
 
+        $total = (float) ($reportado->total_a_cobrar ?: ($reportado->total_mercancia + ($reportado->costo_envio ?? 0)));
+        $reportado->update(['total_a_cobrar' => $total]);
+        \App\Models\SaldosAFavor\PedidoBmaPago::query()->where('pedido_bma_id', $reportado->id)->delete();
+        \App\Models\SaldosAFavor\PedidoBmaPago::create([
+            'pedido_bma_id' => $reportado->id,
+            'numero_exhibicion' => 1,
+            'monto' => $total,
+            'ruta_archivo' => 'pedidos_bma/pagos/x.jpg',
+            'nombre_original' => 'c.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamano_bytes' => 10,
+            'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_PENDIENTE,
+            'capturado_por_id' => $this->usuario->id,
+        ]);
+
         app(EnviarPedidoBmaService::class)->ejecutar(
             $reportado->fresh(['estatus', 'origen', 'documentos', 'comprobantes', 'cliente', 'cajas']),
             $this->usuario->id
@@ -273,6 +288,22 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
         // Reenvío exige pesaje respondido (flujo logístico).
         $reportado->update(['pesaje_respondido_at' => now()]);
         $this->asegurarCajasPesaje($reportado);
+
+        $total = (float) ($reportado->total_a_cobrar ?: ($reportado->total_mercancia + ($reportado->costo_envio ?? 0)));
+        $reportado->update(['total_a_cobrar' => $total]);
+        if (! \App\Models\SaldosAFavor\PedidoBmaPago::where('pedido_bma_id', $reportado->id)->exists()) {
+            \App\Models\SaldosAFavor\PedidoBmaPago::create([
+                'pedido_bma_id' => $reportado->id,
+                'numero_exhibicion' => 1,
+                'monto' => $total,
+                'ruta_archivo' => 'pedidos_bma/pagos/cascada.jpg',
+                'nombre_original' => 'c.jpg',
+                'mime_type' => 'image/jpeg',
+                'tamano_bytes' => 10,
+                'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_PENDIENTE,
+                'capturado_por_id' => $this->usuario->id,
+            ]);
+        }
 
         $enviado = app(EnviarPedidoBmaService::class)->ejecutar(
             $reportado->fresh(['estatus', 'origen', 'documentos', 'comprobantes', 'cliente', 'cajas']),
@@ -530,6 +561,20 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             'mime_type' => 'image/jpeg',
             'tamano_bytes' => 50,
             'orden' => 2,
+        ]);
+
+        $total = (float) ($pedido->total_a_cobrar ?: ($pedido->total_mercancia + ($pedido->costo_envio ?? 0)));
+        $pedido->update(['total_a_cobrar' => $total]);
+        \App\Models\SaldosAFavor\PedidoBmaPago::create([
+            'pedido_bma_id' => $pedido->id,
+            'numero_exhibicion' => 1,
+            'monto' => max($total, 0.01),
+            'ruta_archivo' => 'pedidos_bma/pagos/test.jpg',
+            'nombre_original' => 'comp.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamano_bytes' => 50,
+            'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_PENDIENTE,
+            'capturado_por_id' => $this->usuario->id,
         ]);
 
         return $pedido->fresh();

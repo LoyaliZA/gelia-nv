@@ -89,15 +89,10 @@ try {
 
 try {
     $probe->check($hacerPedido(0, 150.0));
-    fwrite(STDERR, "FAIL: se esperaba excepción por comprobante\n");
-    $fallos++;
+    echo "OK: sin comprobante legacy en trait (cobertura va en exhibiciones)\n";
 } catch (InvalidArgumentException $e) {
-    if (! str_contains($e->getMessage(), 'comprobante de pago')) {
-        fwrite(STDERR, "FAIL: mensaje inesperado (comprobante): {$e->getMessage()}\n");
-        $fallos++;
-    } else {
-        echo "OK: sin comprobante → {$e->getMessage()}\n";
-    }
+    fwrite(STDERR, "FAIL: el trait ya no debe exigir comprobante de documento: {$e->getMessage()}\n");
+    $fallos++;
 }
 
 $cotizacionLista = static function (array $p): bool {

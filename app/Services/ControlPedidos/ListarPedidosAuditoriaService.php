@@ -37,6 +37,7 @@ class ListarPedidosAuditoriaService
     private function anexarFlagsVista(PedidoBma $pedido): PedidoBma
     {
         $pedido->setAttribute('pendiente_re_revision', $this->esPendienteReRevision($pedido));
+        $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());
 
         return $pedido;
     }
@@ -108,7 +109,8 @@ class ListarPedidosAuditoriaService
 
         return PedidoBma::with([
             'cliente',
-            'vendedor',
+            'vendedor.departamento:id,nombre',
+            'vendedor.departamentos:id,nombre',
             'estatus',
             'origen',
             'tipoOperacionEnvio',

@@ -35,6 +35,7 @@ class CatalogoEstatusPedido extends Model
     public const FASE_PENDIENTE_DE_ENVIO = 'PENDIENTE_DE_ENVIO';
     public const FASE_ENTREGADO = 'ENTREGADO';
     public const FASE_ENVIADO = 'ENVIADO';
+    public const FASE_CANCELADO = 'CANCELADO';
 
     /** Etiquetas de negocio por fase (evita nombres de color literales). */
     public const LABELS_POR_FASE = [
@@ -50,6 +51,7 @@ class CatalogoEstatusPedido extends Model
         self::FASE_PENDIENTE_DE_ENVIO => 'Pendiente de envío',
         self::FASE_ENTREGADO => 'Entregado',
         self::FASE_ENVIADO => 'Enviado',
+        self::FASE_CANCELADO => 'Cancelado',
     ];
 
     public function etiquetaSemantica(?bool $esResguardo = false): string

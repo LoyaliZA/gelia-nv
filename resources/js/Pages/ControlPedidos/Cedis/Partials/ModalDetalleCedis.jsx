@@ -14,12 +14,14 @@ import {
     etiquetaAlmacen,
     etiquetaCostoEnvio,
     formatearFechaHoraAuditoria,
+    badgeEstadoFisico,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
     THEME_LABEL,
     BTN_PRIMARY,
     BTN_SECONDARY,
     tieneGuiaPdfDisponible,
+    etiquetasInstanciaRevision,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
@@ -72,6 +74,38 @@ export default function ModalDetalleCedis({
     const comprobantes = comprobantesDe(pedido);
     const remision = remisionDe(pedido);
     const evidenciasApartado = (pedido?.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
+    const evidenciasCondicion = (pedido?.documentos || []).filter((d) => d.tipo === 'evidencia_condicion');
+    const revisiones = [...(pedido.revisiones_producto || pedido.revisionesProducto || [])]
+        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const instancias = etiquetasInstanciaRevision(revisiones);
+    const docsDeProducto = (revId) => evidenciasCondicion.filter(
+        (d) => d.relacion_tipo === 'revision_producto' && String(d.relacion_id) === String(revId),
+    );
+    const revisionConDetalle = (r) => (
+        r.estado_fisico !== 'bueno'
+        || Boolean(r.comentario)
+        || Boolean(r.unica_pieza)
+        || Boolean(r.mejor_ejemplar)
+        || docsDeProducto(r.id).length > 0
+    );
+    const revisionesConDetalle = revisiones.filter(revisionConDetalle);
+    const revisionesOk = revisiones.filter((r) => !revisionConDetalle(r));
+    const indiceRevision = (r) => revisiones.findIndex((x) => x === r || (x.id && x.id === r.id));
+    const evidenciasLote = evidenciasCondicion.filter(
+        (d) => d.relacion_tipo === 'revision_general' || !d.relacion_tipo,
+    );
+    const evidenciasEnvio = evidenciasCondicion.filter((d) => d.relacion_tipo === 'envio_caja');
+    const cajasOrdenadas = [...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const etiquetaEnvioDoc = (doc) => {
+        const idx = cajasOrdenadas.findIndex((c) => String(c.id) === String(doc.relacion_id));
+        if (idx >= 0) return `Envío ${idx + 1}`;
+        return doc.comentario || 'Envío';
+    };
+    const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
+    const tieneRevisionFisica = Boolean(pedido.estado_fisico_general)
+        || revisiones.length > 0
+        || evidenciasLote.length > 0
+        || evidenciasEnvio.length > 0;
     const esErrorCedis = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
@@ -246,6 +280,90 @@ export default function ModalDetalleCedis({
                             </div>
                         </section>
 
+                        {tieneRevisionFisica && (
+                            <section className={SECCION_WRAP}>
+                                <p className={SECCION}>Revisión física</p>
+                                <div className="space-y-3">
+                                    {pedido.estado_fisico_general && badgeFisico && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className={badgeFisico.className} style={badgeFisico.style}>{badgeFisico.label}</span>
+                                            {pedido.comentario_fisico_general && (
+                                                <p className="text-sm font-bold theme-text-main m-0">{pedido.comentario_fisico_general}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                    {revisionesConDetalle.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Productos con detalle</p>
+                                            {revisionesConDetalle.map((r) => {
+                                                const b = badgeEstadoFisico(r.estado_fisico);
+                                                const docs = docsDeProducto(r.id);
+                                                const instancia = instancias[indiceRevision(r)];
+                                                return (
+                                                    <div key={r.id} className="p-3 rounded-xl border theme-border space-y-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            {instancia && (
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black tabular-nums theme-element border theme-border theme-text-main">
+                                                                    {instancia}
+                                                                </span>
+                                                            )}
+                                                            <p className="text-xs font-black theme-text-main m-0">{r.descripcion_producto}</p>
+                                                            <span className={b.className} style={b.style}>{b.label}</span>
+                                                        </div>
+                                                        {r.comentario && <p className="text-xs theme-text-muted font-bold m-0">{r.comentario}</p>}
+                                                        {r.estado_fisico === 'sin_existencia' && (
+                                                            <p className="text-[10px] font-black uppercase text-sky-600 m-0">
+                                                                Sin existencias en CEDIS — Ventas debe proceder.
+                                                            </p>
+                                                        )}
+                                                        {docs.length > 0 && (
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {docs.map((doc) => (
+                                                                    <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {revisionesOk.length > 0 && (
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Productos OK</p>
+                                            <p className="text-xs font-bold theme-text-main m-0">
+                                                {revisionesOk.map((r) => {
+                                                    const tag = instancias[indiceRevision(r)];
+                                                    return tag ? `${r.descripcion_producto} (${tag})` : r.descripcion_producto;
+                                                }).join(' · ')}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {evidenciasLote.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Evidencias del lote</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {evidenciasLote.map((doc) => (
+                                                    <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {evidenciasEnvio.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Foto por envío</p>
+                                            {evidenciasEnvio.map((doc) => (
+                                                <div key={doc.id} className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase theme-text-muted m-0">{etiquetaEnvioDoc(doc)}</p>
+                                                    <MiniaturaDocumento documento={doc} onVer={setDocPreview} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                        )}
+
                         {/* 3. Documentos */}
                         {(comprobantes.length > 0 || remision || evidenciasApartado.length > 0 || complementos.length > 0) && (
                             <section className={SECCION_WRAP}>
@@ -325,7 +443,7 @@ export default function ModalDetalleCedis({
                             <div className="grid grid-cols-2 gap-4">
                                 <Campo label="Cliente" value={pedido.cliente?.nombre} />
                                 <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
-                                <Campo label="Origen" value={pedido.origen?.nombre} />
+                                <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
                                 <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
                                 <Campo label="N° de cajas" value={pedido.numero_cajas} />

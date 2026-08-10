@@ -43,6 +43,7 @@ export const LABELS_ESTATUS_POR_FASE = {
     PENDIENTE_DE_ENVIO: 'Pendiente de envío',
     ENTREGADO: 'Entregado',
     ENVIADO: 'Enviado',
+    CANCELADO: 'Cancelado',
 };
 
 /** Resguardo solo etiqueta el estado cuando el pedido ya está en flujo (no pre-venta/rechazado). */
@@ -67,6 +68,7 @@ export const TABS_PEDIDOS = [
     { id: 'TODAS', label: 'Todas' },
     { id: 'BORRADORES', label: 'Borradores' },
     { id: 'PESAJE_PENDIENTE', label: 'Pesaje pendiente' },
+    { id: 'OBS_CEDIS', label: 'Obs. CEDIS' },
     { id: 'PENDIENTE_AUXILIAR', label: 'Pendiente Auxiliar' },
     { id: 'EN_CEDIS', label: 'En CEDIS' },
     { id: 'PENDIENTE_GUIA_CLIENTE', label: 'Guía del cliente' },
@@ -112,12 +114,25 @@ export const LABELS_ESTATUS_ENVIO = {
 
 /** Revisión de exhibición (pedido_bma_pagos.estado_revision). */
 export const LABELS_ESTADO_REVISION_PAGO = {
-    pendiente: 'Pendiente',
-    confirmado: 'Confirmado',
-    con_diferencia: 'Con diferencia',
+    pendiente: 'Pendiente de revisión',
+    en_revision: 'En revisión',
+    verificado: 'Verificado',
+    con_observaciones: 'Con observaciones',
+    rechazado: 'Rechazado',
+    // legacy (pre-migración)
+    confirmado: 'Verificado',
+    con_diferencia: 'Con observaciones',
 };
 
-/** Resumen calculado de pago del pedido (no columna DB). */
+/** Cobertura de pago del pedido (calculada; independiente de revisión). */
+export const LABELS_COBERTURA_PAGO = {
+    sin_pago: 'Sin pago',
+    parcial: 'Parcial',
+    cubierto: 'Cubierto',
+    con_excedente: 'Con excedente',
+};
+
+/** @deprecated Prefer LABELS_COBERTURA_PAGO + LABELS_ESTADO_REVISION_PAGO */
 export const LABELS_ESTADO_PAGO_PEDIDO = {
     sin_pago: 'Sin pago',
     parcialmente_pagado: 'Parcialmente pagado',
@@ -128,6 +143,7 @@ export const LABELS_ESTADO_PAGO_PEDIDO = {
 
 export const LABELS_FORMA_PAGO = {
     transferencia: 'Transferencia',
+    deposito: 'Depósito',
     efectivo: 'Efectivo',
     tarjeta: 'Tarjeta',
     otro: 'Otro',
@@ -147,12 +163,16 @@ export const etiquetaCodigo = (codigo, mapa = {}) => {
     if (mapa[key]) return mapa[key];
     return key
         .replace(/_/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+        .replace(/\b\w/g, (c) => (c.toUpperCase()));
 };
 
 export const badgeEstadoRevisionPago = (estado) => {
     const colores = {
         pendiente: '#EAB308',
+        en_revision: '#3B82F6',
+        verificado: '#22C55E',
+        con_observaciones: '#F97316',
+        rechazado: '#EF4444',
         confirmado: '#22C55E',
         con_diferencia: '#F97316',
     };
@@ -163,6 +183,26 @@ export const badgeEstadoRevisionPago = (estado) => {
     };
 };
 
+export const badgeCoberturaPago = (estado) => {
+    const colores = {
+        sin_pago: '#94A3B8',
+        parcial: '#EAB308',
+        cubierto: '#22C55E',
+        con_excedente: '#3B82F6',
+    };
+    const hex = colores[estado] || '#94A3B8';
+    return {
+        label: etiquetaCodigo(estado, LABELS_COBERTURA_PAGO),
+        ...badgeClaseEstatusPedido({ color_hex: hex }),
+    };
+};
+
+export const badgeRevisionPagoPedido = (estado) => {
+    if (!estado || estado === 'sin_pagos') return null;
+    return badgeEstadoRevisionPago(estado);
+};
+
+/** @deprecated Prefer badgeCoberturaPago + badgeRevisionPagoPedido */
 export const badgeEstadoPagoPedido = (estado) => {
     const colores = {
         sin_pago: '#94A3B8',
@@ -178,11 +218,50 @@ export const badgeEstadoPagoPedido = (estado) => {
     };
 };
 
+/** Resumen compacto de fuentes de pago (bancos/métodos). */
+export const textoFuentesPagoCompacto = (fuentes = [], maxVisible = 2) => {
+    const list = Array.isArray(fuentes) ? fuentes.filter(Boolean) : [];
+    if (list.length === 0) return { texto: '—', completo: '', extras: 0 };
+    if (list.length <= maxVisible) {
+        return { texto: list.join(', '), completo: list.join(', '), extras: 0 };
+    }
+    const visibles = list.slice(0, maxVisible);
+    const extras = list.length - maxVisible;
+    return {
+        texto: `${visibles.join(', ')} +${extras}`,
+        completo: list.join(', '),
+        extras,
+    };
+};
+
 export const LABELS_MOTIVO_REPESAJE = {
     anexo_piezas: 'Cliente anexó piezas',
     quita_piezas: 'Cliente quitó piezas',
     cambio_surtido: 'Cliente cambió el surtido',
     otro: 'Otro cambio de pedido',
+};
+
+export const LABELS_ESTADO_FISICO = {
+    bueno: 'Bueno',
+    regular: 'Regular',
+    malo: 'Malo',
+    danado: 'Dañado',
+    sin_existencia: 'Sin existencias',
+};
+
+export const badgeEstadoFisico = (estado) => {
+    const colores = {
+        bueno: '#22C55E',
+        regular: '#EAB308',
+        malo: '#F97316',
+        danado: '#EF4444',
+        sin_existencia: '#0EA5E9',
+    };
+    const hex = colores[estado] || '#94A3B8';
+    return {
+        label: LABELS_ESTADO_FISICO[estado] || estado || '—',
+        ...badgeClaseEstatusPedido({ color_hex: hex }),
+    };
 };
 
 export const badgeEstatusEnvio = (estatusEnvio) => {
@@ -402,6 +481,47 @@ export const badgeGuiaLista = () => ({
     label: 'Guía Lista',
 });
 
+export const badgeObservacionesCedis = () => ({
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-orange-500/15 text-orange-600',
+    label: 'Observaciones CEDIS',
+});
+
+export const badgeSinExistencias = () => ({
+    className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest bg-sky-500/15 text-sky-600',
+    label: 'Sin existencias',
+});
+
+/** Pedido con al menos una revisión en sin_existencia. */
+export const pedidoTieneSinExistencias = (pedido) => {
+    if (pedido?.estado_fisico_general === 'sin_existencia') return true;
+    const revs = pedido?.revisiones_producto || pedido?.revisionesProducto || [];
+    return revs.some((r) => r.estado_fisico === 'sin_existencia');
+};
+
+/** Departamentos a mostrar: principal (como área principal); si no hay, los M2M asignados. */
+export const nombresDepartamentosVendedor = (vendedor) => {
+    if (!vendedor) return [];
+    const principal = vendedor.departamento?.nombre;
+    if (principal) return [principal];
+    return (vendedor.departamentos || [])
+        .map((d) => d?.nombre)
+        .filter(Boolean);
+};
+
+/** @deprecated Prefer nombresDepartamentosVendedor; conserva 1 nombre para callers simples. */
+export const nombreDepartamentoVendedor = (vendedor) => {
+    const nombres = nombresDepartamentosVendedor(vendedor);
+    return nombres[0] || null;
+};
+
+export const badgeDepartamentoVendedor = (nombre) => {
+    if (!nombre) return null;
+    return {
+        className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border border-indigo-500/40 bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
+        label: nombre,
+    };
+};
+
 export const BTN_PRIMARY = `${THEME_BTN_PRIMARY} theme-btn-primary--compact`;
 export const BTN_SECONDARY = `${THEME_BTN_SECONDARY} theme-btn-primary--compact`;
 
@@ -433,6 +553,23 @@ export const etiquetaAlmacen = (almacen) => {
     if (!almacen) return '—';
     if (almacen.codigo) return `${almacen.codigo} - ${almacen.nombre}`;
     return almacen.nombre || '—';
+};
+
+/** Etiqueta 1/3… para varias revisiones del mismo SKU/producto (por orden). */
+export const etiquetasInstanciaRevision = (revisiones) => {
+    const grupos = {};
+    (revisiones || []).forEach((r, i) => {
+        const key = String(r.producto_id || r.sku || r.descripcion_producto || `i-${i}`);
+        (grupos[key] ||= []).push(i);
+    });
+    const out = {};
+    Object.values(grupos).forEach((idxs) => {
+        if (idxs.length < 2) return;
+        idxs.forEach((idx, n) => {
+            out[idx] = `${n + 1}/${idxs.length}`;
+        });
+    });
+    return out;
 };
 
 export const calcularTotalCobrar = (mercancia, envio, aplicaSeguro, costoSeguro, saldoFavor) => {
@@ -531,13 +668,13 @@ export const textoWhatsAppPedido = (pedido) => {
 
 /** Espeja EnviarPedidoBmaService::validarCamposRequeridos para feedback inmediato en UI. */
 export const validarCamposEnvioPedido = (data, {
-    comprobantesExistentes = 0,
     requiereLogistica = true,
     direccionesNormalizadas = false,
     esMunicipioDiferido = false,
     esResguardoAbierto = false,
     esResguardoComplementario = false,
     tienePesajeRespondido = false,
+    pagoPendiente = null,
 } = {}) => {
     const faltantes = [];
     const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario;
@@ -553,14 +690,14 @@ export const validarCamposEnvioPedido = (data, {
 
     if (!String(data.folio_remision || '').trim()) faltantes.push('folio de pedido');
     if (!data.cliente_id) faltantes.push('cliente');
-    if (!data.origen_id) faltantes.push('origen del pedido');
-    if (!data.catalogo_banco_id) faltantes.push('banco');
+    if (!data.origen_id) faltantes.push('tipo de pedido');
     if (!data.almacen_id) faltantes.push('almacén de salida');
     if (Number(data.total_mercancia || 0) <= 0) faltantes.push('total de mercancía');
 
-    const comprobantesNuevos = (data.comprobantes || []).length;
-    if (comprobantesExistentes + comprobantesNuevos === 0) {
-        faltantes.push('comprobante de pago');
+    if (pagoPendiente == null) {
+        faltantes.push('exhibiciones de pago (guarde el borrador y registre los abonos que cubran el total)');
+    } else if (Number(pagoPendiente) > 0.01) {
+        faltantes.push(`pago cubierto (pendiente $${Number(pagoPendiente).toFixed(2)})`);
     }
 
     if (requiereLogistica) {

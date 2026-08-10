@@ -7,13 +7,18 @@ use App\Models\Cliente;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafCredito;
+use App\Services\SaldosAFavor\ActualizarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\ConsultarCuentaClienteSafService;
-use App\Services\SaldosAFavor\GenerarCreditoSafService;
+use App\Services\SaldosAFavor\EliminarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
+use App\Services\SaldosAFavor\RevisarPagoPedidoBmaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+use InvalidArgumentException;
+use RuntimeException;
 
 class PedidoBmaSaldosPagosController extends Controller
 {
@@ -40,85 +45,127 @@ class PedidoBmaSaldosPagosController extends Controller
         PedidoBma $pedidoBma,
         RegistrarPagoPedidoBmaService $service,
     ): RedirectResponse {
+        $forma = $request->input('forma_pago');
         $datos = $request->validate([
             'monto' => ['required', 'numeric', 'min:0.01'],
-            'catalogo_banco_id' => ['nullable', 'exists:catalogo_bancos,id'],
+            'catalogo_banco_id' => [
+                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereBanco($forma)),
+                'nullable',
+                'exists:catalogo_bancos,id',
+            ],
             'forma_pago' => ['nullable', 'in:'.implode(',', PedidoBmaPago::FORMAS_PAGO)],
+            'fecha_pago' => ['nullable', 'date'],
+            'referencia' => ['nullable', 'string', 'max:128'],
+            'observaciones' => ['nullable', 'string', 'max:2000'],
+            'comprobante' => ['required', 'file', 'max:10240'],
+        ]);
+
+        try {
+            $service->handle($pedidoBma, $datos, $request->file('comprobante'), Auth::id());
+        } catch (InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Exhibición de pago registrada.');
+    }
+
+    public function actualizarPago(
+        Request $request,
+        PedidoBmaPago $pago,
+        ActualizarPagoPedidoBmaService $service,
+    ): RedirectResponse {
+        $forma = $request->input('forma_pago', $pago->forma_pago);
+        $datos = $request->validate([
+            'monto' => ['sometimes', 'numeric', 'min:0.01'],
+            'catalogo_banco_id' => [
+                Rule::requiredIf(fn () => PedidoBmaPago::formaRequiereBanco($forma)),
+                'nullable',
+                'exists:catalogo_bancos,id',
+            ],
+            'forma_pago' => ['sometimes', 'nullable', 'in:'.implode(',', PedidoBmaPago::FORMAS_PAGO)],
             'fecha_pago' => ['nullable', 'date'],
             'referencia' => ['nullable', 'string', 'max:128'],
             'observaciones' => ['nullable', 'string', 'max:2000'],
             'comprobante' => ['nullable', 'file', 'max:10240'],
         ]);
 
-        $service->handle($pedidoBma, $datos, $request->file('comprobante'), Auth::id());
+        try {
+            $service->handle($pago, $datos, $request->file('comprobante'), Auth::id());
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
-        return back()->with('success', 'Exhibición de pago registrada.');
+        return back()->with('success', 'Exhibición de pago actualizada.');
+    }
+
+    public function eliminarPago(
+        PedidoBmaPago $pago,
+        EliminarPagoPedidoBmaService $service,
+    ): RedirectResponse {
+        try {
+            $service->handle($pago, Auth::id());
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Exhibición de pago eliminada.');
     }
 
     public function resumenPago(PedidoBma $pedidoBma, RegistrarPagoPedidoBmaService $service): JsonResponse
     {
+        $pedidoBma->load(['pagosExhibicion.banco', 'banco']);
+
         return response()->json([
-            'pagos' => $pedidoBma->pagosExhibicion()->with('banco:id,nombre')->get(),
+            'pagos' => $pedidoBma->pagosExhibicion,
             'resumen' => $service->resumenPago($pedidoBma),
+            'formas_pago' => PedidoBmaPago::formasPagoCatalogo(),
         ]);
     }
 
     public function generarSaldoExcedente(
-        Request $request,
         PedidoBma $pedidoBma,
         RegistrarPagoPedidoBmaService $pagos,
-        GenerarCreditoSafService $generar,
     ): RedirectResponse {
         if (! $pedidoBma->cliente_id) {
             return back()->with('error', 'El pedido no tiene cliente.');
         }
 
-        $resumen = $pagos->resumenPago($pedidoBma);
-        $excedente = (float) ($resumen['excedente'] ?? 0);
-        if ($excedente <= 0) {
-            return back()->with('error', 'No hay excedente para generar saldo a favor.');
+        $credito = $pagos->generarExcedenteSiAplica($pedidoBma, Auth::id());
+        if (! $credito) {
+            $resumen = $pagos->resumenPago($pedidoBma);
+            if ((float) ($resumen['excedente'] ?? 0) <= 0) {
+                return back()->with('error', 'No hay excedente para generar saldo a favor.');
+            }
+
+            return back()->with('success', 'El saldo a favor por excedente ya estaba registrado.');
         }
 
-        $datos = $request->validate([
-            'saf_motivo_id' => ['nullable', 'exists:saf_motivos,id'],
-            'detalle_motivo' => ['nullable', 'string', 'max:2000'],
-        ]);
-
-        $motivoId = $datos['saf_motivo_id']
-            ?? \App\Models\SaldosAFavor\SafMotivo::where('codigo', 'pago_de_mas')->value('id');
-
-        try {
-            $credito = $generar->handle([
-                'cliente_id' => $pedidoBma->cliente_id,
-                'monto' => $excedente,
-                'saf_motivo_id' => $motivoId,
-                'detalle_motivo' => $datos['detalle_motivo'] ?? 'Excedente de pagos del pedido',
-                'canal_origen' => 'bellaroma',
-                'pedido_bma_id' => $pedidoBma->id,
-                'documento_origen' => $pedidoBma->folio_remision ?: $pedidoBma->folio,
-                'generado_por_id' => Auth::id(),
-                'origen_manual' => false,
-            ]);
-        } catch (\InvalidArgumentException $e) {
-            return back()->with('error', $e->getMessage());
-        }
-
-        return back()->with('success', "Saldo {$credito->folio} generado por excedente ({$excedente}).");
+        return back()->with(
+            'success',
+            "Saldo {$credito->folio} generado por excedente ({$credito->monto_original})."
+        );
     }
 
-    public function revisarPago(Request $request, PedidoBmaPago $pago): RedirectResponse
-    {
+    public function revisarPago(
+        Request $request,
+        PedidoBmaPago $pago,
+        RevisarPagoPedidoBmaService $service,
+    ): RedirectResponse {
         $datos = $request->validate([
-            'estado_revision' => ['required', 'in:pendiente,confirmado,con_diferencia'],
+            'estado_revision' => ['required', 'in:'.implode(',', PedidoBmaPago::ESTADOS_REVISION)],
             'observaciones' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $pago->update([
-            'estado_revision' => $datos['estado_revision'],
-            'observaciones' => $datos['observaciones'] ?? $pago->observaciones,
-            'revisado_por_id' => Auth::id(),
-            'revisado_at' => now(),
-        ]);
+        try {
+            $service->handle(
+                $pago,
+                $datos['estado_revision'],
+                Auth::id(),
+                $datos['observaciones'] ?? null
+            );
+        } catch (InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', 'Exhibición actualizada.');
     }
