@@ -316,10 +316,10 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                     ) : (
                                         <div className="space-y-3">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-[10px] font-bold truncate">{voucherActual?.nombre_original || 'Voucher'}</span>
+                                                <span className="text-[10px] font-bold theme-text-main truncate">{voucherActual?.nombre_original || 'Voucher'}</span>
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     <button type="button" disabled={voucherIndex <= 0} onClick={() => setVoucherIndex(i => i - 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronLeft className="w-4 h-4" /></button>
-                                                    <span className="text-[9px] font-black">{voucherIndex + 1}/{vouchers.length}</span>
+                                                    <span className="text-[9px] font-black theme-text-muted">{voucherIndex + 1}/{vouchers.length}</span>
                                                     <button type="button" disabled={voucherIndex >= vouchers.length - 1} onClick={() => setVoucherIndex(i => i + 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronRight className="w-4 h-4" /></button>
                                                     <a href={urlArchivoFactura(factura.id, 'voucher', voucherIndex)} target="_blank" rel="noopener noreferrer" className={`${BTN_SECONDARY} !p-2`}><Download className="w-4 h-4" /></a>
                                                 </div>
