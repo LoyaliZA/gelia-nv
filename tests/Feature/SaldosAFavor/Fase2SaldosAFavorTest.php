@@ -284,6 +284,7 @@ class Fase2SaldosAFavorTest extends TestCase
     public function test_bandeja_filtros_y_cola_incidencias(): void
     {
         $this->generar(80);
+        $this->generar(20);
         SafIncidencia::create([
             'cliente_id' => $this->cliente->id,
             'tipo' => 'total_aumento',
@@ -302,6 +303,11 @@ class Fase2SaldosAFavorTest extends TestCase
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
             ->component('SaldosAFavor/Index', false)
+            ->has('cuentas.data', 1)
+            ->where('cuentas.data.0.cliente_id', $this->cliente->id)
+            ->where('cuentas.data.0.disponible', 100)
+            ->where('cuentas.data.0.saldos_disponibles', 2)
+            ->where('cuentas.data.0.pendientes_revision', 2)
             ->has('colas.incidencias', 1)
             ->where('filtros.canal_origen', 'bellaroma')
         );

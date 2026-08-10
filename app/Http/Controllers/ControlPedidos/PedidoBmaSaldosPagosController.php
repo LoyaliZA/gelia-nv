@@ -153,7 +153,13 @@ class PedidoBmaSaldosPagosController extends Controller
     ): RedirectResponse {
         $datos = $request->validate([
             'estado_revision' => ['required', 'in:'.implode(',', PedidoBmaPago::ESTADOS_REVISION)],
-            'observaciones' => ['nullable', 'string', 'max:2000'],
+            'observaciones' => [
+                'nullable',
+                'string',
+                'max:2000',
+                'required_if:estado_revision,'.PedidoBmaPago::REVISION_CON_OBSERVACIONES,
+                'required_if:estado_revision,'.PedidoBmaPago::REVISION_RECHAZADO,
+            ],
         ]);
 
         try {

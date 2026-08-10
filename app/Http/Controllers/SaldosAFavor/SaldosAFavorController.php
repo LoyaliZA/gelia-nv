@@ -7,6 +7,7 @@ use App\Models\Cliente;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafComprobanteCaja;
 use App\Models\SaldosAFavor\SafCredito;
+use App\Models\SaldosAFavor\SafCuenta;
 use App\Models\SaldosAFavor\SafIncidencia;
 use App\Models\SaldosAFavor\SafMotivo;
 use App\Models\SaldosAFavor\SafPedidoAplicacion;
@@ -43,29 +44,71 @@ class SaldosAFavorController extends Controller
         $antiguedadDias = $request->get('antiguedad_dias');
         $tab = $request->get('tab', 'creditos');
 
-        $creditos = SafCredito::query()
-            ->with(['cliente:id,numero_cliente,nombre', 'motivo', 'generadoPor:id,name'])
-            ->when($q !== '', function ($query) use ($q) {
-                $query->where(function ($inner) use ($q) {
-                    $inner->where('folio', 'like', "%{$q}%")
-                        ->orWhereHas('cliente', function ($c) use ($q) {
-                            $c->where('numero_cliente', 'like', "%{$q}%")
-                                ->orWhere('nombre', 'like', "%{$q}%");
-                        });
+        $filtroCreditos = function ($query) use (
+            $q,
+            $estadoRevision,
+            $estadoFinanciero,
+            $canalOrigen,
+            $generadoPorId,
+            $montoMin,
+            $montoMax,
+            $antiguedadDias,
+        ) {
+            $query
+                ->when($q !== '', function ($inner) use ($q) {
+                    $inner->where(function ($w) use ($q) {
+                        $w->where('folio', 'like', "%{$q}%")
+                            ->orWhereHas('cliente', function ($c) use ($q) {
+                                $c->where('numero_cliente', 'like', "%{$q}%")
+                                    ->orWhere('nombre', 'like', "%{$q}%");
+                            });
+                    });
+                })
+                ->when($estadoRevision, fn ($q2) => $q2->where('estado_revision', $estadoRevision))
+                ->when($estadoFinanciero, fn ($q2) => $q2->where('estado_financiero', $estadoFinanciero))
+                ->when($canalOrigen, fn ($q2) => $q2->where('canal_origen', $canalOrigen))
+                ->when($generadoPorId, fn ($q2) => $q2->where('generado_por_id', (int) $generadoPorId))
+                ->when($montoMin !== null && $montoMin !== '', fn ($q2) => $q2->where('monto_original', '>=', (float) $montoMin))
+                ->when($montoMax !== null && $montoMax !== '', fn ($q2) => $q2->where('monto_original', '<=', (float) $montoMax))
+                ->when($antiguedadDias !== null && $antiguedadDias !== '', function ($q2) use ($antiguedadDias) {
+                    $q2->whereDate('fecha_generacion', '<=', now()->subDays((int) $antiguedadDias)->toDateString());
                 });
-            })
-            ->when($estadoRevision, fn ($q2) => $q2->where('estado_revision', $estadoRevision))
-            ->when($estadoFinanciero, fn ($q2) => $q2->where('estado_financiero', $estadoFinanciero))
-            ->when($canalOrigen, fn ($q2) => $q2->where('canal_origen', $canalOrigen))
-            ->when($generadoPorId, fn ($q2) => $q2->where('generado_por_id', (int) $generadoPorId))
-            ->when($montoMin !== null && $montoMin !== '', fn ($q2) => $q2->where('monto_original', '>=', (float) $montoMin))
-            ->when($montoMax !== null && $montoMax !== '', fn ($q2) => $q2->where('monto_original', '<=', (float) $montoMax))
-            ->when($antiguedadDias !== null && $antiguedadDias !== '', function ($q2) use ($antiguedadDias) {
-                $q2->whereDate('fecha_generacion', '<=', now()->subDays((int) $antiguedadDias)->toDateString());
-            })
+        };
+
+        $hoy = now()->toDateString();
+        $creditosUsables = function ($query) use ($hoy) {
+            $query
+                ->whereIn('estado_financiero', [
+                    SafCredito::ESTADO_DISPONIBLE,
+                    SafCredito::ESTADO_PARCIAL,
+                ])
+                ->where('monto_disponible', '>', 0)
+                ->whereDate('fecha_vencimiento', '>=', $hoy);
+        };
+
+        $cuentas = SafCuenta::query()
+            ->with(['cliente:id,numero_cliente,nombre'])
+            ->whereHas('creditos', $filtroCreditos)
+            ->withSum(['creditos as disponible' => $creditosUsables], 'monto_disponible')
+            ->withSum('creditos as reservado', 'monto_reservado')
+            ->withCount([
+                'creditos as saldos_disponibles' => $creditosUsables,
+                'creditos as pendientes_revision' => fn ($q) => $q->where('estado_revision', SafCredito::REVISION_PENDIENTE),
+                'creditos as saldos_vencidos' => fn ($q) => $q->where('estado_financiero', SafCredito::ESTADO_VENCIDO),
+            ])
             ->orderByDesc('id')
             ->paginate(20)
-            ->withQueryString();
+            ->withQueryString()
+            ->through(fn (SafCuenta $cuenta) => [
+                'id' => $cuenta->id,
+                'cliente_id' => $cuenta->cliente_id,
+                'cliente' => $cuenta->cliente,
+                'disponible' => round((float) ($cuenta->disponible ?? 0), 2),
+                'reservado' => round((float) ($cuenta->reservado ?? 0), 2),
+                'saldos_disponibles' => (int) ($cuenta->saldos_disponibles ?? 0),
+                'pendientes_revision' => (int) ($cuenta->pendientes_revision ?? 0),
+                'saldos_vencidos' => (int) ($cuenta->saldos_vencidos ?? 0),
+            ]);
 
         $creditosPendientesRevision = SafCredito::query()
             ->with(['cliente:id,numero_cliente,nombre', 'motivo'])
@@ -101,7 +144,7 @@ class SaldosAFavorController extends Controller
         $pendientes = SafCredito::where('estado_revision', SafCredito::REVISION_PENDIENTE)->count();
 
         return Inertia::render('SaldosAFavor/Index', [
-            'creditos' => $creditos,
+            'cuentas' => $cuentas,
             'tab' => $tab,
             'colas' => [
                 'creditos_pendientes' => $creditosPendientesRevision,
@@ -236,7 +279,13 @@ class SaldosAFavorController extends Controller
     {
         $datos = $request->validate([
             'estado_revision' => ['required', 'in:'.implode(',', PedidoBmaPago::ESTADOS_REVISION)],
-            'observaciones' => ['nullable', 'string', 'max:2000'],
+            'observaciones' => [
+                'nullable',
+                'string',
+                'max:2000',
+                'required_if:estado_revision,'.PedidoBmaPago::REVISION_CON_OBSERVACIONES,
+                'required_if:estado_revision,'.PedidoBmaPago::REVISION_RECHAZADO,
+            ],
         ]);
 
         app(RevisarPagoPedidoBmaService::class)->handle(

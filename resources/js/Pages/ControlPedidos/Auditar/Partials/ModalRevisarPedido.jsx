@@ -357,25 +357,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     ).join(', ') || '—'}
                                 />
                             </div>
-                            {comprobantes.length > 0 ? (
+                            {comprobantes.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mb-4">
                                     {comprobantes.map((doc) => (
                                         <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
                                     ))}
                                 </div>
-                            ) : (
-                                <p className="text-xs theme-text-muted font-bold italic mb-4">Sin comprobantes adjuntos</p>
-                            )}
-                            {esPendiente && (
-                                <button
-                                    type="button"
-                                    onClick={validarPago}
-                                    disabled={procesando || pagoValidado}
-                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
-                                >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    {pagoValidado ? 'Pago validado' : 'Validar pago'}
-                                </button>
                             )}
                             {(pedido.saf_aplicaciones || []).filter((a) => a.estado !== 'liberado').length > 0 && (
                                 <div className="mt-4 space-y-2">
@@ -405,6 +392,19 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         : null}
                                 />
                             </div>
+                            {esPendiente && (
+                                <div className="mt-4">
+                                    <button
+                                        type="button"
+                                        onClick={validarPago}
+                                        disabled={procesando || pagoValidado}
+                                        className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
+                                    >
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        {pagoValidado ? 'Pago validado' : 'Validar pago'}
+                                    </button>
+                                </div>
+                            )}
                         </section>
 
                         <section className={SECCION_WRAP}>

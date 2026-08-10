@@ -6,6 +6,7 @@ import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import {
+    BTN_BACK,
     BTN_PRIMARY,
     BTN_SECONDARY,
     FLASH_OK,
@@ -52,7 +53,7 @@ export default function Comprobante({ auth, comprobante, encabezado }) {
                 <div>
                     <Link
                         href={route('saldos_favor.caja.index', { cliente_id: comprobante.cliente_id })}
-                        className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest theme-text-muted"
+                        className={BTN_BACK}
                     >
                         <ArrowLeft className="w-3.5 h-3.5" /> Caja
                     </Link>

@@ -15,11 +15,40 @@ import {
 import { THEME_INPUT, THEME_SELECT } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+import ModalMotivoRechazo from './ModalMotivoRechazo';
 
 const formaRequiereBanco = (forma, formasPago = []) => {
     const found = formasPago.find((f) => f.codigo === forma);
     if (found) return Boolean(found.requiere_banco);
     return forma === 'transferencia' || forma === 'deposito';
+};
+
+const ESTADOS_DEFINITIVOS = new Set(['verificado', 'con_observaciones', 'rechazado', 'confirmado', 'con_diferencia']);
+
+const BTN_REV = {
+    en_revision: 'inline-flex items-center px-2.5 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wide outline-none bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30 hover:opacity-90',
+    verificado: 'inline-flex items-center px-2.5 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wide outline-none bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:opacity-90',
+    con_observaciones: 'inline-flex items-center px-2.5 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wide outline-none bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:opacity-90',
+    rechazado: 'inline-flex items-center px-2.5 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-wide outline-none bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30 hover:opacity-90',
+};
+
+const accionesVisiblesPara = (estado) => {
+    if (ESTADOS_DEFINITIVOS.has(estado)) {
+        return [{ key: 'en_revision', label: 'Reabrir' }];
+    }
+    if (estado === 'en_revision') {
+        return [
+            { key: 'verificado', label: 'Verificar' },
+            { key: 'con_observaciones', label: 'Observaciones' },
+            { key: 'rechazado', label: 'Rechazar' },
+        ];
+    }
+    return [
+        { key: 'en_revision', label: 'En revisión' },
+        { key: 'verificado', label: 'Verificar' },
+        { key: 'con_observaciones', label: 'Observaciones' },
+        { key: 'rechazado', label: 'Rechazar' },
+    ];
 };
 
 /**
@@ -49,6 +78,7 @@ export default function SeccionPagosExhibicion({
     const [dividido, setDividido] = useState(false);
     const [editandoId, setEditandoId] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
+    const [revisionModal, setRevisionModal] = useState(null); // { pago, estado }
 
     const form = useForm({
         monto: '',
@@ -166,11 +196,24 @@ export default function SeccionPagosExhibicion({
         });
     };
 
-    const revisarPago = (p, estado_revision) => {
-        router.post(route(rutaRevisar, p.id), { estado_revision }, {
+    const revisarPago = (p, estado_revision, observaciones = null) => {
+        const payload = { estado_revision };
+        if (observaciones != null) payload.observaciones = observaciones;
+        router.post(route(rutaRevisar, p.id), payload, {
             preserveScroll: true,
-            onSuccess: () => cargar(),
+            onSuccess: () => {
+                setRevisionModal(null);
+                cargar();
+            },
         });
+    };
+
+    const solicitarRevision = (p, estado) => {
+        if (estado === 'con_observaciones' || estado === 'rechazado') {
+            setRevisionModal({ pago: p, estado });
+            return;
+        }
+        revisarPago(p, estado);
     };
 
     const intentarDesactivarDividido = () => {
@@ -300,38 +343,51 @@ export default function SeccionPagosExhibicion({
                                         </button>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <span className="font-black" style={{ color: 'var(--color-primario)' }}>
-                                        {formatearMoneda(p.monto)}
-                                    </span>
-                                    {puedeRevisar && (
-                                        <div className="flex flex-wrap gap-1">
-                                            <button type="button" className="text-[9px] font-black uppercase text-blue-600" onClick={() => revisarPago(p, 'en_revision')}>En revisión</button>
-                                            <button type="button" className="text-[9px] font-black uppercase text-emerald-700" onClick={() => revisarPago(p, 'verificado')}>Verificar</button>
-                                            <button type="button" className="text-[9px] font-black uppercase text-amber-700" onClick={() => revisarPago(p, 'con_observaciones')}>Observaciones</button>
-                                            <button type="button" className="text-[9px] font-black uppercase text-rose-700" onClick={() => revisarPago(p, 'rechazado')}>Rechazar</button>
-                                        </div>
-                                    )}
-                                    {puedeRegistrar && (
-                                        <>
-                                            <button
-                                                type="button"
-                                                className="text-[10px] font-black uppercase theme-text-muted"
-                                                onClick={() => iniciarEdicion(p)}
-                                            >
-                                                Editar
-                                            </button>
-                                            {(dividido || pagos.length > 1) && (
+                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-black" style={{ color: 'var(--color-primario)' }}>
+                                            {formatearMoneda(p.monto)}
+                                        </span>
+                                        {puedeRevisar && (
+                                            <div className="flex flex-wrap justify-end gap-1.5">
+                                                {accionesVisiblesPara(p.estado_revision).map((accion) => (
+                                                    <button
+                                                        key={accion.key}
+                                                        type="button"
+                                                        className={BTN_REV[accion.key] || BTN_REV.en_revision}
+                                                        onClick={() => solicitarRevision(p, accion.key)}
+                                                    >
+                                                        {accion.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {puedeRegistrar && (
+                                            <>
                                                 <button
                                                     type="button"
-                                                    className="text-rose-500"
-                                                    title="Eliminar"
-                                                    onClick={() => eliminarPago(p)}
+                                                    className="text-[10px] font-black uppercase theme-text-muted"
+                                                    onClick={() => iniciarEdicion(p)}
                                                 >
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    Editar
                                                 </button>
-                                            )}
-                                        </>
+                                                {(dividido || pagos.length > 1) && (
+                                                    <button
+                                                        type="button"
+                                                        className="text-rose-500"
+                                                        title="Eliminar"
+                                                        onClick={() => eliminarPago(p)}
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                    {p.observaciones && (
+                                        <p className="text-[10px] theme-text-muted font-bold m-0 max-w-xs text-right">
+                                            {p.observaciones}
+                                        </p>
                                     )}
                                 </div>
                             </div>
@@ -494,6 +550,27 @@ export default function SeccionPagosExhibicion({
                 indice={docPreview?.indice || 0}
                 onClose={() => setDocPreview(null)}
                 onChangeIndice={(i) => setDocPreview({ indice: i })}
+            />
+            <ModalMotivoRechazo
+                abierto={Boolean(revisionModal)}
+                onClose={() => setRevisionModal(null)}
+                titulo={revisionModal?.estado === 'rechazado' ? 'Rechazar exhibición' : 'Observaciones de exhibición'}
+                descripcion={
+                    revisionModal?.estado === 'rechazado'
+                        ? 'Solo marca esta exhibición como rechazada. No devuelve el pedido a la vendedora.'
+                        : 'Describe la diferencia u observación encontrada en esta exhibición.'
+                }
+                labelCampo={revisionModal?.estado === 'rechazado' ? 'Motivo del rechazo' : 'Observaciones'}
+                placeholder={
+                    revisionModal?.estado === 'rechazado'
+                        ? '¿Por qué se rechaza esta exhibición?'
+                        : 'Detalle de la observación…'
+                }
+                confirmLabel="Guardar"
+                onConfirm={(texto) => {
+                    if (!revisionModal) return;
+                    revisarPago(revisionModal.pago, revisionModal.estado, texto);
+                }}
             />
         </div>
     );

@@ -37,7 +37,7 @@ const TABS = [
 
 export default function Index({
     auth,
-    creditos,
+    cuentas,
     filtros = {},
     metricas = {},
     motivos = [],
@@ -133,8 +133,23 @@ export default function Index({
     };
 
     const revisarPago = (pagoId, estado) => {
+        let observaciones;
+        if (estado === 'con_observaciones' || estado === 'rechazado') {
+            const texto = window.prompt(
+                estado === 'rechazado'
+                    ? 'Motivo del rechazo de la exhibición:'
+                    : 'Observaciones de la exhibición:'
+            );
+            if (texto == null) return;
+            observaciones = texto.trim();
+            if (observaciones.length < 5) {
+                window.alert('Debe indicar al menos 5 caracteres.');
+                return;
+            }
+        }
         router.post(route('saldos_favor.pagos.revisar', pagoId), {
             estado_revision: estado,
+            ...(observaciones ? { observaciones } : {}),
         }, { preserveScroll: true });
     };
 
@@ -281,59 +296,66 @@ export default function Index({
                             <button type="button" onClick={() => buscar()} className={BTN_PRIMARY}>Filtrar</button>
                         </div>
 
-                        <div className={geliaCardClass('overflow-x-auto')}>
-                            <table className="min-w-full">
+                        <div className={geliaCardClass('overflow-hidden')}>
+                            <table className="table-fixed w-full">
                                 <thead className="theme-element">
                                     <tr>
-                                        <th className={TH}>Folio</th>
-                                        <th className={TH}>Cliente</th>
-                                        <th className={TH}>Disponible</th>
-                                        <th className={TH}>Estado</th>
-                                        <th className={TH}>Revisión</th>
-                                        <th className={TH}>Vence</th>
-                                        <th className={TH} />
+                                        <th className={`${TH} w-[34%]`}>Cliente</th>
+                                        <th className={`${TH} w-[18%]`}>Disponible</th>
+                                        <th className={`${TH} w-[32%]`}>Detalle</th>
+                                        <th className={`${TH} w-[16%]`} />
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {(creditos?.data || []).length === 0 && (
+                                    {(cuentas?.data || []).length === 0 && (
                                         <tr>
-                                            <td colSpan={7} className={`${TD} text-center theme-text-muted py-8`}>
-                                                Sin saldos a favor para los filtros seleccionados.
+                                            <td colSpan={4} className={`${TD} text-center theme-text-muted py-8`}>
+                                                Sin clientes con saldos a favor para los filtros seleccionados.
                                             </td>
                                         </tr>
                                     )}
-                                    {(creditos?.data || []).map((c) => (
+                                    {(cuentas?.data || []).map((c) => (
                                         <tr key={c.id} className="hover:bg-[color-mix(in_srgb,var(--color-primario)_4%,transparent)]">
-                                            <td className={`${TD} font-bold`}>{c.folio}</td>
-                                            <td className={TD}>
+                                            <td className={`${TD} break-words`}>
                                                 <div className="font-bold">{c.cliente?.nombre}</div>
                                                 <div className="text-[10px] font-bold uppercase tracking-wider theme-text-muted">#{c.cliente?.numero_cliente}</div>
                                             </td>
-                                            <td className={`${TD} font-bold`}>{fmtMoneda(c.monto_disponible)}</td>
                                             <td className={TD}>
-                                                <span className="text-[10px] font-black uppercase tracking-wide theme-text-muted">
-                                                    {LABEL_ESTADO_FIN[c.estado_financiero] || c.estado_financiero}
-                                                </span>
+                                                <div className="font-black text-emerald-600 dark:text-emerald-400">{fmtMoneda(c.disponible)}</div>
+                                                {Number(c.reservado) > 0 && (
+                                                    <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted mt-0.5">
+                                                        Reservado {fmtMoneda(c.reservado)}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className={TD}>
-                                                <span className={`inline-flex px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wide border ${
-                                                    c.estado_revision === 'pendiente'
-                                                        ? 'bg-amber-500/15 text-amber-700 border-amber-500/30'
-                                                        : c.estado_revision === 'revisado'
-                                                            ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30'
-                                                            : 'theme-element theme-border theme-text-muted'
-                                                }`}>
-                                                    {LABEL_ESTADO_REV[c.estado_revision] || c.estado_revision}
-                                                </span>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wide border bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                                                        {c.saldos_disponibles} {c.saldos_disponibles === 1 ? 'saldo' : 'saldos'} disponible{c.saldos_disponibles === 1 ? '' : 's'}
+                                                    </span>
+                                                    {c.pendientes_revision > 0 ? (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wide border bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30">
+                                                            {c.pendientes_revision} pendiente{c.pendientes_revision === 1 ? '' : 's'} de revisión
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wide border theme-element theme-border theme-text-muted">
+                                                            Sin pendientes
+                                                        </span>
+                                                    )}
+                                                    {c.saldos_vencidos > 0 && (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wide border bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30">
+                                                            {c.saldos_vencidos} vencido{c.saldos_vencidos === 1 ? '' : 's'}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
-                                            <td className={TD}>{c.fecha_vencimiento}</td>
                                             <td className={`${TD} text-right`}>
                                                 <Link
                                                     href={route('saldos_favor.cuenta', c.cliente_id)}
                                                     className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-wide"
                                                     style={{ color: 'var(--color-primario)' }}
                                                 >
-                                                    <ClipboardCheck className="w-4 h-4" /> Cuenta
+                                                    <ClipboardCheck className="w-4 h-4 shrink-0" /> Cuenta
                                                 </Link>
                                             </td>
                                         </tr>
@@ -342,7 +364,7 @@ export default function Index({
                             </table>
                             <div className="p-3 border-t theme-border">
                                 <GeliaPaginacion
-                                    paginator={creditos}
+                                    paginator={cuentas}
                                     onIrAPagina={(page) => router.get(route('saldos_favor.index'), { ...filtrosPayload(), page }, { preserveState: true })}
                                 />
                             </div>
@@ -420,15 +442,15 @@ export default function Index({
                 )}
 
                 {tab === 'incidencias' && (
-                    <div className={geliaCardClass('overflow-x-auto')}>
-                        <table className="min-w-full">
+                    <div className={geliaCardClass('overflow-hidden')}>
+                        <table className="table-fixed w-full">
                             <thead className="theme-element">
                                 <tr>
-                                    <th className={TH}>Tipo</th>
-                                    <th className={TH}>Cliente</th>
-                                    <th className={TH}>Descripción</th>
-                                    <th className={TH}>Nota resolución</th>
-                                    <th className={TH} />
+                                    <th className={`${TH} w-[12%]`}>Tipo</th>
+                                    <th className={`${TH} w-[18%]`}>Cliente</th>
+                                    <th className={`${TH} w-[28%]`}>Descripción</th>
+                                    <th className={`${TH} w-[28%]`}>Nota resolución</th>
+                                    <th className={`${TH} w-[14%]`} />
                                 </tr>
                             </thead>
                             <tbody>
@@ -443,11 +465,11 @@ export default function Index({
                                     <tr key={i.id}>
                                         <td className={`${TD} font-bold`}>{i.tipo}</td>
                                         <td className={TD}>{i.cliente?.nombre || '—'}</td>
-                                        <td className={`${TD} max-w-md truncate`}>{i.descripcion}</td>
+                                        <td className={TD}>{i.descripcion}</td>
                                         <td className={TD}>
                                             {can('saldos_favor.ajustar') && (
                                                 <input
-                                                    className={`${THEME_INPUT} w-full min-w-[140px]`}
+                                                    className={`${THEME_INPUT} w-full`}
                                                     placeholder="Nota (opcional)"
                                                     value={notaIncidencia[i.id] || ''}
                                                     onChange={(e) => setNotaIncidencia((prev) => ({ ...prev, [i.id]: e.target.value }))}
@@ -554,8 +576,8 @@ export default function Index({
 
 function ColaTabla({ rows, empty, columns, renderRow }) {
     return (
-        <div className={geliaCardClass('overflow-x-auto')}>
-            <table className="min-w-full">
+        <div className={geliaCardClass('overflow-hidden')}>
+            <table className="table-fixed w-full">
                 <thead className="theme-element">
                     <tr>
                         {columns.map((c) => <th key={c} className={TH}>{c}</th>)}
