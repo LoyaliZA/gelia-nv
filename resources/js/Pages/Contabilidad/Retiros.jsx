@@ -219,7 +219,7 @@ export default function Retiros({ auth, datos_plataformas = [] }) {
                                                     <tbody className="divide-y theme-border">
                                                         {pedidosGrupo.map((pedido) => {
                                                             const esVenta = (pedido.tipo_transaccion?.codigo || 'venta').includes('venta');
-                                                            const retiroEsp = retiroEsperadoPedido(pedido);
+                                                            const retiroEsp = montoEsperadoBanco(pedido);
                                                             const filtro = `${pedido.numero_pedido} ${pedido.cliente_nombre || ''}`.toLowerCase();
                                                             if (busqueda && !filtro.includes(busqueda.toLowerCase())) return null;
 
