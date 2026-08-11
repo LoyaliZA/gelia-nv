@@ -3,6 +3,7 @@
 namespace App\Services\GeliaAi;
 
 use App\Models\CustomList;
+use App\Services\Listados\ExportarListadoExcelService;
 use App\Services\Listados\PorcentajesListadoService;
 use Rap2hpoutre\FastExcel\FastExcel;
 use RuntimeException;
@@ -25,13 +26,15 @@ class GenerarListadoDesdeRutasService
 
     public function __construct(
         private PorcentajesListadoService $porcentajes,
+        private ExportarListadoExcelService $exportarExcel,
     ) {}
 
     /**
      * @param  array{existencias: string, precios?: string|null, costos?: string|null}  $rutas
+     * @param  array{nota_encabezado?: string|null, mostrar_nota_encabezado?: bool|null}  $opciones
      * @return array{nombre_descarga: string, temp_file: string, temp_path: string, filas: int, inconsistencias: list<array<string, mixed>>}
      */
-    public function generar(string|int $tipoLista, array $rutas): array
+    public function generar(string|int $tipoLista, array $rutas, array $opciones = []): array
     {
         if (empty($rutas['existencias']) || ! is_file($rutas['existencias'])) {
             throw new RuntimeException('Archivo de existencias requerido.');
@@ -252,7 +255,15 @@ class GenerarListadoDesdeRutasService
             mkdir($tempDir, 0755, true);
         }
         $tempPath = $tempDir.'/'.$tempFilename;
-        (new FastExcel($listaCompleta))->export($tempPath);
+
+        $nota = $this->exportarExcel->resolverNota(
+            array_key_exists('mostrar_nota_encabezado', $opciones)
+                ? (bool) $opciones['mostrar_nota_encabezado']
+                : null,
+            $opciones['nota_encabezado'] ?? null,
+            $esListaPersonalizadaBD ? $configuracionBD : null,
+        );
+        $this->exportarExcel->exportar($listaCompleta, $tempPath, $nota);
 
         return [
             'nombre_descarga' => $nombreArchivo,

@@ -13,6 +13,7 @@ use App\Models\ListadoGenerado;
 use App\Models\User;
 use App\Services\Listados\PorcentajesListadoService;
 use App\Services\Listados\ListadoGeneradoService;
+use App\Services\Listados\ExportarListadoExcelService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
@@ -139,6 +140,8 @@ class AromasListasController extends Controller
             'destinatarios_externos' => 'nullable|array',
             'destinatarios_externos.*.nombre' => 'nullable|string|max:100',
             'destinatarios_externos.*.email' => 'required|email|max:150',
+            'mostrar_nota_encabezado' => 'sometimes|boolean',
+            'nota_encabezado' => 'nullable|string|max:500',
         ]);
 
         if ($validator->fails()) {
@@ -158,6 +161,8 @@ class AromasListasController extends Controller
                 'nombre_archivo_salida' => strtoupper($request->nombre_archivo_salida),
                 'solo_con_existencia' => $request->boolean('solo_con_existencia'),
                 'filtro_relojes' => $request->boolean('filtro_relojes'),
+                'mostrar_nota_encabezado' => $request->boolean('mostrar_nota_encabezado'),
+                'nota_encabezado' => $request->input('nota_encabezado'),
                 'destinatarios_user_ids' => $request->input('destinatarios_user_ids', []),
                 'destinatarios_externos' => $request->input('destinatarios_externos', []),
                 'active' => true,
@@ -200,6 +205,8 @@ class AromasListasController extends Controller
             'destinatarios_externos' => 'nullable|array',
             'destinatarios_externos.*.nombre' => 'nullable|string|max:100',
             'destinatarios_externos.*.email' => 'required|email|max:150',
+            'mostrar_nota_encabezado' => 'sometimes|boolean',
+            'nota_encabezado' => 'nullable|string|max:500',
         ]);
 
         if ($validator->fails()) {
@@ -217,6 +224,8 @@ class AromasListasController extends Controller
                 'nombre_archivo_salida' => strtoupper($request->nombre_archivo_salida),
                 'solo_con_existencia' => $request->boolean('solo_con_existencia'),
                 'filtro_relojes' => $request->boolean('filtro_relojes'),
+                'mostrar_nota_encabezado' => $request->boolean('mostrar_nota_encabezado'),
+                'nota_encabezado' => $request->input('nota_encabezado'),
                 'destinatarios_user_ids' => $request->input('destinatarios_user_ids', []),
                 'destinatarios_externos' => $request->input('destinatarios_externos', []),
             ]);
@@ -254,7 +263,7 @@ class AromasListasController extends Controller
     // 2. MOTOR PROCESADOR Y CRUCE DE INVENTARIOS
     // ══════════════════════════════════════════════════════════════════════
 
-    public function generar(Request $request, ListadoGeneradoService $listadoService)
+    public function generar(Request $request, ListadoGeneradoService $listadoService, ExportarListadoExcelService $exportarExcel)
     {
         set_time_limit(0);
         ini_set('memory_limit', '-1');
@@ -501,23 +510,34 @@ class AromasListasController extends Controller
             array_multisort($descripciones, SORT_ASC, SORT_STRING | SORT_FLAG_CASE, $listaCompleta);
         }
 
+        $notaEncabezado = $exportarExcel->resolverNota(
+            $request->has('mostrar_nota_encabezado') ? $request->boolean('mostrar_nota_encabezado') : null,
+            $request->input('nota_encabezado'),
+            $esListaPersonalizadaBD ? $configuracionBD : null,
+        );
+
         $user = $request->user();
         $puedeModal = $user->can('listados.guardar_generado')
             || $user->can('listados.enviar')
             || $user->can('listados.visualizar');
 
+        $tempDir = storage_path('app/temp');
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
         // Sin permisos de guardar/enviar/historial: descarga directa (flujo legacy)
         if (!$puedeModal && count($inconsistencias) === 0) {
-            return (new FastExcel($listaCompleta))->download($nombreArchivo);
+            $tempFilename = 'excel_temp_' . uniqid() . '.xlsx';
+            $tempPath = $tempDir . '/' . $tempFilename;
+            $exportarExcel->exportar($listaCompleta, $tempPath, $notaEncabezado);
+
+            return response()->download($tempPath, $nombreArchivo)->deleteFileAfterSend(true);
         }
 
         if (!$puedeModal && count($inconsistencias) > 0) {
             $tempFilename = 'excel_temp_' . uniqid() . '.xlsx';
-            $tempDir = storage_path('app/temp');
-            if (!file_exists($tempDir)) {
-                mkdir($tempDir, 0755, true);
-            }
-            (new FastExcel($listaCompleta))->export($tempDir . '/' . $tempFilename);
+            $exportarExcel->exportar($listaCompleta, $tempDir . '/' . $tempFilename, $notaEncabezado);
 
             return response()->json([
                 'requiere_confirmacion' => true,
@@ -529,11 +549,7 @@ class AromasListasController extends Controller
         }
 
         $tempFilename = 'excel_temp_' . uniqid() . '.xlsx';
-        $tempDir = storage_path('app/temp');
-        if (!file_exists($tempDir)) {
-            mkdir($tempDir, 0755, true);
-        }
-        (new FastExcel($listaCompleta))->export($tempDir . '/' . $tempFilename);
+        $exportarExcel->exportar($listaCompleta, $tempDir . '/' . $tempFilename, $notaEncabezado);
 
         $defaults = $listadoService->obtenerDestinatariosDefault((string) $tipoLista);
 
