@@ -6,6 +6,7 @@ use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeImageImport;
 use App\Models\Tiendanube\TiendanubeImageImportItem;
 use App\Models\Tiendanube\TiendanubeProducto;
+use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\User;
 use App\Services\Tiendanube\TiendanubeImageImportService;
@@ -219,6 +220,42 @@ class TiendanubeImageImportTest extends TestCase
         });
     }
 
+    public function test_import_reencola_lotes_hasta_completar(): void
+    {
+        $files = [];
+        $n = TiendanubeImageImportService::BATCH_SIZE + 3;
+        for ($i = 1; $i <= $n; $i++) {
+            $sku = 'SKU'.$i;
+            TiendanubeProducto::create(['id' => 1000 + $i, 'name' => ['es' => 'P'.$i], 'published' => true]);
+            TiendanubeProductoVariante::create([
+                'id' => 1000 + $i,
+                'producto_id' => 1000 + $i,
+                'sku' => $sku,
+                'price' => 1,
+            ]);
+            $files[$sku.'.webp'] = 'bytes'.$i;
+        }
+
+        Http::fake(function ($request) {
+            static $id = 5000;
+            $id++;
+
+            return Http::response([
+                'id' => $id,
+                'src' => 'https://cdn.example.com/'.$id.'.webp',
+                'position' => 1,
+            ], 201);
+        });
+
+        $import = app(TiendanubeImageImportService::class)->iniciarDesdeZip($this->makeZip($files));
+        $import->refresh();
+
+        $this->assertSame('completado', $import->estado);
+        $this->assertSame($n, $import->exitosos);
+        $this->assertSame($n, $import->total_archivos);
+        $this->assertSame(0, $import->items()->where('estado', 'pendiente')->count());
+    }
+
     public function test_endpoint_importar_requiere_permiso(): void
     {
         Permission::findOrCreate('tiendanube.ver', 'web');
@@ -243,6 +280,176 @@ class TiendanubeImageImportTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('success', true);
+    }
+
+    public function test_import_desde_archivos_indexa_y_sube(): void
+    {
+        TiendanubeProducto::create(['id' => 77, 'name' => ['es' => 'P'], 'published' => true]);
+        TiendanubeProductoVariante::create([
+            'id' => 77,
+            'producto_id' => 77,
+            'sku' => 'FILE77',
+            'price' => 1,
+        ]);
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/77/images' => Http::response([
+                'id' => 777,
+                'src' => 'https://cdn.example.com/FILE77.webp',
+                'position' => 1,
+            ], 201),
+        ]);
+
+        $png = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            true
+        );
+        $path = sys_get_temp_dir().'/tn_file_'.uniqid('', true).'.png';
+        file_put_contents($path, $png);
+        $upload = new UploadedFile($path, 'FILE77.png', 'image/png', null, true);
+
+        $import = app(TiendanubeImageImportService::class)->iniciarDesdeArchivos([$upload], null, true);
+        $import->refresh();
+
+        $this->assertSame('completado', $import->estado);
+        $this->assertSame(1, $import->exitosos);
+        $this->assertTrue($import->reemplazar_primera);
+        $this->assertDatabaseHas('tiendanube_producto_imagenes', [
+            'id' => 777,
+            'producto_id' => 77,
+        ]);
+    }
+
+    public function test_reporte_alertas_y_sin_foto_csv(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        $user = User::factory()->create();
+        $user->givePermissionTo('tiendanube.ver');
+
+        TiendanubeProducto::create(['id' => 1, 'name' => ['es' => 'Con alerta'], 'published' => true]);
+        TiendanubeProductoVariante::create(['id' => 1, 'producto_id' => 1, 'sku' => 'A1', 'price' => 1]);
+        TiendanubeProductoImagen::create([
+            'id' => 10,
+            'producto_id' => 1,
+            'src' => 'https://cdn.example.com/a.jpg',
+            'position' => 1,
+            'width' => 500,
+            'height' => 600,
+            'alerta_pequena' => true,
+            'alerta_no_cuadrada' => true,
+            'requiere_revision' => true,
+        ]);
+        TiendanubeProducto::create(['id' => 3, 'name' => ['es' => 'Solo pequeña'], 'published' => true]);
+        TiendanubeProductoVariante::create(['id' => 3, 'producto_id' => 3, 'sku' => 'C3', 'price' => 1]);
+        TiendanubeProductoImagen::create([
+            'id' => 11,
+            'producto_id' => 3,
+            'src' => 'https://cdn.example.com/c.jpg',
+            'position' => 1,
+            'width' => 400,
+            'height' => 400,
+            'alerta_pequena' => true,
+            'alerta_no_cuadrada' => false,
+            'requiere_revision' => true,
+        ]);
+        TiendanubeProducto::create(['id' => 4, 'name' => ['es' => 'Solo no cuadrada'], 'published' => true]);
+        TiendanubeProductoVariante::create(['id' => 4, 'producto_id' => 4, 'sku' => 'D4', 'price' => 1]);
+        TiendanubeProductoImagen::create([
+            'id' => 12,
+            'producto_id' => 4,
+            'src' => 'https://cdn.example.com/d.jpg',
+            'position' => 1,
+            'width' => 1200,
+            'height' => 900,
+            'alerta_pequena' => false,
+            'alerta_no_cuadrada' => true,
+            'requiere_revision' => true,
+        ]);
+
+        TiendanubeProducto::create(['id' => 2, 'name' => ['es' => 'Sin foto'], 'published' => true]);
+        TiendanubeProductoVariante::create(['id' => 2, 'producto_id' => 2, 'sku' => 'B2', 'price' => 1]);
+        TiendanubeProducto::create(['id' => 5, 'name' => ['es' => 'Sin foto draft'], 'published' => false]);
+        TiendanubeProductoVariante::create(['id' => 5, 'producto_id' => 5, 'sku' => 'E5', 'price' => 1]);
+
+        $alertas = $this->actingAs($user)->get(route('tiendanube.imagenes.reporte_alertas'));
+        $alertas->assertOk();
+        $csvAlertas = $alertas->streamedContent();
+        $this->assertStringContainsString('detalle', $csvAlertas);
+        $this->assertStringContainsString('lado menor < 800px', $csvAlertas);
+        $this->assertStringContainsString('no cuadrada', $csvAlertas);
+        $this->assertStringContainsString('A1', $csvAlertas);
+
+        $soloPequena = $this->actingAs($user)->get(route('tiendanube.imagenes.reporte_alertas', [
+            'detalle' => ['pequena'],
+        ]));
+        $csvPequena = $soloPequena->streamedContent();
+        $this->assertStringContainsString('C3', $csvPequena);
+        $this->assertStringContainsString('A1', $csvPequena);
+        $this->assertStringNotContainsString('D4', $csvPequena);
+
+        $soloNoCuadrada = $this->actingAs($user)->get(route('tiendanube.imagenes.reporte_alertas', [
+            'detalle' => ['no_cuadrada'],
+        ]));
+        $csvNoCuadrada = $soloNoCuadrada->streamedContent();
+        $this->assertStringContainsString('D4', $csvNoCuadrada);
+        $this->assertStringNotContainsString('C3', $csvNoCuadrada);
+
+        $sinFoto = $this->actingAs($user)->get(route('tiendanube.imagenes.reporte_sin_foto'));
+        $sinFoto->assertOk();
+        $csvSin = $sinFoto->streamedContent();
+        $this->assertStringContainsString('Sin foto', $csvSin);
+        $this->assertStringContainsString('sin imagen', $csvSin);
+        $this->assertStringContainsString('publicado', $csvSin);
+        $this->assertStringContainsString('B2', $csvSin);
+        $this->assertStringContainsString('E5', $csvSin);
+        $this->assertStringNotContainsString('Con alerta', $csvSin);
+
+        $sinFotoPub = $this->actingAs($user)->get(route('tiendanube.imagenes.reporte_sin_foto', [
+            'publicado' => 1,
+        ]));
+        $csvPub = $sinFotoPub->streamedContent();
+        $this->assertStringContainsString('B2', $csvPub);
+        $this->assertStringNotContainsString('E5', $csvPub);
+    }
+
+    public function test_progreso_incluye_alertas_dimension(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        $user = User::factory()->create();
+        $user->givePermissionTo('tiendanube.ver');
+
+        $import = TiendanubeImageImport::create([
+            'estado' => 'completado',
+            'total_archivos' => 1,
+            'procesados' => 1,
+            'exitosos' => 1,
+            'fallidos' => 0,
+            'reemplazar_primera' => true,
+        ]);
+        TiendanubeProducto::create(['id' => 5, 'name' => ['es' => 'P'], 'published' => true]);
+        TiendanubeProductoImagen::create([
+            'id' => 55,
+            'producto_id' => 5,
+            'src' => 'https://cdn.example.com/x.jpg',
+            'position' => 1,
+            'requiere_revision' => true,
+            'alerta_pequena' => true,
+            'alerta_no_cuadrada' => false,
+        ]);
+        TiendanubeImageImportItem::create([
+            'import_id' => $import->id,
+            'filename' => 'x.jpg',
+            'sku' => 'X',
+            'position' => 1,
+            'producto_id' => 5,
+            'estado' => 'ok',
+            'imagen_tn_id' => 55,
+        ]);
+
+        $this->actingAs($user)
+            ->getJson(route('tiendanube.imagenes.importar.progreso', $import->id))
+            ->assertOk()
+            ->assertJsonPath('alertas_dimension', 1);
     }
 
     /**

@@ -173,6 +173,87 @@ class TiendanubeProductoWriteTest extends TestCase
         $this->assertSame(250.0, (float) $producto->fresh()->variantes()->first()->price);
     }
 
+    public function test_agregar_imagen_resuelve_src_temporal_via_get_product(): void
+    {
+        TiendanubeProducto::create([
+            'id' => 100,
+            'name' => ['es' => 'Prod'],
+            'published' => true,
+        ]);
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/100/images' => Http::response([
+                'id' => 779,
+                'src' => 'https://dcdn-us.mitiendanube.com/tmp/stores/008/004/291/products/x.webp',
+                'position' => 1,
+                'product_id' => 100,
+                'alt' => null,
+            ], 201),
+            'api.tiendanube.com/v1/8004291/products/100' => Http::response([
+                'id' => 100,
+                'name' => ['es' => 'Prod'],
+                'images' => [[
+                    'id' => 779,
+                    'src' => 'https://dcdn-us.mitiendanube.com/stores/008/004/291/products/x-1024-1024.webp',
+                    'position' => 1,
+                ]],
+                'variants' => [],
+            ], 200),
+        ]);
+
+        $imagen = app(TiendanubeProductoWriteService::class)->agregarImagen(
+            100,
+            'https://cdn.example.com/origen.jpg'
+        );
+
+        $this->assertSame(779, $imagen->id);
+        $this->assertSame(
+            'https://dcdn-us.mitiendanube.com/stores/008/004/291/products/x-1024-1024.webp',
+            $imagen->src
+        );
+        $this->assertStringNotContainsString('/tmp/', (string) $imagen->src);
+        Http::assertSent(fn ($r) => $r->method() === 'GET' && str_ends_with(rtrim(parse_url($r->url(), PHP_URL_PATH) ?: '', '/'), '/products/100'));
+    }
+
+    public function test_agregar_imagen_tmp_sin_api_permanente_usa_heuristica(): void
+    {
+        TiendanubeProducto::create([
+            'id' => 100,
+            'name' => ['es' => 'Prod'],
+            'published' => true,
+        ]);
+
+        Http::fake([
+            'api.tiendanube.com/v1/8004291/products/100/images' => Http::response([
+                'id' => 780,
+                'src' => 'https://dcdn-us.mitiendanube.com/tmp/stores/008/004/291/products/abc123.webp',
+                'position' => 1,
+                'product_id' => 100,
+                'alt' => null,
+            ], 201),
+            'api.tiendanube.com/v1/8004291/products/100' => Http::response([
+                'id' => 100,
+                'name' => ['es' => 'Prod'],
+                'images' => [[
+                    'id' => 780,
+                    'src' => 'https://dcdn-us.mitiendanube.com/tmp/stores/008/004/291/products/abc123.webp',
+                    'position' => 1,
+                ]],
+                'variants' => [],
+            ], 200),
+        ]);
+
+        $imagen = app(TiendanubeProductoWriteService::class)->agregarImagen(
+            100,
+            'https://cdn.example.com/origen.jpg'
+        );
+
+        $this->assertSame(
+            'https://dcdn-us.mitiendanube.com/stores/008/004/291/products/abc123-1024-1024.webp',
+            $imagen->src
+        );
+    }
+
     public function test_agregar_imagen_por_url(): void
     {
         TiendanubeProducto::create([

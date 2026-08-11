@@ -14,7 +14,8 @@ class ProcessTiendanubeImageImportJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 1800;
+    /** Por debajo del worker Sail/prod (--timeout=630); el servicio reencola por lotes. */
+    public int $timeout = 600;
 
     public int $tries = 1;
 

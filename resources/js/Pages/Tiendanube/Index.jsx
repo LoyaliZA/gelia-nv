@@ -53,6 +53,7 @@ export default function Index({
         if (!syncLogId && !imageImportId) return undefined;
 
         let cancelled = false;
+        let lastImportProcesados = -1;
         const terminal = (estado) => estado && !['pendiente', 'en_proceso'].includes(estado);
 
         const poll = async () => {
@@ -71,6 +72,11 @@ export default function Index({
                     });
                     if (res.ok) {
                         const data = await res.json();
+                        const proc = data.procesados ?? 0;
+                        if (proc !== lastImportProcesados && lastImportProcesados >= 0 && !terminal(data.estado)) {
+                            router.reload({ only: ['productos', 'totales'] });
+                        }
+                        lastImportProcesados = proc;
                         if (!terminal(data.estado)) done = false;
                     }
                 }

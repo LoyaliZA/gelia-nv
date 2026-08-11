@@ -2,6 +2,8 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Crop, ImagePlus, Upload, X } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import ImageEditModal from './ImageEditModal';
+import ModalContinuarSegundoPlano from './ModalContinuarSegundoPlano';
+import { startTiendanubeImageImportTracking } from '../../../utils/tiendanubeImageImportTracker';
 import {
     formatBytes,
     parseTiendanubeImageFilename,
@@ -56,6 +58,7 @@ export default function PanelVincularImagenes({
     permisos,
     credencialesOk,
     onChanged,
+    onImportStarted,
 }) {
     const [rows, setRows] = useState([]);
     const [permitirVarias, setPermitirVarias] = useState(false);
@@ -63,6 +66,9 @@ export default function PanelVincularImagenes({
     const [error, setError] = useState(null);
     const [dragOver, setDragOver] = useState(false);
     const [editRowId, setEditRowId] = useState(null);
+    const [showBgModal, setShowBgModal] = useState(false);
+    const [bgImportId, setBgImportId] = useState(null);
+    const [bgPreview, setBgPreview] = useState(null);
     const inputRef = useRef(null);
 
     const revokeAll = (list) => {
@@ -138,6 +144,37 @@ export default function PanelVincularImagenes({
         setError(null);
         const reemplazar = !permitirVarias;
 
+        // Masiva (≥2): cola + widget. Una sola: sync como antes.
+        if (listos.length >= 2) {
+            try {
+                const body = new FormData();
+                listos.forEach((r) => body.append('imagenes[]', r.file, r.filename || r.file.name));
+                body.append('reemplazar', reemplazar ? '1' : '0');
+                const res = await fetch(route('tiendanube.imagenes.importar.archivos'), {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken(),
+                        Accept: 'application/json',
+                    },
+                    body,
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    throw new Error(data.message || 'No se pudo iniciar la importación.');
+                }
+                setBgImportId(data.import_id);
+                setBgPreview(data.preview || null);
+                setShowBgModal(true);
+                onImportStarted?.(data.import_id);
+                clearAll();
+            } catch (err) {
+                setError(err.message);
+            } finally {
+                setUploading(false);
+            }
+            return;
+        }
+
         for (const row of listos) {
             setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status: 'uploading', message: null } : r)));
             try {
@@ -180,6 +217,16 @@ export default function PanelVincularImagenes({
     return (
         <div className="space-y-4">
             <GeliaLoader isVisible={uploading} message="Subiendo imágenes_" />
+            <ModalContinuarSegundoPlano
+                open={showBgModal}
+                importId={bgImportId}
+                preview={bgPreview}
+                onContinuarSegundoPlano={() => {
+                    if (bgImportId) startTiendanubeImageImportTracking(bgImportId);
+                    setShowBgModal(false);
+                }}
+                onSeguirAqui={() => setShowBgModal(false)}
+            />
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div>
                     <h3 className="text-sm font-black uppercase tracking-widest theme-text-main flex items-center gap-2">
@@ -188,7 +235,8 @@ export default function PanelVincularImagenes({
                     </h3>
                     <p className="text-xs theme-text-muted mt-1">
                         Arrastra archivos <code className="font-mono">SKU.webp</code> o{' '}
-                        <code className="font-mono">SKU_2.jpg</code>. Por defecto reemplaza todas las imágenes del producto.
+                        <code className="font-mono">SKU_2.jpg</code>. Con 2+ archivos la carga va a la cola (segundo plano).
+                        Por defecto reemplaza todas las imágenes del producto.
                     </p>
                 </div>
                 <label className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest theme-text-muted cursor-pointer select-none">

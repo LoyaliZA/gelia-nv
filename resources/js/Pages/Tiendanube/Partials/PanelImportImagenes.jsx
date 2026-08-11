@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Download, ImagePlus, Upload } from 'lucide-react';
+import { FileSpreadsheet, ImagePlus, Upload } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import GeliaLoader from '../../../Components/GeliaLoader';
+import ModalContinuarSegundoPlano from './ModalContinuarSegundoPlano';
+import ModalReportesImagenes from './ModalReportesImagenes';
+import { startTiendanubeImageImportTracking } from '../../../utils/tiendanubeImageImportTracker';
 
 const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
@@ -28,6 +31,9 @@ export default function PanelImportImagenes({
     const [preview, setPreview] = useState(null);
     const [importId, setImportId] = useState(imageImportActivo?.id || null);
     const [progreso, setProgreso] = useState(null);
+    const [showBgModal, setShowBgModal] = useState(false);
+    const [bgModalPreview, setBgModalPreview] = useState(null);
+    const [showReportes, setShowReportes] = useState(false);
 
     useEffect(() => {
         if (imageImportActivo?.id) {
@@ -79,12 +85,17 @@ export default function PanelImportImagenes({
                 },
                 body,
             });
+            if (res.status === 413) {
+                throw new Error('El ZIP supera el límite del servidor (máx. ~512 MB). Divide el archivo o comprime más.');
+            }
             const data = await res.json();
             if (!res.ok || !data.success) {
                 throw new Error(data.message || 'No se pudo iniciar la importación.');
             }
             setPreview(data.preview || null);
             setImportId(data.import_id);
+            setBgModalPreview(data.preview || null);
+            setShowBgModal(true);
             onImportStarted?.(data.import_id);
             setFile(null);
         } catch (err) {
@@ -92,6 +103,11 @@ export default function PanelImportImagenes({
         } finally {
             setUploading(false);
         }
+    };
+
+    const irASegundoPlano = () => {
+        if (importId) startTiendanubeImageImportTracking(importId);
+        setShowBgModal(false);
     };
 
     const activo = progreso && ['pendiente', 'en_proceso'].includes(progreso.estado);
@@ -116,6 +132,20 @@ export default function PanelImportImagenes({
     return (
         <div className={embedded ? 'space-y-4' : `${geliaCardClass()} p-5 md:p-6 space-y-4`}>
             <GeliaLoader isVisible={uploading} message="Subiendo ZIP_" />
+            <ModalContinuarSegundoPlano
+                open={showBgModal}
+                importId={importId}
+                preview={bgModalPreview}
+                onContinuarSegundoPlano={irASegundoPlano}
+                onSeguirAqui={() => setShowBgModal(false)}
+            />
+            <ModalReportesImagenes
+                open={showReportes}
+                onClose={() => setShowReportes(false)}
+                importId={importId}
+                alertasDimension={progreso?.alertas_dimension ?? 0}
+                fallidos={erroresTotal}
+            />
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div>
                     <h2 className="text-sm font-black uppercase tracking-widest theme-text-main flex items-center gap-2">
@@ -125,7 +155,8 @@ export default function PanelImportImagenes({
                     <p className="text-xs theme-text-muted mt-1">
                         ZIP con archivos <code className="font-mono">SKU.webp</code> o{' '}
                         <code className="font-mono">SKU_2.jpg</code>. Se relacionan con el catálogo por SKU.
-                        Cada imagen reemplaza todas las anteriores del producto.
+                        La primera imagen de cada producto reemplaza las anteriores; <code className="font-mono">SKU_n</code> se agrega.
+                        Extracción y carga corren en segundo plano por lotes.
                     </p>
                 </div>
             </div>
@@ -177,14 +208,15 @@ export default function PanelImportImagenes({
                             <span>Estado: {progreso?.estado || imageImportActivo?.estado}</span>
                             <span>{progreso?.porcentaje ?? 0}%</span>
                         </div>
-                        {importId && erroresTotal > 0 && (
-                            <a
-                                href={route('tiendanube.imagenes.importar.reporte', importId)}
+                        {importId && (erroresTotal > 0 || (progreso?.alertas_dimension ?? 0) > 0) && (
+                            <button
+                                type="button"
+                                onClick={() => setShowReportes(true)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border theme-border text-[10px] font-black uppercase tracking-widest theme-text-main hover:bg-black/[0.03] dark:hover:bg-white/[0.03]"
                             >
-                                <Download className="w-3.5 h-3.5" />
-                                Descargar CSV
-                            </a>
+                                <FileSpreadsheet className="w-3.5 h-3.5" />
+                                Reportes
+                            </button>
                         )}
                     </div>
                     <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
