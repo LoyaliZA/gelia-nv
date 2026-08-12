@@ -9,12 +9,12 @@ use Tests\TestCase;
 class ResolverDestinatariosAlertaSolicitudServiceTest extends TestCase
 {
     #[Test]
-    public function sin_departamento_no_devuelve_destinatarios(): void
+    public function sin_permisos_no_devuelve_destinatarios(): void
     {
         $resolver = new ResolverDestinatariosAlertaSolicitudService();
 
         $this->assertTrue(
-            $resolver->porDepartamento(null, ['solicitudes.verificar'])->isEmpty()
+            $resolver->porDepartamento(null, [])->isEmpty()
         );
         $this->assertTrue(
             $resolver->porDepartamento(1, [])->isEmpty()
