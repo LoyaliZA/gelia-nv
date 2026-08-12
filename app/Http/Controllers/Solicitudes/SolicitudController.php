@@ -709,28 +709,14 @@ class SolicitudController extends Controller
 
     private function obtenerDestinatariosDepartamentales(SolicitudTag $solicitud, bool $incluirVendedor = false)
     {
-        $destinatarios = collect();
-
-        if ($incluirVendedor && $solicitud->vendedor) {
-            $destinatarios->push($solicitud->vendedor);
-        }
-
-        $verificadores = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])
-            ->whereHas('departamentos', function ($query) use ($solicitud) {
-                $query->where('departamentos.id', $solicitud->departamento_id);
-            })
-            ->get();
-
-        // Misma regla que CrearSolicitudService / SolicitudOperativaController:
-        // Super Admin y Administrador reciben alertas de actualización, no solo de alta.
-        $adminsGlobales = User::role(['Super Admin', 'Administrador'])->get();
-
-        return $destinatarios->merge($verificadores)
-            ->merge($adminsGlobales)
-            ->unique('id')
-            ->reject(function ($usuario) {
-                return $usuario->id === Auth::id();
-            });
+        return app(\App\Services\Solicitudes\ResolverDestinatariosAlertaSolicitudService::class)
+            ->conVendedorOpcional(
+                $solicitud->departamento_id,
+                ['solicitudes.verificar', 'solicitudes.reportar'],
+                $incluirVendedor,
+                $solicitud->vendedor,
+                Auth::id(),
+            );
     }
 
     public function destroy(SolicitudTag $solicitud, Request $request, EliminarSolicitudService $eliminarService): RedirectResponse

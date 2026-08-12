@@ -5,7 +5,6 @@ namespace App\Services\Solicitudes;
 use App\Models\ConsultaSolicitud;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\SolicitudTag;
-use App\Models\User;
 use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -57,9 +56,12 @@ class CrearConsultaSolicitudService
                 $consultaLista ? 'Lista' : null,
             ]);
 
-            $encargadas = User::permission(['solicitudes.responder_consulta', 'solicitudes.reportar'])
-                ->whereHas('departamentos', fn ($q) => $q->where('departamentos.id', $solicitud->departamento_id))
-                ->get();
+            $encargadas = app(ResolverDestinatariosAlertaSolicitudService::class)
+                ->porDepartamento(
+                    $solicitud->departamento_id,
+                    ['solicitudes.responder_consulta', 'solicitudes.reportar'],
+                    Auth::id(),
+                );
 
             if ($encargadas->isNotEmpty()) {
                 Notification::send($encargadas, new AlertaSolicitud(

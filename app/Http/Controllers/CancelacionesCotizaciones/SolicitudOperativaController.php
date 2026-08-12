@@ -288,25 +288,13 @@ class SolicitudOperativaController extends Controller
 
     private function obtenerDestinatarios(SolicitudTag $solicitud, bool $incluirVendedor = false)
     {
-        $destinatarios = collect();
-
-        if ($incluirVendedor && $solicitud->vendedor) {
-            $destinatarios->push($solicitud->vendedor);
-        }
-
-        $encargadosPorDepto = $solicitud->departamento_id
-            ? User::permission(['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar'])
-                ->whereHas('departamentos', function ($query) use ($solicitud) {
-                    $query->where('departamentos.id', $solicitud->departamento_id);
-                })
-                ->get()
-            : collect();
-
-        $adminsGlobales = User::role(['Super Admin', 'Administrador'])->get();
-
-        return $destinatarios->merge($encargadosPorDepto)
-            ->merge($adminsGlobales)
-            ->unique('id')
-            ->reject(fn ($usuario) => $usuario->id === Auth::id());
+        return app(\App\Services\Solicitudes\ResolverDestinatariosAlertaSolicitudService::class)
+            ->conVendedorOpcional(
+                $solicitud->departamento_id,
+                ['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar'],
+                $incluirVendedor,
+                $solicitud->vendedor,
+                Auth::id(),
+            );
     }
 }

@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Services\WebPush\ConstruirPayloadDesdeNotificacionService;
 use App\Services\WebPush\EnviarWebPushService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Support\Facades\Log;
 
@@ -24,7 +25,8 @@ class EnviarWebPushTrasNotificacion
             return;
         }
 
-        $data = $event->response;
+        // DatabaseChannel devuelve el modelo DatabaseNotification, no el array de toDatabase().
+        $data = $this->extraerDatosNotificacion($event->response);
         if (!is_array($data)) {
             return;
         }
@@ -37,5 +39,24 @@ class EnviarWebPushTrasNotificacion
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @param  mixed  $response
+     * @return array<string, mixed>|null
+     */
+    private function extraerDatosNotificacion(mixed $response): ?array
+    {
+        if (is_array($response)) {
+            return $response;
+        }
+
+        if ($response instanceof Model) {
+            $data = $response->getAttribute('data');
+
+            return is_array($data) ? $data : null;
+        }
+
+        return null;
     }
 }

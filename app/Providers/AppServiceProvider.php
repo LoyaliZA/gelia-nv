@@ -28,10 +28,8 @@ use App\Models\RhHorasExtra;
 use App\Models\RhDeduccion;
 use App\Models\RhPrestamoPagoFijo;
 use App\Observers\CatalogoListaDescuentoObserver;
-use App\Listeners\EnviarWebPushTrasNotificacion;
 use App\Listeners\PreventDestructiveDatabaseCommands;
 use Illuminate\Console\Events\CommandStarting;
-use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Support\Facades\Event;
 
 class AppServiceProvider extends ServiceProvider
@@ -89,8 +87,30 @@ class AppServiceProvider extends ServiceProvider
                         $valor = trim($valor);
                     }
 
+                    // No pisar subject VAPID con URL de otro entorno (BD clonada).
+                    // Los links/contact VAPID deben seguir APP_URL / WEBPUSH_VAPID_SUBJECT del .env.
+                    if ($clave === 'webpush.vapid.subject') {
+                        continue;
+                    }
+
+                    // Claves VAPID desde BD solo si .env no las trae (espejos/prod con config en UI).
+                    if (in_array($clave, ['webpush.vapid.public_key', 'webpush.vapid.private_key'], true)) {
+                        $actual = (string) config($clave, '');
+                        if ($actual !== '' || $valor === '' || $valor === null) {
+                            continue;
+                        }
+                    }
+
                     config([$clave => $valor]);
                 }
+
+                // Subject siempre alineado al entorno actual.
+                $envSubject = env('WEBPUSH_VAPID_SUBJECT');
+                config([
+                    'webpush.vapid.subject' => (is_string($envSubject) && $envSubject !== '')
+                        ? $envSubject
+                        : (string) config('app.url'),
+                ]);
             }
         } catch (\Throwable $e) {
             // Ignorar errores durante la carga inicial o migraciones si la tabla no existe
@@ -143,7 +163,8 @@ class AppServiceProvider extends ServiceProvider
         // CONEXIÓN DEL NUEVO OBSERVADOR PARA CATÁLOGOS
         CatalogoListaDescuento::observe(CatalogoListaDescuentoObserver::class);
 
-        Event::listen(NotificationSent::class, EnviarWebPushTrasNotificacion::class);
+        // EnviarWebPushTrasNotificacion se registra por discovery (App\Listeners).
+        // NO usar Event::listen aquí: duplicaba cada push (2x blast).
         Event::listen(CommandStarting::class, PreventDestructiveDatabaseCommands::class);
 
         Route::bind('factura', fn (string $value) => SolicitudFactura::where('id', $value)->orWhere('folio', $value)->firstOrFail());

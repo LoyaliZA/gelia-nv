@@ -119,9 +119,14 @@ class EnviarWebPushService
 
     private function cliente(): WebPush
     {
+        $subject = (string) config('webpush.vapid.subject');
+        if ($subject === '') {
+            $subject = (string) config('app.url');
+        }
+
         return new WebPush([
             'VAPID' => [
-                'subject' => config('webpush.vapid.subject'),
+                'subject' => $subject,
                 'publicKey' => config('webpush.vapid.public_key'),
                 'privateKey' => config('webpush.vapid.private_key'),
             ],
@@ -131,13 +136,17 @@ class EnviarWebPushService
     private function normalizarPayload(array $payload): array
     {
         $defaults = config('webpush.defaults', []);
+        $url = $payload['url'] ?? url('/dashboard');
+        if (is_string($url) && $url !== '' && !str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
+            $url = url($url);
+        }
 
         return [
             'title' => $payload['title'] ?? 'GELIA ERP',
             'body' => $payload['body'] ?? '',
             'icon' => $payload['icon'] ?? $defaults['icon'] ?? '/favicon.svg',
             'badge' => $payload['badge'] ?? $defaults['badge'] ?? '/favicon.svg',
-            'url' => $payload['url'] ?? url('/dashboard'),
+            'url' => $url,
             'tag' => $payload['tag'] ?? null,
             'tipo' => $payload['tipo'] ?? null,
             'data' => $payload['data'] ?? [],

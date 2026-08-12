@@ -5,7 +5,6 @@ namespace App\Services\Solicitudes;
 use App\Models\SolicitudTag;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\AuditoriaSolicitud;
-use App\Models\User;
 use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -77,19 +76,12 @@ class SolicitarCancelacionSolicitudService
                 'datos_snapshot' => null,
             ]);
 
-            $encargadosPorDepto = $solicitud->departamento_id
-                ? User::permission($permisosEncargados)
-                    ->whereHas('departamentos', function ($query) use ($solicitud) {
-                        $query->where('departamentos.id', $solicitud->departamento_id);
-                    })
-                    ->get()
-                : collect();
-
-            $adminsGlobales = User::role(['Super Admin', 'Administrador'])->get();
-
-            $encargados = $encargadosPorDepto->merge($adminsGlobales)
-                ->unique('id')
-                ->reject(fn ($u) => $u->id === Auth::id());
+            $encargados = app(ResolverDestinatariosAlertaSolicitudService::class)
+                ->porDepartamento(
+                    $solicitud->departamento_id,
+                    $permisosEncargados,
+                    Auth::id(),
+                );
 
             if ($encargados->isNotEmpty()) {
                 $mensaje = Auth::user()->name . ' solicita cancelar la solicitud FOL-' . $solicitud->id . '.';
