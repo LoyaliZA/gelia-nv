@@ -147,9 +147,10 @@ class TiendanubeProductoWriteService
             $opt = $this->optimizarImagen->ejecutar($file);
             $payload['attachment'] = base64_encode((string) file_get_contents($opt['path']));
             $payload['filename'] = $opt['filename'];
+            // Dimensiones = archivo subido (post-resize). Alertas siguen midiendo el original.
             $meta = [
-                'width' => $opt['width'],
-                'height' => $opt['height'],
+                'width' => $opt['output_width'] ?? $opt['width'],
+                'height' => $opt['output_height'] ?? $opt['height'],
                 'requiere_revision' => $opt['requiere_revision'],
                 'alerta_pequena' => $opt['alerta_pequena'],
                 'alerta_no_cuadrada' => $opt['alerta_no_cuadrada'],
@@ -178,11 +179,14 @@ class TiendanubeProductoWriteService
             throw new RuntimeException('Tiendanube no devolvió id de imagen.');
         }
 
-        return TiendanubeProductoImagen::updateOrCreate(
+        $srcCreate = $this->sync->truncateSeo($this->sync->localizedToString($remote['src'] ?? $srcUrl), 2048);
+        $src = $this->resolverSrcImagenPermanente($tnProductId, $imgId, $srcCreate);
+
+        $saved = TiendanubeProductoImagen::updateOrCreate(
             ['id' => $imgId],
             [
                 'producto_id' => $tnProductId,
-                'src' => $this->sync->truncateSeo($this->sync->localizedToString($remote['src'] ?? $srcUrl), 2048),
+                'src' => $src,
                 'position' => (int) ($remote['position'] ?? $position ?? 1),
                 'alt' => $this->sync->truncateSeo($this->sync->localizedToString($remote['alt'] ?? null), 512),
                 'width' => $meta['width'],
@@ -192,6 +196,107 @@ class TiendanubeProductoWriteService
                 'alerta_no_cuadrada' => $meta['alerta_no_cuadrada'],
             ]
         );
+
+        return $saved;
+    }
+
+    /**
+     * createProductImage suele devolver CDN /tmp/ (403). El GET inmediato a veces
+     * sigue en /tmp/; si no hay URL pública aún, derivamos la forma canónica del CDN.
+     *
+     * ponytail: heurística -1024-1024 asume el tamaño que TN publica hoy; si cambia el
+     * sufijo, refrescarSrcsTemporalesDeProductos / sync de catálogo lo corrige.
+     */
+    private function resolverSrcImagenPermanente(int $tnProductId, int $imgId, ?string $srcCreate): ?string
+    {
+        if (! is_string($srcCreate) || $srcCreate === '' || ! str_contains($srcCreate, '/tmp/')) {
+            return $srcCreate;
+        }
+
+        $fromApi = $this->srcDesdeProducto($tnProductId, $imgId);
+        if (is_string($fromApi) && $fromApi !== '' && ! str_contains($fromApi, '/tmp/')) {
+            return $fromApi;
+        }
+
+        return $this->heuristicaSrcCdnPublico($srcCreate) ?? $srcCreate;
+    }
+
+    private function srcDesdeProducto(int $tnProductId, int $imgId): ?string
+    {
+        try {
+            $product = $this->api->getProduct($tnProductId);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        foreach ($product['images'] ?? [] as $img) {
+            if (! is_array($img) || (int) ($img['id'] ?? 0) !== $imgId) {
+                continue;
+            }
+
+            return $this->sync->truncateSeo($this->sync->localizedToString($img['src'] ?? null), 2048);
+        }
+
+        return null;
+    }
+
+    private function heuristicaSrcCdnPublico(string $tmpSrc): ?string
+    {
+        if (! str_contains($tmpSrc, '/tmp/stores/')) {
+            return null;
+        }
+
+        $base = str_replace('/tmp/stores/', '/stores/', $tmpSrc);
+        $withSize = preg_replace('/(\.[A-Za-z0-9]+)$/', '-1024-1024$1', $base);
+
+        return is_string($withSize) && $withSize !== '' ? $withSize : $base;
+    }
+
+    /**
+     * @param  list<int|string>  $productoIds
+     */
+    public function refrescarSrcsTemporalesDeProductos(array $productoIds): int
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $productoIds))));
+        $updated = 0;
+
+        foreach ($ids as $productoId) {
+            $tmpImgs = TiendanubeProductoImagen::query()
+                ->where('producto_id', $productoId)
+                ->where('src', 'like', '%/tmp/%')
+                ->get();
+            if ($tmpImgs->isEmpty()) {
+                continue;
+            }
+
+            try {
+                $product = $this->api->getProduct($productoId);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            $map = [];
+            foreach ($product['images'] ?? [] as $img) {
+                if (! is_array($img) || ! isset($img['id'])) {
+                    continue;
+                }
+                $src = $this->sync->truncateSeo($this->sync->localizedToString($img['src'] ?? null), 2048);
+                if (is_string($src) && $src !== '' && ! str_contains($src, '/tmp/')) {
+                    $map[(int) $img['id']] = $src;
+                }
+            }
+
+            foreach ($tmpImgs as $local) {
+                $nuevo = $map[(int) $local->id] ?? $this->heuristicaSrcCdnPublico((string) $local->src);
+                if (! $nuevo || str_contains($nuevo, '/tmp/')) {
+                    continue;
+                }
+                $local->update(['src' => $nuevo]);
+                $updated++;
+            }
+        }
+
+        return $updated;
     }
 
     /**

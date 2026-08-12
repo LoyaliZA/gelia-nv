@@ -21,7 +21,15 @@ class TiendanubeImageImport extends Model
         'zip_path',
         'extract_path',
         'mensaje_error',
+        'reemplazar_primera',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'reemplazar_primera' => 'boolean',
+        ];
+    }
 
     public function user(): BelongsTo
     {

@@ -50,6 +50,7 @@ export default function SeccionImagenes({
                     permisos={permisos}
                     credencialesOk={credencialesOk}
                     onChanged={onChanged}
+                    onImportStarted={onImportStarted}
                 />
             ) : (
                 <PanelImportImagenes

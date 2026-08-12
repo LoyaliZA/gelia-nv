@@ -10,6 +10,7 @@ use App\Models\Tiendanube\TiendanubeCategoria;
 use App\Models\Tiendanube\TiendanubeConfiguracion;
 use App\Models\Tiendanube\TiendanubeImageImport;
 use App\Models\Tiendanube\TiendanubeProducto;
+use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\Tiendanube\TiendanubeSyncLog;
 use App\Models\Tiendanube\TiendanubeWebhookDelivery;
@@ -574,20 +575,21 @@ class TiendanubeController extends Controller
         try {
             $import = $service->iniciarDesdeZip($request->file('zip'), $request->user());
 
-            $resumen = $import->resumenMotivos();
+            // Con cola async el índice del ZIP corre en el job; con sync ya puede haber resumen.
+            $resumen = $import->items()->exists() ? $import->resumenMotivos() : null;
 
             return response()->json([
                 'success' => true,
-                'message' => 'Importación iniciada.',
+                'message' => 'Importación iniciada. Extracción e indexado en segundo plano.',
                 'import_id' => $import->id,
-                'preview' => [
+                'preview' => $resumen ? [
                     'total' => $import->total_archivos,
                     'matched' => $resumen['matched'],
                     'nombre_invalido' => $resumen['nombre_invalido'],
                     'sku_no_encontrado' => $resumen['sku_no_encontrado'],
                     'archivo_grande' => $resumen['archivo_grande'],
                     'sin_match' => $resumen['omitidos'] + $resumen['errores'],
-                ],
+                ] : null,
             ], 201);
         } catch (\Throwable $e) {
             return response()->json([
@@ -623,6 +625,7 @@ class TiendanubeController extends Controller
             'mensaje_error' => $import->mensaje_error,
             'resumen' => $resumen,
             'errores_total' => $totalFallidos,
+            'alertas_dimension' => app(TiendanubeImageImportService::class)->contarAlertasDimension($import),
             'errores' => $errores->map(fn ($i) => [
                 'filename' => $i->filename,
                 'sku' => $i->sku,
@@ -633,6 +636,47 @@ class TiendanubeController extends Controller
             ]),
             'updated_at' => $import->updated_at?->toIso8601String(),
         ]);
+    }
+
+    public function importarImagenesArchivos(Request $request, TiendanubeImageImportService $service): JsonResponse
+    {
+        Gate::authorize('tiendanube.productos.editar');
+
+        $request->validate([
+            'imagenes' => ['required', 'array', 'min:1', 'max:100'],
+            'imagenes.*' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp'],
+            'reemplazar' => ['sometimes', 'boolean'],
+        ]);
+
+        try {
+            $reemplazarPrimera = $request->boolean('reemplazar', true);
+            $import = $service->iniciarDesdeArchivos(
+                $request->file('imagenes', []),
+                $request->user(),
+                $reemplazarPrimera
+            );
+
+            $resumen = $import->resumenMotivos();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Importación de archivos iniciada.',
+                'import_id' => $import->id,
+                'preview' => [
+                    'total' => $import->total_archivos,
+                    'matched' => $resumen['matched'],
+                    'nombre_invalido' => $resumen['nombre_invalido'],
+                    'sku_no_encontrado' => $resumen['sku_no_encontrado'],
+                    'archivo_grande' => $resumen['archivo_grande'],
+                    'sin_match' => $resumen['omitidos'] + $resumen['errores'],
+                ],
+            ], 201);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
     }
 
     public function reporteImportImagenes(int $id)
@@ -667,6 +711,176 @@ class TiendanubeController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    public function reporteImportDimensiones(Request $request, int $id)
+    {
+        Gate::authorize('tiendanube.ver');
+
+        $import = TiendanubeImageImport::findOrFail($id);
+        $detalle = $this->filtrosDetalleAlerta($request);
+        $filename = 'tiendanube-import-'.$import->id.'-dimensiones.csv';
+
+        return response()->streamDownload(function () use ($import, $detalle) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['producto_id', 'sku', 'filename', 'imagen_id', 'src', 'width', 'height', 'detalle']);
+
+            $import->items()
+                ->where('estado', 'ok')
+                ->whereNotNull('imagen_tn_id')
+                ->orderBy('id')
+                ->cursor()
+                ->each(function ($item) use ($out, $detalle) {
+                    $img = TiendanubeProductoImagen::find($item->imagen_tn_id);
+                    if (! $img || ! $this->imagenCoincideDetalle($img, $detalle)) {
+                        return;
+                    }
+                    fputcsv($out, [
+                        $item->producto_id,
+                        $item->sku,
+                        $item->filename,
+                        $img->id,
+                        $img->src,
+                        $img->width,
+                        $img->height,
+                        $this->etiquetasAlertaImagen($img),
+                    ]);
+                });
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    public function reporteAlertasImagenes(Request $request)
+    {
+        Gate::authorize('tiendanube.ver');
+
+        $detalle = $this->filtrosDetalleAlerta($request);
+        $filename = 'tiendanube-imagenes-alertas-'.now()->format('Ymd-His').'.csv';
+
+        return response()->streamDownload(function () use ($detalle) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['producto_id', 'sku', 'filename', 'imagen_id', 'src', 'width', 'height', 'detalle']);
+
+            $this->queryImagenesPorDetalle($detalle)
+                ->orderBy('producto_id')
+                ->orderBy('id')
+                ->cursor()
+                ->each(function (TiendanubeProductoImagen $img) use ($out) {
+                    $sku = TiendanubeProductoVariante::where('producto_id', $img->producto_id)->orderBy('id')->value('sku');
+                    fputcsv($out, [
+                        $img->producto_id,
+                        $sku,
+                        basename((string) $img->src) ?: null,
+                        $img->id,
+                        $img->src,
+                        $img->width,
+                        $img->height,
+                        $this->etiquetasAlertaImagen($img),
+                    ]);
+                });
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    public function reporteSinFoto(Request $request)
+    {
+        Gate::authorize('tiendanube.ver');
+
+        $filename = 'tiendanube-sin-foto-'.now()->format('Ymd-His').'.csv';
+        $filtrarPublicado = $request->has('publicado');
+        $soloPublicado = $filtrarPublicado ? $request->boolean('publicado') : null;
+
+        return response()->streamDownload(function () use ($filtrarPublicado, $soloPublicado) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['producto_id', 'sku', 'nombre', 'estado_publicacion', 'synced_at', 'detalle']);
+
+            $query = TiendanubeProducto::query()->whereDoesntHave('imagenes');
+            if ($filtrarPublicado) {
+                $query->where('published', $soloPublicado);
+            }
+
+            $query
+                ->with(['variantes' => fn ($q) => $q->orderBy('id')->limit(1)])
+                ->orderBy('id')
+                ->cursor()
+                ->each(function (TiendanubeProducto $p) use ($out) {
+                    fputcsv($out, [
+                        $p->id,
+                        $p->variantes->first()?->sku,
+                        $p->nombreVisible(),
+                        $p->published ? 'publicado' : 'no publicado',
+                        $p->synced_at?->toIso8601String(),
+                        'sin imagen',
+                    ]);
+                });
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function filtrosDetalleAlerta(Request $request): array
+    {
+        $raw = $request->input('detalle', ['pequena', 'no_cuadrada']);
+        if (is_string($raw)) {
+            $raw = array_filter(array_map('trim', explode(',', $raw)));
+        }
+        $selected = array_values(array_intersect(['pequena', 'no_cuadrada'], array_map('strval', (array) $raw)));
+
+        return $selected !== [] ? $selected : ['pequena', 'no_cuadrada'];
+    }
+
+    /**
+     * @param  list<string>  $detalle
+     */
+    private function queryImagenesPorDetalle(array $detalle)
+    {
+        return TiendanubeProductoImagen::query()
+            ->where('requiere_revision', true)
+            ->where(function ($q) use ($detalle) {
+                if (in_array('pequena', $detalle, true)) {
+                    $q->orWhere('alerta_pequena', true);
+                }
+                if (in_array('no_cuadrada', $detalle, true)) {
+                    $q->orWhere('alerta_no_cuadrada', true);
+                }
+            });
+    }
+
+    /**
+     * @param  list<string>  $detalle
+     */
+    private function imagenCoincideDetalle(TiendanubeProductoImagen $img, array $detalle): bool
+    {
+        if (! $img->requiere_revision) {
+            return false;
+        }
+
+        return (in_array('pequena', $detalle, true) && $img->alerta_pequena)
+            || (in_array('no_cuadrada', $detalle, true) && $img->alerta_no_cuadrada);
+    }
+
+    private function etiquetasAlertaImagen(TiendanubeProductoImagen $img): string
+    {
+        $etiquetas = [];
+        if ($img->alerta_pequena) {
+            $etiquetas[] = 'lado menor < 800px';
+        }
+        if ($img->alerta_no_cuadrada) {
+            $etiquetas[] = 'no cuadrada';
+        }
+
+        return $etiquetas !== [] ? implode('; ', $etiquetas) : 'requiere revisión';
     }
 
     public function listarWebhooks(TiendanubeWebhookService $webhooks): JsonResponse
