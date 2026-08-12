@@ -2,15 +2,19 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaAnexoEnvio;
+use App\Services\SaldosAFavor\ReconciliarTotalPedidoSafService;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class SolicitarRepesajePedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private ReconciliarTotalPedidoSafService $reconciliarSaf,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, string $motivo): PedidoBma
@@ -27,7 +31,11 @@ class SolicitarRepesajePedidoBmaService
         }
 
         if (! $pedido->tienePdfPedido()) {
-            throw new \InvalidArgumentException('Debe haber un PDF del pedido adjunto para el re-pesaje.');
+            throw new \InvalidArgumentException('Debe haber un PDF o foto del pedido adjunto para el re-pesaje.');
+        }
+
+        if ($motivo === PedidoBma::MOTIVO_REPESAJE_ANEXO_PIEZAS && ! $pedido->tieneAnexoPiezas()) {
+            throw new \InvalidArgumentException('Debe adjuntar el PDF o foto de las piezas adicionales antes de solicitar el re-pesaje.');
         }
 
         $etiquetas = [
@@ -37,8 +45,22 @@ class SolicitarRepesajePedidoBmaService
             PedidoBma::MOTIVO_REPESAJE_OTRO => 'otro cambio',
         ];
 
-        return DB::transaction(function () use ($pedido, $usuarioId, $motivo, $etiquetas) {
+        $estatusNuevo = null;
+        $faseActual = $pedido->estatus?->fase_ciclo;
+        if (in_array($faseActual, [
+            CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
+        ], true)) {
+            $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE);
+            if (! $estatusNuevo) {
+                throw new \RuntimeException('No se encontró el estatus de pesaje pendiente.');
+            }
+        }
+
+        return DB::transaction(function () use ($pedido, $usuarioId, $motivo, $etiquetas, $estatusNuevo) {
             $estatus = $pedido->estatus;
+            $totalAntes = (float) ($pedido->total_a_cobrar ?? 0) + (float) ($pedido->saldo_a_favor ?? 0);
 
             $pedido->anexosEnvio()
                 ->where('estatus', PedidoBmaAnexoEnvio::ESTATUS_PENDIENTE)
@@ -54,7 +76,7 @@ class SolicitarRepesajePedidoBmaService
             $costoSeguro = (float) ($pedido->costo_seguro ?? 0);
             $saldoFavor = (float) ($pedido->saldo_a_favor ?? 0);
 
-            $pedido->update([
+            $datos = [
                 'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE,
                 'pesaje_solicitado_at' => now(),
                 'pesaje_respondido_at' => null,
@@ -62,14 +84,29 @@ class SolicitarRepesajePedidoBmaService
                 'motivo_repesaje' => $motivo,
                 'costo_envio' => null,
                 'total_a_cobrar' => PedidoBma::calcularTotal($mercancia, 0, $seguro, $costoSeguro, $saldoFavor),
-            ]);
+            ];
+
+            if ($estatusNuevo) {
+                $datos['catalogo_estatus_pedido_id'] = $estatusNuevo->id;
+            }
+
+            $pedido->update($datos);
+
+            $this->reconciliarSaf->handle(
+                $pedido->fresh(),
+                $totalAntes,
+                $usuarioId,
+                'sobrante_envio',
+                'Reconciliación tras invalidar envío por re-pesaje'
+            );
 
             $this->historialService->ejecutar(
                 $pedido->id,
                 $usuarioId,
                 $estatus->id,
-                $estatus->id,
-                'Re-pesaje solicitado: el cliente '.$etiquetas[$motivo].'. Costo de envío invalidado.'
+                $estatusNuevo?->id ?? $estatus->id,
+                'Re-pesaje solicitado: el cliente '.$etiquetas[$motivo].'. Costo de envío invalidado.',
+                AccionesHistorialPedidoBma::SOLICITUD_REPESAJE
             );
 
             $this->notificarService->ejecutar(
@@ -83,7 +120,7 @@ class SolicitarRepesajePedidoBmaService
             );
 
             return $pedido->fresh([
-                'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'tipoCaja',
+                'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'cajas.tipoGuia', 'tipoCaja',
             ]);
         });
     }

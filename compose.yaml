@@ -19,6 +19,7 @@ services:
             IGNITION_LOCAL_SITES_PATH: '${PWD}'
         volumes:
             - '.:/var/www/html'
+            - './docker/sail/zz-gelia-uploads.ini:/etc/php/8.5/cli/conf.d/zz-gelia-uploads.ini'
         networks:
             - sail
         depends_on:

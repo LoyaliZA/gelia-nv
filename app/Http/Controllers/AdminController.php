@@ -121,7 +121,21 @@ class AdminController extends Controller
             'tipos_almacen' => CatalogoTipoAlmacen::orderBy('nombre')->get(),
             'marcas_producto' => CatalogoMarcaProducto::orderBy('nombre')->get(),
             'almacenes' => Almacen::with(['sucursal', 'tipoAlmacen'])->orderBy('nombre')->get(),
-            'categorias_producto' => CatalogoCategoriaProducto::orderBy('nombre')->get(),
+            'categorias_producto' => CatalogoCategoriaProducto::with([
+                'categoriaAtributos:id,categoria_id,atributo_id,orden',
+                'categoriaExtensiones.extension:id,codigo,nombre,habilitada',
+            ])->orderBy('nombre')->get(),
+            'atributos_producto' => \App\Models\Atributo::with(['opciones' => fn ($q) => $q->orderBy('orden')])
+                ->orderBy('nombre')
+                ->get(),
+            'unidades_medida' => \App\Models\UnidadMedida::orderBy('dimension')->orderBy('nombre')->get(),
+            'extensiones_producto' => \App\Models\ExtensionProducto::query()
+                ->withCount(['categoriaExtensiones as categorias_asignadas_count' => fn ($q) => $q->where('habilitada', true)])
+                ->orderBy('nombre')
+                ->get(),
+            'notas_olfativas' => \App\Models\NotaOlfativa::orderBy('nombre')->get(),
+            'perfumeria_en_uso' => app(\App\Services\Productos\ResolverExtensionesProductoService::class)
+                ->algunaCategoriaUsa('perfumeria'),
             'estatus_pedidos' => CatalogoEstatusPedido::orderBy('orden')->get(),
             'paqueterias_pedido' => CatalogoPaqueteriaPedido::orderBy('nombre')->get(),
             'tipos_caja_pedido' => CatalogoTipoCajaPedido::orderBy('nombre')->get(),
@@ -303,6 +317,7 @@ class AdminController extends Controller
             'departamentos' => 'nullable|array',
             'areas' => 'nullable|array',
             'area_id' => 'nullable|integer|exists:areas,id',
+            'departamento_id' => 'nullable|integer|exists:departamentos,id',
             'gerentes' => 'nullable|array',
             'roles_asignados' => 'array',
             'permisos_individuales' => 'array',
@@ -322,6 +337,7 @@ class AdminController extends Controller
         );
 
         $areaPrincipalId = $this->resolverAreaPrincipal($data);
+        $departamentoPrincipalId = $this->resolverDepartamentoPrincipal($data);
 
         $usuario = User::create([
             'name' => $data['name'],
@@ -334,6 +350,7 @@ class AdminController extends Controller
             'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
             'catalogo_sexo_id' => $data['catalogo_sexo_id'] ?? null,
             'area_id' => $areaPrincipalId,
+            'departamento_id' => $departamentoPrincipalId,
         ]);
 
         if (isset($data['departamentos'])) $usuario->departamentos()->sync($data['departamentos']);
@@ -412,6 +429,7 @@ class AdminController extends Controller
             'departamentos' => 'nullable|array',
             'areas' => 'nullable|array',
             'area_id' => 'nullable|integer|exists:areas,id',
+            'departamento_id' => 'nullable|integer|exists:departamentos,id',
             'gerentes' => 'nullable|array',
             'roles_asignados' => 'array',
             'permisos_individuales' => 'array',
@@ -455,6 +473,7 @@ class AdminController extends Controller
         $data['permisos_individuales'] = $permisosFinales;
 
         $areaPrincipalId = $this->resolverAreaPrincipal($data);
+        $departamentoPrincipalId = $this->resolverDepartamentoPrincipal($data);
 
         $user->update([
             'name' => $data['name'],
@@ -466,6 +485,7 @@ class AdminController extends Controller
             'fecha_nacimiento' => $data['fecha_nacimiento'] ?? null,
             'catalogo_sexo_id' => $data['catalogo_sexo_id'] ?? null,
             'area_id' => $areaPrincipalId,
+            'departamento_id' => $departamentoPrincipalId,
         ]);
 
         if ($request->filled('password')) {
@@ -809,6 +829,40 @@ class AdminController extends Controller
         }
 
         return $areaId;
+    }
+
+    private function resolverDepartamentoPrincipal(array $data): ?int
+    {
+        $deptos = collect($data['departamentos'] ?? [])
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        $deptoId = isset($data['departamento_id']) && $data['departamento_id'] !== ''
+            ? (int) $data['departamento_id']
+            : null;
+
+        if ($deptoId !== null && !$deptos->contains($deptoId)) {
+            throw ValidationException::withMessages([
+                'departamento_id' => 'El departamento principal debe estar incluido en los departamentos asignados.',
+            ]);
+        }
+
+        if ($deptoId === null && $deptos->count() === 1) {
+            return $deptos->first();
+        }
+
+        if ($deptos->count() > 1 && $deptoId === null) {
+            throw ValidationException::withMessages([
+                'departamento_id' => 'Selecciona el departamento principal cuando el colaborador tiene varios departamentos asignados.',
+            ]);
+        }
+
+        if ($deptos->isEmpty()) {
+            return null;
+        }
+
+        return $deptoId;
     }
 
     private function sincronizarAreaRhColaborador(User $usuario, ?int $areaId): void

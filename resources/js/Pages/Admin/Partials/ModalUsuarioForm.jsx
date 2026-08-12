@@ -39,7 +39,9 @@ export default function ModalUsuarioForm({
     sexos,
     toggleSelection,
     areasSeleccionadas,
+    departamentosSeleccionados,
     resolverAreaPrincipalFormulario,
+    resolverPrincipalFormulario,
 }) {
     const [activeTab, setActiveTab] = useState('datos');
 
@@ -276,7 +278,40 @@ export default function ModalUsuarioForm({
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">2. Áreas de Operación (Múltiple)</label>
+                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">
+                                    2. Departamento Principal (marca / tickets)
+                                </label>
+                                <select
+                                    value={data.departamento_id || ''}
+                                    onChange={(e) => setData('departamento_id', e.target.value)}
+                                    disabled={departamentosSeleccionados.length === 0}
+                                    required={departamentosSeleccionados.length > 1}
+                                    className="w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none appearance-none transition-all focus:ring-1 focus:ring-transparent disabled:opacity-50"
+                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                >
+                                    <option value="">
+                                        {departamentosSeleccionados.length === 0
+                                            ? 'Selecciona al menos un departamento'
+                                            : departamentosSeleccionados.length === 1
+                                                ? 'Se asignará automáticamente'
+                                                : 'Selecciona el departamento principal...'}
+                                    </option>
+                                    {departamentosSeleccionados.map((depto) => (
+                                        <option key={`depto-principal-${depto.id}`} value={depto.id}>
+                                            {depto.nombre}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-[9px] theme-text-muted ml-2 leading-relaxed">
+                                    Define la marca del ticket térmico y recibos. Debe ser uno de los departamentos asignados arriba.
+                                </p>
+                                {errors.departamento_id && (
+                                    <p className="text-[9px] text-red-500 font-bold ml-2 mt-1">{errors.departamento_id}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">3. Áreas de Operación (Múltiple)</label>
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 p-4 border theme-border rounded-2xl theme-element bg-transparent max-h-80 overflow-y-auto custom-scrollbar">
                                     {(departamentos || []).map((depto) => {
                                         const areasDepto = depto.areas || [];
@@ -343,7 +378,7 @@ export default function ModalUsuarioForm({
 
                             <div className="space-y-2">
                                 <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">
-                                    3. Área Principal (Reportes y RH)
+                                    4. Área Principal (Reportes y RH)
                                 </label>
                                 <select
                                     value={data.area_id || ''}
@@ -380,7 +415,7 @@ export default function ModalUsuarioForm({
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">4. Reporta a (Gerentes / Líderes)</label>
+                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">5. Reporta a (Gerentes / Líderes)</label>
                                 <div className="flex flex-wrap gap-2 p-3 border theme-border rounded-2xl theme-element bg-transparent max-h-32 overflow-y-auto custom-scrollbar">
                                     {(posiblesGerentes || []).length === 0 ? (
                                         <span className="text-xs theme-text-muted italic px-2">No hay gerentes disponibles.</span>

@@ -5,6 +5,8 @@ namespace App\Services\Clientes\Direcciones;
 use App\Models\ClienteDireccion;
 use App\Models\EnlaceDireccion;
 use App\Models\SolicitudDireccion;
+use App\Models\User;
+use App\Notifications\AlertaDireccion;
 use App\Support\Clientes\Direcciones\SanitizarEntradaDireccionPublica;
 use Illuminate\Support\Facades\DB;
 
@@ -20,7 +22,7 @@ class AplicarDireccionPublicaDesdeEnlaceService
      */
     public function ejecutar(string $token, array $datosDireccion): ClienteDireccion
     {
-        return DB::transaction(function () use ($token, $datosDireccion) {
+        $resultado = DB::transaction(function () use ($token, $datosDireccion) {
             $enlace = $this->reclamarEnlace($token);
             $datosDireccion = SanitizarEntradaDireccionPublica::ejecutar($datosDireccion);
 
@@ -33,12 +35,19 @@ class AplicarDireccionPublicaDesdeEnlaceService
                 'verificar' => true,
             ];
 
-            return match ($accion) {
-                SolicitudDireccion::ACCION_ACTUALIZAR => $this->actualizarPrincipal($enlace, $clienteId, $datosDireccion, $ctx),
+            $direccion = match ($accion) {
+                SolicitudDireccion::ACCION_ACTUALIZAR => $this->actualizarDireccion($enlace, $clienteId, $datosDireccion, $ctx),
                 SolicitudDireccion::ACCION_PRIMERA => $this->crearPrimera($clienteId, $datosDireccion, $ctx),
                 default => $this->gestion->crearDireccionAdicional($clienteId, $datosDireccion, $ctx),
             };
+
+            return [$enlace, $direccion];
         });
+
+        [$enlace, $direccion] = $resultado;
+        $this->notificarVendedora($enlace, $direccion);
+
+        return $direccion;
     }
 
     private function reclamarEnlace(string $token): EnlaceDireccion
@@ -76,22 +85,12 @@ class AplicarDireccionPublicaDesdeEnlaceService
      * @param  array<string, mixed>  $datos
      * @param  array{usuario_id?: int|null, origen?: string|null, verificar?: bool}  $ctx
      */
-    private function actualizarPrincipal(EnlaceDireccion $enlace, int $clienteId, array $datos, array $ctx): ClienteDireccion
+    private function actualizarDireccion(EnlaceDireccion $enlace, int $clienteId, array $datos, array $ctx): ClienteDireccion
     {
         $direccionId = $enlace->direccion_id;
 
         if (! $direccionId) {
-            $principal = ClienteDireccion::query()
-                ->where('cliente_id', $clienteId)
-                ->activas()
-                ->where('es_principal', true)
-                ->first();
-
-            if (! $principal) {
-                throw new \InvalidArgumentException('El cliente no tiene dirección principal para actualizar.');
-            }
-
-            $direccionId = $principal->id;
+            throw new \InvalidArgumentException('El enlace de actualización no tiene dirección vinculada.');
         }
 
         $direccion = ClienteDireccion::query()
@@ -123,5 +122,31 @@ class AplicarDireccionPublicaDesdeEnlaceService
         }
 
         return $this->gestion->crearPrimeraDireccion($clienteId, $datos, $ctx);
+    }
+
+    private function notificarVendedora(EnlaceDireccion $enlace, ClienteDireccion $direccion): void
+    {
+        $enlace->loadMissing(['cliente.vendedor']);
+
+        $destinatario = $enlace->cliente?->vendedor;
+        if (! $destinatario && $enlace->creado_por) {
+            $destinatario = User::query()->find($enlace->creado_por);
+        }
+
+        if (! $destinatario) {
+            return;
+        }
+
+        $cliente = $enlace->cliente;
+        if (! $cliente) {
+            return;
+        }
+
+        $destinatario->notify(new AlertaDireccion(
+            $cliente,
+            $direccion,
+            'direccion_formulario_respondido',
+            'El cliente completó el formulario de dirección de envío.',
+        ));
     }
 }

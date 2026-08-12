@@ -48,8 +48,20 @@ class SnapshotDireccionPedidoTest extends TestCase
             'cliente_id' => $cliente->id,
             'cliente_direccion_id' => $direccion->id,
             'origen_id' => $this->origenForaneo()->id,
+            'pesaje_respondido_at' => now(),
         ]);
         $this->agregarComprobante($pedido);
+        if (! DB::table('pedido_bma_cajas')->where('pedido_bma_id', $pedido->id)->exists()) {
+            DB::table('pedido_bma_cajas')->insert([
+                'pedido_bma_id' => $pedido->id,
+                'catalogo_tipo_caja_id' => DB::table('catalogo_tipos_caja_pedido')->value('id'),
+                'peso_real_kg' => 2,
+                'peso_volumetrico_kg' => 1.5,
+                'orden' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
 
         $actualizado = app(EnviarPedidoBmaService::class)->ejecutar($pedido->fresh(['origen']), $this->usuario->id);
 
@@ -145,6 +157,13 @@ class SnapshotDireccionPedidoTest extends TestCase
 
     private function agregarComprobante(PedidoBma $pedido): void
     {
+        $pedido->refresh();
+        $total = (float) ($pedido->total_a_cobrar ?? 0);
+        if ($total <= 0.01) {
+            $total = round((float) $pedido->total_mercancia + (float) ($pedido->costo_envio ?? 0), 2);
+            $pedido->update(['total_a_cobrar' => $total]);
+        }
+
         PedidoBmaDocumento::create([
             'pedido_bma_id' => $pedido->id,
             'tipo' => PedidoBmaDocumento::TIPO_COMPROBANTE,
@@ -153,6 +172,18 @@ class SnapshotDireccionPedidoTest extends TestCase
             'mime_type' => 'image/jpeg',
             'tamano_bytes' => 10,
             'orden' => 0,
+        ]);
+
+        \App\Models\SaldosAFavor\PedidoBmaPago::create([
+            'pedido_bma_id' => $pedido->id,
+            'numero_exhibicion' => 1,
+            'monto' => $total,
+            'ruta_archivo' => 'test/comp.jpg',
+            'nombre_original' => 'comp.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamano_bytes' => 10,
+            'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_PENDIENTE,
+            'capturado_por_id' => $this->usuario->id,
         ]);
     }
 

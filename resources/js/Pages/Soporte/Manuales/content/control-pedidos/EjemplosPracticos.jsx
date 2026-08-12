@@ -255,7 +255,7 @@ export function MockFormCedis() {
                         Marcar empacado
                     </span>
                     <span className="inline-flex px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider theme-element border theme-border theme-text-muted">
-                        Reportar incidencia
+                        Reportar error
                     </span>
                 </div>
             </div>

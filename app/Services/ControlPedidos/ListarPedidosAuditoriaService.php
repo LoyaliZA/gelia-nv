@@ -14,6 +14,7 @@ class ListarPedidosAuditoriaService
         CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
         CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
         CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+        CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
         CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
         CatalogoEstatusPedido::FASE_ENTREGADO,
         CatalogoEstatusPedido::FASE_ENVIADO,
@@ -36,6 +37,7 @@ class ListarPedidosAuditoriaService
     private function anexarFlagsVista(PedidoBma $pedido): PedidoBma
     {
         $pedido->setAttribute('pendiente_re_revision', $this->esPendienteReRevision($pedido));
+        $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());
 
         return $pedido;
     }
@@ -70,6 +72,7 @@ class ListarPedidosAuditoriaService
             $idsPorFase['EN_CEDIS'] ?? null,
             $idsPorFase['INCIDENCIA_CEDIS'] ?? null,
             $idsPorFase['PENDIENTE_DE_GUIA'] ?? null,
+            $idsPorFase['PENDIENTE_GUIA_CLIENTE'] ?? null,
             $idsPorFase['PENDIENTE_DE_ENVIO'] ?? null,
             $idsPorFase['ENTREGADO'] ?? null,
             $idsPorFase['ENVIADO'] ?? null,
@@ -106,7 +109,8 @@ class ListarPedidosAuditoriaService
 
         return PedidoBma::with([
             'cliente',
-            'vendedor',
+            'vendedor.departamento:id,nombre',
+            'vendedor.departamentos:id,nombre',
             'estatus',
             'origen',
             'tipoOperacionEnvio',
@@ -117,7 +121,7 @@ class ListarPedidosAuditoriaService
             'almacen',
             'banco',
             'tipoCaja',
-            'cajas.tipoCaja',
+            'cajas.tipoCaja', 'cajas.tipoGuia',
             'paqueteria',
             'tipoGuia',
             'zona',
@@ -128,8 +132,12 @@ class ListarPedidosAuditoriaService
             'historial.usuario',
             'historial.estatusAnterior',
             'historial.estatusNuevo',
+            'errores.reportadoPor',
+            'errores.corregidoPor',
             'principal',
             'complementos',
+            'safAplicaciones.credito',
+            'pagosExhibicion.banco',
         ])
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
             ->orderByDesc('created_at');
@@ -158,6 +166,7 @@ class ListarPedidosAuditoriaService
                 $idsPorFase['EN_CEDIS'] ?? null,
                 $idsPorFase['INCIDENCIA_CEDIS'] ?? null,
                 $idsPorFase['PENDIENTE_DE_GUIA'] ?? null,
+                $idsPorFase['PENDIENTE_GUIA_CLIENTE'] ?? null,
                 $idsPorFase['PENDIENTE_DE_ENVIO'] ?? null,
                 $idsPorFase['ENTREGADO'] ?? null,
                 $idsPorFase['ENVIADO'] ?? null,

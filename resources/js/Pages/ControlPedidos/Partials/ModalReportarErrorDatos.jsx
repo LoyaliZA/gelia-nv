@@ -11,10 +11,23 @@ import {
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 
+/** Espejo de CamposIncorrectosPedidoBma::CAMPOS_SOLO_* */
+const CAMPOS_SOLO_LOGISTICA = new Set([
+    'paqueteria', 'tipo_guia', 'referencia', 'codigo_postal', 'ciudad_estado',
+    'domicilio', 'destinatario', 'telefono',
+    'costo_envio', 'costo_seguro', 'aplica_seguro', 'reexpedicion', 'cliente_proporciona_guia',
+    'tipo_caja', 'numero_cajas', 'peso_real', 'peso_volumetrico', 'peso_cobrado',
+    'numero_rastreo', 'guia_pdf',
+]);
+
+const CAMPOS_SOLO_TIENDA = new Set(['envio_tienda']);
+
+const CAMPOS_SOLO_RESGUARDO = new Set(['apartado_resguardo', 'modo_resguardo']);
+
 export const GRUPOS_ERROR_DATOS = [
     {
         id: 'vendedora',
-        label: 'Datos de cliente / envío',
+        label: 'Datos de captura / envío',
         destino: 'vendedora',
         campos: [
             { id: 'domicilio', label: 'Domicilio / dirección' },
@@ -25,15 +38,54 @@ export const GRUPOS_ERROR_DATOS = [
             { id: 'referencia', label: 'Referencias' },
             { id: 'codigo_postal', label: 'Código postal' },
             { id: 'ciudad_estado', label: 'Ciudad / estado' },
+            { id: 'origen', label: 'Tipo de pedido' },
+            { id: 'cliente', label: 'Cliente' },
+            { id: 'fecha', label: 'Fecha' },
+            { id: 'banco', label: 'Banco' },
+            { id: 'almacen', label: 'Almacén' },
+            { id: 'es_resguardo', label: 'Resguardo' },
+            { id: 'modo_resguardo', label: 'Tipo de resguardo' },
+            { id: 'total_mercancia', label: 'Total mercancía' },
+            { id: 'costo_envio', label: 'Costo de envío' },
+            { id: 'costo_seguro', label: 'Costo de seguro' },
+            { id: 'total_a_cobrar', label: 'Total a cobrar' },
+            { id: 'aplica_seguro', label: 'Aplica seguro' },
+            { id: 'saldo_a_favor', label: 'Saldo a favor' },
+            { id: 'reexpedicion', label: 'Reexpedición' },
+            { id: 'cliente_proporciona_guia', label: 'Guía del cliente' },
+            { id: 'anexar_remision', label: 'Anexar remisión' },
+            { id: 'comentarios_drive', label: 'Comentarios Drive' },
+            { id: 'comprobantes', label: 'Comprobantes' },
+            { id: 'pagos', label: 'Pagos' },
+            { id: 'envio_tienda', label: 'Envío de tienda' },
         ],
     },
     {
         id: 'auxiliar',
-        label: 'Remisión',
+        label: 'Auditoría / remisión',
         destino: 'auxiliar',
         campos: [
             { id: 'remision', label: 'Remisión PDF' },
             { id: 'folio_remision', label: 'Folio de remisión' },
+            { id: 'pago_validado', label: 'Validación de pago' },
+            { id: 'anexo_envio', label: 'Anexo de envío' },
+        ],
+    },
+    {
+        id: 'cedis',
+        label: 'CEDIS / empaque / pesaje',
+        destino: 'CEDIS',
+        campos: [
+            { id: 'empaque', label: 'Empaque' },
+            { id: 'producto_faltante', label: 'Producto faltante' },
+            { id: 'producto_danado', label: 'Producto dañado' },
+            { id: 'inventario', label: 'Inventario' },
+            { id: 'tipo_caja', label: 'Tipo de caja' },
+            { id: 'numero_cajas', label: 'Número de cajas' },
+            { id: 'peso_real', label: 'Peso real' },
+            { id: 'peso_volumetrico', label: 'Peso volumétrico' },
+            { id: 'peso_cobrado', label: 'Peso cobrado' },
+            { id: 'apartado_resguardo', label: 'Apartado de resguardo' },
         ],
     },
     {
@@ -49,10 +101,38 @@ export const GRUPOS_ERROR_DATOS = [
 
 export const CAMPOS_ERROR_DATOS = GRUPOS_ERROR_DATOS.flatMap((g) => g.campos);
 
-const PRIORIDAD_DESTINO = ['vendedora', 'auxiliar', 'guias'];
+const PRIORIDAD_DESTINO = ['vendedora', 'auxiliar', 'cedis', 'guias'];
 
-function resolverCola(seleccionados) {
-    const gruposTocados = GRUPOS_ERROR_DATOS.filter((g) =>
+/**
+ * @param {{ requiere_logistica?: boolean }|null|undefined} origen
+ * @param {boolean} esResguardo
+ */
+export function campoAplicaAlContexto(campoId, origen, esResguardo = false) {
+    const requiereLogistica = origen?.requiere_logistica ?? true;
+    if (requiereLogistica && CAMPOS_SOLO_TIENDA.has(campoId)) return false;
+    if (!requiereLogistica && CAMPOS_SOLO_LOGISTICA.has(campoId)) return false;
+    if (!esResguardo && CAMPOS_SOLO_RESGUARDO.has(campoId)) return false;
+    return true;
+}
+
+/**
+ * @param {'delegado'|'cedis'|'auditar'} vista
+ */
+export function gruposErrorParaPedido(pedido, vista = 'delegado') {
+    const origenCat = pedido?.origen;
+    const esResguardo = Boolean(pedido?.es_resguardo);
+
+    return GRUPOS_ERROR_DATOS
+        .filter((g) => !(vista === 'auditar' && g.id === 'auxiliar'))
+        .map((g) => ({
+            ...g,
+            campos: g.campos.filter((c) => campoAplicaAlContexto(c.id, origenCat, esResguardo)),
+        }))
+        .filter((g) => g.campos.length > 0);
+}
+
+function resolverCola(seleccionados, grupos) {
+    const gruposTocados = grupos.filter((g) =>
         g.campos.some((c) => seleccionados.includes(c.id))
     );
     const ordenados = PRIORIDAD_DESTINO
@@ -67,18 +147,23 @@ function resolverCola(seleccionados) {
 /**
  * @param {'delegado'|'cedis'|'auditar'} origen
  */
-export default function ModalReportarErrorDatos({ abierto, onClose, pedido, origen = 'delegado' }) {
+export default function ModalReportarErrorDatos({ abierto, onClose, onSuccess, pedido, origen = 'delegado' }) {
     const [seleccionados, setSeleccionados] = useState([]);
     const [detalle, setDetalle] = useState('');
     const [procesando, setProcesando] = useState(false);
     const [error, setError] = useState('');
 
     const gruposVisibles = useMemo(
-        () => (origen === 'auditar'
-            ? GRUPOS_ERROR_DATOS.filter((g) => g.id !== 'auxiliar')
-            : GRUPOS_ERROR_DATOS),
-        [origen]
+        () => gruposErrorParaPedido(pedido, origen),
+        [pedido, origen]
     );
+
+    const etiquetaContexto = useMemo(() => {
+        const logistica = pedido?.origen?.requiere_logistica ?? true;
+        const nombre = pedido?.origen?.nombre;
+        const tipo = logistica ? 'con logística' : 'tienda / sin logística';
+        return nombre ? `${nombre} (${tipo})` : tipo;
+    }, [pedido?.origen]);
 
     useEffect(() => {
         if (abierto) {
@@ -89,7 +174,10 @@ export default function ModalReportarErrorDatos({ abierto, onClose, pedido, orig
         }
     }, [abierto, pedido?.id]);
 
-    const cola = useMemo(() => resolverCola(seleccionados), [seleccionados]);
+    const cola = useMemo(
+        () => resolverCola(seleccionados, gruposVisibles),
+        [seleccionados, gruposVisibles]
+    );
 
     if (!abierto || !pedido) return null;
 
@@ -116,7 +204,10 @@ export default function ModalReportarErrorDatos({ abierto, onClose, pedido, orig
             detalle: detalle.trim() || null,
         }, {
             preserveScroll: true,
-            onSuccess: () => onClose(),
+            onSuccess: () => {
+                onSuccess?.();
+                onClose();
+            },
             onError: (errors) => {
                 setError(errors.campos_incorrectos || errors.detalle || 'No se pudo reportar el error.');
             },
@@ -126,14 +217,11 @@ export default function ModalReportarErrorDatos({ abierto, onClose, pedido, orig
 
     const copyDestino = (() => {
         if (!cola.activo) {
-            return 'Seleccione los datos incorrectos. El pedido irá primero a quien corresponda corregir.';
+            return 'Seleccione los datos incorrectos. Solo quien corresponda podrá corregir; el resto será notificado.';
         }
-        let texto = `Primero irá a la ${cola.activo.destino} para corregir.`;
+        let texto = `Primero irá a ${cola.activo.destino} para corregir.`;
         if (cola.pendientes.length > 0) {
             texto += ` Después: ${cola.pendientes.map((g) => g.destino).join(', ')}.`;
-        }
-        if (cola.activo.id === 'guias' || cola.pendientes.some((g) => g.id === 'guias')) {
-            texto += ' El error de guía se avisará a todos los roles involucrados.';
         }
         return texto;
     })();
@@ -141,13 +229,16 @@ export default function ModalReportarErrorDatos({ abierto, onClose, pedido, orig
     return createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-center`} onClick={onClose}>
             <div
-                className={`${THEME_MODAL_SHELL} max-w-lg w-full`}
+                className={`${THEME_MODAL_SHELL} max-w-2xl w-full`}
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="p-5 border-b theme-border flex justify-between items-start gap-3">
                     <div>
-                        <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-1">Reportar error de datos</p>
+                        <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-1">Reportar error</p>
                         <EncabezadoFolioPedido pedido={pedido} size="sm" />
+                        <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
+                            Campos según origen: {etiquetaContexto}
+                        </p>
                         <p className="text-xs theme-text-muted font-bold mt-2 m-0">
                             {copyDestino}
                         </p>
@@ -157,8 +248,12 @@ export default function ModalReportarErrorDatos({ abierto, onClose, pedido, orig
                     </button>
                 </div>
 
-                <form onSubmit={enviar} className="p-5 space-y-4">
-                    {gruposVisibles.map((grupo) => (
+                <form onSubmit={enviar} className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                    {gruposVisibles.length === 0 ? (
+                        <p className="text-sm theme-text-muted font-bold m-0">
+                            No hay campos reportables para este origen.
+                        </p>
+                    ) : gruposVisibles.map((grupo) => (
                         <div key={grupo.id}>
                             <p className={`${THEME_LABEL} mb-2`}>
                                 {grupo.label}

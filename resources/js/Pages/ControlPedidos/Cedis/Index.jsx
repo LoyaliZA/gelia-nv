@@ -8,22 +8,22 @@ import FiltrosCedis from './Partials/FiltrosCedis';
 import TarjetasCedis from './Partials/TarjetasCedis';
 import ModalDetalleCedis from './Partials/ModalDetalleCedis';
 import ModalResponderPesaje from './Partials/ModalResponderPesaje';
-import ModalReportarIncidencia from './Partials/ModalReportarIncidencia';
 import ModalReportarErrorDatos from '../Partials/ModalReportarErrorDatos';
 import ModalMarcarApartadoResguardo from './Partials/ModalMarcarApartadoResguardo';
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
+import ModalBitacoraPedido from '../Partials/ModalBitacoraPedido';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 const KPI_CONFIG = [
-    { key: 'pendientes_pesaje', label: 'Pendientes pesaje', icon: Scale, color: '#F97316' },
-    { key: 'empacados', label: 'Por empacar', icon: Clock, color: '#EAB308' },
-    { key: 'pendientes_guia', label: 'Pendientes de guía', icon: Package, color: '#A855F7' },
-    { key: 'pendientes_envio', label: 'Pendientes de envío', icon: Package, color: '#0EA5E9' },
-    { key: 'enviados', label: 'Enviados', icon: CheckCircle2, color: '#22C55E' },
-    { key: 'incorrectas', label: 'Incorrectas', icon: CheckCircle2, color: '#F97316' },
+    { key: 'pendientes_pesaje', label: 'Pendientes pesaje', tab: 'PENDIENTES_PESAJE', icon: Scale, color: '#F97316' },
+    { key: 'empacados', label: 'Por empacar', tab: 'EMPACADOS', icon: Clock, color: '#EAB308' },
+    { key: 'pendientes_guia', label: 'Pendientes de guía', tab: 'PENDIENTES_GUIA', icon: Package, color: '#A855F7' },
+    { key: 'pendientes_envio', label: 'Pendientes de envío', tab: 'PENDIENTES_ENVIO', icon: Package, color: '#0EA5E9' },
+    { key: 'enviados', label: 'Enviados', tab: 'ENVIADOS', icon: CheckCircle2, color: '#22C55E' },
+    { key: 'incorrectas', label: 'Errores CEDIS', tab: 'INCORRECTAS', icon: CheckCircle2, color: '#F97316' },
 ];
 
-export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipos_caja = [] }) {
+export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipos_caja = [], almacenes_busqueda = [] }) {
     const { flash } = usePage().props;
     const {
         pedidos: pedidosVista,
@@ -41,9 +41,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalPesaje, setModalPesaje] = useState({ abierto: false, pedido: null });
-    const [modalIncidencia, setModalIncidencia] = useState({ abierto: false, pedido: null });
     const [modalErrorDatos, setModalErrorDatos] = useState({ abierto: false, pedido: null });
     const [modalApartado, setModalApartado] = useState({ abierto: false, pedido: null });
+    const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
@@ -57,8 +57,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
     }, [flash?.success, flash?.error]);
 
     useEffect(() => {
-        modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalIncidencia.abierto || modalErrorDatos.abierto || modalApartado.abierto;
-    }, [modalDetalle.abierto, modalPesaje.abierto, modalIncidencia.abierto, modalErrorDatos.abierto, modalApartado.abierto]);
+        modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto;
+    }, [modalDetalle.abierto, modalPesaje.abierto, modalErrorDatos.abierto, modalApartado.abierto, modalBitacora.abierto]);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -100,39 +100,50 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
         setModalDetalle({ abierto: true, pedido });
     };
     const abrirPesaje = (pedido) => setModalPesaje({ abierto: true, pedido });
-    const abrirIncidencia = (pedido) => setModalIncidencia({ abierto: true, pedido });
     const abrirErrorDatos = (pedido) => setModalErrorDatos({ abierto: true, pedido });
     const abrirApartado = (pedido) => setModalApartado({ abierto: true, pedido });
+    const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
 
     return (
         <AppLayout auth={auth}>
             <Head title="Gestión de pedidos CEDIS | GELIANV" />
             <GeliaPageShell className="space-y-3 md:space-y-6">
-                <header className={`${geliaCardClass()} p-4 md:p-8`}>
-                    <div className="flex items-center gap-2 mb-1 md:mb-2">
-                        <Warehouse className="w-5 h-5" style={{ color: 'var(--color-primario)' }} />
+                <header className={`${geliaCardClass()} p-3 md:p-8`}>
+                    <div className="flex items-center gap-2 mb-0.5 md:mb-2">
+                        <Warehouse className="w-4 h-4 md:w-5 md:h-5" style={{ color: 'var(--color-primario)' }} />
                         <span className="text-[10px] font-black uppercase tracking-widest theme-text-muted">Gestión de pedidos_</span>
                     </div>
-                    <h1 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0">
+                    <h1 className="text-xl md:text-3xl font-black italic uppercase tracking-tighter theme-text-main m-0">
                         Control <span style={{ color: 'var(--color-primario)' }}>pedidos</span> CEDIS
                     </h1>
-                    <p className="text-xs md:text-sm theme-text-muted font-bold mt-1.5 md:mt-2 m-0">Bandeja de pesaje y empaque para almacén</p>
+                    <p className="hidden md:block text-sm theme-text-muted font-bold mt-2 m-0">Bandeja de pesaje y empaque para almacén</p>
                 </header>
 
-                <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4">
-                    {KPI_CONFIG.map(({ key, label, icon: Icon, color }) => (
-                        <div key={key} className={`${geliaCardClass()} p-2.5 md:p-5 text-center md:text-left`}>
-                            <div className="flex items-center justify-center md:justify-start gap-1 md:gap-2 mb-0.5 md:mb-2 min-w-0">
-                                <Icon className="w-3 h-3 md:w-4 md:h-4 shrink-0" style={{ color }} />
-                                <span className="text-[8px] md:text-[9px] font-black uppercase tracking-wide theme-text-muted truncate leading-tight">
-                                    {label}
-                                </span>
-                            </div>
-                            <p className="text-xl md:text-3xl font-black m-0 tabular-nums" style={{ color }}>
-                                {metricasVista[key] ?? 0}
-                            </p>
-                        </div>
-                    ))}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4">
+                    {KPI_CONFIG.map(({ key, label, tab, icon: Icon, color }) => {
+                        const activo = tabActiva === tab;
+                        return (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => onTabChange(tab)}
+                                aria-pressed={activo}
+                                className={`${geliaCardClass()} p-3 md:p-5 text-left outline-none transition-shadow ${
+                                    activo ? 'ring-2 ring-[var(--color-primario)]' : ''
+                                }`}
+                            >
+                                <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2 min-w-0">
+                                    <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" style={{ color }} />
+                                    <span className="text-[10px] md:text-[9px] font-black uppercase tracking-wide theme-text-muted truncate leading-tight">
+                                        {label}
+                                    </span>
+                                </div>
+                                <p className="text-2xl md:text-3xl font-black m-0 tabular-nums" style={{ color }}>
+                                    {metricasVista[key] ?? 0}
+                                </p>
+                            </button>
+                        );
+                    })}
                 </div>
 
                 <div className={`${geliaCardClass()} p-4 md:p-5`}>
@@ -160,9 +171,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
                         pedidos={pedidosVista}
                         onVerDetalle={abrirDetalle}
                         onResponderPesaje={abrirPesaje}
-                        onReportarIncidencia={abrirIncidencia}
                         onReportarErrorDatos={abrirErrorDatos}
                         onMarcarApartado={abrirApartado}
+                        onBitacora={abrirBitacora}
                     />
                 </div>
             </GeliaPageShell>
@@ -171,27 +182,30 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
                 abierto={modalDetalle.abierto}
                 pedido={modalDetalle.pedido}
                 onClose={() => setModalDetalle({ abierto: false, pedido: null })}
-                onReportarIncidencia={abrirIncidencia}
                 onReportarErrorDatos={abrirErrorDatos}
                 onMarcarApartado={abrirApartado}
+            />
+            <ModalBitacoraPedido
+                abierto={modalBitacora.abierto}
+                pedido={modalBitacora.pedido}
+                onClose={() => setModalBitacora({ abierto: false, pedido: null })}
             />
             <ModalResponderPesaje
                 abierto={modalPesaje.abierto}
                 pedido={modalPesaje.pedido}
                 tiposCaja={tipos_caja}
+                almacenesBusqueda={almacenes_busqueda}
                 onClose={() => setModalPesaje({ abierto: false, pedido: null })}
-            />
-
-            <ModalReportarIncidencia
-                abierto={modalIncidencia.abierto}
-                pedido={modalIncidencia.pedido}
-                onClose={() => setModalIncidencia({ abierto: false, pedido: null })}
             />
             <ModalReportarErrorDatos
                 abierto={modalErrorDatos.abierto}
                 pedido={modalErrorDatos.pedido}
                 origen="cedis"
                 onClose={() => setModalErrorDatos({ abierto: false, pedido: null })}
+                onSuccess={() => {
+                    setModalErrorDatos({ abierto: false, pedido: null });
+                    setModalDetalle({ abierto: false, pedido: null });
+                }}
             />
             <ModalMarcarApartadoResguardo
                 abierto={modalApartado.abierto}

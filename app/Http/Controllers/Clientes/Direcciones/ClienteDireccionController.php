@@ -6,13 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Cliente;
 use App\Models\ClienteDireccion;
 use App\Models\EnlaceDireccion;
+use App\Models\SolicitudDireccion;
 use App\Services\Clientes\Direcciones\GenerarEnlaceDireccionService;
 use App\Services\Clientes\Direcciones\GestionDireccionesClienteService;
 use App\Services\Clientes\Direcciones\ValidarEnlaceDireccionService;
+use App\Support\Clientes\Direcciones\ReglasValidacionDireccion;
 use App\Support\Clientes\FormatearDireccionEstructurada;
 use App\Support\FormPublicUrl;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,6 +50,7 @@ class ClienteDireccionController extends Controller
                 'pais' => $d->pais,
                 'referencias' => $d->referencias,
                 'indicaciones_entrega' => $d->indicaciones_entrega,
+                'domicilio_irregular' => (bool) $d->domicilio_irregular,
                 'resumen' => FormatearDireccionEstructurada::resumida($d),
                 'es_principal' => $d->es_principal,
                 'esta_activa' => $d->esta_activa,
@@ -88,26 +92,7 @@ class ClienteDireccionController extends Controller
     {
         Gate::authorize('clientes.direcciones.crear');
 
-        $datos = $request->validate([
-            'nombre_destinatario' => ['required', 'string', 'max:255'],
-            'telefono_destinatario' => ['nullable', 'string', 'max:30'],
-            'calle' => ['required', 'string', 'max:255'],
-            'numero_exterior' => ['nullable', 'string', 'max:30'],
-            'numero_interior' => ['nullable', 'string', 'max:30'],
-            'colonia' => ['required', 'string', 'max:255'],
-            'codigo_postal' => ['required', 'regex:/^\d{5}$/'],
-            'municipio' => ['required', 'string', 'max:255'],
-            'ciudad' => ['nullable', 'string', 'max:255'],
-            'estado' => ['required', 'string', 'max:255'],
-            'pais' => ['nullable', 'string', 'max:255'],
-            'referencias' => ['nullable', 'string'],
-            'indicaciones_entrega' => ['nullable', 'string'],
-            'etiqueta' => ['nullable', 'string', 'max:100'],
-            'tipo_direccion' => ['nullable', 'string', 'max:50'],
-            'es_principal' => ['nullable', 'boolean'],
-            'verificar' => ['nullable', 'boolean'],
-        ]);
-
+        $datos = $this->validarDatosDireccion($request);
         $ctx = [
             'usuario_id' => $request->user()->id,
             'origen' => ClienteDireccion::ORIGEN_INTERNAL,
@@ -134,23 +119,7 @@ class ClienteDireccionController extends Controller
         Gate::authorize('clientes.direcciones.editar');
         abort_unless($direccion->cliente_id === $cliente->id, 404);
 
-        $datos = $request->validate([
-            'nombre_destinatario' => ['required', 'string', 'max:255'],
-            'telefono_destinatario' => ['nullable', 'string', 'max:30'],
-            'calle' => ['required', 'string', 'max:255'],
-            'numero_exterior' => ['nullable', 'string', 'max:30'],
-            'numero_interior' => ['nullable', 'string', 'max:30'],
-            'colonia' => ['required', 'string', 'max:255'],
-            'codigo_postal' => ['required', 'regex:/^\d{5}$/'],
-            'municipio' => ['required', 'string', 'max:255'],
-            'ciudad' => ['nullable', 'string', 'max:255'],
-            'estado' => ['required', 'string', 'max:255'],
-            'pais' => ['nullable', 'string', 'max:255'],
-            'referencias' => ['nullable', 'string'],
-            'indicaciones_entrega' => ['nullable', 'string'],
-            'etiqueta' => ['nullable', 'string', 'max:100'],
-            'tipo_direccion' => ['nullable', 'string', 'max:50'],
-        ]);
+        $datos = $this->validarDatosDireccion($request);
 
         $nueva = $gestion->crearNuevaVersion($direccion->id, $datos, [
             'usuario_id' => $request->user()->id,
@@ -195,7 +164,12 @@ class ClienteDireccionController extends Controller
 
         $validated = $request->validate([
             'accion' => ['nullable', 'string', 'max:40'],
-            'direccion_id' => ['nullable', 'integer', 'exists:cliente_direcciones,id'],
+            'direccion_id' => [
+                Rule::requiredIf(fn () => $request->input('accion') === SolicitudDireccion::ACCION_ACTUALIZAR),
+                'nullable',
+                'integer',
+                'exists:cliente_direcciones,id',
+            ],
             'horas' => ['nullable', 'integer', 'min:1', 'max:720'],
         ]);
 
@@ -227,5 +201,24 @@ class ClienteDireccionController extends Controller
         $validador->revocar($enlace, $request->user()->id);
 
         return redirect()->back()->with('success', 'Enlace revocado.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validarDatosDireccion(Request $request): array
+    {
+        $irregular = $request->boolean('domicilio_irregular');
+        $rules = array_merge(ReglasValidacionDireccion::internas($irregular), [
+            'es_principal' => ['nullable', 'boolean'],
+            'verificar' => ['nullable', 'boolean'],
+        ]);
+
+        $validator = validator($request->all(), $rules);
+        ReglasValidacionDireccion::afterIrregular($validator, $irregular);
+        $datos = $validator->validate();
+        $datos['domicilio_irregular'] = $irregular;
+
+        return $datos;
     }
 }

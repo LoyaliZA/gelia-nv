@@ -5,7 +5,6 @@ import {
     X, CheckCircle2, AlertTriangle, FileText, User, Truck, PackageCheck,
 } from 'lucide-react';
 import {
-    badgeEstatusPedido,
     badgeEmpaqueSemantico,
     badgeRetrasoGuia,
     badgeConComplementos,
@@ -13,12 +12,16 @@ import {
     esPedidoEmpacadoCedis,
     formatearMoneda,
     etiquetaAlmacen,
+    etiquetaCostoEnvio,
     formatearFechaHoraAuditoria,
+    badgeEstadoFisico,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
     THEME_LABEL,
     BTN_PRIMARY,
     BTN_SECONDARY,
+    tieneGuiaPdfDisponible,
+    etiquetasInstanciaRevision,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
@@ -28,6 +31,7 @@ import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
+import ListaErroresPedido from '../../Partials/ListaErroresPedido';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
@@ -43,7 +47,7 @@ const comprobantesDe = (pedido) => (pedido?.documentos || []).filter((d) => d.ti
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 
 export default function ModalDetalleCedis({
-    abierto, onClose, pedido: pedidoInicial, onReportarIncidencia, onReportarErrorDatos, onMarcarApartado,
+    abierto, onClose, pedido: pedidoInicial, onReportarErrorDatos, onMarcarApartado,
 }) {
     const [pedido, setPedido] = useState(pedidoInicial);
     const [procesando, setProcesando] = useState(false);
@@ -63,7 +67,6 @@ export default function ModalDetalleCedis({
     if (!abierto || !pedido) return null;
 
     const fase = pedido.estatus?.fase_ciclo;
-    const badgeEstatus = badgeEstatusPedido(pedido.estatus);
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
     const badgeComp = badgeConComplementos(pedido);
@@ -71,12 +74,46 @@ export default function ModalDetalleCedis({
     const comprobantes = comprobantesDe(pedido);
     const remision = remisionDe(pedido);
     const evidenciasApartado = (pedido?.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
-    const esIncidencia = fase === 'INCIDENCIA_CEDIS';
+    const evidenciasCondicion = (pedido?.documentos || []).filter((d) => d.tipo === 'evidencia_condicion');
+    const revisiones = [...(pedido.revisiones_producto || pedido.revisionesProducto || [])]
+        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const instancias = etiquetasInstanciaRevision(revisiones);
+    const docsDeProducto = (revId) => evidenciasCondicion.filter(
+        (d) => d.relacion_tipo === 'revision_producto' && String(d.relacion_id) === String(revId),
+    );
+    const revisionConDetalle = (r) => (
+        r.estado_fisico !== 'bueno'
+        || Boolean(r.comentario)
+        || Boolean(r.unica_pieza)
+        || Boolean(r.mejor_ejemplar)
+        || docsDeProducto(r.id).length > 0
+    );
+    const revisionesConDetalle = revisiones.filter(revisionConDetalle);
+    const revisionesOk = revisiones.filter((r) => !revisionConDetalle(r));
+    const indiceRevision = (r) => revisiones.findIndex((x) => x === r || (x.id && x.id === r.id));
+    const evidenciasLote = evidenciasCondicion.filter(
+        (d) => d.relacion_tipo === 'revision_general' || !d.relacion_tipo,
+    );
+    const evidenciasEnvio = evidenciasCondicion.filter((d) => d.relacion_tipo === 'envio_caja');
+    const cajasOrdenadas = [...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const etiquetaEnvioDoc = (doc) => {
+        const idx = cajasOrdenadas.findIndex((c) => String(c.id) === String(doc.relacion_id));
+        if (idx >= 0) return `Envío ${idx + 1}`;
+        return doc.comentario || 'Envío';
+    };
+    const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
+    const tieneRevisionFisica = Boolean(pedido.estado_fisico_general)
+        || revisiones.length > 0
+        || evidenciasLote.length > 0
+        || evidenciasEnvio.length > 0;
+    const esErrorCedis = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
-    const puedeErrorDatos = ['EN_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
+    const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
+    const mostrarGuia = tieneGuiaPdfDisponible(pedido) || Boolean(pedido.numero_rastreo)
+        || fase === 'PENDIENTE_DE_ENVIO' || fase === 'ENVIADO';
 
     const ejecutarConfirmacion = () => {
         const accion = confirmacion;
@@ -131,7 +168,7 @@ export default function ModalDetalleCedis({
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
+                    <div className="p-4 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                         <div className="min-w-0">
                             <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-1">Detalle CEDIS</p>
                             <EncabezadoFolioPedido pedido={pedido} size="lg" />
@@ -141,9 +178,6 @@ export default function ModalDetalleCedis({
                                 </p>
                             )}
                             <div className="flex flex-wrap gap-2 mt-2">
-                                <span className={badgeEstatus.className} style={badgeEstatus.style}>
-                                    {badgeEstatus.label}
-                                </span>
                                 <span className={badgeEmpaque.className} style={badgeEmpaque.style}>
                                     {badgeEmpaque.label}
                                 </span>
@@ -159,12 +193,13 @@ export default function ModalDetalleCedis({
                                 )}
                             </div>
                         </div>
-                        <button type="button" onClick={onClose} className="p-2 rounded-full theme-text-muted hover:theme-text-main outline-none shrink-0" aria-label="Cerrar">
+                        <button type="button" onClick={onClose} className="p-2 min-h-[44px] min-w-[44px] rounded-full theme-text-muted hover:theme-text-main outline-none shrink-0 inline-flex items-center justify-center" aria-label="Cerrar">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
 
-                    <div className="gelia-modal-body p-5 md:p-6 space-y-6">
+                    <div className="gelia-modal-body p-4 md:p-6 space-y-6">
+                        {/* 1. Estatus / avisos / errores */}
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>Estatus de empaque</p>
                             <div className="space-y-3">
@@ -191,13 +226,13 @@ export default function ModalDetalleCedis({
                                         </span>
                                     </AvisoOperativoPedido>
                                 )}
-                                {esIncidencia && (
+                                {esErrorCedis && (
                                     <AvisoOperativoPedido
-                                        label="Incidencia"
+                                        label="Error reportado"
                                         tono="danger"
                                         icon={AlertTriangle}
                                     >
-                                        {pedido.detalle_incidencia_empaque || 'Con detalle / incidencia'}
+                                        {pedido.detalle_incidencia_empaque || pedido.detalle_error_datos || 'Error CEDIS reportado'}
                                         {pedido.incidencia_empaque_at && (
                                             <span className="block text-sm font-bold mt-1 opacity-80 font-mono">
                                                 {(pedido.incidencia_empaque_por?.name || pedido.incidenciaEmpaquePor?.name) || '—'}
@@ -207,7 +242,8 @@ export default function ModalDetalleCedis({
                                         )}
                                     </AvisoOperativoPedido>
                                 )}
-                                {!pedido.es_resguardo && !esEmpacado && !esIncidencia && fase === 'EN_CEDIS' && (
+                                <ListaErroresPedido errores={pedido.errores} />
+                                {!pedido.es_resguardo && !esEmpacado && !esErrorCedis && fase === 'EN_CEDIS' && (
                                     <AvisoOperativoPedido label="Estatus" tono="warning">
                                         Pendiente de empaque en almacén
                                     </AvisoOperativoPedido>
@@ -222,141 +258,134 @@ export default function ModalDetalleCedis({
                                         Listo para verificación y envío en almacén
                                     </AvisoOperativoPedido>
                                 )}
-                                {(fase === 'PENDIENTE_DE_ENVIO' || fase === 'ENVIADO') && (
+                            </div>
+                        </section>
+
+                        {/* 2. Nota de compra + guía */}
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>Empaque y guía</p>
+                            <div className="space-y-3">
+                                <AvisoOperativoPedido
+                                    label="Nota de compra en el envío"
+                                    tono={pedido.anexar_remision ? 'success' : 'warning'}
+                                    icon={FileText}
+                                >
+                                    {pedido.anexar_remision
+                                        ? 'Incluir nota de compra en el paquete'
+                                        : 'No incluir nota de compra (dropshipping)'}
+                                </AvisoOperativoPedido>
+                                {mostrarGuia && (
                                     <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} />
                                 )}
                             </div>
                         </section>
 
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Datos del cliente</p>
-                            <div className="grid grid-cols-2 gap-4">
-                                <Campo label="Nombre" value={pedido.cliente?.nombre} />
-                                <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
-                                <Campo label="Origen" value={pedido.origen?.nombre} />
-                                <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
-                                <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
-                                <Campo label="Saldo a favor" value={Number(pedido.saldo_a_favor) > 0 ? formatearMoneda(pedido.saldo_a_favor) : '—'} />
-                            </div>
-                        </section>
-
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Envío y costos</p>
-                            <div className="grid grid-cols-2 gap-4">
-                                <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
-                                <Campo label="N° de cajas" value={pedido.numero_cajas} />
-                                <Campo label="Tipo de guía" value={pedido.tipo_guia?.nombre} />
-                                <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
-                                <Campo label="Seguro" value={pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : 'No aplica'} />
-                            </div>
-                            {(pedido.cajas || []).length > 0 && (
-                                <div className="mt-3 space-y-1">
-                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de cajas (pesaje)</p>
-                                    {(pedido.cajas || []).map((c) => (
-                                        <p key={c.id} className="text-xs font-bold theme-text-main m-0">
-                                            {c.tipo_caja?.nombre || 'Caja'}: {c.cantidad}
-                                        </p>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="mt-4 p-4 rounded-xl border theme-border theme-element space-y-2 text-sm">
-                                <div className="flex justify-between theme-text-muted font-bold"><span>Mercancía</span><span>{formatearMoneda(pedido.total_mercancia)}</span></div>
-                                <div className="flex justify-between theme-text-muted font-bold"><span>Envío</span><span>{formatearMoneda(pedido.costo_envio)}</span></div>
-                                {pedido.aplica_seguro && (
-                                    <div className="flex justify-between theme-text-muted font-bold"><span>Seguro</span><span>{formatearMoneda(pedido.costo_seguro)}</span></div>
-                                )}
-                                <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
-                                    <span>Total</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
-                                </div>
-                            </div>
-                        </section>
-
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Datos de envío</p>
-                            <div className="space-y-3">
-                                <DireccionPedidoResumen
-                                    direccion={pedido.direccion_vigente || pedido.direccionVigente}
-                                    domicilioLegacy={pedido.domicilio_entrega}
-                                    codigoPostal={pedido.codigo_postal}
-                                codigoDireccion={codigoDireccionCliente(
-                                    pedido.cliente?.numero_cliente,
-                                    (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
-                                )}
-                                />
-                                <Campo label="Código postal" value={pedido.codigo_postal} />
-                                <Campo label="Reexpedición / Zona" value={pedido.zona?.nombre} />
-                                <Campo label="Anexar remisión" value={pedido.anexar_remision ? 'Sí' : 'No'} />
-                                {pedido.es_resguardo && (
-                                    <Campo
-                                        label="Resguardo"
-                                        value={pedido.resguardo_apartado_at
-                                            ? `Apartado${pedido.resguardo_apartado_at ? ` · ${formatearFechaHoraAuditoria(pedido.resguardo_apartado_at)}` : ''}`
-                                            : 'Sí — pendiente de apartar'}
-                                    />
-                                )}
-                                {pedido.detalle_resguardo_apartado && (
-                                    <Campo label="Nota apartado" value={pedido.detalle_resguardo_apartado} />
-                                )}
-                                {pedido.envia_a_otra_persona && <Campo label="Destinatario alterno" value={pedido.envia_otra_persona} />}
-                            </div>
-                        </section>
-
-                        {evidenciasApartado.length > 0 && (
+                        {tieneRevisionFisica && (
                             <section className={SECCION_WRAP}>
-                                <p className={SECCION}>Evidencia de apartado</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {evidenciasApartado.map((doc) => (
-                                        <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
-                                    ))}
-                                </div>
-                            </section>
-                        )}
-
-                        {pedido.comentarios_drive && (
-                            <section className={SECCION_WRAP}>
-                                <p className={SECCION}>Comentarios para Drive</p>
-                                <p className="text-sm font-bold theme-text-main m-0">{pedido.comentarios_drive}</p>
-                            </section>
-                        )}
-
-                        {complementos.length > 0 && (
-                            <section className={SECCION_WRAP}>
-                                <p className={SECCION}>Remisiones del grupo</p>
+                                <p className={SECCION}>Revisión física</p>
                                 <div className="space-y-3">
-                                    {[pedido, ...complementos].map((p) => {
-                                        const rem = remisionDe(p);
-                                        return (
-                                            <div key={p.id} className="p-3 rounded-xl border theme-border theme-element space-y-2">
-                                                <p className="text-sm font-black theme-text-main m-0">
-                                                    {p.folio}
-                                                    {p.folio_remision ? ` · ${p.folio_remision}` : ''}
-                                                    {p.id === pedido.id ? ' · principal' : ' · complemento'}
-                                                </p>
-                                                <p className="text-[10px] theme-text-muted font-bold m-0">
-                                                    {formatearMoneda(p.total_mercancia)}
-                                                </p>
-                                                {rem && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setDocPreview(rem)}
-                                                        className="text-xs font-bold inline-flex items-center gap-1 outline-none"
-                                                        style={{ color: 'var(--color-primario)' }}
-                                                    >
-                                                        <FileText className="w-3.5 h-3.5" /> Ver remisión
-                                                    </button>
-                                                )}
+                                    {pedido.estado_fisico_general && badgeFisico && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className={badgeFisico.className} style={badgeFisico.style}>{badgeFisico.label}</span>
+                                            {pedido.comentario_fisico_general && (
+                                                <p className="text-sm font-bold theme-text-main m-0">{pedido.comentario_fisico_general}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                    {revisionesConDetalle.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Productos con detalle</p>
+                                            {revisionesConDetalle.map((r) => {
+                                                const b = badgeEstadoFisico(r.estado_fisico);
+                                                const docs = docsDeProducto(r.id);
+                                                const instancia = instancias[indiceRevision(r)];
+                                                return (
+                                                    <div key={r.id} className="p-3 rounded-xl border theme-border space-y-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            {instancia && (
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black tabular-nums theme-element border theme-border theme-text-main">
+                                                                    {instancia}
+                                                                </span>
+                                                            )}
+                                                            <p className="text-xs font-black theme-text-main m-0">{r.descripcion_producto}</p>
+                                                            <span className={b.className} style={b.style}>{b.label}</span>
+                                                        </div>
+                                                        {r.comentario && <p className="text-xs theme-text-muted font-bold m-0">{r.comentario}</p>}
+                                                        {r.estado_fisico === 'sin_existencia' && (
+                                                            <p className="text-[10px] font-black uppercase text-sky-600 m-0">
+                                                                Sin existencias en CEDIS — Ventas debe proceder.
+                                                            </p>
+                                                        )}
+                                                        {docs.length > 0 && (
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {docs.map((doc) => (
+                                                                    <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {revisionesOk.length > 0 && (
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Productos OK</p>
+                                            <p className="text-xs font-bold theme-text-main m-0">
+                                                {revisionesOk.map((r) => {
+                                                    const tag = instancias[indiceRevision(r)];
+                                                    return tag ? `${r.descripcion_producto} (${tag})` : r.descripcion_producto;
+                                                }).join(' · ')}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {evidenciasLote.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Evidencias del lote</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {evidenciasLote.map((doc) => (
+                                                    <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
+                                                ))}
                                             </div>
-                                        );
-                                    })}
+                                        </div>
+                                    )}
+                                    {evidenciasEnvio.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Foto por envío</p>
+                                            {evidenciasEnvio.map((doc) => (
+                                                <div key={doc.id} className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase theme-text-muted m-0">{etiquetaEnvioDoc(doc)}</p>
+                                                    <MiniaturaDocumento documento={doc} onVer={setDocPreview} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </section>
                         )}
 
-                        {(comprobantes.length > 0 || remision) && (
+                        {/* 3. Documentos */}
+                        {(comprobantes.length > 0 || remision || evidenciasApartado.length > 0 || complementos.length > 0) && (
                             <section className={SECCION_WRAP}>
-                                <p className={SECCION}>Documentos adjuntos</p>
+                                <p className={SECCION}>Documentos</p>
+                                {remision && (
+                                    <div className="flex items-center gap-3 p-4 rounded-xl border theme-border theme-element mb-3">
+                                        <FileText className="w-8 h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-bold theme-text-main m-0 truncate">{remision.nombre_original}</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setDocPreview(remision)}
+                                                className="text-xs font-bold inline-flex items-center gap-1 mt-1 outline-none min-h-[40px]"
+                                                style={{ color: 'var(--color-primario)' }}
+                                            >
+                                                Ver remisión PDF
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                                 {comprobantes.length > 0 && (
-                                    <div className="mb-4">
+                                    <div className="mb-3">
                                         <p className="text-[9px] font-black uppercase theme-text-muted mb-2">Comprobantes</p>
                                         <div className="flex flex-wrap gap-2">
                                             {comprobantes.map((doc) => (
@@ -365,48 +394,155 @@ export default function ModalDetalleCedis({
                                         </div>
                                     </div>
                                 )}
-                                {remision && (
-                                    <div className="flex items-center gap-3 p-4 rounded-xl border theme-border theme-element">
-                                        <FileText className="w-8 h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-bold theme-text-main m-0 truncate">{remision.nombre_original}</p>
-                                            <button
-                                                type="button"
-                                                onClick={() => setDocPreview(remision)}
-                                                className="text-xs font-bold inline-flex items-center gap-1 mt-1 outline-none"
-                                                style={{ color: 'var(--color-primario)' }}
-                                            >
-                                                Ver remisión PDF
-                                            </button>
+                                {evidenciasApartado.length > 0 && (
+                                    <div className="mb-3">
+                                        <p className="text-[9px] font-black uppercase theme-text-muted mb-2">Evidencia de apartado</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {evidenciasApartado.map((doc) => (
+                                                <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
+                                            ))}
                                         </div>
+                                    </div>
+                                )}
+                                {complementos.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Remisiones del grupo</p>
+                                        {[pedido, ...complementos].map((p) => {
+                                            const rem = remisionDe(p);
+                                            return (
+                                                <div key={p.id} className="p-3 rounded-xl border theme-border theme-element space-y-2">
+                                                    <p className="text-sm font-black theme-text-main m-0">
+                                                        {p.folio}
+                                                        {p.folio_remision ? ` · ${p.folio_remision}` : ''}
+                                                        {p.id === pedido.id ? ' · principal' : ' · complemento'}
+                                                    </p>
+                                                    <p className="text-[10px] theme-text-muted font-bold m-0">
+                                                        {formatearMoneda(p.total_mercancia)}
+                                                    </p>
+                                                    {rem && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setDocPreview(rem)}
+                                                            className="text-xs font-bold inline-flex items-center gap-1 outline-none min-h-[40px]"
+                                                            style={{ color: 'var(--color-primario)' }}
+                                                        >
+                                                            <FileText className="w-3.5 h-3.5" /> Ver remisión
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </section>
                         )}
+
+                        {/* 4. Datos operativos */}
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>Datos operativos</p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Campo label="Cliente" value={pedido.cliente?.nombre} />
+                                <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
+                                <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
+                                <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
+                                <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
+                                <Campo label="N° de cajas" value={pedido.numero_cajas} />
+                                <Campo label="Tipo de guía" value={pedido.tipo_guia?.nombre} />
+                                <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
+                                <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
+                                <Campo label="Seguro" value={pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : 'No aplica'} />
+                            </div>
+                            {(pedido.cajas || []).length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de envíos (pesaje)</p>
+                                    {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                        <p key={c.id || idx} className="text-xs font-bold theme-text-main m-0">
+                                            Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
+                                            {c.peso_real_kg != null ? ` · real ${c.peso_real_kg} kg` : ''}
+                                            {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
+                            {pedido.comentarios_drive && (
+                                <div className="mt-4">
+                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0 mb-1">Comentarios para Drive</p>
+                                    <p className="text-sm font-bold theme-text-main m-0">{pedido.comentarios_drive}</p>
+                                </div>
+                            )}
+                        </section>
+
+                        {/* 5. Dirección / costos (secundario) */}
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>Dirección y costos</p>
+                            <div className="space-y-3">
+                                <DireccionPedidoResumen
+                                    direccion={pedido.direccion_vigente || pedido.direccionVigente}
+                                    domicilioLegacy={pedido.domicilio_entrega}
+                                    codigoPostal={pedido.codigo_postal}
+                                    codigoDireccion={codigoDireccionCliente(
+                                        pedido.cliente?.numero_cliente,
+                                        (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
+                                    )}
+                                />
+                                <Campo label="Código postal" value={pedido.codigo_postal} />
+                                <Campo label="Reexpedición / Zona" value={pedido.zona?.nombre} />
+                                {pedido.es_resguardo && (
+                                    <Campo
+                                        label="Resguardo"
+                                        value={pedido.resguardo_apartado_at
+                                            ? `Apartado · ${formatearFechaHoraAuditoria(pedido.resguardo_apartado_at)}`
+                                            : 'Sí — pendiente de apartar'}
+                                    />
+                                )}
+                                {pedido.detalle_resguardo_apartado && (
+                                    <Campo label="Nota apartado" value={pedido.detalle_resguardo_apartado} />
+                                )}
+                                {pedido.envia_a_otra_persona && <Campo label="Destinatario alterno" value={pedido.envia_otra_persona} />}
+                                <div className="mt-2 p-4 rounded-xl border theme-border theme-element space-y-2 text-sm">
+                                    <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(pedido.total_mercancia)}</span></div>
+                                    <div className="flex justify-between theme-text-muted font-bold">
+                                        <span>{etiquetaCostoEnvio(pedido.paqueteria)}</span>
+                                        <span>{formatearMoneda(pedido.costo_envio)}</span>
+                                    </div>
+                                    <div className="flex justify-between theme-text-muted font-bold">
+                                        <span>Costo del seguro</span>
+                                        <span>{pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : formatearMoneda(0)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-emerald-600 font-bold">
+                                        <span>Saldo a favor aplicado</span>
+                                        <span>- {formatearMoneda(pedido.saldo_a_favor)}</span>
+                                    </div>
+                                    <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
+                                        <span>Total final del pedido</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
                     </div>
 
-                    <div className="gelia-modal-footer flex flex-wrap gap-3 p-5 md:p-6 border-t theme-border shrink-0">
-                        <button type="button" onClick={onClose} className={`${BTN_SECONDARY} theme-element border theme-border outline-none`}>
+                    <div className="gelia-modal-footer flex flex-col-reverse sm:flex-row sm:flex-wrap gap-3 p-4 md:p-6 border-t theme-border shrink-0">
+                        <button type="button" onClick={onClose} className={`${BTN_SECONDARY} theme-element border theme-border outline-none min-h-[44px] w-full sm:w-auto`}>
                             Cerrar
                         </button>
-                        {fase === 'EN_CEDIS' && (
+                        {puedeReportarError && (
                             <button
                                 type="button"
-                                onClick={() => { onClose(); onReportarIncidencia(pedido); }}
+                                onClick={() => onReportarErrorDatos?.(pedido)}
                                 disabled={procesando}
-                                className={`${BTN_SECONDARY} theme-element border border-orange-500/40 text-orange-600 outline-none`}
+                                className={`${BTN_SECONDARY} theme-element border border-orange-500/40 text-orange-600 outline-none min-h-[44px] w-full sm:w-auto`}
                             >
-                                <AlertTriangle className="w-4 h-4 inline mr-1" /> Incidencia empaque
+                                <AlertTriangle className="w-4 h-4 inline mr-1" /> Reportar error
                             </button>
                         )}
-                        {puedeErrorDatos && (
+                        {puedeApartar && (
                             <button
                                 type="button"
-                                onClick={() => { onClose(); onReportarErrorDatos?.(pedido); }}
+                                onClick={() => { onClose(); onMarcarApartado?.(pedido); }}
                                 disabled={procesando}
-                                className={`${BTN_SECONDARY} theme-element border border-orange-500/40 text-orange-600 outline-none`}
+                                className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto`}
                             >
-                                <AlertTriangle className="w-4 h-4 inline mr-1" /> Error de datos
+                                <PackageCheck className="w-4 h-4" /> Marcar apartado
                             </button>
                         )}
                         {puedeMarcarEnviado && (
@@ -414,7 +550,7 @@ export default function ModalDetalleCedis({
                                 type="button"
                                 onClick={() => setConfirmacion('enviar')}
                                 disabled={procesando}
-                                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 ml-auto`}
+                                className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto sm:ml-auto`}
                             >
                                 <Truck className="w-4 h-4" /> Marcar enviado
                             </button>
@@ -424,19 +560,9 @@ export default function ModalDetalleCedis({
                                 type="button"
                                 onClick={() => setConfirmacion('empacar')}
                                 disabled={procesando}
-                                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 ml-auto`}
+                                className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto sm:ml-auto`}
                             >
                                 <CheckCircle2 className="w-4 h-4" /> {complementos.length ? 'Empacar grupo' : 'Marcar empacado'}
-                            </button>
-                        )}
-                        {puedeApartar && (
-                            <button
-                                type="button"
-                                onClick={() => { onClose(); onMarcarApartado?.(pedido); }}
-                                disabled={procesando}
-                                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
-                            >
-                                <PackageCheck className="w-4 h-4" /> Marcar apartado
                             </button>
                         )}
                     </div>

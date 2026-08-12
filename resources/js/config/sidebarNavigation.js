@@ -12,6 +12,7 @@ import {
     Layers,
     CreditCard,
     Receipt,
+    Wallet,
     Settings,
     Package,
     Wrench,
@@ -52,9 +53,10 @@ function routeHref(name, fallback) {
 }
 
 /** Árbol de navegación del menú lateral (permisos aplicados al renderizar). */
-export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible = false, geliaAiVisible = false }) {
+export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible = false, geliaAiVisible = false, saldosFavorPendientes = 0 }) {
     const showReportes = can('solicitudes.exportar');
     const showReporteTraspasos = can('traspasos.reporte_dia');
+    const showVentas = can('reportes.ventas.ver');
     const showListados = can('listados.ver');
     const showLimpieza = can('funciones.limpieza_clientes');
     const showEjercicioEscalonamiento = can('ejercicio_escalonamiento.ver');
@@ -65,7 +67,8 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
     const showLimpiezaArchivos = can('funciones.limpieza_archivos');
     const showTransacciones = can('funciones.transacciones');
 
-    const showHerramientas = showReportes || showReporteTraspasos || showListados || showLimpieza || showEjercicioEscalonamiento || showAsistencia || showAvisos || showGastos || showLimpiezaArchivos || showTransacciones;
+    const showGrupoReportes = showReportes || showReporteTraspasos || showVentas;
+    const showHerramientas = showListados || showLimpieza || showEjercicioEscalonamiento || showAsistencia || showAvisos || showGastos || showLimpiezaArchivos || showTransacciones;
 
     const solicitudesChildren = [
         can('solicitudes.ver_listado') && {
@@ -176,6 +179,23 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('auto-cobranza.index', '/auto-cobranza'),
             active: (url) => url.startsWith('/auto-cobranza'),
         },
+        can('saldos_favor.ver') && {
+            type: 'link',
+            id: 'saldos_favor',
+            label: 'Saldos a favor',
+            icon: Wallet,
+            href: () => routeHref('saldos_favor.index', '/saldos-favor'),
+            active: (url) => url.startsWith('/saldos-favor') && !url.startsWith('/saldos-favor/caja'),
+            badge: saldosFavorPendientes > 0 ? saldosFavorPendientes : undefined,
+        },
+        can('saldos_favor.caja') && {
+            type: 'link',
+            id: 'saldos_favor_caja',
+            label: 'Caja · saldos',
+            icon: Store,
+            href: () => routeHref('saldos_favor.caja.index', '/saldos-favor/caja'),
+            active: (url) => url.startsWith('/saldos-favor/caja'),
+        },
     ].filter(Boolean);
 
     const comercialChildren = [
@@ -240,22 +260,6 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
     ].filter(Boolean);
 
     const herramientasChildren = [
-        showReportes && {
-            type: 'link',
-            id: 'reportes',
-            label: 'Reportes',
-            icon: BarChart3,
-            href: () => routeHref('reportes.solicitudes.index', '/reportes/solicitudes'),
-            active: (url) => url.startsWith('/reportes/solicitudes'),
-        },
-        showReporteTraspasos && {
-            type: 'link',
-            id: 'reportes_traspasos_dia',
-            label: 'Traspasos del día',
-            icon: Package,
-            href: () => routeHref('reportes.traspasos_dia.index', '/reportes/traspasos-dia'),
-            active: (url) => url.startsWith('/reportes/traspasos-dia'),
-        },
         showListados && {
             type: 'link',
             id: 'listados',
@@ -323,14 +327,6 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
     ].filter(Boolean);
 
     const almacenesChildren = [
-        (can('almacenes.productos.ver') || can('catalogos.gestionar')) && {
-            type: 'link',
-            id: 'almacenes_productos',
-            label: 'Productos',
-            icon: Package,
-            href: () => routeHref('almacenes.productos.index', '/almacenes/productos'),
-            active: (url) => url.startsWith('/almacenes/productos'),
-        },
         (can('almacenes.inventarios.ver') || can('catalogos.gestionar')) && {
             type: 'link',
             id: 'almacenes_inventarios',
@@ -385,6 +381,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
     ].filter(Boolean);
 
     const gestionChildren = [
+        (can('gestion_interna.productos.ver') || can('almacenes.productos.ver') || can('catalogos.gestionar')) && {
+            type: 'link',
+            id: 'gestion_productos',
+            label: 'Productos',
+            icon: Package,
+            href: () => routeHref('gestion_interna.productos.index', '/gestion-interna/productos'),
+            active: (url) => url.startsWith('/gestion-interna/productos'),
+        },
         can('plantilla_pedidos.ver') && {
             type: 'link',
             id: 'plantilla_bellaroma',
@@ -538,6 +542,38 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             label: 'Finanzas',
             icon: Landmark,
             children: finanzasChildren,
+        },
+        showGrupoReportes && {
+            type: 'group',
+            id: 'reportes',
+            label: 'Reportes',
+            icon: BarChart3,
+            children: [
+                showVentas && {
+                    type: 'link',
+                    id: 'reportes_ventas',
+                    label: 'Ventas',
+                    icon: DollarSign,
+                    href: () => routeHref('reportes.ventas.index', '/reportes/ventas'),
+                    active: (url) => url.startsWith('/reportes/ventas'),
+                },
+                showReportes && {
+                    type: 'link',
+                    id: 'reportes_solicitudes',
+                    label: 'Solicitudes',
+                    icon: FileSpreadsheet,
+                    href: () => routeHref('reportes.solicitudes.index', '/reportes/solicitudes'),
+                    active: (url) => url.startsWith('/reportes/solicitudes'),
+                },
+                showReporteTraspasos && {
+                    type: 'link',
+                    id: 'reportes_traspasos_dia',
+                    label: 'Traspasos del día',
+                    icon: Package,
+                    href: () => routeHref('reportes.traspasos_dia.index', '/reportes/traspasos-dia'),
+                    active: (url) => url.startsWith('/reportes/traspasos-dia'),
+                },
+            ].filter(Boolean),
         },
         showHerramientas && herramientasChildren.length > 0 && {
             type: 'group',

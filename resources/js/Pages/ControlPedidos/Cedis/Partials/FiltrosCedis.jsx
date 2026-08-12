@@ -111,7 +111,7 @@ export default function FiltrosCedis({
                                     role="tab"
                                     aria-selected={activo}
                                     onClick={() => elegirTab(tab.id)}
-                                    className={`flex items-center justify-between gap-1 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wide outline-none border transition-colors ${
+                                    className={`flex items-center justify-between gap-1 px-3 py-3 min-h-[44px] rounded-xl text-[10px] font-black uppercase tracking-wide outline-none border transition-colors ${
                                         activo
                                             ? 'border-transparent text-white'
                                             : 'theme-border theme-element theme-text-muted'

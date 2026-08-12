@@ -4,12 +4,15 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaAnexoEnvio;
+use App\Services\SaldosAFavor\ReconciliarTotalPedidoSafService;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class AprobarAnexoEnvioPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private ReconciliarTotalPedidoSafService $reconciliarSaf,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -28,6 +31,7 @@ class AprobarAnexoEnvioPedidoBmaService
         }
 
         return DB::transaction(function () use ($pedido, $anexo, $usuarioId) {
+            $totalAntes = (float) ($pedido->total_a_cobrar ?? 0) + (float) ($pedido->saldo_a_favor ?? 0);
             $monto = (float) $anexo->monto;
             $mercancia = (float) $pedido->total_mercancia;
             $seguro = (bool) $pedido->aplica_seguro;
@@ -53,6 +57,14 @@ class AprobarAnexoEnvioPedidoBmaService
                 'estatus_envio' => PedidoBma::ESTATUS_ENVIO_COMPLETO,
             ]);
 
+            $this->reconciliarSaf->handle(
+                $pedido->fresh(),
+                $totalAntes,
+                $usuarioId,
+                'sobrante_envio',
+                'Reconciliación tras aprobar anexo de envío'
+            );
+
             $this->historialService->ejecutar(
                 $pedido->id,
                 $usuarioId,
@@ -61,7 +73,8 @@ class AprobarAnexoEnvioPedidoBmaService
                 sprintf(
                     'Anexo de pago de envío aprobado ($%s). Costo de envío actualizado.',
                     number_format($monto, 2, '.', ',')
-                )
+                ),
+                AccionesHistorialPedidoBma::APROBAR_ANEXO
             );
 
             return $pedido->fresh([

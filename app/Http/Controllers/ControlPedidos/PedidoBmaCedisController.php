@@ -7,6 +7,7 @@ use App\Http\Requests\ControlPedidos\MarcarResguardoApartadoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarIncidenciaEmpaqueRequest;
 use App\Http\Requests\ControlPedidos\ResponderPesajePedidoBmaRequest;
+use App\Models\Almacen;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
@@ -14,7 +15,6 @@ use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
 use App\Services\ControlPedidos\MarcarResguardoApartadoPedidoBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
-use App\Services\ControlPedidos\ReportarIncidenciaEmpaqueService;
 use App\Services\ControlPedidos\ResponderPesajePedidoBmaService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
@@ -38,6 +38,11 @@ class PedidoBmaCedisController extends Controller
             'metricas' => fn () => $listarService->metricas(),
             'filtros' => $request->only(['tab', 'q', 'page']),
             'tipos_caja' => $catalogos['tipos_caja'] ?? [],
+            'almacenes_busqueda' => Almacen::query()
+                ->where('activo', true)
+                ->where('permite_busqueda_productos', true)
+                ->orderBy('nombre')
+                ->get(['id', 'codigo', 'nombre']),
         ]);
     }
 
@@ -94,15 +99,20 @@ class PedidoBmaCedisController extends Controller
     public function reportarIncidencia(
         ReportarIncidenciaEmpaqueRequest $request,
         PedidoBma $pedidoBma,
-        ReportarIncidenciaEmpaqueService $service
+        ReportarErrorDatosPedidoBmaService $service
     ): RedirectResponse {
         try {
-            $service->ejecutar($pedidoBma, Auth::id(), $request->validated('detalle'));
+            $service->ejecutar(
+                $pedidoBma->load(['estatus', 'documentos']),
+                Auth::id(),
+                ['empaque'],
+                (string) $request->validated('detalle')
+            );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Incidencia reportada correctamente.');
+        return redirect()->back()->with('success', 'Error reportado correctamente.');
     }
 
     public function reportarErrorDatos(
@@ -154,8 +164,21 @@ class PedidoBmaCedisController extends Controller
             $service->ejecutar(
                 $pedidoBma->load('estatus'),
                 Auth::id(),
-                (float) $request->validated('peso_real_kg'),
-                $request->validated('cajas')
+                $request->validated('cajas'),
+                [
+                    'estado_fisico_general' => $request->validated('estado_fisico_general'),
+                    'comentario_fisico_general' => $request->validated('comentario_fisico_general'),
+                    'evidencias_generales' => $request->file('evidencias_generales', []),
+                    'evidencias_envios' => $request->file('evidencias_envios', []),
+                    'revisiones' => collect($request->validated('revisiones') ?? [])->map(function (array $rev, int $i) use ($request) {
+                        $files = $request->file("revisiones.{$i}.evidencias") ?? [];
+
+                        return [
+                            ...$rev,
+                            'evidencias' => is_array($files) ? $files : ($files ? [$files] : []),
+                        ];
+                    })->all(),
+                ]
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());

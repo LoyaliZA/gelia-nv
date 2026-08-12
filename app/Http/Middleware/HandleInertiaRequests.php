@@ -11,6 +11,10 @@ use App\Services\PersonalizacionCatalogoService;
 use App\Services\Mensajeria\ListarConversacionesService;
 use App\Services\Presencia\PresenciaUsuarioService;
 use App\Support\PresenciaCatalogo;
+use App\Models\SaldosAFavor\PedidoBmaPago;
+use App\Models\SaldosAFavor\SafComprobanteCaja;
+use App\Models\SaldosAFavor\SafCredito;
+use App\Models\SaldosAFavor\SafIncidencia;
 use App\Services\Manuales\ResolverManualesVisiblesService;
 use App\Services\GeliaAi\ResolverAccesoGeliaAi;
 
@@ -94,10 +98,13 @@ class HandleInertiaRequests extends Middleware
                     'enabled' => (bool) config('webpush.enabled', true) && (bool) config('webpush.vapid.public_key'),
                     'public_key' => config('webpush.vapid.public_key'),
                 ],
+                'saldos_favor_pendientes' => fn () => $this->contarPendientesSaf($user),
             ],
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'warning' => fn () => $request->session()->get('warning'),
+                'saf_excedente' => fn () => $request->session()->get('saf_excedente'),
                 'activo_registrado' => fn () => $request->session()->get('activo_registrado'),
                 // Permite el paso del reporte hacia React
                 'reporte_importacion' => fn () => $request->session()->get('reporte_importacion'),
@@ -113,6 +120,9 @@ class HandleInertiaRequests extends Middleware
             'importacion_almacen_activa' => fn () => ($user && (
                 $user->can('catalogos.gestionar')
                 || $user->can('almacenes.productos.gestionar')
+                || $user->can('gestion_interna.productos.gestionar')
+                || $user->can('gestion_interna.productos.importar')
+                || $user->can('reportes.ventas.importar')
                 || $user->can('almacenes.inventarios.importar')
                 || $user->can('almacenes.costos.importar')
             ))
@@ -125,5 +135,20 @@ class HandleInertiaRequests extends Middleware
                 ? app(ResolverAccesoGeliaAi::class)->puedeUsar($user)
                 : false,
         ];
+    }
+
+    private function contarPendientesSaf(?\App\Models\User $user): int
+    {
+        if (! $user || ! $user->can('saldos_favor.ver')) {
+            return 0;
+        }
+
+        return SafCredito::where('estado_revision', SafCredito::REVISION_PENDIENTE)->count()
+            + SafIncidencia::where('estado', SafIncidencia::ESTADO_ABIERTA)->count()
+            + SafComprobanteCaja::whereIn('estado', [
+                SafComprobanteCaja::ESTADO_PENDIENTE_FIRMA,
+                SafComprobanteCaja::ESTADO_FIRMADO_PENDIENTE_REVISION,
+            ])->count()
+            + PedidoBmaPago::where('estado_revision', PedidoBmaPago::REVISION_PENDIENTE)->count();
     }
 }

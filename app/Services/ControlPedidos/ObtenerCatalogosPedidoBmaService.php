@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\ControlPedidos\CatalogoEnvioTienda;
+use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
@@ -35,6 +36,7 @@ class ObtenerCatalogosPedidoBmaService
                 ->orderBy('nombre')
                 ->get(['id', 'codigo', 'nombre']),
             'bancos' => CatalogoBanco::where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
+            'formas_pago' => PedidoBmaPago::formasPagoCatalogo(),
             'tipos_caja' => CatalogoTipoCajaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'peso_volumetrico', 'medidas', 'largo', 'ancho', 'alto']),
             'paqueterias' => CatalogoPaqueteriaPedido::where('activo', true)->orderBy('categoria')->orderBy('nombre')->get(['id', 'nombre', 'categoria', 'permite_costo_diferido']),
             'tipos_guia' => CatalogoTipoGuiaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),

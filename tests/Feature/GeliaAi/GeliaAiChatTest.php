@@ -78,31 +78,10 @@ class GeliaAiChatTest extends TestCase
             ->assertJsonPath('usage.total_tokens', 42);
     }
 
-    public function test_chat_ejecuta_tool_y_devuelve_reply(): void
+    public function test_chat_nombre_producto_usa_prefetch_una_ronda(): void
     {
-        Http::fakeSequence()
-            ->push([
-                'choices' => [
-                    [
-                        'message' => [
-                            'role' => 'assistant',
-                            'content' => null,
-                            'tool_calls' => [
-                                [
-                                    'id' => 'call_1',
-                                    'type' => 'function',
-                                    'function' => [
-                                        'name' => 'buscar_producto_inventario',
-                                        'arguments' => '{"q":"vainilla mist"}',
-                                    ],
-                                ],
-                            ],
-                        ],
-                    ],
-                ],
-                'usage' => ['prompt_tokens' => 100, 'completion_tokens' => 20, 'total_tokens' => 120],
-            ], 200)
-            ->push([
+        Http::fake([
+            'api.deepseek.test/*' => Http::response([
                 'choices' => [
                     [
                         'message' => [
@@ -112,7 +91,8 @@ class GeliaAiChatTest extends TestCase
                     ],
                 ],
                 'usage' => ['prompt_tokens' => 150, 'completion_tokens' => 30, 'total_tokens' => 180],
-            ], 200);
+            ], 200),
+        ]);
 
         $admin = User::factory()->create();
         $admin->assignRole('Super Admin');
@@ -120,7 +100,9 @@ class GeliaAiChatTest extends TestCase
         $result = app(GeliaAiChatService::class)->chat($admin, 'busca el producto vainilla mist', []);
 
         $this->assertStringContainsString('vainilla', mb_strtolower($result['reply']));
-        Http::assertSentCount(2);
+        $this->assertSame('prefetch_inventario', $result['usage']['gelia_mode'] ?? null);
+        $this->assertSame(1, $result['usage']['gelia_acc']['rounds'] ?? null);
+        Http::assertSentCount(1);
     }
 
     public function test_codigo_barra_usa_una_sola_ronda(): void

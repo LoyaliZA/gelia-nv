@@ -246,18 +246,22 @@ function headersRecargaParcial(version) {
     };
 }
 
-/** Resuelve área principal para el formulario (datos legacy en prod sin area_id). */
-function resolverAreaPrincipalFormulario(areas = [], areaId = null) {
-    const ids = (areas || [])
+/** Resuelve área/departamento principal para el formulario (datos legacy en prod). */
+function resolverPrincipalFormulario(idsAsignados = [], principalId = null) {
+    const ids = (idsAsignados || [])
         .map((id) => Number(id))
         .filter((id) => !Number.isNaN(id));
     if (ids.length === 0) return '';
 
-    const parsed = areaId !== '' && areaId != null ? Number(areaId) : null;
+    const parsed = principalId !== '' && principalId != null ? Number(principalId) : null;
     if (parsed != null && ids.includes(parsed)) return String(parsed);
     if (ids.length >= 1) return String(ids[0]);
 
     return '';
+}
+
+function resolverAreaPrincipalFormulario(areas = [], areaId = null) {
+    return resolverPrincipalFormulario(areas, areaId);
 }
 
 function paramsListadoUsuarios({ busqueda, gerenteId, page }) {
@@ -337,6 +341,7 @@ export default function Usuarios({
         fecha_nacimiento: '',
         catalogo_sexo_id: '',
         departamentos: [],
+        departamento_id: '',
         areas: [],
         area_id: '',
         gerentes: [],
@@ -471,6 +476,10 @@ export default function Usuarios({
                 fecha_nacimiento: usuario.fecha_nacimiento || '',
                 catalogo_sexo_id: usuario.catalogo_sexo_id || '',
                 departamentos: usuario.departamentos ? usuario.departamentos.map(d => d.id) : [],
+                departamento_id: resolverPrincipalFormulario(
+                    usuario.departamentos ? usuario.departamentos.map(d => d.id) : [],
+                    usuario.departamento_id,
+                ),
                 areas: usuario.areas ? usuario.areas.map(a => a.id) : [],
                 area_id: resolverAreaPrincipalFormulario(
                     usuario.areas ? usuario.areas.map(a => a.id) : [],
@@ -509,11 +518,17 @@ export default function Usuarios({
         if (campo === 'areas') {
             setData('area_id', resolverAreaPrincipalFormulario(nuevos, data.area_id));
         }
+        if (campo === 'departamentos') {
+            setData('departamento_id', resolverPrincipalFormulario(nuevos, data.departamento_id));
+        }
     };
 
     const areasSeleccionadas = (departamentos || [])
         .flatMap((depto) => depto.areas || [])
         .filter((area) => (data.areas || []).includes(area.id));
+
+    const departamentosSeleccionados = (departamentos || [])
+        .filter((depto) => (data.departamentos || []).includes(depto.id));
 
     const aplicarPlantilla = (nombreGrupo) => {
         if (plantillaSeleccionada === nombreGrupo) {
@@ -604,14 +619,20 @@ export default function Usuarios({
 
         clearErrors();
         const areaPrincipalId = resolverAreaPrincipalFormulario(data.areas, data.area_id);
+        const departamentoPrincipalId = resolverPrincipalFormulario(data.departamentos, data.departamento_id);
         if ((data.areas || []).length > 1 && !areaPrincipalId) {
             setError('area_id', 'Selecciona el área principal cuando el colaborador tiene varias áreas asignadas.');
+            return;
+        }
+        if ((data.departamentos || []).length > 1 && !departamentoPrincipalId) {
+            setError('departamento_id', 'Selecciona el departamento principal cuando el colaborador tiene varios departamentos asignados.');
             return;
         }
 
         const payload = {
             ...data,
             area_id: areaPrincipalId || null,
+            departamento_id: departamentoPrincipalId || null,
             permisos_individuales: permisosLimpios,
             plantilla_origen: plantillaSeleccionada || null,
             plantilla_por_permiso: plantillaPorPermiso,
@@ -843,7 +864,9 @@ export default function Usuarios({
                                 sexos={sexos}
                                 toggleSelection={toggleSelection}
                                 areasSeleccionadas={areasSeleccionadas}
+                                departamentosSeleccionados={departamentosSeleccionados}
                                 resolverAreaPrincipalFormulario={resolverAreaPrincipalFormulario}
+                                resolverPrincipalFormulario={resolverPrincipalFormulario}
                             />
                         </div>
                     </div>,

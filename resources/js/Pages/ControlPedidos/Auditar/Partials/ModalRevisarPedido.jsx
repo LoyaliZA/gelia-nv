@@ -9,8 +9,11 @@ import {
     badgeEstatusEnvio,
     badgeConComplementos,
     badgeCorregirRemision,
+    badgePendienteReRevision,
+    esPendienteReRevision,
     formatearMoneda,
     etiquetaAlmacen,
+    etiquetaCostoEnvio,
     formatearFechaNegocio,
     formatearFechaHoraAuditoria,
     THEME_MODAL_OVERLAY,
@@ -21,6 +24,8 @@ import {
     anexoEnvioPendienteDe,
     puedeAnexarPagoEnvio,
     LABELS_ESTATUS_ENVIO,
+    LABELS_ESTADO_SAF_APLICACION,
+    etiquetaCodigo,
     tieneErrorRemision,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
@@ -34,6 +39,8 @@ import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import ModalCambiarDireccion from '../../Partials/ModalCambiarDireccion';
 import ModalLiberarResguardoAbierto from './ModalLiberarResguardoAbierto';
+import SeccionPagosExhibicion from '../../Partials/SeccionPagosExhibicion';
+import ListaErroresPedido from '../../Partials/ListaErroresPedido';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
@@ -81,6 +88,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
     const badgeComp = badgeConComplementos(pedido);
     const badgeRemision = tieneErrorRemision(pedido) ? badgeCorregirRemision() : null;
+    const badgeReRevision = esPendienteReRevision(pedido) ? badgePendienteReRevision() : null;
     const esPendiente = fase === 'PENDIENTE_AUXILIAR';
     const puedeLiberarResguardo = Boolean(pedido.es_resguardo) && (esPendiente || fase === 'EN_CEDIS');
     const requiereCapturaLiberacion = Boolean(pedido.es_resguardo)
@@ -239,6 +247,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             <EncabezadoFolioPedido pedido={pedido} size="lg" />
                             <div className="flex flex-wrap gap-2 mt-2">
                                 <span className={`${badge.className} inline-flex`} style={badge.style}>{badge.label}</span>
+                                {badgeReRevision && (
+                                    <span className={`${badgeReRevision.className} inline-flex`} style={badgeReRevision.style}>{badgeReRevision.label}</span>
+                                )}
                                 {badgeRemision && (
                                     <span className={`${badgeRemision.className} inline-flex`} style={badgeRemision.style}>{badgeRemision.label}</span>
                                 )}
@@ -257,10 +268,15 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     Estado actual: <span style={{ color: badge.style?.color }}>{badge.label}</span>
                                 </p>
                                 {pedido.origen?.nombre && (
-                                    <p className="text-xs font-black uppercase text-blue-600 mt-2 m-0">Origen: {pedido.origen.nombre}</p>
+                                    <p className="text-xs font-black uppercase text-blue-600 mt-2 m-0">Tipo: {pedido.origen.nombre}</p>
                                 )}
                                 {pedido.es_resguardo && (
                                     <p className="text-xs font-black uppercase text-blue-600 mt-1 m-0">En resguardo — mercancía bloqueada en almacén</p>
+                                )}
+                                {badgeReRevision && (
+                                    <p className="text-[10px] text-emerald-600 font-bold mt-2 m-0">
+                                        Corregido y reenviado — dar luz verde si todo está en orden
+                                    </p>
                                 )}
                                 {badgeRemision && (
                                     <div className="mt-3 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 space-y-1">
@@ -291,6 +307,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         )}
                                     </div>
                                 )}
+                                <div className="mt-3">
+                                    <ListaErroresPedido errores={pedido.errores} />
+                                </div>
                                 {pagoValidado && (
                                     <p className="text-xs text-emerald-600 font-bold mt-2 m-0 flex items-center gap-1">
                                         <CheckCircle2 className="w-4 h-4" />
@@ -311,9 +330,15 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <Campo label="Fecha pedido" value={formatearFechaNegocio(pedido.fecha)} />
                                 <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
-                                <Campo label="Origen" value={pedido.origen?.nombre} />
-                                <Campo label="Banco" value={pedido.banco?.nombre} />
-                                <Campo label="Anexar remisión" value={pedido.anexar_remision ? 'Sí' : 'No'} />
+                                <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
+                                <Campo
+                                    label="Pagos / bancos"
+                                    value={(pedido.fuentes_pago?.length
+                                        ? pedido.fuentes_pago
+                                        : (pedido.banco?.nombre ? [pedido.banco.nombre] : [])
+                                    ).join(', ') || '—'}
+                                />
+                                <Campo label="Nota de compra en el envío" value={pedido.anexar_remision ? 'Sí' : 'No'} />
                                 <Campo label="Saldo a favor" value={Number(pedido.saldo_a_favor) > 0 ? formatearMoneda(pedido.saldo_a_favor) : '—'} />
                                 <Campo label="N° de cajas" value={pedido.numero_cajas} />
                                 <Campo label="Capturado por" value={pedido.vendedor?.name} />
@@ -323,28 +348,62 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>3. Pago del cliente</p>
                             <div className="grid grid-cols-2 gap-4 mb-4">
-                                <Campo label="Monto pagado" value={formatearMoneda(pedido.total_a_cobrar)} />
-                                <Campo label="Método de pago" value={pedido.banco?.nombre} />
+                                <Campo label="Monto a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} />
+                                <Campo
+                                    label="Fuentes de pago"
+                                    value={(pedido.fuentes_pago?.length
+                                        ? pedido.fuentes_pago
+                                        : (pedido.banco?.nombre ? [pedido.banco.nombre] : [])
+                                    ).join(', ') || '—'}
+                                />
                             </div>
-                            {comprobantes.length > 0 ? (
+                            {comprobantes.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mb-4">
                                     {comprobantes.map((doc) => (
                                         <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
                                     ))}
                                 </div>
-                            ) : (
-                                <p className="text-xs theme-text-muted font-bold italic mb-4">Sin comprobantes adjuntos</p>
                             )}
+                            {(pedido.saf_aplicaciones || []).filter((a) => a.estado !== 'liberado').length > 0 && (
+                                <div className="mt-4 space-y-2">
+                                    <p className="text-xs font-bold theme-text-muted uppercase">Saldos a favor aplicados/reservados</p>
+                                    {(pedido.saf_aplicaciones || []).filter((a) => a.estado !== 'liberado').map((a) => (
+                                        <div key={a.id} className="flex justify-between text-sm border theme-border theme-element rounded-xl px-3 py-2">
+                                            <span className="font-bold theme-text-main">
+                                                {a.credito?.folio || a.saf_credito_id}
+                                                {' · '}
+                                                {etiquetaCodigo(a.estado, LABELS_ESTADO_SAF_APLICACION)}
+                                            </span>
+                                            <span className="font-black" style={{ color: 'var(--color-primario)' }}>-{formatearMoneda(a.monto)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <div className="mt-4">
+                                <SeccionPagosExhibicion
+                                    pedidoId={pedido.id}
+                                    bancos={bancos}
+                                    puedeRegistrar={false}
+                                    puedeRevisar={esPendiente}
+                                    puedeGenerarSaldo={false}
+                                    rutaResumen="control_pedidos.pagos.resumen_auditoria"
+                                    mensajeBloqueo={esPendiente
+                                        ? 'Revise cada exhibición. La cobertura no sustituye la verificación.'
+                                        : null}
+                                />
+                            </div>
                             {esPendiente && (
-                                <button
-                                    type="button"
-                                    onClick={validarPago}
-                                    disabled={procesando || pagoValidado || comprobantes.length === 0}
-                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
-                                >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    {pagoValidado ? 'Pago validado' : 'Validar pago'}
-                                </button>
+                                <div className="mt-4">
+                                    <button
+                                        type="button"
+                                        onClick={validarPago}
+                                        disabled={procesando || pagoValidado}
+                                        className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
+                                    >
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        {pagoValidado ? 'Pago validado' : 'Validar pago'}
+                                    </button>
+                                </div>
                             )}
                         </section>
 
@@ -369,11 +428,13 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <Campo label="Pesaje CEDIS" value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
                             </div>
                             {(pedido.cajas || []).length > 0 && (
-                                <div className="mt-3 space-y-1">
-                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de cajas</p>
-                                    {(pedido.cajas || []).map((c) => (
-                                        <p key={c.id} className="text-xs font-bold theme-text-main m-0">
-                                            {c.tipo_caja?.nombre || 'Caja'}: {c.cantidad}
+                                <div className="mt-3 space-y-2">
+                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de envíos</p>
+                                    {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                        <p key={c.id || idx} className="text-xs font-bold theme-text-main m-0">
+                                            Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
+                                            {c.peso_real_kg != null ? ` · real ${c.peso_real_kg} kg` : ''}
+                                            {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
                                         </p>
                                     ))}
                                 </div>
@@ -390,16 +451,21 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 </div>
                             )}
                             <div className="mt-4 p-4 rounded-xl border theme-border theme-element space-y-2 text-sm">
-                                <div className="flex justify-between theme-text-muted font-bold"><span>Mercancía</span><span>{formatearMoneda(pedido.total_mercancia)}</span></div>
-                                <div className="flex justify-between theme-text-muted font-bold"><span>Envío</span><span>{formatearMoneda(pedido.costo_envio)}</span></div>
-                                {pedido.aplica_seguro && (
-                                    <div className="flex justify-between theme-text-muted font-bold"><span>Seguro</span><span>{formatearMoneda(pedido.costo_seguro)}</span></div>
-                                )}
-                                {Number(pedido.saldo_a_favor) > 0 && (
-                                    <div className="flex justify-between text-emerald-600 font-bold"><span>Saldo a favor</span><span>- {formatearMoneda(pedido.saldo_a_favor)}</span></div>
-                                )}
+                                <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(pedido.total_mercancia)}</span></div>
+                                <div className="flex justify-between theme-text-muted font-bold">
+                                    <span>{etiquetaCostoEnvio(pedido.paqueteria)}</span>
+                                    <span>{formatearMoneda(pedido.costo_envio)}</span>
+                                </div>
+                                <div className="flex justify-between theme-text-muted font-bold">
+                                    <span>Costo del seguro</span>
+                                    <span>{pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : formatearMoneda(0)}</span>
+                                </div>
+                                <div className="flex justify-between text-emerald-600 font-bold">
+                                    <span>Saldo a favor aplicado</span>
+                                    <span>- {formatearMoneda(pedido.saldo_a_favor)}</span>
+                                </div>
                                 <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
-                                    <span>Total</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
+                                    <span>Total final del pedido</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
                                 </div>
                             </div>
                             <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} compact />

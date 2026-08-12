@@ -9,6 +9,7 @@ use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class CambiarDireccionPedido
 {
@@ -65,7 +66,8 @@ class CambiarDireccionPedido
                 $contexto['usuario_id'],
                 $pedido->catalogo_estatus_pedido_id,
                 $pedido->catalogo_estatus_pedido_id,
-                'Cambio de dirección. Anterior: '.($anterior ?: 'N/D').'. Motivo: '.$contexto['motivo'].'. Fase: '.($fase ?: 'N/D')
+                'Cambio de dirección. Anterior: '.($anterior ?: 'N/D').'. Motivo: '.$contexto['motivo'].'. Fase: '.($fase ?: 'N/D'),
+                AccionesHistorialPedidoBma::CAMBIO_DIRECCION
             );
 
             return $pedido->fresh(['direccionVigente', 'cliente', 'estatus', 'documentos']);

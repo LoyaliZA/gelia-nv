@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class MarcarEnviadoPedidoBmaService
 {
@@ -47,7 +48,8 @@ class MarcarEnviadoPedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusEnviado,
-                'Pedido marcado como enviado; sale a recolección.'
+                'Pedido marcado como enviado; sale a recolección.',
+                AccionesHistorialPedidoBma::ENVIO_FINAL
             );
 
             $pedido = $pedido->fresh([

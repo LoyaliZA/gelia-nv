@@ -23,6 +23,7 @@ class ProductoBusquedaTest extends TestCase
         parent::setUp();
 
         foreach ([
+            'gestion_interna.productos.ver',
             'almacenes.productos.ver',
             'almacenes.inventarios.ver',
             'almacenes.costos.ver',
@@ -32,7 +33,7 @@ class ProductoBusquedaTest extends TestCase
 
         $this->usuario = User::factory()->create();
         $this->usuario->givePermissionTo([
-            'almacenes.productos.ver',
+            'gestion_interna.productos.ver',
             'almacenes.inventarios.ver',
             'almacenes.costos.ver',
         ]);
@@ -44,22 +45,22 @@ class ProductoBusquedaTest extends TestCase
         $this->crearProducto(['sku' => '99', 'descripcion' => 'Otro artículo', 'folio' => 100101]);
 
         $this->actingAs($this->usuario)
-            ->getJson(route('almacenes.productos.buscar', ['q' => '42']))
+            ->getJson(route('gestion_interna.productos.buscar', ['q' => '42']))
             ->assertOk()
             ->assertJsonPath('data.0.sku', '42');
 
         $this->actingAs($this->usuario)
-            ->getJson(route('almacenes.productos.buscar', ['q' => 'Zeta']))
+            ->getJson(route('gestion_interna.productos.buscar', ['q' => 'Zeta']))
             ->assertOk()
             ->assertJsonPath('data.0.descripcion', 'Perfume Zeta');
 
         $this->actingAs($this->usuario)
-            ->getJson(route('almacenes.productos.buscar', ['q' => '7501234']))
+            ->getJson(route('gestion_interna.productos.buscar', ['q' => '7501234']))
             ->assertOk()
             ->assertJsonPath('data.0.codigo_barras', '7501234567890');
 
         $this->actingAs($this->usuario)
-            ->getJson(route('almacenes.productos.buscar', ['q' => '100100']))
+            ->getJson(route('gestion_interna.productos.buscar', ['q' => '100100']))
             ->assertOk()
             ->assertJsonPath('data.0.folio', 100100);
     }
@@ -75,12 +76,12 @@ class ProductoBusquedaTest extends TestCase
         }
 
         $paginaUno = $this->actingAs($this->usuario)
-            ->getJson(route('almacenes.productos.buscar', ['per_page' => 25, 'page' => 1]))
+            ->getJson(route('gestion_interna.productos.buscar', ['per_page' => 25, 'page' => 1]))
             ->assertOk()
             ->json('data');
 
         $paginaDos = $this->actingAs($this->usuario)
-            ->getJson(route('almacenes.productos.buscar', ['per_page' => 25, 'page' => 2]))
+            ->getJson(route('gestion_interna.productos.buscar', ['per_page' => 25, 'page' => 2]))
             ->assertOk()
             ->json('data');
 
@@ -94,7 +95,7 @@ class ProductoBusquedaTest extends TestCase
         $sinPermiso = User::factory()->create();
 
         $this->actingAs($sinPermiso)
-            ->getJson(route('almacenes.productos.buscar'))
+            ->getJson(route('gestion_interna.productos.buscar'))
             ->assertForbidden();
     }
 

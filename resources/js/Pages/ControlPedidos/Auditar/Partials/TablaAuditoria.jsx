@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, AlertTriangle } from 'lucide-react';
+import { Eye, AlertTriangle, History, PackagePlus } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
     badgeAuditoriaSemantico,
@@ -10,8 +10,11 @@ import {
     formatearFechaNegocio,
     tieneErrorRemision,
     esPendienteReRevision,
+    textoFuentesPagoCompacto,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
+import BotonAccionCubico from '../../Partials/BotonAccionCubico';
 
 function CardAuditoria({
     pedido,
@@ -22,6 +25,7 @@ function CardAuditoria({
     esRechazado,
     esIncidenciaCedis,
     onRevisar,
+    onBitacora,
 }) {
     const reRevision = Boolean(badgeReRevision);
 
@@ -43,16 +47,13 @@ function CardAuditoria({
                     <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
                         {formatearFechaNegocio(pedido.fecha)}
                     </p>
-                    {pedido.vendedor?.name && (
-                        <p className="text-[9px] theme-text-muted font-bold mt-1 m-0">
-                            Capturado por: {pedido.vendedor.name}
-                        </p>
-                    )}
+                    <BloqueVendedorPedido pedido={pedido} variante="nombre" />
                     {pedido.origen?.nombre && (
-                        <p className="text-[9px] font-black uppercase text-blue-600 mt-1 m-0">Origen: {pedido.origen.nombre}</p>
+                        <p className="text-[9px] font-black uppercase text-blue-600 mt-1 m-0">Tipo: {pedido.origen.nombre}</p>
                     )}
                 </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                <div className="flex flex-col items-end gap-1.5 shrink-0 max-w-[50%]">
+                    <BloqueVendedorPedido pedido={pedido} variante="etiquetas" className="mt-0 justify-end" />
                     <span className={badge.className} style={badge.style}>{badge.label}</span>
                     {badgeReRevision && (
                         <span className={badgeReRevision.className} style={badgeReRevision.style}>{badgeReRevision.label}</span>
@@ -70,7 +71,9 @@ function CardAuditoria({
                 <p className="text-[9px] theme-text-muted m-0">{pedido.cliente?.numero_cliente}</p>
             </div>
             <div className="flex flex-wrap gap-2 text-[10px] font-bold theme-text-muted uppercase">
-                <span>{pedido.banco?.nombre || '—'}</span>
+                <span title={textoFuentesPagoCompacto(pedido.fuentes_pago).completo || undefined}>
+                    {textoFuentesPagoCompacto(pedido.fuentes_pago).texto}
+                </span>
                 <span>·</span>
                 <span>{pedido.paqueteria?.nombre || '—'}</span>
             </div>
@@ -95,14 +98,17 @@ function CardAuditoria({
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Corregir remisión
                 </p>
             )}
-            <button type="button" onClick={() => onRevisar(pedido)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border theme-border theme-element text-xs font-black uppercase outline-none hover:border-[var(--color-primario)]">
-                <Eye className="w-4 h-4" /> Revisar
-            </button>
+            <div className={`grid gap-2 ${onBitacora ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <BotonAccionCubico icon={Eye} label="Revisar" onClick={() => onRevisar(pedido)} conLabel />
+                {onBitacora && (
+                    <BotonAccionCubico icon={History} label="Bitácora" onClick={() => onBitacora(pedido)} tone="purple" conLabel />
+                )}
+            </div>
         </div>
     );
 }
 
-export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
+export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBitacora }) {
     const items = pedidos?.data || [];
 
     if (items.length === 0) {
@@ -131,19 +137,21 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
                             esRechazado={fase === 'RECHAZADO_VENDEDORA'}
                             esIncidenciaCedis={fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque)}
                             onRevisar={onRevisar}
+                            onBitacora={onBitacora}
                         />
                     );
                 })}
             </div>
 
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto overflow-y-visible">
                 <table className="w-full border-collapse">
                     <thead>
                         <tr className="border-b-2 border-[var(--color-primario)]/30">
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Folio_</th>
+                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Vendedor_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Fecha_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Cliente_</th>
-                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Banco_</th>
+                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Pagos_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Envío_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Total_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Estado_</th>
@@ -176,7 +184,7 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
                                     <td className="px-5 py-4">
                                         <EncabezadoFolioPedido pedido={pedido} size="sm" />
                                         {pedido.origen?.nombre && (
-                                            <p className="text-[9px] font-black uppercase text-blue-600 mt-1 m-0">Origen: {pedido.origen.nombre}</p>
+                                            <p className="text-[9px] font-black uppercase text-blue-600 mt-1 m-0">Tipo: {pedido.origen.nombre}</p>
                                         )}
                                         {badgeReRevision && (
                                             <p className="text-[9px] text-emerald-600 font-bold mt-1 m-0">Corregido — dar luz verde</p>
@@ -197,6 +205,9 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
                                             </p>
                                         )}
                                     </td>
+                                    <td className="px-5 py-4">
+                                        <BloqueVendedorPedido pedido={pedido} variante="completo" className="mt-0" />
+                                    </td>
                                     <td className="px-5 py-4 text-xs font-bold theme-text-muted">
                                         {formatearFechaNegocio(pedido.fecha)}
                                     </td>
@@ -204,7 +215,12 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
                                         <p className="text-xs font-black theme-text-main uppercase m-0">{pedido.cliente?.nombre}</p>
                                         <p className="text-[9px] theme-text-muted m-0">{pedido.cliente?.numero_cliente}</p>
                                     </td>
-                                    <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase">{pedido.banco?.nombre || '—'}</td>
+                                    <td
+                                        className="px-5 py-4 text-xs font-bold theme-text-muted uppercase"
+                                        title={textoFuentesPagoCompacto(pedido.fuentes_pago).completo || undefined}
+                                    >
+                                        {textoFuentesPagoCompacto(pedido.fuentes_pago).texto}
+                                    </td>
                                     <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase">{pedido.paqueteria?.nombre || '—'}</td>
                                     <td className="px-5 py-4 text-sm font-black" style={{ color: 'var(--color-primario)' }}>
                                         {formatearMoneda(pedido.total_a_cobrar)}
@@ -221,16 +237,20 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio }) {
                                             <span className={`${badgeEnvio.className} mt-1.5 block w-fit`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
                                         )}
                                     </td>
-                                    <td className="px-5 py-4 text-right">
-                                        <div className="inline-flex flex-wrap justify-end gap-1.5">
+                                    <td className="px-5 py-4 text-right overflow-visible">
+                                        <div className="inline-flex justify-end gap-1.5 relative">
                                             {puedeAnexar && onAnexarEnvio && (
-                                                <button type="button" onClick={() => onAnexarEnvio(pedido)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border theme-border theme-element text-[10px] font-black uppercase outline-none hover:border-amber-500 text-amber-700">
-                                                    Anexar envío
-                                                </button>
+                                                <BotonAccionCubico
+                                                    icon={PackagePlus}
+                                                    label="Anexar envío"
+                                                    onClick={() => onAnexarEnvio(pedido)}
+                                                    tone="warn"
+                                                />
                                             )}
-                                            <button type="button" onClick={() => onRevisar(pedido)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border theme-border theme-element text-[10px] font-black uppercase outline-none hover:border-[var(--color-primario)]">
-                                                <Eye className="w-4 h-4" /> Revisar
-                                            </button>
+                                            <BotonAccionCubico icon={Eye} label="Revisar" onClick={() => onRevisar(pedido)} />
+                                            {onBitacora && (
+                                                <BotonAccionCubico icon={History} label="Bitácora" onClick={() => onBitacora(pedido)} tone="purple" />
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

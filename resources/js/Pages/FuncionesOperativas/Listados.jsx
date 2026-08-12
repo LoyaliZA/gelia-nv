@@ -229,11 +229,17 @@ export default function Listados({
         columnas_exportar: [],
         solo_con_existencia: false,
         filtro_relojes: false,
+        mostrar_nota_encabezado: false,
+        nota_encabezado: '*Cambio de precio sin previo aviso',
         shared_users: [],
         destinatarios_user_ids: [],
         destinatarios_externos: [],
     };
     const [modalPlantilla, setModalPlantilla] = useState({ show: false, data: estadoInicialPlantilla });
+    const [notaGeneracion, setNotaGeneracion] = useState({
+        activa: false,
+        texto: '*Cambio de precio sin previo aviso',
+    });
 
     const fileRefs = { existencias: useRef(null), precios: useRef(null), costos: useRef(null) };
 
@@ -262,6 +268,8 @@ export default function Listados({
                 columnas_exportar: lista.columnas_exportar || [],
                 solo_con_existencia: lista.solo_con_existencia === 1 || lista.solo_con_existencia === true,
                 filtro_relojes: lista.filtro_relojes === 1 || lista.filtro_relojes === true,
+                mostrar_nota_encabezado: lista.mostrar_nota_encabezado === 1 || lista.mostrar_nota_encabezado === true,
+                nota_encabezado: lista.nota_encabezado || '*Cambio de precio sin previo aviso',
                 shared_users: lista.shared_users ? lista.shared_users.map(u => u.id) : [],
                 destinatarios_user_ids: lista.destinatarios_user_ids || [],
                 destinatarios_externos: lista.destinatarios_externos || [],
@@ -339,6 +347,15 @@ export default function Listados({
         if (LISTAS_DEFAULT[tipo]) {
             formData.append('orden_final', LISTAS_DEFAULT[tipo].join(','));
         }
+
+        if (notaGeneracion.activa) {
+            formData.append('mostrar_nota_encabezado', '1');
+            formData.append('nota_encabezado', notaGeneracion.texto || '');
+        } else if (!(typeof tipo === 'number' || /^\d+$/.test(String(tipo)))) {
+            // Plantillas base: sin override explícito no agregan nota
+            formData.append('mostrar_nota_encabezado', '0');
+        }
+        // Plantilla personalizada sin override: el backend usa la config guardada
 
         if (archivos.existencias) formData.append('existencias', archivos.existencias);
         if (archivos.precios) formData.append('precios', archivos.precios);
@@ -561,6 +578,38 @@ export default function Listados({
                             instructions="<span style='color: var(--color-primario)'>Ruta:</span> Almacenes > Costos<br><span style='color: var(--color-primario)'>Operaciones:</span> Seleccionar Opcion Excel<br><span style='color: var(--color-primario)'>Opciones:</span> Guardar en CSV."
                         />
                     </div>
+                </section>
+
+                {/* --- NOTA OPCIONAL DE ENCABEZADO --- */}
+                <section className={`${activeCardClass} p-6 md:p-8 space-y-4`}>
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                        <input
+                            type="checkbox"
+                            checked={notaGeneracion.activa}
+                            onChange={(e) => setNotaGeneracion((prev) => ({ ...prev, activa: e.target.checked }))}
+                            className="w-5 h-5 rounded shrink-0 mt-0.5"
+                            style={{ accentColor: '#dc2626' }}
+                        />
+                        <div className="min-w-0 flex-1">
+                            <span className="text-xs theme-text-main font-black uppercase tracking-widest block">
+                                Nota de encabezado en el Excel (opcional)
+                            </span>
+                            <span className="text-[10px] theme-text-muted font-bold block mt-1">
+                                Aplica a esta generación. Si no se marca, las plantillas personalizadas usan su
+                                propia configuración guardada; las base quedan sin nota.
+                            </span>
+                        </div>
+                    </label>
+                    {notaGeneracion.activa && (
+                        <input
+                            type="text"
+                            maxLength={500}
+                            value={notaGeneracion.texto}
+                            onChange={(e) => setNotaGeneracion((prev) => ({ ...prev, texto: e.target.value }))}
+                            className="w-full theme-surface border theme-border rounded-2xl p-4 theme-text-main text-sm font-bold outline-none focus:ring-2 focus:ring-[var(--color-primario)] transition-all shadow-sm"
+                            placeholder="*Cambio de precio sin previo aviso"
+                        />
+                    )}
                 </section>
 
                 {/* --- SECCIÓN 2: PLANTILLAS DEL SISTEMA --- */}

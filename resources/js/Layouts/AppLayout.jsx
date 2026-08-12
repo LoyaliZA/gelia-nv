@@ -11,6 +11,7 @@ import GeliaLoader from '../Components/GeliaLoader';
 import WooSyncFloatingTracker from '../Components/WooSyncFloatingTracker';
 import ImportacionAlmacenFloatingTracker from '../Components/Almacenes/ImportacionAlmacenFloatingTracker';
 import CobranzaReporteFloatingTracker from '../Components/CobranzaReporteFloatingTracker';
+import TiendanubeImportFloatingTracker from '../Components/TiendanubeImportFloatingTracker';
 import {
     resolveAlertasPrefs,
     getTipoAlerta,
@@ -168,6 +169,9 @@ export default function AppLayout({ children, fullScreen = false }) {
     const permisosAlmacen = auth?.user?.permissions ?? [];
     const canViewImportacionAlmacen = esSuperAdmin
         || permisosAlmacen.includes('almacenes.productos.gestionar')
+        || permisosAlmacen.includes('gestion_interna.productos.gestionar')
+        || permisosAlmacen.includes('gestion_interna.productos.importar')
+        || permisosAlmacen.includes('reportes.ventas.importar')
         || permisosAlmacen.includes('almacenes.inventarios.importar')
         || permisosAlmacen.includes('almacenes.costos.importar')
         || permisosAlmacen.includes('catalogos.gestionar');
@@ -175,6 +179,11 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     const permisosCobranza = auth?.user?.permissions ?? [];
     const canViewCobranzaReportes = esSuperAdmin || permisosCobranza.includes('cobranza.reportes');
+
+    const permisosTn = auth?.user?.permissions ?? [];
+    const canViewTiendanubeImport = esSuperAdmin
+        || permisosTn.includes('tiendanube.ver')
+        || permisosTn.includes('tiendanube.productos.editar');
 
     // --- ESCUCHADORES DE EVENTOS GLOBALES DE INERTIA ---
     useEffect(() => {
@@ -735,6 +744,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                     <WooSyncFloatingTracker canView={canViewWooSync} canSync={canSyncWoo} />
                     <ImportacionAlmacenFloatingTracker canView={canViewImportacionAlmacen} canManage={canManageImportacionAlmacen} />
                     <CobranzaReporteFloatingTracker canView={canViewCobranzaReportes} />
+                    <TiendanubeImportFloatingTracker canView={canViewTiendanubeImport} />
                 </div>
 
             </div>

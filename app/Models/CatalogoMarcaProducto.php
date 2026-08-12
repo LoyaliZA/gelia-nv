@@ -11,6 +11,7 @@ class CatalogoMarcaProducto extends Model
 
     protected $fillable = [
         'nombre',
+        'slug',
         'activo',
     ];
 

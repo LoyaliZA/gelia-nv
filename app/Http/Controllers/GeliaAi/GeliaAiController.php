@@ -8,6 +8,7 @@ use App\Services\GeliaAi\DeepSeekClient;
 use App\Services\GeliaAi\GeliaAiArchivoService;
 use App\Services\GeliaAi\GeliaAiChatService;
 use App\Services\GeliaAi\GeliaAiConversacionService;
+use App\Services\GeliaAi\GeliaAiUsoService;
 use App\Services\GeliaAi\InspeccionarArchivoGeliaAiService;
 use App\Services\GeliaAi\ResolverAccesoGeliaAi;
 use Illuminate\Http\JsonResponse;
@@ -39,6 +40,7 @@ class GeliaAiController extends Controller
         ResolverAccesoGeliaAi $acceso,
         GeliaAiChatService $chatService,
         GeliaAiConversacionService $conversaciones,
+        GeliaAiUsoService $usos,
     ): JsonResponse {
         abort_unless($acceso->puedeUsar($request->user()), 403);
 
@@ -59,11 +61,12 @@ class GeliaAiController extends Controller
         ]);
 
         try {
+            $fileIds = $validated['file_ids'] ?? [];
             $result = $chatService->chat(
                 $request->user(),
                 $validated['message'],
                 $validated['messages'] ?? [],
-                $validated['file_ids'] ?? [],
+                $fileIds,
             );
 
             $saved = $conversaciones->persistirTurno(
@@ -75,6 +78,14 @@ class GeliaAiController extends Controller
 
             $result['conversacion_id'] = $saved['conversacion_id'];
             $result['titulo'] = $saved['titulo'];
+
+            $usos->registrar(
+                $request->user(),
+                (int) $saved['conversacion_id'],
+                $validated['message'],
+                $result,
+                $fileIds !== [],
+            );
         } catch (RuntimeException $e) {
             $code = str_contains($e->getMessage(), 'no está configurado') ? 503 : 422;
 

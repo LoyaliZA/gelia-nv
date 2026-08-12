@@ -58,6 +58,7 @@ class ControlPedidosFase2Test extends TestCase
         $pedido = $this->crearPedidoBase([
             'origen_id' => $this->origenForaneo()->id,
             'costo_envio' => null,
+            'pesaje_respondido_at' => now(),
         ]);
 
         $this->agregarComprobante($pedido);
@@ -216,6 +217,16 @@ class ControlPedidosFase2Test extends TestCase
 
     private function agregarComprobante(PedidoBma $pedido): void
     {
+        $pedido->refresh();
+        $total = (float) ($pedido->total_a_cobrar ?? 0);
+        if ($total <= 0.01) {
+            $total = round((float) $pedido->total_mercancia + (float) ($pedido->costo_envio ?? 0), 2);
+            $pedido->update([
+                'total_a_cobrar' => $total,
+                'saldo_a_favor' => $pedido->saldo_a_favor ?? 0,
+            ]);
+        }
+
         PedidoBmaDocumento::create([
             'pedido_bma_id' => $pedido->id,
             'tipo' => PedidoBmaDocumento::TIPO_COMPROBANTE,
@@ -224,6 +235,18 @@ class ControlPedidosFase2Test extends TestCase
             'mime_type' => 'image/jpeg',
             'tamano_bytes' => 100,
             'orden' => 0,
+        ]);
+
+        \App\Models\SaldosAFavor\PedidoBmaPago::create([
+            'pedido_bma_id' => $pedido->id,
+            'numero_exhibicion' => 1,
+            'monto' => $total,
+            'ruta_archivo' => 'test/comprobante.jpg',
+            'nombre_original' => 'comprobante.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamano_bytes' => 100,
+            'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_PENDIENTE,
+            'capturado_por_id' => $this->usuario->id,
         ]);
     }
 

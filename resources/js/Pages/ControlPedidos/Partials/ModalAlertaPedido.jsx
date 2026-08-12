@@ -1,7 +1,9 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, XCircle, CheckCircle, Info, X } from 'lucide-react';
-import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, BTN_PRIMARY } from './pedidosBmaStyles';
+import {
+    THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, BTN_PRIMARY, deferModalAction,
+} from './pedidosBmaStyles';
 
 const CONFIG = {
     error: { icon: XCircle, color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/20', btn: 'bg-red-500 hover:bg-red-600 text-white' },
@@ -22,8 +24,17 @@ export default function ModalAlertaPedido({ abierto, tipo = 'info', titulo, mens
     const cfg = CONFIG[tipo] || CONFIG.info;
     const Icon = cfg.icon;
 
+    const cerrar = (e) => {
+        e?.stopPropagation?.();
+        deferModalAction(onClose);
+    };
+
     return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-center py-4`} onClick={onClose}>
+        <div
+            className={`${THEME_MODAL_OVERLAY} items-center py-4`}
+            style={{ zIndex: 'calc(var(--gelia-z-modal) + 20)' }}
+            onClick={cerrar}
+        >
             <div
                 className={`${THEME_MODAL_SHELL} max-w-sm w-full p-6 md:p-8 flex flex-col items-center gap-4 text-center relative`}
                 onClick={(e) => e.stopPropagation()}
@@ -35,10 +46,10 @@ export default function ModalAlertaPedido({ abierto, tipo = 'info', titulo, mens
                     <h3 className={`text-base font-black uppercase italic tracking-tighter m-0 ${cfg.color}`}>{titulo}</h3>
                     {mensaje && <p className="text-xs font-bold theme-text-main leading-snug m-0">{mensaje}</p>}
                 </div>
-                <button type="button" onClick={onClose} className={`${BTN_PRIMARY} w-full py-3 ${cfg.btn}`}>
+                <button type="button" onClick={cerrar} className={`${BTN_PRIMARY} w-full py-3 ${cfg.btn}`}>
                     Entendido
                 </button>
-                <button type="button" onClick={onClose} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-full outline-none" aria-label="Cerrar">
+                <button type="button" onClick={cerrar} className="absolute top-4 right-4 p-2 theme-text-muted hover:theme-text-main rounded-full outline-none" aria-label="Cerrar">
                     <X className="w-4 h-4" />
                 </button>
             </div>

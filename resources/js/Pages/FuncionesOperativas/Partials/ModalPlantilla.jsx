@@ -337,6 +337,39 @@ export default function ModalPlantilla({
                             </label>
                         </div>
 
+                        <div className="p-6 theme-surface rounded-[2rem] border theme-border space-y-4 shadow-sm">
+                            <h4 className="text-[11px] font-black theme-text-main uppercase tracking-widest">
+                                Nota de Encabezado (opcional)
+                            </h4>
+                            <p className="text-[10px] theme-text-muted font-bold">
+                                Si se activa, aparece arriba de las columnas del Excel. Sin activar, el archivo
+                                queda igual que siempre.
+                            </p>
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <input
+                                    type="checkbox"
+                                    checked={!!data.mostrar_nota_encabezado}
+                                    onChange={(e) => setData('mostrar_nota_encabezado', e.target.checked)}
+                                    className="w-5 h-5 rounded shrink-0"
+                                    style={{ accentColor: '#dc2626' }}
+                                />
+                                <span className="text-xs theme-text-main group-hover:text-red-600 font-black uppercase tracking-widest transition-colors">
+                                    Incluir nota en el Excel
+                                </span>
+                            </label>
+                            {!!data.mostrar_nota_encabezado && (
+                                <input
+                                    type="text"
+                                    maxLength={500}
+                                    value={data.nota_encabezado || ''}
+                                    onChange={(e) => setData('nota_encabezado', e.target.value)}
+                                    className="w-full theme-surface border theme-border rounded-2xl p-4 theme-text-main text-sm font-bold outline-none focus:ring-2 transition-all shadow-sm"
+                                    style={{ '--tw-ring-color': activeColorHex }}
+                                    placeholder="*Cambio de precio sin previo aviso"
+                                />
+                            )}
+                        </div>
+
                         <div className="p-6 theme-element rounded-[2rem] border theme-border space-y-4">
                             <h4 className="text-[11px] font-black theme-text-main uppercase tracking-widest flex items-center gap-2">
                                 <Share2 className="w-4 h-4" style={{ color: activeColorHex }} /> Acceso

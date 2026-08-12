@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '../../Layouts/AppLayout';
 import { geliaCardClass } from '../../utils/geliaTheme';
-import { ArrowLeft, Images, Search } from 'lucide-react';
+import { ArrowLeft, FileSpreadsheet, Images, Search } from 'lucide-react';
 import { inertiaVisitUrl } from '../../utils/inertiaVisitUrl';
 import SeccionImagenes from './Partials/SeccionImagenes';
+import ModalReportesImagenes from './Partials/ModalReportesImagenes';
 
 export default function Imagenes({
     auth,
@@ -20,6 +21,7 @@ export default function Imagenes({
     const [filtroAlerta, setFiltroAlerta] = useState(!!filters?.imagenes_alerta);
     const [filtroSinImagen, setFiltroSinImagen] = useState(!!filters?.sin_imagen);
     const [imageImportId, setImageImportId] = useState(imageImportActivo?.id || null);
+    const [showReportes, setShowReportes] = useState(false);
 
     useEffect(() => {
         setFiltroAlerta(!!filters?.imagenes_alerta);
@@ -36,6 +38,7 @@ export default function Imagenes({
     useEffect(() => {
         if (!imageImportId) return undefined;
         let cancelled = false;
+        let lastProcesados = -1;
         const terminal = (estado) => estado && !['pendiente', 'en_proceso'].includes(estado);
 
         const poll = async () => {
@@ -45,7 +48,13 @@ export default function Imagenes({
                 });
                 if (!res.ok) return;
                 const data = await res.json();
-                if (!cancelled && terminal(data.estado)) {
+                if (cancelled) return;
+                const proc = data.procesados ?? 0;
+                if (proc !== lastProcesados && lastProcesados >= 0 && !terminal(data.estado)) {
+                    router.reload({ only: ['productos', 'totales'] });
+                }
+                lastProcesados = proc;
+                if (terminal(data.estado)) {
                     setImageImportId(null);
                     router.reload({ only: ['productos', 'totales', 'imageImportActivo', 'ultimosImportImagenes'] });
                 }
@@ -122,7 +131,22 @@ export default function Imagenes({
                             </div>
                         </div>
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => setShowReportes(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border theme-border theme-text-main hover:bg-black/[0.03] dark:hover:bg-white/[0.03]"
+                    >
+                        <FileSpreadsheet className="w-4 h-4" style={{ color: 'var(--color-primario)' }} />
+                        Reportes
+                    </button>
                 </header>
+
+                <ModalReportesImagenes
+                    open={showReportes}
+                    onClose={() => setShowReportes(false)}
+                    importId={imageImportId || imageImportActivo?.id || ultimosImportImagenes?.[0]?.id || null}
+                    fallidos={imageImportActivo?.fallidos ?? ultimosImportImagenes?.[0]?.fallidos ?? 0}
+                />
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className={`${geliaCardClass()} p-4`}>

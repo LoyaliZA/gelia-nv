@@ -3,8 +3,11 @@
 namespace App\Services\Clientes\Direcciones;
 
 use App\Models\Cliente;
+use App\Models\ClienteDireccion;
 use App\Models\EnlaceDireccion;
+use App\Models\SolicitudDireccion;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class GenerarEnlaceDireccionService
 {
@@ -21,6 +24,31 @@ class GenerarEnlaceDireccionService
      */
     public function ejecutar(Cliente $cliente, array $opciones = []): array
     {
+        $accion = $opciones['accion'] ?? null;
+        $direccionId = isset($opciones['direccion_id']) ? (int) $opciones['direccion_id'] : null;
+
+        if ($accion === SolicitudDireccion::ACCION_ACTUALIZAR) {
+            if (! $direccionId) {
+                throw ValidationException::withMessages([
+                    'direccion_id' => 'Seleccione la dirección a actualizar.',
+                ]);
+            }
+
+            $pertenece = ClienteDireccion::query()
+                ->where('cliente_id', $cliente->id)
+                ->whereKey($direccionId)
+                ->activas()
+                ->exists();
+
+            if (! $pertenece) {
+                throw ValidationException::withMessages([
+                    'direccion_id' => 'La dirección no pertenece a este cliente o no está activa.',
+                ]);
+            }
+        } else {
+            $direccionId = null;
+        }
+
         $codigo = $this->generarCodigoUnico();
         $horas = (int) ($opciones['horas'] ?? 72);
 
@@ -28,17 +56,17 @@ class GenerarEnlaceDireccionService
             'cliente_id' => $cliente->id,
             'token_hash' => hash('sha256', $codigo),
             'codigo_publico' => $codigo,
-            'accion_permitida' => $opciones['accion'] ?? null,
-            'direccion_id' => $opciones['direccion_id'] ?? null,
+            'accion_permitida' => $accion,
+            'direccion_id' => $direccionId,
             'expira_en' => now()->addHours($horas),
             'creado_por' => $opciones['usuario_id'] ?? null,
         ]);
 
-                $this->auditoria->ejecutar(
+        $this->auditoria->ejecutar(
             $cliente->id,
             'generar_enlace',
             $opciones['usuario_id'] ?? null,
-            $opciones['direccion_id'] ?? null,
+            $direccionId,
             null,
             null,
             [

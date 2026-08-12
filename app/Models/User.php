@@ -32,6 +32,7 @@ class User extends Authenticatable
         'firma_ruta',
         'catalogo_sexo_id',
         'area_id',
+        'departamento_id',
         'excluir_asignacion_tickets',
     ];
 
@@ -74,6 +75,31 @@ class User extends Authenticatable
     public function area(): BelongsTo
     {
         return $this->belongsTo(Area::class, 'area_id');
+    }
+
+    /** Departamento principal (marca / tickets térmicos). */
+    public function departamento(): BelongsTo
+    {
+        return $this->belongsTo(Departamento::class, 'departamento_id');
+    }
+
+    /**
+     * Departamento para branding: principal, o el único asignado.
+     * Si hay varios sin principal, null (caller usa fallback de logos).
+     */
+    public function departamentoParaBranding(): ?Departamento
+    {
+        $this->loadMissing(['departamento', 'departamentos']);
+
+        if ($this->departamento) {
+            return $this->departamento;
+        }
+
+        if ($this->departamentos->count() === 1) {
+            return $this->departamentos->first();
+        }
+
+        return null;
     }
 
     // Quiénes son los gerentes de este usuario

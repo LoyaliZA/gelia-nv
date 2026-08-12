@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Cliente;
 use App\Services\Clientes\Direcciones\GestionDireccionesClienteService;
-use App\Support\ControlPedidos\FormatearDomicilioCliente;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -132,29 +131,26 @@ class ClienteApiController extends Controller
             return response()->json(['encontrado' => false], 404);
         }
 
-        $domicilio = FormatearDomicilioCliente::ejecutar($cliente);
-        $cp = FormatearDomicilioCliente::codigoPostal($cliente);
+        $direcciones = app(GestionDireccionesClienteService::class)
+            ->listarActivasVerificadasPorCliente((int) $cliente->id)
+            ->values()
+            ->all();
 
-        $payload = [
+        $tienePrincipal = collect($direcciones)->contains(fn (array $d) => ! empty($d['es_principal']));
+
+        // Solo catálogo cliente_direcciones (nunca campos legado de contacto).
+        return response()->json([
             'encontrado' => true,
             'id' => $cliente->id,
             'numero_cliente' => $cliente->numero_cliente,
             'nombre' => $cliente->nombre,
-            'domicilio_entrega' => $domicilio,
-            'codigo_postal' => $cp,
-            'tiene_direccion' => filled($domicilio) || filled($cp),
-            'direcciones_normalizadas' => (bool) config('control_pedidos.direcciones_normalizadas'),
-            'direcciones' => [],
-        ];
-
-        if (config('control_pedidos.direcciones_normalizadas')) {
-            $payload['direcciones'] = app(GestionDireccionesClienteService::class)
-                ->listarActivasVerificadasPorCliente((int) $cliente->id)
-                ->values()
-                ->all();
-        }
-
-        return response()->json($payload);
+            'direcciones_normalizadas' => true,
+            'direcciones' => $direcciones,
+            'tiene_direccion' => count($direcciones) > 0,
+            'tiene_direccion_principal' => $tienePrincipal,
+            'domicilio_entrega' => null,
+            'codigo_postal' => null,
+        ]);
     }
 
     private function aplicarBusqueda($query, string $termino): void

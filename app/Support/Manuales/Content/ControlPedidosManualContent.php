@@ -61,8 +61,8 @@ class ControlPedidosManualContent
             ],
             'ramas' => [
                 ['nombre' => 'Rechazo auxiliar', 'detalle' => 'PENDIENTE_AUXILIAR → RECHAZADO_VENDEDORA. Limpia remisión y validación de pago. La vendedora corrige y reenvía.'],
-                ['nombre' => 'Error de datos (cola)', 'detalle' => 'Prioridad vendedora → auxiliar → guías. Cambia fase según dueño activo e invalida guía/remisión cuando corresponde.'],
-                ['nombre' => 'Incidencia empaque', 'detalle' => 'EN_CEDIS → INCIDENCIA_CEDIS. Sigue siendo empacable tras resolver o continuar.'],
+                ['nombre' => 'Error de datos (cola)', 'detalle' => 'Prioridad vendedora → auxiliar → CEDIS → guías. Cambia fase según dueño activo e invalida guía/remisión cuando corresponde.'],
+                ['nombre' => 'Error CEDIS / empaque', 'detalle' => 'EN_CEDIS → INCIDENCIA_CEDIS (Error CEDIS). Sigue siendo empacable tras resolver o continuar.'],
                 ['nombre' => 'Resguardo', 'detalle' => 'Flag es_resguardo bloquea empaque y guía hasta liberar. estatus_envio puede ser pendiente_liberacion.'],
                 ['nombre' => 'Municipio diferido / anexo', 'detalle' => 'Sin costo al enviar: pendiente_regularizacion → anexar pago → revisión auxiliar.'],
             ],
@@ -75,9 +75,9 @@ class ControlPedidosManualContent
         return [
             ['fase' => 'BORRADOR', 'etiqueta' => 'Borrador', 'nota' => 'Editable por vendedora; eliminable'],
             ['fase' => 'PENDIENTE_AUXILIAR', 'etiqueta' => 'Pendiente Auxiliar', 'nota' => 'Auditoría: pago + remisión'],
-            ['fase' => 'EN_CEDIS', 'etiqueta' => 'En CEDIS', 'nota' => 'Empaque / incidencia / apartado'],
+            ['fase' => 'EN_CEDIS', 'etiqueta' => 'En CEDIS', 'nota' => 'Empaque / reportar error / apartado'],
             ['fase' => 'RECHAZADO_VENDEDORA', 'etiqueta' => 'Rechazado', 'nota' => 'Corregir y reenviar'],
-            ['fase' => 'INCIDENCIA_CEDIS', 'etiqueta' => 'Incidencia CEDIS', 'nota' => 'Problema de empaque reportado'],
+            ['fase' => 'INCIDENCIA_CEDIS', 'etiqueta' => 'Error CEDIS', 'nota' => 'Problema de empaque/pesaje reportado'],
             ['fase' => 'PENDIENTE_DE_GUIA', 'etiqueta' => 'Pendiente de guía', 'nota' => 'Empacado; falta rastreo'],
             ['fase' => 'PENDIENTE_DE_ENVIO', 'etiqueta' => 'Pendiente de envío', 'nota' => 'Listo para marcar enviado'],
             ['fase' => 'ENVIADO', 'etiqueta' => 'Enviado', 'nota' => 'Fin operativo actual'],
@@ -149,7 +149,7 @@ class ControlPedidosManualContent
                 ],
                 'errores_que_te_llegan' => [
                     'Error de remisión (campos remision / folio_remision) desde CEDIS o guías.',
-                    'Alertas de incidencia de empaque (informativas).',
+                    'Alertas de error CEDIS / empaque (informativas).',
                 ],
             ],
             [
@@ -157,19 +157,18 @@ class ControlPedidosManualContent
                 'cargo' => 'CEDIS',
                 'titulo' => 'Control de empaque y envío',
                 'ruta' => '/control-pedidos/cedis',
-                'resumen' => 'Respondes pesajes, empacas (incluye grupo principal+complementos), reportas incidencias, apartas resguardos y marcas envíos.',
+                'resumen' => 'Respondes pesajes, empacas (incluye grupo principal+complementos), reportas errores, apartas resguardos y marcas envíos.',
                 'pasos' => [
                     ['titulo' => 'Responder pesaje', 'detalle' => 'Peso, cajas, tipo de caja → pesaje_listo para la vendedora.'],
                     ['titulo' => 'Empacar', 'detalle' => 'Requiere pago validado + remisión. Bloqueado si es_resguardo abierto. Destino: PENDIENTE_DE_GUIA o PENDIENTE_DE_ENVIO.'],
-                    ['titulo' => 'Incidencia', 'detalle' => 'Solo desde EN_CEDIS → INCIDENCIA_CEDIS.'],
+                    ['titulo' => 'Reportar error', 'detalle' => 'Campos incorrectos (incluye CEDIS) → dueño correspondiente; Error CEDIS si es empaque/pesaje.'],
                     ['titulo' => 'Marcar enviado', 'detalle' => 'Solo en PENDIENTE_DE_ENVIO, empacado, y con guía si ofrece rastreo.'],
                     ['titulo' => 'Revertir empacado', 'detalle' => 'Solo sin número de guía asignado; vuelve a EN_CEDIS.'],
                 ],
                 'elementos' => [
                     ['nombre' => 'Marcar empacado', 'uso' => 'Avanza fase según rastreo/guía.'],
                     ['nombre' => 'Marcar enviado', 'uso' => 'Cierre operativo → ENVIADO.'],
-                    ['nombre' => 'Reportar incidencia', 'uso' => 'Documenta problema de empaque.'],
-                    ['nombre' => 'Reportar error de datos', 'uso' => 'Devuelve al dueño correcto (vendedora/auxiliar/guías).'],
+                    ['nombre' => 'Reportar error', 'uso' => 'Documenta campo incorrecto y dueño de corrección.'],
                     ['nombre' => 'Apartado resguardo', 'uso' => 'Evidencia fotográfica de piezas apartadas.'],
                 ],
                 'errores_que_te_llegan' => [
@@ -233,8 +232,8 @@ class ControlPedidosManualContent
     {
         $mapa = [
             'vendedora' => ['pedido_rechazado_auxiliar', 'pedido_error_datos', 'pedido_enviado', 'pedido_pesaje_listo'],
-            'auxiliar' => ['pedido_pendiente_auxiliar', 'pedido_error_remision', 'pedido_incidencia_cedis'],
-            'cedis' => ['pedido_aprobado', 'pedido_consulta_pesaje', 'pedido_pendiente_envio', 'pedido_guia_asignada', 'pedido_error_guia'],
+            'auxiliar' => ['pedido_pendiente_auxiliar', 'pedido_error_remision', 'pedido_error_cedis', 'pedido_incidencia_cedis'],
+            'cedis' => ['pedido_aprobado', 'pedido_consulta_pesaje', 'pedido_pendiente_envio', 'pedido_guia_asignada', 'pedido_error_guia', 'pedido_error_cedis', 'pedido_guia_retraso'],
             'guias' => ['pedido_pendiente_guia', 'pedido_error_guia'],
             'direcciones' => [],
         ];
@@ -255,7 +254,10 @@ class ControlPedidosManualContent
             'pedido_error_datos' => 'Datos de vendedora incorrectos.',
             'pedido_error_remision' => 'Remisión / folio a corregir en auditoría.',
             'pedido_error_guia' => 'Error grave de guía; no enviar hasta corregir.',
-            'pedido_incidencia_cedis' => 'Incidencia de empaque reportada.',
+            'pedido_error_cedis' => 'Error CEDIS (empaque/pesaje) a corregir.',
+            'pedido_error_estado' => 'Aviso informativo: se reportó un error; solo el responsable corrige.',
+            'pedido_incidencia_cedis' => 'Error de empaque reportado.',
+            'pedido_guia_retraso' => 'Retraso por error/corrección post-guía.',
             'pedido_pendiente_guia' => 'Empacado; falta captura de guía.',
             'pedido_pendiente_envio' => 'Listo para marcar enviado.',
             'pedido_guia_asignada' => 'Guía asignada; pendiente de envío.',

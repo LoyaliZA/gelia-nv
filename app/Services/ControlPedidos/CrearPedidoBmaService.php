@@ -7,8 +7,10 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoTipoOperacionEnvio;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class CrearPedidoBmaService
 {
@@ -17,6 +19,7 @@ class CrearPedidoBmaService
     public function __construct(
         private GenerarFolioPedidoBmaService $folioService,
         private RegistrarHistorialPedidoService $historialService,
+        private SincronizarAplicacionesPedidoSafService $safPedido,
     ) {}
 
     public function ejecutar(array $datos, int $vendedorId): PedidoBma
@@ -54,6 +57,10 @@ class CrearPedidoBmaService
 
             $this->guardarDocumentos($pedido, $datos['comprobantes'] ?? []);
 
+            if (array_key_exists('saf_aplicaciones', $datos)) {
+                $this->safPedido->reservarParaPedido($pedido, $datos['saf_aplicaciones'] ?? [], $vendedorId);
+            }
+
             $this->historialService->registrarCreacion($pedido->id, $vendedorId, $estatusBorrador->id);
 
             if ($principal) {
@@ -62,7 +69,8 @@ class CrearPedidoBmaService
                     $vendedorId,
                     $estatusBorrador->id,
                     $estatusBorrador->id,
-                    "Complemento de {$principal->folio}."
+                    "Complemento de {$principal->folio}.",
+                    AccionesHistorialPedidoBma::COMPLEMENTO
                 );
             }
 

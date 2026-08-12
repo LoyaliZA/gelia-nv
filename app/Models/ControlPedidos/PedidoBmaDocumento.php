@@ -13,6 +13,15 @@ class PedidoBmaDocumento extends Model
     public const TIPO_GUIA = 'guia';
     public const TIPO_EVIDENCIA_APARTADO = 'evidencia_apartado';
     public const TIPO_PDF_PEDIDO = 'pdf_pedido';
+    public const TIPO_ANEXO_PIEZAS = 'anexo_piezas';
+    public const TIPO_EVIDENCIA_PESAJE = 'evidencia_pesaje';
+    public const TIPO_EVIDENCIA_CONDICION = 'evidencia_condicion';
+
+    public const RELACION_REVISION_GENERAL = 'revision_general';
+
+    public const RELACION_REVISION_PRODUCTO = 'revision_producto';
+
+    public const RELACION_ENVIO_CAJA = 'envio_caja';
 
     protected $table = 'pedido_bma_documentos';
 
@@ -24,6 +33,9 @@ class PedidoBmaDocumento extends Model
         'mime_type',
         'tamano_bytes',
         'orden',
+        'comentario',
+        'relacion_tipo',
+        'relacion_id',
     ];
 
     protected $casts = [
@@ -38,8 +50,16 @@ class PedidoBmaDocumento extends Model
         return $this->belongsTo(PedidoBma::class, 'pedido_bma_id');
     }
 
+    /** URL autenticada (gate VisibilidadPedidoBma); fallback público solo si falta id. */
     public function getUrlAttribute(): string
     {
+        if ($this->pedido_bma_id && $this->id) {
+            return route('control_pedidos.documentos.show', [
+                'pedidoBma' => $this->pedido_bma_id,
+                'documento' => $this->id,
+            ]);
+        }
+
         return Storage::disk('public')->url($this->ruta_archivo);
     }
 }

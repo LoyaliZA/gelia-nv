@@ -29,6 +29,13 @@ class IniciarImportacionAlmacenService
             $rules['mapping.descripcion'] = 'required|string';
         }
 
+        if ($tipo === 'ventas') {
+            $rules['mapping.periodo'] = 'required|string';
+            $rules['mapping.monto_venta'] = 'required|string';
+            // codigo_almacen o almacen_id
+            $rules['almacen_id'] = 'nullable|exists:almacenes,id';
+        }
+
         if (in_array($tipo, ['inventarios', 'costos'], true)) {
             $rules['almacen_id'] = 'required|exists:almacenes,id';
             if ($tipo === 'inventarios') {
@@ -39,11 +46,18 @@ class IniciarImportacionAlmacenService
 
         $validated = $request->validate($rules);
 
+        // validate() solo conserva claves con regla (mapping.sku, etc.); costo/precio
+        // y demás opcionales llegan en el request pero se pierden en validated().
+        $mapping = $request->input('mapping', []);
+        if (! is_array($mapping)) {
+            $mapping = [];
+        }
+
         return $this->ejecutarDesdeRuta(
             $request->user()->id,
             $tipo,
             $validated['file_path'],
-            $validated['mapping'],
+            $mapping,
             isset($validated['almacen_id']) ? (int) $validated['almacen_id'] : null,
             conservarOrigen: false,
         );

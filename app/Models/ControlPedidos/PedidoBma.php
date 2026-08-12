@@ -5,6 +5,8 @@ namespace App\Models\ControlPedidos;
 use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\Cliente;
+use App\Models\SaldosAFavor\PedidoBmaPago;
+use App\Models\SaldosAFavor\SafPedidoAplicacion;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -79,8 +81,12 @@ class PedidoBma extends Model
         'pesaje_solicitado_at',
         'pesaje_respondido_at',
         'pesaje_respondido_por_id',
+        'estado_fisico_general',
+        'comentario_fisico_general',
+        'tiene_observaciones_fisicas',
         'motivo_repesaje',
         'aplica_seguro',
+        'cliente_proporciona_guia',
         'costo_seguro',
         'total_a_cobrar',
         'catalogo_estatus_pedido_id',
@@ -102,6 +108,11 @@ class PedidoBma extends Model
         'detalle_error_datos',
         'error_datos_at',
         'error_datos_por_id',
+        'motivo_cancelacion',
+        'comentario_cancelacion',
+        'resolucion_financiera_cancelacion',
+        'cancelado_por_id',
+        'cancelado_at',
     ];
 
     protected $casts = [
@@ -117,10 +128,13 @@ class PedidoBma extends Model
         'campos_incorrectos' => 'array',
         'fecha' => 'date',
         'aplica_seguro' => 'boolean',
+        'cliente_proporciona_guia' => 'boolean',
         'es_resguardo' => 'boolean',
         'resguardo_apartado_at' => 'datetime',
         'anexar_remision' => 'boolean',
         'envia_a_otra_persona' => 'boolean',
+        'tiene_observaciones_fisicas' => 'boolean',
+        'cancelado_at' => 'datetime',
         'saldo_a_favor' => 'decimal:2',
         'peso_real_kg' => 'decimal:4',
         'peso_volumetrico_kg' => 'decimal:4',
@@ -171,6 +185,57 @@ class PedidoBma extends Model
     public function anexosEnvio(): HasMany
     {
         return $this->hasMany(PedidoBmaAnexoEnvio::class, 'pedido_bma_id')->orderByDesc('created_at');
+    }
+
+    public function pagosExhibicion(): HasMany
+    {
+        return $this->hasMany(PedidoBmaPago::class, 'pedido_bma_id')->orderBy('numero_exhibicion');
+    }
+
+    /**
+     * Bancos/métodos derivados de exhibiciones; fallback al banco general legacy.
+     *
+     * @return list<string>
+     */
+    public function fuentesPagoResumen(): array
+    {
+        $this->loadMissing(['pagosExhibicion.banco', 'banco']);
+
+        $labels = [];
+        $seen = [];
+        foreach ($this->pagosExhibicion as $pago) {
+            $label = $pago->banco?->nombre
+                ?? PedidoBmaPago::labelForma($pago->forma_pago);
+            if ($label === null || $label === '') {
+                continue;
+            }
+            $key = mb_strtolower($label);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $labels[] = $label;
+        }
+
+        if ($labels === [] && $this->banco?->nombre) {
+            $labels[] = $this->banco->nombre;
+        }
+
+        return $labels;
+    }
+
+    public function puedeEditarExhibicionesPago(): bool
+    {
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
+        ], true);
+    }
+
+    public function safAplicaciones(): HasMany
+    {
+        return $this->hasMany(SafPedidoAplicacion::class, 'pedido_bma_id');
     }
 
     public function anexoEnvioPendiente(): HasOne
@@ -342,6 +407,11 @@ class PedidoBma extends Model
         return $this->hasMany(PedidoBmaCaja::class, 'pedido_bma_id')->orderBy('orden');
     }
 
+    public function revisionesProducto(): HasMany
+    {
+        return $this->hasMany(PedidoBmaRevisionProducto::class, 'pedido_bma_id')->orderBy('orden');
+    }
+
     public function pesajeRespondidoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'pesaje_respondido_por_id');
@@ -364,9 +434,25 @@ class PedidoBma extends Model
         return $this->pdfPedido()->exists();
     }
 
+    public function anexoPiezas(): HasMany
+    {
+        return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
+            ->where('tipo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS)
+            ->orderBy('orden');
+    }
+
+    public function tieneAnexoPiezas(): bool
+    {
+        return $this->anexoPiezas()->exists();
+    }
+
     public function puedeSolicitarPesaje(): bool
     {
-        if (! $this->esEditablePorVendedora()) {
+        $fase = $this->estatus?->fase_ciclo;
+        if (! in_array($fase, [
+            CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
+        ], true)) {
             return false;
         }
 
@@ -400,6 +486,7 @@ class PedidoBma extends Model
 
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
             CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
             CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
             CatalogoEstatusPedido::FASE_EN_CEDIS,
@@ -407,14 +494,81 @@ class PedidoBma extends Model
         ], true);
     }
 
+    public function puedeEliminarPreVenta(): bool
+    {
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+        ], true);
+    }
+
+    /**
+     * Cancelación directa pre-hitos (política 1A).
+     * Bloquea si ya hay guía/rastreo o fases avanzadas; permite resguardo sin guía.
+     */
+    public function puedeCancelarDirecto(): bool
+    {
+        $this->loadMissing('estatus');
+        $fase = $this->estatus?->fase_ciclo;
+
+        if ($fase === CatalogoEstatusPedido::FASE_CANCELADO || $this->cancelado_at) {
+            return false;
+        }
+
+        if ($this->numero_rastreo || in_array($fase, [
+            CatalogoEstatusPedido::FASE_ENVIADO,
+            CatalogoEstatusPedido::FASE_ENTREGADO,
+            CatalogoEstatusPedido::FASE_EN_RUTA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+        ], true)) {
+            return false;
+        }
+
+        if (in_array($fase, [
+            CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
+        ], true)) {
+            return true;
+        }
+
+        // Resguardo apartado en flujo temprano, sin guía.
+        if ($this->es_resguardo && in_array($fase, [
+            CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
+        ], true)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function puedeVolverABorrador(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE;
+    }
+
     public function historial(): HasMany
     {
         return $this->hasMany(PedidoBmaHistorialEstado::class, 'pedido_bma_id')->orderByDesc('created_at');
     }
 
+    public function errores(): HasMany
+    {
+        return $this->hasMany(PedidoBmaError::class, 'pedido_bma_id')->orderByDesc('reportado_at');
+    }
+
     public function pagoValidadoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'pago_validado_por_id');
+    }
+
+    public function canceladoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelado_por_id');
     }
 
     public function empacadoPor(): BelongsTo
@@ -490,6 +644,7 @@ class PedidoBma extends Model
     {
         return $this->empacado_at !== null && in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
             CatalogoEstatusPedido::FASE_ENTREGADO,
             CatalogoEstatusPedido::FASE_ENVIADO,
@@ -505,9 +660,18 @@ class PedidoBma extends Model
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_EN_CEDIS,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
             CatalogoEstatusPedido::FASE_ENVIADO,
         ], true);
+    }
+
+    public function puedeCargarGuiaCliente(): bool
+    {
+        return (bool) $this->cliente_proporciona_guia
+            && empty($this->numero_rastreo)
+            && ! $this->es_resguardo
+            && $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE;
     }
 
     public function guiaBloqueadaPorResguardo(): bool
@@ -524,7 +688,7 @@ class PedidoBma extends Model
 
     public function puedeAsignarGuia(): bool
     {
-        if ($this->es_resguardo || !empty($this->numero_rastreo)) {
+        if ($this->es_resguardo || !empty($this->numero_rastreo) || $this->cliente_proporciona_guia) {
             return false;
         }
 
@@ -561,6 +725,7 @@ class PedidoBma extends Model
 
         return in_array($fase, [
             CatalogoEstatusPedido::FASE_BORRADOR,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
             CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
         ], true);
     }
@@ -568,6 +733,11 @@ class PedidoBma extends Model
     public function esBorrador(): bool
     {
         return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_BORRADOR;
+    }
+
+    public function esPesajePendiente(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE;
     }
 
     public function esGestionablePorCedis(): bool
@@ -580,6 +750,10 @@ class PedidoBma extends Model
 
     public function ofreceRastreo(): bool
     {
+        if ($this->cliente_proporciona_guia) {
+            return true;
+        }
+
         if ($this->paqueteria) {
             return $this->paqueteria->ofreceRastreo();
         }
@@ -613,6 +787,7 @@ class PedidoBma extends Model
     {
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
             CatalogoEstatusPedido::FASE_ENTREGADO,
         ], true) && empty($this->numero_rastreo);

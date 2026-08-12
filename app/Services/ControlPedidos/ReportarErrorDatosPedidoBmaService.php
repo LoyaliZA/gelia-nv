@@ -5,9 +5,11 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Models\ControlPedidos\PedidoBmaError;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class ReportarErrorDatosPedidoBmaService
 {
@@ -21,7 +23,8 @@ class ReportarErrorDatosPedidoBmaService
      */
     public function ejecutar(PedidoBma $pedido, int $usuarioId, array $campos, string $detalle = ''): PedidoBma
     {
-        $campos = CamposIncorrectosPedidoBma::filtrar($campos);
+        $pedido->loadMissing('origen');
+        $campos = CamposIncorrectosPedidoBma::filtrarParaPedido($campos, $pedido);
         $detalle = trim($detalle);
 
         if ($campos === [] && $detalle === '') {
@@ -29,7 +32,7 @@ class ReportarErrorDatosPedidoBmaService
         }
 
         if ($campos === []) {
-            throw new \InvalidArgumentException('Seleccione al menos un dato incorrecto.');
+            throw new \InvalidArgumentException('Seleccione al menos un dato incorrecto válido para el origen de este pedido.');
         }
 
         $fase = $pedido->estatus?->fase_ciclo;
@@ -53,17 +56,21 @@ class ReportarErrorDatosPedidoBmaService
         // La auxiliar no se reporta a sí misma: remisión se corrige en su bandeja, no vía este flujo.
         if ($duenoActivo === CamposIncorrectosPedidoBma::DUENO_AUXILIAR
             && $fase === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR) {
-            throw new \InvalidArgumentException('Seleccione datos de la vendedora o de guía. La remisión se corrige aquí mismo en auditoría.');
+            throw new \InvalidArgumentException('Seleccione datos de la vendedora, CEDIS o de guía. La remisión se corrige aquí mismo en auditoría.');
         }
 
         $destino = CamposIncorrectosPedidoBma::destinoPara($duenoActivo);
         $faseDestino = $destino['fase'];
-        // Sin empaque aún no puede vivir en PENDIENTE_DE_GUIA: se queda en CEDIS con la cola marcada.
         if ($duenoActivo === CamposIncorrectosPedidoBma::DUENO_GUIAS && $pedido->empacado_at === null) {
             $faseDestino = CatalogoEstatusPedido::FASE_EN_CEDIS;
         }
 
-        return DB::transaction(function () use ($pedido, $usuarioId, $campos, $detalle, $duenoActivo, $destino, $faseDestino) {
+        $teniaGuia = ! empty($pedido->numero_rastreo)
+            || $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_GUIA)->exists();
+
+        return DB::transaction(function () use (
+            $pedido, $usuarioId, $campos, $detalle, $duenoActivo, $destino, $faseDestino, $teniaGuia
+        ) {
             $estatusAnterior = $pedido->estatus;
             $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
 
@@ -75,7 +82,7 @@ class ReportarErrorDatosPedidoBmaService
             $resumenCampos = implode(', ', $etiquetas);
             $duenos = CamposIncorrectosPedidoBma::duenosEnCola($campos);
             $colaPendiente = array_slice($duenos, 1);
-            $comentario = "Error de datos reportado ({$destino['etiqueta']}): {$resumenCampos}";
+            $comentario = "Error reportado ({$destino['etiqueta']}): {$resumenCampos}";
             if ($detalle !== '') {
                 $comentario .= ". Detalle: {$detalle}";
             }
@@ -96,7 +103,14 @@ class ReportarErrorDatosPedidoBmaService
                 'motivo_rechazo' => $comentario,
             ];
 
-            if (CamposIncorrectosPedidoBma::invalidanGuia($campos) && ! empty($pedido->numero_rastreo)) {
+            if ($duenoActivo === CamposIncorrectosPedidoBma::DUENO_CEDIS) {
+                $attrs['detalle_incidencia_empaque'] = $detalle !== '' ? $detalle : $resumenCampos;
+                $attrs['incidencia_empaque_at'] = now();
+                $attrs['incidencia_empaque_por_id'] = $usuarioId;
+            }
+
+            $invalidaGuia = CamposIncorrectosPedidoBma::invalidanGuia($campos) && $teniaGuia;
+            if ($invalidaGuia) {
                 $guias = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_GUIA)->get();
                 foreach ($guias as $guia) {
                     $guia->update([
@@ -105,14 +119,17 @@ class ReportarErrorDatosPedidoBmaService
                 }
                 $attrs['numero_rastreo'] = null;
                 $attrs['guia_subida_at'] = null;
-                $attrs['guia_retraso'] = false;
                 $attrs['guia_corregida_at'] = null;
                 $attrs['guia_corregida_por_id'] = null;
             }
 
+            // Error detectado después de generar guía → retraso + aviso CEDIS.
+            if ($teniaGuia) {
+                $attrs['guia_retraso'] = true;
+            }
+
             if (CamposIncorrectosPedidoBma::invalidanRemision($campos)
                 || $duenoActivo === CamposIncorrectosPedidoBma::DUENO_VENDEDORA) {
-                // Al devolver a vendedora (como el rechazo clásico) hay que revalidar pago/remisión.
                 $this->eliminarRemisiones($pedido);
                 $attrs['pago_validado_at'] = null;
                 $attrs['pago_validado_por_id'] = null;
@@ -120,16 +137,20 @@ class ReportarErrorDatosPedidoBmaService
 
             $pedido->update($attrs);
 
+            $this->registrarBitacora($pedido, $usuarioId, $campos, $detalle);
+
             $this->historialService->registrarTransicion(
                 $pedido->id,
                 $usuarioId,
                 $estatusAnterior,
                 $estatusNuevo,
-                $comentario
+                $comentario,
+                AccionesHistorialPedidoBma::ERROR_DATOS
             );
 
             $pedido = $pedido->fresh([
                 'cliente', 'estatus', 'vendedor', 'documentos', 'paqueteria', 'direccionVigente',
+                'errores',
             ]);
 
             $activos = CamposIncorrectosPedidoBma::camposDeDueno($campos, $duenoActivo);
@@ -149,8 +170,92 @@ class ReportarErrorDatosPedidoBmaService
                 ]
             );
 
+            $this->notificarInvolucradosEstado(
+                $pedido,
+                $usuarioId,
+                $duenoActivo,
+                $resumenCampos,
+                $detalle,
+                $q
+            );
+
+            if ($teniaGuia) {
+                $this->notificarService->ejecutar(
+                    $pedido,
+                    'pedido_guia_retraso',
+                    'Se reportó un error después de generar la guía; el pedido queda con retraso.',
+                    ['control_pedidos.cedis'],
+                    $usuarioId,
+                    false,
+                    ['url' => '/control-pedidos/cedis?q='.$q]
+                );
+            }
+
             return $pedido;
         });
+    }
+
+    /**
+     * @param  list<string>  $campos
+     */
+    private function registrarBitacora(PedidoBma $pedido, int $usuarioId, array $campos, string $detalle): void
+    {
+        foreach (CamposIncorrectosPedidoBma::duenosEnCola($campos) as $dueno) {
+            $camposDueno = CamposIncorrectosPedidoBma::camposDeDueno($campos, $dueno);
+            PedidoBmaError::create([
+                'pedido_bma_id' => $pedido->id,
+                'campos' => $camposDueno,
+                'descripcion' => $detalle !== '' ? $detalle : null,
+                'reportado_por_id' => $usuarioId,
+                'responsable_dueno' => $dueno,
+                'responsable_user_id' => $dueno === CamposIncorrectosPedidoBma::DUENO_VENDEDORA
+                    ? $pedido->vendedor_id
+                    : null,
+                'reportado_at' => now(),
+                'estatus' => PedidoBmaError::ESTATUS_ABIERTO,
+            ]);
+        }
+    }
+
+    private function notificarInvolucradosEstado(
+        PedidoBma $pedido,
+        int $usuarioId,
+        string $duenoActivo,
+        string $resumenCampos,
+        string $detalle,
+        string $q
+    ): void {
+        $extra = $detalle !== '' ? " Detalle: {$detalle}" : '';
+        $mensaje = "Error reportado (corrige {$duenoActivo}): {$resumenCampos}. Solo el responsable puede corregir.{$extra}";
+
+        $permisos = array_values(array_unique(array_filter([
+            'control_pedidos.auditar',
+            'control_pedidos.cedis',
+            'control_pedidos.delegado',
+        ])));
+
+        $destinoActivo = CamposIncorrectosPedidoBma::destinoPara($duenoActivo);
+        // Excluir permisos del dueño activo para no duplicar su alerta operativa.
+        $permisosInfo = array_values(array_diff($permisos, $destinoActivo['permisos']));
+
+        $incluirVendedora = $duenoActivo !== CamposIncorrectosPedidoBma::DUENO_VENDEDORA;
+
+        if ($permisosInfo === [] && ! $incluirVendedora) {
+            return;
+        }
+
+        $this->notificarService->ejecutar(
+            $pedido,
+            'pedido_error_estado',
+            $mensaje,
+            $permisosInfo,
+            $usuarioId,
+            $incluirVendedora,
+            [
+                'url' => '/control-pedidos?q='.$q,
+                'solo_informativo' => true,
+            ]
+        );
     }
 
     private function mensajeAlerta(string $dueno, string $resumen, string $detalle): string
@@ -160,6 +265,7 @@ class ReportarErrorDatosPedidoBmaService
         return match ($dueno) {
             CamposIncorrectosPedidoBma::DUENO_VENDEDORA => "Error de datos: {$resumen}. Corrija y reenvíe.{$extra}",
             CamposIncorrectosPedidoBma::DUENO_AUXILIAR => "Error de remisión: {$resumen}. Corrija antes de aprobar.{$extra}",
+            CamposIncorrectosPedidoBma::DUENO_CEDIS => "Error CEDIS: {$resumen}. Corrija en empaque/pesaje.{$extra}",
             CamposIncorrectosPedidoBma::DUENO_GUIAS => "Error de guía grave: {$resumen}. No enviar hasta corregir.{$extra}",
             default => "Error de datos: {$resumen}.{$extra}",
         };

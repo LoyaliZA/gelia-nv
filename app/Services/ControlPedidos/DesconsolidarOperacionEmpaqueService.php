@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\OperacionEmpaque;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class DesconsolidarOperacionEmpaqueService
 {
@@ -35,7 +36,8 @@ class DesconsolidarOperacionEmpaqueService
                     $usuarioId,
                     $estatusId,
                     $estatusId,
-                    "Desconsolidado de operación {$operacion->folio_operacion}."
+                    "Desconsolidado de operación {$operacion->folio_operacion}.",
+                    AccionesHistorialPedidoBma::DESCONSOLIDACION
                 );
             }
 

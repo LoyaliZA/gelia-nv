@@ -22,14 +22,23 @@ import {
     tieneErrorGuiaReportado,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
-import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/ModalVistaPreviaDocumento';
 import BotonCopiar from '../../Partials/BotonCopiar';
+import { textoDireccionParaGuia, textoDomicilioCompleto } from '../../Partials/textoDireccionGuia';
 
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
+
+const ETIQUETA_DOC = {
+    remision: 'Remisión',
+    comprobante: 'Comprobante',
+    guia: 'Guía PDF',
+    pdf_pedido: 'PDF pedido',
+    anexo_piezas: 'Anexo piezas',
+    evidencia_apartado: 'Evidencia apartado',
+};
 
 const CampoConCopia = ({ label, value, copiar = true }) => (
     <div>
@@ -41,8 +50,15 @@ const CampoConCopia = ({ label, value, copiar = true }) => (
     </div>
 );
 
-const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
-const comprobantesDe = (pedido) => (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' || !d.tipo);
+const documentosVisibles = (pedido) => {
+    const docs = pedido?.documentos || [];
+    const orden = ['remision', 'pdf_pedido', 'anexo_piezas', 'comprobante', 'guia', 'evidencia_apartado'];
+    return [...docs].sort((a, b) => {
+        const ia = orden.indexOf(a.tipo);
+        const ib = orden.indexOf(b.tipo);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+};
 
 const modoAccionGuia = (pedido) => {
     if (pedido.es_resguardo) return 'resguardo';
@@ -220,11 +236,13 @@ export default function ModalDetalleDelegado({
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
     const badgeResguardo = pedido.es_resguardo ? badgeResguardoSemantico() : null;
     const badgeErrorGuia = tieneErrorGuiaReportado(pedido) ? badgeCorregirGuia() : null;
-    const remision = remisionDe(pedido);
-    const comprobantes = comprobantesDe(pedido);
+    const docs = documentosVisibles(pedido);
     const dir = pedido.direccion_vigente || pedido.direccionVigente;
     const modo = modoAccionGuia(pedido);
     const puedeReportar = ['PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO', 'EN_CEDIS'].includes(fase) && !pedido.es_resguardo;
+    const codigoDir = codigoDireccionCliente(pedido.cliente?.numero_cliente, dir?.numero_direccion);
+    const direccionTexto = textoDireccionParaGuia(dir, pedido.domicilio_entrega);
+    const domicilioCompleto = textoDomicilioCompleto(dir, pedido.domicilio_entrega, pedido.codigo_postal);
 
     const recargarPedido = () => {
         router.reload({
@@ -237,11 +255,6 @@ export default function ModalDetalleDelegado({
             },
         });
     };
-
-    const domicilioTexto = dir
-        ? [dir.calle, dir.numero_exterior, dir.colonia, dir.ciudad || dir.municipio, dir.estado, dir.codigo_postal]
-            .filter(Boolean).join(', ')
-        : pedido.domicilio_entrega;
 
     return createPortal(
         <>
@@ -283,69 +296,28 @@ export default function ModalDetalleDelegado({
                                 </p>
                             </div>
                         )}
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Identificación</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <CampoConCopia label="ID pedido" value={pedido.id} />
-                                <CampoConCopia label="Folio" value={pedido.folio} />
-                                <CampoConCopia label="Folio remisión" value={pedido.folio_remision} />
-                                <CampoConCopia label="N° Cliente" value={pedido.cliente?.numero_cliente} />
-                                <CampoConCopia label="Cliente" value={pedido.cliente?.nombre} />
-                                <CampoConCopia label="Almacén" value={etiquetaAlmacen(pedido.almacen)} copiar={false} />
-                            </div>
-                        </section>
 
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Envío</p>
+                            <p className={SECCION}>Datos para paquetería</p>
+                            {codigoDir && (
+                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mb-3">
+                                    Dir. {codigoDir}
+                                </p>
+                            )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <CampoConCopia label="Paquetería" value={pedido.paqueteria?.nombre} />
                                 <CampoConCopia label="Tipo de guía" value={pedido.tipo_guia?.nombre || pedido.tipoGuia?.nombre} />
-                                <CampoConCopia label="Código postal" value={pedido.codigo_postal || dir?.codigo_postal} />
                                 <CampoConCopia label="Destinatario" value={dir?.nombre_destinatario || pedido.envia_otra_persona} />
                                 <CampoConCopia label="Teléfono" value={dir?.telefono_destinatario} />
+                                <CampoConCopia label="Código postal" value={pedido.codigo_postal || dir?.codigo_postal} />
+                                <CampoConCopia label="Dirección" value={direccionTexto} />
                                 <CampoConCopia label="Referencias" value={dir?.referencias} />
+                                <CampoConCopia label="Indicaciones" value={dir?.indicaciones_entrega} />
                             </div>
-                            <DireccionPedidoResumen
-                                direccion={dir}
-                                domicilioLegacy={pedido.domicilio_entrega}
-                                codigoPostal={pedido.codigo_postal}
-                                codigoDireccion={codigoDireccionCliente(pedido.cliente?.numero_cliente, dir?.numero_direccion)}
-                            />
-                            {domicilioTexto && (
-                                <div className="mt-3">
-                                    <BotonCopiar texto={domicilioTexto} etiqueta="Copiar domicilio completo" />
-                                </div>
+                            {domicilioCompleto && (
+                                <BotonCopiar texto={domicilioCompleto} etiqueta="Copiar domicilio completo" />
                             )}
                         </section>
-
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Costos</p>
-                            <div className="p-4 rounded-xl border theme-border theme-element space-y-2 text-sm">
-                                <div className="flex justify-between theme-text-muted font-bold"><span>Mercancía</span><span>{formatearMoneda(pedido.total_mercancia)}</span></div>
-                                <div className="flex justify-between theme-text-muted font-bold"><span>Envío</span><span>{formatearMoneda(pedido.costo_envio)}</span></div>
-                                <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
-                                    <span>Total</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
-                                </div>
-                            </div>
-                        </section>
-
-                        {(comprobantes.length > 0 || remision) && (
-                            <section className={SECCION_WRAP}>
-                                <p className={SECCION}>Documentos</p>
-                                {comprobantes.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 mb-3">
-                                        {comprobantes.map((doc) => (
-                                            <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
-                                        ))}
-                                    </div>
-                                )}
-                                {remision && (
-                                    <button type="button" onClick={() => setDocPreview(remision)} className={`${BTN_SECONDARY} text-xs outline-none`}>
-                                        Ver remisión
-                                    </button>
-                                )}
-                            </section>
-                        )}
 
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>Guía de rastreo</p>
@@ -383,6 +355,47 @@ export default function ModalDetalleDelegado({
                                 </div>
                             )}
                         </section>
+
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>Identificación</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <CampoConCopia label="ID pedido" value={pedido.id} />
+                                <CampoConCopia label="Folio" value={pedido.folio} />
+                                <CampoConCopia label="Folio remisión" value={pedido.folio_remision} />
+                                <CampoConCopia label="N° Cliente" value={pedido.cliente?.numero_cliente} />
+                                <CampoConCopia label="Cliente" value={pedido.cliente?.nombre} />
+                                <CampoConCopia label="Almacén" value={etiquetaAlmacen(pedido.almacen)} copiar={false} />
+                            </div>
+                        </section>
+
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>Costos</p>
+                            <div className="p-4 rounded-xl border theme-border theme-element space-y-2 text-sm">
+                                <div className="flex justify-between theme-text-muted font-bold"><span>Mercancía</span><span>{formatearMoneda(pedido.total_mercancia)}</span></div>
+                                <div className="flex justify-between theme-text-muted font-bold"><span>Envío</span><span>{formatearMoneda(pedido.costo_envio)}</span></div>
+                                <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
+                                    <span>Total</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>Documentos</p>
+                            {docs.length === 0 ? (
+                                <p className="text-sm theme-text-muted font-bold m-0">Sin documentos</p>
+                            ) : (
+                                <div className="flex flex-wrap gap-3">
+                                    {docs.map((doc) => (
+                                        <div key={doc.id} className="space-y-1">
+                                            <MiniaturaDocumento documento={doc} onVer={setDocPreview} />
+                                            <p className="text-[9px] font-black uppercase theme-text-muted m-0 text-center max-w-[5rem] truncate">
+                                                {ETIQUETA_DOC[doc.tipo] || doc.tipo || 'Doc'}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
                     </div>
 
                     <div className="gelia-modal-footer flex flex-wrap gap-3 p-5 md:p-6 border-t theme-border shrink-0">
@@ -390,7 +403,7 @@ export default function ModalDetalleDelegado({
                         {puedeReportar && (
                             <button
                                 type="button"
-                                onClick={() => { onClose(); onReportarError?.(pedido); }}
+                                onClick={() => onReportarError?.(pedido)}
                                 className={`${BTN_SECONDARY} border border-orange-500/40 text-orange-600 outline-none ml-auto`}
                             >
                                 <AlertTriangle className="w-4 h-4 inline mr-1" /> Reportar error de datos

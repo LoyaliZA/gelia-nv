@@ -10,6 +10,7 @@ import {
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
 } from '../../../utils/geliaTheme';
+import { deferModalAction } from './pedidosBmaStyles';
 import { labelAccionSolicitud, LABELS_ACCION_SOLICITUD } from './DireccionPedidoResumen';
 
 const ACCIONES = Object.keys(LABELS_ACCION_SOLICITUD);
@@ -55,14 +56,15 @@ export default function ModalGenerarLinkDireccion({
     const [cliente, setCliente] = useState(null);
     const [accion, setAccion] = useState('register_first_address');
     const [direccionesCliente, setDireccionesCliente] = useState([]);
+    const [direccionId, setDireccionId] = useState('');
     const [enviando, setEnviando] = useState(false);
     const [enlaceUrl, setEnlaceUrl] = useState('');
     const [error, setError] = useState('');
     const [copiado, setCopiado] = useState(false);
     const debounce = useRef(null);
 
-    const principal = direccionesCliente.find((d) => d.es_principal) || direccionesCliente[0] || null;
     const tieneDirecciones = direccionesCliente.length > 0;
+    const direccionSeleccionada = direccionesCliente.find((d) => String(d.id) === String(direccionId)) || null;
 
     useEffect(() => {
         if (!abierto) {
@@ -71,6 +73,7 @@ export default function ModalGenerarLinkDireccion({
             setCliente(clientePreseleccionado || null);
             setAccion('register_first_address');
             setDireccionesCliente([]);
+            setDireccionId('');
             setEnlaceUrl('');
             setError('');
             setCopiado(false);
@@ -83,6 +86,7 @@ export default function ModalGenerarLinkDireccion({
     useEffect(() => {
         if (!abierto || !cliente?.id) {
             setDireccionesCliente([]);
+            setDireccionId('');
             return;
         }
 
@@ -91,10 +95,12 @@ export default function ModalGenerarLinkDireccion({
                 const dirs = data?.direcciones || [];
                 setDireccionesCliente(dirs);
                 const princ = dirs.find((d) => d.es_principal) || dirs[0];
-                setAccion(princ ? 'update_address' : 'register_first_address');
+                setDireccionId(princ?.id ? String(princ.id) : '');
+                setAccion(dirs.length > 0 ? 'add_address' : 'register_first_address');
             })
             .catch(() => {
                 setDireccionesCliente([]);
+                setDireccionId('');
                 setAccion('register_first_address');
             });
     }, [abierto, cliente?.id]);
@@ -125,17 +131,23 @@ export default function ModalGenerarLinkDireccion({
     const generarEnlace = async () => {
         if (!cliente?.id) return;
 
-        if (accion === 'update_address' && !principal) {
-            setError('Este cliente no tiene dirección verificada para actualizar.');
-            return;
+        if (accion === 'update_address') {
+            if (!tieneDirecciones) {
+                setError('Este cliente no tiene dirección verificada para actualizar.');
+                return;
+            }
+            if (!direccionId) {
+                setError('Seleccione la dirección a actualizar.');
+                return;
+            }
         }
 
         setEnviando(true);
         setError('');
 
         const payload = { accion };
-        if (accion === 'update_address' && principal?.id) {
-            payload.direccion_id = principal.id;
+        if (accion === 'update_address') {
+            payload.direccion_id = Number(direccionId);
         }
 
         try {
@@ -152,6 +164,7 @@ export default function ModalGenerarLinkDireccion({
             }
         } catch (err) {
             const msg = err?.response?.data?.message
+                || err?.response?.data?.errors?.direccion_id?.[0]
                 || err?.response?.data?.errors?.accion?.[0]
                 || 'No se pudo generar el enlace.';
             setError(msg);
@@ -170,7 +183,14 @@ export default function ModalGenerarLinkDireccion({
     };
 
     return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-center`} onClick={onClose}>
+        <div
+            className={`${THEME_MODAL_OVERLAY} items-center`}
+            style={{ zIndex: 'calc(var(--gelia-z-modal) + 20)' }}
+            onClick={(e) => {
+                e.stopPropagation();
+                deferModalAction(onClose);
+            }}
+        >
             <div
                 className={`${THEME_MODAL_SHELL} max-w-lg w-full`}
                 onClick={(e) => e.stopPropagation()}
@@ -185,7 +205,15 @@ export default function ModalGenerarLinkDireccion({
                             Elija la acción del enlace. El cliente solo verá el formulario, sin decisiones.
                         </p>
                     </div>
-                    <button type="button" onClick={onClose} className="p-2 rounded-full theme-text-muted" aria-label="Cerrar">
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            deferModalAction(onClose);
+                        }}
+                        className="p-2 rounded-full theme-text-muted"
+                        aria-label="Cerrar"
+                    >
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -238,7 +266,7 @@ export default function ModalGenerarLinkDireccion({
                                 <button
                                     type="button"
                                     className="mt-2 text-[10px] font-black uppercase tracking-widest theme-text-muted hover:theme-text-main"
-                                    onClick={() => { setCliente(null); setEnlaceUrl(''); setError(''); }}
+                                    onClick={() => { setCliente(null); setEnlaceUrl(''); setError(''); setDireccionId(''); }}
                                 >
                                     Cambiar cliente
                                 </button>
@@ -261,6 +289,31 @@ export default function ModalGenerarLinkDireccion({
                                 </select>
                             </label>
 
+                            {accion === 'update_address' && tieneDirecciones && (
+                                <label className="block">
+                                    <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Dirección a actualizar</span>
+                                    <select
+                                        className={`${THEME_SELECT} mt-1.5 w-full`}
+                                        value={direccionId}
+                                        onChange={(e) => { setDireccionId(e.target.value); setError(''); }}
+                                    >
+                                        <option value="">Seleccione…</option>
+                                        {direccionesCliente.map((d) => (
+                                            <option key={d.id} value={d.id}>
+                                                {d.etiqueta || `Dir. ${d.numero_direccion}`}
+                                                {d.es_principal ? ' · Principal' : ''}
+                                                {d.direccion_resumida ? ` — ${d.direccion_resumida}` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {direccionSeleccionada?.es_principal && (
+                                        <p className="text-xs font-bold text-amber-700 dark:text-amber-300 m-0 mt-2">
+                                            Esta es la dirección principal del cliente. El formulario la actualizará directamente.
+                                        </p>
+                                    )}
+                                </label>
+                            )}
+
                             {accion === 'update_address' && !tieneDirecciones && (
                                 <p className="text-xs font-bold text-amber-700 dark:text-amber-300 m-0">
                                     Este cliente no tiene direcciones verificadas. Use «Registrar primera dirección» o espere a que exista una dirección principal.
@@ -271,13 +324,18 @@ export default function ModalGenerarLinkDireccion({
                                     El cliente ya tiene direcciones registradas. Si continúa, el sistema creará una adicional si el cliente envía el formulario.
                                 </p>
                             )}
+                            {accion === 'add_address' && (
+                                <p className="text-xs theme-text-muted m-0">
+                                    Se creará una dirección adicional sin tocar la principal.
+                                </p>
+                            )}
 
                             {error && (
                                 <p className="text-xs font-bold text-red-600 m-0">{error}</p>
                             )}
                             <button
                                 type="button"
-                                disabled={enviando || (accion === 'update_address' && !principal)}
+                                disabled={enviando || (accion === 'update_address' && (!tieneDirecciones || !direccionId))}
                                 onClick={generarEnlace}
                                 className={`${THEME_BTN_PRIMARY} w-full disabled:opacity-60`}
                             >

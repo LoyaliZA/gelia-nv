@@ -3,17 +3,25 @@
 namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ControlPedidos\CancelarPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\StorePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\UpdatePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\ActualizarCamposDireccionPedidoRequest;
+use App\Http\Requests\ControlPedidos\CargarGuiaClientePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\CompletarEnvioResguardoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SolicitarRepesajePedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\SubirAnexoPiezasPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SubirPdfPedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Services\ControlPedidos\ActualizarPedidoBmaService;
 use App\Services\ControlPedidos\AnexarPagoEnvioPedidoBmaService;
+use App\Services\ControlPedidos\CargarGuiaClientePedidoBmaService;
 use App\Services\ControlPedidos\CrearPedidoBmaService;
+use App\Services\ControlPedidos\Direcciones\ActualizarCamposDireccionPedidoService;
 use App\Services\ControlPedidos\Direcciones\CambiarDireccionPedido;
+use App\Services\ControlPedidos\CancelarPedidoBmaService;
 use App\Services\ControlPedidos\EliminarPedidoBmaService;
 use App\Services\ControlPedidos\EnviarPedidoBmaService;
 use App\Services\ControlPedidos\GestionarPdfPedidoBmaService;
@@ -22,15 +30,21 @@ use App\Services\ControlPedidos\ListarPedidosBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\SolicitarPesajePedidoBmaService;
 use App\Services\ControlPedidos\SolicitarRepesajePedidoBmaService;
+use App\Services\ControlPedidos\VolverBorradorPedidoBmaService;
+use App\Support\Clientes\FormatearDireccionEstructurada;
+use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use Rap2hpoutre\FastExcel\FastExcel;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class PedidoBmaController extends Controller
 {
@@ -129,7 +143,11 @@ class PedidoBmaController extends Controller
                 'paqueteria:id,nombre',
             ])
             ->where('cliente_id', $clienteId)
-            ->whereNull('pedido_principal_id')
+            ->whereNull('pedido_principal_id');
+
+        VisibilidadPedidoBma::aplicarAlcanceListadoBma($pedidos, Auth::user());
+
+        $pedidos = $pedidos
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($inner) use ($q) {
                     $inner->where('folio', 'like', "%{$q}%")
@@ -144,7 +162,7 @@ class PedidoBmaController extends Controller
                 'origen_id', 'almacen_id', 'cliente_direccion_id', 'domicilio_entrega',
                 'codigo_postal', 'catalogo_paqueteria_id', 'catalogo_tipo_guia_id',
                 'catalogo_zona_id', 'catalogo_tipo_caja_id', 'envia_a_otra_persona',
-                'envia_otra_persona', 'anexar_remision',
+                'envia_otra_persona', 'anexar_remision', 'vendedor_id',
             ]);
 
         return response()->json(['data' => $pedidos]);
@@ -241,6 +259,61 @@ class PedidoBmaController extends Controller
         return redirect()->back()->with('success', 'Dirección del pedido actualizada.');
     }
 
+    public function actualizarCamposDireccion(
+        ActualizarCamposDireccionPedidoRequest $request,
+        ActualizarCamposDireccionPedidoService $service,
+    ): JsonResponse {
+        $datos = $request->validated();
+        $pedido = ! empty($datos['pedido_id'])
+            ? PedidoBma::query()->findOrFail((int) $datos['pedido_id'])
+            : null;
+
+        try {
+            $resultado = $service->ejecutar(
+                (int) $datos['cliente_id'],
+                (int) $datos['cliente_direccion_id'],
+                $datos,
+                Auth::id(),
+                $pedido,
+                $datos['motivo'] ?? null,
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $dir = $resultado['direccion'];
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Dirección actualizada (nueva versión) y registrada en auditoría.',
+            'direccion' => [
+                'id' => $dir->id,
+                'numero_direccion' => $dir->numero_direccion,
+                'etiqueta' => $dir->etiqueta,
+                'tipo_direccion' => $dir->tipo_direccion,
+                'nombre_destinatario' => $dir->nombre_destinatario,
+                'telefono_destinatario' => $dir->telefono_destinatario,
+                'calle' => $dir->calle,
+                'numero_exterior' => $dir->numero_exterior,
+                'numero_interior' => $dir->numero_interior,
+                'colonia' => $dir->colonia,
+                'codigo_postal' => $dir->codigo_postal,
+                'municipio' => $dir->municipio,
+                'ciudad' => $dir->ciudad,
+                'estado' => $dir->estado,
+                'pais' => $dir->pais,
+                'referencias' => $dir->referencias,
+                'indicaciones_entrega' => $dir->indicaciones_entrega,
+                'domicilio_irregular' => (bool) $dir->domicilio_irregular,
+                'anexa_remision' => (bool) $dir->anexa_remision,
+                'direccion_resumida' => FormatearDireccionEstructurada::resumida($dir),
+                'es_principal' => (bool) $dir->es_principal,
+                'estado_verificacion' => $dir->estado_verificacion,
+            ],
+            'pedido_id' => $resultado['pedido']?->id,
+        ]);
+    }
+
     public function completarEnvioResguardo(
         CompletarEnvioResguardoPedidoBmaRequest $request,
         PedidoBma $pedidoBma,
@@ -268,6 +341,28 @@ class PedidoBmaController extends Controller
         return redirect()->back()->with('success', 'Envío del resguardo completado. Anexo pendiente de revisión.');
     }
 
+    public function cargarGuiaCliente(
+        CargarGuiaClientePedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        CargarGuiaClientePedidoBmaService $service
+    ): RedirectResponse {
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $service->ejecutar(
+                $pedidoBma->load('estatus'),
+                $request->validated('numero_rastreo'),
+                $request->file('guia_pdf'),
+                Auth::id()
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Guía del cliente cargada. CEDIS fue notificado.');
+    }
+
     public function subirPdfPedido(
         SubirPdfPedidoBmaRequest $request,
         PedidoBma $pedidoBma,
@@ -282,7 +377,24 @@ class PedidoBmaController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'PDF del pedido adjuntado.');
+        return redirect()->back()->with('success', 'PDF o foto del pedido adjuntado.');
+    }
+
+    public function subirAnexoPiezas(
+        SubirAnexoPiezasPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        GestionarPdfPedidoBmaService $service
+    ): RedirectResponse {
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $service->subirAnexoPiezas($pedidoBma->load('estatus'), $request->file('anexo_piezas'));
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Anexo de piezas adicionales adjuntado.');
     }
 
     public function solicitarPesaje(
@@ -295,8 +407,13 @@ class PedidoBmaController extends Controller
 
         try {
             $service->ejecutar($pedidoBma->load(['estatus', 'origen']), Auth::id());
-        } catch (\InvalidArgumentException|\RuntimeException $e) {
-            return redirect()->back()->with('error', $e->getMessage());
+        } catch (Throwable $e) {
+            return $this->responderErrorOperacionPedido(
+                $e,
+                $pedidoBma,
+                'solicitar_pesaje',
+                'No se pudo solicitar el pesaje. Intente de nuevo o contacte a soporte.'
+            );
         }
 
         return redirect()->back()->with('success', 'Consulta de pesaje enviada a CEDIS.');
@@ -316,11 +433,88 @@ class PedidoBmaController extends Controller
                 Auth::id(),
                 (string) $request->validated('motivo')
             );
-        } catch (\InvalidArgumentException|\RuntimeException $e) {
-            return redirect()->back()->with('error', $e->getMessage());
+        } catch (Throwable $e) {
+            return $this->responderErrorOperacionPedido(
+                $e,
+                $pedidoBma,
+                'solicitar_repesaje',
+                'No se pudo solicitar el re-pesaje. Intente de nuevo o contacte a soporte.'
+            );
         }
 
         return redirect()->back()->with('success', 'Re-pesaje solicitado a CEDIS.');
+    }
+
+    public function volverBorrador(
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        VolverBorradorPedidoBmaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $service->ejecutar($pedidoBma->load('estatus'), Auth::id());
+        } catch (Throwable $e) {
+            return $this->responderErrorOperacionPedido(
+                $e,
+                $pedidoBma,
+                'volver_borrador',
+                'No se pudo conservar el pedido como borrador. Intente de nuevo o contacte a soporte.'
+            );
+        }
+
+        return redirect()->back()->with('success', 'Pedido listo para continuar.');
+    }
+
+    /**
+     * Mensaje de negocio al usuario; detalle técnico solo en logs internos.
+     */
+    private function responderErrorOperacionPedido(
+        Throwable $e,
+        PedidoBma $pedido,
+        string $operacion,
+        string $mensajeGenerico
+    ): RedirectResponse {
+        $esNegocio = $e instanceof \InvalidArgumentException
+            || ($e instanceof \RuntimeException && ! $e instanceof \Illuminate\Database\QueryException);
+
+        Log::error('Control pedidos: error en operación', [
+            'operacion' => $operacion,
+            'pedido_bma_id' => $pedido->id,
+            'usuario_id' => Auth::id(),
+            'exception' => $e::class,
+            'message' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'file' => $e->getFile().':'.$e->getLine(),
+        ]);
+        report($e);
+
+        return redirect()->back()->with('error', $esNegocio ? $e->getMessage() : $mensajeGenerico);
+    }
+
+    public function documento(PedidoBma $pedidoBma, PedidoBmaDocumento $documento): StreamedResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        if (! VisibilidadPedidoBma::puedeConsultar(Auth::user(), $pedidoBma)) {
+            abort(403, 'No tienes autorización para consultar documentos de este pedido.');
+        }
+
+        if ((int) $documento->pedido_bma_id !== (int) $pedidoBma->id) {
+            abort(404);
+        }
+
+        if (! Storage::disk('public')->exists($documento->ruta_archivo)) {
+            abort(404, 'Archivo no encontrado.');
+        }
+
+        $mime = $documento->mime_type ?: 'application/octet-stream';
+        $nombre = $documento->nombre_original ?: basename($documento->ruta_archivo);
+
+        return Storage::disk('public')->response(
+            $documento->ruta_archivo,
+            $nombre,
+            ['Content-Type' => $mime]
+        );
     }
 
     public function destroy(
@@ -338,6 +532,38 @@ class PedidoBmaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Pedido eliminado.');
+    }
+
+    public function cancelar(
+        CancelarPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        CancelarPedidoBmaService $cancelarService
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.cancelar');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $cancelarService->ejecutar($pedidoBma, Auth::id(), $request->validated());
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Pedido cancelado. Se liberaron reservas pendientes.');
+    }
+
+    public function previewCancelacion(
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        CancelarPedidoBmaService $cancelarService
+    ): \Illuminate\Http\JsonResponse {
+        Gate::authorize('control_pedidos.cancelar');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        return response()->json([
+            'preview' => $cancelarService->preview($pedidoBma),
+            'motivos' => CancelarPedidoBmaService::MOTIVOS,
+        ]);
     }
 
     public function exportar(Request $request, ListarPedidosBmaService $listarService): StreamedResponse

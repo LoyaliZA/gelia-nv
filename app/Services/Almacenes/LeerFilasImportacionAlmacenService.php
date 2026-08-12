@@ -179,10 +179,17 @@ class LeerFilasImportacionAlmacenService
             throw new \RuntimeException('El archivo no tiene cabeceras.');
         }
 
-        return array_map(
+        $headers = array_map(
             fn ($h) => trim((string) $h),
             $headers,
         );
+
+        // El normalizador escribe BOM UTF-8; sin quitarlo el primer header queda "\xEF\xBB\xBFsku".
+        if ($headers !== [] && str_starts_with($headers[0], "\xEF\xBB\xBF")) {
+            $headers[0] = substr($headers[0], 3);
+        }
+
+        return $headers;
     }
 
     /**

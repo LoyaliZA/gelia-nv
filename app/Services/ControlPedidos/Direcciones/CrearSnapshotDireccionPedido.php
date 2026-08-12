@@ -58,6 +58,7 @@ class CrearSnapshotDireccionPedido
                     'pais' => $datos['pais'],
                     'referencias' => $datos['referencias'],
                     'indicaciones_entrega' => $datos['indicaciones_entrega'],
+                    'domicilio_irregular' => (bool) ($datos['domicilio_irregular'] ?? false),
                     'domicilio_legacy' => FormatearDireccionEstructurada::ejecutar($datos),
                     'origen' => PedidoBmaDireccion::ORIGEN_NORMALIZADO,
                 ]);

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, usePage } from '@inertiajs/react';
 import { FileSpreadsheet, Package, Search, Truck, Send, Loader2, ChevronDown } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
@@ -11,6 +11,8 @@ import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 import { TABS_DELEGADO } from '../Partials/pedidosBmaStyles';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
+
+const TIPOS_NOTIF_GUIA = new Set(['pedido_pendiente_guia', 'pedido_error_guia']);
 
 export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
     const { flash } = usePage().props;
@@ -31,6 +33,13 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
     const debounceBusqueda = useRef(null);
+    const modalAbiertoRef = useRef(false);
+
+    const paramsListado = useCallback(() => ({
+        tab: tabActiva,
+        q: busqueda || undefined,
+        page: pedidosVista?.current_page || 1,
+    }), [tabActiva, busqueda, pedidosVista?.current_page]);
 
     useEffect(() => {
         if (flash?.success) {
@@ -39,6 +48,34 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
             setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: flash.error });
         }
     }, [flash?.success, flash?.error]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (modalAbiertoRef.current || cargando) return;
+            cargar(paramsListado(), { silencioso: true });
+        }, 15000);
+        return () => clearInterval(interval);
+    }, [cargando, paramsListado, cargar]);
+
+    useEffect(() => {
+        const onNotification = (e) => {
+            const tipo = e.detail?.tipo;
+            if (!TIPOS_NOTIF_GUIA.has(tipo)) return;
+            if (!modalAbiertoRef.current) {
+                cargar(paramsListado(), { silencioso: true });
+            }
+            if (tipo === 'pedido_pendiente_guia') {
+                setAlerta({
+                    abierto: true,
+                    tipo: 'success',
+                    titulo: 'Nuevo pedido pendiente de guía',
+                    mensaje: e.detail?.mensaje || e.detail?.mensaje_visible || 'Hay un pedido listo para captura de guía.',
+                });
+            }
+        };
+        window.addEventListener('notification-received', onNotification);
+        return () => window.removeEventListener('notification-received', onNotification);
+    }, [cargar, paramsListado]);
 
     const onBuscar = (valor) => {
         setBusqueda(valor);
@@ -226,7 +263,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
                             <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-label="Cargando pedidos" />
                         </div>
                     )}
-                    <TablaDelegado pedidos={pedidosVista} tabActiva={tabActiva} />
+                    <TablaDelegado
+                        pedidos={pedidosVista}
+                        tabActiva={tabActiva}
+                        onModalAbierto={(abierto) => { modalAbiertoRef.current = abierto; }}
+                    />
                 </div>
             </GeliaPageShell>
 

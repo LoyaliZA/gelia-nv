@@ -57,10 +57,10 @@ export const IMPORTACION_CATALOGOS = {
     },
     productos: {
         titulo: 'Importar Productos',
-        rutaPlantilla: 'almacenes.productos.plantilla_importacion',
+        rutaPlantilla: 'gestion_interna.productos.plantilla_importacion',
         rutaImportar: null,
-        rutaPreview: 'almacenes.productos.import_preview',
-        rutaIniciar: 'almacenes.productos.import_iniciar',
+        rutaPreview: 'gestion_interna.productos.import_preview',
+        rutaIniciar: 'gestion_interna.productos.import_iniciar',
         wizard: true,
         requiereAlmacen: false,
         columnas: [
@@ -170,6 +170,38 @@ export const IMPORTACION_CATALOGOS = {
             'Indica al menos uno: costo, costo de reposición o precio de venta.',
             'No modifica existencias de inventario.',
             'Errores por fila se reportan en CSV descargable.',
+        ],
+    },
+    ventas: {
+        titulo: 'Importar Ventas',
+        rutaPlantilla: 'reportes.ventas.plantilla_importacion',
+        rutaImportar: null,
+        rutaPreview: 'reportes.ventas.import_preview',
+        rutaIniciar: 'reportes.ventas.import_iniciar',
+        wizard: true,
+        requiereAlmacen: false,
+        columnas: [
+            { key: 'sku', label: 'SKU', requerido: true },
+            { key: 'codigo_almacen', label: 'Código almacén', requerido: true, nota: 'Opcional si eliges almacén en pantalla' },
+            { key: 'periodo', label: 'Periodo', requerido: true, nota: 'YYYY-MM' },
+            { key: 'monto_venta', label: 'Monto venta', requerido: true },
+            { key: 'cantidad_vendida', label: 'Cantidad', requerido: false },
+        ],
+        mapping: {
+            sku: '', codigo_almacen: '', periodo: '', monto_venta: '', cantidad_vendida: '',
+        },
+        labels: {
+            sku: 'SKU *',
+            codigo_almacen: 'Código almacén',
+            periodo: 'Periodo *',
+            monto_venta: 'Monto venta *',
+            cantidad_vendida: 'Cantidad',
+        },
+        required: ['sku', 'periodo', 'monto_venta'],
+        notas: [
+            'Upsert por SKU + almacén + periodo (YYYY-MM).',
+            'No crea productos automáticamente.',
+            'Si mapeas codigo_almacen, no hace falta seleccionar almacén fijo.',
         ],
     },
 };

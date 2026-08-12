@@ -27,7 +27,13 @@ class ControlPedidosMejoras21Test extends TestCase
 
     public function test_enviar_falla_sin_folio_remision(): void
     {
-        $pedido = $this->crearPedidoBase(['folio_remision' => null]);
+        $pedido = $this->crearPedidoBase([
+            'folio_remision' => null,
+            'origen_id' => CatalogoOrigenPedido::firstOrCreate(
+                ['nombre' => 'Mostrador'],
+                ['requiere_logistica' => false, 'activo' => true]
+            )->id,
+        ]);
         $this->agregarComprobante($pedido);
 
         $this->expectException(\InvalidArgumentException::class);
@@ -38,8 +44,14 @@ class ControlPedidosMejoras21Test extends TestCase
 
     public function test_enviar_exitoso_con_folio_remision(): void
     {
-        $pedido = $this->crearPedidoBase(['folio_remision' => 'REM-12345']);
+        config(['control_pedidos.direcciones_normalizadas' => false]);
+
+        $pedido = $this->crearPedidoBase([
+            'folio_remision' => 'REM-12345',
+            'pesaje_respondido_at' => now(),
+        ]);
         $this->agregarComprobante($pedido);
+        $this->asegurarCajasPesaje($pedido);
 
         $actualizado = app(EnviarPedidoBmaService::class)->ejecutar($pedido->fresh(['origen']), $this->usuario->id);
 
@@ -102,6 +114,13 @@ class ControlPedidosMejoras21Test extends TestCase
 
     private function agregarComprobante(PedidoBma $pedido): void
     {
+        $pedido->refresh();
+        $total = (float) ($pedido->total_a_cobrar ?? 0);
+        if ($total <= 0.01) {
+            $total = round((float) $pedido->total_mercancia + (float) ($pedido->costo_envio ?? 0), 2);
+            $pedido->update(['total_a_cobrar' => $total]);
+        }
+
         PedidoBmaDocumento::create([
             'pedido_bma_id' => $pedido->id,
             'tipo' => PedidoBmaDocumento::TIPO_COMPROBANTE,
@@ -111,15 +130,39 @@ class ControlPedidosMejoras21Test extends TestCase
             'tamano_bytes' => 100,
             'orden' => 0,
         ]);
+
+        \App\Models\SaldosAFavor\PedidoBmaPago::create([
+            'pedido_bma_id' => $pedido->id,
+            'numero_exhibicion' => 1,
+            'monto' => $total,
+            'ruta_archivo' => 'test/comprobante.jpg',
+            'nombre_original' => 'comprobante.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamano_bytes' => 100,
+            'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_PENDIENTE,
+            'capturado_por_id' => $this->usuario->id,
+        ]);
+    }
+
+    private function asegurarCajasPesaje(PedidoBma $pedido): void
+    {
+        if (DB::table('pedido_bma_cajas')->where('pedido_bma_id', $pedido->id)->exists()) {
+            return;
+        }
+
+        DB::table('pedido_bma_cajas')->insert([
+            'pedido_bma_id' => $pedido->id,
+            'catalogo_tipo_caja_id' => DB::table('catalogo_tipos_caja_pedido')->value('id'),
+            'peso_real_kg' => 2,
+            'peso_volumetrico_kg' => 1.5,
+            'orden' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     private function seedCatalogosMinimos(): void
     {
-        static $seeded = false;
-        if ($seeded) {
-            return;
-        }
-
         $now = now();
 
         if (!CatalogoEstatusPedido::exists()) {
@@ -167,7 +210,5 @@ class ControlPedidosMejoras21Test extends TestCase
         if (!DB::table('catalogo_envios_tienda')->exists()) {
             DB::table('catalogo_envios_tienda')->insert(['nombre' => 'Tienda', 'es_otro' => false, 'activo' => true, 'created_at' => $now, 'updated_at' => $now]);
         }
-
-        $seeded = true;
     }
 }

@@ -8,6 +8,7 @@ use App\Services\Almacenes\LeerFilasImportacionAlmacenService;
 use App\Services\Almacenes\ProcesarFilaCostoImportacionService;
 use App\Services\Almacenes\ProcesarFilaInventarioImportacionService;
 use App\Services\Almacenes\ProcesarFilaProductoImportacionService;
+use App\Services\Almacenes\ProcesarFilaVentaImportacionService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -136,8 +137,25 @@ class ImportarAlmacenCatalogoJob implements ShouldQueue
             'productos' => $procesadorProducto->ejecutar($row, $mapping),
             'inventarios' => $procesadorInventario->ejecutar($row, $mapping, (int) $log->almacen_id),
             'costos' => $procesadorCosto->ejecutar($row, $mapping, (int) $log->almacen_id),
+            'ventas' => $this->mapearResultadoVenta(
+                app(ProcesarFilaVentaImportacionService::class)->ejecutar(
+                    $row,
+                    $mapping,
+                    $log->almacen_id ? (int) $log->almacen_id : null
+                )
+            ),
             default => throw new \RuntimeException('Tipo de importación no soportado.'),
         };
+    }
+
+    /** @param  array{ok: bool, error?: string}  $r */
+    private function mapearResultadoVenta(array $r): array
+    {
+        if (! ($r['ok'] ?? false)) {
+            throw new \RuntimeException($r['error'] ?? 'Error en fila de ventas');
+        }
+
+        return ['accion' => 'actualizado'];
     }
 
     public function failed(?Throwable $exception): void

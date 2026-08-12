@@ -12,6 +12,7 @@ import {
     formatearFechaHoraAuditoria,
     tieneGuiaLista,
     badgeGuiaLista,
+    badgeEstadoFisico,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
     BTN_SECONDARY,
@@ -19,6 +20,7 @@ import {
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import SeccionGuiaRastreo from './SeccionGuiaRastreo';
+import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
 import DireccionPedidoResumen from './DireccionPedidoResumen';
 import { codigoDireccionCliente } from './codigoDireccionCliente';
 import ModalCambiarDireccion from './ModalCambiarDireccion';
@@ -45,6 +47,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
     const badgeApartado = pedido.resguardo_apartado_at ? badgeResguardoApartado() : null;
     const docsSinGuia = (pedido.documentos || []).filter((d) => d.tipo !== 'guia');
     const evidenciasApartado = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
+    const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
     const snap = pedido.direccion_vigente || pedido.direccionVigente;
 
     return createPortal(
@@ -65,6 +68,14 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 )}
                                 {badgeApartado && (
                                     <span className={badgeApartado.className} style={badgeApartado.style}>{badgeApartado.label}</span>
+                                )}
+                                {badgeFisico && (
+                                    <span className={badgeFisico.className} style={badgeFisico.style}>{badgeFisico.label}</span>
+                                )}
+                                {pedido.tiene_observaciones_fisicas && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-orange-500/15 text-orange-600">
+                                        Observaciones CEDIS
+                                    </span>
                                 )}
                             </div>
                             {pedido.vendedor?.name && (
@@ -87,9 +98,15 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <Campo label="Fecha pedido" value={formatearFechaNegocio(pedido.fecha)} />
                             <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
                             <Campo label="Status" value={etiquetaEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo })} />
-                            <Campo label="Origen" value={pedido.origen?.nombre} />
+                            <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
                             <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
-                            <Campo label="Banco" value={pedido.banco?.nombre} />
+                            <Campo
+                                label="Pagos / bancos"
+                                value={(pedido.fuentes_pago?.length
+                                    ? pedido.fuentes_pago
+                                    : (pedido.banco?.nombre ? [pedido.banco.nombre] : [])
+                                ).join(', ') || '—'}
+                            />
                             <Campo label="Tipo caja" value={pedido.tipo_caja?.nombre} />
                             <Campo label="Peso vol." value={pedido.peso_volumetrico_kg != null ? `${pedido.peso_volumetrico_kg} kg` : null} />
                             <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
@@ -104,10 +121,28 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                     ? formatearFechaHoraAuditoria(pedido.resguardo_apartado_at)
                                     : (pedido.es_resguardo ? 'Pendiente' : '—')}
                             />
-                            <Campo label="Anexar remisión" value={pedido.anexar_remision ? 'Sí' : 'No'} />
+                            <Campo label="Nota de compra en el envío" value={pedido.anexar_remision ? 'Sí' : 'No'} />
                             <Campo label="C.P." value={pedido.codigo_postal} />
                             <Campo label="Total a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} />
                         </div>
+                        {(pedido.cajas || []).length > 0 && (
+                            <div className="mt-4 space-y-3">
+                                <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
+                                {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                    <div key={c.id || idx} className="space-y-1">
+                                        <p className="text-xs font-black theme-text-main m-0">Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}</p>
+                                        <div className="grid grid-cols-2 gap-1 text-xs">
+                                            <p className="m-0 theme-text-muted font-bold">Largo: <span className="theme-text-main">{c.largo != null ? `${c.largo} cm` : '—'}</span></p>
+                                            <p className="m-0 theme-text-muted font-bold">Ancho: <span className="theme-text-main">{c.ancho != null ? `${c.ancho} cm` : '—'}</span></p>
+                                            <p className="m-0 theme-text-muted font-bold">Alto: <span className="theme-text-main">{c.alto != null ? `${c.alto} cm` : '—'}</span></p>
+                                            <p className="m-0 theme-text-muted font-bold">Real: <span className="theme-text-main">{c.peso_real_kg != null ? `${c.peso_real_kg} kg` : '—'}</span></p>
+                                            <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{c.peso_cobrado_kg != null ? `${c.peso_cobrado_kg} kg` : '—'}</span></p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <SeccionRevisionFisicaPedido pedido={pedido} onVerDoc={setDocPreview} />
                         <div className="mt-4 space-y-3">
                             <div className="flex items-center justify-between gap-2">
                                 <p className="text-[9px] font-black uppercase theme-text-muted m-0">Domicilio de envío</p>
@@ -148,9 +183,9 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 </div>
                             </div>
                         )}
-                        {docsSinGuia.filter((d) => d.tipo !== 'evidencia_apartado').length > 0 && (
+                        {docsSinGuia.filter((d) => d.tipo !== 'evidencia_apartado' && d.tipo !== 'evidencia_condicion').length > 0 && (
                             <div className="mt-4 flex flex-wrap gap-2">
-                                {docsSinGuia.filter((d) => d.tipo !== 'evidencia_apartado').map((doc) => (
+                                {docsSinGuia.filter((d) => d.tipo !== 'evidencia_apartado' && d.tipo !== 'evidencia_condicion').map((doc) => (
                                     <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
                                 ))}
                             </div>

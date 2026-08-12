@@ -24,6 +24,15 @@ trait ResuelveDatosPedidoBma
 
     protected function resolverSaldoFavor(array $datos): float
     {
+        if (! empty($datos['saf_aplicaciones']) && is_array($datos['saf_aplicaciones'])) {
+            $suma = 0.0;
+            foreach ($datos['saf_aplicaciones'] as $item) {
+                $suma += (float) ($item['monto'] ?? 0);
+            }
+
+            return round($suma, 2);
+        }
+
         $aplica = filter_var($datos['aplica_saldo_favor'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         return $aplica ? (float) ($datos['saldo_a_favor'] ?? 0) : 0.0;
@@ -189,6 +198,14 @@ trait ResuelveDatosPedidoBma
             $datos['es_resguardo'] = true;
         }
 
+        $clienteProporcionaGuia = filter_var($datos['cliente_proporciona_guia'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if ($clienteProporcionaGuia) {
+            $datos['costo_envio'] = null;
+            $datos['aplica_seguro'] = false;
+            $datos['catalogo_tipo_guia_id'] = null;
+            $datos['catalogo_zona_id'] = null;
+        }
+
         $totales = $this->resolverTotales($datos);
         $envia = $this->resolverEnviaOtraPersona($datos);
         $envioTienda = $this->resolverEnvioTiendaDesdeOrigen($datos);
@@ -211,7 +228,7 @@ trait ResuelveDatosPedidoBma
                 ? (int) $datos['pedido_principal_id']
                 : null,
             'almacen_id' => $datos['almacen_id'] ?? null,
-            'catalogo_banco_id' => $datos['catalogo_banco_id'] ?? null,
+            // Banco receptor vive en exhibiciones; no persistir banco general desde el form.
             'catalogo_tipo_caja_id' => $datos['catalogo_tipo_caja_id'] ?? null,
             'numero_cajas' => isset($datos['numero_cajas']) && $datos['numero_cajas'] !== ''
                 ? (int) $datos['numero_cajas']
@@ -230,9 +247,18 @@ trait ResuelveDatosPedidoBma
             'es_resguardo' => $esResguardoAbierto || $esComplementario
                 ? true
                 : filter_var($datos['es_resguardo'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'cliente_proporciona_guia' => $clienteProporcionaGuia,
             'anexar_remision' => filter_var($datos['anexar_remision'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'comentarios_drive' => $datos['comentarios_drive'] ?? null,
         ], $envioTienda, $envia, $totales);
+
+        if ($clienteProporcionaGuia) {
+            $attrs['costo_envio'] = null;
+            $attrs['aplica_seguro'] = false;
+            $attrs['costo_seguro'] = 0;
+            $attrs['catalogo_tipo_guia_id'] = null;
+            $attrs['catalogo_zona_id'] = null;
+        }
 
         if ($esResguardoAbierto || $esComplementario) {
             $attrs['costo_envio'] = null;

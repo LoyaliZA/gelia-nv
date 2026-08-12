@@ -24,35 +24,42 @@ class CatalogoEstatusPedido extends Model
     ];
 
     public const FASE_BORRADOR = 'BORRADOR';
+    public const FASE_PESAJE_PENDIENTE = 'PESAJE_PENDIENTE';
     public const FASE_PENDIENTE_AUXILIAR = 'PENDIENTE_AUXILIAR';
     public const FASE_EN_CEDIS = 'EN_CEDIS';
     public const FASE_RECHAZADO_VENDEDORA = 'RECHAZADO_VENDEDORA';
     public const FASE_INCIDENCIA_CEDIS = 'INCIDENCIA_CEDIS';
     public const FASE_EN_RUTA = 'EN_RUTA';
     public const FASE_PENDIENTE_DE_GUIA = 'PENDIENTE_DE_GUIA';
+    public const FASE_PENDIENTE_GUIA_CLIENTE = 'PENDIENTE_GUIA_CLIENTE';
     public const FASE_PENDIENTE_DE_ENVIO = 'PENDIENTE_DE_ENVIO';
     public const FASE_ENTREGADO = 'ENTREGADO';
     public const FASE_ENVIADO = 'ENVIADO';
+    public const FASE_CANCELADO = 'CANCELADO';
 
     /** Etiquetas de negocio por fase (evita nombres de color literales). */
     public const LABELS_POR_FASE = [
         self::FASE_BORRADOR => 'Borrador',
+        self::FASE_PESAJE_PENDIENTE => 'Pesaje pendiente',
         self::FASE_PENDIENTE_AUXILIAR => 'Pendiente Auxiliar',
         self::FASE_EN_CEDIS => 'En CEDIS',
         self::FASE_RECHAZADO_VENDEDORA => 'Rechazado',
-        self::FASE_INCIDENCIA_CEDIS => 'Incidencia CEDIS',
+        self::FASE_INCIDENCIA_CEDIS => 'Error CEDIS',
         self::FASE_EN_RUTA => 'En ruta',
         self::FASE_PENDIENTE_DE_GUIA => 'Pendiente de guía',
+        self::FASE_PENDIENTE_GUIA_CLIENTE => 'Pendiente de guía del cliente',
         self::FASE_PENDIENTE_DE_ENVIO => 'Pendiente de envío',
         self::FASE_ENTREGADO => 'Entregado',
         self::FASE_ENVIADO => 'Enviado',
+        self::FASE_CANCELADO => 'Cancelado',
     ];
 
     public function etiquetaSemantica(?bool $esResguardo = false): string
     {
-        // Flag de intención en borrador/rechazado: no sustituye la etiqueta de fase.
+        // Flag de intención en pre-venta: no sustituye la etiqueta de fase.
         if ($esResguardo
             && $this->fase_ciclo !== self::FASE_BORRADOR
+            && $this->fase_ciclo !== self::FASE_PESAJE_PENDIENTE
             && $this->fase_ciclo !== self::FASE_RECHAZADO_VENDEDORA
         ) {
             return 'Resguardo';

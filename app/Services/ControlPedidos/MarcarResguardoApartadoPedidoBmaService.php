@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
 class MarcarResguardoApartadoPedidoBmaService
 {
@@ -75,7 +76,8 @@ class MarcarResguardoApartadoPedidoBmaService
                 $usuarioId,
                 $estatus->id,
                 $estatus->id,
-                $comentario
+                $comentario,
+                AccionesHistorialPedidoBma::RESGUARDO
             );
 
             $pedido = $pedido->fresh([
