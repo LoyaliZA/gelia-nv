@@ -134,7 +134,7 @@ class PedidoBmaSaldosPagosController extends Controller
         if (! $credito) {
             $resumen = $pagos->resumenPago($pedidoBma);
             if ((float) ($resumen['excedente'] ?? 0) <= 0) {
-                return back()->with('error', 'No hay excedente para generar saldo a favor.');
+                return back()->with('error', 'No hay excedente de este pedido para generar saldo a favor.');
             }
 
             return back()->with('success', 'El saldo a favor por excedente ya estaba registrado.');
@@ -142,7 +142,7 @@ class PedidoBmaSaldosPagosController extends Controller
 
         return back()->with(
             'success',
-            "Saldo {$credito->folio} generado por excedente ({$credito->monto_original})."
+            "Saldo {$credito->folio} generado por excedente de este pedido ({$credito->monto_original})."
         );
     }
 

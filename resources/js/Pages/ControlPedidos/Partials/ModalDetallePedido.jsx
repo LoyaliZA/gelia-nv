@@ -38,6 +38,9 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
+    const puedeAtender = Boolean(pedido?.puede_mutar)
+        || Number(pedido?.vendedor_id) === Number(auth?.user?.id)
+        || Boolean(auth?.user?.roles?.includes('Super Admin'));
 
     if (!abierto || !pedido) return null;
 
@@ -142,7 +145,12 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 ))}
                             </div>
                         )}
-                        <SeccionRevisionFisicaPedido pedido={pedido} onVerDoc={setDocPreview} />
+                        <SeccionRevisionFisicaPedido
+                            pedido={pedido}
+                            onVerDoc={setDocPreview}
+                            puedeAtender={puedeAtender}
+                            puedeCancelar={Boolean(pedido?.puede_cancelar) || can('control_pedidos.cancelar')}
+                        />
                         <div className="mt-4 space-y-3">
                             <div className="flex items-center justify-between gap-2">
                                 <p className="text-[9px] font-black uppercase theme-text-muted m-0">Domicilio de envío</p>

@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class AsignarGuiaPedidoBmaService
 {
@@ -43,7 +44,9 @@ class AsignarGuiaPedidoBmaService
             $attrsCola = $this->attrsTrasCorregirGuia($pedido, ['numero_rastreo'], $usuarioId);
 
             if ($yaEmpacado) {
-                $estatusPendienteEnvio = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO);
+                $faseDestino = MaquinaEstadosPedidoBma::faseDestinoTrasAsignarGuia();
+                MaquinaEstadosPedidoBma::assertTransicion($estatusAnterior?->fase_ciclo, $faseDestino);
+                $estatusPendienteEnvio = CatalogoEstatusPedido::porFase($faseDestino);
 
                 if (!$estatusPendienteEnvio) {
                     throw new \RuntimeException('No se encontró el estatus PENDIENTE_DE_ENVIO.');
@@ -60,7 +63,7 @@ class AsignarGuiaPedidoBmaService
                     $usuarioId,
                     $estatusAnterior,
                     $estatusPendienteEnvio,
-                    "Guía de rastreo asignada: {$guia}",
+                    "Guía de rastreo asignada: {$guia}. Pendiente de recolección.",
                     AccionesHistorialPedidoBma::ASIGNACION_GUIA
                 );
 

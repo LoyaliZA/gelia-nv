@@ -4,32 +4,36 @@
     <meta charset="utf-8">
     <title>{{ $comprobante->folio }}</title>
     <style>
+        /* DomPDF: solo normal/bold (DejaVu no tiene medium 500 → faux-bold borroso al imprimir). Usar pt. */
         @page { margin: 3mm; }
         body {
             font-family: DejaVu Sans, sans-serif;
-            font-size: {{ ($perfil ?? '80mm') === '58mm' ? '11px' : (($perfil ?? '80mm') === 'carta' ? '13px' : '12px') }};
-            font-weight: bold;
+            font-size: {{ ($perfil ?? '80mm') === '58mm' ? '9pt' : (($perfil ?? '80mm') === 'carta' ? '11pt' : '10pt') }};
+            font-weight: normal;
             color: #000;
             margin: 0;
             padding: 0;
             line-height: 1.4;
         }
+        strong { font-weight: bold; }
         .center { text-align: center; }
-        .logo { max-width: 98%; max-height: 136px; margin: 0 auto 8px; display: block; }
-        .titulo { font-size: 0.95em; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; margin: 4px 0 0; }
-        .badge { font-weight: bold; letter-spacing: 1px; font-size: 0.85em; margin-bottom: 6px; }
-        .rule { border-top: 1.5px dashed #000; margin: 8px 0; }
+        .logo { max-width: 75%; max-height: 95px; margin: 0 auto 5px; display: block; }
+        .titulo { font-size: 0.95em; font-weight: bold; text-transform: uppercase; margin: 3px 0 0; }
+        .badge { font-weight: bold; font-size: 0.85em; margin-bottom: 4px; text-transform: uppercase; }
+        .rule { border-top: 1px dashed #000; margin: 7px 0; }
+        .meta { margin: 3px 0; font-weight: normal; }
         .row { width: 100%; border-collapse: collapse; margin: 3px 0; }
-        .row td { padding: 1px 0; vertical-align: top; font-weight: bold; }
-        .row td.r { text-align: right; white-space: nowrap; }
-        .section { font-size: 0.9em; font-weight: bold; text-transform: uppercase; margin: 8px 0 3px; }
-        .item { margin: 5px 0 0; padding-left: 3px; border-left: 2.5px solid #000; }
-        .total { font-weight: bold; font-size: 1.15em; }
-        .muted { color: #222; font-size: 0.95em; }
-        .legal { margin-top: 12px; margin-bottom: 18px; font-size: 0.95em; }
-        .sig { margin-top: 48px; text-align: center; font-size: 0.95em; }
-        .sig-line { border-top: 1.5px solid #000; width: 75%; margin: 0 auto 3px; }
-        .footer { margin-top: 12px; font-weight: bold; font-size: 0.95em; }
+        .row td { padding: 1.5px 0; vertical-align: top; font-weight: normal; color: #000; }
+        .row td.r { text-align: right; white-space: nowrap; width: 1%; }
+        .section { font-size: 0.9em; font-weight: bold; text-transform: uppercase; margin: 7px 0 3px; color: #000; }
+        .item-sub { font-size: 0.9em; color: #000; margin: 0 0 4px; }
+        .total td { font-weight: bold; font-size: 1.05em; }
+        .ops { margin-top: 7px; font-size: 0.9em; color: #000; }
+        .legal { margin: 9px 0 5px; font-size: 0.9em; }
+        .sigs { width: 100%; margin-top: 10px; border-collapse: collapse; }
+        .sigs td { width: 50%; text-align: center; font-size: 0.85em; padding-top: 24px; vertical-align: top; font-weight: normal; }
+        .sig-line { border-top: 1px solid #000; width: 90%; margin: 0 auto 3px; }
+        .footer { margin-top: 7px; font-weight: bold; font-size: 0.85em; }
     </style>
 </head>
 <body>
@@ -37,6 +41,8 @@
         $logo = ($encabezado['logos'][0] ?? null);
         $marca = $logo['alt']
             ?? ($encabezado['mostrar_bellaroma'] ?? false ? 'Bellaroma' : (($encabezado['mostrar_aromas'] ?? false) ? 'Aromas' : 'GELIA'));
+        $items = collect($comprobante->creditos_detalle ?? []);
+        $generadores = $items->pluck('generado_por')->filter()->unique()->implode(', ');
     @endphp
 
     @if(!empty($esReimpresion))
@@ -54,25 +60,17 @@
 
     <div class="rule"></div>
 
-    <div><strong>Folio:</strong> {{ $comprobante->folio }}</div>
-    <div><strong>Fecha:</strong> {{ optional($comprobante->aplicado_at ?? $comprobante->created_at)->format('d/m/Y H:i') }}</div>
-    @if($comprobante->sucursal)
-        <div><strong>Sucursal:</strong> {{ $comprobante->sucursal }}</div>
-    @endif
-    @if($comprobante->caja || $comprobante->referencia_venta)
-        <div>
-            @if($comprobante->caja)<strong>Caja:</strong> {{ $comprobante->caja }}@endif
-            @if($comprobante->referencia_venta)
-                @if($comprobante->caja) · @endif
-                <strong>Venta:</strong> {{ $comprobante->referencia_venta }}
-            @endif
+    <div class="meta"><strong>Folio:</strong> {{ $comprobante->folio }}
+        · {{ optional($comprobante->aplicado_at ?? $comprobante->created_at)->format('d/m/Y H:i') }}</div>
+    @if($comprobante->sucursal || $comprobante->caja || $comprobante->referencia_venta)
+        <div class="meta">
+            @if($comprobante->sucursal)<strong>Suc:</strong> {{ $comprobante->sucursal }}@endif
+            @if($comprobante->caja)@if($comprobante->sucursal) · @endif<strong>Caja:</strong> {{ $comprobante->caja }}@endif
+            @if($comprobante->referencia_venta)@if($comprobante->sucursal || $comprobante->caja) · @endif<strong>Venta:</strong> {{ $comprobante->referencia_venta }}@endif
         </div>
     @endif
-
-    <div class="rule"></div>
-
-    <div><strong>Cliente:</strong> {{ $comprobante->cliente?->nombre }}</div>
-    <div><strong>No. cliente:</strong> {{ $comprobante->cliente?->numero_cliente }}</div>
+    <div class="meta"><strong>Cliente:</strong> {{ $comprobante->cliente?->nombre }}
+        (#{{ $comprobante->cliente?->numero_cliente }})</div>
 
     <div class="rule"></div>
 
@@ -81,18 +79,15 @@
         <td class="r">${{ number_format((float) $comprobante->saldo_anterior, 2) }}</td>
     </tr></table>
 
-    <div class="section">Saldos utilizados</div>
-    @foreach(($comprobante->creditos_detalle ?? []) as $item)
-        <div class="item">
-            <div><strong>{{ $item['folio'] ?? '' }}</strong> · {{ $item['canal_origen'] ?? '' }}</div>
-            @if(!empty($item['documento_origen']))
-                <div class="muted">Origen: {{ $item['documento_origen'] }}</div>
-            @endif
-            <table class="row"><tr>
-                <td>Aplicado</td>
-                <td class="r">${{ number_format((float) ($item['monto'] ?? 0), 2) }}</td>
-            </tr></table>
-        </div>
+    <div class="section">Saldos utilizados ({{ $items->count() }})</div>
+    @foreach($items as $item)
+        <table class="row"><tr>
+            <td>{{ $item['folio'] ?? '' }}@if(!empty($item['canal_origen'])) · {{ $item['canal_origen'] }}@endif</td>
+            <td class="r">${{ number_format((float) ($item['monto'] ?? 0), 2) }}</td>
+        </tr></table>
+        @if(!empty($item['documento_origen']))
+            <div class="item-sub">Doc: {{ $item['documento_origen'] }}</div>
+        @endif
     @endforeach
 
     <div class="rule"></div>
@@ -106,20 +101,19 @@
         <td class="r">${{ number_format((float) $comprobante->saldo_restante, 2) }}</td>
     </tr></table>
 
-    <div class="rule"></div>
-
-    @php
-        $generadores = collect($comprobante->creditos_detalle ?? [])->pluck('generado_por')->filter()->unique()->implode(', ');
-    @endphp
-    @if($generadores)
-        <div class="muted">SAF registrado por: {{ $generadores }}</div>
-    @endif
-    <div class="muted">Encargado de caja: {{ $comprobante->generadoPor?->name }}</div>
+    <div class="ops">
+        @if($generadores)
+            SAF: {{ $generadores }} ·
+        @endif
+        Caja: {{ $comprobante->generadoPor?->name }}
+    </div>
 
     <p class="legal">Firma de autorización.</p>
 
-    <div class="sig"><div class="sig-line"></div>Firma del cliente</div>
-    <div class="sig"><div class="sig-line"></div>Firma de la cajera</div>
+    <table class="sigs"><tr>
+        <td><div class="sig-line"></div>Cliente</td>
+        <td><div class="sig-line"></div>Cajera</td>
+    </tr></table>
 
     <div class="center footer">No es un comprobante fiscal.</div>
 </body>

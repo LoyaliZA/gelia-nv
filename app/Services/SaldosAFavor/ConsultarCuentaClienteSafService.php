@@ -21,7 +21,8 @@ class ConsultarCuentaClienteSafService
             ->where('saf_cuenta_id', $cuenta->id)
             ->orderByRaw("CASE estado_financiero
                 WHEN 'disponible' THEN 1
-                WHEN 'parcialmente_aplicado' THEN 2
+                WHEN 'parcialmente_aplicado' THEN 1
+                WHEN 'reservado' THEN 2
                 WHEN 'aplicado' THEN 3
                 WHEN 'vencido' THEN 4
                 ELSE 5 END")

@@ -34,6 +34,8 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'evidencias_envios.*.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
             'revisiones' => ['nullable', 'array'],
             'revisiones.*.descripcion_producto' => ['required_with:revisiones', 'string', 'max:255'],
+            'revisiones.*.producto_id' => ['nullable', 'integer'],
+            'revisiones.*.sku' => ['nullable', 'string', 'max:64'],
             'revisiones.*.estado_fisico' => ['required_with:revisiones', 'string', Rule::in($estados)],
             'revisiones.*.comentario' => ['nullable', 'string', 'max:2000'],
             'revisiones.*.unica_pieza' => ['nullable', 'boolean'],

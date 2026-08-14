@@ -41,7 +41,7 @@ class ControlPedidosManualContent
                 ['nombre' => 'Auditar pedidos', 'ruta' => '/control-pedidos/auditar', 'cargo' => 'Auxiliar'],
                 ['nombre' => 'Control Pedidos (CEDIS)', 'ruta' => '/control-pedidos/cedis', 'cargo' => 'CEDIS'],
                 ['nombre' => 'Actualizar guías', 'ruta' => '/control-pedidos/delegado', 'cargo' => 'Guías'],
-                ['nombre' => 'Direcciones', 'ruta' => '/control-pedidos/direcciones', 'cargo' => 'Auxiliar / Direcciones'],
+                ['nombre' => 'Saldos a favor', 'ruta' => '/saldos-favor', 'cargo' => 'Finanzas / Administración'],
             ],
         ];
     }
@@ -53,18 +53,32 @@ class ControlPedidosManualContent
             'titulo' => 'Diagrama de flujo operativo',
             'camino_feliz' => [
                 ['fase' => 'BORRADOR', 'quien' => 'Vendedora', 'accion' => 'Crear / autoguardar; solicitar pesaje CEDIS si el origen requiere logística'],
-                ['fase' => 'PENDIENTE_AUXILIAR', 'quien' => 'Vendedora → Auxiliar', 'accion' => 'Enviar a auditoría (campos y pesaje completos)'],
-                ['fase' => 'EN_CEDIS', 'quien' => 'Auxiliar', 'accion' => 'Validar pago + remisión PDF y aprobar'],
-                ['fase' => 'PENDIENTE_DE_GUIA o PENDIENTE_DE_ENVIO', 'quien' => 'CEDIS', 'accion' => 'Empacar: si ofrece rastreo y no hay guía → pendiente de guía; si no → pendiente de envío'],
-                ['fase' => 'PENDIENTE_DE_ENVIO', 'quien' => 'Guías (si aplica)', 'accion' => 'Asignar número de guía / PDF'],
-                ['fase' => 'ENVIADO', 'quien' => 'CEDIS', 'accion' => 'Marcar enviado (requiere empaque y guía si la paquetería rastrea)'],
+                ['fase' => 'PESAJE_PENDIENTE → PESAJE_RESPONDIDO', 'quien' => 'CEDIS → Vendedora', 'accion' => 'CEDIS responde pesaje; el pedido pasa a pesaje respondido'],
+                ['fase' => 'PENDIENTE_AUXILIAR', 'quien' => 'Vendedora → Auxiliar', 'accion' => 'Enviar a auditoría. Hitos: pago en revisión → pago validado → pendiente de remisión'],
+                ['fase' => 'EN_CEDIS', 'quien' => 'Auxiliar', 'accion' => 'Validar pago + remisión PDF y aprobar → pendiente de empaque'],
+                ['fase' => 'PENDIENTE_DE_GUIA o PENDIENTE_DE_ENVIO', 'quien' => 'CEDIS', 'accion' => 'Empacar (no es enviado). Sin guía → pendiente de guía; con guía o sin rastreo → pendiente de recolección'],
+                ['fase' => 'PENDIENTE_DE_ENVIO', 'quien' => 'Guías (si aplica)', 'accion' => 'Asignar número de guía / PDF → pendiente de recolección'],
+                ['fase' => 'ENVIADO', 'quien' => 'CEDIS', 'accion' => 'Solo cuando la paquetería recogió el paquete'],
             ],
             'ramas' => [
-                ['nombre' => 'Rechazo auxiliar', 'detalle' => 'PENDIENTE_AUXILIAR → RECHAZADO_VENDEDORA. Limpia remisión y validación de pago. La vendedora corrige y reenvía.'],
+                ['nombre' => 'Rechazo auxiliar', 'detalle' => 'PENDIENTE_AUXILIAR → RECHAZADO_VENDEDORA (Rechazado o devuelto para corrección). Limpia remisión y validación de pago. La vendedora corrige y reenvía.'],
+                ['nombre' => 'Reabrir envío', 'detalle' => 'ENVIADO → PENDIENTE_DE_ENVIO con permiso control_pedidos.reabrir. Solo si la paquetería no recogió.'],
                 ['nombre' => 'Error de datos (cola)', 'detalle' => 'Prioridad vendedora → auxiliar → CEDIS → guías. Cambia fase según dueño activo e invalida guía/remisión cuando corresponde.'],
                 ['nombre' => 'Error CEDIS / empaque', 'detalle' => 'EN_CEDIS → INCIDENCIA_CEDIS (Error CEDIS). Sigue siendo empacable tras resolver o continuar.'],
                 ['nombre' => 'Resguardo', 'detalle' => 'Flag es_resguardo bloquea empaque y guía hasta liberar. estatus_envio puede ser pendiente_liberacion.'],
                 ['nombre' => 'Municipio diferido / anexo', 'detalle' => 'Sin costo al enviar: pendiente_regularizacion → anexar pago → revisión auxiliar.'],
+                ['nombre' => 'Sin existencias', 'detalle' => 'CEDIS marca la pieza (no la omite). Overlay: pedido detenido hasta que Ventas retire, sustituya, espere, contacte o cancele. Sin envío parcial. Si ya estaba pagado y cambia mercancía → se invalida remisión/pago y vuelve a auditoría. CEDIS puede confirmar «ya hay existencias» (el estado físico se conserva).'],
+                ['nombre' => 'Saldos a favor', 'detalle' => 'Monto mínimo y vigencia (días o fecha límite) se configuran en /saldos-favor/configurar. Aplicación FIFO (vence primero), varios créditos por pedido, sin elegir crédito. Uso parcial permitido con aviso de usar completo. Cubre mercancía+envío. Estados: Disponible, Reservado, Aplicado, Vencido, Cancelado. Error de saldos: alerta visual solo en Auditar (no detiene el pedido); se corrige, bitácora y continúa.'],
+            ],
+            'reaperturas' => [
+                ['desde' => 'Pesaje pendiente / respondido', 'hacia' => 'Borrador', 'permiso' => 'crear / editar (dueña)', 'nota' => 'Volver a borrador'],
+                ['desde' => 'Pesaje respondido', 'hacia' => 'Pesaje pendiente', 'permiso' => 'crear / editar', 'nota' => 'Re-pesaje'],
+                ['desde' => 'Rechazado', 'hacia' => 'Auditoría / borrador / pesaje', 'permiso' => 'crear / editar (dueña)', 'nota' => 'Reenvío actual'],
+                ['desde' => 'Pendiente empaque', 'hacia' => 'Auditoría', 'permiso' => 'cola de errores / auditar', 'nota' => 'Sin botón extra'],
+                ['desde' => 'Empacado sin guía', 'hacia' => 'Pendiente empaque', 'permiso' => 'control_pedidos.cedis', 'nota' => 'Revertir empacado'],
+                ['desde' => 'Pendiente recolección con guía', 'hacia' => 'Pendiente de guía', 'permiso' => 'control_pedidos.delegado', 'nota' => 'Invalidar / corregir guía (overlay retraso)'],
+                ['desde' => 'Enviado', 'hacia' => 'Pendiente recolección', 'permiso' => 'control_pedidos.reabrir', 'nota' => 'Solo si la paquetería no recogió'],
+                ['desde' => 'Entregado / Cancelado', 'hacia' => '—', 'permiso' => 'ninguno', 'nota' => 'Terminales'],
             ],
         ];
     }
@@ -74,13 +88,17 @@ class ControlPedidosManualContent
     {
         return [
             ['fase' => 'BORRADOR', 'etiqueta' => 'Borrador', 'nota' => 'Editable por vendedora; eliminable'],
-            ['fase' => 'PENDIENTE_AUXILIAR', 'etiqueta' => 'Pendiente Auxiliar', 'nota' => 'Auditoría: pago + remisión'],
-            ['fase' => 'EN_CEDIS', 'etiqueta' => 'En CEDIS', 'nota' => 'Empaque / reportar error / apartado'],
-            ['fase' => 'RECHAZADO_VENDEDORA', 'etiqueta' => 'Rechazado', 'nota' => 'Corregir y reenviar'],
+            ['fase' => 'PESAJE_PENDIENTE', 'etiqueta' => 'Pesaje pendiente', 'nota' => 'Esperando respuesta CEDIS'],
+            ['fase' => 'PESAJE_RESPONDIDO', 'etiqueta' => 'Pesaje respondido', 'nota' => 'CEDIS ya pesó; vendedora cotiza y envía a auditoría'],
+            ['fase' => 'PENDIENTE_AUXILIAR', 'etiqueta' => 'Pendiente de auditoría', 'nota' => 'Hitos: pago en revisión / pago validado / pendiente de remisión'],
+            ['fase' => 'EN_CEDIS', 'etiqueta' => 'Pendiente de empaque', 'nota' => 'Aprobado; empacar / reportar error / apartado'],
+            ['fase' => 'RECHAZADO_VENDEDORA', 'etiqueta' => 'Rechazado o devuelto para corrección', 'nota' => 'Corregir y reenviar'],
             ['fase' => 'INCIDENCIA_CEDIS', 'etiqueta' => 'Error CEDIS', 'nota' => 'Problema de empaque/pesaje reportado'],
             ['fase' => 'PENDIENTE_DE_GUIA', 'etiqueta' => 'Pendiente de guía', 'nota' => 'Empacado; falta rastreo'],
-            ['fase' => 'PENDIENTE_DE_ENVIO', 'etiqueta' => 'Pendiente de envío', 'nota' => 'Listo para marcar enviado'],
-            ['fase' => 'ENVIADO', 'etiqueta' => 'Enviado', 'nota' => 'Fin operativo actual'],
+            ['fase' => 'PENDIENTE_DE_ENVIO', 'etiqueta' => 'Pendiente de recolección o envío', 'nota' => 'Empacado + guía (si aplica); espera recolecta'],
+            ['fase' => 'ENVIADO', 'etiqueta' => 'Enviado', 'nota' => 'La paquetería recogió el paquete'],
+            ['fase' => 'overlay', 'etiqueta' => 'Con retraso', 'nota' => 'Badge guia_retraso; no sustituye la fase'],
+            ['fase' => 'overlay', 'etiqueta' => 'Sin existencias', 'nota' => 'Revisión sin_existencia abierta; detiene enviar/aprobar/empacar hasta decisión de Ventas o stock_ok de CEDIS'],
         ];
     }
 
@@ -110,10 +128,12 @@ class ControlPedidosManualContent
                 'resumen' => 'Creas el pedido, solicitas pesaje cuando aplica, completas datos y lo envías a auditoría. También atiendes rechazos y errores de datos tuyos.',
                 'pasos' => [
                     ['titulo' => 'Crear o autoguardar', 'detalle' => 'El pedido nace en BORRADOR. Puedes ir guardando sin enviar.'],
-                    ['titulo' => 'Pesaje CEDIS (si aplica)', 'detalle' => 'Si el origen requiere logística (y no es complementario), solicita pesaje. CEDIS responde con peso, cajas y tipo de caja. Sin pesaje no podrás enviar.'],
+                    ['titulo' => 'Pesaje CEDIS (si aplica)', 'detalle' => 'Si el origen requiere logística (y no es complementario), solicita pesaje (PESAJE_PENDIENTE). CEDIS responde → PESAJE_RESPONDIDO. Sin pesaje no podrás enviar.'],
                     ['titulo' => 'Completar campos', 'detalle' => 'Cliente, origen, banco, almacén, mercancía, comprobante de pago, paquetería, tipo de guía, reexpedición, CP y domicilio (o dirección verificada).'],
                     ['titulo' => 'Enviar', 'detalle' => 'Pasa a PENDIENTE_AUXILIAR. Se limpia remisión/validación de pago previas y se notifica al auxiliar.'],
                     ['titulo' => 'Si te rechazan o reportan error', 'detalle' => 'Aparece en RECHAZADAS. Corrige los campos marcados y reenvía.'],
+                    ['titulo' => 'Saldo a favor', 'detalle' => 'Indica el monto a aplicar; el sistema reparte FIFO (vence primero). No se elige crédito. Varios saldos en un pedido sí; uso parcial permitido con aviso de preferir completo.'],
+                    ['titulo' => 'Sin existencias', 'detalle' => 'Tab Sin existencias + alerta. El pedido no se envía ni se empaca hasta atender cada pieza: contactar, esperar, retirar, sustituir o cancelar. Retirar/sustituir recálcula mercancía, envío, seguro y saldo a favor.'],
                 ],
                 'elementos' => [
                     ['nombre' => 'Tabs del listado', 'uso' => 'Filtra por estado (todas, borradores, rechazadas, enviados, etc.).'],
@@ -134,11 +154,12 @@ class ControlPedidosManualContent
                 'ruta' => '/control-pedidos/auditar',
                 'resumen' => 'Revisas pago y remisión, apruebas hacia CEDIS, rechazas, reportas errores de datos, gestionas anexos de envío y liberas resguardos.',
                 'pasos' => [
-                    ['titulo' => 'Validar pago', 'detalle' => 'Marca pago_validado. Obligatorio antes de aprobar.'],
-                    ['titulo' => 'Subir remisión PDF', 'detalle' => 'Documento tipo remisión. Obligatorio antes de aprobar.'],
-                    ['titulo' => 'Aprobar', 'detalle' => 'Envía a EN_CEDIS (o a pendiente de guía si queda error de guías en cola y ya estaba empacado).'],
+                    ['titulo' => 'Validar pago', 'detalle' => 'Hito «Pago en revisión» → «Pago validado». Obligatorio antes de aprobar. No cambia fase.'],
+                    ['titulo' => 'Subir remisión PDF', 'detalle' => 'Hito «Pendiente de remisión» hasta adjuntar. Obligatorio antes de aprobar.'],
+                    ['titulo' => 'Aprobar', 'detalle' => 'Envía a pendiente de empaque (EN_CEDIS). No aprobar sin pago+remisión.'],
                     ['titulo' => 'Rechazar', 'detalle' => 'Motivo obligatorio → RECHAZADO_VENDEDORA.'],
                     ['titulo' => 'Reportar error de datos', 'detalle' => 'Selecciona campos incorrectos. No uses remisión vía este flujo estando en pendiente auxiliar: corrígela en tu bandeja.'],
+                    ['titulo' => 'Alerta de saldos a favor', 'detalle' => 'Si hay incidencia SAF, ves un aviso ámbar (solo auxiliar). No cambia la fase del pedido. Corrige el monto si aplica, marca revisado (bitácora) y continúa.'],
                 ],
                 'elementos' => [
                     ['nombre' => 'Validar pago', 'uso' => 'Flag de auditoría; no cambia fase.'],
@@ -146,10 +167,12 @@ class ControlPedidosManualContent
                     ['nombre' => 'Aprobar / Rechazar', 'uso' => 'Transiciones principales de auditoría.'],
                     ['nombre' => 'Liberar resguardo', 'uso' => 'Con captura de costo/comprobante cuando aplica.'],
                     ['nombre' => 'Anexos de envío', 'uso' => 'Aprobar o rechazar regularización de costo.'],
+                    ['nombre' => 'Alerta SAF', 'uso' => 'Banner no bloqueante; resolver incidencia y seguir.'],
                 ],
                 'errores_que_te_llegan' => [
                     'Error de remisión (campos remision / folio_remision) desde CEDIS o guías.',
                     'Alertas de error CEDIS / empaque (informativas).',
+                    'Alerta de saldos a favor (no bloqueante).',
                 ],
             ],
             [
@@ -159,15 +182,15 @@ class ControlPedidosManualContent
                 'ruta' => '/control-pedidos/cedis',
                 'resumen' => 'Respondes pesajes, empacas (incluye grupo principal+complementos), reportas errores, apartas resguardos y marcas envíos.',
                 'pasos' => [
-                    ['titulo' => 'Responder pesaje', 'detalle' => 'Peso, cajas, tipo de caja → pesaje_listo para la vendedora.'],
-                    ['titulo' => 'Empacar', 'detalle' => 'Requiere pago validado + remisión. Bloqueado si es_resguardo abierto. Destino: PENDIENTE_DE_GUIA o PENDIENTE_DE_ENVIO.'],
+                    ['titulo' => 'Responder pesaje', 'detalle' => 'Peso, cajas, tipo de caja y revisión física. Si no hay existencias, márquela (no la omita) → Ventas queda detenida hasta elegir acción.'],
+                    ['titulo' => 'Empacar', 'detalle' => 'Requiere pago+remisión, sin errores graves de guía/pago/productos y sin piezas sin existencias abiertas. Empacado ≠ enviado. Destino: pendiente de guía o de recolección.'],
                     ['titulo' => 'Reportar error', 'detalle' => 'Campos incorrectos (incluye CEDIS) → dueño correspondiente; Error CEDIS si es empaque/pesaje.'],
-                    ['titulo' => 'Marcar enviado', 'detalle' => 'Solo en PENDIENTE_DE_ENVIO, empacado, y con guía si ofrece rastreo.'],
-                    ['titulo' => 'Revertir empacado', 'detalle' => 'Solo sin número de guía asignado; vuelve a EN_CEDIS.'],
+                    ['titulo' => 'Confirmar recolección', 'detalle' => 'Solo en pendiente de recolección, empacado, y con guía si ofrece rastreo. Marca ENVIADO cuando la paquetería recogió.'],
+                    ['titulo' => 'Revertir empacado', 'detalle' => 'Solo sin número de guía asignado; vuelve a pendiente de empaque. Reabrir ENVIADO requiere permiso control_pedidos.reabrir.'],
                 ],
                 'elementos' => [
                     ['nombre' => 'Marcar empacado', 'uso' => 'Avanza fase según rastreo/guía.'],
-                    ['nombre' => 'Marcar enviado', 'uso' => 'Cierre operativo → ENVIADO.'],
+                    ['nombre' => 'Paquetería recogió', 'uso' => 'Cierre operativo → ENVIADO (solo recolecta real).'],
                     ['nombre' => 'Reportar error', 'uso' => 'Documenta campo incorrecto y dueño de corrección.'],
                     ['nombre' => 'Apartado resguardo', 'uso' => 'Evidencia fotográfica de piezas apartadas.'],
                 ],
@@ -183,8 +206,8 @@ class ControlPedidosManualContent
                 'ruta' => '/control-pedidos/delegado',
                 'resumen' => 'Asignas número de rastreo, PDF de guía, importación masiva y corrección de guías. No asignas guía a pedidos en resguardo.',
                 'pasos' => [
-                    ['titulo' => 'Asignar guía (post-empaque)', 'detalle' => 'PENDIENTE_DE_GUIA → PENDIENTE_DE_ENVIO; notifica a CEDIS.'],
-                    ['titulo' => 'Guía pre-empaque', 'detalle' => 'Puedes capturar en EN_CEDIS sin cambiar fase; al empacar irá directo a pendiente de envío.'],
+                    ['titulo' => 'Asignar guía (post-empaque)', 'detalle' => 'PENDIENTE_DE_GUIA → pendiente de recolección; notifica a CEDIS.'],
+                    ['titulo' => 'Guía pre-empaque', 'detalle' => 'Puedes capturar en EN_CEDIS sin cambiar fase; al empacar irá directo a pendiente de recolección.'],
                     ['titulo' => 'PDF de guía', 'detalle' => 'Adjunta el documento de la paquetería.'],
                     ['titulo' => 'Importar / exportar', 'detalle' => 'Plantilla CSV para carga masiva.'],
                     ['titulo' => 'Actualizar guía', 'detalle' => 'Corrección; puede marcar retraso y avisar a CEDIS.'],
@@ -231,9 +254,9 @@ class ControlPedidosManualContent
     private static function erroresFiltrados(array $ids): array
     {
         $mapa = [
-            'vendedora' => ['pedido_rechazado_auxiliar', 'pedido_error_datos', 'pedido_enviado', 'pedido_pesaje_listo'],
+            'vendedora' => ['pedido_rechazado_auxiliar', 'pedido_error_datos', 'pedido_enviado', 'pedido_pesaje_listo', 'pedido_sin_existencia'],
             'auxiliar' => ['pedido_pendiente_auxiliar', 'pedido_error_remision', 'pedido_error_cedis', 'pedido_incidencia_cedis'],
-            'cedis' => ['pedido_aprobado', 'pedido_consulta_pesaje', 'pedido_pendiente_envio', 'pedido_guia_asignada', 'pedido_error_guia', 'pedido_error_cedis', 'pedido_guia_retraso'],
+            'cedis' => ['pedido_aprobado', 'pedido_consulta_pesaje', 'pedido_pendiente_envio', 'pedido_guia_asignada', 'pedido_error_guia', 'pedido_error_cedis', 'pedido_guia_retraso', 'pedido_sin_existencia'],
             'guias' => ['pedido_pendiente_guia', 'pedido_error_guia'],
             'direcciones' => [],
         ];
@@ -248,6 +271,7 @@ class ControlPedidosManualContent
         $catalogo = [
             'pedido_consulta_pesaje' => 'Consulta de pesaje pendiente en CEDIS.',
             'pedido_pesaje_listo' => 'CEDIS respondió el pesaje; ya puedes cotizar/enviar.',
+            'pedido_sin_existencia' => 'Producto sin existencias; el pedido está detenido hasta que Ventas elija acción.',
             'pedido_pendiente_auxiliar' => 'Pedido en bandeja de auditoría.',
             'pedido_aprobado' => 'Pedido aprobado; visible en CEDIS.',
             'pedido_rechazado_auxiliar' => 'Rechazado; corrige y reenvía.',
@@ -259,9 +283,9 @@ class ControlPedidosManualContent
             'pedido_incidencia_cedis' => 'Error de empaque reportado.',
             'pedido_guia_retraso' => 'Retraso por error/corrección post-guía.',
             'pedido_pendiente_guia' => 'Empacado; falta captura de guía.',
-            'pedido_pendiente_envio' => 'Listo para marcar enviado.',
-            'pedido_guia_asignada' => 'Guía asignada; pendiente de envío.',
-            'pedido_enviado' => 'Pedido marcado como enviado.',
+            'pedido_pendiente_envio' => 'Empacado; pendiente de recolección.',
+            'pedido_guia_asignada' => 'Guía asignada; pendiente de recolección.',
+            'pedido_enviado' => 'La paquetería recogió el paquete.',
         ];
 
         $out = [];
@@ -287,7 +311,7 @@ class ControlPedidosManualContent
         $todos = [
             [
                 'titulo' => 'Caso feliz',
-                'detalle' => 'Borrador → pesaje → enviar → validar pago + remisión → aprobar → empacar (con o sin guía) → asignar guía si falta → marcar enviado.',
+                'detalle' => 'Borrador → pesaje pendiente → pesaje respondido → auditoría (hitos pago/remisión) → aprobar → empacar ≠ enviado → guía → pendiente de recolección → paquetería recogió.',
                 'secciones' => ['vendedora', 'auxiliar', 'cedis', 'guias'],
             ],
             [
@@ -304,6 +328,11 @@ class ControlPedidosManualContent
                 'titulo' => 'Empaque con y sin guía',
                 'detalle' => 'Paquetería con rastreo y sin número → PENDIENTE_DE_GUIA. Sin rastreo o con guía ya capturada → PENDIENTE_DE_ENVIO.',
                 'secciones' => ['cedis', 'guias'],
+            ],
+            [
+                'titulo' => 'Sin existencias',
+                'detalle' => 'CEDIS marca la pieza. Ventas retira, sustituye, espera, contacta o cancela. Sin envío parcial. Recálculo + bitácora. Si ya estaba pagado y cambia mercancía, vuelve a auditoría sin remisión/pago.',
+                'secciones' => ['vendedora', 'auxiliar', 'cedis'],
             ],
         ];
 

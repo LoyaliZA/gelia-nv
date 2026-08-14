@@ -71,20 +71,18 @@ export default function DiagramaMaestro() {
                     <Arrow label="PDF o foto del pedido (sin comprobante)" />
                     <Node tone="mute">Solicitar pesaje → <strong>PESAJE_PENDIENTE</strong></Node>
                     <Arrow label="CEDIS responde" />
-                    <Node tone="ok">pesaje_listo (peso / cajas). Si agrega piezas: 2º PDF/foto + re-pesaje</Node>
+                    <Node tone="ok"><strong>PESAJE_RESPONDIDO</strong> (peso / cajas). Si agrega piezas: re-pesaje</Node>
                     <Arrow label="Comprobante + cotización OK" />
-                    <Node tone="ok">Enviar → <strong>PENDIENTE_AUXILIAR</strong></Node>
+                    <Node tone="ok">Enviar → <strong>PENDIENTE_AUDITORÍA</strong></Node>
                     <p className="text-[9px] theme-text-muted m-0 pt-1 leading-relaxed">
                         Pre-venta: conservar borrador o eliminar si el cliente no compra. Al enviar: limpia remisión y pago validado; notifica auxiliar.
                     </p>
                 </Lane>
 
                 <Lane title="2 · Auxiliar · Auditar">
-                    <Node>Validar pago (flag)</Node>
-                    <Arrow />
-                    <Node>Subir remisión PDF</Node>
-                    <Arrow label="Ambos OK" />
-                    <Node tone="ok">Aprobar → <strong>EN_CEDIS</strong></Node>
+                    <Node>Hitos: pago en revisión → pago validado → pendiente de remisión</Node>
+                    <Arrow label="Pago + remisión OK" />
+                    <Node tone="ok">Aprobar → <strong>PENDIENTE_EMPAQUE</strong></Node>
                     <Arrow label="O" />
                     <Node tone="err">Rechazar + motivo → <strong>RECHAZADO</strong></Node>
                     <p className="text-[9px] theme-text-muted m-0 pt-1 leading-relaxed">
@@ -93,24 +91,24 @@ export default function DiagramaMaestro() {
                 </Lane>
 
                 <Lane title="3 · CEDIS · Empaque">
-                    <Node>Pedido en <strong>EN_CEDIS</strong></Node>
+                    <Node>Pedido en <strong>PENDIENTE_EMPAQUE</strong></Node>
                     <Arrow label="¿Resguardo abierto?" />
                     <Node tone="warn">Sí → bloquea empaque/guía hasta liberar</Node>
                     <Arrow label="No / liberado" />
-                    <Node tone="ok">Empacar</Node>
+                    <Node tone="ok">Empacar (≠ enviado)</Node>
                     <Arrow label="¿Ofrece rastreo y sin guía?" />
                     <Node>Sí → <strong>PENDIENTE_DE_GUIA</strong></Node>
-                    <Node tone="ok">No / ya hay guía → <strong>PENDIENTE_DE_ENVIO</strong></Node>
+                    <Node tone="ok">No / ya hay guía → <strong>PENDIENTE_RECOLECCIÓN</strong></Node>
                 </Lane>
 
                 <Lane title="4 · Guías + envío">
                     <Node>Asignar Nº guía / PDF</Node>
                     <Arrow label="Post-empaque" />
-                    <Node tone="ok"><strong>PENDIENTE_DE_ENVIO</strong></Node>
-                    <Arrow label="CEDIS" />
-                    <Node tone="ok">Marcar enviado → <strong>ENVIADO</strong></Node>
+                    <Node tone="ok"><strong>PENDIENTE_RECOLECCIÓN</strong></Node>
+                    <Arrow label="Paquetería recogió" />
+                    <Node tone="ok"><strong>ENVIADO</strong></Node>
                     <p className="text-[9px] theme-text-muted m-0 pt-1 leading-relaxed">
-                        Guía pre-empaque: se puede capturar en EN_CEDIS sin cambiar fase.
+                        Guía pre-empaque: se puede capturar en pendiente de empaque sin cambiar fase. Overlay «Con retraso» no sustituye la fase.
                     </p>
                 </Lane>
             </div>
@@ -124,10 +122,11 @@ export default function DiagramaMaestro() {
                     {[
                         'BORRADOR',
                         'PESAJE_PENDIENTE',
-                        'PENDIENTE_AUXILIAR',
-                        'EN_CEDIS',
+                        'PESAJE_RESPONDIDO',
+                        'PENDIENTE_AUDITORÍA',
+                        'PENDIENTE_EMPAQUE',
                         'PENDIENTE_DE_GUIA*',
-                        'PENDIENTE_DE_ENVIO',
+                        'PENDIENTE_RECOLECCIÓN',
                         'ENVIADO',
                     ].map((fase, i, arr) => (
                         <React.Fragment key={fase}>

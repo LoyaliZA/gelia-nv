@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { Search, Wallet, PlusCircle, ClipboardCheck, Upload, AlertTriangle } from 'lucide-react';
+import { Search, Wallet, PlusCircle, ClipboardCheck, Upload, AlertTriangle, Settings2, Filter, ExternalLink, CheckCircle2, X, Save } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
 import GeliaPaginacion from '../../Components/GeliaPaginacion';
 import { geliaCardClass, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } from '../../utils/geliaTheme';
+import SafModal from './Partials/SafModal';
 import {
+    BTN_ICON,
     BTN_PRIMARY,
     BTN_SECONDARY,
     FLASH_ERR,
@@ -19,10 +21,9 @@ import {
     TH,
     THEME_INPUT,
     THEME_LABEL,
-    THEME_MODAL_OVERLAY,
-    THEME_MODAL_SHELL,
     THEME_SELECT,
     THEME_TEXTAREA,
+    fmtFecha,
     fmtMoneda,
     groupMotivosByCategoria,
 } from './Partials/safStyles';
@@ -132,25 +133,26 @@ export default function Index({
         return undefined;
     };
 
-    const revisarPago = (pagoId, estado) => {
-        let observaciones;
-        if (estado === 'con_observaciones' || estado === 'rechazado') {
-            const texto = window.prompt(
-                estado === 'rechazado'
-                    ? 'Motivo del rechazo de la exhibición:'
-                    : 'Observaciones de la exhibición:'
-            );
-            if (texto == null) return;
-            observaciones = texto.trim();
-            if (observaciones.length < 5) {
-                window.alert('Debe indicar al menos 5 caracteres.');
-                return;
-            }
-        }
-        router.post(route('saldos_favor.pagos.revisar', pagoId), {
-            estado_revision: estado,
-            ...(observaciones ? { observaciones } : {}),
-        }, { preserveScroll: true });
+    const [pagoRevision, setPagoRevision] = useState(null);
+    const formPagoRevision = useForm({ estado_revision: 'verificado', observaciones: '' });
+
+    const abrirRevisionPago = (pago) => {
+        setPagoRevision(pago);
+        formPagoRevision.setData({ estado_revision: 'verificado', observaciones: '' });
+        formPagoRevision.clearErrors();
+    };
+
+    const cerrarRevisionPago = () => {
+        setPagoRevision(null);
+        formPagoRevision.reset();
+    };
+
+    const enviarRevisionPago = (e) => {
+        e.preventDefault();
+        formPagoRevision.post(route('saldos_favor.pagos.revisar', pagoRevision.id), {
+            preserveScroll: true,
+            onSuccess: cerrarRevisionPago,
+        });
     };
 
     const resolverIncidencia = (id) => {
@@ -161,6 +163,11 @@ export default function Index({
 
     const acciones = (
         <div className="flex flex-wrap gap-2">
+            {can('saldos_favor.configurar') && (
+                <Link href={route('saldos_favor.configurar.edit')} className={`${BTN_SECONDARY} inline-flex items-center gap-2`}>
+                    <Settings2 className="w-4 h-4" /> Reglas
+                </Link>
+            )}
             {can('saldos_favor.caja') && (
                 <Link href={route('saldos_favor.caja.index')} className={`${BTN_SECONDARY} inline-flex items-center gap-2`}>
                     <Wallet className="w-4 h-4" /> Caja
@@ -264,7 +271,11 @@ export default function Index({
                                 <label className={THEME_LABEL}>Estado financiero</label>
                                 <select className={`${THEME_SELECT} w-full mt-1`} value={estadoFinanciero} onChange={(e) => setEstadoFinanciero(e.target.value)}>
                                     <option value="">Todos</option>
-                                    {Object.entries(LABEL_ESTADO_FIN).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                    <option value="disponible">Disponible</option>
+                                    <option value="reservado">Reservado</option>
+                                    <option value="aplicado">Aplicado</option>
+                                    <option value="vencido">Vencido</option>
+                                    <option value="cancelado">Cancelado</option>
                                 </select>
                             </div>
                             <div className="min-w-[140px]">
@@ -293,7 +304,9 @@ export default function Index({
                                 <label className={THEME_LABEL}>Antigüedad (días)</label>
                                 <input type="number" className={`${THEME_INPUT} w-full mt-1`} value={antiguedadDias} onChange={(e) => setAntiguedadDias(e.target.value)} />
                             </div>
-                            <button type="button" onClick={() => buscar()} className={BTN_PRIMARY}>Filtrar</button>
+                            <button type="button" onClick={() => buscar()} className={BTN_PRIMARY}>
+                                <Filter className="w-4 h-4" /> Filtrar
+                            </button>
                         </div>
 
                         <div className={geliaCardClass('overflow-hidden')}>
@@ -352,7 +365,7 @@ export default function Index({
                                             <td className={`${TD} text-right`}>
                                                 <Link
                                                     href={route('saldos_favor.cuenta', c.cliente_id)}
-                                                    className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-wide"
+                                                    className={BTN_ICON}
                                                     style={{ color: 'var(--color-primario)' }}
                                                 >
                                                     <ClipboardCheck className="w-4 h-4 shrink-0" /> Cuenta
@@ -384,7 +397,13 @@ export default function Index({
                                 <td className={TD}>{fmtMoneda(c.monto_disponible)}</td>
                                 <td className={TD}>{LABEL_CANAL[c.canal_origen] || c.canal_origen}</td>
                                 <td className={`${TD} text-right`}>
-                                    <Link href={route('saldos_favor.cuenta', c.cliente_id)} className="text-xs font-black uppercase" style={{ color: 'var(--color-primario)' }}>Revisar</Link>
+                                    <Link
+                                        href={route('saldos_favor.cuenta', c.cliente_id)}
+                                        className={BTN_ICON}
+                                        style={{ color: 'var(--color-primario)' }}
+                                    >
+                                        <ClipboardCheck className="w-4 h-4" /> Revisar
+                                    </Link>
                                 </td>
                             </>
                         )}
@@ -402,19 +421,16 @@ export default function Index({
                                 <td className={TD}>{p.pedido?.cliente?.nombre}</td>
                                 <td className={TD}>{fmtMoneda(p.monto)}</td>
                                 <td className={TD}>{LABEL_ESTADO_REV[p.estado_revision] || p.estado_revision}</td>
-                                <td className={`${TD} text-right whitespace-nowrap space-x-2`}>
+                                <td className={`${TD} text-right`}>
                                     {can('saldos_favor.revisar') && (
-                                        <>
-                                            <button type="button" className="text-xs font-black uppercase text-emerald-700" onClick={() => revisarPago(p.id, 'verificado')}>
-                                                Verificar
-                                            </button>
-                                            <button type="button" className="text-xs font-black uppercase text-amber-700" onClick={() => revisarPago(p.id, 'con_observaciones')}>
-                                                Observaciones
-                                            </button>
-                                            <button type="button" className="text-xs font-black uppercase text-rose-700" onClick={() => revisarPago(p.id, 'rechazado')}>
-                                                Rechazar
-                                            </button>
-                                        </>
+                                        <button
+                                            type="button"
+                                            className={BTN_ICON}
+                                            style={{ color: 'var(--color-primario)' }}
+                                            onClick={() => abrirRevisionPago(p)}
+                                        >
+                                            <ClipboardCheck className="w-4 h-4" /> Revisar
+                                        </button>
                                     )}
                                 </td>
                             </>
@@ -434,7 +450,13 @@ export default function Index({
                                 <td className={TD}>{fmtMoneda(c.monto_aplicado)}</td>
                                 <td className={TD}>{c.estado}</td>
                                 <td className={`${TD} text-right`}>
-                                    <Link href={route('saldos_favor.caja.comprobante', c.id)} className="text-xs font-black uppercase" style={{ color: 'var(--color-primario)' }}>Abrir</Link>
+                                    <Link
+                                        href={route('saldos_favor.caja.comprobante', c.id)}
+                                        className={BTN_ICON}
+                                        style={{ color: 'var(--color-primario)' }}
+                                    >
+                                        <ExternalLink className="w-4 h-4" /> Abrir
+                                    </Link>
                                 </td>
                             </>
                         )}
@@ -478,8 +500,8 @@ export default function Index({
                                         </td>
                                         <td className={`${TD} text-right`}>
                                             {can('saldos_favor.ajustar') && (
-                                                <button type="button" className="text-xs font-black uppercase text-emerald-700" onClick={() => resolverIncidencia(i.id)}>
-                                                    Resolver
+                                                <button type="button" className={`${BTN_ICON} text-emerald-700 dark:text-emerald-400`} onClick={() => resolverIncidencia(i.id)}>
+                                                    <CheckCircle2 className="w-4 h-4" /> Resolver
                                                 </button>
                                             )}
                                         </td>
@@ -490,10 +512,14 @@ export default function Index({
                     </div>
                 )}
 
-                {mostrarGenerar && (
-                    <div className={THEME_MODAL_OVERLAY} role="dialog" aria-modal="true">
-                        <form onSubmit={enviarGenerar} className={`${THEME_MODAL_SHELL} w-full max-w-lg p-6 space-y-4`}>
-                            <h2 className="text-lg font-black italic uppercase tracking-tight theme-text-main m-0">Generar saldo a favor</h2>
+                <SafModal
+                    abierto={mostrarGenerar}
+                    onClose={() => setMostrarGenerar(false)}
+                    maxWidth="max-w-lg"
+                    labelledBy="saf-generar-titulo"
+                >
+                    <form onSubmit={enviarGenerar} className="gelia-modal-body p-6 space-y-4">
+                            <h2 id="saf-generar-titulo" className="text-lg font-black italic uppercase tracking-tight theme-text-main m-0">Generar saldo a favor</h2>
                             <div>
                                 <label className={THEME_LABEL}>Cliente</label>
                                 <input className={`${THEME_INPUT} w-full mt-1`} value={clienteQuery} onChange={(e) => buscarClientes(e.target.value)} placeholder="Número o nombre" />
@@ -563,12 +589,136 @@ export default function Index({
                                 {form.errors.evidencias && <p className="text-xs font-bold text-rose-600 mt-1 m-0">{form.errors.evidencias}</p>}
                             </div>
                             <div className="flex justify-end gap-2 pt-2">
-                                <button type="button" className={BTN_SECONDARY} onClick={() => setMostrarGenerar(false)}>Cancelar</button>
-                                <button type="submit" disabled={form.processing} className={BTN_PRIMARY}>Guardar</button>
+                                <button type="button" className={BTN_SECONDARY} onClick={() => setMostrarGenerar(false)}>
+                                    <X className="w-4 h-4" /> Cancelar
+                                </button>
+                                <button type="submit" disabled={form.processing} className={BTN_PRIMARY}>
+                                    <Save className="w-4 h-4" /> Guardar
+                                </button>
+                            </div>
+                    </form>
+                </SafModal>
+
+                <SafModal
+                    abierto={Boolean(pagoRevision)}
+                    onClose={cerrarRevisionPago}
+                    maxWidth="max-w-2xl"
+                    labelledBy="saf-pago-revision-titulo"
+                >
+                    {pagoRevision && (
+                        <form onSubmit={enviarRevisionPago} className="gelia-modal-body p-6 space-y-4 max-h-[min(90vh,920px)] overflow-y-auto">
+                            <h2 id="saf-pago-revision-titulo" className="text-lg font-black italic uppercase tracking-tight theme-text-main m-0">
+                                Revisar exhibición · {pagoRevision.pedido?.folio || `#${pagoRevision.pedido_bma_id}`}
+                            </h2>
+
+                            <div className="rounded-2xl border theme-border theme-element p-3 space-y-3">
+                                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                    <div>
+                                        <span className="theme-text-muted font-bold">Cliente</span>
+                                        <div className="font-black theme-text-main">{pagoRevision.pedido?.cliente?.nombre || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <span className="theme-text-muted font-bold">Monto</span>
+                                        <div className="font-black theme-text-main">{fmtMoneda(pagoRevision.monto)}</div>
+                                    </div>
+                                    <div>
+                                        <span className="theme-text-muted font-bold">Forma</span>
+                                        <div className="font-semibold">{pagoRevision.forma_pago || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <span className="theme-text-muted font-bold">Banco</span>
+                                        <div className="font-semibold">{pagoRevision.banco?.nombre || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <span className="theme-text-muted font-bold">Fecha pago</span>
+                                        <div className="font-semibold">{fmtFecha(pagoRevision.fecha_pago)}</div>
+                                    </div>
+                                    <div>
+                                        <span className="theme-text-muted font-bold">Referencia</span>
+                                        <div className="font-semibold truncate">{pagoRevision.referencia || '—'}</div>
+                                    </div>
+                                </div>
+
+                                {pagoRevision.url || pagoRevision.ruta_archivo ? (
+                                    (() => {
+                                        const href = pagoRevision.url || `/storage/${pagoRevision.ruta_archivo}`;
+                                        const mime = String(pagoRevision.mime_type || '').toLowerCase();
+                                        const nombre = pagoRevision.nombre_original || '';
+                                        const esImg = mime.startsWith('image/') || /\.(jpe?g|png|webp|gif)(\?|$)/i.test(`${nombre} ${href}`);
+                                        return (
+                                            <a
+                                                href={href}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="block rounded-xl border theme-border overflow-hidden hover:border-[var(--color-primario)] transition-colors"
+                                            >
+                                                {esImg ? (
+                                                    <div className="bg-black/5 dark:bg-white/5 flex items-center justify-center p-2">
+                                                        <img src={href} alt={nombre || 'Comprobante'} className="max-h-56 w-full object-contain" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="px-4 py-6 text-center text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                                                        Abrir comprobante · {nombre || 'archivo'}
+                                                    </div>
+                                                )}
+                                            </a>
+                                        );
+                                    })()
+                                ) : (
+                                    <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 m-0">
+                                        Esta exhibición no tiene archivo adjunto.
+                                    </p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className={THEME_LABEL}>Resolución</label>
+                                <select
+                                    className={`${THEME_SELECT} w-full mt-1`}
+                                    value={formPagoRevision.data.estado_revision}
+                                    onChange={(e) => formPagoRevision.setData('estado_revision', e.target.value)}
+                                >
+                                    <option value="verificado">Verificado</option>
+                                    <option value="con_observaciones">Con observaciones</option>
+                                    <option value="rechazado">Rechazado</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className={THEME_LABEL}>
+                                    Observaciones
+                                    {(formPagoRevision.data.estado_revision === 'con_observaciones'
+                                        || formPagoRevision.data.estado_revision === 'rechazado') && ' (obligatorias)'}
+                                </label>
+                                <textarea
+                                    className={`${THEME_TEXTAREA} w-full mt-1`}
+                                    value={formPagoRevision.data.observaciones}
+                                    onChange={(e) => formPagoRevision.setData('observaciones', e.target.value)}
+                                    required={
+                                        formPagoRevision.data.estado_revision === 'con_observaciones'
+                                        || formPagoRevision.data.estado_revision === 'rechazado'
+                                    }
+                                    minLength={
+                                        formPagoRevision.data.estado_revision === 'con_observaciones'
+                                        || formPagoRevision.data.estado_revision === 'rechazado'
+                                            ? 5
+                                            : undefined
+                                    }
+                                />
+                                {formPagoRevision.errors.observaciones && (
+                                    <p className="text-xs font-bold text-rose-600 mt-1 m-0">{formPagoRevision.errors.observaciones}</p>
+                                )}
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <button type="button" className={BTN_SECONDARY} onClick={cerrarRevisionPago}>
+                                    <X className="w-4 h-4" /> Cerrar
+                                </button>
+                                <button type="submit" disabled={formPagoRevision.processing} className={BTN_PRIMARY}>
+                                    <Save className="w-4 h-4" /> Guardar revisión
+                                </button>
                             </div>
                         </form>
-                    </div>
-                )}
+                    )}
+                </SafModal>
             </GeliaPageShell>
         </AppLayout>
     );

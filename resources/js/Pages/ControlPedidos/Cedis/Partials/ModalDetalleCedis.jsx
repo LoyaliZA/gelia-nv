@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
-    X, CheckCircle2, AlertTriangle, FileText, User, Truck, PackageCheck,
+    X, CheckCircle2, AlertTriangle, FileText, User, Truck, PackageCheck, Undo2,
 } from 'lucide-react';
 import {
     badgeEmpaqueSemantico,
@@ -22,6 +22,8 @@ import {
     BTN_SECONDARY,
     tieneGuiaPdfDisponible,
     etiquetasInstanciaRevision,
+    revisionSinExistenciaAbierta,
+    LABELS_RESOLUCION_SIN_EXISTENCIA,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
@@ -32,6 +34,7 @@ import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 import ListaErroresPedido from '../../Partials/ListaErroresPedido';
+import { THEME_INPUT, THEME_TEXTAREA } from '../../../../utils/geliaTheme';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
@@ -49,11 +52,15 @@ const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo ===
 export default function ModalDetalleCedis({
     abierto, onClose, pedido: pedidoInicial, onReportarErrorDatos, onMarcarApartado,
 }) {
+    const { auth } = usePage().props;
+    const permisos = auth?.user?.permissions || [];
+    const puedeReabrir = permisos.includes('control_pedidos.reabrir') || auth?.user?.roles?.includes('Super Admin');
     const [pedido, setPedido] = useState(pedidoInicial);
     const [procesando, setProcesando] = useState(false);
     const [docPreview, setDocPreview] = useState(null);
     const [confirmacion, setConfirmacion] = useState(null);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
+    const [reporteSinEx, setReporteSinEx] = useState({ descripcion: '', comentario: '' });
 
     useEffect(() => {
         if (abierto && pedidoInicial) {
@@ -108,8 +115,11 @@ export default function ModalDetalleCedis({
         || evidenciasEnvio.length > 0;
     const esErrorCedis = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
-    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
+    const haySinExAbierta = revisiones.some(revisionSinExistenciaAbierta);
+    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !haySinExAbierta;
+    const puedeReportarSinEx = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.empacado_at;
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
+    const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
     const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const mostrarGuia = tieneGuiaPdfDisponible(pedido) || Boolean(pedido.numero_rastreo)
@@ -138,10 +148,45 @@ export default function ModalDetalleCedis({
             router.post(route('control_pedidos.cedis.marcar_enviado', pedido.id), {}, {
                 preserveScroll: true,
                 onSuccess: () => {
-                    setAlerta({ abierto: true, tipo: 'success', titulo: 'Enviado', mensaje: 'Pedido marcado como enviado.' });
+                    setAlerta({ abierto: true, tipo: 'success', titulo: 'Recolección', mensaje: 'Paquetería confirmada: el pedido fue recogido.' });
                     onClose();
                 },
-                onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo marcar como enviado.' }),
+                onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo confirmar la recolección.' }),
+                onFinish: () => setProcesando(false),
+            });
+            return;
+        }
+
+        if (accion === 'reportar_sin_ex') {
+            if (!reporteSinEx.descripcion.trim() || !reporteSinEx.comentario.trim()) {
+                setAlerta({ abierto: true, tipo: 'error', titulo: 'Sin existencias', mensaje: 'Indique producto y comentario para Ventas.' });
+                return;
+            }
+            setProcesando(true);
+            router.post(route('control_pedidos.cedis.reportar_sin_existencia', pedido.id), {
+                descripcion_producto: reporteSinEx.descripcion,
+                comentario: reporteSinEx.comentario,
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setAlerta({ abierto: true, tipo: 'success', titulo: 'Reportado', mensaje: 'Sin existencias reportada. Ventas fue notificada.' });
+                    setReporteSinEx({ descripcion: '', comentario: '' });
+                },
+                onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo reportar sin existencias.' }),
+                onFinish: () => setProcesando(false),
+            });
+            return;
+        }
+
+        if (accion === 'reabrir') {
+            setProcesando(true);
+            router.post(route('control_pedidos.cedis.reabrir_envio', pedido.id), {}, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setAlerta({ abierto: true, tipo: 'success', titulo: 'Reabierto', mensaje: 'Pedido pendiente de recolección.' });
+                    onClose();
+                },
+                onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo reabrir el envío.' }),
                 onFinish: () => setProcesando(false),
             });
         }
@@ -157,8 +202,12 @@ export default function ModalDetalleCedis({
             variante: 'primary',
         }
         : confirmacion === 'enviar'
-            ? { titulo: 'Confirmar envío', mensaje: 'Al confirmar, el pedido sale a recolección y el estado se actualiza para auxiliar, CEDIS y logística.', etiquetaConfirmar: 'Marcar enviado', variante: 'primary' }
-            : null;
+            ? { titulo: 'Confirmar recolección', mensaje: '¿Confirmas que la paquetería recogió el paquete? Empacado no significa enviado.', etiquetaConfirmar: 'Paquetería recogió', variante: 'primary' }
+            : confirmacion === 'reabrir'
+                ? { titulo: 'Reabrir recolección', mensaje: 'El pedido volverá a pendiente de recolección. Solo si la paquetería no recogió.', etiquetaConfirmar: 'Reabrir', variante: 'danger' }
+                : confirmacion === 'reportar_sin_ex'
+                    ? { titulo: 'Reportar sin existencias', mensaje: 'El pedido quedará detenido y se avisará a Ventas.', etiquetaConfirmar: 'Reportar', variante: 'danger' }
+                    : null;
 
     return createPortal(
         <>
@@ -314,7 +363,28 @@ export default function ModalDetalleCedis({
                                                         {r.estado_fisico === 'sin_existencia' && (
                                                             <p className="text-[10px] font-black uppercase text-sky-600 m-0">
                                                                 Sin existencias en CEDIS — Ventas debe proceder.
+                                                                {r.resolucion ? ` (${LABELS_RESOLUCION_SIN_EXISTENCIA[r.resolucion] || r.resolucion})` : ''}
                                                             </p>
+                                                        )}
+                                                        {revisionSinExistenciaAbierta(r) && puedeReportarSinEx && (
+                                                            <button
+                                                                type="button"
+                                                                disabled={procesando}
+                                                                onClick={() => {
+                                                                    setProcesando(true);
+                                                                    router.post(route('control_pedidos.cedis.confirmar_stock_sin_existencia', pedido.id), {
+                                                                        revision_id: r.id,
+                                                                    }, {
+                                                                        preserveScroll: true,
+                                                                        onSuccess: () => setAlerta({ abierto: true, tipo: 'success', titulo: 'Existencias', mensaje: 'Se confirmó que ya hay existencias. El estado físico se conserva.' }),
+                                                                        onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo confirmar existencias.' }),
+                                                                        onFinish: () => setProcesando(false),
+                                                                    });
+                                                                }}
+                                                                className={`${BTN_SECONDARY} text-xs min-h-[40px]`}
+                                                            >
+                                                                Ya hay existencias
+                                                            </button>
                                                         )}
                                                         {docs.length > 0 && (
                                                             <div className="flex flex-wrap gap-2">
@@ -360,6 +430,43 @@ export default function ModalDetalleCedis({
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            </section>
+                        )}
+
+                        {puedeReportarSinEx && (
+                            <section className={SECCION_WRAP}>
+                                <p className={SECCION}>Reportar sin existencias</p>
+                                <p className="text-xs font-bold theme-text-muted m-0 mb-3">
+                                    Si detecta una pieza faltante en empaque, márquela aquí. El pedido se detiene hasta que Ventas decida.
+                                </p>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase theme-text-muted mb-1 block">Producto</label>
+                                        <input
+                                            value={reporteSinEx.descripcion}
+                                            onChange={(e) => setReporteSinEx((s) => ({ ...s, descripcion: e.target.value }))}
+                                            className={`${THEME_INPUT} w-full py-2`}
+                                            placeholder="SKU o descripción"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[9px] font-black uppercase theme-text-muted mb-1 block">Comentario para Ventas *</label>
+                                        <textarea
+                                            value={reporteSinEx.comentario}
+                                            onChange={(e) => setReporteSinEx((s) => ({ ...s, comentario: e.target.value }))}
+                                            className={`${THEME_TEXTAREA} w-full min-h-[60px]`}
+                                            placeholder="Qué falta y cómo debe proceder Ventas…"
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={procesando}
+                                        onClick={() => setConfirmacion('reportar_sin_ex')}
+                                        className={`${BTN_SECONDARY} text-xs min-h-[40px] border-sky-500/40 text-sky-700`}
+                                    >
+                                        Reportar sin existencias
+                                    </button>
                                 </div>
                             </section>
                         )}
@@ -509,12 +616,20 @@ export default function ModalDetalleCedis({
                                         <span>Costo del seguro</span>
                                         <span>{pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : formatearMoneda(0)}</span>
                                     </div>
+                                    <div className="flex justify-between theme-text-muted font-bold">
+                                        <span>Total a cubrir</span>
+                                        <span>{formatearMoneda(
+                                            Number(pedido.total_mercancia || 0)
+                                            + Number(pedido.costo_envio || 0)
+                                            + (pedido.aplica_seguro ? Number(pedido.costo_seguro || 0) : 0)
+                                        )}</span>
+                                    </div>
                                     <div className="flex justify-between text-emerald-600 font-bold">
                                         <span>Saldo a favor aplicado</span>
                                         <span>- {formatearMoneda(pedido.saldo_a_favor)}</span>
                                     </div>
                                     <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
-                                        <span>Total final del pedido</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
+                                        <span>Total a cobrar ahora</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -552,7 +667,17 @@ export default function ModalDetalleCedis({
                                 disabled={procesando}
                                 className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto sm:ml-auto`}
                             >
-                                <Truck className="w-4 h-4" /> Marcar enviado
+                                <Truck className="w-4 h-4" /> Paquetería recogió
+                            </button>
+                        )}
+                        {puedeReabrirEnvio && (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmacion('reabrir')}
+                                disabled={procesando}
+                                className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto sm:ml-auto`}
+                            >
+                                <Undo2 className="w-4 h-4" /> Reabrir recolección
                             </button>
                         )}
                         {puedeEmpacar && (

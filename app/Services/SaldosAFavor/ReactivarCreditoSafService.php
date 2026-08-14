@@ -4,6 +4,7 @@ namespace App\Services\SaldosAFavor;
 
 use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafMovimiento;
+use App\Support\SaldosAFavor\ReglasSaf;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -36,13 +37,17 @@ class ReactivarCreditoSafService
             }
 
             $antes = $remanente;
-            $dias = $nuevaVigenciaDias ?? SafCredito::VIGENCIA_DIAS;
-            $credito->fecha_vencimiento = now()->addDays($dias)->toDateString();
+            if ($nuevaVigenciaDias !== null) {
+                $credito->fecha_vencimiento = now()->addDays(max(1, $nuevaVigenciaDias))->toDateString();
+            } else {
+                $credito->fecha_vencimiento = ReglasSaf::fechaVencimientoPara(now());
+            }
             $credito->recalcularEstadoFinanciero();
             // Forzar salida de vencido tras recalcular
             if ($credito->estado_financiero === SafCredito::ESTADO_VENCIDO) {
-                $credito->estado_financiero = (float) $credito->monto_aplicado > 0
-                    ? SafCredito::ESTADO_PARCIAL
+                $credito->estado_financiero = (float) $credito->monto_reservado > 0
+                    && (float) $credito->monto_disponible <= 0
+                    ? SafCredito::ESTADO_RESERVADO
                     : SafCredito::ESTADO_DISPONIBLE;
             }
             $credito->save();

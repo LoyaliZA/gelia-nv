@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class SolicitarPesajePedidoBmaService
 {
@@ -25,6 +26,11 @@ class SolicitarPesajePedidoBmaService
         if (! $pedido->tienePdfPedido()) {
             throw new \InvalidArgumentException('Debe adjuntar el PDF o una foto del pedido antes de solicitar el pesaje.');
         }
+
+        MaquinaEstadosPedidoBma::assertTransicion(
+            $pedido->estatus?->fase_ciclo,
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE
+        );
 
         $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE);
         if (! $estatusNuevo) {

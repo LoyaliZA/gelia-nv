@@ -10,6 +10,7 @@ use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -37,6 +38,7 @@ class EnviarPedidoBmaService
             throw new \RuntimeException('Solo la vendedora que creó el pedido puede reenviarlo o corregir sus errores.');
         }
 
+        $pedido->assertSinExistenciaAtendida();
         $this->validarCamposRequeridos($pedido);
         $this->pagosService->assertCubiertoParaEnviar($pedido);
         $this->pagosService->generarExcedenteSiAplica($pedido, $usuarioId);
@@ -54,6 +56,10 @@ class EnviarPedidoBmaService
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $estatusAnterior = $pedido->estatus;
+            MaquinaEstadosPedidoBma::assertTransicion(
+                $estatusAnterior?->fase_ciclo,
+                CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR
+            );
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR)
                 ?? CatalogoEstatusPedido::porCodigo('AZUL_1');
 

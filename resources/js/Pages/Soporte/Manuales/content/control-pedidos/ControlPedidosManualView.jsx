@@ -126,6 +126,36 @@ export default function ControlPedidosManualView({ contenido, seccionesMeta = []
                 <SectionBlock key={s.id} seccion={s} />
             ))}
 
+            {(contenido?.flujo?.reaperturas || []).length > 0 && (
+                <section id="sec-reaperturas" className="scroll-mt-24 space-y-3">
+                    <h2 className="text-lg font-black italic uppercase tracking-tighter theme-text-main m-0">
+                        Matriz de reapertura
+                    </h2>
+                    <div className="overflow-x-auto rounded-xl border theme-border">
+                        <table className="w-full text-left text-xs">
+                            <thead>
+                                <tr className="theme-element border-b theme-border">
+                                    <th className="px-3 py-2 font-black uppercase tracking-wider theme-text-muted">Desde</th>
+                                    <th className="px-3 py-2 font-black uppercase tracking-wider theme-text-muted">Hacia</th>
+                                    <th className="px-3 py-2 font-black uppercase tracking-wider theme-text-muted">Permiso</th>
+                                    <th className="px-3 py-2 font-black uppercase tracking-wider theme-text-muted">Nota</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {contenido.flujo.reaperturas.map((r) => (
+                                    <tr key={`${r.desde}-${r.hacia}`} className="border-b theme-border last:border-0">
+                                        <td className="px-3 py-2.5 font-bold theme-text-main align-top">{r.desde}</td>
+                                        <td className="px-3 py-2.5 theme-text-main align-top">{r.hacia}</td>
+                                        <td className="px-3 py-2.5 font-mono theme-text-muted align-top">{r.permiso}</td>
+                                        <td className="px-3 py-2.5 theme-text-muted align-top">{r.nota}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            )}
+
             <section id="sec-estatus" className="scroll-mt-24 space-y-3">
                 <h2 className="text-lg font-black italic uppercase tracking-tighter theme-text-main m-0">
                     Catálogo de estatus (fase_ciclo)

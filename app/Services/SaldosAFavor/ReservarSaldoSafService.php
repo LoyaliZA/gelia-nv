@@ -15,7 +15,8 @@ class ReservarSaldoSafService
     ) {}
 
     /**
-     * Reserva montos sobre saldos específicos o por FIFO de vencimiento.
+     * Reserva montos por FIFO de vencimiento. Si se pasa selección, se ignora
+     * y se replanifica con el monto total (fuente de verdad: FIFO).
      *
      * @param  list<array{saf_credito_id:int, monto:float|int|string}>|null  $seleccion
      * @return list<array{credito:SafCredito, monto:float}>
@@ -32,18 +33,19 @@ class ReservarSaldoSafService
             throw new InvalidArgumentException('El monto a reservar debe ser mayor a cero.');
         }
 
-        return DB::transaction(function () use ($clienteId, $montoTotal, $usuarioId, $seleccion, $extra) {
-            $plan = $seleccion
-                ? $this->planDesdeSeleccion($clienteId, $seleccion)
-                : $this->planFifo($clienteId, $montoTotal);
+        // Si hay selección explícita, el total es la suma; siempre se aplica FIFO.
+        if ($seleccion !== null && $seleccion !== []) {
+            $sumaSeleccion = round(array_sum(array_map(
+                fn ($r) => (float) ($r['monto'] ?? 0),
+                $seleccion
+            )), 2);
+            if ($sumaSeleccion > 0) {
+                $montoTotal = $sumaSeleccion;
+            }
+        }
 
-            $suma = round(array_sum(array_column($plan, 'monto')), 2);
-            if ($suma + 0.001 < $montoTotal && $seleccion === null) {
-                throw new InvalidArgumentException('Saldo disponible insuficiente para reservar el monto solicitado.');
-            }
-            if ($seleccion !== null && abs($suma - $montoTotal) > 0.01) {
-                // Si hay selección explícita, el total es la suma de la selección.
-            }
+        return DB::transaction(function () use ($clienteId, $montoTotal, $usuarioId, $extra) {
+            $plan = $this->planFifo($clienteId, $montoTotal);
 
             $resultado = [];
             foreach ($plan as $item) {
@@ -82,28 +84,6 @@ class ReservarSaldoSafService
     }
 
     /**
-     * @param  list<array{saf_credito_id:int, monto:float|int|string}>  $seleccion
-     * @return list<array{credito_id:int, monto:float}>
-     */
-    private function planDesdeSeleccion(int $clienteId, array $seleccion): array
-    {
-        $plan = [];
-        foreach ($seleccion as $row) {
-            $id = (int) ($row['saf_credito_id'] ?? 0);
-            $monto = round((float) ($row['monto'] ?? 0), 2);
-            if ($id <= 0 || $monto <= 0) {
-                continue;
-            }
-            $plan[] = ['credito_id' => $id, 'monto' => $monto];
-        }
-        if ($plan === []) {
-            throw new InvalidArgumentException('Debe indicar al menos un saldo a favor con monto a reservar.');
-        }
-
-        return $plan;
-    }
-
-    /**
      * @return list<array{credito_id:int, monto:float}>
      */
     private function planFifo(int $clienteId, float $montoTotal): array
@@ -135,7 +115,7 @@ class ReservarSaldoSafService
     {
         return SafCredito::query()
             ->where('cliente_id', $clienteId)
-            ->whereIn('estado_financiero', [SafCredito::ESTADO_DISPONIBLE, SafCredito::ESTADO_PARCIAL])
+            ->whereIn('estado_financiero', SafCredito::ESTADOS_USABLES)
             ->where('monto_disponible', '>', 0)
             ->whereDate('fecha_vencimiento', '>=', now()->toDateString())
             ->orderBy('fecha_vencimiento')

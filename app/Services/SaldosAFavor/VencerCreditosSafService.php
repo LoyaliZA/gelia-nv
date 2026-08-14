@@ -19,7 +19,7 @@ class VencerCreditosSafService
     {
         $hoy = $hoy ?? now();
         $ids = SafCredito::query()
-            ->whereIn('estado_financiero', [SafCredito::ESTADO_DISPONIBLE, SafCredito::ESTADO_PARCIAL])
+            ->whereIn('estado_financiero', SafCredito::ESTADOS_USABLES)
             ->where('monto_disponible', '>', 0)
             ->whereDate('fecha_vencimiento', '<', $hoy->toDateString())
             ->pluck('id');
@@ -33,7 +33,7 @@ class VencerCreditosSafService
                 if (! $credito) {
                     return;
                 }
-                if (! in_array($credito->estado_financiero, [SafCredito::ESTADO_DISPONIBLE, SafCredito::ESTADO_PARCIAL], true)) {
+                if (! in_array($credito->estado_financiero, SafCredito::ESTADOS_USABLES, true)) {
                     return;
                 }
                 if ((float) $credito->monto_disponible <= 0) {
@@ -54,7 +54,7 @@ class VencerCreditosSafService
                     $antes,
                     $antes,
                     null,
-                    ['observaciones' => 'Vencimiento automático por vigencia de 365 días']
+                    ['observaciones' => 'Vencimiento automático por vigencia configurada']
                 );
 
                 if ($revisores->isNotEmpty()) {

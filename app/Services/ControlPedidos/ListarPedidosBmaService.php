@@ -67,6 +67,7 @@ class ListarPedidosBmaService
             'todas' => (clone $base)->count(),
             'borradores' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['BORRADOR'] ?? 0)->count(),
             'pesaje_pendiente' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PESAJE_PENDIENTE'] ?? 0)->count(),
+            'pesaje_respondido' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PESAJE_RESPONDIDO'] ?? 0)->count(),
             'pendiente_auxiliar' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)->count(),
             'en_cedis' => (clone $base)->whereIn('catalogo_estatus_pedido_id', array_filter([
                 $idsPorFase['EN_CEDIS'] ?? null,
@@ -76,6 +77,7 @@ class ListarPedidosBmaService
             'enviados' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0)->count(),
             'rechazadas' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0)->count(),
             'obs_cedis' => (clone $base)->where('tiene_observaciones_fisicas', true)->count(),
+            'sin_existencia' => (clone $base)->whereHas('revisionesProducto', fn ($q) => $q->sinExistenciaAbierta())->count(),
         ];
     }
 
@@ -88,6 +90,7 @@ class ListarPedidosBmaService
         $pedido->setAttribute('puede_editar', $puedeEditar);
         $pedido->setAttribute('puede_mutar', $puedeEditar);
         $pedido->setAttribute('puede_cancelar', $pedido->puedeCancelarDirecto());
+        $pedido->setAttribute('tiene_sin_existencia_abierta', $pedido->tieneSinExistenciaAbierta());
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());
 
         return $pedido;
@@ -113,7 +116,9 @@ class ListarPedidosBmaService
         match ($tab) {
             'BORRADORES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['BORRADOR'] ?? 0),
             'PESAJE_PENDIENTE' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PESAJE_PENDIENTE'] ?? 0),
+            'PESAJE_RESPONDIDO' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PESAJE_RESPONDIDO'] ?? 0),
             'OBS_CEDIS' => $query->where('tiene_observaciones_fisicas', true),
+            'SIN_EXISTENCIA' => $query->whereHas('revisionesProducto', fn ($q) => $q->sinExistenciaAbierta()),
             'PENDIENTE_AUXILIAR' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0),
             'EN_CEDIS' => $query->whereIn('catalogo_estatus_pedido_id', array_filter([
                 $idsPorFase['EN_CEDIS'] ?? null,
@@ -132,6 +137,7 @@ class ListarPedidosBmaService
             ->whereIn('fase_ciclo', [
                 'BORRADOR',
                 'PESAJE_PENDIENTE',
+                'PESAJE_RESPONDIDO',
                 'PENDIENTE_AUXILIAR',
                 'EN_CEDIS',
                 'PENDIENTE_DE_GUIA',

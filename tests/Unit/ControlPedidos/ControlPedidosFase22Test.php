@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\User;
 use App\Services\ControlPedidos\AsignarGuiaPedidoBmaService;
 use App\Services\ControlPedidos\ActualizarGuiaPedidoBmaService;
@@ -13,7 +14,9 @@ use App\Services\ControlPedidos\ImportarGuiasPedidoService;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
 use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
+use App\Services\ControlPedidos\ReabrirEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Rap2hpoutre\FastExcel\FastExcel;
@@ -255,6 +258,136 @@ class ControlPedidosFase22Test extends TestCase
         $this->assertSame(
             CatalogoEstatusPedido::FASE_ENVIADO,
             $enviado->fresh('estatus')->estatus->fase_ciclo
+        );
+    }
+
+    public function test_empacar_con_sin_existencia_abierta_falla(): void
+    {
+        $pedido = $this->crearPedidoAprobadoCedis([
+            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
+        ]);
+
+        PedidoBmaRevisionProducto::create([
+            'pedido_bma_id' => $pedido->id,
+            'orden' => 0,
+            'descripcion_producto' => 'SKU-X — Pieza faltante',
+            'estado_fisico' => PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA,
+            'comentario' => 'No hay en almacén',
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('sin existencias');
+
+        app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['paqueteria', 'origen', 'estatus', 'revisionesProducto']),
+            $this->usuario->id
+        );
+    }
+
+    public function test_empacar_con_sin_existencia_esperar_sigue_bloqueado(): void
+    {
+        $pedido = $this->crearPedidoAprobadoCedis([
+            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
+        ]);
+
+        PedidoBmaRevisionProducto::create([
+            'pedido_bma_id' => $pedido->id,
+            'orden' => 0,
+            'descripcion_producto' => 'SKU-Y — Esperar',
+            'estado_fisico' => PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA,
+            'comentario' => 'Cliente espera',
+            'resolucion' => PedidoBmaRevisionProducto::RESOLUCION_ESPERAR,
+            'resolucion_at' => now(),
+            'resolucion_por_id' => $this->usuario->id,
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('sin existencias');
+
+        app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['paqueteria', 'origen', 'estatus', 'revisionesProducto']),
+            $this->usuario->id
+        );
+    }
+
+    public function test_empacar_tras_stock_ok_desbloquea(): void
+    {
+        $pedido = $this->crearPedidoAprobadoCedis([
+            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
+        ]);
+
+        PedidoBmaRevisionProducto::create([
+            'pedido_bma_id' => $pedido->id,
+            'orden' => 0,
+            'descripcion_producto' => 'SKU-Z — Ya llegó',
+            'estado_fisico' => PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA,
+            'comentario' => 'Faltaba',
+            'resolucion' => PedidoBmaRevisionProducto::RESOLUCION_STOCK_OK,
+            'resolucion_at' => now(),
+            'resolucion_por_id' => $this->usuario->id,
+        ]);
+
+        $actualizado = app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['paqueteria', 'origen', 'estatus', 'revisionesProducto']),
+            $this->usuario->id
+        );
+
+        $this->assertSame(
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            $actualizado->fresh('estatus')->estatus->fase_ciclo
+        );
+        $rev = $actualizado->revisionesProducto->first();
+        $this->assertSame(PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA, $rev->estado_fisico);
+        $this->assertSame(PedidoBmaRevisionProducto::RESOLUCION_STOCK_OK, $rev->resolucion);
+    }
+
+    public function test_empacar_con_error_grave_de_pago_falla(): void
+    {
+        $pedido = $this->crearPedidoAprobadoCedis([
+            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
+            'campos_incorrectos' => ['pago_validado'],
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('errores graves');
+
+        app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['paqueteria', 'origen', 'estatus']),
+            $this->usuario->id
+        );
+    }
+
+    public function test_reabrir_envio_vuelve_a_pendiente_de_recoleccion(): void
+    {
+        $pedido = $this->crearPedidoAprobadoCedis([
+            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
+        ]);
+
+        app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['paqueteria', 'origen']),
+            $this->usuario->id
+        );
+        app(AsignarGuiaPedidoBmaService::class)->ejecutar(
+            $pedido->fresh('estatus'),
+            'GUIA-REABRIR',
+            $this->usuario->id
+        );
+        app(MarcarEnviadoPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['estatus', 'paqueteria', 'origen']),
+            $this->usuario->id
+        );
+
+        $reabierto = app(ReabrirEnvioPedidoBmaService::class)->ejecutar(
+            $pedido->fresh('estatus'),
+            $this->usuario->id
+        );
+
+        $this->assertSame(
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+            $reabierto->fresh('estatus')->estatus->fase_ciclo
+        );
+        $this->assertTrue(
+            $reabierto->historial()->where('accion', AccionesHistorialPedidoBma::REABRIR_ENVIO)->exists()
         );
     }
 

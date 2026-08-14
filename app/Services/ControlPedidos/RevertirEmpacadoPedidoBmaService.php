@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class RevertirEmpacadoPedidoBmaService
 {
@@ -21,6 +22,10 @@ class RevertirEmpacadoPedidoBmaService
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $estatusAnterior = $pedido->estatus;
+            MaquinaEstadosPedidoBma::assertTransicion(
+                $estatusAnterior?->fase_ciclo,
+                CatalogoEstatusPedido::FASE_EN_CEDIS
+            );
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_EN_CEDIS)
                 ?? CatalogoEstatusPedido::porCodigo('AMARILLO');
 

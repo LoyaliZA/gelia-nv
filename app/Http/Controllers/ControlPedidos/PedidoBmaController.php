@@ -10,6 +10,7 @@ use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ActualizarCamposDireccionPedidoRequest;
 use App\Http\Requests\ControlPedidos\CargarGuiaClientePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\CompletarEnvioResguardoPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\AtenderSinExistenciaPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SolicitarRepesajePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SubirAnexoPiezasPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SubirPdfPedidoBmaRequest;
@@ -17,6 +18,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Services\ControlPedidos\ActualizarPedidoBmaService;
 use App\Services\ControlPedidos\AnexarPagoEnvioPedidoBmaService;
+use App\Services\ControlPedidos\AtenderSinExistenciaPedidoBmaService;
 use App\Services\ControlPedidos\CargarGuiaClientePedidoBmaService;
 use App\Services\ControlPedidos\CrearPedidoBmaService;
 use App\Services\ControlPedidos\Direcciones\ActualizarCamposDireccionPedidoService;
@@ -443,6 +445,42 @@ class PedidoBmaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Re-pesaje solicitado a CEDIS.');
+    }
+
+    public function atenderSinExistencia(
+        AtenderSinExistenciaPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        AtenderSinExistenciaPedidoBmaService $service
+    ): RedirectResponse {
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $datos = $request->validated();
+            $revisionId = (int) $datos['revision_id'];
+            $accion = (string) $datos['accion'];
+            unset($datos['revision_id'], $datos['accion']);
+            $service->ejecutar(
+                $pedidoBma->load(['estatus', 'revisionesProducto', 'documentos', 'paqueteria']),
+                Auth::user(),
+                $revisionId,
+                $accion,
+                $datos
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        $ok = match ($request->validated('accion')) {
+            'cancelar' => 'Pedido cancelado por sin existencias.',
+            'contactar' => 'Se registró el contacto con el cliente. El pedido sigue detenido.',
+            'esperar' => 'El cliente espera el producto. El pedido sigue detenido.',
+            'retirar' => 'Producto retirado. Totales actualizados.',
+            'sustituir' => 'Producto a sustituir. Totales actualizados.',
+            default => 'Decisión de sin existencias registrada.',
+        };
+
+        return redirect()->back()->with('success', $ok);
     }
 
     public function volverBorrador(

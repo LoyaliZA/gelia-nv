@@ -40,6 +40,11 @@ class SafIncidencia extends Model
         return $this->belongsTo(SafCredito::class, 'saf_credito_id');
     }
 
+    public function pedido(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\ControlPedidos\PedidoBma::class, 'pedido_bma_id');
+    }
+
     public function creadoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creado_por_id');

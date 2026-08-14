@@ -10,6 +10,7 @@ use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class ReportarErrorDatosPedidoBmaService
 {
@@ -72,6 +73,7 @@ class ReportarErrorDatosPedidoBmaService
             $pedido, $usuarioId, $campos, $detalle, $duenoActivo, $destino, $faseDestino, $teniaGuia
         ) {
             $estatusAnterior = $pedido->estatus;
+            MaquinaEstadosPedidoBma::assertTransicion($estatusAnterior?->fase_ciclo, $faseDestino);
             $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
 
             if (! $estatusNuevo) {

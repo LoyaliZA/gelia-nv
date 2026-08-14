@@ -311,6 +311,11 @@ class CajaSaldosAFavorController extends Controller
             'esReimpresion' => $comprobante->es_reimpresion,
             'encabezado' => $encabezado,
         ]);
+        // Tipografía vectorial nítida: DPI alto + fuente embebida (evitar medium 500 en la vista).
+        $pdf->setOption('dpi', 150);
+        $pdf->setOption('defaultFont', 'DejaVu Sans');
+        $pdf->setOption('isHtml5ParserEnabled', true);
+        $pdf->setOption('isRemoteEnabled', false);
         $pdf->setPaper([0, 0, $ancho, $alto], 'portrait');
 
         return $pdf->download("{$comprobante->folio}.pdf");

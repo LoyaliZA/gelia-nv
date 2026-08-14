@@ -3,7 +3,6 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
-use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
@@ -24,7 +23,7 @@ class ValidarPagoPedidoBmaService
             throw new \RuntimeException('Solo se puede validar el pago de pedidos pendientes de revisión.');
         }
 
-        $this->pagos->assertCubiertoParaEnviar($pedido);
+        $this->pagos->assertPagoListoParaAvanzar($pedido, RegistrarPagoPedidoBmaService::FASE_VALIDAR);
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $pedido->update([

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\SaldosAFavor;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cliente;
-use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafMotivo;
 use App\Services\SaldosAFavor\AplicarReservaSafService;
 use App\Services\SaldosAFavor\GenerarCreditoSafService;
@@ -14,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MigrarSaldosAFavorController extends Controller
 {
@@ -21,6 +21,38 @@ class MigrarSaldosAFavorController extends Controller
     {
         return Inertia::render('SaldosAFavor/Migrar', [
             'motivos' => SafMotivo::where('activo', true)->orderBy('orden')->get(['id', 'codigo', 'nombre']),
+        ]);
+    }
+
+    public function plantilla(): StreamedResponse
+    {
+        $headers = [
+            'numero_cliente',
+            'monto_original',
+            'monto_aplicado',
+            'fecha_generacion',
+            'fecha_vencimiento',
+            'documento_origen',
+            'remision_aplicacion',
+            'motivo',
+        ];
+
+        return response()->streamDownload(function () use ($headers) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $headers);
+            fputcsv($out, [
+                '12345',
+                '500.00',
+                '0',
+                '2026-01-15',
+                '',
+                'DOC-HIST-001',
+                '',
+                'Migración histórica',
+            ]);
+            fclose($out);
+        }, 'plantilla_saldos_a_favor.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 
@@ -55,7 +87,7 @@ class MigrarSaldosAFavorController extends Controller
         DB::transaction(function () use ($clasificado, $generar, $aplicar, $motivoMigracion, $request, &$importados, &$errores) {
             foreach ($clasificado['ok'] as $row) {
                 try {
-                    $credito = $generar->handle([
+                    $payload = [
                         'cliente_id' => $row['cliente_id'],
                         'monto' => $row['monto_original'],
                         'saf_motivo_id' => $motivoMigracion,
@@ -65,7 +97,13 @@ class MigrarSaldosAFavorController extends Controller
                         'generado_por_id' => Auth::id(),
                         'fecha_generacion' => $row['fecha_generacion'] ?: now(),
                         'observaciones' => 'Importación CSV conciliada',
-                    ]);
+                        'omitir_monto_minimo' => true,
+                    ];
+                    if (! empty($row['fecha_vencimiento'])) {
+                        $payload['fecha_vencimiento'] = $row['fecha_vencimiento'];
+                    }
+
+                    $credito = $generar->handle($payload);
 
                     $aplicado = round((float) $row['monto_aplicado'], 2);
                     if ($aplicado > 0) {
@@ -90,7 +128,7 @@ class MigrarSaldosAFavorController extends Controller
     }
 
     /**
-     * CSV esperado: numero_cliente,monto_original,monto_aplicado,fecha_generacion,documento_origen,remision_aplicacion,motivo
+     * CSV esperado: numero_cliente,monto_original,monto_aplicado,fecha_generacion,fecha_vencimiento,documento_origen,remision_aplicacion,motivo
      */
     private function parseCsv(string $path): array
     {
@@ -146,6 +184,7 @@ class MigrarSaldosAFavorController extends Controller
                 'monto_original' => $monto,
                 'monto_aplicado' => min($aplicado, $monto),
                 'fecha_generacion' => $row['fecha_generacion'] ?? null,
+                'fecha_vencimiento' => trim((string) ($row['fecha_vencimiento'] ?? '')) ?: null,
                 'documento_origen' => $row['documento_origen'] ?? null,
                 'remision_aplicacion' => $row['remision_aplicacion'] ?? null,
                 'motivo' => $row['motivo'] ?? null,

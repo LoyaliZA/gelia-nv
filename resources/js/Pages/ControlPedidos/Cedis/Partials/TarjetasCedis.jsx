@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
-    Eye, CheckCircle2, AlertTriangle, FileText, Truck, PackageCheck, Scale, History,
+    Eye, CheckCircle2, AlertTriangle, FileText, Truck, PackageCheck, Scale, History, Undo2,
 } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
@@ -30,7 +30,7 @@ const pdfPedidoDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo ==
 const anexoPiezasDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'anexo_piezas');
 
 function TarjetaPedido({
-    pedido, onVerDetalle, onResponderPesaje, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento, onBitacora,
+    pedido, onVerDetalle, onResponderPesaje, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento, onBitacora, puedeReabrir,
 }) {
     const fase = pedido.estatus?.fase_ciclo;
     const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
@@ -46,6 +46,7 @@ function TarjetaPedido({
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
+    const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
     const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const tieneGuiaPdf = tieneGuiaPdfDisponible(pedido);
@@ -168,7 +169,12 @@ function TarjetaPedido({
                 )}
                 {puedeMarcarEnviado && (
                     <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
-                        <Truck className="w-4 h-4" /> Marcar enviado
+                        <Truck className="w-4 h-4" /> Confirmar que la paquetería recogió
+                    </button>
+                )}
+                {puedeReabrirEnvio && (
+                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'reabrir', pedido })} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
+                        <Undo2 className="w-4 h-4" /> Reabrir recolección
                     </button>
                 )}
                 {puedeEmpacar && (
@@ -221,6 +227,9 @@ function TarjetaPedido({
 export default function TarjetasCedis({
     pedidos, onVerDetalle, onResponderPesaje, onReportarErrorDatos, onMarcarApartado, onBitacora,
 }) {
+    const { auth } = usePage().props;
+    const permisos = auth?.user?.permissions || [];
+    const puedeReabrir = permisos.includes('control_pedidos.reabrir') || auth?.user?.roles?.includes('Super Admin');
     const [confirmacion, setConfirmacion] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
     const items = pedidos?.data || [];
@@ -233,6 +242,8 @@ export default function TarjetasCedis({
             router.post(route('control_pedidos.cedis.marcar_empacado', pedido.id), {}, { preserveScroll: true });
         } else if (accion === 'enviar') {
             router.post(route('control_pedidos.cedis.marcar_enviado', pedido.id), {}, { preserveScroll: true });
+        } else if (accion === 'reabrir') {
+            router.post(route('control_pedidos.cedis.reabrir_envio', pedido.id), {}, { preserveScroll: true });
         }
     };
 
@@ -247,8 +258,10 @@ export default function TarjetasCedis({
             variante: 'primary',
         }
         : confirmacion?.accion === 'enviar'
-            ? { titulo: 'Confirmar envío', mensaje: 'Al confirmar, el pedido sale a recolección.', etiquetaConfirmar: 'Marcar enviado', variante: 'primary' }
-            : null;
+            ? { titulo: 'Confirmar recolección', mensaje: '¿Confirmas que la paquetería recogió el paquete? Empacado no significa enviado.', etiquetaConfirmar: 'Paquetería recogió', variante: 'primary' }
+            : confirmacion?.accion === 'reabrir'
+                ? { titulo: 'Reabrir recolección', mensaje: 'El pedido volverá a pendiente de recolección. Solo si la paquetería no recogió.', etiquetaConfirmar: 'Reabrir', variante: 'danger' }
+                : null;
 
     if (items.length === 0) {
         return (
@@ -272,6 +285,7 @@ export default function TarjetasCedis({
                         onSolicitarConfirmacion={setConfirmacion}
                         onVerDocumento={setDocPreview}
                         onBitacora={onBitacora}
+                        puedeReabrir={puedeReabrir}
                     />
                 ))}
             </div>

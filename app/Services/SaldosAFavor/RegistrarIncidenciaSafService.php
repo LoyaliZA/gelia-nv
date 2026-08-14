@@ -2,13 +2,20 @@
 
 namespace App\Services\SaldosAFavor;
 
+use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\SafIncidencia;
 use App\Models\User;
 use App\Notifications\SaldoFavorIncidenciaAbiertaNotification;
+use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Support\Facades\Notification;
 
 class RegistrarIncidenciaSafService
 {
+    public function __construct(
+        private RegistrarHistorialPedidoService $historial,
+    ) {}
+
     public function handle(
         string $tipo,
         string $descripcion,
@@ -26,6 +33,23 @@ class RegistrarIncidenciaSafService
             'estado' => SafIncidencia::ESTADO_ABIERTA,
             'creado_por_id' => $usuarioId,
         ]);
+
+        // No aborta el pedido: solo bitácora + alerta para auxiliar.
+        if ($pedidoBmaId) {
+            $pedido = PedidoBma::query()->find($pedidoBmaId);
+            $actorId = $usuarioId ?: (int) ($pedido?->vendedor_id ?? 0);
+            if ($pedido && $actorId > 0) {
+                $estatusId = (int) $pedido->catalogo_estatus_pedido_id;
+                $this->historial->ejecutar(
+                    $pedido->id,
+                    $actorId,
+                    $estatusId,
+                    $estatusId,
+                    $descripcion,
+                    AccionesHistorialPedidoBma::INCIDENCIA_SAF
+                );
+            }
+        }
 
         $revisores = User::permission('saldos_favor.revisar')->get();
         if ($revisores->isNotEmpty()) {
@@ -53,7 +77,21 @@ class RegistrarIncidenciaSafService
             throw new \RuntimeException('No se pudo resolver la incidencia.');
         }
 
-        // Evitar fresh(): puede devolver null y romper el return type (500).
+        if ($incidencia->pedido_bma_id && $usuarioId) {
+            $pedido = PedidoBma::query()->find($incidencia->pedido_bma_id);
+            if ($pedido) {
+                $estatusId = (int) $pedido->catalogo_estatus_pedido_id;
+                $this->historial->ejecutar(
+                    $pedido->id,
+                    $usuarioId,
+                    $estatusId,
+                    $estatusId,
+                    $nota ?: 'Incidencia de saldos a favor resuelta; se continúa el pedido.',
+                    AccionesHistorialPedidoBma::CORRECCION_SAF
+                );
+            }
+        }
+
         return $incidencia;
     }
 }

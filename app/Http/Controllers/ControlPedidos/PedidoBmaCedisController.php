@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ControlPedidos\ConfirmarStockSinExistenciaPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\MarcarResguardoApartadoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarIncidenciaEmpaqueRequest;
+use App\Http\Requests\ControlPedidos\ReportarSinExistenciaPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ResponderPesajePedidoBmaRequest;
 use App\Models\Almacen;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Services\ControlPedidos\GestionarSinExistenciaCedisPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
 use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
@@ -16,6 +19,7 @@ use App\Services\ControlPedidos\MarcarResguardoApartadoPedidoBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use App\Services\ControlPedidos\ResponderPesajePedidoBmaService;
+use App\Services\ControlPedidos\ReabrirEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -80,7 +84,20 @@ class PedidoBmaCedisController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Pedido marcado como enviado.');
+        return redirect()->back()->with('success', 'Paquetería confirmada: el pedido fue recogido.');
+    }
+
+    public function reabrirEnvio(PedidoBma $pedidoBma, ReabrirEnvioPedidoBmaService $service): RedirectResponse
+    {
+        Gate::authorize('control_pedidos.reabrir');
+
+        try {
+            $service->ejecutar($pedidoBma->load('estatus'), Auth::id());
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Envío reabierto; pendiente de recolección.');
     }
 
     public function revertirEmpacado(PedidoBma $pedidoBma, RevertirEmpacadoPedidoBmaService $service): RedirectResponse
@@ -185,5 +202,46 @@ class PedidoBmaCedisController extends Controller
         }
 
         return redirect()->back()->with('success', 'Pesaje registrado. Se notificó a la vendedora.');
+    }
+
+    public function reportarSinExistencia(
+        ReportarSinExistenciaPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        GestionarSinExistenciaCedisPedidoBmaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.cedis');
+
+        try {
+            $service->reportar(
+                $pedidoBma->load(['estatus', 'revisionesProducto']),
+                Auth::id(),
+                $request->validated()
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Sin existencias reportada. El pedido quedó detenido; se notificó a Ventas.');
+    }
+
+    public function confirmarStockSinExistencia(
+        ConfirmarStockSinExistenciaPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        GestionarSinExistenciaCedisPedidoBmaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.cedis');
+
+        try {
+            $service->confirmarStock(
+                $pedidoBma->load(['estatus', 'revisionesProducto']),
+                Auth::id(),
+                (int) $request->validated('revision_id'),
+                $request->validated('nota')
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Existencias confirmadas. El estado físico se conserva.');
     }
 }

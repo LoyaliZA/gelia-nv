@@ -12,8 +12,10 @@ $form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/Mod
 $checks = [
     ['sin cascada mostrarTrasTipo', ! str_contains($form, 'mostrarTrasTipo')],
     ['flag tieneTipo', str_contains($form, 'const tieneTipo')],
-    ['gate pesaje exige tipo', str_contains($form, 'mostrarPesaje = tieneTipo && requiereLogistica')],
-    ['gate resto exige tipo', str_contains($form, 'mostrarRestoPedido = tieneTipo &&')],
+    ['gate pesaje exige tipo o pesaje en curso', str_contains($form, 'mostrarPesaje = (tieneTipo && requiereLogistica)')
+        && str_contains($form, 'tienePesajeRespondido')],
+    ['gate resto exige origen y cotización', str_contains($form, 'mostrarRestoPedido = Boolean(data.origen_id)')
+        && str_contains($form, 'cotizacionHabilitada')],
     ['flag enfocadoEnPesaje', str_contains($form, 'enfocadoEnPesaje')],
     ['flag mostrarRestoPedido', str_contains($form, 'mostrarRestoPedido')],
     ['hint elegir tipo', str_contains($form, 'Seleccione Tipo de pedido')],

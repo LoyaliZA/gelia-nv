@@ -12,19 +12,38 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SafCredito extends Model
 {
     public const ESTADO_DISPONIBLE = 'disponible';
+
+    /** @deprecated Prefer ESTADO_DISPONIBLE; se remapea en recalcularEstadoFinanciero */
     public const ESTADO_PARCIAL = 'parcialmente_aplicado';
+
+    public const ESTADO_RESERVADO = 'reservado';
+
     public const ESTADO_APLICADO = 'aplicado';
+
     public const ESTADO_VENCIDO = 'vencido';
+
     public const ESTADO_CANCELADO = 'cancelado';
 
     public const REVISION_PENDIENTE = 'pendiente';
+
     public const REVISION_REVISADO = 'revisado';
+
     public const REVISION_CON_DIFERENCIA = 'con_diferencia';
+
     public const REVISION_REQUIERE_CORRECCION = 'requiere_correccion';
+
     public const REVISION_AJUSTADO = 'ajustado';
+
     public const REVISION_RECHAZADO = 'rechazado';
 
-    public const VIGENCIA_DIAS = 365;
+    /** @deprecated Usar ReglasSaf::vigenciaDias(); se mantiene como fallback de tests legacy */
+    public const VIGENCIA_DIAS = 20;
+
+    /** Estados con saldo usable (disponible para reservar/aplicar). */
+    public const ESTADOS_USABLES = [
+        self::ESTADO_DISPONIBLE,
+        self::ESTADO_PARCIAL,
+    ];
 
     protected $table = 'saf_creditos';
 
@@ -110,10 +129,8 @@ class SafCredito extends Model
 
     public function puedeUsarse(): bool
     {
-        return in_array($this->estado_financiero, [self::ESTADO_DISPONIBLE, self::ESTADO_PARCIAL], true)
-            && (float) $this->monto_disponible > 0
-            && $this->estado_financiero !== self::ESTADO_CANCELADO
-            && $this->estado_financiero !== self::ESTADO_VENCIDO;
+        return in_array($this->estado_financiero, self::ESTADOS_USABLES, true)
+            && (float) $this->monto_disponible > 0;
     }
 
     public function recalcularEstadoFinanciero(): void
@@ -121,7 +138,8 @@ class SafCredito extends Model
         if ($this->estado_financiero === self::ESTADO_CANCELADO) {
             return;
         }
-        if ($this->estado_financiero === self::ESTADO_VENCIDO && (float) $this->monto_disponible <= 0) {
+        if ($this->estado_financiero === self::ESTADO_VENCIDO && (float) $this->monto_disponible <= 0
+            && (float) $this->monto_reservado <= 0) {
             $this->estado_financiero = self::ESTADO_APLICADO;
 
             return;
@@ -131,13 +149,15 @@ class SafCredito extends Model
         }
 
         $disponible = (float) $this->monto_disponible;
+        $reservado = (float) $this->monto_reservado;
         $aplicado = (float) $this->monto_aplicado;
 
-        if ($disponible <= 0 && $aplicado > 0) {
+        if ($disponible <= 0 && $reservado > 0) {
+            $this->estado_financiero = self::ESTADO_RESERVADO;
+        } elseif ($disponible <= 0 && $aplicado > 0) {
             $this->estado_financiero = self::ESTADO_APLICADO;
-        } elseif ($aplicado > 0) {
-            $this->estado_financiero = self::ESTADO_PARCIAL;
         } else {
+            // Disponible (incluye remanente tras aplicación parcial)
             $this->estado_financiero = self::ESTADO_DISPONIBLE;
         }
     }

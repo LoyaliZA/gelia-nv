@@ -10,6 +10,7 @@ import {
     badgeConComplementos,
     badgeCorregirRemision,
     badgePendienteReRevision,
+    badgeHitoAuditoria,
     esPendienteReRevision,
     formatearMoneda,
     etiquetaAlmacen,
@@ -85,6 +86,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
 
     const fase = pedido.estatus?.fase_ciclo;
     const badge = badgeAuditoriaSemantico(fase, pedido.es_resguardo);
+    const badgeHito = badgeHitoAuditoria(pedido.hito_auditoria);
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
     const badgeComp = badgeConComplementos(pedido);
     const badgeRemision = tieneErrorRemision(pedido) ? badgeCorregirRemision() : null;
@@ -247,6 +249,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             <EncabezadoFolioPedido pedido={pedido} size="lg" />
                             <div className="flex flex-wrap gap-2 mt-2">
                                 <span className={`${badge.className} inline-flex`} style={badge.style}>{badge.label}</span>
+                                {badgeHito && (
+                                    <span className={`${badgeHito.className} inline-flex`} style={badgeHito.style}>{badgeHito.label}</span>
+                                )}
                                 {badgeReRevision && (
                                     <span className={`${badgeReRevision.className} inline-flex`} style={badgeReRevision.style}>{badgeReRevision.label}</span>
                                 )}
@@ -266,6 +271,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             <div className={`p-4 rounded-xl border theme-border ${esRechazado ? 'bg-red-500/10 border-red-500/30' : pedido.es_resguardo ? 'bg-blue-500/10 border-blue-500/30' : 'theme-element'}`}>
                                 <p className="text-sm font-bold theme-text-main m-0">
                                     Estado actual: <span style={{ color: badge.style?.color }}>{badge.label}</span>
+                                    {badgeHito ? ` · ${badgeHito.label}` : ''}
                                 </p>
                                 {pedido.origen?.nombre && (
                                     <p className="text-xs font-black uppercase text-blue-600 mt-2 m-0">Tipo: {pedido.origen.nombre}</p>
@@ -310,6 +316,50 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <div className="mt-3">
                                     <ListaErroresPedido errores={pedido.errores} />
                                 </div>
+                                {can('control_pedidos.auditar') && (pedido.saf_incidencias_abiertas || []).length > 0 && (
+                                    <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+                                        <p className="text-sm font-bold text-amber-700 m-0 flex items-center gap-2">
+                                            <AlertTriangle className="w-4 h-4" /> Alerta de saldos a favor (no detiene el pedido)
+                                        </p>
+                                        {(pedido.saf_incidencias_abiertas || []).map((inc) => (
+                                            <div key={inc.id} className="space-y-2">
+                                                <p className="text-sm font-bold theme-text-main m-0">{inc.descripcion}</p>
+                                                <p className="text-[10px] theme-text-muted font-bold m-0 uppercase tracking-wide">
+                                                    Tipo: {inc.tipo || '—'} · Corrige el monto si aplica, deja nota y continúa
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    className={`${BTN_SECONDARY} text-xs`}
+                                                    disabled={procesando}
+                                                    onClick={() => {
+                                                        setProcesando(true);
+                                                        router.post(
+                                                            route('control_pedidos.auditar.incidencias_saf.resolver', {
+                                                                pedidoBma: pedido.id,
+                                                                incidencia: inc.id,
+                                                            }),
+                                                            { nota: 'Revisado en auditoría; se continúa con la incidencia.' },
+                                                            {
+                                                                preserveScroll: true,
+                                                                onFinish: () => setProcesando(false),
+                                                                onSuccess: () => {
+                                                                    setPedido((prev) => ({
+                                                                        ...prev,
+                                                                        saf_incidencias_abiertas: (prev.saf_incidencias_abiertas || [])
+                                                                            .filter((x) => x.id !== inc.id),
+                                                                        tiene_alerta_saf: false,
+                                                                    }));
+                                                                },
+                                                            }
+                                                        );
+                                                    }}
+                                                >
+                                                    Marcar revisado y continuar
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 {pagoValidado && (
                                     <p className="text-xs text-emerald-600 font-bold mt-2 m-0 flex items-center gap-1">
                                         <CheckCircle2 className="w-4 h-4" />
@@ -339,7 +389,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     ).join(', ') || '—'}
                                 />
                                 <Campo label="Nota de compra en el envío" value={pedido.anexar_remision ? 'Sí' : 'No'} />
-                                <Campo label="Saldo a favor" value={Number(pedido.saldo_a_favor) > 0 ? formatearMoneda(pedido.saldo_a_favor) : '—'} />
+                                <Campo label="Saldo a favor aplicado" value={Number(pedido.saldo_a_favor) > 0 ? formatearMoneda(pedido.saldo_a_favor) : '—'} />
                                 <Campo label="N° de cajas" value={pedido.numero_cajas} />
                                 <Campo label="Capturado por" value={pedido.vendedor?.name} />
                             </div>
@@ -387,8 +437,13 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     puedeRevisar={esPendiente}
                                     puedeGenerarSaldo={false}
                                     rutaResumen="control_pedidos.pagos.resumen_auditoria"
+                                    totalMercancia={pedido.total_mercancia}
+                                    costoEnvio={pedido.costo_envio}
+                                    aplicaSeguro={Boolean(pedido.aplica_seguro)}
+                                    costoSeguro={pedido.costo_seguro}
+                                    saldoAFavorAplicado={pedido.saldo_a_favor}
                                     mensajeBloqueo={esPendiente
-                                        ? 'Revise cada exhibición. La cobertura no sustituye la verificación.'
+                                        ? 'Revise cada exhibición. Todas deben quedar verificadas antes de validar el pago.'
                                         : null}
                                 />
                             </div>
@@ -460,12 +515,20 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     <span>Costo del seguro</span>
                                     <span>{pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : formatearMoneda(0)}</span>
                                 </div>
+                                <div className="flex justify-between theme-text-muted font-bold">
+                                    <span>Total a cubrir</span>
+                                    <span>{formatearMoneda(
+                                        Number(pedido.total_mercancia || 0)
+                                        + Number(pedido.costo_envio || 0)
+                                        + (pedido.aplica_seguro ? Number(pedido.costo_seguro || 0) : 0)
+                                    )}</span>
+                                </div>
                                 <div className="flex justify-between text-emerald-600 font-bold">
                                     <span>Saldo a favor aplicado</span>
                                     <span>- {formatearMoneda(pedido.saldo_a_favor)}</span>
                                 </div>
                                 <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
-                                    <span>Total final del pedido</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
+                                    <span>Total a cobrar ahora</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
                                 </div>
                             </div>
                             <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} compact />
@@ -645,7 +708,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     onClick={() => setConfirmacion({ accion: 'aprobar' })}
                                     disabled={!puedeAprobar || procesando}
                                     className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 ml-auto`}
-                                    title={!pagoValidado ? 'Valide el pago primero' : !remision ? 'Adjunte la remisión PDF' : ''}
+                                    title={!pagoValidado ? 'Valide el pago antes de aprobar' : !remision ? 'Adjunte la remisión PDF antes de aprobar' : ''}
                                 >
                                     <CheckCircle2 className="w-4 h-4" /> Aprobar y enviar a Registro General
                                 </button>

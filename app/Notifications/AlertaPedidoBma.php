@@ -43,10 +43,11 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         'pedido_rechazado_auxiliar' => 'Pedido rechazado',
         'pedido_incidencia_cedis' => 'Error de empaque',
         'pedido_pendiente_guia' => 'Pedido pendiente de guía',
-        'pedido_pendiente_envio' => 'Pedido pendiente de envío',
+        'pedido_pendiente_envio' => 'Pedido pendiente de recolección',
         'pedido_guia_asignada' => 'Guía asignada',
-        'pedido_enviado' => 'Pedido enviado',
+        'pedido_enviado' => 'Paquetería recogió el pedido',
         'pedido_resguardo_liberado' => 'Resguardo liberado',
+        'pedido_sin_existencia' => 'Producto sin existencias',
     ];
 
     public function __construct(PedidoBma $pedido, string $tipoAlerta, string $mensaje, array $extras = [])
@@ -122,6 +123,10 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
 
     private function construirTitulo(): string
     {
+        if ($this->tipoAlerta === 'pedido_sin_existencia') {
+            return 'Sin existencias: '.$this->folio();
+        }
+
         if ($this->tipoAlerta === 'pedido_pesaje_listo' && ! empty($this->extras['con_observaciones_fisicas'])) {
             return 'Pesaje con observaciones: '.$this->folio();
         }
@@ -158,10 +163,11 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
             'pedido_rechazado_auxiliar' => "Atención {$nombre}, tu pedido {$folio} fue rechazado, corrígelo y reenvía.",
             'pedido_incidencia_cedis' => "Atención {$nombre}, hay un error de empaque en el pedido {$folio}.",
             'pedido_pendiente_guia' => "Atención {$nombre}, el pedido {$folio} está pendiente de guía.",
-            'pedido_pendiente_envio' => "Atención {$nombre}, el pedido {$folio} está empacado, pendiente de envío.",
-            'pedido_guia_asignada' => "Atención {$nombre}, se asignó guía al pedido {$folio}, pendiente de envío.",
-            'pedido_enviado' => "Atención {$nombre}, tu pedido {$folio} fue marcado como enviado.",
+            'pedido_pendiente_envio' => "Atención {$nombre}, el pedido {$folio} está empacado, pendiente de recolección.",
+            'pedido_guia_asignada' => "Atención {$nombre}, se asignó guía al pedido {$folio}, pendiente de recolección.",
+            'pedido_enviado' => "Atención {$nombre}, la paquetería recogió el pedido {$folio}.",
             'pedido_resguardo_liberado' => "Atención {$nombre}, se liberó el resguardo del pedido {$folio}, listo para CEDIS.",
+            'pedido_sin_existencia' => "Atención {$nombre}, CEDIS reportó producto sin existencias en el pedido {$folio}. El pedido está detenido hasta que elijas una acción.",
             default => "{$nombre}, tienes una notificación sobre el pedido {$folio}.",
         };
     }

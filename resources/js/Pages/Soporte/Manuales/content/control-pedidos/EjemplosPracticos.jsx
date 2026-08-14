@@ -187,7 +187,7 @@ export function MockFormAuditoria() {
                         <p className="text-sm font-black italic theme-text-main m-0">{DEMO.folio}</p>
                         <p className="text-[10px] theme-text-muted m-0 mt-1">{DEMO.cliente}</p>
                     </div>
-                    <FakeBadge label="Pendiente Auxiliar" color="#2563eb" />
+                    <FakeBadge label="Pendiente de auditoría" color="#2563eb" />
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <FakeField label="Mercancía" value={DEMO.mercancia} />
@@ -239,7 +239,7 @@ export function MockFormCedis() {
                         <p className="text-sm font-black italic theme-text-main m-0">{DEMO.folio}</p>
                         <p className="text-[10px] theme-text-muted m-0 mt-1">{DEMO.paqueteria} · {DEMO.tipoGuia}</p>
                     </div>
-                    <FakeBadge label="En CEDIS" color="#ca8a04" />
+                    <FakeBadge label="Pendiente de empaque" color="#ca8a04" />
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <FakeField label="Peso" value={DEMO.peso} />
@@ -332,8 +332,8 @@ export default function EjemplosPracticos({ idsSecciones = [] }) {
                 <div className="space-y-4">
                     <h3 className="text-xs font-black uppercase tracking-widest theme-text-muted m-0">Auxiliar</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
-                        <MockCardPedido fase="Pendiente Auxiliar" faseColor="#2563eb" acciones={['ver', 'aprobar']} />
-                        <MockCardPedido fase="En CEDIS" faseColor="#ca8a04" envioLabel="Completo" acciones={['ver']} />
+                        <MockCardPedido fase="Pendiente de auditoría" faseColor="#2563eb" acciones={['ver', 'aprobar']} />
+                        <MockCardPedido fase="Pendiente de empaque" faseColor="#ca8a04" envioLabel="Completo" acciones={['ver']} />
                     </div>
                     <MockFormAuditoria />
                 </div>
@@ -343,8 +343,8 @@ export default function EjemplosPracticos({ idsSecciones = [] }) {
                 <div className="space-y-4">
                     <h3 className="text-xs font-black uppercase tracking-widest theme-text-muted m-0">CEDIS</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
-                        <MockCardPedido fase="En CEDIS" faseColor="#ca8a04" acciones={['ver', 'empacar']} />
-                        <MockCardPedido fase="Pendiente de envío" faseColor="#0d9488" conGuia acciones={['ver', 'enviar']} />
+                        <MockCardPedido fase="Pendiente de empaque" faseColor="#ca8a04" acciones={['ver', 'empacar']} />
+                        <MockCardPedido fase="Pendiente de recolección" faseColor="#0d9488" conGuia acciones={['ver', 'enviar']} />
                     </div>
                     <MockFormCedis />
                 </div>

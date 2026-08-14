@@ -11,6 +11,7 @@ import InputMoneda from './InputMoneda';
 import { codigoDireccionCliente, labelOpcionDireccion } from './codigoDireccionCliente';
 import {
     calcularTotalCobrar,
+    calcularResumenCoberturaPago,
     calcCostoSeguro,
     calcularPesoCobradoGuia,
     paqueteriaTieneCobertura,
@@ -219,13 +220,54 @@ export default function ModalFormPedido({
     const [sinDireccionPrincipal, setSinDireccionPrincipal] = useState(false);
     const [safCuenta, setSafCuenta] = useState(null);
     const [cargandoSaf, setCargandoSaf] = useState(false);
-    const [saldoGeneradoExcedente, setSaldoGeneradoExcedente] = useState(0);
+    const [safFifoItems, setSafFifoItems] = useState([]);
     const [pagoResumen, setPagoResumen] = useState(null);
 
     const { data, setData, post, processing, reset, errors, transform } = useForm(formDefaults(pedido, catalogos.tipos_operacion_envio || []));
 
-    const saldoFavorCalculado = (data.saf_aplicaciones || []).reduce((acc, i) => acc + (Number(i.monto) || 0), 0)
-        || (data.aplica_saldo_favor ? Number(data.saldo_a_favor || 0) : 0);
+    const saldoFavorCalculado = data.aplica_saldo_favor ? Number(data.saldo_a_favor || 0) : 0;
+
+    const aplicarFifoSaf = (montoDeseado) => {
+        const monto = Math.max(0, Number(montoDeseado) || 0);
+        if (monto <= 0) {
+            setSafFifoItems([]);
+            setData('saf_aplicaciones', []);
+            return;
+        }
+        const creditos = [...(safCuenta?.creditos_usables || [])].sort((a, b) => {
+            const fa = String(a.fecha_vencimiento || '');
+            const fb = String(b.fecha_vencimiento || '');
+            if (fa !== fb) return fa < fb ? -1 : 1;
+            return Number(a.id) - Number(b.id);
+        });
+        let restante = monto;
+        const items = [];
+        for (const c of creditos) {
+            if (restante <= 0) break;
+            const disp = Number(c.monto_disponible) || 0;
+            const tomar = Math.min(disp, restante);
+            if (tomar <= 0) continue;
+            items.push({
+                saf_credito_id: c.id,
+                folio: c.folio,
+                canal_origen: c.canal_origen,
+                disponible: disp,
+                fecha_vencimiento: c.fecha_vencimiento,
+                monto: Math.round(tomar * 100) / 100,
+            });
+            restante = Math.round((restante - tomar) * 100) / 100;
+        }
+        setSafFifoItems(items);
+        setData('saf_aplicaciones', items.map((i) => ({
+            saf_credito_id: i.saf_credito_id,
+            monto: i.monto,
+            folio: i.folio,
+        })));
+        const cubierto = items.reduce((a, i) => a + Number(i.monto || 0), 0);
+        if (cubierto > 0 && Math.abs(cubierto - monto) > 0.01) {
+            setData('saldo_a_favor', cubierto);
+        }
+    };
 
     useEffect(() => {
         if (!data.cliente_id) {
@@ -246,10 +288,10 @@ export default function ModalFormPedido({
         return () => { cancelado = true; };
     }, [data.cliente_id]);
 
-    const puedeAutoguardarBd = !pedido || ['BORRADOR', 'PESAJE_PENDIENTE', 'RECHAZADO_VENDEDORA'].includes(pedido?.estatus?.fase_ciclo);
+    const puedeAutoguardarBd = !pedido || ['BORRADOR', 'PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'].includes(pedido?.estatus?.fase_ciclo);
     const fasePedido = pedido?.estatus?.fase_ciclo;
-    const puedeVolverBorrador = fasePedido === 'PESAJE_PENDIENTE';
-    const puedeContinuarPedido = puedeVolverBorrador && Boolean(pedido?.pesaje_respondido_at);
+    const puedeVolverBorrador = ['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(fasePedido);
+    const puedeContinuarPedido = fasePedido === 'PESAJE_PENDIENTE' && Boolean(pedido?.pesaje_respondido_at);
 
     const paqueteriaSeleccionada = (catalogos.paqueterias || []).find(
         (p) => String(p.id) === String(data.catalogo_paqueteria_id)
@@ -288,8 +330,7 @@ export default function ModalFormPedido({
 
     // Sin tipo elegido: solo Tipo + Cliente. Con Envío: pesaje primero; resto tras «Continuar pedido».
     const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id);
-    const enfocadoEnPesaje = (requiereLogistica && puedeVolverBorrador)
-        || (puedeVolverBorrador && (tienePesajeRespondido || pendientePesaje));
+    const enfocadoEnPesaje = fasePedido === 'PESAJE_PENDIENTE';
     // Pesaje listo/pendiente debe verse aunque falte origen en el form (p. ej. fila sin origen_id).
     const mostrarPesaje = (tieneTipo && requiereLogistica) || tienePesajeRespondido || pendientePesaje;
     const mostrarRestoPedido = Boolean(data.origen_id) && (!requiereLogistica || (cotizacionHabilitada && !enfocadoEnPesaje));
@@ -298,6 +339,21 @@ export default function ModalFormPedido({
     const mostrarPagosYCierre = mostrarRestoPedido;
     // «Enviar» solo tras Continuar pedido (o flujo sin pesaje). Deshabilitado si faltan datos.
     const mostrarEnviarPedido = mostrarRestoPedido;
+    const totalCobrar = calcularTotalCobrar(
+        data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
+        saldoFavorCalculado
+    );
+    const resumenCoberturaVivo = calcularResumenCoberturaPago({
+        totalMercancia: data.total_mercancia,
+        costoEnvio: guiaCliente ? 0 : data.costo_envio,
+        aplicaSeguro: Boolean(data.aplica_seguro),
+        costoSeguro: data.costo_seguro,
+        saldoAFavorAplicado: data.aplica_saldo_favor ? saldoFavorCalculado : 0,
+        totalPagado: pagoResumen?.total_pagado ?? pagoResumen?.total_recibido ?? 0,
+    });
+    const pagoPendienteVivo = !idPedidoAcciones
+        ? null
+        : (pagoResumen == null ? null : resumenCoberturaVivo.pendiente);
     const validacionEnvio = validarCamposEnvioPedido(data, {
         requiereLogistica,
         direccionesNormalizadas,
@@ -305,7 +361,7 @@ export default function ModalFormPedido({
         esResguardoAbierto,
         esResguardoComplementario,
         tienePesajeRespondido,
-        pagoPendiente: idPedidoAcciones ? (pagoResumen?.pendiente ?? null) : null,
+        pagoPendiente: pagoPendienteVivo,
     });
     const enviarPedidoListo = validacionEnvio.valido
         && !(esResguardoComplementario && !data.pedido_principal_id)
@@ -339,11 +395,6 @@ export default function ModalFormPedido({
     const tieneCoberturaSeguro = paqueteriaTieneCobertura(paqueteriaSeleccionada?.nombre);
     const paqueteriasComerciales = (catalogos.paqueterias || []).filter((p) => p.categoria === 'comercial');
     const paqueteriasLocales = (catalogos.paqueterias || []).filter((p) => p.categoria !== 'comercial');
-
-    const totalCobrar = calcularTotalCobrar(
-        data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
-        saldoFavorCalculado
-    );
 
     const modalAnidadoAbierto = confirmarActualizarDir || alertaEnvio.abierto || Boolean(vistaPrevia) || modalLinkDireccion;
 
@@ -536,10 +587,12 @@ export default function ModalFormPedido({
             });
             payload.pedido_id = pedidoBdIdRef.current || undefined;
             payload.saldo_a_favor = data.aplica_saldo_favor
-                ? ((data.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || data.saldo_a_favor || 0)
+                ? (Number(data.saldo_a_favor) || (data.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
                 : 0;
-            payload.saf_aplicaciones = data.aplica_saldo_favor
-                ? (data.saf_aplicaciones || []).filter((i) => Number(i.monto) > 0)
+            payload.saf_aplicaciones = data.aplica_saldo_favor && Number(data.saldo_a_favor) > 0
+                ? (data.saf_aplicaciones?.length
+                    ? data.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
+                    : [{ monto: Number(data.saldo_a_favor) }])
                 : [];
             payload.comentarios_drive = data.direccion_manual_excepcion && data.motivo_direccion_manual
                 ? `${data.comentarios_drive || ''}\n[Excepción dirección] ${data.motivo_direccion_manual}`.trim()
@@ -1021,7 +1074,7 @@ export default function ModalFormPedido({
                 esResguardoAbierto,
                 esResguardoComplementario,
                 tienePesajeRespondido,
-                pagoPendiente: idPedidoAcciones ? (pagoResumen?.pendiente ?? null) : null,
+                pagoPendiente: pagoPendienteVivo,
             });
             if (!valido) {
                 setAlertaEnvio({ abierto: true, mensaje });
@@ -1057,10 +1110,12 @@ export default function ModalFormPedido({
                 _method: 'put',
                 enviar: enviarPedido,
                 saldo_a_favor: d.aplica_saldo_favor
-                    ? ((d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || d.saldo_a_favor || 0)
+                    ? (Number(d.saldo_a_favor) || (d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
                     : 0,
-                saf_aplicaciones: d.aplica_saldo_favor
-                    ? (d.saf_aplicaciones || []).filter((i) => Number(i.monto) > 0)
+                saf_aplicaciones: d.aplica_saldo_favor && Number(d.saldo_a_favor) > 0
+                    ? (d.saf_aplicaciones?.length
+                        ? d.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
+                        : [{ monto: Number(d.saldo_a_favor) }])
                     : [],
                 comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
                     ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
@@ -1072,10 +1127,12 @@ export default function ModalFormPedido({
                 ...d,
                 enviar: enviarPedido,
                 saldo_a_favor: d.aplica_saldo_favor
-                    ? ((d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || d.saldo_a_favor || 0)
+                    ? (Number(d.saldo_a_favor) || (d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
                     : 0,
-                saf_aplicaciones: d.aplica_saldo_favor
-                    ? (d.saf_aplicaciones || []).filter((i) => Number(i.monto) > 0)
+                saf_aplicaciones: d.aplica_saldo_favor && Number(d.saldo_a_favor) > 0
+                    ? (d.saf_aplicaciones?.length
+                        ? d.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
+                        : [{ monto: Number(d.saldo_a_favor) }])
                     : [],
                 comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
                     ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
@@ -1486,6 +1543,8 @@ export default function ModalFormPedido({
                                     pedido={pedido}
                                     onVerDoc={setVistaPrevia}
                                     titulo="Revisión física CEDIS"
+                                    puedeAtender={Boolean(pedido?.puede_mutar)}
+                                    puedeCancelar={Boolean(pedido?.puede_cancelar)}
                                 />
                                 {cajasPesaje.length > 0 ? (
                                     <div className="space-y-3">
@@ -2045,8 +2104,12 @@ export default function ModalFormPedido({
                                             if (!on) {
                                                 setData('saf_aplicaciones', []);
                                                 setData('saldo_a_favor', '');
-                                            } else if (safCuenta?.creditos_usables?.length && (!data.saf_aplicaciones || data.saf_aplicaciones.length === 0)) {
-                                                // sugerencia FIFO se carga al activar si hay cuenta
+                                                setSafFifoItems([]);
+                                            } else {
+                                                const disponible = Number(safCuenta?.disponible || 0);
+                                                const sugerido = disponible > 0 ? disponible : '';
+                                                setData('saldo_a_favor', sugerido);
+                                                if (sugerido) aplicarFifoSaf(sugerido);
                                             }
                                         }}
                                     />
@@ -2080,41 +2143,44 @@ export default function ModalFormPedido({
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {data.aplica_saldo_favor && (
                                         <div className="md:col-span-2 space-y-2">
-                                            <label className={SECCION}>Saldos a favor a aplicar (vence primero)</label>
-                                            {(safCuenta?.creditos_usables || []).length === 0 ? (
+                                            <label className={SECCION}>Monto a aplicar (FIFO: vence primero)</label>
+                                            <InputMoneda
+                                                value={data.saldo_a_favor}
+                                                onChange={(v) => {
+                                                    setData('saldo_a_favor', v);
+                                                    aplicarFifoSaf(v);
+                                                }}
+                                                className="w-full max-w-xs py-3"
+                                            />
+                                            <p className="text-xs theme-text-muted m-0">
+                                                El sistema reparte automáticamente el saldo más antiguo primero. No se elige crédito a crédito.
+                                            </p>
+                                            {safFifoItems.length > 0 && (
+                                                <div className="space-y-1 border theme-border rounded-lg p-2">
+                                                    {safFifoItems.map((i) => {
+                                                        const parcial = Number(i.monto) + 0.001 < Number(i.disponible);
+                                                        return (
+                                                            <div key={i.saf_credito_id} className="flex justify-between gap-2 text-xs">
+                                                                <span className="font-bold">{i.folio} · vence {i.fecha_vencimiento}</span>
+                                                                <span>
+                                                                    {formatearMoneda(i.monto)}
+                                                                    {parcial && (
+                                                                        <span className="ml-2 text-amber-600 font-semibold">
+                                                                            (se sugiere usar completo: {formatearMoneda(i.disponible)})
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                            {(safCuenta?.creditos_usables || []).length === 0 && (
                                                 <div className="text-xs theme-text-muted">
                                                     {data.cliente_id
-                                                        ? 'El cliente no tiene saldo disponible en el libro. Puede capturar un monto manual temporal.'
+                                                        ? 'El cliente no tiene saldo disponible en el libro.'
                                                         : 'Seleccione un cliente para consultar su saldo.'}
-                                                    <div className="mt-2">
-                                                        <InputMoneda value={data.saldo_a_favor} onChange={(v) => setData('saldo_a_favor', v)} className="w-full py-3" />
-                                                    </div>
                                                 </div>
-                                            ) : (
-                                                (safCuenta.creditos_usables || []).map((c) => {
-                                                    const actual = (data.saf_aplicaciones || []).find((a) => String(a.saf_credito_id) === String(c.id));
-                                                    return (
-                                                        <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 border theme-border rounded-lg p-2">
-                                                            <div className="text-xs">
-                                                                <div className="font-bold">{c.folio}</div>
-                                                                <div className="theme-text-muted">{c.canal_origen || '—'} · vence {c.fecha_vencimiento} · {formatearMoneda(c.monto_disponible)}</div>
-                                                            </div>
-                                                            <InputMoneda
-                                                                value={actual?.monto ?? ''}
-                                                                onChange={(v) => {
-                                                                    const monto = v;
-                                                                    const resto = (data.saf_aplicaciones || []).filter((a) => String(a.saf_credito_id) !== String(c.id));
-                                                                    const next = Number(monto) > 0
-                                                                        ? [...resto, { saf_credito_id: c.id, monto, folio: c.folio }]
-                                                                        : resto;
-                                                                    setData('saf_aplicaciones', next);
-                                                                    setData('saldo_a_favor', next.reduce((a, i) => a + (Number(i.monto) || 0), 0));
-                                                                }}
-                                                                className="w-36 py-2"
-                                                            />
-                                                        </div>
-                                                    );
-                                                })
                                             )}
                                             <div className="text-sm font-bold text-emerald-700">Total saldo: {formatearMoneda(saldoFavorCalculado)}</div>
                                         </div>
@@ -2150,10 +2216,12 @@ export default function ModalFormPedido({
                                 formasPago={catalogos.formas_pago || []}
                                 puedeRegistrar={Boolean(idPedidoAcciones) && cotizacionLista}
                                 puedeGenerarSaldo={false}
-                                onResumenChange={(r) => {
-                                    setPagoResumen(r);
-                                    setSaldoGeneradoExcedente(Number(r?.excedente || 0));
-                                }}
+                                totalMercancia={data.total_mercancia}
+                                costoEnvio={guiaCliente ? 0 : data.costo_envio}
+                                aplicaSeguro={Boolean(data.aplica_seguro)}
+                                costoSeguro={data.costo_seguro}
+                                saldoAFavorAplicado={data.aplica_saldo_favor ? saldoFavorCalculado : 0}
+                                onResumenChange={(r) => setPagoResumen(r)}
                                 mensajeBloqueo={!cotizacionLista
                                     ? (requiereLogistica && !tienePesajeRespondido && !esResguardoComplementario
                                         ? 'Complete el pesaje CEDIS y la cotización antes de registrar pagos.'
@@ -2204,17 +2272,24 @@ export default function ModalFormPedido({
                                 <span>Costo del seguro</span>
                                 <span>{data.aplica_seguro ? formatearMoneda(data.costo_seguro) : formatearMoneda(0)}</span>
                             </div>
+                            <div className="flex justify-between theme-text-muted font-bold">
+                                <span>Total a cubrir</span>
+                                <span>{formatearMoneda(resumenCoberturaVivo.total_a_cubrir)}</span>
+                            </div>
                             <div className="flex justify-between text-emerald-600 font-bold">
                                 <span>Saldo a favor aplicado</span>
                                 <span>- {formatearMoneda(data.aplica_saldo_favor ? saldoFavorCalculado : 0)}</span>
                             </div>
-                            <div className="flex justify-between text-emerald-600 font-bold">
-                                <span>Saldo a favor generado</span>
-                                <span>{formatearMoneda(saldoGeneradoExcedente)}</span>
-                            </div>
+                            {resumenCoberturaVivo.excedente_generado > 0.01 && (
+                                <div className="flex justify-between font-bold" style={{ color: '#3B82F6' }}>
+                                    <span>Excedente generado (este pedido)</span>
+                                    <span>{formatearMoneda(resumenCoberturaVivo.excedente_generado)}</span>
+                                </div>
+                            )}
                         </div>
                         <div className="mt-4 p-4 rounded-2xl border-2" style={{ borderColor: 'var(--color-primario)' }}>
-                            <p className="text-[10px] font-black uppercase theme-text-muted m-0">Total final del pedido</p>
+                            <p className="text-[10px] font-black uppercase theme-text-muted m-0">Total a cobrar ahora</p>
+                            <p className="text-[10px] theme-text-muted font-bold m-0">Después del saldo a favor aplicado</p>
                             <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(totalCobrar)}</p>
                         </div>
                     </section>

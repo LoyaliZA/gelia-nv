@@ -46,6 +46,7 @@ describe('agruparPermisosPorSubmodulo', () => {
         const permisos = [
             'control_pedidos.ver_listado',
             'control_pedidos.cedis',
+            'control_pedidos.reabrir',
             'control_pedidos.auditar',
             'control_pedidos.delegado',
             'control_pedidos.configurar_catalogos',
@@ -57,7 +58,7 @@ describe('agruparPermisosPorSubmodulo', () => {
             'registrar', 'auditar', 'cedis', 'delegado', 'catalogos',
         ]);
         expect(grupos.find((g) => g.id === 'cedis').permisos.map((p) => p.name))
-            .toEqual(['control_pedidos.cedis']);
+            .toEqual(['control_pedidos.cedis', 'control_pedidos.reabrir']);
         expect(grupos.find((g) => g.id === 'registrar').permisos.map((p) => p.name))
             .toContain('control_pedidos.direccion.seleccionar');
     });

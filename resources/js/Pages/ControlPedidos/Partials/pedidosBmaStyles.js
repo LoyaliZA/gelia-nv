@@ -33,24 +33,45 @@ export const badgeClaseEstatusPedido = (estatus) => {
 export const LABELS_ESTATUS_POR_FASE = {
     BORRADOR: 'Borrador',
     PESAJE_PENDIENTE: 'Pesaje pendiente',
-    PENDIENTE_AUXILIAR: 'Pendiente Auxiliar',
-    EN_CEDIS: 'En CEDIS',
-    RECHAZADO_VENDEDORA: 'Rechazado',
+    PESAJE_RESPONDIDO: 'Pesaje respondido',
+    PENDIENTE_AUXILIAR: 'Pendiente de auditoría',
+    EN_CEDIS: 'Pendiente de empaque',
+    RECHAZADO_VENDEDORA: 'Rechazado o devuelto para corrección',
     INCIDENCIA_CEDIS: 'Error CEDIS',
     EN_RUTA: 'En ruta',
     PENDIENTE_DE_GUIA: 'Pendiente de guía',
     PENDIENTE_GUIA_CLIENTE: 'Pendiente de guía del cliente',
-    PENDIENTE_DE_ENVIO: 'Pendiente de envío',
+    PENDIENTE_DE_ENVIO: 'Pendiente de recolección o envío',
     ENTREGADO: 'Entregado',
     ENVIADO: 'Enviado',
     CANCELADO: 'Cancelado',
+};
+
+export const LABELS_HITO_AUDITORIA = {
+    pago_en_revision: 'Pago en revisión',
+    pendiente_remision: 'Pendiente de remisión',
+    pago_validado: 'Pago validado',
+};
+
+export const badgeHitoAuditoria = (hito) => {
+    if (!hito) return null;
+    const map = {
+        pago_en_revision: { hex: '#EAB308', label: LABELS_HITO_AUDITORIA.pago_en_revision },
+        pendiente_remision: { hex: '#F97316', label: LABELS_HITO_AUDITORIA.pendiente_remision },
+        pago_validado: { hex: '#22C55E', label: LABELS_HITO_AUDITORIA.pago_validado },
+    };
+    const item = map[hito] || { hex: '#94A3B8', label: LABELS_HITO_AUDITORIA[hito] || hito };
+    return {
+        label: item.label,
+        ...badgeClaseEstatusPedido({ color_hex: item.hex }),
+    };
 };
 
 /** Resguardo solo etiqueta el estado cuando el pedido ya está en flujo (no pre-venta/rechazado). */
 export const etiquetaResguardoVisible = (estatus, esResguardo = false) => {
     if (!esResguardo) return false;
     const fase = estatus?.fase_ciclo;
-    return Boolean(fase) && !['BORRADOR', 'PESAJE_PENDIENTE', 'RECHAZADO_VENDEDORA'].includes(fase);
+    return Boolean(fase) && !['BORRADOR', 'PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'].includes(fase);
 };
 
 export const etiquetaEstatusPedido = (estatus, { esResguardo = false } = {}) => {
@@ -68,9 +89,11 @@ export const TABS_PEDIDOS = [
     { id: 'TODAS', label: 'Todas' },
     { id: 'BORRADORES', label: 'Borradores' },
     { id: 'PESAJE_PENDIENTE', label: 'Pesaje pendiente' },
+    { id: 'PESAJE_RESPONDIDO', label: 'Pesaje respondido' },
     { id: 'OBS_CEDIS', label: 'Obs. CEDIS' },
-    { id: 'PENDIENTE_AUXILIAR', label: 'Pendiente Auxiliar' },
-    { id: 'EN_CEDIS', label: 'En CEDIS' },
+    { id: 'SIN_EXISTENCIA', label: 'Sin existencias' },
+    { id: 'PENDIENTE_AUXILIAR', label: 'Pendiente de auditoría' },
+    { id: 'EN_CEDIS', label: 'Pendiente de empaque' },
     { id: 'PENDIENTE_GUIA_CLIENTE', label: 'Guía del cliente' },
     { id: 'ENVIADOS', label: 'Enviados' },
     { id: 'RECHAZADAS', label: 'Rechazadas' },
@@ -86,6 +109,9 @@ export const TABS_AUDITORIA_PRINCIPALES = [
 
 /** Colas operativas / envío: subfiltros. */
 export const TABS_AUDITORIA_SUBFILTROS = [
+    { id: 'PAGO_EN_REVISION', label: 'Pago en revisión' },
+    { id: 'PENDIENTE_REMISION', label: 'Pendiente remisión' },
+    { id: 'PAGO_VALIDADO', label: 'Pago validado' },
     { id: 'ENVIO_PENDIENTE', label: 'Envío pendiente' },
     { id: 'PENDIENTE_LIBERACION', label: 'Pendiente liberación' },
     { id: 'ANEXO_POR_VERIFICAR', label: 'Anexo por verificar' },
@@ -330,8 +356,8 @@ export const anexoEnvioPendienteDe = (pedido) => (
 export const TABS_CEDIS = [
     { id: 'TODOS', label: 'Todos' },
     { id: 'PENDIENTES_PESAJE', label: 'Pendientes de pesaje' },
-    { id: 'EMPACADOS', label: 'Por empacar' },
-    { id: 'PENDIENTES_ENVIO', label: 'Pendientes de Enviar' },
+    { id: 'EMPACADOS', label: 'Pendiente de empaque' },
+    { id: 'PENDIENTES_ENVIO', label: 'Pendiente de recolección' },
     { id: 'PENDIENTES_GUIA', label: 'Pendientes de Guía' },
     { id: 'ENVIADOS', label: 'Enviados' },
     { id: 'INCORRECTAS', label: 'Errores CEDIS' },
@@ -340,7 +366,7 @@ export const TABS_CEDIS = [
 export const TABS_DELEGADO = [
     { id: 'TODOS', label: 'Todos' },
     { id: 'PENDIENTES_GUIA', label: 'Pendientes de Guía' },
-    { id: 'PENDIENTES_ENVIO', label: 'Pendientes de Envío' },
+    { id: 'PENDIENTES_ENVIO', label: 'Pendiente de recolección' },
     { id: 'ENVIADOS', label: 'Enviados' },
 ];
 
@@ -438,7 +464,7 @@ export const badgeEmpaqueSemantico = (fase, esResguardo = false, resguardoAparta
         INCIDENCIA_CEDIS: { hex: '#F97316', label: 'Error reportado' },
         PENDIENTE_DE_GUIA: { hex: '#A855F7', label: 'Esperando Guía' },
         PENDIENTE_GUIA_CLIENTE: { hex: '#C026D3', label: 'Guía del cliente' },
-        PENDIENTE_DE_ENVIO: { hex: '#0EA5E9', label: 'Pendiente de envío' },
+        PENDIENTE_DE_ENVIO: { hex: '#0EA5E9', label: 'Pendiente de recolección' },
         ENTREGADO: { hex: '#22C55E', label: 'Empacado' },
         ENVIADO: { hex: '#22C55E', label: 'Empacado' },
     };
@@ -493,9 +519,29 @@ export const badgeSinExistencias = () => ({
 
 /** Pedido con al menos una revisión en sin_existencia. */
 export const pedidoTieneSinExistencias = (pedido) => {
+    if (pedido?.tiene_sin_existencia_abierta) return true;
     if (pedido?.estado_fisico_general === 'sin_existencia') return true;
     const revs = pedido?.revisiones_producto || pedido?.revisionesProducto || [];
     return revs.some((r) => r.estado_fisico === 'sin_existencia');
+};
+
+export const LABELS_RESOLUCION_SIN_EXISTENCIA = {
+    contactar: 'Contactar cliente',
+    esperar: 'Esperar producto',
+    retirar: 'Retirar producto',
+    sustituir: 'Sustituir producto',
+    stock_ok: 'Ya hay existencias',
+};
+
+export const revisionSinExistenciaAbierta = (r) => (
+    r?.estado_fisico === 'sin_existencia'
+    && !['retirar', 'sustituir', 'stock_ok'].includes(r?.resolucion)
+);
+
+export const pedidoTieneSinExistenciaAbierta = (pedido) => {
+    if (pedido?.tiene_sin_existencia_abierta) return true;
+    const revs = pedido?.revisiones_producto || pedido?.revisionesProducto || [];
+    return revs.some(revisionSinExistenciaAbierta);
 };
 
 /** Departamentos a mostrar: principal (como área principal); si no hay, los M2M asignados. */
@@ -576,6 +622,49 @@ export const calcularTotalCobrar = (mercancia, envio, aplicaSeguro, costoSeguro,
     const total = Number(mercancia || 0) + Number(envio || 0) + (aplicaSeguro ? Number(costoSeguro || 0) : 0) - Number(saldoFavor || 0);
     return Math.max(0, Math.round(total * 100) / 100);
 };
+
+const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+
+/** Espeja RegistrarPagoPedidoBmaService::calcularResumenCobertura. */
+export const calcularResumenCoberturaPago = ({
+    totalMercancia = 0,
+    costoEnvio = 0,
+    aplicaSeguro = false,
+    costoSeguro = 0,
+    saldoAFavorAplicado = 0,
+    totalPagado = 0,
+} = {}) => {
+    const totalACubrir = round2(Number(totalMercancia || 0) + Number(costoEnvio || 0) + (aplicaSeguro ? Number(costoSeguro || 0) : 0));
+    const saf = round2(Math.max(0, Number(saldoAFavorAplicado || 0)));
+    const totalACobrar = Math.max(0, round2(totalACubrir - saf));
+    const pagado = round2(Math.max(0, Number(totalPagado || 0)));
+    const delta = round2(totalACobrar - pagado);
+    const pendiente = Math.max(0, delta);
+    const excedenteGenerado = Math.max(0, round2(-delta));
+    let cobertura = 'sin_pago';
+    if (pagado <= 0 && saf <= 0) cobertura = 'sin_pago';
+    else if (pendiente > 0.01) cobertura = 'parcial';
+    else if (excedenteGenerado > 0.01) cobertura = 'con_excedente';
+    else cobertura = 'cubierto';
+    return {
+        total_a_cubrir: totalACubrir,
+        saldo_a_favor_aplicado: saf,
+        total_a_cobrar: totalACobrar,
+        total_pagado: pagado,
+        pendiente,
+        excedente_generado: excedenteGenerado,
+        cobertura,
+        total_final: totalACubrir,
+        saldos_aplicados: saf,
+        total_recibido: pagado,
+        excedente: excedenteGenerado,
+        nuevo_saldo_sugerido: excedenteGenerado,
+    };
+};
+
+export const mensajePagoFaltante = (pendiente) => (
+    `El total a cubrir no está completo. Faltan $${Number(pendiente).toFixed(2)}. Registre exhibiciones hasta cubrir mercancía, envío y seguro (menos el saldo a favor aplicado).`
+);
 
 /** Fórmula Drive: se cobra el mayor entre peso real y peso volumétrico. */
 export const calcularPesoCobradoGuia = (pesoReal, pesoVolumetrico) => {
@@ -697,7 +786,7 @@ export const validarCamposEnvioPedido = (data, {
     if (pagoPendiente == null) {
         faltantes.push('exhibiciones de pago (guarde el borrador y registre los abonos que cubran el total)');
     } else if (Number(pagoPendiente) > 0.01) {
-        faltantes.push(`pago cubierto (pendiente $${Number(pagoPendiente).toFixed(2)})`);
+        faltantes.push(mensajePagoFaltante(pagoPendiente));
     }
 
     if (requiereLogistica) {

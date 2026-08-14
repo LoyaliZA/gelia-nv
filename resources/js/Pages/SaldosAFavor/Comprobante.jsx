@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ArrowLeft, Download, Printer, Receipt } from 'lucide-react';
+import { ArrowLeft, Download, Printer, Receipt, RefreshCw, PenLine } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
@@ -68,42 +68,55 @@ export default function Comprobante({ auth, comprobante, encabezado }) {
 
                 {flash?.success && <div className={FLASH_OK}>{flash.success}</div>}
 
-                <div className={geliaCardClass('p-6 max-w-md mx-auto space-y-3 text-sm theme-text-main')}>
+                <div className={geliaCardClass('p-5 max-w-md mx-auto space-y-2.5 text-sm theme-text-main')}>
                     {comprobante.es_reimpresion && (
-                        <div className="text-center text-[10px] font-black tracking-[0.25em] uppercase theme-text-muted">REIMPRESIÓN</div>
+                        <div className="text-center text-[10px] font-medium tracking-[0.2em] uppercase theme-text-muted">REIMPRESIÓN</div>
                     )}
                     <div className="flex flex-col items-center gap-1">
                         {logo?.base64 ? (
                             <img
                                 src={`data:image/png;base64,${logo.base64}`}
                                 alt={marca}
-                                className="max-h-40 w-auto max-w-full object-contain"
+                                className="max-h-28 w-auto max-w-[75%] object-contain"
                             />
                         ) : (
-                            <div className="text-center font-black italic uppercase tracking-tight text-lg">{marca}</div>
+                            <div className="text-center font-medium uppercase tracking-tight text-base">{marca}</div>
                         )}
-                        <div className="text-center text-[10px] font-black uppercase tracking-widest theme-text-muted">
+                        <div className="text-center text-[10px] font-medium uppercase tracking-widest theme-text-muted">
                             Aplicación de saldo a favor
                         </div>
                     </div>
-                    <hr className="border-theme-border theme-border" />
-                    <div><span className="theme-text-muted font-bold">Cliente:</span> {comprobante.cliente?.nombre}</div>
-                    <div><span className="theme-text-muted font-bold">No. cliente:</span> {comprobante.cliente?.numero_cliente}</div>
-                    <div className="flex justify-between"><span className="theme-text-muted font-bold">Saldo anterior</span><strong>{fmtMoneda(comprobante.saldo_anterior)}</strong></div>
-                    <div className="pt-2 text-[10px] font-black uppercase tracking-widest theme-text-muted">Saldos utilizados</div>
+                    <hr className="border-theme-border theme-border !my-2" />
+                    <div>
+                        <span className="theme-text-muted font-medium">Cliente:</span> {comprobante.cliente?.nombre}
+                        {' '}
+                        <span className="theme-text-muted">#{comprobante.cliente?.numero_cliente}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="theme-text-muted font-medium">Saldo anterior</span>
+                        <span className="font-medium tabular-nums">{fmtMoneda(comprobante.saldo_anterior)}</span>
+                    </div>
+                    <div className="pt-1 text-[10px] font-medium uppercase tracking-widest theme-text-muted">
+                        Saldos utilizados ({(comprobante.creditos_detalle || []).length})
+                    </div>
                     {(comprobante.creditos_detalle || []).map((item, idx) => (
-                        <div key={idx} className="pl-3 border-l-2 theme-border space-y-0.5">
-                            <div className="font-bold">{item.folio} · {item.canal_origen}</div>
-                            <div className="flex justify-between"><span>Aplicado</span><span>{fmtMoneda(item.monto)}</span></div>
+                        <div key={idx} className="flex justify-between gap-2 py-0.5">
+                            <span className="min-w-0 break-words font-medium">
+                                {item.folio}{item.canal_origen ? ` · ${item.canal_origen}` : ''}
+                            </span>
+                            <span className="shrink-0 tabular-nums font-medium">{fmtMoneda(item.monto)}</span>
                         </div>
                     ))}
-                    <hr className="border-theme-border theme-border" />
-                    <div className="flex justify-between font-black text-base">
+                    <hr className="border-theme-border theme-border !my-2" />
+                    <div className="flex justify-between font-medium text-base">
                         <span>Total usado</span>
-                        <span style={{ color: 'var(--color-primario)' }}>{fmtMoneda(comprobante.monto_aplicado)}</span>
+                        <span className="tabular-nums" style={{ color: 'var(--color-primario)' }}>{fmtMoneda(comprobante.monto_aplicado)}</span>
                     </div>
-                    <div className="flex justify-between"><span className="theme-text-muted font-bold">Saldo restante</span><span className="font-bold">{fmtMoneda(comprobante.saldo_restante)}</span></div>
-                    <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted pt-2">
+                    <div className="flex justify-between">
+                        <span className="theme-text-muted font-medium">Saldo restante</span>
+                        <span className="font-medium tabular-nums">{fmtMoneda(comprobante.saldo_restante)}</span>
+                    </div>
+                    <div className="text-[10px] font-medium uppercase tracking-wide theme-text-muted pt-1">
                         Aplicó: {comprobante.generado_por?.name}
                     </div>
                     {comprobante.ruta_evidencia_firmada && (
@@ -111,7 +124,7 @@ export default function Comprobante({ auth, comprobante, encabezado }) {
                             href={`/storage/${comprobante.ruta_evidencia_firmada}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="block text-xs font-bold underline"
+                            className="block text-xs font-medium underline"
                             style={{ color: 'var(--color-primario)' }}
                         >
                             Ver evidencia firmada
@@ -138,9 +151,9 @@ export default function Comprobante({ auth, comprobante, encabezado }) {
                         href={urlImprimir({ reimpresion: 1 })}
                         target="_blank"
                         rel="noreferrer"
-                        className={`${BTN_SECONDARY} inline-flex items-center gap-2`}
+                        className={BTN_SECONDARY}
                     >
-                        Reimprimir
+                        <RefreshCw className="w-4 h-4" /> Reimprimir
                     </a>
                 </div>
 
@@ -154,7 +167,7 @@ export default function Comprobante({ auth, comprobante, encabezado }) {
                             onChange={(e) => setEvidencia(e.target.files?.[0] || null)}
                         />
                         <button type="submit" disabled={enviando} className={`${BTN_PRIMARY} w-full`}>
-                            {enviando ? 'Guardando…' : 'Marcar firmado'}
+                            <PenLine className="w-4 h-4" /> {enviando ? 'Guardando…' : 'Marcar firmado'}
                         </button>
                     </form>
                 )}

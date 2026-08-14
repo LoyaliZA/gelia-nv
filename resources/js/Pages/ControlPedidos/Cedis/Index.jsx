@@ -16,9 +16,9 @@ import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 const KPI_CONFIG = [
     { key: 'pendientes_pesaje', label: 'Pendientes pesaje', tab: 'PENDIENTES_PESAJE', icon: Scale, color: '#F97316' },
-    { key: 'empacados', label: 'Por empacar', tab: 'EMPACADOS', icon: Clock, color: '#EAB308' },
+    { key: 'empacados', label: 'Pendiente de empaque', tab: 'EMPACADOS', icon: Clock, color: '#EAB308' },
     { key: 'pendientes_guia', label: 'Pendientes de guía', tab: 'PENDIENTES_GUIA', icon: Package, color: '#A855F7' },
-    { key: 'pendientes_envio', label: 'Pendientes de envío', tab: 'PENDIENTES_ENVIO', icon: Package, color: '#0EA5E9' },
+    { key: 'pendientes_envio', label: 'Pendiente de recolección', tab: 'PENDIENTES_ENVIO', icon: Package, color: '#0EA5E9' },
     { key: 'enviados', label: 'Enviados', tab: 'ENVIADOS', icon: CheckCircle2, color: '#22C55E' },
     { key: 'incorrectas', label: 'Errores CEDIS', tab: 'INCORRECTAS', icon: CheckCircle2, color: '#F97316' },
 ];

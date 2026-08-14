@@ -4,8 +4,10 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 
@@ -16,6 +18,7 @@ class AprobarPedidoBmaService
         private NotificarPedidoBmaService $notificarService,
         private AvanzarColaErroresPedidoBmaService $colaErroresService,
         private SincronizarAplicacionesPedidoSafService $safPedido,
+        private RegistrarPagoPedidoBmaService $pagos,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -25,12 +28,16 @@ class AprobarPedidoBmaService
         }
 
         if (!$pedido->tienePagoValidado()) {
-            throw new \RuntimeException('Debe validar el pago antes de aprobar.');
+            throw new \RuntimeException('Valide el pago antes de aprobar.');
         }
 
         if (!$pedido->tieneRemision()) {
-            throw new \RuntimeException('Debe adjuntar la remisión PDF antes de aprobar.');
+            throw new \RuntimeException('Adjunte la remisión PDF antes de aprobar.');
         }
+
+        $pedido->assertSinExistenciaAtendida();
+
+        $this->pagos->assertPagoListoParaAvanzar($pedido, RegistrarPagoPedidoBmaService::FASE_APROBAR);
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $this->safPedido->aplicarReservasPedido($pedido, $usuarioId);
@@ -48,6 +55,7 @@ class AprobarPedidoBmaService
 
             if ($siguiente !== null) {
                 $faseDestino = $this->colaErroresService->faseParaDuenoPendiente($pedido, $siguiente);
+                MaquinaEstadosPedidoBma::assertTransicion($estatusAnterior?->fase_ciclo, $faseDestino);
                 $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
                 if (! $estatusNuevo) {
                     throw new \RuntimeException("No se encontró el estatus {$faseDestino}.");
@@ -85,6 +93,10 @@ class AprobarPedidoBmaService
                 return $pedido;
             }
 
+            MaquinaEstadosPedidoBma::assertTransicion(
+                $estatusAnterior?->fase_ciclo,
+                CatalogoEstatusPedido::FASE_EN_CEDIS
+            );
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_EN_CEDIS)
                 ?? CatalogoEstatusPedido::porCodigo('AMARILLO');
 

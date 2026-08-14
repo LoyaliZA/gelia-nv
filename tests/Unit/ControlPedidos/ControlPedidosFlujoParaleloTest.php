@@ -143,7 +143,7 @@ class ControlPedidosFlujoParaleloTest extends TestCase
         $enCedis = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_EN_CEDIS);
 
         $this->assertSame('Resguardo', $enCedis->etiquetaSemantica(true));
-        $this->assertSame('En CEDIS', $enCedis->etiquetaSemantica(false));
+        $this->assertSame('Pendiente de empaque', $enCedis->etiquetaSemantica(false));
     }
 
     private function origenForaneo(): CatalogoOrigenPedido

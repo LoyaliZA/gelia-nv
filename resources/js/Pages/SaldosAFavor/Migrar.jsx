@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ArrowLeft, Upload } from 'lucide-react';
+import { ArrowLeft, Download, Upload, Eye, FileUp } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
@@ -55,17 +55,23 @@ export default function Migrar({ auth }) {
                     eyebrow="Administración"
                     title="Migración"
                     titleHighlight="histórica"
-                    description="CSV conciliado · solo filas con cliente y monto válidos · excepciones se omiten"
+                    description="Descarga plantilla · CSV conciliado · solo filas con cliente y monto válidos · excepciones se omiten"
                     icon={Upload}
                 />
 
                 {flash?.success && <div className={FLASH_OK}>{flash.success}</div>}
 
-                <div className={geliaCardClass('p-5 space-y-2 max-w-2xl')}>
+                <div className={geliaCardClass('p-5 space-y-3 max-w-2xl')}>
+                    <a href={route('saldos_favor.migrar.plantilla')} className={`${BTN_SECONDARY} inline-flex items-center gap-2`}>
+                        <Download className="w-4 h-4" /> Descargar plantilla CSV
+                    </a>
                     <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Columnas esperadas</p>
                     <code className="block text-xs theme-element border theme-border rounded-xl px-3 py-2 theme-text-main overflow-x-auto">
-                        numero_cliente,monto_original,monto_aplicado,fecha_generacion,documento_origen,remision_aplicacion,motivo
+                        numero_cliente,monto_original,monto_aplicado,fecha_generacion,fecha_vencimiento,documento_origen,remision_aplicacion,motivo
                     </code>
+                    <p className="text-xs theme-text-muted m-0">
+                        `fecha_vencimiento` es opcional: si va vacía, se aplica la vigencia configurada en Reglas.
+                    </p>
                 </div>
 
                 <form
@@ -94,7 +100,9 @@ export default function Migrar({ auth }) {
                         />
                     </div>
                     <div className="flex flex-wrap gap-2 items-center">
-                        <button type="button" onClick={previsualizar} className={BTN_SECONDARY}>Previsualizar</button>
+                        <button type="button" onClick={previsualizar} className={BTN_SECONDARY}>
+                            <Eye className="w-4 h-4" /> Previsualizar
+                        </button>
                         <label className="inline-flex items-center gap-2 text-sm font-bold theme-text-main">
                             <input
                                 type="checkbox"
@@ -106,7 +114,7 @@ export default function Migrar({ auth }) {
                         </label>
                     </div>
                     <button type="submit" disabled={form.processing || !form.data.confirmar} className={`${BTN_PRIMARY} disabled:opacity-50`}>
-                        Importar filas OK
+                        <FileUp className="w-4 h-4" /> Importar filas OK
                     </button>
                 </form>
 

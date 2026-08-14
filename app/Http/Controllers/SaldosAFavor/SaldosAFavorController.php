@@ -65,7 +65,13 @@ class SaldosAFavorController extends Controller
                     });
                 })
                 ->when($estadoRevision, fn ($q2) => $q2->where('estado_revision', $estadoRevision))
-                ->when($estadoFinanciero, fn ($q2) => $q2->where('estado_financiero', $estadoFinanciero))
+                ->when($estadoFinanciero, function ($q2) use ($estadoFinanciero) {
+                    if ($estadoFinanciero === SafCredito::ESTADO_DISPONIBLE) {
+                        $q2->whereIn('estado_financiero', SafCredito::ESTADOS_USABLES);
+                    } else {
+                        $q2->where('estado_financiero', $estadoFinanciero);
+                    }
+                })
                 ->when($canalOrigen, fn ($q2) => $q2->where('canal_origen', $canalOrigen))
                 ->when($generadoPorId, fn ($q2) => $q2->where('generado_por_id', (int) $generadoPorId))
                 ->when($montoMin !== null && $montoMin !== '', fn ($q2) => $q2->where('monto_original', '>=', (float) $montoMin))
@@ -78,10 +84,7 @@ class SaldosAFavorController extends Controller
         $hoy = now()->toDateString();
         $creditosUsables = function ($query) use ($hoy) {
             $query
-                ->whereIn('estado_financiero', [
-                    SafCredito::ESTADO_DISPONIBLE,
-                    SafCredito::ESTADO_PARCIAL,
-                ])
+                ->whereIn('estado_financiero', SafCredito::ESTADOS_USABLES)
                 ->where('monto_disponible', '>', 0)
                 ->whereDate('fecha_vencimiento', '>=', $hoy);
         };
@@ -168,10 +171,10 @@ class SaldosAFavorController extends Controller
                 'pagos_pendientes' => $pagosPendientes->count(),
                 'caja_pendientes' => $comprobantesCaja->count(),
                 'incidencias_abiertas' => $incidenciasAbiertas->count(),
-                'disponibles' => SafCredito::whereIn('estado_financiero', [
-                    SafCredito::ESTADO_DISPONIBLE,
-                    SafCredito::ESTADO_PARCIAL,
-                ])->where('monto_disponible', '>', 0)->count(),
+                'disponibles' => SafCredito::whereIn('estado_financiero', SafCredito::ESTADOS_USABLES)
+                    ->where('monto_disponible', '>', 0)->count(),
+                'reservados' => SafCredito::where('estado_financiero', SafCredito::ESTADO_RESERVADO)->count(),
+                'vencidos' => SafCredito::where('estado_financiero', SafCredito::ESTADO_VENCIDO)->count(),
             ],
             'motivos' => SafMotivo::where('activo', true)->orderBy('orden')->get(['id', 'codigo', 'nombre', 'categoria', 'requiere_detalle']),
             'sucursales' => Sucursal::query()->where('activo', true)->orderBy('nombre')->get(['id', 'codigo', 'nombre']),
@@ -189,6 +192,9 @@ class SaldosAFavorController extends Controller
 
         $creditos = $cuenta['creditos']->loadMissing([
             'motivo:id,nombre,categoria',
+            'evidencias',
+            'pedidoOrigen:id,folio,cliente_id',
+            'pedidoOrigen.pagosExhibicion.banco:id,nombre',
             'aplicacionesPedido' => fn ($q) => $q->where('estado', SafPedidoAplicacion::ESTADO_APLICADO)->orderByDesc('id'),
         ]);
 
@@ -201,7 +207,36 @@ class SaldosAFavorController extends Controller
                 'vencido' => $cuenta['vencido'],
                 'moneda' => $cuenta['cuenta']->moneda,
             ],
-            'creditos' => $creditos,
+            'creditos' => $creditos->map(function (SafCredito $c) {
+                $pagos = $c->pedidoOrigen?->pagosExhibicion ?? collect();
+
+                return [
+                    ...$c->toArray(),
+                    'recibos_pago' => $pagos->map(fn (PedidoBmaPago $p) => [
+                        'id' => $p->id,
+                        'monto' => (float) $p->monto,
+                        'forma_pago' => $p->forma_pago,
+                        'forma_pago_label' => PedidoBmaPago::labelForma($p->forma_pago),
+                        'fecha_pago' => $p->fecha_pago?->toDateString(),
+                        'referencia' => $p->referencia,
+                        'banco_nombre' => $p->banco?->nombre,
+                        'ruta_archivo' => $p->ruta_archivo,
+                        'nombre_original' => $p->nombre_original,
+                        'mime_type' => $p->mime_type,
+                        'estado_revision' => $p->estado_revision,
+                        'url' => $p->ruta_archivo ? asset('storage/'.$p->ruta_archivo) : null,
+                    ])->values(),
+                    'evidencias' => ($c->evidencias ?? collect())->map(fn ($e) => [
+                        'id' => $e->id,
+                        'nombre_original' => $e->nombre_original,
+                        'ruta_archivo' => $e->ruta_archivo,
+                        'mime_type' => $e->mime_type ?? null,
+                        'created_at' => $e->created_at,
+                        'url' => $e->ruta_archivo ? asset('storage/'.$e->ruta_archivo) : null,
+                    ])->values(),
+                    'pedido_origen_folio' => $c->pedidoOrigen?->folio,
+                ];
+            }),
             'movimientos' => $cuenta['movimientos'],
             'motivos' => SafMotivo::where('activo', true)->orderBy('orden')->get(['id', 'codigo', 'nombre', 'categoria', 'requiere_detalle']),
         ]);

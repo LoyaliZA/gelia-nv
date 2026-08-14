@@ -11,6 +11,8 @@ import {
     badgeEstadoRevisionPago,
     badgeCoberturaPago,
     badgeRevisionPagoPedido,
+    calcularResumenCoberturaPago,
+    mensajePagoFaltante,
 } from './pedidosBmaStyles';
 import { THEME_INPUT, THEME_SELECT } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
@@ -70,6 +72,11 @@ export default function SeccionPagosExhibicion({
     rutaExcedente = 'control_pedidos.generar_saldo_excedente',
     onResumenChange = null,
     mensajeBloqueo = null,
+    totalMercancia = null,
+    costoEnvio = null,
+    aplicaSeguro = null,
+    costoSeguro = null,
+    saldoAFavorAplicado = null,
 }) {
     const [resumen, setResumen] = useState(null);
     const [pagos, setPagos] = useState([]);
@@ -91,6 +98,36 @@ export default function SeccionPagosExhibicion({
 
     const requiereBanco = formaRequiereBanco(form.data.forma_pago, formas);
 
+    const mezclarResumenVivo = (base, listaPagos) => {
+        const tieneTotalesVivos = totalMercancia != null || saldoAFavorAplicado != null;
+        if (!tieneTotalesVivos) return base;
+        const pagado = (listaPagos || []).reduce((a, p) => a + Number(p.monto || 0), 0);
+        const vivo = calcularResumenCoberturaPago({
+            totalMercancia: totalMercancia ?? base?.total_a_cubrir ?? base?.total_final ?? 0,
+            costoEnvio: costoEnvio ?? 0,
+            aplicaSeguro: Boolean(aplicaSeguro),
+            costoSeguro: costoSeguro ?? 0,
+            saldoAFavorAplicado: saldoAFavorAplicado ?? base?.saldo_a_favor_aplicado ?? base?.saldos_aplicados ?? 0,
+            totalPagado: pagado,
+        });
+        return {
+            ...(base || {}),
+            ...vivo,
+            revision: base?.revision ?? null,
+            fuentes_pago: base?.fuentes_pago,
+            estado_pago: base?.estado_pago,
+        };
+    };
+
+    const emitirResumenLocal = (lista) => {
+        const next = mezclarResumenVivo(resumen, lista);
+        setPagos(lista);
+        setResumen(next);
+        if (typeof onResumenChange === 'function') {
+            onResumenChange(next, lista);
+        }
+    };
+
     const cargar = async () => {
         if (!pedidoId) return;
         setCargando(true);
@@ -104,13 +141,13 @@ export default function SeccionPagosExhibicion({
             if (Array.isArray(json.formas_pago) && json.formas_pago.length) {
                 setFormas(json.formas_pago);
             }
-            const nextResumen = json.resumen || null;
+            const nextResumen = mezclarResumenVivo(json.resumen || null, nextPagos);
             setResumen(nextResumen);
             if (nextPagos.length > 1) {
                 setDividido(true);
             }
             if (typeof onResumenChange === 'function') {
-                onResumenChange(nextResumen);
+                onResumenChange(nextResumen, nextPagos);
             }
         } finally {
             setCargando(false);
@@ -120,6 +157,16 @@ export default function SeccionPagosExhibicion({
     useEffect(() => {
         cargar();
     }, [pedidoId]);
+
+    useEffect(() => {
+        if (totalMercancia == null && saldoAFavorAplicado == null) return;
+        if (!resumen && pagos.length === 0) return;
+        const next = mezclarResumenVivo(resumen, pagos);
+        setResumen(next);
+        if (typeof onResumenChange === 'function') {
+            onResumenChange(next, pagos);
+        }
+    }, [totalMercancia, costoEnvio, aplicaSeguro, costoSeguro, saldoAFavorAplicado]);
 
     useEffect(() => {
         if (formasPago?.length) setFormas(formasPago);
@@ -191,6 +238,7 @@ export default function SeccionPagosExhibicion({
             preserveScroll: true,
             onSuccess: () => {
                 if (editandoId === p.id) resetForm();
+                emitirResumenLocal(pagos.filter((x) => x.id !== p.id));
                 cargar();
             },
         });
@@ -289,6 +337,11 @@ export default function SeccionPagosExhibicion({
     const badgeRev = resumen?.revision ? badgeRevisionPagoPedido(resumen.revision) : null;
     const mostrarFormulario = puedeRegistrar && (dividido || pagos.length === 0 || editandoId);
     const modoUnicoConPago = !dividido && pagos.length === 1 && !editandoId;
+    const totalACubrir = resumen?.total_a_cubrir ?? resumen?.total_final;
+    const totalPagado = resumen?.total_pagado ?? resumen?.total_recibido;
+    const safAplicado = resumen?.saldo_a_favor_aplicado ?? resumen?.saldos_aplicados ?? 0;
+    const pendiente = Number(resumen?.pendiente || 0);
+    const excedenteGenerado = Number(resumen?.excedente_generado ?? resumen?.excedente ?? 0);
 
     return (
         <div className="space-y-3">
@@ -402,22 +455,41 @@ export default function SeccionPagosExhibicion({
             )}
             {resumen && (
                 <div className="grid grid-cols-2 gap-2 p-3 rounded-xl border theme-border theme-element text-xs font-bold">
-                    <div className="theme-text-muted">
-                        Total:{' '}
-                        <strong className="theme-text-main">{formatearMoneda(resumen.total_final)}</strong>
+                    <div className="theme-text-muted col-span-2">
+                        Total a cubrir:{' '}
+                        <strong className="theme-text-main">{formatearMoneda(totalACubrir)}</strong>
                     </div>
-                    <div className="theme-text-muted">
-                        SAF:{' '}
-                        <strong className="theme-text-main">{formatearMoneda(resumen.saldos_aplicados)}</strong>
+                    <div className="theme-text-muted col-span-2">
+                        Total pagado por el cliente:{' '}
+                        <strong className="theme-text-main">{formatearMoneda(totalPagado)}</strong>
                     </div>
-                    <div className="theme-text-muted">
-                        Recibido:{' '}
-                        <strong className="theme-text-main">{formatearMoneda(resumen.total_recibido)}</strong>
-                    </div>
-                    <div className="theme-text-muted">
-                        Pendiente:{' '}
-                        <strong className="theme-text-main">{formatearMoneda(resumen.pendiente)}</strong>
-                    </div>
+                    {pendiente > 0.01 ? (
+                        <div className="col-span-2 text-amber-700 dark:text-amber-400">
+                            Saldo pendiente:{' '}
+                            <strong>{formatearMoneda(pendiente)}</strong>
+                        </div>
+                    ) : excedenteGenerado > 0.01 ? (
+                        <div className="col-span-2" style={{ color: '#3B82F6' }}>
+                            Excedente generado (este pedido):{' '}
+                            <strong>{formatearMoneda(excedenteGenerado)}</strong>
+                        </div>
+                    ) : (
+                        <div className="theme-text-muted col-span-2">
+                            Saldo pendiente:{' '}
+                            <strong className="theme-text-main">{formatearMoneda(0)}</strong>
+                        </div>
+                    )}
+                    {Number(safAplicado) > 0.01 && (
+                        <div className="col-span-2 text-emerald-600">
+                            Saldo a favor aplicado:{' '}
+                            <strong>- {formatearMoneda(safAplicado)}</strong>
+                        </div>
+                    )}
+                    {pendiente > 0.01 && (
+                        <p className="col-span-2 text-[11px] font-black text-amber-700 dark:text-amber-400 m-0">
+                            {mensajePagoFaltante(pendiente)}
+                        </p>
+                    )}
                     <div className="theme-text-muted col-span-2 flex flex-wrap items-center gap-2">
                         {badgeCob && (
                             <span className={badgeCob.className} style={badgeCob.style}>{badgeCob.label}</span>
@@ -425,10 +497,6 @@ export default function SeccionPagosExhibicion({
                         {badgeRev && (
                             <span className={badgeRev.className} style={badgeRev.style}>{badgeRev.label}</span>
                         )}
-                    </div>
-                    <div className="theme-text-muted">
-                        Excedente:{' '}
-                        <strong style={{ color: 'var(--color-primario)' }}>{formatearMoneda(resumen.excedente)}</strong>
                     </div>
                 </div>
             )}
@@ -530,18 +598,18 @@ export default function SeccionPagosExhibicion({
                     </div>
                 </form>
             )}
-            {puedeGenerarSaldo && resumen?.excedente > 0 && (
+            {puedeGenerarSaldo && excedenteGenerado > 0 && (
                 <button
                     type="button"
                     className={`${BTN_SECONDARY} outline-none`}
                     onClick={() => router.post(route(rutaExcedente, pedidoId))}
                 >
-                    Generar saldo a favor por excedente ({formatearMoneda(resumen.excedente)})
+                    Generar saldo a favor por excedente de este pedido ({formatearMoneda(excedenteGenerado)})
                 </button>
             )}
-            {!puedeGenerarSaldo && resumen?.excedente > 0 && (
+            {!puedeGenerarSaldo && excedenteGenerado > 0 && (
                 <p className="text-[10px] theme-text-muted font-bold m-0">
-                    Excedente detectado: el saldo a favor se genera al registrar el pago o al enviar el pedido.
+                    Excedente de este pedido: el saldo a favor se genera al registrar el pago o al enviar el pedido.
                 </p>
             )}
             <ModalVistaPreviaDocumento

@@ -9,6 +9,7 @@ use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class RechazarPedidoBmaService
 {
@@ -33,6 +34,10 @@ class RechazarPedidoBmaService
             $this->safPedido->liberarReservasPendientes($pedido, $usuarioId);
 
             $estatusAnterior = $pedido->estatus;
+            MaquinaEstadosPedidoBma::assertTransicion(
+                $estatusAnterior?->fase_ciclo,
+                CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA
+            );
             $estatusRechazado = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA)
                 ?? CatalogoEstatusPedido::porCodigo('NARANJA');
 

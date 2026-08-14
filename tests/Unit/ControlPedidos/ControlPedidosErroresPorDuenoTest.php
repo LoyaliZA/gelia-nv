@@ -347,6 +347,8 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
             'pago_validado_at' => now(),
             'pago_validado_por_id' => $this->usuario->id,
         ]);
+        \App\Models\SaldosAFavor\PedidoBmaPago::where('pedido_bma_id', $enviado->id)
+            ->update(['estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_VERIFICADO]);
 
         $aprobado = app(AprobarPedidoBmaService::class)->ejecutar(
             $enviado->fresh(['estatus', 'documentos']),

@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class MarcarEmpacadoPedidoBmaService
 {
@@ -70,6 +71,12 @@ class MarcarEmpacadoPedidoBmaService
             throw new \RuntimeException("El pedido {$pedido->folio} debe tener pago validado y remisión adjunta.");
         }
 
+        if ($pedido->tieneErroresGravesBloqueanEmpaque()) {
+            throw new \RuntimeException("El pedido {$pedido->folio} tiene errores graves de guía, pago o productos sin resolver.");
+        }
+
+        $pedido->assertSinExistenciaAtendida();
+
         if ($pedido->es_resguardo && !$pedido->esResguardoComplementario()) {
             throw new \RuntimeException("El pedido {$pedido->folio} está en resguardo; libérelo primero.");
         }
@@ -81,13 +88,8 @@ class MarcarEmpacadoPedidoBmaService
         $estatusAnterior = $pedido->estatus;
 
         $tieneGuia = !empty($pedido->numero_rastreo);
-        if ($pedido->cliente_proporciona_guia && ! $tieneGuia) {
-            $faseDestino = CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE;
-        } elseif (! $pedido->ofreceRastreo() || $tieneGuia) {
-            $faseDestino = CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO;
-        } else {
-            $faseDestino = CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA;
-        }
+        $faseDestino = MaquinaEstadosPedidoBma::faseDestinoEmpaque($pedido);
+        MaquinaEstadosPedidoBma::assertTransicion($estatusAnterior?->fase_ciclo, $faseDestino);
 
         $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino);
 
@@ -110,8 +112,8 @@ class MarcarEmpacadoPedidoBmaService
             CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE => 'Pedido empacado; pendiente de guía del cliente.',
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA => 'Pedido empacado; pendiente de captura de guía.',
             default => $tieneGuia
-                ? 'Pedido empacado; guía ya asignada, pendiente de envío.'
-                : 'Pedido empacado; pendiente de envío.',
+                ? 'Pedido empacado; guía ya asignada, pendiente de recolección.'
+                : 'Pedido empacado; pendiente de recolección o envío.',
         };
 
         if ($folioGrupo) {
@@ -147,7 +149,7 @@ class MarcarEmpacadoPedidoBmaService
             $this->notificarService->ejecutar(
                 $pedido,
                 'pedido_pendiente_envio',
-                'Pedido empacado; pendiente de envío',
+                'Pedido empacado; pendiente de recolección',
                 ['control_pedidos.cedis'],
                 $usuarioId,
                 false,

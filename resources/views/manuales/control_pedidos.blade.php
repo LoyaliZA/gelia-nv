@@ -197,6 +197,23 @@
             @endif
         @endforeach
 
+        @if(!empty($c['flujo']['reaperturas']))
+            <div class="section-title">Matriz de reapertura</div>
+            <table class="data">
+                <thead><tr><th>Desde</th><th>Hacia</th><th>Permiso</th><th>Nota</th></tr></thead>
+                <tbody>
+                    @foreach($c['flujo']['reaperturas'] as $r)
+                        <tr>
+                            <td>{{ $r['desde'] }}</td>
+                            <td>{{ $r['hacia'] }}</td>
+                            <td>{{ $r['permiso'] }}</td>
+                            <td>{{ $r['nota'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+
         <div class="section-title">Catálogo de estatus</div>
         <table class="data">
             <thead><tr><th>Fase</th><th>Etiqueta</th><th>Nota</th></tr></thead>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { ArrowLeft, Store } from 'lucide-react';
+import { ArrowLeft, Store, Layers, Printer, PlusCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
@@ -36,7 +36,8 @@ export default function Caja({
     const { flash } = usePage().props;
     const [clienteQuery, setClienteQuery] = useState(cliente ? `${cliente.numero_cliente} — ${cliente.nombre}` : '');
     const [resultados, setResultados] = useState([]);
-    const [montos, setMontos] = useState({});
+    const [montoAplicar, setMontoAplicar] = useState('');
+    const [fifoItems, setFifoItems] = useState([]);
     const [mostrarGenerar, setMostrarGenerar] = useState(false);
     const [evidencias, setEvidencias] = useState([]);
 
@@ -90,42 +91,40 @@ export default function Caja({
     const seleccionarCliente = (c) => {
         setClienteQuery(`${c.numero_cliente} — ${c.nombre}`);
         setResultados([]);
-        setMontos({});
+        setMontoAplicar('');
+        setFifoItems([]);
         router.get(route('saldos_favor.caja.index'), { cliente_id: c.id }, { preserveState: true });
     };
 
     const totalSeleccionado = useMemo(
-        () => Object.values(montos).reduce((acc, v) => acc + (Number(v) || 0), 0),
-        [montos]
+        () => fifoItems.reduce((acc, i) => acc + (Number(i.monto) || 0), 0),
+        [fifoItems]
     );
 
-    const aplicarTodo = () => {
-        const next = {};
-        (cuenta?.creditos_usables || []).forEach((c) => {
-            next[c.id] = String(c.monto_disponible);
-        });
-        setMontos(next);
-    };
-
-    const sugerirFifo = async () => {
+    const aplicarFifo = async (monto) => {
         if (!cliente?.id) return;
-        const monto = Number(prompt('Monto a sugerir (FIFO por vencimiento):', String(cuenta?.disponible || 0)));
-        if (!monto || monto <= 0) return;
-        const res = await fetch(`${route('saldos_favor.api.sugerir', cliente.id)}?monto=${encodeURIComponent(monto)}`, {
+        const m = Number(monto) || 0;
+        if (m <= 0) {
+            setFifoItems([]);
+            return;
+        }
+        const res = await fetch(`${route('saldos_favor.api.sugerir', cliente.id)}?monto=${encodeURIComponent(m)}`, {
             headers: { Accept: 'application/json' },
         });
         const json = await res.json();
-        const next = {};
-        (json.items || []).forEach((i) => {
-            next[i.saf_credito_id] = String(i.monto);
-        });
-        setMontos(next);
+        setFifoItems(json.items || []);
+    };
+
+    const aplicarTodo = () => {
+        const disp = Number(cuenta?.disponible || 0);
+        setMontoAplicar(String(disp));
+        aplicarFifo(disp);
     };
 
     const enviarAplicacion = (e) => {
         e.preventDefault();
-        const items = (cuenta?.creditos_usables || [])
-            .map((c) => ({ saf_credito_id: c.id, monto: Number(montos[c.id] || 0) }))
+        const items = fifoItems
+            .map((i) => ({ saf_credito_id: i.saf_credito_id, monto: Number(i.monto || 0) }))
             .filter((i) => i.monto > 0);
         formAplicar.transform((data) => ({ ...data, items }));
         formAplicar.post(route('saldos_favor.caja.aplicar'));
@@ -202,12 +201,29 @@ export default function Caja({
                                     <p className="text-3xl font-black theme-text-main m-0 mt-1">{fmtMoneda(cuenta.disponible)}</p>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
-                                    <button type="button" className={BTN_SECONDARY} onClick={aplicarTodo}>Aplicar todo</button>
-                                    <button type="button" className={BTN_SECONDARY} onClick={sugerirFifo}>Sugerir FIFO</button>
+                                    <button type="button" className={BTN_SECONDARY} onClick={aplicarTodo}>
+                                        <Layers className="w-4 h-4" /> Aplicar todo (FIFO)
+                                    </button>
                                 </div>
                             </div>
 
                             <form onSubmit={enviarAplicacion} className="space-y-3">
+                                <div>
+                                    <label className={THEME_LABEL}>Monto a aplicar (FIFO automático)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        className={`${THEME_INPUT} w-full mt-1`}
+                                        value={montoAplicar}
+                                        onChange={(e) => {
+                                            setMontoAplicar(e.target.value);
+                                            aplicarFifo(e.target.value);
+                                        }}
+                                        placeholder="0.00"
+                                    />
+                                    <p className="text-xs theme-text-muted m-0 mt-1">Se aplica el saldo más antiguo primero. No se elige crédito a crédito.</p>
+                                </div>
                                 <div>
                                     <label className={THEME_LABEL}>Referencia venta / ticket</label>
                                     <input className={`${THEME_INPUT} w-full mt-1`} value={formAplicar.data.referencia_venta} onChange={(e) => formAplicar.setData('referencia_venta', e.target.value)} />
@@ -249,31 +265,30 @@ export default function Caja({
                                     </select>
                                 </div>
                                 <div className="space-y-2 max-h-64 overflow-auto">
-                                    {(cuenta.creditos_usables || []).map((c) => (
-                                        <div key={c.id} className="border theme-border rounded-xl p-3 text-sm flex items-center justify-between gap-2 theme-element">
-                                            <div className="min-w-0">
-                                                <div className="font-bold theme-text-main">{c.folio}</div>
-                                                <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">
-                                                    {LABEL_CANAL[c.canal_origen] || c.canal_origen} · vence {fmtFecha(c.fecha_vencimiento)} · {fmtMoneda(c.monto_disponible)}
+                                    {fifoItems.length === 0 ? (
+                                        <p className="text-xs theme-text-muted m-0">Indique un monto para ver la distribución FIFO.</p>
+                                    ) : fifoItems.map((c) => {
+                                        const parcial = Number(c.monto) + 0.001 < Number(c.disponible);
+                                        return (
+                                            <div key={c.saf_credito_id} className="border theme-border rounded-xl p-3 text-sm flex items-center justify-between gap-2 theme-element">
+                                                <div className="min-w-0">
+                                                    <div className="font-bold theme-text-main">{c.folio}</div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">
+                                                        {LABEL_CANAL[c.canal_origen] || c.canal_origen} · vence {fmtFecha(c.fecha_vencimiento)} · disp. {fmtMoneda(c.disponible)}
+                                                    </div>
+                                                    {parcial && (
+                                                        <div className="text-[10px] font-bold text-amber-600 mt-1">Se sugiere usar el saldo completo</div>
+                                                    )}
                                                 </div>
+                                                <div className="font-black">{fmtMoneda(c.monto)}</div>
                                             </div>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                max={c.monto_disponible}
-                                                className={`${THEME_INPUT} w-28`}
-                                                value={montos[c.id] ?? ''}
-                                                onChange={(e) => setMontos((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                                                placeholder="0.00"
-                                            />
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                                 <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                                     <p className="font-black theme-text-main m-0">Total: {fmtMoneda(totalSeleccionado)}</p>
                                     <button type="submit" disabled={formAplicar.processing || totalSeleccionado <= 0} className={`${BTN_PRIMARY} disabled:opacity-50`}>
-                                        Reservar, aplicar e imprimir
+                                        <Printer className="w-4 h-4" /> Reservar, aplicar e imprimir
                                     </button>
                                 </div>
                                 {formAplicar.errors.items && <p className="text-xs text-rose-600 font-bold m-0">{formAplicar.errors.items}</p>}
@@ -282,6 +297,7 @@ export default function Caja({
 
                         <div className={geliaCardClass('p-5 space-y-3')}>
                             <button type="button" className={`${BTN_SECONDARY} w-full`} onClick={() => setMostrarGenerar((v) => !v)}>
+                                {mostrarGenerar ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                 {mostrarGenerar ? 'Ocultar generación' : 'Generar saldo a favor en Caja'}
                             </button>
                             {mostrarGenerar && (
@@ -322,7 +338,9 @@ export default function Caja({
                                         />
                                         {formGenerar.errors.evidencias && <p className="text-xs text-rose-600 font-bold m-0 mt-1">{formGenerar.errors.evidencias}</p>}
                                     </div>
-                                    <button type="submit" disabled={formGenerar.processing} className={BTN_PRIMARY}>Generar</button>
+                                    <button type="submit" disabled={formGenerar.processing} className={BTN_PRIMARY}>
+                                        <PlusCircle className="w-4 h-4" /> Generar
+                                    </button>
                                     {formGenerar.errors.monto && <p className="text-xs text-rose-600 font-bold m-0">{formGenerar.errors.monto}</p>}
                                 </form>
                             )}

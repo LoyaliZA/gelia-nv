@@ -30,9 +30,12 @@ final class AccionesHistorialPedidoBma
     public const ELIMINA_GUIA_PDF = 'elimina_guia_pdf';
     public const INVALIDAR_GUIA = 'invalidar_guia';
     public const INCIDENCIA = 'incidencia';
+    public const INCIDENCIA_SAF = 'incidencia_saf';
     public const ERROR_DATOS = 'error_datos';
     public const CORRECCION = 'correccion';
+    public const CORRECCION_SAF = 'correccion_saf';
     public const ENVIO_FINAL = 'envio_final';
+    public const REABRIR_ENVIO = 'reabrir_envio';
     public const ANEXO_PAGO_ENVIO = 'anexo_pago_envio';
     public const APROBAR_ANEXO = 'aprobar_anexo';
     public const RECHAZAR_ANEXO = 'rechazar_anexo';
@@ -44,6 +47,9 @@ final class AccionesHistorialPedidoBma
     public const BAJA_EXHIBICION_PAGO = 'baja_exhibicion_pago';
     public const REVISION_EXHIBICION_PAGO = 'revision_exhibicion_pago';
     public const CANCELACION = 'cancelacion';
+    public const DECISION_SIN_EXISTENCIA = 'decision_sin_existencia';
+    public const STOCK_SIN_EXISTENCIA = 'stock_sin_existencia';
+    public const REPORTE_SIN_EXISTENCIA = 'reporte_sin_existencia';
 
     /** @var array<string, string> */
     public const ETIQUETAS = [
@@ -70,9 +76,12 @@ final class AccionesHistorialPedidoBma
         self::ELIMINA_GUIA_PDF => 'Eliminación de PDF de guía',
         self::INVALIDAR_GUIA => 'Invalidación de guía',
         self::INCIDENCIA => 'Incidencia',
+        self::INCIDENCIA_SAF => 'Incidencia de saldo a favor',
         self::ERROR_DATOS => 'Error de datos',
         self::CORRECCION => 'Corrección',
-        self::ENVIO_FINAL => 'Envío final',
+        self::CORRECCION_SAF => 'Corrección de saldo a favor',
+        self::ENVIO_FINAL => 'Paquetería recogió el paquete',
+        self::REABRIR_ENVIO => 'Reapertura de envío',
         self::ANEXO_PAGO_ENVIO => 'Anexo de pago de envío',
         self::APROBAR_ANEXO => 'Aprobación de anexo',
         self::RECHAZAR_ANEXO => 'Rechazo de anexo',
@@ -84,6 +93,9 @@ final class AccionesHistorialPedidoBma
         self::BAJA_EXHIBICION_PAGO => 'Baja de exhibición de pago',
         self::REVISION_EXHIBICION_PAGO => 'Revisión de exhibición de pago',
         self::CANCELACION => 'Cancelación del pedido',
+        self::DECISION_SIN_EXISTENCIA => 'Decisión por sin existencias',
+        self::STOCK_SIN_EXISTENCIA => 'Existencias confirmadas (CEDIS)',
+        self::REPORTE_SIN_EXISTENCIA => 'CEDIS reportó sin existencias',
     ];
 
     public static function etiqueta(?string $accion): ?string

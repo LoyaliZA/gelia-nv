@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use Illuminate\Support\Facades\DB;
 
 class CancelarPedidoBmaService
@@ -91,6 +92,10 @@ class CancelarPedidoBmaService
 
             $estatusAnteriorId = $pedido->catalogo_estatus_pedido_id;
             $faseAnterior = $pedido->estatus?->fase_ciclo;
+            MaquinaEstadosPedidoBma::assertTransicion(
+                $faseAnterior,
+                CatalogoEstatusPedido::FASE_CANCELADO
+            );
 
             $this->safPedido->liberarReservasPendientes($pedido, $usuarioId);
 

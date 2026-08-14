@@ -226,6 +226,7 @@ export default function ModalResponderPesaje({
     const [listaProductosAbierta, setListaProductosAbierta] = useState(false);
     const skuAbortRef = useRef(null);
     const skuDebounceRef = useRef(null);
+    const avisoPiezasRef = useRef(false);
     const skipAutosaveRef = useRef(true);
     const hydratingRef = useRef(false);
 
@@ -253,6 +254,7 @@ export default function ModalResponderPesaje({
         setSkuError('');
         setListaProductosAbierta(false);
         setBorradorMsg(null);
+        avisoPiezasRef.current = false;
     };
 
     useEffect(() => {
@@ -438,12 +440,31 @@ export default function ModalResponderPesaje({
     };
 
     const quitarRevision = (idx) => {
-        setRevisiones((prev) => {
-            const copy = [...prev];
-            const [removed] = copy.splice(idx, 1);
-            revocarPreviews(removed?.previews);
-            return copy;
-        });
+        const rev = revisiones[idx];
+        if (!rev) return;
+        if (rev.estado_fisico !== 'sin_existencia') {
+            setRevisiones((prev) => prev.map((r, i) => (i === idx ? {
+                ...r,
+                estado_fisico: 'sin_existencia',
+                expandido: true,
+            } : r)));
+            setAlerta({
+                abierto: true,
+                tipo: 'warning',
+                titulo: 'No omita la pieza',
+                mensaje: 'Si no hay existencias, márquela así (comentario obligatorio). No la quite de la revisión.',
+            });
+            return;
+        }
+        if (!String(rev.comentario || '').trim()) {
+            setAlerta({
+                abierto: true,
+                tipo: 'error',
+                titulo: 'Sin existencias',
+                mensaje: 'Indique un comentario para Ventas. La pieza debe quedar revisada, no omitida.',
+            });
+            actualizarRevision(idx, 'expandido', true);
+        }
     };
 
     const agregarProducto = (producto) => {
@@ -585,6 +606,18 @@ export default function ModalResponderPesaje({
             }
         }
 
+        const piezasPedido = Number(pedido.cantidad_piezas || 0);
+        if (piezasPedido > 0 && revisiones.length < piezasPedido && !avisoPiezasRef.current) {
+            avisoPiezasRef.current = true;
+            setAlerta({
+                abierto: true,
+                tipo: 'warning',
+                titulo: 'Piezas por revisar',
+                mensaje: `El pedido tiene ${piezasPedido} piezas y solo revisó ${revisiones.length}. Si falta alguna, márquela Sin existencias; no la omita. Confirme de nuevo para continuar.`,
+            });
+            return;
+        }
+
         for (let i = 0; i < revisiones.length; i++) {
             const r = revisiones[i];
             if (!r.descripcion_producto.trim()) {
@@ -621,6 +654,8 @@ export default function ModalResponderPesaje({
         });
         revisiones.forEach((r, i) => {
             form.append(`revisiones[${i}][descripcion_producto]`, r.descripcion_producto);
+            if (r.producto_id) form.append(`revisiones[${i}][producto_id]`, String(r.producto_id));
+            if (r.sku) form.append(`revisiones[${i}][sku]`, String(r.sku));
             form.append(`revisiones[${i}][estado_fisico]`, r.estado_fisico);
             form.append(`revisiones[${i}][comentario]`, r.comentario || '');
             form.append(`revisiones[${i}][unica_pieza]`, r.unica_pieza ? '1' : '0');
@@ -692,7 +727,7 @@ export default function ModalResponderPesaje({
                             quitarRevision(idx);
                         }}
                         className="p-2 min-h-[40px] min-w-[40px] rounded-xl border theme-border theme-element outline-none inline-flex items-center justify-center theme-text-main shrink-0"
-                        aria-label="Quitar producto"
+                        aria-label="Marcar sin existencias"
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
@@ -810,6 +845,7 @@ export default function ModalResponderPesaje({
                             </div>
                             <p className="text-[10px] theme-text-muted font-bold m-0">
                                 Cada producto se agrega en Bueno. Expanda solo si CEDIS debe cambiar el estado o adjuntar evidencia individual.
+                                Si no hay existencias, márquela Sin existencias (no la omita).
                             </p>
 
                             <div className="space-y-2">

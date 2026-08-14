@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class MarcarEnviadoPedidoBmaService
 {
@@ -17,7 +18,7 @@ class MarcarEnviadoPedidoBmaService
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
         if ($pedido->estatus?->fase_ciclo !== CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO) {
-            throw new \RuntimeException('El pedido no está pendiente de envío.');
+            throw new \RuntimeException('El pedido no está pendiente de recolección o envío.');
         }
 
         if ($pedido->empacado_at === null) {
@@ -30,6 +31,10 @@ class MarcarEnviadoPedidoBmaService
             throw new \RuntimeException('El pedido requiere número de guía antes de marcarlo como enviado.');
         }
 
+        MaquinaEstadosPedidoBma::assertTransicion(
+            $pedido->estatus?->fase_ciclo,
+            CatalogoEstatusPedido::FASE_ENVIADO
+        );
         $estatusEnviado = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_ENVIADO);
 
         if (!$estatusEnviado) {
@@ -48,7 +53,7 @@ class MarcarEnviadoPedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusEnviado,
-                'Pedido marcado como enviado; sale a recolección.',
+                'Paquetería recogió el paquete.',
                 AccionesHistorialPedidoBma::ENVIO_FINAL
             );
 
@@ -60,7 +65,7 @@ class MarcarEnviadoPedidoBmaService
             $this->notificarService->ejecutar(
                 $pedido,
                 'pedido_enviado',
-                'Pedido marcado como enviado',
+                'Paquetería recogió el paquete',
                 [],
                 $usuarioId,
                 true,

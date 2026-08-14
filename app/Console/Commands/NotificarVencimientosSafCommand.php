@@ -20,7 +20,7 @@ class NotificarVencimientosSafCommand extends Command
         $hasta = now()->addDays($dias)->toDateString();
 
         $creditos = SafCredito::query()
-            ->whereIn('estado_financiero', [SafCredito::ESTADO_DISPONIBLE, SafCredito::ESTADO_PARCIAL])
+            ->whereIn('estado_financiero', SafCredito::ESTADOS_USABLES)
             ->where('monto_disponible', '>', 0)
             ->whereDate('fecha_vencimiento', '<=', $hasta)
             ->whereDate('fecha_vencimiento', '>=', now()->toDateString())

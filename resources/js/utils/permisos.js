@@ -93,6 +93,8 @@ export const DESCRIPCIONES_PERMISOS = {
     'control_pedidos.auditar': 'Permite acceder al panel de auditoría de pedidos (auxiliar).',
     'control_pedidos.cedis': 'Permite acceder al panel de control de empaque en CEDIS.',
     'control_pedidos.delegado': 'Permite acceder al panel de delegado (asignación de guías y PDF).',
+    'control_pedidos.cancelar': 'Permite cancelar un pedido BMA en fases tempranas (pre-guía / pre-envío).',
+    'control_pedidos.reabrir': 'Permite reabrir un pedido enviado a pendiente de recolección si la paquetería no recogió.',
     'control_pedidos.configurar_catalogos': 'Permite administrar catálogos del módulo de control de pedidos.',
     'control_pedidos.direccion.seleccionar': 'Permite seleccionar una dirección normalizada en pedidos BMA.',
     'control_pedidos.direccion.cambiar': 'Permite cambiar la dirección de un pedido con auditoría.',
@@ -232,6 +234,8 @@ export const ETIQUETAS_PERMISOS = {
     'control_pedidos.delegado': 'asignar / actualizar guías',
     'control_pedidos.configurar_catalogos': 'configurar catálogos',
     'control_pedidos.auditar': 'auditar pedidos',
+    'control_pedidos.cancelar': 'cancelar pedido',
+    'control_pedidos.reabrir': 'reabrir envío',
 };
 
 /** Permisos de excepción / estados avanzados (resalte en permisos específicos). */
@@ -261,6 +265,7 @@ export const SUBMODULOS_UI_POR_MODULO = {
                 'control_pedidos.crear',
                 'control_pedidos.editar',
                 'control_pedidos.eliminar',
+                'control_pedidos.cancelar',
                 'control_pedidos.exportar',
                 'control_pedidos.direccion.seleccionar',
                 'control_pedidos.direccion.cambiar',
@@ -278,8 +283,8 @@ export const SUBMODULOS_UI_POR_MODULO = {
         {
             id: 'cedis',
             label: 'Control pedidos CEDIS',
-            descripcion: 'Empaque y control operativo en CEDIS',
-            permisos: ['control_pedidos.cedis'],
+            descripcion: 'Empaque, recolección y reapertura excepcional de envío',
+            permisos: ['control_pedidos.cedis', 'control_pedidos.reabrir'],
         },
         {
             id: 'delegado',
@@ -296,21 +301,21 @@ export const SUBMODULOS_UI_POR_MODULO = {
     ],
     saldos_favor: [
         {
-            id: 'acceso',
+            id: 'consulta',
             label: 'Consulta',
             descripcion: 'Ver cuentas y saldos a favor',
             permisos: ['saldos_favor.ver'],
         },
         {
-            id: 'operacion',
-            label: 'Operación',
-            descripcion: 'Generar y aplicar saldos',
+            id: 'vendedoras',
+            label: 'Vendedoras / operación',
+            descripcion: 'Registrar, reservar, liberar y usar saldos (pedido y caja)',
             permisos: ['saldos_favor.generar', 'saldos_favor.aplicar', 'saldos_favor.caja'],
         },
         {
-            id: 'admin',
+            id: 'administracion',
             label: 'Administración',
-            descripcion: 'Revisión, ajustes, cancelación y migración',
+            descripcion: 'Revisar, editar/ajustar, cancelar, configurar reglas y migrar',
             permisos: [
                 'saldos_favor.revisar',
                 'saldos_favor.ajustar',

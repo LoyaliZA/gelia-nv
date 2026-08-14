@@ -91,6 +91,9 @@ export default function FiltrosAuditoria({
     const conteoTab = (tabId) => {
         const map = {
             PENDIENTES: metricas.pendientes,
+            PAGO_EN_REVISION: metricas.pago_en_revision,
+            PENDIENTE_REMISION: metricas.pendiente_remision,
+            PAGO_VALIDADO: metricas.pago_validado,
             ENVIO_PENDIENTE: metricas.envio_pendiente,
             PENDIENTE_LIBERACION: metricas.pendiente_liberacion,
             ANEXO_POR_VERIFICAR: metricas.anexo_por_verificar,

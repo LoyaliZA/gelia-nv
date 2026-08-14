@@ -8,6 +8,7 @@ use App\Models\ControlPedidos\PedidoBmaAnexoEnvio;
 use App\Services\SaldosAFavor\ReconciliarTotalPedidoSafService;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class SolicitarRepesajePedidoBmaService
 {
@@ -50,8 +51,13 @@ class SolicitarRepesajePedidoBmaService
         if (in_array($faseActual, [
             CatalogoEstatusPedido::FASE_BORRADOR,
             CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
             CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
         ], true)) {
+            MaquinaEstadosPedidoBma::assertTransicion(
+                $faseActual,
+                CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE
+            );
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE);
             if (! $estatusNuevo) {
                 throw new \RuntimeException('No se encontró el estatus de pesaje pendiente.');

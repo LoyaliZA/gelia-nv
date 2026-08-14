@@ -4,6 +4,7 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListarPedidosAuditoriaService
@@ -36,8 +37,16 @@ class ListarPedidosAuditoriaService
 
     private function anexarFlagsVista(PedidoBma $pedido): PedidoBma
     {
+        $hito = MaquinaEstadosPedidoBma::hitoAuditoria($pedido);
         $pedido->setAttribute('pendiente_re_revision', $this->esPendienteReRevision($pedido));
+        $pedido->setAttribute('hito_auditoria', $hito);
+        $pedido->setAttribute('hito_auditoria_etiqueta', MaquinaEstadosPedidoBma::etiquetaHito($hito));
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());
+        $incidenciasSaf = $pedido->relationLoaded('safIncidencias')
+            ? $pedido->safIncidencias
+            : collect();
+        $pedido->setAttribute('saf_incidencias_abiertas', $incidenciasSaf->values());
+        $pedido->setAttribute('tiene_alerta_saf', $incidenciasSaf->isNotEmpty());
 
         return $pedido;
     }
@@ -84,9 +93,18 @@ class ListarPedidosAuditoriaService
         $anexoPorVerificar = (clone $base)->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_REVISION_ANEXO)->count();
         $anexoRechazado = (clone $base)->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_ANEXO_RECHAZADO)->count();
         $consolidados = (clone $base)->whereNull('pedido_principal_id')->whereHas('complementos')->count();
+        $pendienteId = $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0;
+        $pagoEnRevision = (clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)->whereNull('pago_validado_at')->count();
+        $pendienteRemision = (clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)
+            ->whereNotNull('pago_validado_at')->whereDoesntHave('remision')->count();
+        $pagoValidado = (clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)
+            ->whereNotNull('pago_validado_at')->whereHas('remision')->count();
 
         return [
             'pendientes' => $pendientes,
+            'pago_en_revision' => $pagoEnRevision,
+            'pendiente_remision' => $pendienteRemision,
+            'pago_validado' => $pagoValidado,
             'aprobados' => $aprobados,
             'rechazados' => $rechazados,
             'resguardos' => $resguardos,
@@ -126,6 +144,7 @@ class ListarPedidosAuditoriaService
             'tipoGuia',
             'zona',
             'documentos',
+            'revisionesProducto',
             'pagoValidadoPor',
             'incidenciaEmpaquePor',
             'direccionVigente',
@@ -138,6 +157,7 @@ class ListarPedidosAuditoriaService
             'complementos',
             'safAplicaciones.credito',
             'pagosExhibicion.banco',
+            'safIncidencias' => fn ($q) => $q->where('estado', \App\Models\SaldosAFavor\SafIncidencia::ESTADO_ABIERTA)->orderByDesc('id'),
         ])
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
             ->orderByDesc('created_at');
@@ -162,6 +182,14 @@ class ListarPedidosAuditoriaService
 
         match ($tab) {
             'PENDIENTES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0),
+            'PAGO_EN_REVISION' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
+                ->whereNull('pago_validado_at'),
+            'PENDIENTE_REMISION' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
+                ->whereNotNull('pago_validado_at')
+                ->whereDoesntHave('remision'),
+            'PAGO_VALIDADO' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
+                ->whereNotNull('pago_validado_at')
+                ->whereHas('remision'),
             'APROBADOS' => $query->whereIn('catalogo_estatus_pedido_id', array_filter([
                 $idsPorFase['EN_CEDIS'] ?? null,
                 $idsPorFase['INCIDENCIA_CEDIS'] ?? null,

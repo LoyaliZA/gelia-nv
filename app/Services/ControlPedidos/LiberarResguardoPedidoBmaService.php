@@ -9,6 +9,7 @@ use App\Services\SaldosAFavor\ReconciliarTotalPedidoSafService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class LiberarResguardoPedidoBmaService
 {
@@ -119,6 +120,10 @@ class LiberarResguardoPedidoBmaService
             );
 
             if ($enPendienteAuxiliar && $listoParaCedis) {
+                MaquinaEstadosPedidoBma::assertTransicion(
+                    $estatusAnterior?->fase_ciclo,
+                    CatalogoEstatusPedido::FASE_EN_CEDIS
+                );
                 $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_EN_CEDIS)
                     ?? CatalogoEstatusPedido::porCodigo('AMARILLO');
 

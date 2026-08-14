@@ -217,6 +217,24 @@ class ControlPedidosPesajeTest extends TestCase
             'Pesaje pendiente',
             CatalogoEstatusPedido::LABELS_POR_FASE[CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE]
         );
+        $this->assertSame(
+            'Pesaje respondido',
+            CatalogoEstatusPedido::LABELS_POR_FASE[CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO]
+        );
+        $this->assertSame('PESAJE_RESPONDIDO', CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO);
+    }
+
+    public function test_editable_y_volver_borrador_incluye_pesaje_respondido(): void
+    {
+        $respondido = new PedidoBma([]);
+        $respondido->setRelation('estatus', new CatalogoEstatusPedido([
+            'fase_ciclo' => CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
+        ]));
+        $this->assertTrue($respondido->esEditablePorVendedora());
+        $this->assertTrue($respondido->puedeEliminarPreVenta());
+        $this->assertTrue($respondido->puedeVolverABorrador());
+        $this->assertTrue($respondido->esPesajeRespondido());
+        $this->assertFalse($respondido->esPesajePendiente());
     }
 
     public function test_enviar_con_pesaje_sin_costo_envio_falla(): void

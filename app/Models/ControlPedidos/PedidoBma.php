@@ -6,8 +6,10 @@ use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\Cliente;
 use App\Models\SaldosAFavor\PedidoBmaPago;
+use App\Models\SaldosAFavor\SafIncidencia;
 use App\Models\SaldosAFavor\SafPedidoAplicacion;
 use App\Models\User;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -236,6 +238,11 @@ class PedidoBma extends Model
     public function safAplicaciones(): HasMany
     {
         return $this->hasMany(SafPedidoAplicacion::class, 'pedido_bma_id');
+    }
+
+    public function safIncidencias(): HasMany
+    {
+        return $this->hasMany(SafIncidencia::class, 'pedido_bma_id');
     }
 
     public function anexoEnvioPendiente(): HasOne
@@ -487,6 +494,7 @@ class PedidoBma extends Model
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_BORRADOR,
             CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
             CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
             CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
             CatalogoEstatusPedido::FASE_EN_CEDIS,
@@ -499,6 +507,7 @@ class PedidoBma extends Model
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_BORRADOR,
             CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
         ], true);
     }
 
@@ -529,8 +538,18 @@ class PedidoBma extends Model
         if (in_array($fase, [
             CatalogoEstatusPedido::FASE_BORRADOR,
             CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
             CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
         ], true)) {
+            return true;
+        }
+
+        // Pedido pagado/en empaque detenido por sin existencias: Ventas puede cancelar.
+        if (in_array($fase, [
+            CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
+        ], true) && $this->tieneSinExistenciaAbierta()) {
             return true;
         }
 
@@ -548,7 +567,10 @@ class PedidoBma extends Model
 
     public function puedeVolverABorrador(): bool
     {
-        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE;
+        return in_array($this->estatus?->fase_ciclo, [
+            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
+        ], true);
     }
 
     public function historial(): HasMany
@@ -726,6 +748,7 @@ class PedidoBma extends Model
         return in_array($fase, [
             CatalogoEstatusPedido::FASE_BORRADOR,
             CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+            CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
             CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA,
         ], true);
     }
@@ -738,6 +761,47 @@ class PedidoBma extends Model
     public function esPesajePendiente(): bool
     {
         return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE;
+    }
+
+    public function esPesajeRespondido(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO;
+    }
+
+    public function hitoAuditoria(): ?string
+    {
+        return MaquinaEstadosPedidoBma::hitoAuditoria($this);
+    }
+
+    public function puedeReabrirEnvio(): bool
+    {
+        return $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_ENVIADO
+            && $this->empacado_at !== null;
+    }
+
+    public function tieneErroresGravesBloqueanEmpaque(): bool
+    {
+        return MaquinaEstadosPedidoBma::erroresGravesBloqueanEmpaque($this);
+    }
+
+    public function tieneSinExistenciaAbierta(): bool
+    {
+        $revisiones = $this->relationLoaded('revisionesProducto')
+            ? $this->getRelation('revisionesProducto')
+            : $this->revisionesProducto()->get();
+
+        return collect($revisiones)->contains(
+            fn (PedidoBmaRevisionProducto $r) => $r->estaSinExistenciaAbierta()
+        );
+    }
+
+    public function assertSinExistenciaAtendida(): void
+    {
+        if ($this->tieneSinExistenciaAbierta()) {
+            throw new \RuntimeException(
+                'Hay productos sin existencias sin atender. Ventas debe elegir una acción (retirar, sustituir, esperar o cancelar) antes de continuar.'
+            );
+        }
     }
 
     public function esGestionablePorCedis(): bool

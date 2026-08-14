@@ -10,6 +10,7 @@ use App\Http\Requests\ControlPedidos\RechazarPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SubirRemisionPedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\SaldosAFavor\SafIncidencia;
 use App\Services\ControlPedidos\AnexarPagoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\AprobarAnexoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\AprobarPedidoBmaService;
@@ -76,7 +77,7 @@ class PedidoBmaAuditoriaController extends Controller
                 'folio' => $pedidoBma->folio,
                 'excedente' => $excedente,
                 'mensaje' => sprintf(
-                    'Hay un excedente de $%s. El saldo a favor se genera al registrar/enviar el pedido (no en auditoría).',
+                    'Hay un excedente de $%s en este pedido. El saldo a favor se genera al registrar o enviar el pedido (no en auditoría).',
                     number_format($excedente, 2, '.', ',')
                 ),
             ]);
@@ -229,5 +230,26 @@ class PedidoBmaAuditoriaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Anexo de envío rechazado.');
+    }
+
+    public function resolverIncidenciaSaf(
+        Request $request,
+        PedidoBma $pedidoBma,
+        SafIncidencia $incidencia,
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.auditar');
+
+        if ((int) $incidencia->pedido_bma_id !== (int) $pedidoBma->id) {
+            return redirect()->back()->with('error', 'La incidencia no pertenece a este pedido.');
+        }
+
+        $datos = $request->validate([
+            'nota' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        app(\App\Services\SaldosAFavor\RegistrarIncidenciaSafService::class)
+            ->resolver($incidencia, Auth::id(), $datos['nota'] ?? 'Corregido en auditoría; se continúa el pedido.');
+
+        return redirect()->back()->with('success', 'Incidencia de saldo a favor marcada como revisada.');
     }
 }

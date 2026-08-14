@@ -13,6 +13,7 @@ class EliminarPagoPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historial,
+        private RegistrarPagoPedidoBmaService $pagos,
     ) {}
 
     public function handle(PedidoBmaPago $pago, ?int $usuarioId = null): void
@@ -52,6 +53,8 @@ class EliminarPagoPedidoBmaService
                     AccionesHistorialPedidoBma::BAJA_EXHIBICION_PAGO
                 );
             }
+
+            $this->pagos->reconciliarExcedenteTrasExhibicion($pedido->fresh(), $usuarioId);
         });
     }
 }

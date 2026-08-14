@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class VolverBorradorPedidoBmaService
 {
@@ -18,8 +19,13 @@ class VolverBorradorPedidoBmaService
         $pedido->loadMissing('estatus');
 
         if (! $pedido->puedeVolverABorrador()) {
-            throw new \RuntimeException('Solo se puede volver a borrador desde pesaje pendiente.');
+            throw new \RuntimeException('Solo se puede volver a borrador desde pesaje pendiente o respondido.');
         }
+
+        MaquinaEstadosPedidoBma::assertTransicion(
+            $pedido->estatus?->fase_ciclo,
+            CatalogoEstatusPedido::FASE_BORRADOR
+        );
 
         $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_BORRADOR);
         if (! $estatusNuevo) {

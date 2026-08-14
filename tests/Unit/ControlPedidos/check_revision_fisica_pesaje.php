@@ -24,6 +24,7 @@ $checks = [
     ['servicio deriva estado general', str_contains($servicio, 'derivarEstadoGeneral')],
     ['servicio exige evidencia malo', str_contains($servicio, 'malo/dañado requiere')],
     ['servicio flags unica/mejor', str_contains($servicio, 'unica_pieza') && str_contains($servicio, 'mejor_ejemplar')],
+    ['servicio persiste sku', str_contains($servicio, "'sku' =>")],
     ['request estado_fisico_general opcional', str_contains($request, "'estado_fisico_general' => ['nullable'")],
     ['UI revisión física', str_contains($modal, 'Revisión física de productos')],
     ['UI sin Estado general', ! str_contains($modal, 'Estado general')],

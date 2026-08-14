@@ -142,7 +142,7 @@ class ActualizarPagoPedidoBmaService
                 );
             }
 
-            $this->registrarPago->generarExcedenteSiAplica($pedido->fresh(), $usuarioId);
+            $this->registrarPago->reconciliarExcedenteTrasExhibicion($pedido->fresh(), $usuarioId);
 
             return $pago->fresh(['banco']);
         });

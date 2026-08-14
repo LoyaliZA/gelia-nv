@@ -68,15 +68,16 @@ class LibroSaldosAFavorTest extends TestCase
         ], $extra));
     }
 
-    public function test_generar_credito_disponible_pendiente_revision_con_vigencia_365(): void
+    public function test_generar_credito_disponible_pendiente_revision_con_vigencia_configurada(): void
     {
         $credito = $this->generar(1000);
 
         $this->assertSame(SafCredito::ESTADO_DISPONIBLE, $credito->estado_financiero);
         $this->assertSame(SafCredito::REVISION_PENDIENTE, $credito->estado_revision);
         $this->assertEquals(1000.0, (float) $credito->monto_disponible);
+        $dias = \App\Support\SaldosAFavor\ReglasSaf::vigenciaDias();
         $this->assertTrue(
-            $credito->fecha_generacion->copy()->addDays(365)->isSameDay($credito->fecha_vencimiento)
+            $credito->fecha_generacion->copy()->addDays($dias)->isSameDay($credito->fecha_vencimiento)
         );
         $this->assertDatabaseHas('saf_movimientos', [
             'saf_credito_id' => $credito->id,
@@ -98,7 +99,7 @@ class LibroSaldosAFavorTest extends TestCase
         $credito->refresh();
         $this->assertEquals(300.0, (float) $credito->monto_disponible);
         $this->assertEquals(200.0, (float) $credito->monto_aplicado);
-        $this->assertSame(SafCredito::ESTADO_PARCIAL, $credito->estado_financiero);
+        $this->assertSame(SafCredito::ESTADO_DISPONIBLE, $credito->estado_financiero);
         $this->assertSame(SafCredito::REVISION_PENDIENTE, $credito->estado_revision);
         $this->assertCount(1, $reservas);
     }

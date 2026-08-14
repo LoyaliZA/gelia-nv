@@ -10,6 +10,7 @@ use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class InvalidarGuiaPorCambioDireccion
 {
@@ -32,6 +33,10 @@ class InvalidarGuiaPorCambioDireccion
                 ]);
             }
 
+            MaquinaEstadosPedidoBma::assertTransicion(
+                $estatusAnterior?->fase_ciclo,
+                CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
+            );
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA)
                 ?? $estatusAnterior;
 

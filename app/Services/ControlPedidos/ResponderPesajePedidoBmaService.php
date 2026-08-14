@@ -2,12 +2,14 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -128,7 +130,11 @@ class ResponderPesajePedidoBmaService
                 $cajaPrincipalId = $lineas[0]['catalogo_tipo_caja_id'];
             }
 
-            $tieneObs = PedidoBmaRevisionProducto::esObservacionParaVentas($estadoGeneral)
+            $tieneSinExistencia = collect($revisiones)->contains(
+                fn (array $r) => $r['estado_fisico'] === PedidoBmaRevisionProducto::ESTADO_SIN_EXISTENCIA
+            );
+            $tieneObs = $tieneSinExistencia
+                || PedidoBmaRevisionProducto::esObservacionParaVentas($estadoGeneral)
                 || collect($revisiones)->contains(
                     fn (array $r) => PedidoBmaRevisionProducto::esObservacionParaVentas($r['estado_fisico'])
                 );
@@ -136,12 +142,22 @@ class ResponderPesajePedidoBmaService
             $estatus = $pedido->estatus;
             $numeroCajas = count($lineas);
 
+            MaquinaEstadosPedidoBma::assertTransicion(
+                $estatus?->fase_ciclo,
+                CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO
+            );
+            $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO);
+            if (! $estatusNuevo) {
+                throw new \RuntimeException('No se encontró el estatus de pesaje respondido.');
+            }
+
             $pedido->update([
                 'peso_real_kg' => round($pesoRealTotal, 4),
                 'peso_volumetrico_kg' => round($pesoVolumetricoTotal, 4),
                 'peso_cobrado_guia_kg' => round($pesoCobradoTotal, 4),
                 'numero_cajas' => $numeroCajas,
                 'catalogo_tipo_caja_id' => $cajaPrincipalId,
+                'catalogo_estatus_pedido_id' => $estatusNuevo->id,
                 'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
                 'pesaje_respondido_at' => now(),
                 'pesaje_respondido_por_id' => $usuarioId,
@@ -182,6 +198,8 @@ class ResponderPesajePedidoBmaService
                     'pedido_bma_id' => $pedido->id,
                     'orden' => $i,
                     'descripcion_producto' => $rev['descripcion_producto'],
+                    'producto_id' => $rev['producto_id'],
+                    'sku' => $rev['sku'],
                     'estado_fisico' => $rev['estado_fisico'],
                     'comentario' => $rev['comentario'],
                     'unica_pieza' => $rev['unica_pieza'],
@@ -206,39 +224,57 @@ class ResponderPesajePedidoBmaService
                 $pesoCobradoTotal,
                 $numeroCajas,
                 PedidoBmaRevisionProducto::LABELS[$estadoGeneral] ?? $estadoGeneral,
-                $tieneObs ? ' Con observaciones — Ventas debe revisar.' : ''
+                $tieneSinExistencia
+                    ? ' Sin existencias — pedido detenido hasta que Ventas elija acción.'
+                    : ($tieneObs ? ' Con observaciones — Ventas debe revisar.' : '')
             );
 
             $this->historialService->ejecutar(
                 $pedido->id,
                 $usuarioId,
                 $estatus->id,
-                $estatus->id,
+                $estatusNuevo->id,
                 $detalleHist,
                 AccionesHistorialPedidoBma::RESPUESTA_PESAJE
             );
 
-            $tituloNotif = $tieneObs
-                ? 'CEDIS respondió el pesaje con observaciones físicas'
-                : 'CEDIS respondió el pesaje de tu pedido';
-
             $folioQ = $pedido->folio_remision ?: $pedido->folio ?: '';
-            $urlNotif = $tieneObs
-                ? '/control-pedidos?tab=OBS_CEDIS'.($folioQ !== '' ? '&q='.rawurlencode($folioQ) : '')
-                : '/control-pedidos'.($folioQ !== '' ? '?q='.rawurlencode($folioQ) : '');
+            $fresh = $pedido->fresh();
+            if ($tieneSinExistencia) {
+                $this->notificarService->ejecutar(
+                    $fresh,
+                    'pedido_sin_existencia',
+                    'CEDIS reportó producto sin existencias. El pedido está detenido hasta que elijas una acción.',
+                    [],
+                    $usuarioId,
+                    true,
+                    [
+                        'url' => '/control-pedidos?tab=SIN_EXISTENCIA'.($folioQ !== '' ? '&q='.rawurlencode($folioQ) : ''),
+                        'con_sin_existencia' => true,
+                        'con_observaciones_fisicas' => true,
+                    ]
+                );
+            } else {
+                $tituloNotif = $tieneObs
+                    ? 'CEDIS respondió el pesaje con observaciones físicas'
+                    : 'CEDIS respondió el pesaje de tu pedido';
+                $urlNotif = $tieneObs
+                    ? '/control-pedidos?tab=OBS_CEDIS'.($folioQ !== '' ? '&q='.rawurlencode($folioQ) : '')
+                    : '/control-pedidos'.($folioQ !== '' ? '?q='.rawurlencode($folioQ) : '');
 
-            $this->notificarService->ejecutar(
-                $pedido->fresh(),
-                'pedido_pesaje_listo',
-                $tituloNotif,
-                [],
-                $usuarioId,
-                true,
-                [
-                    'url' => $urlNotif,
-                    'con_observaciones_fisicas' => $tieneObs,
-                ]
-            );
+                $this->notificarService->ejecutar(
+                    $fresh,
+                    'pedido_pesaje_listo',
+                    $tituloNotif,
+                    [],
+                    $usuarioId,
+                    true,
+                    [
+                        'url' => $urlNotif,
+                        'con_observaciones_fisicas' => $tieneObs,
+                    ]
+                );
+            }
 
             return $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'cajas.tipoGuia', 'tipoCaja', 'tipoGuia',
@@ -365,6 +401,8 @@ class ResponderPesajePedidoBmaService
      * @param  list<array<string, mixed>>  $revisiones
      * @return list<array{
      *   descripcion_producto:string,
+     *   producto_id:?int,
+     *   sku:?string,
      *   estado_fisico:string,
      *   comentario:?string,
      *   unica_pieza:bool,
@@ -401,8 +439,15 @@ class ResponderPesajePedidoBmaService
                 );
             }
 
+            $sku = trim((string) ($rev['sku'] ?? ''));
+            $productoId = isset($rev['producto_id']) && $rev['producto_id'] !== '' && $rev['producto_id'] !== null
+                ? (int) $rev['producto_id']
+                : null;
+
             $out[] = [
                 'descripcion_producto' => mb_substr($desc, 0, 255),
+                'producto_id' => $productoId && $productoId > 0 ? $productoId : null,
+                'sku' => $sku !== '' ? mb_substr($sku, 0, 64) : null,
                 'estado_fisico' => $estado,
                 'comentario' => $comentario !== '' ? $comentario : null,
                 'unica_pieza' => filter_var($rev['unica_pieza'] ?? false, FILTER_VALIDATE_BOOLEAN),

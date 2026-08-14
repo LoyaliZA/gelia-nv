@@ -48,7 +48,8 @@
 
     /* Capas de UI (sidebar < modales < toasts) */
     --gelia-z-sidebar: 200;
-    --gelia-z-modal: 500;
+    /* Por encima de topbars sticky del shell (z-9000) y debajo de toasts (10000) */
+    --gelia-z-modal: 9500;
     --gelia-z-toast: 10000;
     /* Altura reservada para barra inferior en móvil (< 768px) */
     --gelia-mobile-nav-offset: 6.5rem;

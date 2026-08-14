@@ -16,9 +16,9 @@ class SincronizarAplicacionesPedidoSafService
     ) {}
 
     /**
-     * Reemplaza reservas del pedido por la selección dada y actualiza saldo_a_favor derivado.
+     * Reemplaza reservas del pedido por FIFO del monto total (ignora cherry-pick de créditos).
      *
-     * @param  list<array{saf_credito_id:int, monto:float|int|string}>  $seleccion
+     * @param  list<array{saf_credito_id?:int, monto:float|int|string}>  $seleccion
      */
     public function reservarParaPedido(PedidoBma $pedido, array $seleccion, ?int $usuarioId = null): float
     {
@@ -29,30 +29,27 @@ class SincronizarAplicacionesPedidoSafService
         return DB::transaction(function () use ($pedido, $seleccion, $usuarioId) {
             $this->liberarReservasPendientes($pedido, $usuarioId);
 
-            $seleccion = array_values(array_filter(
-                $seleccion,
-                fn ($r) => (float) ($r['monto'] ?? 0) > 0 && (int) ($r['saf_credito_id'] ?? 0) > 0
-            ));
+            $montoTotal = round(array_sum(array_map(fn ($r) => (float) ($r['monto'] ?? 0), $seleccion)), 2);
 
-            if ($seleccion === []) {
+            if ($montoTotal <= 0) {
                 $pedido->saldo_a_favor = 0;
                 $pedido->save();
 
                 return 0.0;
             }
 
-            $montoTotal = round(array_sum(array_map(fn ($r) => (float) $r['monto'], $seleccion)), 2);
+            // FIFO obligatorio: no se pasa selección de créditos.
             $reservas = $this->reservar->handle(
                 (int) $pedido->cliente_id,
                 $montoTotal,
                 $usuarioId,
-                $seleccion,
+                null,
                 ['pedido_bma_id' => $pedido->id]
             );
 
             $total = 0.0;
             foreach ($reservas as $item) {
-                $app = SafPedidoAplicacion::create([
+                SafPedidoAplicacion::create([
                     'pedido_bma_id' => $pedido->id,
                     'saf_credito_id' => $item['credito']->id,
                     'monto' => $item['monto'],
@@ -61,8 +58,6 @@ class SincronizarAplicacionesPedidoSafService
                     'reservado_at' => now(),
                 ]);
                 $total = round($total + $item['monto'], 2);
-                // Vincular movimiento más reciente de reserva (best-effort via last movement)
-                unset($app);
             }
 
             $pedido->saldo_a_favor = $total;

@@ -132,12 +132,15 @@ class IntegracionPedidosYCajaSafTest extends TestCase
         $pedido = $this->pedidoStub();
         $pagos = app(RegistrarPagoPedidoBmaService::class);
         $file = UploadedFile::fake()->image('pago.jpg');
-        $pagos->handle($pedido, ['monto' => 700, 'forma_pago' => 'transferencia'], $file, $this->user->id);
-        $pagos->handle($pedido, ['monto' => 500, 'forma_pago' => 'transferencia'], UploadedFile::fake()->image('pago2.jpg'), $this->user->id);
+        $pagos->handle($pedido, ['monto' => 700, 'forma_pago' => 'efectivo'], $file, $this->user->id);
+        $pagos->handle($pedido, ['monto' => 500, 'forma_pago' => 'efectivo'], UploadedFile::fake()->image('pago2.jpg'), $this->user->id);
 
         $resumen = $pagos->resumenPago($pedido);
         $this->assertEquals(1200.0, $resumen['total_recibido']);
+        $this->assertEquals(1200.0, $resumen['total_pagado']);
+        $this->assertEquals(1100.0, $resumen['total_a_cubrir']);
         $this->assertEquals(100.0, $resumen['excedente']);
+        $this->assertEquals(100.0, $resumen['excedente_generado']);
         $this->assertSame('con_excedente', $resumen['cobertura']);
         $this->assertSame('sobrepagado', $resumen['estado_pago']);
         $this->assertSame('pendiente', $resumen['revision']);

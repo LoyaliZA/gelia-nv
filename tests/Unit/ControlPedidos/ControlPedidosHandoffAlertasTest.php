@@ -58,9 +58,9 @@ class ControlPedidosHandoffAlertasTest extends TestCase
             'pedido_rechazado_auxiliar' => 'fue rechazado',
             'pedido_incidencia_cedis' => 'error de empaque',
             'pedido_pendiente_guia' => 'pendiente de guía',
-            'pedido_pendiente_envio' => 'pendiente de envío',
+            'pedido_pendiente_envio' => 'pendiente de recolección',
             'pedido_guia_asignada' => 'se asignó guía',
-            'pedido_enviado' => 'marcado como enviado',
+            'pedido_enviado' => 'paquetería recogió',
             'pedido_resguardo_liberado' => 'liberó el resguardo',
         ];
 
@@ -229,6 +229,19 @@ class ControlPedidosHandoffAlertasTest extends TestCase
             'mime_type' => 'application/pdf',
             'tamano_bytes' => 100,
             'orden' => 1,
+        ]);
+
+        $pedido->update(['total_a_cobrar' => 1000, 'saldo_a_favor' => 0]);
+        \App\Models\SaldosAFavor\PedidoBmaPago::create([
+            'pedido_bma_id' => $pedido->id,
+            'numero_exhibicion' => 1,
+            'monto' => 1000,
+            'ruta_archivo' => 'pedidos_bma/pagos/aux.jpg',
+            'nombre_original' => 'pago.jpg',
+            'mime_type' => 'image/jpeg',
+            'tamano_bytes' => 100,
+            'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_VERIFICADO,
+            'capturado_por_id' => $this->vendedora->id,
         ]);
 
         return $pedido->fresh();

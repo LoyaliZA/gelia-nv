@@ -1,10 +1,23 @@
 import React, { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ArrowLeft, Wallet } from 'lucide-react';
+import {
+    ArrowLeft,
+    Wallet,
+    ClipboardCheck,
+    SlidersHorizontal,
+    RotateCcw,
+    Undo2,
+    Ban,
+    X,
+    Save,
+} from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaPageShell from '../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../Components/GeliaTituloCard';
 import { geliaCardClass } from '../../utils/geliaTheme';
+import SafMenuAcciones from './Partials/SafMenuAcciones';
+import SafModal from './Partials/SafModal';
+import SafEvidenciasPanel from './Partials/SafEvidenciasPanel';
 import {
     BTN_BACK,
     BTN_PRIMARY,
@@ -18,14 +31,21 @@ import {
     TH,
     THEME_INPUT,
     THEME_LABEL,
-    THEME_MODAL_OVERLAY,
-    THEME_MODAL_SHELL,
     THEME_SELECT,
     THEME_TEXTAREA,
     fmtFecha,
     fmtMoneda,
     groupMotivosByCategoria,
 } from './Partials/safStyles';
+
+const MODOS_CON_EVIDENCIA = new Set(['revisar', 'ajustar', 'cancelar']);
+const TITULO_MODO = {
+    revisar: 'Revisar',
+    ajustar: 'Ajustar',
+    cancelar: 'Cancelar',
+    reactivar: 'Reactivar',
+    revertir: 'Revertir',
+};
 
 const KPI = ({ label, valor, tone }) => (
     <div className={geliaCardClass('p-4')}>
@@ -78,15 +98,55 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
         ? (creditoAccion.aplicaciones_pedido || creditoAccion.aplicacionesPedido || [])
         : [];
 
+    const itemsMenu = (c) => [
+        {
+            key: 'revisar',
+            label: 'Revisar',
+            icon: ClipboardCheck,
+            tone: 'primary',
+            show: can('saldos_favor.revisar'),
+            onClick: () => abrir(c, 'revisar'),
+        },
+        {
+            key: 'ajustar',
+            label: 'Ajustar',
+            icon: SlidersHorizontal,
+            tone: 'amber',
+            show: can('saldos_favor.ajustar'),
+            onClick: () => abrir(c, 'ajustar'),
+        },
+        {
+            key: 'reactivar',
+            label: 'Reactivar',
+            icon: RotateCcw,
+            tone: 'emerald',
+            show: can('saldos_favor.ajustar') && c.estado_financiero === 'vencido' && Number(c.monto_disponible) > 0,
+            onClick: () => abrir(c, 'reactivar'),
+        },
+        {
+            key: 'revertir',
+            label: 'Revertir',
+            icon: Undo2,
+            tone: 'sky',
+            show: can('saldos_favor.ajustar') && Number(c.monto_aplicado) > 0,
+            onClick: () => abrir(c, 'revertir'),
+        },
+        {
+            key: 'cancelar',
+            label: 'Cancelar',
+            icon: Ban,
+            tone: 'rose',
+            show: can('saldos_favor.cancelar') && c.estado_financiero !== 'cancelado',
+            onClick: () => abrir(c, 'cancelar'),
+        },
+    ];
+
     return (
         <AppLayout auth={auth}>
             <Head title={`Cuenta SAF · ${cliente.nombre}`} />
             <GeliaPageShell className="space-y-6">
                 <div>
-                    <Link
-                        href={route('saldos_favor.index')}
-                        className={BTN_BACK}
-                    >
+                    <Link href={route('saldos_favor.index')} className={BTN_BACK}>
                         <ArrowLeft className="w-3.5 h-3.5" /> Saldos a favor
                     </Link>
                 </div>
@@ -123,17 +183,53 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                                 <th className={`${TH} w-[10%]`}>Estados</th>
                                 <th className={`${TH} w-[9%]`}>Emisión</th>
                                 <th className={`${TH} w-[9%]`}>Vence</th>
-                                <th className={`${TH} w-[10%]`} />
+                                <th className={`${TH} w-[10%] text-right`}>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             {creditos.map((c) => (
                                 <tr key={c.id}>
-                                    <td className={`${TD} font-bold`}>{c.folio}</td>
+                                    <td className={`${TD} font-bold`}>
+                                        <div>{c.folio}</div>
+                                        {c.pedido_origen_folio && (
+                                            <div className="text-[10px] theme-text-muted font-semibold">Pedido {c.pedido_origen_folio}</div>
+                                        )}
+                                    </td>
                                     <td className={TD}>{LABEL_CANAL[c.canal_origen] || c.canal_origen || '—'}</td>
                                     <td className={TD}>
                                         <div className="text-xs font-bold">{c.motivo?.nombre || '—'}</div>
                                         <div className="text-[10px] theme-text-muted">{c.documento_origen || ''}</div>
+                                        {(c.recibos_pago || []).length > 0 && (
+                                            <div className="mt-1 space-y-0.5">
+                                                {(c.recibos_pago || []).map((r) => (
+                                                    <a
+                                                        key={r.id}
+                                                        href={r.url || '#'}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="block text-[10px] font-bold"
+                                                        style={{ color: 'var(--color-primario)' }}
+                                                    >
+                                                        Recibo {fmtMoneda(r.monto)} · {r.nombre_original || 'archivo'}
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {(c.evidencias || []).length > 0 && (
+                                            <div className="mt-1 space-y-0.5">
+                                                {(c.evidencias || []).map((e) => (
+                                                    <a
+                                                        key={e.id}
+                                                        href={e.url || '#'}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="block text-[10px] font-bold text-amber-700"
+                                                    >
+                                                        Evidencia · {e.nombre_original || 'archivo'}
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className={TD}>{fmtMoneda(c.monto_original)}</td>
                                     <td className={`${TD} font-bold`}>{fmtMoneda(c.monto_disponible)}</td>
@@ -146,23 +242,9 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                                     </td>
                                     <td className={TD}>{fmtFecha(c.fecha_generacion)}</td>
                                     <td className={TD}>{fmtFecha(c.fecha_vencimiento)}</td>
-                                    <td className={TD}>
-                                        <div className="flex flex-col items-end gap-1">
-                                            {can('saldos_favor.revisar') && (
-                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide" style={{ color: 'var(--color-primario)' }} onClick={() => abrir(c, 'revisar')}>Revisar</button>
-                                            )}
-                                            {can('saldos_favor.ajustar') && (
-                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide text-amber-700" onClick={() => abrir(c, 'ajustar')}>Ajustar</button>
-                                            )}
-                                            {can('saldos_favor.ajustar') && c.estado_financiero === 'vencido' && Number(c.monto_disponible) > 0 && (
-                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide text-emerald-700" onClick={() => abrir(c, 'reactivar')}>Reactivar</button>
-                                            )}
-                                            {can('saldos_favor.ajustar') && Number(c.monto_aplicado) > 0 && (
-                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide text-sky-700" onClick={() => abrir(c, 'revertir')}>Revertir</button>
-                                            )}
-                                            {can('saldos_favor.cancelar') && c.estado_financiero !== 'cancelado' && (
-                                                <button type="button" className="text-[10px] font-black uppercase tracking-wide text-rose-700" onClick={() => abrir(c, 'cancelar')}>Cancelar</button>
-                                            )}
+                                    <td className={`${TD} text-right`}>
+                                        <div className="inline-flex justify-end">
+                                            <SafMenuAcciones items={itemsMenu(c)} />
                                         </div>
                                     </td>
                                 </tr>
@@ -201,12 +283,17 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                     </table>
                 </div>
 
-                {creditoAccion && modo && (
-                    <div className={THEME_MODAL_OVERLAY} role="dialog" aria-modal="true">
-                        <div className={`${THEME_MODAL_SHELL} w-full max-w-md p-6 space-y-4`}>
-                            <h2 className="text-lg font-black italic uppercase tracking-tight theme-text-main m-0 capitalize">
-                                {modo} · {creditoAccion.folio}
+                <SafModal
+                    abierto={Boolean(creditoAccion && modo)}
+                    onClose={cerrar}
+                    maxWidth={MODOS_CON_EVIDENCIA.has(modo) ? 'max-w-3xl' : 'max-w-md'}
+                    labelledBy="saf-modal-titulo"
+                >
+                    <div className="gelia-modal-body p-6 space-y-4 max-h-[min(90vh,920px)] overflow-y-auto">
+                            <h2 id="saf-modal-titulo" className="text-lg font-black italic uppercase tracking-tight theme-text-main m-0">
+                                {TITULO_MODO[modo] || modo} · {creditoAccion?.folio}
                             </h2>
+                            {MODOS_CON_EVIDENCIA.has(modo) && <SafEvidenciasPanel credito={creditoAccion} />}
                             {modo === 'revisar' && (
                                 <form
                                     onSubmit={(e) => {
@@ -223,8 +310,12 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                                     </select>
                                     <textarea className={`${THEME_TEXTAREA} w-full`} placeholder="Observaciones" value={formRevision.data.observaciones} onChange={(e) => formRevision.setData('observaciones', e.target.value)} />
                                     <div className="flex justify-end gap-2">
-                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>Cerrar</button>
-                                        <button type="submit" className={BTN_PRIMARY}>Guardar</button>
+                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>
+                                            <X className="w-4 h-4" /> Cerrar
+                                        </button>
+                                        <button type="submit" className={BTN_PRIMARY}>
+                                            <Save className="w-4 h-4" /> Guardar
+                                        </button>
                                     </div>
                                 </form>
                             )}
@@ -250,8 +341,12 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                                     </select>
                                     <textarea required className={`${THEME_TEXTAREA} w-full`} placeholder="Observaciones / evidencia" value={formAjuste.data.observaciones} onChange={(e) => formAjuste.setData('observaciones', e.target.value)} />
                                     <div className="flex justify-end gap-2">
-                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>Cerrar</button>
-                                        <button type="submit" className={BTN_PRIMARY}>Aplicar ajuste</button>
+                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>
+                                            <X className="w-4 h-4" /> Cerrar
+                                        </button>
+                                        <button type="submit" className={BTN_PRIMARY}>
+                                            <SlidersHorizontal className="w-4 h-4" /> Aplicar ajuste
+                                        </button>
                                     </div>
                                 </form>
                             )}
@@ -265,8 +360,12 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                                 >
                                     <textarea required className={`${THEME_TEXTAREA} w-full`} placeholder="Motivo de cancelación" value={formCancelar.data.observaciones} onChange={(e) => formCancelar.setData('observaciones', e.target.value)} />
                                     <div className="flex justify-end gap-2">
-                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>Cerrar</button>
-                                        <button type="submit" className={`${BTN_PRIMARY} !bg-rose-600`}>Cancelar saldo</button>
+                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>
+                                            <X className="w-4 h-4" /> Cerrar
+                                        </button>
+                                        <button type="submit" className={`${BTN_PRIMARY} !bg-rose-600`}>
+                                            <Ban className="w-4 h-4" /> Cancelar saldo
+                                        </button>
                                     </div>
                                 </form>
                             )}
@@ -278,11 +377,17 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                                     }}
                                     className="space-y-3"
                                 >
-                                    <p className="text-sm theme-text-muted m-0">Reactiva el remanente vencido ({fmtMoneda(creditoAccion.monto_disponible)}) con nueva vigencia de 365 días.</p>
+                                    <p className="text-sm theme-text-muted m-0">
+                                        Reactiva el remanente vencido ({fmtMoneda(creditoAccion.monto_disponible)}) con la vigencia configurada en reglas.
+                                    </p>
                                     <textarea className={`${THEME_TEXTAREA} w-full`} placeholder="Observaciones" value={formReactivar.data.observaciones} onChange={(e) => formReactivar.setData('observaciones', e.target.value)} />
                                     <div className="flex justify-end gap-2">
-                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>Cerrar</button>
-                                        <button type="submit" className={BTN_PRIMARY}>Reactivar</button>
+                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>
+                                            <X className="w-4 h-4" /> Cerrar
+                                        </button>
+                                        <button type="submit" className={BTN_PRIMARY}>
+                                            <RotateCcw className="w-4 h-4" /> Reactivar
+                                        </button>
                                     </div>
                                 </form>
                             )}
@@ -324,14 +429,17 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                                     </div>
                                     <textarea required className={`${THEME_TEXTAREA} w-full`} placeholder="Motivo de reversión" value={formRevertir.data.observaciones} onChange={(e) => formRevertir.setData('observaciones', e.target.value)} />
                                     <div className="flex justify-end gap-2">
-                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>Cerrar</button>
-                                        <button type="submit" className={BTN_PRIMARY}>Revertir aplicación</button>
+                                        <button type="button" className={BTN_SECONDARY} onClick={cerrar}>
+                                            <X className="w-4 h-4" /> Cerrar
+                                        </button>
+                                        <button type="submit" className={BTN_PRIMARY}>
+                                            <Undo2 className="w-4 h-4" /> Revertir aplicación
+                                        </button>
                                     </div>
                                 </form>
                             )}
-                        </div>
                     </div>
-                )}
+                </SafModal>
             </GeliaPageShell>
         </AppLayout>
     );

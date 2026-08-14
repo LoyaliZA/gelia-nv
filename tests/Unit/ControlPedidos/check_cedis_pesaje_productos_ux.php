@@ -15,6 +15,7 @@ $request = file_get_contents($root.'/app/Http/Requests/ControlPedidos/ResponderP
 $service = file_get_contents($root.'/app/Services/ControlPedidos/ResponderPesajePedidoBmaService.php');
 $docModel = file_get_contents($root.'/app/Models/ControlPedidos/PedidoBmaDocumento.php');
 $detalle = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalDetallePedido.jsx');
+$seccion = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/SeccionRevisionFisicaPedido.jsx');
 $detalleCedis = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/ModalDetalleCedis.jsx');
 
 $detalleStyles = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js');
@@ -36,12 +37,12 @@ $checks = [
     ['envíos después de revisión', strpos($modal, 'Revisión física de productos') < strpos($modal, '>Envíos<')
         || (strpos($modal, 'Revisión física de productos') !== false
             && strpos($modal, 'Revisión física de productos') < strpos($modal, 'Envíos'))],
-    ['detalle Productos con detalle', str_contains($detalle, 'Productos con detalle')],
-    ['detalle Productos OK', str_contains($detalle, 'Productos OK')],
-    ['detalle Evidencias del lote', str_contains($detalle, 'Evidencias del lote')],
-    ['detalle Foto por envío', str_contains($detalle, 'Foto por envío')],
-    ['detalle filtra revision_producto', str_contains($detalle, "relacion_tipo === 'revision_producto'")],
-    ['detalle filtra envio_caja', str_contains($detalle, "relacion_tipo === 'envio_caja'")],
+    ['detalle Productos con detalle', str_contains($seccion, 'Productos con detalle') || str_contains($detalle, 'Productos con detalle')],
+    ['detalle Productos OK', str_contains($seccion, 'Productos OK') || str_contains($detalle, 'Productos OK')],
+    ['detalle Evidencias del lote', str_contains($seccion, 'Evidencias del lote') || str_contains($detalle, 'Evidencias del lote')],
+    ['detalle Foto por envío', str_contains($seccion, 'Foto por envío') || str_contains($detalle, 'Foto por envío')],
+    ['detalle filtra revision_producto', str_contains($seccion, "relacion_tipo === 'revision_producto'") || str_contains($detalle, "relacion_tipo === 'revision_producto'")],
+    ['detalle filtra envio_caja', str_contains($seccion, "relacion_tipo === 'envio_caja'") || str_contains($detalle, "relacion_tipo === 'envio_caja'")],
     ['CEDIS detalle espejo secciones', str_contains($detalleCedis, 'Productos con detalle') && str_contains($detalleCedis, 'Evidencias del lote')],
     ['PDF pedido siempre visible al inicio', str_contains($modal, 'PDF o foto del pedido')
         && ! str_contains($modal, 'soporteAbierto')

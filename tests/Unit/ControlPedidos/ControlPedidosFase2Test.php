@@ -112,6 +112,21 @@ class ControlPedidosFase2Test extends TestCase
         );
     }
 
+    public function test_aprobar_sin_remision_falla(): void
+    {
+        $pedido = $this->crearPedidoBase([
+            'catalogo_estatus_pedido_id' => CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR)->id,
+            'pago_validado_at' => now(),
+            'pago_validado_por_id' => $this->usuario->id,
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Adjunte la remisión');
+
+        app(\App\Services\ControlPedidos\AprobarPedidoBmaService::class)
+            ->ejecutar($pedido->fresh(['estatus', 'remision']), $this->usuario->id);
+    }
+
     public function test_aprobar_resguardo_avanza_a_cedis_conservando_flag(): void
     {
         $pedido = $this->crearPedidoBase([
@@ -130,6 +145,10 @@ class ControlPedidosFase2Test extends TestCase
             'tamano_bytes' => 100,
             'orden' => 0,
         ]);
+
+        $this->agregarComprobante($pedido);
+        \App\Models\SaldosAFavor\PedidoBmaPago::where('pedido_bma_id', $pedido->id)
+            ->update(['estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_VERIFICADO]);
 
         $actualizado = app(\App\Services\ControlPedidos\AprobarPedidoBmaService::class)
             ->ejecutar($pedido->fresh(['estatus', 'remision']), $this->usuario->id);

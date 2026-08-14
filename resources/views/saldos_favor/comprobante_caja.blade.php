@@ -17,15 +17,17 @@
             default => 15,
         };
         $logoMax = match ($perfil) {
-            '58mm' => 112,
-            'carta' => 176,
-            default => 144,
+            '58mm' => 80,
+            'carta' => 128,
+            default => 108,
         };
         $esReimpresion = !empty($esReimpresion);
         $autoprint = $autoprint ?? true;
         $logo = ($encabezado['logos'][0] ?? null);
         $marca = $logo['alt']
             ?? ($encabezado['mostrar_bellaroma'] ?? false ? 'Bellaroma' : (($encabezado['mostrar_aromas'] ?? false) ? 'Aromas' : 'GELIA'));
+        $items = collect($comprobante->creditos_detalle ?? []);
+        $generadores = $items->pluck('generado_por')->filter()->unique()->implode(', ');
     @endphp
     <style>
         * { box-sizing: border-box; }
@@ -48,7 +50,7 @@
             padding: 10px 12px;
             background: #fff;
             border-bottom: 1px solid #ccc;
-            font-size: 12px;
+            font-size: 11px;
         }
         .toolbar button, .toolbar a {
             appearance: none;
@@ -57,8 +59,8 @@
             color: #fff;
             padding: 8px 14px;
             border-radius: 6px;
-            font-weight: 700;
-            font-size: 12px;
+            font-weight: 500;
+            font-size: 11px;
             text-decoration: none;
             cursor: pointer;
         }
@@ -77,90 +79,103 @@
             max-width: 100%;
             background: #fff;
             color: #000;
-            padding: 3mm 3mm 5mm;
+            padding: 3mm 3mm 4mm;
             font-size: {{ $fontPx }}px;
-            font-weight: 600;
-            line-height: 1.4;
+            font-weight: 500;
+            line-height: 1.35;
             box-shadow: 0 2px 12px rgba(0,0,0,.12);
         }
         .center { text-align: center; }
-        .muted { color: #222; font-weight: 600; }
+        .muted { color: #333; }
         .logo {
             display: block;
-            margin: 0 auto 8px;
-            max-width: 98%;
+            margin: 0 auto 5px;
+            max-width: 75%;
             max-height: {{ $logoMax }}px;
             width: auto;
             height: auto;
             object-fit: contain;
         }
         .marca {
-            font-weight: 900;
-            font-size: 1.25em;
+            font-weight: 500;
+            font-size: 1.15em;
             letter-spacing: 0.04em;
             text-transform: uppercase;
-            margin: 2px 0 0;
+            margin: 0;
         }
         .titulo {
-            font-size: 0.95em;
-            font-weight: 800;
-            letter-spacing: 0.06em;
+            font-size: 0.9em;
+            font-weight: 500;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
-            margin: 4px 0 0;
+            margin: 3px 0 0;
         }
         .badge {
-            font-weight: 900;
-            letter-spacing: 0.18em;
-            font-size: 0.85em;
-            margin-bottom: 6px;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            font-size: 0.82em;
+            margin-bottom: 4px;
         }
         .rule {
             border: 0;
-            border-top: 1.5px dashed #000;
-            margin: 10px 0;
+            border-top: 1px dashed #000;
+            margin: 8px 0;
         }
-        .meta, .block { margin: 3px 0; word-break: break-word; font-weight: 700; }
-        .meta strong, .block strong { font-weight: 900; }
+        .meta { margin: 3px 0; word-break: break-word; }
+        .meta strong { font-weight: 500; }
         .row {
             display: flex;
             justify-content: space-between;
+            align-items: baseline;
             gap: 8px;
             margin: 3px 0;
-            font-weight: 700;
         }
-        .row span:last-child { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; font-weight: 800; }
+        .row .amt {
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .row .lbl { min-width: 0; overflow-wrap: anywhere; }
         .section {
-            font-size: 0.9em;
-            font-weight: 900;
-            letter-spacing: 0.05em;
+            font-size: 0.88em;
+            letter-spacing: 0.04em;
             text-transform: uppercase;
-            margin: 10px 0 4px;
+            margin: 8px 0 4px;
+            color: #333;
         }
-        .item { margin: 6px 0 0; padding-left: 3px; border-left: 2.5px solid #000; font-weight: 700; }
-        .item .sub { font-size: 0.92em; color: #222; font-weight: 600; }
-        .total { font-weight: 900; font-size: 1.15em; margin-top: 6px; }
+        .item-sub {
+            font-size: 0.88em;
+            color: #333;
+            margin: 0 0 4px 0;
+            padding-left: 2px;
+        }
+        .total { margin-top: 6px; font-size: 1.08em; }
+        .ops { margin-top: 8px; font-size: 0.9em; color: #333; line-height: 1.35; }
         .legal {
-            margin-top: 12px;
-            margin-bottom: 18px;
-            font-size: 0.95em;
-            font-weight: 600;
-            line-height: 1.4;
+            margin: 10px 0 6px;
+            font-size: 0.9em;
+            line-height: 1.35;
         }
-        .sigs { margin-top: 28px; }
+        .sigs {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
         .sig {
-            margin-top: 42px;
+            flex: 1;
             text-align: center;
-            font-size: 0.95em;
-            font-weight: 700;
+            font-size: 0.85em;
+            margin-top: 26px;
         }
         .sig::before {
             content: "";
             display: block;
-            border-top: 1.5px solid #000;
-            width: 78%;
+            border-top: 1px solid #000;
+            width: 100%;
             margin: 0 auto 4px;
         }
-        .footer { margin-top: 12px; font-size: 0.95em; font-weight: 800; }
+        .footer { margin-top: 8px; font-size: 0.85em; }
 
         @page {
             size: {{ $anchoMm }}mm auto;
@@ -182,7 +197,7 @@
                 width: {{ $anchoMm }}mm !important;
                 max-width: none !important;
                 margin: 0 !important;
-                padding: 2mm 2.5mm 4mm !important;
+                padding: 2.5mm 3mm 3.5mm !important;
                 box-shadow: none !important;
                 page-break-inside: avoid;
             }
@@ -222,61 +237,50 @@
 
             <hr class="rule">
 
-            <div class="meta"><strong>Folio:</strong> {{ $comprobante->folio }}</div>
-            <div class="meta"><strong>Fecha:</strong> {{ optional($comprobante->aplicado_at ?? $comprobante->created_at)->format('d/m/Y H:i') }}</div>
-            @if($comprobante->sucursal)
-                <div class="meta"><strong>Sucursal:</strong> {{ $comprobante->sucursal }}</div>
-            @endif
-            @if($comprobante->caja || $comprobante->referencia_venta)
+            <div class="meta"><strong>Folio:</strong> {{ $comprobante->folio }}
+                · {{ optional($comprobante->aplicado_at ?? $comprobante->created_at)->format('d/m/Y H:i') }}</div>
+            @if($comprobante->sucursal || $comprobante->caja || $comprobante->referencia_venta)
                 <div class="meta">
-                    @if($comprobante->caja)<strong>Caja:</strong> {{ $comprobante->caja }}@endif
-                    @if($comprobante->referencia_venta)
-                        @if($comprobante->caja) · @endif
-                        <strong>Venta:</strong> {{ $comprobante->referencia_venta }}
-                    @endif
+                    @if($comprobante->sucursal)<strong>Suc:</strong> {{ $comprobante->sucursal }}@endif
+                    @if($comprobante->caja)@if($comprobante->sucursal) · @endif<strong>Caja:</strong> {{ $comprobante->caja }}@endif
+                    @if($comprobante->referencia_venta)@if($comprobante->sucursal || $comprobante->caja) · @endif<strong>Venta:</strong> {{ $comprobante->referencia_venta }}@endif
                 </div>
             @endif
+            <div class="meta"><strong>Cliente:</strong> {{ $comprobante->cliente?->nombre }}
+                (#{{ $comprobante->cliente?->numero_cliente }})</div>
 
             <hr class="rule">
 
-            <div class="block"><strong>Cliente:</strong> {{ $comprobante->cliente?->nombre }}</div>
-            <div class="block"><strong>No. cliente:</strong> {{ $comprobante->cliente?->numero_cliente }}</div>
+            <div class="row"><span class="lbl">Saldo anterior</span><span class="amt">${{ number_format((float) $comprobante->saldo_anterior, 2) }}</span></div>
 
-            <hr class="rule">
-
-            <div class="row"><span>Saldo anterior</span><span>${{ number_format((float) $comprobante->saldo_anterior, 2) }}</span></div>
-
-            <div class="section">Saldos utilizados</div>
-            @foreach(($comprobante->creditos_detalle ?? []) as $item)
-                <div class="item">
-                    <div><strong>{{ $item['folio'] ?? '' }}</strong> · {{ $item['canal_origen'] ?? '' }}</div>
-                    @if(!empty($item['documento_origen']))
-                        <div class="sub">Origen: {{ $item['documento_origen'] }}</div>
-                    @endif
-                    <div class="row"><span>Aplicado</span><span>${{ number_format((float) ($item['monto'] ?? 0), 2) }}</span></div>
+            <div class="section">Saldos utilizados ({{ $items->count() }})</div>
+            @foreach($items as $item)
+                <div class="row">
+                    <span class="lbl">{{ $item['folio'] ?? '' }}@if(!empty($item['canal_origen'])) · {{ $item['canal_origen'] }}@endif</span>
+                    <span class="amt">${{ number_format((float) ($item['monto'] ?? 0), 2) }}</span>
                 </div>
+                @if(!empty($item['documento_origen']))
+                    <div class="item-sub">Doc: {{ $item['documento_origen'] }}</div>
+                @endif
             @endforeach
 
             <hr class="rule">
 
-            <div class="row total"><span>TOTAL USADO</span><span>${{ number_format((float) $comprobante->monto_aplicado, 2) }}</span></div>
-            <div class="row"><span>Saldo restante</span><span>${{ number_format((float) $comprobante->saldo_restante, 2) }}</span></div>
+            <div class="row total"><span class="lbl">TOTAL USADO</span><span class="amt">${{ number_format((float) $comprobante->monto_aplicado, 2) }}</span></div>
+            <div class="row"><span class="lbl">Saldo restante</span><span class="amt">${{ number_format((float) $comprobante->saldo_restante, 2) }}</span></div>
 
-            <hr class="rule">
-
-            @php
-                $generadores = collect($comprobante->creditos_detalle ?? [])->pluck('generado_por')->filter()->unique()->implode(', ');
-            @endphp
-            @if($generadores)
-                <div class="block muted">SAF registrado por: {{ $generadores }}</div>
-            @endif
-            <div class="block muted">Encargado de caja: {{ $comprobante->generadoPor?->name }}</div>
+            <div class="ops">
+                @if($generadores)
+                    SAF: {{ $generadores }} ·
+                @endif
+                Caja: {{ $comprobante->generadoPor?->name }}
+            </div>
 
             <p class="legal">Firma de autorización.</p>
 
             <div class="sigs">
-                <div class="sig">Firma del cliente</div>
-                <div class="sig">Firma de la cajera</div>
+                <div class="sig">Cliente</div>
+                <div class="sig">Cajera</div>
             </div>
 
             <div class="center footer">No es un comprobante fiscal.</div>

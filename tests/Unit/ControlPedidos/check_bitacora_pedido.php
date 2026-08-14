@@ -39,6 +39,7 @@ $assert(str_contains($writer, 'evidencia'), 'writer acepta evidencia');
 $assert(str_contains($acciones, 'CREACION_BORRADOR'), 'constantes de acción');
 $assert(str_contains($acciones, 'CARGA_REMISION'), 'acción carga remisión');
 $assert(str_contains($acciones, 'CORRECCION'), 'acción corrección');
+$assert(str_contains($acciones, 'REABRIR_ENVIO'), 'acción reabrir envío');
 
 $assert(str_contains($modal, 'accion_etiqueta') || str_contains($modal, 'accionEtiqueta'), 'modal muestra acción');
 $assert(str_contains($modal, 'estatus_anterior') || str_contains($modal, 'estatusAnterior'), 'modal muestra estado anterior');

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, createContext, useContext, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, usePage, router } from '@inertiajs/react';
 import Sidebar from '../Components/Sidebar';
 import GeliaLogo from '../Components/GeliaLogo';
@@ -698,13 +699,14 @@ export default function AppLayout({ children, fullScreen = false }) {
                         </div>
                     </main>
 
-                    {/* MODAL GLOBAL */}
-                    {isModalOpen && (
-                        <div className="gelia-modal-overlay" onClick={closeModal}>
-                            <div className="gelia-modal-shell max-w-lg p-6 modal-pop" onClick={(e) => e.stopPropagation()}>
+                    {/* MODAL GLOBAL — portal a body para blur/centrado fuera de gelia-ui-scale */}
+                    {isModalOpen && createPortal(
+                        <div className="gelia-modal-overlay !items-center overflow-y-auto" onClick={closeModal}>
+                            <div className="gelia-modal-shell max-w-lg p-6 modal-pop my-auto" onClick={(e) => e.stopPropagation()}>
                                 {modalContent}
                             </div>
-                        </div>
+                        </div>,
+                        document.body
                     )}
 
                     {/* TOASTS FLOTANTES */}

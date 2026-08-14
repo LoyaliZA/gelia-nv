@@ -9,6 +9,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class CargarGuiaClientePedidoBmaService
 {
@@ -35,7 +36,11 @@ class CargarGuiaClientePedidoBmaService
             throw new \InvalidArgumentException('La guía debe ser un archivo PDF.');
         }
 
-        $estatusPendienteEnvio = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO);
+        MaquinaEstadosPedidoBma::assertTransicion(
+            $pedido->estatus?->fase_ciclo,
+            MaquinaEstadosPedidoBma::faseDestinoTrasAsignarGuia()
+        );
+        $estatusPendienteEnvio = CatalogoEstatusPedido::porFase(MaquinaEstadosPedidoBma::faseDestinoTrasAsignarGuia());
 
         if (! $estatusPendienteEnvio) {
             throw new \RuntimeException('No se encontró el estatus PENDIENTE_DE_ENVIO.');
@@ -68,7 +73,7 @@ class CargarGuiaClientePedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusPendienteEnvio,
-                "Guía del cliente cargada: {$guia}",
+                "Guía del cliente cargada: {$guia}. Pendiente de recolección.",
                 AccionesHistorialPedidoBma::CARGA_GUIA_CLIENTE
             );
 

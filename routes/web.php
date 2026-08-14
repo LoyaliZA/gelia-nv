@@ -30,6 +30,7 @@ use App\Http\Controllers\ControlPedidos\DireccionesAuxiliarController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaSaldosPagosController;
 use App\Http\Controllers\SaldosAFavor\SaldosAFavorController;
 use App\Http\Controllers\SaldosAFavor\CajaSaldosAFavorController;
+use App\Http\Controllers\SaldosAFavor\ConfigurarSaldosAFavorController;
 use App\Http\Controllers\SaldosAFavor\MigrarSaldosAFavorController;
 use App\Http\Controllers\Clientes\Direcciones\ImportarDireccionesController;
 use App\Http\Controllers\Mensajeria\{ConversacionController,MensajeController,AdjuntoMensajeController};
@@ -527,6 +528,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/anexo-piezas', [PedidoBmaController::class, 'subirAnexoPiezas'])->name('anexo_piezas.store');
         Route::post('/{pedidoBma}/solicitar-pesaje', [PedidoBmaController::class, 'solicitarPesaje'])->name('solicitar_pesaje');
         Route::post('/{pedidoBma}/solicitar-repesaje', [PedidoBmaController::class, 'solicitarRepesaje'])->name('solicitar_repesaje');
+        Route::post('/{pedidoBma}/atender-sin-existencia', [PedidoBmaController::class, 'atenderSinExistencia'])->name('atender_sin_existencia');
         Route::post('/{pedidoBma}/volver-borrador', [PedidoBmaController::class, 'volverBorrador'])->name('volver_borrador');
         Route::post('/actualizar-campos-direccion', [PedidoBmaController::class, 'actualizarCamposDireccion'])->name('actualizar_campos_direccion');
         Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
@@ -579,6 +581,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/anexar-pago-envio', [PedidoBmaAuditoriaController::class, 'anexarPagoEnvio'])->name('anexar_pago_envio');
         Route::post('/{pedidoBma}/anexo-envio/aprobar', [PedidoBmaAuditoriaController::class, 'aprobarAnexoEnvio'])->name('anexo_envio.aprobar');
         Route::post('/{pedidoBma}/anexo-envio/rechazar', [PedidoBmaAuditoriaController::class, 'rechazarAnexoEnvio'])->name('anexo_envio.rechazar');
+        Route::post('/{pedidoBma}/incidencias-saf/{incidencia}/resolver', [PedidoBmaAuditoriaController::class, 'resolverIncidenciaSaf'])->name('incidencias_saf.resolver');
     });
 
     // Submódulo Direcciones (Auxiliar) — sin acceso al módulo Clientes
@@ -621,11 +624,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/listado', [PedidoBmaCedisController::class, 'listado'])->name('listado');
         Route::post('/{pedidoBma}/marcar-empacado', [PedidoBmaCedisController::class, 'marcarEmpacado'])->name('marcar_empacado');
         Route::post('/{pedidoBma}/marcar-enviado', [PedidoBmaCedisController::class, 'marcarEnviado'])->name('marcar_enviado');
+        Route::post('/{pedidoBma}/reabrir-envio', [PedidoBmaCedisController::class, 'reabrirEnvio'])->name('reabrir_envio');
         Route::post('/{pedidoBma}/revertir-empacado', [PedidoBmaCedisController::class, 'revertirEmpacado'])->name('revertir_empacado');
         Route::post('/{pedidoBma}/reportar-incidencia', [PedidoBmaCedisController::class, 'reportarIncidencia'])->name('reportar_incidencia');
         Route::post('/{pedidoBma}/reportar-error-datos', [PedidoBmaCedisController::class, 'reportarErrorDatos'])->name('reportar_error_datos');
         Route::post('/{pedidoBma}/marcar-resguardo-apartado', [PedidoBmaCedisController::class, 'marcarResguardoApartado'])->name('marcar_resguardo_apartado');
         Route::post('/{pedidoBma}/responder-pesaje', [PedidoBmaCedisController::class, 'responderPesaje'])->name('responder_pesaje');
+        Route::post('/{pedidoBma}/reportar-sin-existencia', [PedidoBmaCedisController::class, 'reportarSinExistencia'])->name('reportar_sin_existencia');
+        Route::post('/{pedidoBma}/confirmar-stock-sin-existencia', [PedidoBmaCedisController::class, 'confirmarStockSinExistencia'])->name('confirmar_stock_sin_existencia');
     });
 
     Route::middleware(['can:control_pedidos.delegado'])->prefix('control-pedidos/delegado')->name('control_pedidos.delegado.')->group(function () {
@@ -682,8 +688,14 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/preferencia', [CajaSaldosAFavorController::class, 'guardarPreferencia'])->name('preferencia');
     });
 
+    Route::middleware(['can:saldos_favor.configurar'])->prefix('saldos-favor/configurar')->name('saldos_favor.configurar.')->group(function () {
+        Route::get('/', [ConfigurarSaldosAFavorController::class, 'edit'])->name('edit');
+        Route::put('/', [ConfigurarSaldosAFavorController::class, 'update'])->name('update');
+    });
+
     Route::middleware(['can:saldos_favor.migrar'])->prefix('saldos-favor/migrar')->name('saldos_favor.migrar.')->group(function () {
         Route::get('/', [MigrarSaldosAFavorController::class, 'index'])->name('index');
+        Route::get('/plantilla', [MigrarSaldosAFavorController::class, 'plantilla'])->name('plantilla');
         Route::post('/preview', [MigrarSaldosAFavorController::class, 'preview'])->name('preview');
         Route::post('/importar', [MigrarSaldosAFavorController::class, 'importar'])->name('importar');
     });

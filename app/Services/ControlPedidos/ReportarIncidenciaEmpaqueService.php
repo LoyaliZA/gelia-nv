@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 
 class ReportarIncidenciaEmpaqueService
 {
@@ -22,6 +23,10 @@ class ReportarIncidenciaEmpaqueService
 
         return DB::transaction(function () use ($pedido, $usuarioId, $detalle) {
             $estatusAnterior = $pedido->estatus;
+            MaquinaEstadosPedidoBma::assertTransicion(
+                $estatusAnterior?->fase_ciclo,
+                CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS
+            );
             $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS)
                 ?? CatalogoEstatusPedido::porCodigo('ROJO');
 

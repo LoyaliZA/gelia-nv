@@ -6,6 +6,7 @@ import {
     badgeEstatusEnvio,
     badgeCorregirRemision,
     badgePendienteReRevision,
+    badgeHitoAuditoria,
     formatearMoneda,
     formatearFechaNegocio,
     tieneErrorRemision,
@@ -22,6 +23,7 @@ function CardAuditoria({
     badgeEnvio,
     badgeRemision,
     badgeReRevision,
+    badgeHito,
     esRechazado,
     esIncidenciaCedis,
     onRevisar,
@@ -55,6 +57,9 @@ function CardAuditoria({
                 <div className="flex flex-col items-end gap-1.5 shrink-0 max-w-[50%]">
                     <BloqueVendedorPedido pedido={pedido} variante="etiquetas" className="mt-0 justify-end" />
                     <span className={badge.className} style={badge.style}>{badge.label}</span>
+                    {badgeHito && (
+                        <span className={badgeHito.className} style={badgeHito.style}>{badgeHito.label}</span>
+                    )}
                     {badgeReRevision && (
                         <span className={badgeReRevision.className} style={badgeReRevision.style}>{badgeReRevision.label}</span>
                     )}
@@ -91,6 +96,11 @@ function CardAuditoria({
             {esIncidenciaCedis && pedido.detalle_incidencia_empaque && (
                 <p className="text-[10px] text-orange-600 font-bold m-0 flex items-start gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {pedido.detalle_incidencia_empaque}
+                </p>
+            )}
+            {pedido.tiene_alerta_saf && (
+                <p className="text-[10px] text-amber-700 font-bold m-0 flex items-start gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Alerta saldo a favor (no bloquea)
                 </p>
             )}
             {badgeRemision && (
@@ -134,6 +144,7 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBi
                             badgeEnvio={badgeEnvio}
                             badgeRemision={tieneErrorRemision(pedido) ? badgeCorregirRemision() : null}
                             badgeReRevision={esPendienteReRevision(pedido) ? badgePendienteReRevision() : null}
+                            badgeHito={badgeHitoAuditoria(pedido.hito_auditoria)}
                             esRechazado={fase === 'RECHAZADO_VENDEDORA'}
                             esIncidenciaCedis={fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque)}
                             onRevisar={onRevisar}
@@ -167,6 +178,7 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBi
                             const esIncidenciaCedis = fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque);
                             const badgeRemision = tieneErrorRemision(pedido) ? badgeCorregirRemision() : null;
                             const badgeReRevision = esPendienteReRevision(pedido) ? badgePendienteReRevision() : null;
+                            const badgeHito = badgeHitoAuditoria(pedido.hito_auditoria);
                             const puedeAnexar = ['pendiente_regularizacion', 'anexo_rechazado'].includes(pedido.estatus_envio);
                             return (
                                 <tr
@@ -199,6 +211,11 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBi
                                                 <AlertTriangle className="w-3 h-3" /> {pedido.detalle_incidencia_empaque}
                                             </p>
                                         )}
+                                        {pedido.tiene_alerta_saf && (
+                                            <p className="text-[9px] text-amber-700 font-bold mt-1 flex items-center gap-1">
+                                                <AlertTriangle className="w-3 h-3" /> Alerta saldo a favor
+                                            </p>
+                                        )}
                                         {badgeRemision && (
                                             <p className="text-[9px] text-orange-600 font-bold mt-1 flex items-center gap-1">
                                                 <AlertTriangle className="w-3 h-3" /> Corregir remisión
@@ -227,6 +244,9 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBi
                                     </td>
                                     <td className="px-5 py-4">
                                         <span className={badge.className} style={badge.style}>{badge.label}</span>
+                                        {badgeHito && (
+                                            <span className={`${badgeHito.className} mt-1.5 block w-fit`} style={badgeHito.style}>{badgeHito.label}</span>
+                                        )}
                                         {badgeReRevision && (
                                             <span className={`${badgeReRevision.className} mt-1.5 block w-fit`} style={badgeReRevision.style}>{badgeReRevision.label}</span>
                                         )}

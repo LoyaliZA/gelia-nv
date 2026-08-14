@@ -252,7 +252,7 @@ html.glass-active .theme-element:not(.theme-no-blur) {
 
 .theme-btn-secondary:hover { color: var(--theme-text-main); }
 
-/* Modales — por encima del sidebar fijo (z-index 200) */
+/* Modales — por encima del sidebar fijo y topbars sticky del shell */
 .gelia-modal-overlay {
     position: fixed;
     inset: 0;
@@ -261,6 +261,8 @@ html.glass-active .theme-element:not(.theme-no-blur) {
     align-items: center;
     justify-content: center;
     padding: 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background-color: var(--theme-modal-overlay-bg);
     backdrop-filter: blur(var(--theme-modal-blur));
     -webkit-backdrop-filter: blur(var(--theme-modal-blur));
@@ -268,9 +270,9 @@ html.glass-active .theme-element:not(.theme-no-blur) {
 
 @media (max-width: 767px) {
     .gelia-modal-overlay {
-        align-items: flex-start;
+        align-items: center;
         padding-top: 1rem;
-        padding-bottom: calc(var(--gelia-mobile-nav-offset) + env(safe-area-inset-bottom, 0px));
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
     }
 }
 
@@ -284,13 +286,15 @@ html.glass-active .theme-element:not(.theme-no-blur) {
     width: 100%;
     max-height: min(90vh, calc(100dvh - 2rem));
     overflow: hidden;
+    margin-block: auto;
+    flex-shrink: 0;
 }
 
 @media (max-width: 767px) {
     .gelia-modal-shell {
         max-height: min(
             90dvh,
-            calc(100dvh - var(--gelia-mobile-nav-offset) - 2rem - env(safe-area-inset-bottom, 0px))
+            calc(100dvh - 2rem - env(safe-area-inset-bottom, 0px))
         );
     }
 }

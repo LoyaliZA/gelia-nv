@@ -8,6 +8,7 @@ use App\Models\SaldosAFavor\SafMotivo;
 use App\Models\SaldosAFavor\SafMovimiento;
 use App\Models\User;
 use App\Notifications\SaldoFavorPendienteRevisionNotification;
+use App\Support\SaldosAFavor\ReglasSaf;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -35,8 +36,10 @@ class GenerarCreditoSafService
      *   generado_por_id?:int|null,
      *   moneda?:string,
      *   fecha_generacion?:\Carbon\Carbon|string|null,
+     *   fecha_vencimiento?:\Carbon\Carbon|string|null,
      *   observaciones?:string|null,
      *   origen_manual?:bool,
+     *   omitir_monto_minimo?:bool,
      * }  $datos
      * @param  list<UploadedFile>  $evidencias
      */
@@ -48,6 +51,9 @@ class GenerarCreditoSafService
         $monto = round((float) ($datos['monto'] ?? 0), 2);
         if ($monto <= 0) {
             throw new InvalidArgumentException('El monto del saldo a favor debe ser mayor a cero.');
+        }
+        if (! ($datos['omitir_monto_minimo'] ?? false)) {
+            ReglasSaf::assertMontoMinimo($monto);
         }
 
         $motivoId = (int) ($datos['saf_motivo_id'] ?? 0);
@@ -79,6 +85,9 @@ class GenerarCreditoSafService
             $fechaGeneracion = isset($datos['fecha_generacion'])
                 ? \Carbon\Carbon::parse($datos['fecha_generacion'])
                 : now();
+            $fechaVencimientoOverride = isset($datos['fecha_vencimiento']) && $datos['fecha_vencimiento'] !== ''
+                ? \Carbon\Carbon::parse($datos['fecha_vencimiento'])
+                : null;
             $folio = $this->siguienteFolio();
 
             $credito = SafCredito::create([
@@ -95,7 +104,7 @@ class GenerarCreditoSafService
                 'monto_reservado' => 0,
                 'monto_disponible' => $monto,
                 'fecha_generacion' => $fechaGeneracion,
-                'fecha_vencimiento' => $fechaGeneracion->copy()->addDays(SafCredito::VIGENCIA_DIAS)->toDateString(),
+                'fecha_vencimiento' => ReglasSaf::fechaVencimientoPara($fechaGeneracion, $fechaVencimientoOverride),
                 'saf_motivo_id' => $motivoId,
                 'detalle_motivo' => $datos['detalle_motivo'] ?? null,
                 'generado_por_id' => $datos['generado_por_id'] ?? null,
