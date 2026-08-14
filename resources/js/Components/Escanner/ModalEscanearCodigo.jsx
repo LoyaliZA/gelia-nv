@@ -4,7 +4,55 @@ import { Camera, AlertTriangle, Flashlight, FlashlightOff, X } from 'lucide-reac
 import { cargarHtml5Qrcode } from './cargarHtml5Qrcode';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_SECONDARY } from '@/utils/geliaTheme';
 
-const DEBOUNCE_CONTINUO_MS = 1200;
+const DEBOUNCE_ENTRE_ESCANEOS_MS = 1000;
+const DEBOUNCE_MISMO_CODIGO_MS = 2500;
+const BIP_SCANNER_SRC = '/assets/sound_efects/bip_scanner.mp3';
+
+let bipAudioEl = null;
+let bipAudioUnlocked = false;
+
+function obtenerBipAudio() {
+    if (!bipAudioEl) {
+        bipAudioEl = new Audio(BIP_SCANNER_SRC);
+        bipAudioEl.preload = 'auto';
+        bipAudioEl.volume = 1;
+    }
+    return bipAudioEl;
+}
+
+function desbloquearBipAudio() {
+    if (bipAudioUnlocked || typeof Audio === 'undefined') return;
+    const audio = obtenerBipAudio();
+    const prevMuted = audio.muted;
+    audio.muted = true;
+    const playPromise = audio.play();
+    if (playPromise?.then) {
+        playPromise
+            .then(() => {
+                audio.pause();
+                audio.currentTime = 0;
+                audio.muted = prevMuted;
+                bipAudioUnlocked = true;
+            })
+            .catch(() => {
+                audio.muted = prevMuted;
+            });
+    }
+}
+
+function reproducirBipConfirmacion() {
+    try {
+        if (typeof Audio === 'undefined') return;
+        const audio = obtenerBipAudio();
+        audio.currentTime = 0;
+        const playPromise = audio.play();
+        if (playPromise?.catch) {
+            playPromise.catch(() => {});
+        }
+    } catch {
+        // sin audio en este dispositivo
+    }
+}
 
 function esperarDom() {
     return new Promise((resolve) => {
@@ -99,6 +147,9 @@ export default function ModalEscanearCodigo({
     useEffect(() => {
         if (!abierto) return undefined;
 
+        // Desbloquear audio en el gesto del usuario (abrir escáner).
+        desbloquearBipAudio();
+
         let cancelado = false;
         ultimoCodigoRef.current = { valor: '', at: 0 };
         setUltimoLeido('');
@@ -140,46 +191,65 @@ export default function ModalEscanearCodigo({
                 });
                 escanerRef.current = escaner;
 
-                await escaner.start(
-                    {
-                        facingMode: 'environment',
-                        advanced: [{ focusMode: 'continuous' }],
+                // html5-qrcode exige exactamente 1 key en cameraIdOrConfig (facingMode O deviceId).
+                // El autofocus se aplica después con applyVideoConstraints.
+                const cameraConfig = { facingMode: 'environment' };
+                const configScan = {
+                    fps: 24,
+                    // Zona cuadrada: mejor para QR pequeños (antes era franja tipo código de barras).
+                    qrbox: (viewfinderWidth, viewfinderHeight) => {
+                        const lado = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.85);
+                        const size = Math.max(Math.min(lado, 360), 200);
+                        return { width: size, height: size };
                     },
-                    {
-                        fps: 20,
-                        qrbox: (viewfinderWidth, viewfinderHeight) => {
-                            const ancho = Math.min(viewfinderWidth * 0.9, 400);
-                            const alto = Math.min(viewfinderHeight * 0.25, 120);
-                            return { width: Math.max(ancho, 200), height: Math.max(alto, 80) };
-                        },
+                    experimentalFeatures: {
+                        useBarCodeDetectorIfSupported: true,
                     },
-                    async (texto) => {
-                        if (cancelado) return;
-                        const valor = texto.trim();
-                        if (!valor) return;
+                };
 
-                        if (continuoRef.current) {
-                            const ahora = Date.now();
-                            const prev = ultimoCodigoRef.current;
-                            if (prev.valor === valor && ahora - prev.at < DEBOUNCE_CONTINUO_MS) {
-                                return;
-                            }
-                            ultimoCodigoRef.current = { valor, at: ahora };
-                            setUltimoLeido(valor);
-                            onEscaneadoRef.current?.(valor);
+                const onScanSuccess = async (texto) => {
+                    if (cancelado) return;
+                    const valor = texto.trim();
+                    if (!valor) return;
+
+                    if (continuoRef.current) {
+                        const ahora = Date.now();
+                        const prev = ultimoCodigoRef.current;
+                        // Pausa entre cualquier lectura (evita dobles por sensibilidad).
+                        if (prev.at && ahora - prev.at < DEBOUNCE_ENTRE_ESCANEOS_MS) {
                             return;
                         }
-
-                        cancelado = true;
-                        if (flashActivoRef.current) {
-                            await aplicarFlash(escanerRef.current, false);
+                        // El mismo código exige más tiempo (no re-registrar el mismo perfume al sostener la cámara).
+                        if (prev.valor === valor && ahora - prev.at < DEBOUNCE_MISMO_CODIGO_MS) {
+                            return;
                         }
-                        await detenerEscaner(escanerRef.current);
-                        escanerRef.current = null;
+                        ultimoCodigoRef.current = { valor, at: ahora };
+                        setUltimoLeido(valor);
+                        reproducirBipConfirmacion();
                         onEscaneadoRef.current?.(valor);
-                    },
-                    () => {},
-                );
+                        return;
+                    }
+
+                    cancelado = true;
+                    if (flashActivoRef.current) {
+                        await aplicarFlash(escanerRef.current, false);
+                    }
+                    await detenerEscaner(escanerRef.current);
+                    escanerRef.current = null;
+                    reproducirBipConfirmacion();
+                    onEscaneadoRef.current?.(valor);
+                };
+
+                try {
+                    await escaner.start(cameraConfig, configScan, onScanSuccess, () => {});
+                } catch (startErr) {
+                    const cams = await Html5Qrcode.getCameras().catch(() => []);
+                    const trasera = (cams || []).find((c) => /back|rear|environment|trasera|posterior/i.test(c.label || ''))
+                        || cams?.[cams.length - 1]
+                        || cams?.[0];
+                    if (!trasera?.id) throw startErr;
+                    await escaner.start(trasera.id, configScan, onScanSuccess, () => {});
+                }
 
                 await aplicarAutofocus(escaner);
 
@@ -228,7 +298,7 @@ export default function ModalEscanearCodigo({
                 <div className="p-5 space-y-4">
                     <p className="text-sm theme-text-muted m-0">
                         {continuo
-                            ? `${descripcion} Puede escanear varios códigos seguidos; cierre cuando termine.`
+                            ? `${descripcion} Espere el bip y ~1 s entre lecturas; el mismo código no se re-registra de inmediato.`
                             : descripcion}
                     </p>
                     <div className="rounded-2xl overflow-hidden border theme-border bg-black/90 min-h-[220px] relative">
@@ -253,7 +323,7 @@ export default function ModalEscanearCodigo({
                         </div>
                     )}
                     <p className="text-[10px] theme-text-muted m-0">
-                        Compatible con QR, Code 128/39, EAN y UPC. El autofocus ayuda con códigos pequeños.
+                        Compatible con QR, Code 128/39, EAN y UPC. Acerca el código a la zona cuadrada; el autofocus ayuda con QR pequeños.
                         {soportaFlash ? ' Usa el flash si el entorno está oscuro.' : ''}
                     </p>
                 </div>

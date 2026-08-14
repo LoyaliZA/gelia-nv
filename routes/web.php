@@ -118,6 +118,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/push/vapid-public-key', [\App\Http\Controllers\WebPushController::class, 'vapidPublicKey'])->name('push.vapid');
     Route::post('/push/subscribe', [\App\Http\Controllers\WebPushController::class, 'subscribe'])->name('push.subscribe');
     Route::delete('/push/unsubscribe', [\App\Http\Controllers\WebPushController::class, 'unsubscribe'])->name('push.unsubscribe');
+    Route::post('/push/client-debug', [\App\Http\Controllers\WebPushController::class, 'clientDebug'])->name('push.client-debug');
 
     // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: ASISTENTE GELIA AI (fase 1: consulta + ayuda)

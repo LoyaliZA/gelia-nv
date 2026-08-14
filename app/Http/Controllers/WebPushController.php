@@ -19,6 +19,38 @@ class WebPushController extends Controller
         ]);
     }
 
+    /**
+     * Debug ingest: cliente (móvil/escritorio remoto) no alcanza localhost del agente.
+     */
+    public function clientDebug(Request $request): JsonResponse
+    {
+        $payload = $request->validate([
+            'hypothesisId' => 'nullable|string|max:16',
+            'location' => 'nullable|string|max:120',
+            'message' => 'nullable|string|max:240',
+            'data' => 'nullable|array',
+            'runId' => 'nullable|string|max:40',
+        ]);
+
+        // #region agent log
+        $line = json_encode([
+            'sessionId' => '80055b',
+            'runId' => $payload['runId'] ?? 'desktop-push',
+            'hypothesisId' => $payload['hypothesisId'] ?? '?',
+            'location' => $payload['location'] ?? 'client',
+            'message' => $payload['message'] ?? '',
+            'data' => array_merge($payload['data'] ?? [], [
+                'user_id' => Auth::id(),
+                'ua' => substr((string) $request->userAgent(), 0, 120),
+            ]),
+            'timestamp' => (int) round(microtime(true) * 1000),
+        ], JSON_UNESCAPED_UNICODE);
+        @file_put_contents(base_path('.cursor/debug-80055b.log'), $line . "\n", FILE_APPEND | LOCK_EX);
+        // #endregion
+
+        return response()->json(['ok' => true]);
+    }
+
     public function subscribe(Request $request, EnviarWebPushService $service): JsonResponse
     {
         $datos = $request->validate([

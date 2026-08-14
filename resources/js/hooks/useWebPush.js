@@ -48,7 +48,8 @@ export default function useWebPush(auth) {
         WebPushService.publicKey = webpush.public_key;
 
         activar().then((result) => {
-            if (!result?.ok) {
+            // push_service_error = FCM del navegador; reintentar en cada navegación no ayuda.
+            if (!result?.ok && result?.reason !== 'push_service_error') {
                 intentadoRef.current = false;
             }
         });
