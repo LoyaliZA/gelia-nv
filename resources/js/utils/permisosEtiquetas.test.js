@@ -49,12 +49,13 @@ describe('agruparPermisosPorSubmodulo', () => {
             'control_pedidos.auditar',
             'control_pedidos.delegado',
             'control_pedidos.configurar_catalogos',
+            'control_pedidos.configurar_plazos',
             'control_pedidos.direccion.seleccionar',
         ].map((name) => ({ name, id: name }));
 
         const grupos = agruparPermisosPorSubmodulo('control_pedidos', permisos);
         expect(grupos.map((g) => g.id)).toEqual([
-            'registrar', 'auditar', 'cedis', 'delegado', 'catalogos',
+            'registrar', 'auditar', 'cedis', 'delegado', 'catalogos', 'plazos',
         ]);
         expect(grupos.find((g) => g.id === 'cedis').permisos.map((p) => p.name))
             .toEqual(['control_pedidos.cedis']);

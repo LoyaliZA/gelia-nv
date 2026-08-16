@@ -2,6 +2,7 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 
 trait ValidacionCamposPedidoBma
@@ -17,7 +18,21 @@ trait ValidacionCamposPedidoBma
         $esComplementario = $pedido->esResguardoComplementario();
         $omiteCosto = $esDiferido || $esResguardoAbierto || $esComplementario;
         $guiaCliente = (bool) $pedido->cliente_proporciona_guia;
+        $envioPorCobrar = (bool) $pedido->envio_por_cobrar;
         $tienePesaje = $pedido->tienePesajeRespondido();
+
+        if ($guiaCliente || $envioPorCobrar) {
+            $omiteCosto = true;
+        }
+
+        // Tarifa por peso local: no exigir costo hasta tener pesaje.
+        if (! $omiteCosto && ! $tienePesaje) {
+            $pedido->loadMissing('paqueteria');
+            if ($pedido->paqueteria?->esLocalRegional()
+                && $pedido->paqueteria->modalidad_tarifa === CatalogoPaqueteriaPedido::MODALIDAD_POR_PESO) {
+                $omiteCosto = true;
+            }
+        }
 
         if ($requiereLogistica && ! $esComplementario && ! $tienePesaje) {
             throw new \InvalidArgumentException(

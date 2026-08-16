@@ -120,12 +120,16 @@ class TiendanubeProductoWriteService
         }
     }
 
+    /**
+     * @param  array{convertir_webp?: bool, modo_1280?: string}  $optImagen
+     */
     public function agregarImagen(
         int $tnProductId,
         ?string $srcUrl = null,
         ?UploadedFile $file = null,
         ?int $position = null,
-        bool $reemplazar = false
+        bool $reemplazar = false,
+        array $optImagen = []
     ): TiendanubeProductoImagen {
         if ($reemplazar) {
             $this->eliminarTodasLasImagenes($tnProductId);
@@ -144,7 +148,7 @@ class TiendanubeProductoWriteService
         if ($srcUrl) {
             $payload['src'] = $srcUrl;
         } elseif ($file) {
-            $opt = $this->optimizarImagen->ejecutar($file);
+            $opt = $this->optimizarImagen->ejecutar($file, $optImagen);
             $payload['attachment'] = base64_encode((string) file_get_contents($opt['path']));
             $payload['filename'] = $opt['filename'];
             // Dimensiones = archivo subido (post-resize). Alertas siguen midiendo el original.

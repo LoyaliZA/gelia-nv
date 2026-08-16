@@ -24,6 +24,8 @@ export default function PanelImportImagenes({
     ultimosImportImagenes = [],
     onImportStarted,
     embedded = false,
+    convertirWebp = true,
+    modo1280 = 'none',
 }) {
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
@@ -77,6 +79,8 @@ export default function PanelImportImagenes({
         try {
             const body = new FormData();
             body.append('zip', file);
+            body.append('convertir_webp', convertirWebp ? '1' : '0');
+            body.append('modo_1280', modo1280);
             const res = await fetch(route('tiendanube.imagenes.importar'), {
                 method: 'POST',
                 headers: {

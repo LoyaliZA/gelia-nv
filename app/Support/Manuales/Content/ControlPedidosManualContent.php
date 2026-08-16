@@ -41,6 +41,7 @@ class ControlPedidosManualContent
                 ['nombre' => 'Auditar pedidos', 'ruta' => '/control-pedidos/auditar', 'cargo' => 'Auxiliar'],
                 ['nombre' => 'Control Pedidos (CEDIS)', 'ruta' => '/control-pedidos/cedis', 'cargo' => 'CEDIS'],
                 ['nombre' => 'Actualizar guías', 'ruta' => '/control-pedidos/delegado', 'cargo' => 'Guías'],
+                ['nombre' => 'Plazos de retraso', 'ruta' => '/control-pedidos/plazos', 'cargo' => 'Superadmin / gerente'],
                 ['nombre' => 'Direcciones', 'ruta' => '/control-pedidos/direcciones', 'cargo' => 'Auxiliar / Direcciones'],
             ],
         ];
@@ -231,10 +232,10 @@ class ControlPedidosManualContent
     private static function erroresFiltrados(array $ids): array
     {
         $mapa = [
-            'vendedora' => ['pedido_rechazado_auxiliar', 'pedido_error_datos', 'pedido_enviado', 'pedido_pesaje_listo'],
+            'vendedora' => ['pedido_rechazado_auxiliar', 'pedido_error_datos', 'pedido_enviado', 'pedido_pesaje_listo', 'pedido_retraso_empaque', 'pedido_retraso_recoleccion'],
             'auxiliar' => ['pedido_pendiente_auxiliar', 'pedido_error_remision', 'pedido_error_cedis', 'pedido_incidencia_cedis'],
-            'cedis' => ['pedido_aprobado', 'pedido_consulta_pesaje', 'pedido_pendiente_envio', 'pedido_guia_asignada', 'pedido_error_guia', 'pedido_error_cedis', 'pedido_guia_retraso'],
-            'guias' => ['pedido_pendiente_guia', 'pedido_error_guia'],
+            'cedis' => ['pedido_aprobado', 'pedido_consulta_pesaje', 'pedido_pendiente_envio', 'pedido_guia_asignada', 'pedido_error_guia', 'pedido_error_cedis', 'pedido_guia_retraso', 'pedido_retraso_empaque', 'pedido_retraso_recoleccion'],
+            'guias' => ['pedido_pendiente_guia', 'pedido_error_guia', 'pedido_retraso_recoleccion'],
             'direcciones' => [],
         ];
 
@@ -258,6 +259,8 @@ class ControlPedidosManualContent
             'pedido_error_estado' => 'Aviso informativo: se reportó un error; solo el responsable corrige.',
             'pedido_incidencia_cedis' => 'Error de empaque reportado.',
             'pedido_guia_retraso' => 'Retraso por error/corrección post-guía.',
+            'pedido_retraso_empaque' => 'No empacado dentro del plazo (alerta distinta a recolección).',
+            'pedido_retraso_recoleccion' => 'Listo para envío pero no marcado enviado a tiempo.',
             'pedido_pendiente_guia' => 'Empacado; falta captura de guía.',
             'pedido_pendiente_envio' => 'Listo para marcar enviado.',
             'pedido_guia_asignada' => 'Guía asignada; pendiente de envío.',
@@ -304,6 +307,11 @@ class ControlPedidosManualContent
                 'titulo' => 'Empaque con y sin guía',
                 'detalle' => 'Paquetería con rastreo y sin número → PENDIENTE_DE_GUIA. Sin rastreo o con guía ya capturada → PENDIENTE_DE_ENVIO.',
                 'secciones' => ['cedis', 'guias'],
+            ],
+            [
+                'titulo' => 'Retraso de empaque vs recolección',
+                'detalle' => 'Si el pedido no se empaca a tiempo (desde pago validado + corte) se alerta retraso de empaque. Si ya está listo en PENDIENTE_DE_ENVIO y no se marca enviado, se alerta retraso de recolección. Son alertas distintas; plazos en /control-pedidos/plazos.',
+                'secciones' => ['vendedora', 'cedis', 'guias'],
             ],
         ];
 

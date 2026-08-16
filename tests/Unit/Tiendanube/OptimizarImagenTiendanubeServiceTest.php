@@ -58,31 +58,7 @@ class OptimizarImagenTiendanubeServiceTest extends TestCase
         @unlink($path);
     }
 
-    public function test_cuadrada_grande_a_1280_webp(): void
-    {
-        if (! function_exists('imagewebp') || ! function_exists('imagecreatetruecolor')) {
-            $this->markTestSkipped('GD+WebP requerido');
-        }
-
-        $path = $this->escribirJpegGd(2000, 2000);
-        $file = new UploadedFile($path, 'grande.jpg', 'image/jpeg', null, true);
-
-        $opt = app(OptimizarImagenTiendanubeService::class)->ejecutar($file);
-
-        $this->assertFalse($opt['requiere_revision']);
-        $this->assertSame(2000, $opt['width']);
-        $this->assertSame(2000, $opt['height']);
-        $this->assertSame(1280, $opt['output_width']);
-        $this->assertSame(1280, $opt['output_height']);
-        $this->assertStringEndsWith('.webp', $opt['filename']);
-        $this->assertTrue($opt['cleanup']);
-        $this->assertFileExists($opt['path']);
-
-        @unlink($opt['path']);
-        @unlink($path);
-    }
-
-    public function test_rectangular_reescala_lado_menor_1280_y_alerta(): void
+    public function test_rectangular_square_a_1280_webp(): void
     {
         if (! function_exists('imagewebp') || ! function_exists('imagecreatetruecolor')) {
             $this->markTestSkipped('GD+WebP requerido');
@@ -91,18 +67,92 @@ class OptimizarImagenTiendanubeServiceTest extends TestCase
         $path = $this->escribirJpegGd(900, 1600);
         $file = new UploadedFile($path, 'rect.jpg', 'image/jpeg', null, true);
 
-        $opt = app(OptimizarImagenTiendanubeService::class)->ejecutar($file);
+        $opt = app(OptimizarImagenTiendanubeService::class)->ejecutar($file, [
+            'convertir_webp' => true,
+            'modo_1280' => 'square',
+        ]);
 
         $this->assertTrue($opt['alerta_no_cuadrada']);
         $this->assertTrue($opt['requiere_revision']);
-        $this->assertFalse($opt['alerta_pequena']);
+        $this->assertSame(900, $opt['width']);
+        $this->assertSame(1600, $opt['height']);
         $this->assertSame(1280, $opt['output_width']);
-        $this->assertSame((int) round(1600 * (1280 / 900)), $opt['output_height']);
+        $this->assertSame(1280, $opt['output_height']);
+        $this->assertStringEndsWith('.webp', $opt['filename']);
+        $this->assertTrue($opt['cleanup']);
+
+        @unlink($opt['path']);
+        @unlink($path);
+    }
+
+    public function test_rectangular_fit_lado_mayor_1280(): void
+    {
+        if (! function_exists('imagewebp') || ! function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD+WebP requerido');
+        }
+
+        $path = $this->escribirJpegGd(900, 1600);
+        $file = new UploadedFile($path, 'rect.jpg', 'image/jpeg', null, true);
+
+        $opt = app(OptimizarImagenTiendanubeService::class)->ejecutar($file, [
+            'convertir_webp' => true,
+            'modo_1280' => 'fit',
+        ]);
+
+        $this->assertTrue($opt['alerta_no_cuadrada']);
+        $this->assertSame(720, $opt['output_width']);
+        $this->assertSame(1280, $opt['output_height']);
         $this->assertStringEndsWith('.webp', $opt['filename']);
 
         if ($opt['cleanup']) {
             @unlink($opt['path']);
         }
+        @unlink($path);
+    }
+
+    public function test_ambos_off_conserva_original(): void
+    {
+        if (! function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD requerido');
+        }
+
+        $path = $this->escribirJpegGd(2000, 2000);
+        $file = new UploadedFile($path, 'grande.jpg', 'image/jpeg', null, true);
+
+        $opt = app(OptimizarImagenTiendanubeService::class)->ejecutar($file, [
+            'convertir_webp' => false,
+            'modo_1280' => 'none',
+        ]);
+
+        $this->assertFalse($opt['cleanup']);
+        $this->assertSame($path, $opt['path']);
+        $this->assertSame('grande.jpg', $opt['filename']);
+        $this->assertSame(2000, $opt['output_width']);
+        $this->assertSame(2000, $opt['output_height']);
+
+        @unlink($path);
+    }
+
+    public function test_solo_webp_conserva_dimensiones(): void
+    {
+        if (! function_exists('imagewebp') || ! function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD+WebP requerido');
+        }
+
+        $path = $this->escribirJpegGd(900, 1600);
+        $file = new UploadedFile($path, 'rect.jpg', 'image/jpeg', null, true);
+
+        $opt = app(OptimizarImagenTiendanubeService::class)->ejecutar($file, [
+            'convertir_webp' => true,
+            'modo_1280' => 'none',
+        ]);
+
+        $this->assertSame(900, $opt['output_width']);
+        $this->assertSame(1600, $opt['output_height']);
+        $this->assertStringEndsWith('.webp', $opt['filename']);
+        $this->assertTrue($opt['cleanup']);
+
+        @unlink($opt['path']);
         @unlink($path);
     }
 

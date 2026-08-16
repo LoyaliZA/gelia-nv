@@ -179,6 +179,7 @@ export default function ImageEditModal({ file, onClose, onSave }) {
                 <p className="text-xs theme-text-muted">
                     Arrastra el recuadro o usa un preset. Luego aplica antes de subir.
                     {natural.w ? ` · Original ${natural.w}×${natural.h}` : ''}
+                    {' · '}Las opciones generales (WebP / 1280) se aplican al subir; desmarca Ajustar si quieres conservar este recorte tal cual.
                 </p>
 
                 <div className="flex flex-wrap gap-2">

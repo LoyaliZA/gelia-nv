@@ -32,7 +32,10 @@ class TiendanubeImageImportService
         private TiendanubeProductoWriteService $write
     ) {}
 
-    public function iniciarDesdeZip(UploadedFile $zip, ?User $user = null): TiendanubeImageImport
+    /**
+     * @param  array{convertir_webp?: bool, modo_1280?: string}  $optImagen
+     */
+    public function iniciarDesdeZip(UploadedFile $zip, ?User $user = null, array $optImagen = []): TiendanubeImageImport
     {
         if ($zip->getClientOriginalExtension() !== 'zip' && $zip->getMimeType() !== 'application/zip') {
             if (strtolower($zip->getClientOriginalExtension()) !== 'zip') {
@@ -44,10 +47,13 @@ class TiendanubeImageImportService
             throw new RuntimeException('Ya hay una importación de imágenes en curso.');
         }
 
+        $opciones = OptimizarImagenTiendanubeService::normalizarOpciones($optImagen);
         $import = TiendanubeImageImport::create([
             'user_id' => $user?->id,
             'estado' => 'pendiente',
             'reemplazar_primera' => true,
+            'convertir_webp' => $opciones['convertir_webp'],
+            'modo_1280' => $opciones['modo_1280'],
         ]);
 
         $dir = 'tiendanube/imports/'.$import->id;
@@ -71,8 +77,9 @@ class TiendanubeImageImportService
 
     /**
      * @param  list<UploadedFile>  $files
+     * @param  array{convertir_webp?: bool, modo_1280?: string}  $optImagen
      */
-    public function iniciarDesdeArchivos(array $files, ?User $user = null, bool $reemplazarPrimera = true): TiendanubeImageImport
+    public function iniciarDesdeArchivos(array $files, ?User $user = null, bool $reemplazarPrimera = true, array $optImagen = []): TiendanubeImageImport
     {
         if ($files === []) {
             throw new RuntimeException('No se recibieron imágenes.');
@@ -82,10 +89,13 @@ class TiendanubeImageImportService
             throw new RuntimeException('Ya hay una importación de imágenes en curso.');
         }
 
+        $opciones = OptimizarImagenTiendanubeService::normalizarOpciones($optImagen);
         $import = TiendanubeImageImport::create([
             'user_id' => $user?->id,
             'estado' => 'pendiente',
             'reemplazar_primera' => $reemplazarPrimera,
+            'convertir_webp' => $opciones['convertir_webp'],
+            'modo_1280' => $opciones['modo_1280'],
         ]);
 
         $dir = 'tiendanube/imports/'.$import->id;
@@ -187,7 +197,11 @@ class TiendanubeImageImportService
                     null,
                     $uploaded,
                     (int) $item->position,
-                    $reemplazar
+                    $reemplazar,
+                    [
+                        'convertir_webp' => (bool) $import->convertir_webp,
+                        'modo_1280' => (string) ($import->modo_1280 ?: OptimizarImagenTiendanubeService::MODO_NONE),
+                    ]
                 );
 
                 $item->update([

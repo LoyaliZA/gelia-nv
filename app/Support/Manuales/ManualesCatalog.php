@@ -33,6 +33,7 @@ class ManualesCatalog
                     'control_pedidos.auditar',
                     'control_pedidos.cedis',
                     'control_pedidos.delegado',
+                    'control_pedidos.configurar_plazos',
                     'clientes.direcciones.ver',
                 ],
                 'secciones' => [

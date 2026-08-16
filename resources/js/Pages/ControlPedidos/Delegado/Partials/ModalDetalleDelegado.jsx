@@ -8,6 +8,7 @@ import { THEME_INPUT } from '../../../../utils/geliaTheme';
 import {
     badgeEstatusPedido,
     badgeRetrasoGuia,
+    badgesRetrasoSla,
     badgeResguardoSemantico,
     badgeCorregirGuia,
     formatearMoneda,
@@ -234,6 +235,7 @@ export default function ModalDetalleDelegado({
     const fase = pedido.estatus?.fase_ciclo;
     const badgeEstatus = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
+    const badgesSla = badgesRetrasoSla(pedido);
     const badgeResguardo = pedido.es_resguardo ? badgeResguardoSemantico() : null;
     const badgeErrorGuia = tieneErrorGuiaReportado(pedido) ? badgeCorregirGuia() : null;
     const docs = documentosVisibles(pedido);
@@ -277,6 +279,9 @@ export default function ModalDetalleDelegado({
                                 <span className={badgeEstatus.className} style={badgeEstatus.style}>{badgeEstatus.label}</span>
                                 {badgeErrorGuia && <span className={badgeErrorGuia.className} style={badgeErrorGuia.style}>{badgeErrorGuia.label}</span>}
                                 {badgeRetraso && <span className={badgeRetraso.className} style={badgeRetraso.style}>{badgeRetraso.label}</span>}
+                                {badgesSla.map((b) => (
+                                    <span key={b.label} className={b.className} style={b.style}>{b.label}</span>
+                                ))}
                                 {badgeResguardo && <span className={badgeResguardo.className} style={badgeResguardo.style}>{badgeResguardo.label}</span>}
                             </div>
                         </div>

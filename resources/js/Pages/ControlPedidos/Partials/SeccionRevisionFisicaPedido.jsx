@@ -1,5 +1,5 @@
 import React from 'react';
-import { badgeEstadoFisico, etiquetasInstanciaRevision } from './pedidosBmaStyles';
+import { badgeEstadoFisico, etiquetasInstanciaRevision, esFasePreVenta } from './pedidosBmaStyles';
 import { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 
 /**
@@ -85,7 +85,7 @@ export default function SeccionRevisionFisicaPedido({ pedido, onVerDoc, titulo =
                                     {r.mejor_ejemplar && <span className="text-[9px] font-black uppercase text-emerald-600">Mejor ejemplar</span>}
                                 </div>
                                 {r.comentario && <p className="text-xs theme-text-muted font-bold m-0">{r.comentario}</p>}
-                                {r.estado_fisico === 'sin_existencia' && (
+                                {r.estado_fisico === 'sin_existencia' && esFasePreVenta(pedido?.estatus?.fase_ciclo) && (
                                     <p className="text-[10px] font-black uppercase text-sky-600 m-0">
                                         Sin existencias en CEDIS — Ventas debe proceder (sustituir / contactar cliente).
                                     </p>

@@ -5,6 +5,9 @@ import {
     formatearFechaNegocio,
     badgeEstatusPedido,
     badgeRetrasoGuia,
+    badgesRetrasoSla,
+    tieneRetrasoEmpaqueActivo,
+    tieneRetrasoRecoleccionActivo,
     badgeResguardoSemantico,
     badgeCorregirGuia,
     tieneErrorGuiaReportado,
@@ -19,6 +22,7 @@ import ModalBitacoraPedido from '../../Partials/ModalBitacoraPedido';
 function BadgesPedido({ pedido }) {
     const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
     const retraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
+    const badgesSla = badgesRetrasoSla(pedido);
     const resguardo = pedido.es_resguardo ? badgeResguardoSemantico() : null;
     const errorGuia = tieneErrorGuiaReportado(pedido) ? badgeCorregirGuia() : null;
 
@@ -27,6 +31,9 @@ function BadgesPedido({ pedido }) {
             <span className={badge.className} style={badge.style}>{badge.label}</span>
             {errorGuia && <span className={errorGuia.className} style={errorGuia.style}>{errorGuia.label}</span>}
             {retraso && <span className={retraso.className} style={retraso.style}>{retraso.label}</span>}
+            {badgesSla.map((b) => (
+                <span key={b.label} className={b.className} style={b.style}>{b.label}</span>
+            ))}
             {resguardo && !pedido.estatus?.fase_ciclo && (
                 <span className={resguardo.className} style={resguardo.style}>{resguardo.label}</span>
             )}
@@ -37,7 +44,7 @@ function BadgesPedido({ pedido }) {
 function CardPedidoDelegado({ pedido, onAbrir, onBitacora }) {
     return (
         <div
-            className={`${geliaCardClass()} p-4 space-y-3 text-left w-full ${pedido.es_resguardo ? 'ring-2 ring-blue-500/40 bg-blue-500/5' : ''} ${pedido.guia_retraso || tieneErrorGuiaReportado(pedido) ? 'ring-2 ring-amber-500/30' : ''}`}
+            className={`${geliaCardClass()} p-4 space-y-3 text-left w-full ${pedido.es_resguardo ? 'ring-2 ring-blue-500/40 bg-blue-500/5' : ''} ${pedido.guia_retraso || tieneErrorGuiaReportado(pedido) || tieneRetrasoEmpaqueActivo(pedido) || tieneRetrasoRecoleccionActivo(pedido) ? 'ring-2 ring-amber-500/30' : ''}`}
         >
             <button type="button" onClick={() => onAbrir(pedido)} className="w-full text-left space-y-3 outline-none">
                 <div className="flex items-start justify-between gap-2">
@@ -134,7 +141,7 @@ export default function TablaDelegado({ pedidos, tabActiva = 'PENDIENTES_GUIA', 
                                 {items.map((pedido) => (
                                     <tr
                                         key={pedido.id}
-                                        className={`border-b theme-border last:border-0 align-middle hover:bg-black/[0.02] ${pedido.guia_retraso ? 'bg-amber-500/5' : ''} ${pedido.es_resguardo ? 'bg-blue-500/5' : ''}`}
+                                        className={`border-b theme-border last:border-0 align-middle hover:bg-black/[0.02] ${pedido.guia_retraso || tieneRetrasoEmpaqueActivo(pedido) || tieneRetrasoRecoleccionActivo(pedido) ? 'bg-amber-500/5' : ''} ${pedido.es_resguardo ? 'bg-blue-500/5' : ''}`}
                                     >
                                         <td className="px-5 py-4 text-sm font-black theme-text-main font-mono cursor-pointer" onClick={() => setPedidoDetalle(pedido)}>{pedido.id}</td>
                                         <td className="px-5 py-4 cursor-pointer" onClick={() => setPedidoDetalle(pedido)}>

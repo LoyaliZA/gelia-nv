@@ -53,6 +53,7 @@ abstract class PedidoBmaRequestBase extends FormRequest
             'costo_envio' => ['nullable', 'numeric', 'min:0'],
             'aplica_seguro' => ['nullable', 'boolean'],
             'cliente_proporciona_guia' => ['nullable', 'boolean'],
+            'envio_por_cobrar' => ['nullable', 'boolean'],
             'costo_seguro' => ['nullable', 'numeric', 'min:0'],
             'comentarios_drive' => ['nullable', 'string'],
             'comprobantes' => ['nullable', 'array'],

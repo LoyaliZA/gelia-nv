@@ -38,6 +38,7 @@ final class VisibilidadPedidoBma
         CatalogoEstatusPedido::FASE_EN_CEDIS,
         CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
         CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+        CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
         CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
         CatalogoEstatusPedido::FASE_ENTREGADO,
         CatalogoEstatusPedido::FASE_ENVIADO,

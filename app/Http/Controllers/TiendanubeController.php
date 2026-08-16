@@ -14,6 +14,7 @@ use App\Models\Tiendanube\TiendanubeProductoImagen;
 use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\Tiendanube\TiendanubeSyncLog;
 use App\Models\Tiendanube\TiendanubeWebhookDelivery;
+use App\Services\Tiendanube\OptimizarImagenTiendanubeService;
 use App\Services\Tiendanube\TiendanubeApiClient;
 use App\Services\Tiendanube\TiendanubeCatalogoWipeService;
 use App\Services\Tiendanube\TiendanubeImageImportService;
@@ -505,7 +506,8 @@ class TiendanubeController extends Controller
                 $request->input('src'),
                 $request->file('file'),
                 $request->filled('position') ? (int) $request->input('position') : null,
-                $reemplazar
+                $reemplazar,
+                OptimizarImagenTiendanubeService::opcionesDesdeRequest($request)
             );
 
             return response()->json([
@@ -570,10 +572,16 @@ class TiendanubeController extends Controller
 
         $request->validate([
             'zip' => ['required', 'file', 'max:512000', 'mimes:zip'],
+            'convertir_webp' => ['sometimes', 'boolean'],
+            'modo_1280' => ['sometimes', 'string', 'in:none,fit,square'],
         ]);
 
         try {
-            $import = $service->iniciarDesdeZip($request->file('zip'), $request->user());
+            $import = $service->iniciarDesdeZip(
+                $request->file('zip'),
+                $request->user(),
+                OptimizarImagenTiendanubeService::opcionesDesdeRequest($request)
+            );
 
             // Con cola async el índice del ZIP corre en el job; con sync ya puede haber resumen.
             $resumen = $import->items()->exists() ? $import->resumenMotivos() : null;
@@ -646,6 +654,8 @@ class TiendanubeController extends Controller
             'imagenes' => ['required', 'array', 'min:1', 'max:100'],
             'imagenes.*' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp'],
             'reemplazar' => ['sometimes', 'boolean'],
+            'convertir_webp' => ['sometimes', 'boolean'],
+            'modo_1280' => ['sometimes', 'string', 'in:none,fit,square'],
         ]);
 
         try {
@@ -653,7 +663,8 @@ class TiendanubeController extends Controller
             $import = $service->iniciarDesdeArchivos(
                 $request->file('imagenes', []),
                 $request->user(),
-                $reemplazarPrimera
+                $reemplazarPrimera,
+                OptimizarImagenTiendanubeService::opcionesDesdeRequest($request)
             );
 
             $resumen = $import->resumenMotivos();

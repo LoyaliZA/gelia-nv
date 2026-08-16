@@ -8,6 +8,9 @@ import {
     badgeEmpaqueSemantico,
     badgeEstatusEnvio,
     badgeRetrasoGuia,
+    badgesRetrasoSla,
+    tieneRetrasoEmpaqueActivo,
+    tieneRetrasoRecoleccionActivo,
     badgeConComplementos,
     complementosDe,
     esPedidoEmpacadoCedis,
@@ -35,8 +38,9 @@ function TarjetaPedido({
     const fase = pedido.estatus?.fase_ciclo;
     const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
-    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
+    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { forzarPesaje: true });
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
+    const badgesSla = badgesRetrasoSla(pedido);
     const badgeComp = badgeConComplementos(pedido);
     const complementos = complementosDe(pedido);
     const remision = remisionDe(pedido);
@@ -46,13 +50,22 @@ function TarjetaPedido({
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
+    const cajasPedido = pedido.cajas || [];
+    const cajasPendientesCount = pedido.cajas_pendientes
+        ?? cajasPedido.filter((c) => (c.estatus_recoleccion || 'pendiente') === 'pendiente').length;
+    const cajasRecolectadasCount = pedido.cajas_recolectadas
+        ?? cajasPedido.filter((c) => c.estatus_recoleccion === 'recolectada').length;
+    const requiereSeleccionEnvios = cajasPendientesCount > 1;
     const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const tieneGuiaPdf = tieneGuiaPdfDisponible(pedido);
     const requiereLogistica = pedido.origen?.requiere_logistica ?? true;
+    const ringRetraso = pedido.guia_retraso
+        || tieneRetrasoEmpaqueActivo(pedido)
+        || tieneRetrasoRecoleccionActivo(pedido);
 
     return (
-        <div className={`${geliaCardClass()} p-4 space-y-3 ${esErrorCedis ? 'ring-1 ring-orange-500/40' : ''} ${pedido.guia_retraso ? 'ring-1 ring-amber-500/40' : ''}`}>
+        <div className={`${geliaCardClass()} p-4 space-y-3 ${esErrorCedis ? 'ring-1 ring-orange-500/40' : ''} ${ringRetraso ? 'ring-1 ring-amber-500/40' : ''}`}>
             {pedido.origen?.nombre && (
                 <p className="text-sm font-black uppercase tracking-widest text-center py-2 px-3 rounded-xl bg-[var(--color-primario)]/10 m-0" style={{ color: 'var(--color-primario)' }}>
                     ORIGEN: {pedido.origen.nombre}
@@ -79,6 +92,14 @@ function TarjetaPedido({
                     )}
                     {badgeRetraso && (
                         <span className={badgeRetraso.className} style={badgeRetraso.style}>{badgeRetraso.label}</span>
+                    )}
+                    {badgesSla.map((b) => (
+                        <span key={b.label} className={b.className} style={b.style}>{b.label}</span>
+                    ))}
+                    {fase === 'PENDIENTE_DE_ENVIO' && cajasPedido.length > 1 && (
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700">
+                            {cajasRecolectadasCount}/{cajasPedido.length} recolectadas
+                        </span>
                     )}
                 </div>
             </div>
@@ -159,6 +180,11 @@ function TarjetaPedido({
                     </span>
                 </AvisoOperativoPedido>
             )}
+            {fase === 'PENDIENTE_GUIA_CLIENTE' && (
+                <AvisoOperativoPedido label="Guía del cliente" tono="info">
+                    Esperando guía del cliente (vendedora). Solo lectura hasta que cargue la guía.
+                </AvisoOperativoPedido>
+            )}
 
             <div className="pt-2 border-t theme-border space-y-2">
                 {pendientePesaje && (
@@ -167,8 +193,15 @@ function TarjetaPedido({
                     </button>
                 )}
                 {puedeMarcarEnviado && (
-                    <button type="button" onClick={() => onSolicitarConfirmacion({ accion: 'enviar', pedido })} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
-                        <Truck className="w-4 h-4" /> Marcar enviado
+                    <button
+                        type="button"
+                        onClick={() => (requiereSeleccionEnvios
+                            ? onVerDetalle(pedido)
+                            : onSolicitarConfirmacion({ accion: 'enviar', pedido }))}
+                        className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}
+                    >
+                        <Truck className="w-4 h-4" />
+                        {requiereSeleccionEnvios ? 'Elegir envíos a recolectar' : 'Marcar enviado'}
                     </button>
                 )}
                 {puedeEmpacar && (

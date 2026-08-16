@@ -13,6 +13,7 @@ import {
     tieneGuiaLista,
     badgeGuiaLista,
     badgeEstadoFisico,
+    badgesRetrasoSla,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
     BTN_SECONDARY,
@@ -48,6 +49,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
     const docsSinGuia = (pedido.documentos || []).filter((d) => d.tipo !== 'guia');
     const evidenciasApartado = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_apartado');
     const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
+    const badgesSla = badgesRetrasoSla(pedido);
     const snap = pedido.direccion_vigente || pedido.direccionVigente;
 
     return createPortal(
@@ -72,6 +74,9 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 {badgeFisico && (
                                     <span className={badgeFisico.className} style={badgeFisico.style}>{badgeFisico.label}</span>
                                 )}
+                                {badgesSla.map((b) => (
+                                    <span key={b.label} className={b.className} style={b.style}>{b.label}</span>
+                                ))}
                                 {pedido.tiene_observaciones_fisicas && (
                                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-orange-500/15 text-orange-600">
                                         Observaciones CEDIS
@@ -130,13 +135,24 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
                                 {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
                                     <div key={c.id || idx} className="space-y-1">
-                                        <p className="text-xs font-black theme-text-main m-0">Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}</p>
+                                        <p className="text-xs font-black theme-text-main m-0">
+                                            Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
+                                            <span className="ml-2 font-bold theme-text-muted">
+                                                {(c.estatus_recoleccion || 'pendiente') === 'recolectada' ? 'Recolectada' : 'Pendiente'}
+                                            </span>
+                                        </p>
                                         <div className="grid grid-cols-2 gap-1 text-xs">
                                             <p className="m-0 theme-text-muted font-bold">Largo: <span className="theme-text-main">{c.largo != null ? `${c.largo} cm` : '—'}</span></p>
                                             <p className="m-0 theme-text-muted font-bold">Ancho: <span className="theme-text-main">{c.ancho != null ? `${c.ancho} cm` : '—'}</span></p>
                                             <p className="m-0 theme-text-muted font-bold">Alto: <span className="theme-text-main">{c.alto != null ? `${c.alto} cm` : '—'}</span></p>
+                                            <p className="m-0 theme-text-muted font-bold">Vol.: <span className="theme-text-main">{c.peso_volumetrico_kg != null ? `${c.peso_volumetrico_kg} kg` : '—'}</span></p>
                                             <p className="m-0 theme-text-muted font-bold">Real: <span className="theme-text-main">{c.peso_real_kg != null ? `${c.peso_real_kg} kg` : '—'}</span></p>
                                             <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{c.peso_cobrado_kg != null ? `${c.peso_cobrado_kg} kg` : '—'}</span></p>
+                                            {(c.numero_rastreo || pedido.numero_rastreo) && (
+                                                <p className="m-0 theme-text-muted font-bold col-span-2">
+                                                    Guía: <span className="theme-text-main">{c.numero_rastreo || pedido.numero_rastreo}</span>
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 ))}

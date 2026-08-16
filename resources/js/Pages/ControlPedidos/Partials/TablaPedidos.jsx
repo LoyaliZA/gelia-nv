@@ -11,13 +11,15 @@ import {
     badgeGuiaLista,
     badgeObservacionesCedis,
     badgeSinExistencias,
-    pedidoTieneSinExistencias,
+    mostrarBadgeSinExistencias,
     tieneGuiaPdfDisponible,
     puedeAnexarPagoEnvio,
     puedeCompletarEnvioResguardo,
     puedeCargarGuiaCliente,
     textoFuentesPagoCompacto,
     guiaPdfDe,
+    esFasePreVenta,
+    badgesRetrasoSla,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import BotonAccionCubico from './BotonAccionCubico';
@@ -104,8 +106,12 @@ function AccionesPedido({
 function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEditar, onEliminar, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia, puedeEditar, puedeEliminar, puedeCancelar }) {
     const guiaLista = tieneGuiaLista(pedido);
     const badgeGuia = badgeGuiaLista();
-    const badgeObs = pedido.tiene_observaciones_fisicas ? badgeObservacionesCedis() : null;
-    const badgeSinEx = pedidoTieneSinExistencias(pedido) ? badgeSinExistencias() : null;
+    const fase = pedido.estatus?.fase_ciclo;
+    const badgeObs = (pedido.tiene_observaciones_fisicas && esFasePreVenta(fase))
+        ? badgeObservacionesCedis()
+        : null;
+    const badgeSinEx = mostrarBadgeSinExistencias(pedido) ? badgeSinExistencias() : null;
+    const badgesSla = badgesRetrasoSla(pedido);
 
     return (
         <div className={`${geliaCardClass()} p-4 space-y-3 ${esRechazado ? 'ring-1 ring-red-500/30' : ''}`}>
@@ -130,6 +136,9 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                     {badgeSinEx && (
                         <span className={badgeSinEx.className}>{badgeSinEx.label}</span>
                     )}
+                    {badgesSla.map((b) => (
+                        <span key={b.label} className={b.className} style={b.style}>{b.label}</span>
+                    ))}
                     {guiaLista && (
                         <span className={badgeGuia.className}>{badgeGuia.label}</span>
                     )}
@@ -227,7 +236,7 @@ export default function TablaPedidos({
                         key={pedido.id}
                         pedido={pedido}
                         badge={badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo })}
-                        badgeEnvio={badgeEstatusEnvio(pedido.estatus_envio)}
+                        badgeEnvio={badgeEstatusEnvio(pedido.estatus_envio, { faseCiclo: pedido.estatus?.fase_ciclo })}
                         esRechazado={pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA'}
                         can={can}
                         onVer={onVer}
@@ -263,12 +272,17 @@ export default function TablaPedidos({
                     <tbody>
                         {items.map((pedido) => {
                             const badge = badgeEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo });
-                            const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
+                            const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
+                                faseCiclo: pedido.estatus?.fase_ciclo,
+                            });
                             const esRechazado = pedido.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA';
                             const guiaLista = tieneGuiaLista(pedido);
                             const badgeGuia = badgeGuiaLista();
-                            const badgeObs = pedido.tiene_observaciones_fisicas ? badgeObservacionesCedis() : null;
-                            const badgeSinEx = pedidoTieneSinExistencias(pedido) ? badgeSinExistencias() : null;
+                            const badgeObs = (pedido.tiene_observaciones_fisicas && esFasePreVenta(pedido.estatus?.fase_ciclo))
+                                ? badgeObservacionesCedis()
+                                : null;
+                            const badgeSinEx = mostrarBadgeSinExistencias(pedido) ? badgeSinExistencias() : null;
+                            const badgesSla = badgesRetrasoSla(pedido);
                             return (
                                 <tr key={pedido.id} className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${esRechazado ? 'bg-red-500/5' : ''}`}>
                                     <td className="px-5 py-4">
@@ -306,6 +320,9 @@ export default function TablaPedidos({
                                         {badgeSinEx && (
                                             <span className={`${badgeSinEx.className} mt-1.5 block w-fit`}>{badgeSinEx.label}</span>
                                         )}
+                                        {badgesSla.map((b) => (
+                                            <span key={b.label} className={`${b.className} mt-1.5 block w-fit`} style={b.style}>{b.label}</span>
+                                        ))}
                                         {guiaLista && (
                                             <span className={`${badgeGuia.className} mt-1.5 block w-fit`}>{badgeGuia.label}</span>
                                         )}

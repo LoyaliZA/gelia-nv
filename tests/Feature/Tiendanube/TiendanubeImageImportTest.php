@@ -11,6 +11,7 @@ use App\Models\Tiendanube\TiendanubeProductoVariante;
 use App\Models\User;
 use App\Services\Tiendanube\TiendanubeImageImportService;
 use App\Services\Tiendanube\TiendanubeImageSkuParser;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
@@ -265,7 +266,7 @@ class TiendanubeImageImportTest extends TestCase
         $zip = $this->makeZip(['X.webp' => 'b']);
 
         $this->actingAs($user)
-            ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class)
+            ->withoutMiddleware(PreventRequestForgery::class)
             ->post(route('tiendanube.imagenes.importar'), ['zip' => $zip])
             ->assertForbidden();
 
@@ -274,12 +275,39 @@ class TiendanubeImageImportTest extends TestCase
         Http::fake();
 
         $this->actingAs($user)
-            ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class)
+            ->withoutMiddleware(PreventRequestForgery::class)
             ->post(route('tiendanube.imagenes.importar'), [
                 'zip' => $this->makeZip(['Y.webp' => 'b']),
             ])
             ->assertCreated()
             ->assertJsonPath('success', true);
+    }
+
+    public function test_endpoint_importar_persiste_opciones_optimizar(): void
+    {
+        Permission::findOrCreate('tiendanube.ver', 'web');
+        Permission::findOrCreate('tiendanube.productos.editar', 'web');
+        $user = User::factory()->create();
+        $user->givePermissionTo(['tiendanube.ver', 'tiendanube.productos.editar']);
+
+        Http::fake();
+
+        $res = $this->actingAs($user)
+            ->withoutMiddleware(PreventRequestForgery::class)
+            ->post(route('tiendanube.imagenes.importar'), [
+                'zip' => $this->makeZip(['Z.webp' => 'b']),
+                'convertir_webp' => '0',
+                'modo_1280' => 'square',
+            ])
+            ->assertCreated();
+
+        $importId = $res->json('import_id');
+        $this->assertNotNull($importId);
+        $this->assertDatabaseHas('tiendanube_image_imports', [
+            'id' => $importId,
+            'convertir_webp' => 0,
+            'modo_1280' => 'square',
+        ]);
     }
 
     public function test_import_desde_archivos_indexa_y_sube(): void

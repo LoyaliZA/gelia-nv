@@ -15,6 +15,7 @@ import {
     calcularPesoCobradoGuia,
     paqueteriaTieneCobertura,
     etiquetaCostoEnvio,
+    calcularCostoTarifaLocal,
     esCotizacionLista,
     formatearMoneda,
     etiquetaAlmacen,
@@ -27,6 +28,8 @@ import {
     etiquetaEstatusPedido,
     LABELS_ESTATUS_ENVIO,
     LABELS_MOTIVO_REPESAJE,
+    LABELS_ESTATUS_POR_FASE,
+    formatearFechaNegocio,
 } from './pedidosBmaStyles';
 import ModalAlertaPedido from './ModalAlertaPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
@@ -150,6 +153,7 @@ function formDefaults(pedido = null, tiposOperacion = []) {
             .map((a) => ({ saf_credito_id: a.saf_credito_id, monto: a.monto, folio: a.credito?.folio })),
         aplica_seguro: pedido?.aplica_seguro || false,
         cliente_proporciona_guia: pedido?.cliente_proporciona_guia || false,
+        envio_por_cobrar: pedido?.envio_por_cobrar || false,
         costo_seguro: pedido?.costo_seguro ?? '',
         envia_a_otra_persona: pedido?.envia_a_otra_persona || false,
         envia_otra_persona: pedido?.envia_otra_persona || '',
@@ -196,6 +200,9 @@ export default function ModalFormPedido({
     const [buscandoPrincipal, setBuscandoPrincipal] = useState(false);
     const [principalSeleccionado, setPrincipalSeleccionado] = useState(pedido?.principal || null);
     const [qPrincipal, setQPrincipal] = useState('');
+    const [filtroFasePrincipal, setFiltroFasePrincipal] = useState('');
+    const [filtroFechaDesdePrincipal, setFiltroFechaDesdePrincipal] = useState('');
+    const [filtroFechaHastaPrincipal, setFiltroFechaHastaPrincipal] = useState('');
     const temporizadorBusqueda = useRef(null);
     const temporizadorPrincipal = useRef(null);
     const abortBusqueda = useRef(null);
@@ -268,13 +275,19 @@ export default function ModalFormPedido({
     const tienePesajeRespondido = Boolean(pedido?.pesaje_respondido_at);
     const pendientePesaje = pedido?.estatus_envio === 'pendiente_pesaje';
     const guiaCliente = Boolean(data.cliente_proporciona_guia);
+    const envioPorCobrar = Boolean(data.envio_por_cobrar);
     const pesoCajasSoloLectura = tienePesajeRespondido || pendientePesaje || camposEnvioBloqueados;
     const cotizacionHabilitada = !requiereLogistica || esResguardoComplementario || tienePesajeRespondido;
-    const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario;
+    const omiteCostoPorTarifaPeso = !tienePesajeRespondido
+        && paqueteriaSeleccionada?.categoria !== 'comercial'
+        && paqueteriaSeleccionada?.modalidad_tarifa === 'por_peso';
+    const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario
+        || guiaCliente || envioPorCobrar || omiteCostoPorTarifaPeso;
     const cotizacionLista = esCotizacionLista({
         requiereLogistica,
         cotizacionHabilitada,
         guiaCliente,
+        envioPorCobrar,
         esResguardoComplementario,
         omiteCosto,
         catalogo_paqueteria_id: data.catalogo_paqueteria_id,
@@ -286,7 +299,7 @@ export default function ModalFormPedido({
     const labelCostoEnvio = etiquetaCostoEnvio(paqueteriaSeleccionada);
     const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
 
-    // Sin tipo elegido: solo Tipo + Cliente. Con Envío: pesaje primero; resto tras «Continuar pedido».
+    // Sin tipo elegido: solo Tipo + Cliente. Con Envío: pesaje primero; resto al responder (o Continuar legacy).
     const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id);
     const enfocadoEnPesaje = (requiereLogistica && puedeVolverBorrador)
         || (puedeVolverBorrador && (tienePesajeRespondido || pendientePesaje));
@@ -296,7 +309,7 @@ export default function ModalFormPedido({
 
     const mostrarLogisticaPostPesaje = mostrarPesaje && mostrarRestoPedido;
     const mostrarPagosYCierre = mostrarRestoPedido;
-    // «Enviar» solo tras Continuar pedido (o flujo sin pesaje). Deshabilitado si faltan datos.
+    // «Enviar» tras pesaje respondido (auto-borrador) o Continuar legacy / flujo sin pesaje.
     const mostrarEnviarPedido = mostrarRestoPedido;
     const validacionEnvio = validarCamposEnvioPedido(data, {
         requiereLogistica,
@@ -306,6 +319,7 @@ export default function ModalFormPedido({
         esResguardoComplementario,
         tienePesajeRespondido,
         pagoPendiente: idPedidoAcciones ? (pagoResumen?.pendiente ?? null) : null,
+        paqueteria: paqueteriaSeleccionada,
     });
     const enviarPedidoListo = validacionEnvio.valido
         && !(esResguardoComplementario && !data.pedido_principal_id)
@@ -723,6 +737,7 @@ export default function ModalFormPedido({
     const marcarGuiaCliente = (checked) => {
         setData('cliente_proporciona_guia', checked);
         if (checked) {
+            setData('envio_por_cobrar', false);
             setData('costo_envio', '');
             setData('aplica_seguro', false);
             setData('costo_seguro', 0);
@@ -730,6 +745,30 @@ export default function ModalFormPedido({
             setData('catalogo_zona_id', '');
         }
     };
+
+    const marcarEnvioPorCobrar = (checked) => {
+        setData('envio_por_cobrar', checked);
+        if (checked) {
+            setData('cliente_proporciona_guia', false);
+            setData('costo_envio', '');
+        }
+    };
+
+    useEffect(() => {
+        if (!abierto || guiaCliente || envioPorCobrar || camposEnvioBloqueados) return;
+        const paq = paqueteriaSeleccionada;
+        if (!paq || paq.categoria === 'comercial' || !paq.modalidad_tarifa) return;
+        if (data.costo_envio !== '' && data.costo_envio != null) return;
+        const peso = data.peso_cobrado_guia_kg !== '' && data.peso_cobrado_guia_kg != null
+            ? Number(data.peso_cobrado_guia_kg)
+            : null;
+        const calc = calcularCostoTarifaLocal(paq, Number.isFinite(peso) ? peso : null);
+        if (calc != null) {
+            setData('costo_envio', calc);
+        }
+    // Solo auto-sugiere cuando el costo está vacío (override manual se respeta).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [abierto, data.peso_cobrado_guia_kg, data.catalogo_paqueteria_id, guiaCliente, envioPorCobrar]);
 
     const fetchClientes = async (term) => {
         const limpio = term.trim();
@@ -906,18 +945,37 @@ export default function ModalFormPedido({
         setPrincipalSeleccionado(null);
         setCandidatosPrincipal([]);
         setQPrincipal('');
+        setFiltroFasePrincipal('');
+        setFiltroFechaDesdePrincipal('');
+        setFiltroFechaHastaPrincipal('');
         cargarDireccionCliente(cliente.id, { silencioso: true });
     };
 
-    const buscarPrincipales = async (termino = '') => {
+    const etiquetaCandidatoPrincipal = (p) => {
+        const fase = p.estatus?.fase_ciclo;
+        const estatus = LABELS_ESTATUS_POR_FASE[fase] || p.estatus?.nombre_visual || fase || '—';
+        const fecha = p.fecha ? formatearFechaNegocio(p.fecha) : '—';
+        return `Folio interno: ${p.folio || '—'} · Folio de pedido: ${p.folio_remision || '—'} · ${estatus} · ${fecha}`;
+    };
+
+    const buscarPrincipales = async (termino = qPrincipal, extras = {}) => {
         if (!data.cliente_id) {
             setCandidatosPrincipal([]);
             return;
         }
+        const fase = extras.fase_ciclo !== undefined ? extras.fase_ciclo : filtroFasePrincipal;
+        const desde = extras.fecha_desde !== undefined ? extras.fecha_desde : filtroFechaDesdePrincipal;
+        const hasta = extras.fecha_hasta !== undefined ? extras.fecha_hasta : filtroFechaHastaPrincipal;
         setBuscandoPrincipal(true);
         try {
             const { data: json } = await axios.get(route('control_pedidos.candidatos_principal'), {
-                params: { cliente_id: data.cliente_id, q: termino || '' },
+                params: {
+                    cliente_id: data.cliente_id,
+                    q: termino || '',
+                    ...(fase ? { fase_ciclo: fase } : {}),
+                    ...(desde ? { fecha_desde: desde } : {}),
+                    ...(hasta ? { fecha_hasta: hasta } : {}),
+                },
                 headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             });
             setCandidatosPrincipal(json.data || []);
@@ -953,6 +1011,13 @@ export default function ModalFormPedido({
         const paq = (catalogos.paqueterias || []).find((p) => String(p.id) === String(id));
         if (!paqueteriaTieneCobertura(paq?.nombre)) {
             setData('aplica_seguro', false);
+        }
+        if (!guiaCliente && !data.envio_por_cobrar && paq?.categoria !== 'comercial' && paq?.modalidad_tarifa) {
+            const peso = data.peso_cobrado_guia_kg !== '' && data.peso_cobrado_guia_kg != null
+                ? Number(data.peso_cobrado_guia_kg)
+                : (pedido?.peso_cobrado_guia_kg != null ? Number(pedido.peso_cobrado_guia_kg) : null);
+            const calc = calcularCostoTarifaLocal(paq, Number.isFinite(peso) ? peso : null);
+            setData('costo_envio', calc != null ? calc : '');
         }
     };
 
@@ -1022,6 +1087,7 @@ export default function ModalFormPedido({
                 esResguardoComplementario,
                 tienePesajeRespondido,
                 pagoPendiente: idPedidoAcciones ? (pagoResumen?.pendiente ?? null) : null,
+                paqueteria: paqueteriaSeleccionada,
             });
             if (!valido) {
                 setAlertaEnvio({ abierto: true, mensaje });
@@ -1320,7 +1386,7 @@ export default function ModalFormPedido({
                                 {origenSeleccionado ? (
                                     <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
                                         {requiereLogistica
-                                            ? 'Envío: a continuación solicite el pesaje; el resto del pedido se abre con «Continuar pedido».'
+                                            ? 'Envío: solicite el pesaje a CEDIS; al responder podrá cotizar y completar el pedido.'
                                             : 'Tienda/mostrador: sin pesaje ni datos de guía.'}
                                     </p>
                                 ) : (
@@ -1370,12 +1436,12 @@ export default function ModalFormPedido({
                         )}
                         {tienePesajeRespondido && !pendientePesaje && puedeContinuarPedido && (
                             <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
-                                Revise la respuesta de CEDIS y pulse «Continuar pedido» para reanudar el flujo (datos, dirección, costos y pagos).
+                                CEDIS ya respondió. Pulse «Continuar pedido» para desbloquear el resto del formulario (pedidos que aún figuran en pesaje pendiente).
                             </AvisoOperativoPedido>
                         )}
                         {tienePesajeRespondido && !pendientePesaje && !puedeContinuarPedido && (
                             <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
-                                CEDIS registró el peso y las cajas. Complete la cotización (paquetería y costos); el comprobante de pago se solicita después. Si agrega piezas, suba un segundo PDF/foto y solicite re-pesaje.
+                                CEDIS registró el peso y las cajas. Ya puede cotizar (paquetería y costos) y enviar; el comprobante de pago se solicita después. Si agrega piezas, suba un segundo PDF/foto y solicite re-pesaje.
                             </AvisoOperativoPedido>
                         )}
                         {!tienePesajeRespondido && !pendientePesaje && (
@@ -1694,15 +1760,57 @@ export default function ModalFormPedido({
                                                 <p className="text-xs font-bold text-teal-700 dark:text-teal-400 m-0">
                                                     {principalSeleccionado
                                                         ? `Se agregará al folio ${principalSeleccionado.folio} como complemento. Logística heredada del padre; el peso del paquete se captura al completar el envío del principal.`
-                                                        : 'Seleccione el pedido principal (mismo cliente). Se reutilizará su logística; CEDIS verá una sola card.'}
+                                                        : 'Seleccione el pedido principal (mismo cliente). Se listan todos los pedidos del cliente, no solo resguardos. Se reutilizará su logística; CEDIS verá una sola card.'}
                                                 </p>
                                             </div>
                                             {!data.cliente_id && (
                                                 <p className="text-xs font-bold text-amber-600 m-0">Seleccione primero el cliente para buscar el pedido principal.</p>
                                             )}
                                             {data.cliente_id && (
-                                                <div className="relative">
+                                                <div className="relative space-y-2">
                                                     <label className={SECCION}>Pedido principal *</label>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                        <select
+                                                            value={filtroFasePrincipal}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                setFiltroFasePrincipal(v);
+                                                                buscarPrincipales(qPrincipal, { fase_ciclo: v });
+                                                            }}
+                                                            className={`${THEME_SELECT} w-full py-2 text-xs`}
+                                                        >
+                                                            <option value="">Todos los estatus</option>
+                                                            {(catalogos.estatus || [])
+                                                                .filter((e, idx, arr) => arr.findIndex((x) => x.fase_ciclo === e.fase_ciclo) === idx)
+                                                                .map((e) => (
+                                                                    <option key={e.fase_ciclo || e.id} value={e.fase_ciclo}>
+                                                                        {LABELS_ESTATUS_POR_FASE[e.fase_ciclo] || e.nombre_visual || e.fase_ciclo}
+                                                                    </option>
+                                                                ))}
+                                                        </select>
+                                                        <input
+                                                            type="date"
+                                                            value={filtroFechaDesdePrincipal}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                setFiltroFechaDesdePrincipal(v);
+                                                                buscarPrincipales(qPrincipal, { fecha_desde: v });
+                                                            }}
+                                                            className={`${THEME_INPUT} w-full py-2 text-xs`}
+                                                            title="Fecha desde"
+                                                        />
+                                                        <input
+                                                            type="date"
+                                                            value={filtroFechaHastaPrincipal}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                setFiltroFechaHastaPrincipal(v);
+                                                                buscarPrincipales(qPrincipal, { fecha_hasta: v });
+                                                            }}
+                                                            className={`${THEME_INPUT} w-full py-2 text-xs`}
+                                                            title="Fecha hasta"
+                                                        />
+                                                    </div>
                                                     <div className="theme-field-with-icon">
                                                         <Search className="theme-field-icon w-4 h-4" />
                                                         <input
@@ -1715,18 +1823,17 @@ export default function ModalFormPedido({
                                                                 temporizadorPrincipal.current = setTimeout(() => buscarPrincipales(v), 350);
                                                             }}
                                                             onFocus={() => buscarPrincipales(qPrincipal)}
-                                                            placeholder="Buscar folio o remisión..."
+                                                            placeholder="Buscar folio interno o folio de pedido..."
                                                             className={`${THEME_INPUT} w-full py-3`}
                                                         />
                                                     </div>
                                                     {principalSeleccionado && (
-                                                        <p className="text-xs font-bold theme-text-main mt-2 m-0">
-                                                            Principal: {principalSeleccionado.folio}
-                                                            {principalSeleccionado.folio_remision ? ` · ${principalSeleccionado.folio_remision}` : ''}
+                                                        <p className="text-xs font-bold theme-text-main mt-1 m-0">
+                                                            Principal: {etiquetaCandidatoPrincipal(principalSeleccionado)}
                                                         </p>
                                                     )}
                                                     {(buscandoPrincipal || candidatosPrincipal.length > 0) && (
-                                                        <div className="absolute z-50 mt-1 w-full theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-2">
+                                                        <div className="absolute z-50 mt-1 w-full theme-surface border theme-border rounded-xl shadow-xl max-h-56 overflow-y-auto p-2 top-full">
                                                             {buscandoPrincipal ? (
                                                                 <p className="p-3 text-xs theme-text-muted font-bold">Buscando...</p>
                                                             ) : candidatosPrincipal.map((p) => (
@@ -1742,9 +1849,12 @@ export default function ModalFormPedido({
                                                                         setCandidatosPrincipal([]);
                                                                         setQPrincipal(p.folio || '');
                                                                     }}
-                                                                    className="w-full text-left p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold uppercase theme-text-main"
+                                                                    className="w-full text-left p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold theme-text-main normal-case"
                                                                 >
-                                                                    {p.folio}{p.folio_remision ? ` — ${p.folio_remision}` : ''}
+                                                                    {etiquetaCandidatoPrincipal(p)}
+                                                                    {p.es_resguardo ? (
+                                                                        <span className="block text-[10px] theme-text-muted font-black uppercase mt-1">Resguardo</span>
+                                                                    ) : null}
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -1971,7 +2081,25 @@ export default function ModalFormPedido({
                             {guiaCliente && (
                                 <div className="flex items-start gap-2 p-3 rounded-xl border border-sky-500/40 bg-sky-500/10">
                                     <p className="text-xs font-bold text-sky-700 dark:text-sky-400 m-0">
-                                        No se cobra envío ni seguro de la empresa. Tras el empaque, usted cargará la guía del cliente.
+                                        No se cobra envío ni seguro de la empresa. Tras el empaque, usted cargará la guía del cliente (no se notifica a quien genera guías).
+                                    </p>
+                                </div>
+                            )}
+                            {!guiaCliente && (
+                                <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? 'opacity-50' : 'cursor-pointer'} p-4 rounded-xl border theme-border theme-element`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={envioPorCobrar}
+                                        disabled={logisticaBloqueada}
+                                        onChange={(e) => marcarEnvioPorCobrar(e.target.checked)}
+                                    />
+                                    <span className="text-sm font-bold">Envío por cobrar (no se cobra envío de la empresa).</span>
+                                </label>
+                            )}
+                            {envioPorCobrar && !guiaCliente && (
+                                <div className="flex items-start gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
+                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 m-0">
+                                        El costo de envío empresarial queda en $0. La paquetería cobra al destinatario.
                                     </p>
                                 </div>
                             )}
@@ -2008,10 +2136,15 @@ export default function ModalFormPedido({
                                         </p>
                                     </div>
                                 )}
-                                {!guiaCliente && (
+                                {!guiaCliente && !envioPorCobrar && (
                                 <div>
-                                    <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
+                                    <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido || omiteCostoPorTarifaPeso ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
                                     <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} className={`w-full py-3 ${camposEnvioBloqueados ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
+                                    {omiteCostoPorTarifaPeso && (
+                                        <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
+                                            Se calculará con el pesaje CEDIS según la tarifa por peso de la paquetería.
+                                        </p>
+                                    )}
                                 </div>
                                 )}
                                 {!guiaCliente && (
@@ -2199,7 +2332,7 @@ export default function ModalFormPedido({
                         <p className={SECCION}>{requiereLogistica ? '7. Desglose de montos' : '4. Desglose de montos'}</p>
                         <div className="space-y-2 text-sm">
                             <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
-                            <div className="flex justify-between theme-text-muted font-bold"><span>{labelCostoEnvio}</span><span>{formatearMoneda(guiaCliente ? 0 : data.costo_envio)}</span></div>
+                            <div className="flex justify-between theme-text-muted font-bold"><span>{labelCostoEnvio}</span><span>{formatearMoneda(guiaCliente || envioPorCobrar ? 0 : data.costo_envio)}</span></div>
                             <div className="flex justify-between theme-text-muted font-bold">
                                 <span>Costo del seguro</span>
                                 <span>{data.aplica_seguro ? formatearMoneda(data.costo_seguro) : formatearMoneda(0)}</span>
