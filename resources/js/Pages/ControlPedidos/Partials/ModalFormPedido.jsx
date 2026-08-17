@@ -285,6 +285,10 @@ export default function ModalFormPedido({
         setCargandoSaf(true);
         axios.get(route('control_pedidos.cliente.saldo_favor', data.cliente_id), {
             headers: { Accept: 'application/json' },
+            params: {
+                pedido_id: pedido?.id || undefined,
+                almacen_id: data.almacen_id || undefined,
+            },
         }).then((res) => {
             if (!cancelado) setSafCuenta(res.data);
         }).catch(() => {
@@ -293,7 +297,7 @@ export default function ModalFormPedido({
             if (!cancelado) setCargandoSaf(false);
         });
         return () => { cancelado = true; };
-    }, [data.cliente_id]);
+    }, [data.cliente_id, pedido?.id, data.almacen_id]);
 
     const puedeAutoguardarBd = !pedido || ['BORRADOR', 'PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'].includes(pedido?.estatus?.fase_ciclo);
     const fasePedido = pedido?.estatus?.fase_ciclo;
@@ -2253,6 +2257,9 @@ export default function ModalFormPedido({
                                         </span>
                                     )}
                                     {cargandoSaf && <span className="text-xs theme-text-muted">Consultando…</span>}
+                                    <span className="text-[10px] theme-text-muted font-bold">
+                                        Solo saldos del mismo almacén/área. Un saldo generado aquí aplica a partir del siguiente pedido.
+                                    </span>
                                 </label>
                                 {!guiaCliente && tieneCoberturaSeguro && (
                                     <label className="flex items-center gap-2 theme-text-main cursor-pointer">

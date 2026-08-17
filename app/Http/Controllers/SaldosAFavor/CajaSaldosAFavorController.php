@@ -37,19 +37,24 @@ class CajaSaldosAFavorController extends Controller
 {
     public function index(ConsultarCuentaClienteSafService $consultar, Request $request): Response
     {
+        $preferencia = SafImpresionPreferencia::firstOrCreate(
+            ['user_id' => Auth::id(), 'terminal_key' => 'default'],
+            ['perfil' => '80mm', 'copias' => 1]
+        );
+
         $cliente = null;
         $cuenta = null;
         if ($request->filled('cliente_id')) {
             $cliente = Cliente::find($request->integer('cliente_id'));
             if ($cliente) {
-                $cuenta = $consultar->handle($cliente->id);
+                $alcance = ['canal_origen' => 'punto_venta'];
+                $sucursal = $preferencia->sucursal ?: $request->query('sucursal');
+                if ($sucursal) {
+                    $alcance['sucursal'] = $sucursal;
+                }
+                $cuenta = $consultar->handle($cliente->id, 'MXN', $alcance);
             }
         }
-
-        $preferencia = SafImpresionPreferencia::firstOrCreate(
-            ['user_id' => Auth::id(), 'terminal_key' => 'default'],
-            ['perfil' => '80mm', 'copias' => 1]
-        );
 
         return Inertia::render('SaldosAFavor/Caja', [
             'cliente' => $cliente?->only(['id', 'numero_cliente', 'nombre']),
@@ -79,6 +84,7 @@ class CajaSaldosAFavorController extends Controller
             'detalle_motivo' => ['nullable', 'string', 'max:2000'],
             'documento_origen' => ['nullable', 'string', 'max:128'],
             'observaciones' => ['nullable', 'string', 'max:2000'],
+            'sucursal' => ['nullable', 'string', 'max:128'],
             'evidencias' => ['required', 'array', 'min:1'],
             'evidencias.*' => ['file', 'max:10240'],
         ]);
@@ -86,6 +92,7 @@ class CajaSaldosAFavorController extends Controller
         try {
             $credito = $service->handle(array_merge($datos, [
                 'canal_origen' => 'punto_venta',
+                'sucursal' => $datos['sucursal'] ?? null,
                 'generado_por_id' => Auth::id(),
                 'origen_manual' => true,
             ]), $request->file('evidencias', []) ?? []);
@@ -95,7 +102,7 @@ class CajaSaldosAFavorController extends Controller
 
         return redirect()
             ->route('saldos_favor.caja.index', ['cliente_id' => $credito->cliente_id])
-            ->with('success', "Saldo a favor {$credito->folio} generado en Caja.");
+            ->with('success', "Saldo a favor {$credito->folio} generado en Caja. Disponible a partir del siguiente pedido.");
     }
 
     public function aplicar(
@@ -133,6 +140,8 @@ class CajaSaldosAFavorController extends Controller
 
                 $reservas = $reservar->handle($clienteId, $montoTotal, Auth::id(), $datos['items'], [
                     'referencia_externa' => $datos['referencia_venta'] ?? null,
+                    'canal_origen' => 'punto_venta',
+                    'sucursal' => $datos['sucursal'],
                 ]);
 
                 $detalle = [];

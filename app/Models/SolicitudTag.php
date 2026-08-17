@@ -22,6 +22,8 @@ class SolicitudTag extends Model
         'catalogo_proceso_id',
         'catalogo_estado_solicitud_id',
         'monto_cotizado',
+        'monto_aplicado_al_cliente',
+        'cubierto_por_carga_masiva',
         'pago_confirmado',
         'observaciones_vendedor',
         'evidencia_path',
@@ -50,9 +52,11 @@ class SolicitudTag extends Model
 
     protected $casts = [
         'monto_cotizado' => 'decimal:2',
+        'monto_aplicado_al_cliente' => 'decimal:2',
         'monto_final_tentativo' => 'decimal:2',
         'total_proyectado_neto' => 'decimal:2',
         'pago_confirmado' => 'boolean',
+        'cubierto_por_carga_masiva' => 'boolean',
         'vendedor_id' => 'integer',
         'confirmo_informacion_escalonamiento' => 'boolean',
         'rollback_confirmado_at' => 'datetime',
@@ -115,9 +119,14 @@ class SolicitudTag extends Model
      */
     public function scopeSujetasAPlazoDePago(Builder $query): Builder
     {
+        $estados = array_values(array_filter([
+            CatalogoEstadoSolicitud::idDe('Pendiente'),
+            CatalogoEstadoSolicitud::idDe('Respondida'),
+        ]));
+
         return $query
             ->where('pago_confirmado', false)
-            ->whereIn('catalogo_estado_solicitud_id', [1, 2])
+            ->whereIn('catalogo_estado_solicitud_id', $estados ?: [0])
             ->whereHas('proceso', function (Builder $proceso) {
                 $proceso->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);
             });

@@ -12,6 +12,8 @@ use App\Services\SaldosAFavor\ConsultarCuentaClienteSafService;
 use App\Services\SaldosAFavor\EliminarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\RevisarPagoPedidoBmaService;
+use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\SaldosAFavor\AlcanceSaf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,9 +24,21 @@ use RuntimeException;
 
 class PedidoBmaSaldosPagosController extends Controller
 {
-    public function cuentaCliente(Cliente $cliente, ConsultarCuentaClienteSafService $consultar): JsonResponse
+    public function cuentaCliente(Request $request, Cliente $cliente, ConsultarCuentaClienteSafService $consultar): JsonResponse
     {
-        $cuenta = $consultar->handle($cliente->id);
+        $alcance = [];
+        $pedidoId = $request->integer('pedido_id');
+        if ($pedidoId > 0) {
+            $pedido = PedidoBma::with(['almacen.sucursal', 'vendedor.departamento'])->find($pedidoId);
+            if ($pedido) {
+                VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedido);
+                $alcance = AlcanceSaf::desdePedido($pedido);
+            }
+        } elseif ($request->filled('almacen_id')) {
+            $alcance = AlcanceSaf::desdeAlmacenYUsuario($request->integer('almacen_id'), Auth::user());
+        }
+
+        $cuenta = $consultar->handle($cliente->id, 'MXN', $alcance);
 
         return response()->json([
             'disponible' => $cuenta['disponible'],
@@ -33,6 +47,9 @@ class PedidoBmaSaldosPagosController extends Controller
                 'id' => $c->id,
                 'folio' => $c->folio,
                 'canal_origen' => $c->canal_origen,
+                'sucursal' => $c->sucursal,
+                'departamento' => $c->departamento,
+                'pedido_bma_id' => $c->pedido_bma_id,
                 'monto_disponible' => (float) $c->monto_disponible,
                 'fecha_vencimiento' => $c->fecha_vencimiento?->toDateString(),
                 'estado_revision' => $c->estado_revision,
@@ -45,6 +62,7 @@ class PedidoBmaSaldosPagosController extends Controller
         PedidoBma $pedidoBma,
         RegistrarPagoPedidoBmaService $service,
     ): RedirectResponse {
+        VisibilidadPedidoBma::assertPuedeMutarComoVendedora(Auth::user(), $pedidoBma);
         $forma = $request->input('forma_pago');
         $datos = $request->validate([
             'monto' => ['required', 'numeric', 'min:0.01'],
@@ -74,6 +92,7 @@ class PedidoBmaSaldosPagosController extends Controller
         PedidoBmaPago $pago,
         ActualizarPagoPedidoBmaService $service,
     ): RedirectResponse {
+        $this->assertPuedeMutarPago($pago);
         $forma = $request->input('forma_pago', $pago->forma_pago);
         $datos = $request->validate([
             'monto' => ['sometimes', 'numeric', 'min:0.01'],
@@ -102,6 +121,7 @@ class PedidoBmaSaldosPagosController extends Controller
         PedidoBmaPago $pago,
         EliminarPagoPedidoBmaService $service,
     ): RedirectResponse {
+        $this->assertPuedeMutarPago($pago);
         try {
             $service->handle($pago, Auth::id());
         } catch (RuntimeException $e) {
@@ -113,6 +133,7 @@ class PedidoBmaSaldosPagosController extends Controller
 
     public function resumenPago(PedidoBma $pedidoBma, RegistrarPagoPedidoBmaService $service): JsonResponse
     {
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
         $pedidoBma->load(['pagosExhibicion.banco', 'banco']);
 
         return response()->json([
@@ -126,6 +147,7 @@ class PedidoBmaSaldosPagosController extends Controller
         PedidoBma $pedidoBma,
         RegistrarPagoPedidoBmaService $pagos,
     ): RedirectResponse {
+        VisibilidadPedidoBma::assertPuedeMutarComoVendedora(Auth::user(), $pedidoBma);
         if (! $pedidoBma->cliente_id) {
             return back()->with('error', 'El pedido no tiene cliente.');
         }
@@ -142,7 +164,7 @@ class PedidoBmaSaldosPagosController extends Controller
 
         return back()->with(
             'success',
-            "Saldo {$credito->folio} generado por excedente de este pedido ({$credito->monto_original})."
+            "Saldo {$credito->folio} generado por excedente de este pedido ({$credito->monto_original}). Disponible a partir del siguiente pedido."
         );
     }
 
@@ -151,6 +173,10 @@ class PedidoBmaSaldosPagosController extends Controller
         PedidoBmaPago $pago,
         RevisarPagoPedidoBmaService $service,
     ): RedirectResponse {
+        $pago->loadMissing('pedido');
+        if ($pago->pedido) {
+            VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pago->pedido);
+        }
         $datos = $request->validate([
             'estado_revision' => ['required', 'in:'.implode(',', PedidoBmaPago::ESTADOS_REVISION)],
             'observaciones' => [
@@ -174,5 +200,14 @@ class PedidoBmaSaldosPagosController extends Controller
         }
 
         return back()->with('success', 'Exhibición actualizada.');
+    }
+
+    private function assertPuedeMutarPago(PedidoBmaPago $pago): void
+    {
+        $pago->loadMissing('pedido');
+        if (! $pago->pedido) {
+            abort(404);
+        }
+        VisibilidadPedidoBma::assertPuedeMutarComoVendedora(Auth::user(), $pago->pedido);
     }
 }

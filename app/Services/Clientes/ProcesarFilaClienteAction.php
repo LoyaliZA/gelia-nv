@@ -4,6 +4,7 @@ namespace App\Services\Clientes;
 
 use App\Models\CambioListaImportacionCliente;
 use App\Models\Cliente;
+use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Support\Collection;
 
@@ -194,6 +195,15 @@ class ProcesarFilaClienteAction
         }
 
         $montoExtraido = $this->limpiarMonto($data['monto_venta_actual'] ?? null);
+
+        if ($montoExtraido !== null) {
+            $montoGeliaAntes = (float) $cliente->monto_venta_actual;
+            app(AjustarMontoPorSolicitudService::class)->marcarCubiertasPorCarga(
+                $cliente,
+                $montoGeliaAntes,
+                $montoExtraido,
+            );
+        }
 
         if ($montoExtraido !== null && !$this->montosSonIguales($cliente->monto_venta_actual, $montoExtraido)) {
             $updateData['monto_venta_actual'] = $montoExtraido;

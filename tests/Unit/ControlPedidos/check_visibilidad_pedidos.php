@@ -52,8 +52,12 @@ $assert(str_contains($cedis, 'ModalBitacoraPedido'), 'bitácora en cedis');
 $assert(str_contains($delegado, 'ModalBitacoraPedido'), 'bitácora en delegado');
 
 $cedisList = file_get_contents(__DIR__.'/../../../app/Services/ControlPedidos/ListarPedidosCedisService.php');
+$auditoriaList = file_get_contents(__DIR__.'/../../../app/Services/ControlPedidos/ListarPedidosAuditoriaService.php');
 $delegadoList = file_get_contents(__DIR__.'/../../../app/Services/ControlPedidos/ListarPedidosDelegadoService.php');
 $assert(str_contains($cedisList, 'historial.usuario'), 'CEDIS carga historial');
+$assert(str_contains($vis, 'idsDepartamentos'), 'helper departamentos');
+$assert(str_contains($auditoriaList, 'aplicarAlcanceListadoBma'), 'auditoría filtra por visibilidad');
+$assert(str_contains($cedisList, 'FASE_PENDIENTE_GUIA_CLIENTE'), 'CEDIS incluye guía del cliente');
 $assert(str_contains($cedisList, 'function queryTodos'), 'CEDIS TODOS une bandeja + pesaje');
 $assert(str_contains($cedisList, 'ESTATUS_ENVIO_PENDIENTE_PESAJE'), 'CEDIS TODOS incluye pendiente_pesaje');
 $assert(str_contains($cedisList, '+ $pendientesPesaje'), 'métrica total incluye pesaje');

@@ -4,7 +4,9 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListarPedidosAuditoriaService
@@ -21,9 +23,9 @@ class ListarPedidosAuditoriaService
         CatalogoEstatusPedido::FASE_ENVIADO,
     ];
 
-    public function ejecutar(array $filtros = [], bool $paginar = true)
+    public function ejecutar(array $filtros = [], bool $paginar = true, ?User $usuario = null)
     {
-        $query = $this->queryBase();
+        $query = $this->queryBase($usuario);
         $this->aplicarFiltros($query, $filtros);
 
         if (! $paginar) {
@@ -71,9 +73,9 @@ class ListarPedidosAuditoriaService
             && $faseAnterior !== CatalogoEstatusPedido::FASE_BORRADOR;
     }
 
-    public function metricas(): array
+    public function metricas(?User $usuario = null): array
     {
-        $base = $this->queryBase();
+        $base = $this->queryBase($usuario);
         $idsPorFase = $this->idsPorFase();
 
         $pendientes = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)->count();
@@ -117,7 +119,7 @@ class ListarPedidosAuditoriaService
         ];
     }
 
-    private function queryBase(): Builder
+    private function queryBase(?User $usuario = null): Builder
     {
         $idsPorFase = $this->idsPorFase();
         $idsVisibles = array_values(array_filter(array_map(
@@ -125,7 +127,7 @@ class ListarPedidosAuditoriaService
             self::FASES_AUDITORIA
         )));
 
-        return PedidoBma::with([
+        $query = PedidoBma::with([
             'cliente',
             'vendedor.departamento:id,nombre',
             'vendedor.departamentos:id,nombre',
@@ -161,6 +163,12 @@ class ListarPedidosAuditoriaService
         ])
             ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
             ->orderByDesc('created_at');
+
+        if ($usuario) {
+            VisibilidadPedidoBma::aplicarAlcanceListadoBma($query, $usuario);
+        }
+
+        return $query;
     }
 
     private function aplicarFiltros(Builder $query, array $filtros): void

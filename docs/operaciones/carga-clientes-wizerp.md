@@ -7,12 +7,17 @@
 
 ## Conflicto con pagos vencidos (09:00)
 
-El comando `pagos:rechazar-vencidos` (programado a las 09:00 en `routes/console.php`) resta montos de clientes por solicitudes de pago vencidas.
+El comando `pagos:rechazar-vencidos` (programado a las 09:00 en `routes/console.php`) cierra solicitudes sin pago. **No resta** el monto precargado ni ventas de días anteriores. Solo quita lista/tipo provisionales y, si había una capa de esa solicitud todavía escrita (casos viejos), pela únicamente esa capa.
+
+La carga masiva es la fuente del `monto_venta_actual`. Si el CSV ya trae la venta de una solicitud pendiente:
+
+- Se marca `cubierto_por_carga_masiva`.
+- Confirmar el pago **no vuelve a sumar**.
 
 Durante una importación activa:
 
 - Se activa la bandera de caché `import_clientes_en_curso`.
-- Si el scheduler corre a las 09:00 mientras la importación sigue en curso, **el rechazo de pagos se omite** ese día para evitar condiciones de carrera sobre `monto_venta_actual`.
+- Si el scheduler corre a las 09:00 mientras la importación sigue en curso, **el rechazo de pagos se omite** ese día.
 
 ## Reglas de `codigo_lista`
 

@@ -9,6 +9,7 @@ use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaHistorialEstado;
 use App\Models\User;
 use App\Services\ControlPedidos\CargarGuiaClientePedidoBmaService;
+use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Services\ControlPedidos\ListarPedidosDelegadoService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
 use App\Services\ControlPedidos\NotificarPedidoBmaService;
@@ -159,6 +160,9 @@ class ControlPedidosGuiaClienteTest extends TestCase
 
         $enDelegado = app(ListarPedidosDelegadoService::class)->ejecutar(['tab' => 'PENDIENTES_GUIA'], false);
         $this->assertFalse($enDelegado->contains('id', $pedido->id));
+
+        $enCedis = app(ListarPedidosCedisService::class)->ejecutar(['tab' => 'PENDIENTES_GUIA'], false);
+        $this->assertTrue($enCedis->contains('id', $pedido->id));
     }
 
     public function test_cargar_guia_cliente_pasa_a_envio_notifica_cedis_y_bitacora(): void

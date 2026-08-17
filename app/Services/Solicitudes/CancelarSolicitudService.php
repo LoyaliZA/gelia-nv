@@ -5,10 +5,7 @@ namespace App\Services\Solicitudes;
 use App\Models\SolicitudTag;
 use App\Models\Cliente;
 use App\Models\CatalogoEstadoSolicitud;
-use App\Models\CatalogoListaDescuento;
 use App\Models\AuditoriaSolicitud;
-use App\Models\User;
-use App\Services\Clientes\RegistrarHistorialMontoClienteService;
 use App\Notifications\AlertaSolicitud;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +15,7 @@ class CancelarSolicitudService
 {
     public function __construct(
         private ValidarListaInferiorService $validarListaInferior,
+        private AjustarMontoPorSolicitudService $ajustarMonto,
     ) {}
 
     public function ejecutar(SolicitudTag $solicitud, ?string $motivo = null): void
@@ -43,7 +41,21 @@ class CancelarSolicitudService
             ];
 
             if (in_array($estadoAnteriorId, $estadosConBeneficios) && $solicitud->proceso?->esFinanciero()) {
-                $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
+                $snapshotDiff = $this->ajustarMonto->revertirBeneficios($solicitud, Auth::id());
+
+                if ($solicitud->catalogo_lista_rebaja_id && $solicitud->cliente_id) {
+                    $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
+                    if ($cliente) {
+                        $listaRebaja = $this->validarListaInferior->validarListaInferior(
+                            $solicitud,
+                            $solicitud->catalogo_lista_rebaja_id
+                        );
+                        $cliente->lista_actual_id = $listaRebaja->id;
+                        $cliente->save();
+                        $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+                        $snapshotDiff['despues'] = $this->ajustarMonto->capturarSnapshotCliente($cliente);
+                    }
+                }
             }
 
             $motivoFinal = $motivo ?: $solicitud->motivo_cancelacion;
@@ -75,118 +87,5 @@ class CancelarSolicitudService
                 );
             }
         });
-    }
-
-    private function revertirBeneficiosCliente(SolicitudTag $solicitud): array
-    {
-        if (!$solicitud->cliente_id) {
-            return [];
-        }
-
-        $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
-        if (!$cliente) {
-            return [];
-        }
-
-        $antes = $this->capturarSnapshotCliente($cliente);
-
-        $auditoriaAprobacion = AuditoriaSolicitud::where('solicitud_id', $solicitud->id)
-            ->whereIn('estado_nuevo_id', [
-                CatalogoEstadoSolicitud::idDe('Respondida'),
-                CatalogoEstadoSolicitud::idDe('Verificada'),
-            ])
-            ->whereNotNull('datos_snapshot')
-            ->orderBy('id')
-            ->first();
-
-        $snapshotAntes = $auditoriaAprobacion?->datos_snapshot['antes'] ?? null;
-
-        if ($snapshotAntes) {
-            $montoRestaurado = (float) ($snapshotAntes['monto_venta'] ?? $cliente->monto_venta_actual);
-            app(RegistrarHistorialMontoClienteService::class)->registrar(
-                $cliente,
-                $montoRestaurado,
-                RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_REVERSION,
-                Auth::id(),
-                null,
-                $solicitud->id,
-                (float) $solicitud->monto_cotizado,
-                'Cancelación — Solicitante: ' . ($solicitud->vendedor?->name ?? 'N/A'),
-            );
-            $this->restaurarClienteDesdeSnapshot($cliente, $snapshotAntes);
-        } else {
-            $nuevoMonto = max(0, ($cliente->monto_venta_actual ?? 0) - ($solicitud->monto_cotizado ?? 0));
-            app(RegistrarHistorialMontoClienteService::class)->registrar(
-                $cliente,
-                $nuevoMonto,
-                RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_REVERSION,
-                Auth::id(),
-                null,
-                $solicitud->id,
-                (float) $solicitud->monto_cotizado,
-                'Cancelación — Solicitante: ' . ($solicitud->vendedor?->name ?? 'N/A'),
-            );
-            $cliente->monto_venta_actual = $nuevoMonto;
-            $this->recalcularListaCliente($cliente);
-
-            if ($solicitud->catalogo_tipo_cliente_id) {
-                $cliente->catalogo_tipo_cliente_id = null;
-            }
-        }
-
-        if ($solicitud->catalogo_lista_rebaja_id) {
-            $listaRebaja = $this->validarListaInferior->validarListaInferior($solicitud, $solicitud->catalogo_lista_rebaja_id);
-            $cliente->lista_actual_id = $listaRebaja->id;
-        }
-
-        $cliente->save();
-        $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
-
-        return [
-            'antes' => $antes,
-            'despues' => $this->capturarSnapshotCliente($cliente),
-        ];
-    }
-
-    private function restaurarClienteDesdeSnapshot(Cliente $cliente, array $snapshot): void
-    {
-        if (array_key_exists('monto_venta', $snapshot)) {
-            $cliente->monto_venta_actual = $snapshot['monto_venta'];
-        }
-        if (array_key_exists('lista_id', $snapshot)) {
-            $cliente->lista_actual_id = $snapshot['lista_id'];
-        }
-        if (array_key_exists('tipo_cliente_id', $snapshot)) {
-            $cliente->catalogo_tipo_cliente_id = $snapshot['tipo_cliente_id'];
-        }
-        if (array_key_exists('tag_vendedor_id', $snapshot)) {
-            $cliente->vendedor_id = $snapshot['tag_vendedor_id'];
-        }
-    }
-
-    private function capturarSnapshotCliente(Cliente $cliente): array
-    {
-        return [
-            'monto_venta' => $cliente->monto_venta_actual,
-            'lista_id' => $cliente->lista_actual_id,
-            'lista_nombre' => $cliente->listaDescuento?->nombre,
-            'tag_vendedor_id' => $cliente->vendedor_id,
-            'tag_vendedor_nombre' => $cliente->vendedor?->name,
-            'tipo_cliente_id' => $cliente->catalogo_tipo_cliente_id,
-            'tipo_cliente_nombre' => $cliente->tipo?->nombre,
-        ];
-    }
-
-    private function recalcularListaCliente(Cliente $cliente): void
-    {
-        $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
-            ->where('activo', true)
-            ->orderByDesc('monto_requerido')
-            ->get();
-
-        $listaCalificada = app(EscalonamientoService::class)
-            ->resolverListaPorMonto((float) $cliente->monto_venta_actual, $listas);
-
-        $cliente->lista_actual_id = $listaCalificada ? $listaCalificada->id : null;
     }
 }

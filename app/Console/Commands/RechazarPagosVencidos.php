@@ -5,12 +5,11 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\SolicitudTag;
 use App\Models\AuditoriaSolicitud;
-use App\Models\CatalogoListaDescuento;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\Cliente;
 use App\Models\User;
 use App\Services\Clientes\RegistrarHistorialMontoClienteService;
-use App\Services\Solicitudes\EscalonamientoService;
+use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -39,9 +38,6 @@ class RechazarPagosVencidos extends Command
             return;
         }
 
-        $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
-            ->orderBy('monto_requerido', 'desc')
-            ->get();
         $encargadas = User::permission(['solicitudes.verificar', 'solicitudes.reportar'])->get();
         $contador = 0;
 
@@ -50,7 +46,7 @@ class RechazarPagosVencidos extends Command
                 continue;
             }
 
-            DB::transaction(function () use ($solicitud, $listas, &$contador) {
+            DB::transaction(function () use ($solicitud, &$contador) {
                 $estadoAnteriorId = $solicitud->catalogo_estado_solicitud_id;
                 $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
                 $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
@@ -68,26 +64,12 @@ class RechazarPagosVencidos extends Command
 
                 if ($cliente) {
                     if ((int) $estadoAnteriorId === (int) $idRespondida) {
-                        $montoAnterior = $cliente->monto_venta_actual;
-                        $montoNuevo = max(0, $montoAnterior - $solicitud->monto_cotizado);
-                        $nuevaListaId = $this->determinarListaPorMonto($montoNuevo, $listas);
-
-                        app(RegistrarHistorialMontoClienteService::class)->registrar(
-                            $cliente,
-                            $montoNuevo,
+                        $ajuste = app(AjustarMontoPorSolicitudService::class);
+                        $ajuste->revertirBeneficios(
+                            $solicitud,
+                            null,
                             RegistrarHistorialMontoClienteService::ORIGEN_CRON_RECHAZO_PAGO,
-                            null,
-                            null,
-                            $solicitud->id,
-                            (float) $solicitud->monto_cotizado,
-                            'Plazo de pago expirado (24h) — Solicitante: ' . ($solicitud->vendedor?->name ?? 'N/A'),
                         );
-
-                        $cliente->update([
-                            'monto_venta_actual' => $montoNuevo,
-                            'lista_actual_id' => $nuevaListaId,
-                            'catalogo_tipo_cliente_id' => $solicitud->catalogo_tipo_cliente_id ? null : $cliente->catalogo_tipo_cliente_id,
-                        ]);
                     } else {
                         $cliente->update([
                             'catalogo_tipo_cliente_id' => $solicitud->catalogo_tipo_cliente_id ? null : $cliente->catalogo_tipo_cliente_id,
@@ -143,10 +125,5 @@ class RechazarPagosVencidos extends Command
             'tipo_cliente_id' => $cliente->catalogo_tipo_cliente_id,
             'tipo_cliente_nombre' => $cliente->tipo?->nombre,
         ];
-    }
-
-    private function determinarListaPorMonto(float $monto, $listas): int
-    {
-        return app(EscalonamientoService::class)->resolverListaPorMontoId($monto, $listas);
     }
 }

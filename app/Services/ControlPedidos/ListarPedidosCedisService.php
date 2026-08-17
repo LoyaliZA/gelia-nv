@@ -17,6 +17,7 @@ class ListarPedidosCedisService
 
     private const FASES_EMPACADOS = [
         CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+        CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE,
         CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
         CatalogoEstatusPedido::FASE_ENTREGADO,
         CatalogoEstatusPedido::FASE_ENVIADO,
@@ -43,7 +44,10 @@ class ListarPedidosCedisService
 
         $empacados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0)->count();
         $pendientesEnvio = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_ENVIO'] ?? 0)->count();
-        $pendientesGuia = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_GUIA'] ?? 0)->count();
+        $pendientesGuia = (clone $base)->whereIn('catalogo_estatus_pedido_id', array_filter([
+            $idsPorFase['PENDIENTE_DE_GUIA'] ?? null,
+            $idsPorFase['PENDIENTE_GUIA_CLIENTE'] ?? null,
+        ]))->count();
         $enviados = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0)->count();
         $incorrectas = (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0)->count();
         $pendientesPesaje = $this->queryPendientesPesaje()->count();
@@ -168,7 +172,10 @@ class ListarPedidosCedisService
         match ($tab) {
             'EMPACADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0),
             'PENDIENTES_ENVIO' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_ENVIO'] ?? 0),
-            'PENDIENTES_GUIA' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_DE_GUIA'] ?? 0),
+            'PENDIENTES_GUIA' => $query->whereIn('catalogo_estatus_pedido_id', array_filter([
+                $idsPorFase['PENDIENTE_DE_GUIA'] ?? null,
+                $idsPorFase['PENDIENTE_GUIA_CLIENTE'] ?? null,
+            ])),
             'ENVIADOS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['ENVIADO'] ?? 0),
             'INCORRECTAS', 'INCIDENCIAS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['INCIDENCIA_CEDIS'] ?? 0),
             'PENDIENTES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['EN_CEDIS'] ?? 0),

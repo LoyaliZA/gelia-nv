@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\SaldosAFavor\GenerarCreditoSafService;
 use App\Services\SaldosAFavor\RegistrarIncidenciaSafService;
 use App\Services\SaldosAFavor\ReservarSaldoSafService;
+use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\SaldosAFavor\ReglasSaf;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -167,6 +168,95 @@ class ReglasSaldosAFavorTest extends TestCase
         $this->assertDatabaseHas('pedido_bma_historial_estados', [
             'pedido_bma_id' => $pedido->id,
             'accion' => AccionesHistorialPedidoBma::INCIDENCIA_SAF,
+        ]);
+    }
+
+    public function test_no_aplica_credito_del_mismo_pedido(): void
+    {
+        $pedido = PedidoBma::create([
+            'folio' => 'BMA-SAF-NEXT-1',
+            'cliente_id' => $this->cliente->id,
+            'vendedor_id' => $this->user->id,
+            'catalogo_estatus_pedido_id' => CatalogoEstatusPedido::firstOrCreate(
+                ['codigo_interno' => 'BORRADOR'],
+                [
+                    'nombre_visual' => 'Borrador',
+                    'color_hex' => '#94a3b8',
+                    'fase_ciclo' => CatalogoEstatusPedido::FASE_BORRADOR,
+                    'orden' => 1,
+                    'activo' => true,
+                ]
+            )->id,
+            'fecha' => now()->toDateString(),
+            'total_mercancia' => 500,
+            'costo_envio' => 0,
+            'aplica_seguro' => false,
+            'costo_seguro' => 0,
+            'saldo_a_favor' => 0,
+            'total_a_cobrar' => 500,
+        ]);
+
+        $origen = $this->generar(80, ['pedido_bma_id' => $pedido->id]);
+        $otro = $this->generar(50);
+
+        $total = app(SincronizarAplicacionesPedidoSafService::class)->reservarParaPedido(
+            $pedido,
+            [['monto' => 50]],
+            $this->user->id
+        );
+
+        $this->assertEquals(50.0, $total);
+        $this->assertDatabaseHas('saf_pedido_aplicaciones', [
+            'pedido_bma_id' => $pedido->id,
+            'saf_credito_id' => $otro->id,
+        ]);
+        $this->assertDatabaseMissing('saf_pedido_aplicaciones', [
+            'pedido_bma_id' => $pedido->id,
+            'saf_credito_id' => $origen->id,
+        ]);
+    }
+
+    public function test_no_mezcla_canal_ni_sucursal_al_reservar(): void
+    {
+        $pdv = $this->generar(50, ['canal_origen' => 'punto_venta', 'sucursal' => 'Norte']);
+        $mismo = $this->generar(40, ['canal_origen' => 'bellaroma']);
+
+        $pedido = PedidoBma::create([
+            'folio' => 'BMA-SAF-ISO-1',
+            'cliente_id' => $this->cliente->id,
+            'vendedor_id' => $this->user->id,
+            'catalogo_estatus_pedido_id' => CatalogoEstatusPedido::firstOrCreate(
+                ['codigo_interno' => 'BORRADOR'],
+                [
+                    'nombre_visual' => 'Borrador',
+                    'color_hex' => '#94a3b8',
+                    'fase_ciclo' => CatalogoEstatusPedido::FASE_BORRADOR,
+                    'orden' => 1,
+                    'activo' => true,
+                ]
+            )->id,
+            'fecha' => now()->toDateString(),
+            'total_mercancia' => 500,
+            'costo_envio' => 0,
+            'aplica_seguro' => false,
+            'costo_seguro' => 0,
+            'saldo_a_favor' => 0,
+            'total_a_cobrar' => 500,
+        ]);
+
+        $total = app(SincronizarAplicacionesPedidoSafService::class)->reservarParaPedido(
+            $pedido,
+            [['monto' => 40]],
+            $this->user->id
+        );
+        $this->assertEquals(40.0, $total);
+        $this->assertDatabaseHas('saf_pedido_aplicaciones', [
+            'pedido_bma_id' => $pedido->id,
+            'saf_credito_id' => $mismo->id,
+        ]);
+        $this->assertDatabaseMissing('saf_pedido_aplicaciones', [
+            'pedido_bma_id' => $pedido->id,
+            'saf_credito_id' => $pdv->id,
         ]);
     }
 }

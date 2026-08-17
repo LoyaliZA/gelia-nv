@@ -12,8 +12,7 @@ use App\Services\Solicitudes\ResponderConsultaSolicitudService;
 use App\Services\Solicitudes\CancelarSolicitudService;
 use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use App\Services\Solicitudes\ExportarReporteSolicitudesService;
-use App\Services\Clientes\RegistrarHistorialMontoClienteService;
-use App\Services\Clientes\ReactivarClienteInactivoService;
+use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use App\Services\Solicitudes\EscalonamientoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -176,27 +175,22 @@ class SolicitudController extends Controller
         }
 
         DB::transaction(function () use ($solicitud, $request, $idRespondida, $idIncorrecta) {
-            $montoOriginal = $solicitud->monto_cotizado;
             $montoFinal = $request->monto_final_pagado;
             $estadoNuevoId = $idRespondida;
             $mensajeAuditoria = 'PAGO CONFIRMADO POR EL COLABORADOR';
             $esAlertaFaltaPago = false;
             $esAlertaAscenso = false;
-            $beneficiosProvisionalAplicados = false;
-            $montoHistoricoBase = 0.0;
             $totalProyectado = 0.0;
             $listaCalificada = null;
+            $ajusteMonto = app(AjustarMontoPorSolicitudService::class);
 
             // 1. Extraemos al cliente con su lista actual cargada para hacer la comparación real
             if ($solicitud->cliente_id) {
                 $cliente = Cliente::with('listaDescuento')->find($solicitud->cliente_id);
                 
                 if ($cliente) {
-                    $beneficiosProvisionalAplicados = $this->beneficiosProvisionalEstanAplicados($solicitud, $cliente);
-                    $montoHistoricoBase = $beneficiosProvisionalAplicados
-                        ? max(0, (float) $cliente->monto_venta_actual - (float) $montoOriginal)
-                        : (float) $cliente->monto_venta_actual;
-                    $totalProyectado = $montoHistoricoBase + (float) $montoFinal;
+                    $proyeccion = $ajusteMonto->proyectarMonto($cliente, $solicitud, (float) $montoFinal);
+                    $totalProyectado = $proyeccion['proyectado'];
 
                     $listasActivas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
                         ->where('activo', true)
@@ -237,9 +231,7 @@ class SolicitudController extends Controller
             // 4. Persistencia y Control Monetario
             $snapshotDiff = [];
             if ($esAlertaFaltaPago) {
-                $snapshotDiff = $beneficiosProvisionalAplicados
-                    ? $this->revertirBeneficiosCliente($solicitud)
-                    : $this->capturarSnapshotClienteSinCambioMonetario($solicitud);
+                $snapshotDiff = $ajusteMonto->revertirBeneficios($solicitud, Auth::id());
 
                 $solicitud->update([
                     'pago_confirmado' => false,
@@ -249,37 +241,15 @@ class SolicitudController extends Controller
                 ]);
             } else {
                 if ($solicitud->cliente_id) {
-                    $clienteObj = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
-                    if ($clienteObj) {
-                        $antes = $this->capturarSnapshotCliente($clienteObj);
-                        $montoObjetivo = max(0, $montoHistoricoBase + (float) $montoFinal);
-                        $this->registrarHistorialMontoSolicitud(
-                            $clienteObj,
-                            $montoObjetivo,
-                            RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_PAGO,
-                            $solicitud,
-                            (float) $montoFinal,
-                            'Pago confirmado',
-                        );
-                        $clienteObj->monto_venta_actual = $montoObjetivo;
-
-                        if ($esAlertaAscenso && isset($listaCalificada)) {
-                            $clienteObj->lista_actual_id = $listaCalificada->id;
-                        }
-
-                        app(ReactivarClienteInactivoService::class)->ejecutar(
-                            $clienteObj,
-                            $montoObjetivo,
-                            !($esAlertaAscenso && isset($listaCalificada)),
-                        );
-
-                        $clienteObj->save();
-                        $clienteObj->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
-                        $snapshotDiff = [
-                            'antes' => $antes,
-                            'despues' => $this->capturarSnapshotCliente($clienteObj),
-                        ];
+                    if ($esAlertaAscenso && isset($listaCalificada)) {
+                        $solicitud->catalogo_lista_descuento_id = $listaCalificada->id;
                     }
+                    $snapshotDiff = $ajusteMonto->aplicarPagoConfirmado(
+                        $solicitud,
+                        (float) $montoFinal,
+                        Auth::id(),
+                        $esAlertaAscenso && isset($listaCalificada),
+                    );
                 }
 
                 $solicitud->update([
@@ -355,7 +325,7 @@ class SolicitudController extends Controller
                 'catalogo_lista_descuento_id' => $solicitud->catalogo_lista_descuento_id,
             ]);
 
-            $snapshotDiff = $this->aplicarBeneficiosCliente($solicitud);
+            $snapshotDiff = app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
 
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
@@ -586,9 +556,9 @@ class SolicitudController extends Controller
             $esFinanciero = $solicitud->proceso?->esFinanciero() ?? true;
 
             if ($esFinanciero && in_array($estadoNuevoId, $estadosAprobatorios, true) && !in_array($estadoAnteriorId, $estadosAprobatorios, true)) {
-                $snapshotDiff = $this->aplicarBeneficiosCliente($solicitud);
+                $snapshotDiff = app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
             } elseif ($esFinanciero && $estadoNuevoId === $idIncorrecta && in_array($estadoAnteriorId, $estadosAprobatorios, true)) {
-                $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
+                $snapshotDiff = app(AjustarMontoPorSolicitudService::class)->revertirBeneficios($solicitud, Auth::id());
             }
 
             $motivoReporte = $request->motivo ?: 'CAMBIO DE ESTADO OPERATIVO';
@@ -668,7 +638,7 @@ class SolicitudController extends Controller
             $snapshotDiff = [];
 
             if (in_array((int) $estadoAnteriorId, [(int) $idRespondida, (int) $idVerificada], true)) {
-                $snapshotDiff = $this->revertirBeneficiosCliente($solicitud);
+                $snapshotDiff = app(AjustarMontoPorSolicitudService::class)->revertirBeneficios($solicitud, Auth::id());
             }
 
             $solicitud->update([
@@ -909,190 +879,4 @@ class SolicitudController extends Controller
         ];
     }
 
-    private function aplicarBeneficiosCliente(SolicitudTag $solicitud): array
-    {
-        if (!$solicitud->cliente_id) {
-            return [];
-        }
-
-        $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
-        if (!$cliente) {
-            return [];
-        }
-
-        $antes = $this->capturarSnapshotCliente($cliente);
-
-        $montoNuevo = ($cliente->monto_venta_actual ?? 0) + ($solicitud->monto_cotizado ?? 0);
-        $this->registrarHistorialMontoSolicitud(
-            $cliente,
-            $montoNuevo,
-            RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_APROBACION,
-            $solicitud,
-        );
-        $cliente->monto_venta_actual = $montoNuevo;
-
-        if ($solicitud->catalogo_lista_descuento_id) {
-            $cliente->lista_actual_id = $solicitud->catalogo_lista_descuento_id;
-        }
-
-        if ($solicitud->catalogo_tipo_cliente_id) {
-            $cliente->catalogo_tipo_cliente_id = $solicitud->catalogo_tipo_cliente_id;
-        }
-
-        $nombreProceso = strtoupper($solicitud->proceso?->nombre ?? '');
-        if ($solicitud->vendedor_id && (
-            str_contains($nombreProceso, 'ASIGNAR TAG')
-            || str_contains($nombreProceso, 'ASIGNAR CLIENTE')
-        )) {
-            $cliente->vendedor_id = $solicitud->vendedor_id;
-        }
-
-        app(ReactivarClienteInactivoService::class)->ejecutar(
-            $cliente,
-            $montoNuevo,
-            !$solicitud->catalogo_lista_descuento_id,
-        );
-
-        $cliente->save();
-        $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
-
-        return [
-            'antes' => $antes,
-            'despues' => $this->capturarSnapshotCliente($cliente),
-        ];
-    }
-
-    private function revertirBeneficiosCliente(SolicitudTag $solicitud): array
-    {
-        if (!$solicitud->cliente_id) {
-            return [];
-        }
-
-        $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
-        if (!$cliente) {
-            return [];
-        }
-
-        $antes = $this->capturarSnapshotCliente($cliente);
-
-        $nuevoMonto = max(0, ($cliente->monto_venta_actual ?? 0) - ($solicitud->monto_cotizado ?? 0));
-        $this->registrarHistorialMontoSolicitud(
-            $cliente,
-            $nuevoMonto,
-            RegistrarHistorialMontoClienteService::ORIGEN_SOLICITUD_REVERSION,
-            $solicitud,
-        );
-        $cliente->monto_venta_actual = $nuevoMonto;
-        $this->recalcularListaCliente($cliente);
-        $cliente->save();
-        $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
-
-        return [
-            'antes' => $antes,
-            'despues' => $this->capturarSnapshotCliente($cliente),
-        ];
-    }
-
-    /**
-     * Recalcula la lista de descuento del cliente basada estrictamente en su monto actual.
-     * Excluye listas protegidas del cálculo general.
-     */
-    private function recalcularListaCliente(Cliente $cliente): void
-    {
-        $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')
-            ->where('activo', true)
-            ->orderByDesc('monto_requerido')
-            ->get();
-
-        $listaCalificada = app(EscalonamientoService::class)
-            ->resolverListaPorMonto((float) $cliente->monto_venta_actual, $listas);
-
-        $cliente->lista_actual_id = $listaCalificada ? $listaCalificada->id : null;
-    }
-
-    private function capturarSnapshotClienteSinCambioMonetario(SolicitudTag $solicitud): array
-    {
-        if (!$solicitud->cliente_id) {
-            return [];
-        }
-
-        $cliente = Cliente::with(['listaDescuento', 'vendedor', 'tipo'])->find($solicitud->cliente_id);
-        if (!$cliente) {
-            return [];
-        }
-
-        $snapshot = $this->capturarSnapshotCliente($cliente);
-
-        return [
-            'antes' => $snapshot,
-            'despues' => $snapshot,
-        ];
-    }
-
-    private function beneficiosProvisionalEstanAplicados(SolicitudTag $solicitud, Cliente $cliente): bool
-    {
-        $montoCotizado = (float) ($solicitud->monto_cotizado ?? 0);
-        if ($montoCotizado <= 0) {
-            return false;
-        }
-
-        $auditoriaAprobacion = AuditoriaSolicitud::query()
-            ->where('solicitud_id', $solicitud->id)
-            ->where('estado_nuevo_id', CatalogoEstadoSolicitud::idDe('Respondida'))
-            ->whereNotNull('datos_snapshot')
-            ->orderByDesc('id')
-            ->first();
-
-        if (!$auditoriaAprobacion) {
-            return false;
-        }
-
-        $snapshot = $auditoriaAprobacion->datos_snapshot;
-        $montoAntesAprobacion = isset($snapshot['antes']['monto_venta'])
-            ? (float) $snapshot['antes']['monto_venta']
-            : null;
-        $montoDespuesAprobacion = isset($snapshot['despues']['monto_venta'])
-            ? (float) $snapshot['despues']['monto_venta']
-            : null;
-
-        if ($montoDespuesAprobacion === null || $montoAntesAprobacion === null) {
-            return false;
-        }
-
-        $incrementoEsperado = round($montoDespuesAprobacion - $montoAntesAprobacion, 2);
-        if ($incrementoEsperado <= 0) {
-            return false;
-        }
-
-        $montoClienteActual = round((float) $cliente->monto_venta_actual, 2);
-
-        return abs($montoClienteActual - $montoDespuesAprobacion) < 0.01
-            || $montoClienteActual >= $montoDespuesAprobacion;
-    }
-
-    private function registrarHistorialMontoSolicitud(
-        Cliente $cliente,
-        float $montoNuevo,
-        string $origen,
-        SolicitudTag $solicitud,
-        ?float $montoOperacion = null,
-        ?string $notasExtra = null,
-    ): void {
-        $solicitud->loadMissing('vendedor');
-        $notas = trim(
-            ($notasExtra ? $notasExtra . ' — ' : '')
-            . 'Solicitante: ' . ($solicitud->vendedor?->name ?? 'N/A')
-        );
-
-        app(RegistrarHistorialMontoClienteService::class)->registrar(
-            $cliente,
-            $montoNuevo,
-            $origen,
-            Auth::id(),
-            null,
-            $solicitud->id,
-            $montoOperacion ?? (float) $solicitud->monto_cotizado,
-            $notas,
-        );
-    }
 }

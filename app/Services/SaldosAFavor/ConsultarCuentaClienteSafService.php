@@ -5,6 +5,7 @@ namespace App\Services\SaldosAFavor;
 use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafCuenta;
 use App\Models\SaldosAFavor\SafMovimiento;
+use App\Support\SaldosAFavor\AlcanceSaf;
 
 class ConsultarCuentaClienteSafService
 {
@@ -12,7 +13,8 @@ class ConsultarCuentaClienteSafService
         private ObtenerOCrearCuentaSafService $cuentas,
     ) {}
 
-    public function handle(int $clienteId, string $moneda = 'MXN'): array
+    /** @param  array<string, mixed>  $alcance */
+    public function handle(int $clienteId, string $moneda = 'MXN', array $alcance = []): array
     {
         $cuenta = $this->cuentas->handle($clienteId, $moneda);
 
@@ -32,6 +34,14 @@ class ConsultarCuentaClienteSafService
 
         $usables = $creditos->filter(fn (SafCredito $c) => $c->puedeUsarse()
             && $c->fecha_vencimiento->gte(now()->startOfDay()));
+
+        if ($alcance !== [] && $usables->isNotEmpty()) {
+            $ids = SafCredito::query()
+                ->whereIn('id', $usables->pluck('id'))
+                ->tap(fn ($q) => AlcanceSaf::aplicarFiltro($q, $alcance))
+                ->pluck('id');
+            $usables = $usables->filter(fn (SafCredito $c) => $ids->contains($c->id));
+        }
 
         $disponible = round($usables->sum(fn (SafCredito $c) => (float) $c->monto_disponible), 2);
         $reservado = round($creditos->sum(fn (SafCredito $c) => (float) $c->monto_reservado), 2);
@@ -62,10 +72,11 @@ class ConsultarCuentaClienteSafService
         ];
     }
 
-    public function sugerirAplicacion(int $clienteId, float $montoDeseado): array
+    /** @param  array<string, mixed>  $alcance */
+    public function sugerirAplicacion(int $clienteId, float $montoDeseado, array $alcance = []): array
     {
         $montoDeseado = round($montoDeseado, 2);
-        $cuenta = $this->handle($clienteId);
+        $cuenta = $this->handle($clienteId, 'MXN', $alcance);
         $restante = $montoDeseado;
         $sugerencia = [];
 

@@ -292,7 +292,7 @@ class SaldosAFavorController extends Controller
 
         return redirect()
             ->route('saldos_favor.cuenta', $credito->cliente_id)
-            ->with('success', "Saldo a favor {$credito->folio} generado. Disponible de inmediato (pendiente de revisión).");
+            ->with('success', "Saldo a favor {$credito->folio} generado. Disponible a partir del siguiente pedido (pendiente de revisión).");
     }
 
     public function revisar(

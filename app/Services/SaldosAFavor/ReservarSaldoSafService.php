@@ -4,6 +4,7 @@ namespace App\Services\SaldosAFavor;
 
 use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafMovimiento;
+use App\Support\SaldosAFavor\AlcanceSaf;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -45,13 +46,13 @@ class ReservarSaldoSafService
         }
 
         return DB::transaction(function () use ($clienteId, $montoTotal, $usuarioId, $extra) {
-            $plan = $this->planFifo($clienteId, $montoTotal);
+            $plan = $this->planFifo($clienteId, $montoTotal, $extra);
 
             $resultado = [];
             foreach ($plan as $item) {
                 /** @var SafCredito $credito */
                 $credito = SafCredito::whereKey($item['credito_id'])->lockForUpdate()->firstOrFail();
-                $this->assertUsable($credito, $clienteId);
+                $this->assertUsable($credito, $clienteId, $extra);
 
                 $monto = round((float) $item['monto'], 2);
                 if ($monto <= 0) {
@@ -84,11 +85,12 @@ class ReservarSaldoSafService
     }
 
     /**
+     * @param  array<string, mixed>  $extra
      * @return list<array{credito_id:int, monto:float}>
      */
-    private function planFifo(int $clienteId, float $montoTotal): array
+    private function planFifo(int $clienteId, float $montoTotal, array $extra = []): array
     {
-        $creditos = $this->creditosDisponibles($clienteId);
+        $creditos = $this->creditosDisponibles($clienteId, $extra);
         $restante = $montoTotal;
         $plan = [];
 
@@ -111,20 +113,26 @@ class ReservarSaldoSafService
         return $plan;
     }
 
-    private function creditosDisponibles(int $clienteId): Collection
+    /** @param  array<string, mixed>  $extra */
+    private function creditosDisponibles(int $clienteId, array $extra = []): Collection
     {
-        return SafCredito::query()
+        $query = SafCredito::query()
             ->where('cliente_id', $clienteId)
             ->whereIn('estado_financiero', SafCredito::ESTADOS_USABLES)
             ->where('monto_disponible', '>', 0)
-            ->whereDate('fecha_vencimiento', '>=', now()->toDateString())
+            ->whereDate('fecha_vencimiento', '>=', now()->toDateString());
+
+        AlcanceSaf::aplicarFiltro($query, $extra);
+
+        return $query
             ->orderBy('fecha_vencimiento')
             ->orderBy('id')
             ->lockForUpdate()
             ->get();
     }
 
-    private function assertUsable(SafCredito $credito, int $clienteId): void
+    /** @param  array<string, mixed>  $extra */
+    private function assertUsable(SafCredito $credito, int $clienteId, array $extra = []): void
     {
         if ((int) $credito->cliente_id !== $clienteId) {
             throw new InvalidArgumentException('El saldo a favor no pertenece al cliente.');
@@ -134,6 +142,12 @@ class ReservarSaldoSafService
         }
         if ($credito->fecha_vencimiento->lt(now()->startOfDay())) {
             throw new InvalidArgumentException("El saldo a favor {$credito->folio} está vencido.");
+        }
+        if (! empty($extra['excluir_pedido_bma_id'])
+            && (int) $credito->pedido_bma_id === (int) $extra['excluir_pedido_bma_id']) {
+            throw new InvalidArgumentException(
+                'El saldo a favor de este pedido estará disponible a partir del siguiente.'
+            );
         }
     }
 }

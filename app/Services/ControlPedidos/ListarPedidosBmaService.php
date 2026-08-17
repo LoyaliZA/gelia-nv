@@ -152,16 +152,12 @@ class ListarPedidosBmaService
     /** Mutaciones de vendedora: solo el creador (o admin). */
     public function asegurarAcceso(PedidoBma $pedido, User $usuario): void
     {
-        if (! VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $pedido)) {
-            abort(403, 'No tienes autorización para modificar este pedido.');
-        }
+        VisibilidadPedidoBma::assertPuedeMutarComoVendedora($usuario, $pedido);
     }
 
-    /** Consulta en panel BMA: propios + equipo del gerente. */
+    /** Consulta: propios, equipo/departamento, o bandeja por permiso. */
     public function asegurarConsulta(PedidoBma $pedido, User $usuario): void
     {
-        if (! VisibilidadPedidoBma::puedeConsultarEnListadoBma($usuario, $pedido)) {
-            abort(403, 'No tienes autorización para consultar este pedido.');
-        }
+        VisibilidadPedidoBma::assertPuedeConsultar($usuario, $pedido);
     }
 }

@@ -2,12 +2,14 @@
 
 namespace App\Services\SaldosAFavor;
 
+use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafEvidencia;
 use App\Models\SaldosAFavor\SafMotivo;
 use App\Models\SaldosAFavor\SafMovimiento;
 use App\Models\User;
 use App\Notifications\SaldoFavorPendienteRevisionNotification;
+use App\Support\SaldosAFavor\AlcanceSaf;
 use App\Support\SaldosAFavor\ReglasSaf;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -68,6 +70,8 @@ class GenerarCreditoSafService
         if ($motivo->requiere_detalle && blank($datos['detalle_motivo'] ?? null)) {
             throw new InvalidArgumentException('El motivo seleccionado requiere detalle.');
         }
+
+        $datos = $this->sellarAlcance($datos);
 
         $origenManual = (bool) ($datos['origen_manual'] ?? false);
         $archivos = array_values(array_filter(
@@ -182,6 +186,32 @@ class GenerarCreditoSafService
                 );
             }
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function sellarAlcance(array $datos): array
+    {
+        $pedidoId = isset($datos['pedido_bma_id']) ? (int) $datos['pedido_bma_id'] : 0;
+        if ($pedidoId < 1) {
+            return $datos;
+        }
+
+        $pedido = PedidoBma::with(['almacen.sucursal', 'vendedor.departamento'])->find($pedidoId);
+        if (! $pedido) {
+            return $datos;
+        }
+
+        $sellos = AlcanceSaf::sellosDesdePedido($pedido);
+        foreach (['canal_origen', 'sucursal', 'departamento'] as $clave) {
+            if (! array_key_exists($clave, $datos) || $datos[$clave] === null || $datos[$clave] === '') {
+                $datos[$clave] = $sellos[$clave] ?? null;
+            }
+        }
+
+        return $datos;
     }
 
     private function siguienteFolio(): string

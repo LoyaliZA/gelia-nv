@@ -134,6 +134,7 @@ export default function Caja({
         e.preventDefault();
         formGenerar.transform((data) => ({
             ...data,
+            sucursal: formAplicar.data.sucursal || preferencia?.sucursal || '',
             evidencias,
         }));
         formGenerar.post(route('saldos_favor.caja.generar'), {

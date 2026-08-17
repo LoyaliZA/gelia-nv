@@ -22,6 +22,7 @@ use App\Services\ControlPedidos\RechazarAnexoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RechazarPedidoBmaService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use App\Services\ControlPedidos\ValidarPagoPedidoBmaService;
+use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -41,8 +42,8 @@ class PedidoBmaAuditoriaController extends Controller
 
         return Inertia::render('ControlPedidos/Auditar/Index', [
             // Closures: en reload parcial solo se evalúan las props pedidas (only).
-            'pedidos' => fn () => $listarService->ejecutar($request->all()),
-            'metricas' => fn () => $listarService->metricas(),
+            'pedidos' => fn () => $listarService->ejecutar($request->all(), true, Auth::user()),
+            'metricas' => fn () => $listarService->metricas(Auth::user()),
             'filtros' => $request->only(['tab', 'q', 'page']),
             'catalogos' => fn () => $catalogosService->ejecutar(),
         ]);
@@ -53,8 +54,8 @@ class PedidoBmaAuditoriaController extends Controller
         Gate::authorize('control_pedidos.auditar');
 
         return response()->json([
-            'pedidos' => $listarService->ejecutar($request->all()),
-            'metricas' => $listarService->metricas(),
+            'pedidos' => $listarService->ejecutar($request->all(), true, Auth::user()),
+            'metricas' => $listarService->metricas(Auth::user()),
             'filtros' => $request->only(['tab', 'q', 'page']),
         ]);
     }
@@ -62,6 +63,7 @@ class PedidoBmaAuditoriaController extends Controller
     public function validarPago(PedidoBma $pedidoBma, ValidarPagoPedidoBmaService $service): RedirectResponse
     {
         Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
 
         try {
             $resultado = $service->ejecutar($pedidoBma, Auth::id());
@@ -91,6 +93,7 @@ class PedidoBmaAuditoriaController extends Controller
         PedidoBma $pedidoBma,
         GestionarRemisionPedidoBmaService $service
     ): RedirectResponse {
+        $this->assertPedidoVisible($pedidoBma);
         try {
             $service->subir($pedidoBma, $request->file('remision'), Auth::id());
         } catch (\InvalidArgumentException|\RuntimeException $e) {
@@ -103,6 +106,7 @@ class PedidoBmaAuditoriaController extends Controller
     public function eliminarRemision(PedidoBma $pedidoBma, GestionarRemisionPedidoBmaService $service): RedirectResponse
     {
         Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
 
         try {
             $service->eliminar($pedidoBma, Auth::id());
@@ -116,6 +120,7 @@ class PedidoBmaAuditoriaController extends Controller
     public function aprobar(PedidoBma $pedidoBma, AprobarPedidoBmaService $service): RedirectResponse
     {
         Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
 
         try {
             $service->ejecutar($pedidoBma, Auth::id());
@@ -131,6 +136,7 @@ class PedidoBmaAuditoriaController extends Controller
         PedidoBma $pedidoBma,
         RechazarPedidoBmaService $service
     ): RedirectResponse {
+        $this->assertPedidoVisible($pedidoBma);
         try {
             $service->ejecutar($pedidoBma, Auth::id(), $request->validated('motivo'));
         } catch (\InvalidArgumentException|\RuntimeException $e) {
@@ -145,6 +151,7 @@ class PedidoBmaAuditoriaController extends Controller
         PedidoBma $pedidoBma,
         ReportarErrorDatosPedidoBmaService $service
     ): RedirectResponse {
+        $this->assertPedidoVisible($pedidoBma);
         try {
             $service->ejecutar(
                 $pedidoBma->load(['estatus', 'documentos']),
@@ -165,6 +172,7 @@ class PedidoBmaAuditoriaController extends Controller
         LiberarResguardoPedidoBmaService $service
     ): RedirectResponse {
         Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
 
         try {
             $datos = $request->validated();
@@ -188,6 +196,7 @@ class PedidoBmaAuditoriaController extends Controller
         AnexarPagoEnvioPedidoBmaService $service
     ): RedirectResponse {
         Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
 
         try {
             $service->ejecutar(
@@ -208,6 +217,7 @@ class PedidoBmaAuditoriaController extends Controller
         AprobarAnexoEnvioPedidoBmaService $service
     ): RedirectResponse {
         Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
 
         try {
             $service->ejecutar($pedidoBma, Auth::id());
@@ -223,6 +233,7 @@ class PedidoBmaAuditoriaController extends Controller
         PedidoBma $pedidoBma,
         RechazarAnexoEnvioPedidoBmaService $service
     ): RedirectResponse {
+        $this->assertPedidoVisible($pedidoBma);
         try {
             $service->ejecutar($pedidoBma, Auth::id(), $request->validated('motivo'));
         } catch (\InvalidArgumentException|\RuntimeException $e) {
@@ -238,6 +249,7 @@ class PedidoBmaAuditoriaController extends Controller
         SafIncidencia $incidencia,
     ): RedirectResponse {
         Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
 
         if ((int) $incidencia->pedido_bma_id !== (int) $pedidoBma->id) {
             return redirect()->back()->with('error', 'La incidencia no pertenece a este pedido.');
@@ -251,5 +263,10 @@ class PedidoBmaAuditoriaController extends Controller
             ->resolver($incidencia, Auth::id(), $datos['nota'] ?? 'Corregido en auditoría; se continúa el pedido.');
 
         return redirect()->back()->with('success', 'Incidencia de saldo a favor marcada como revisada.');
+    }
+
+    private function assertPedidoVisible(PedidoBma $pedido): void
+    {
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedido);
     }
 }

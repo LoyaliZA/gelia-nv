@@ -609,7 +609,7 @@ export default function SeccionPagosExhibicion({
             )}
             {!puedeGenerarSaldo && excedenteGenerado > 0 && (
                 <p className="text-[10px] theme-text-muted font-bold m-0">
-                    Excedente de este pedido: el saldo a favor se genera al registrar el pago o al enviar el pedido.
+                    Excedente de este pedido: el saldo a favor se genera al registrar el pago o al enviar el pedido y estará disponible a partir del siguiente.
                 </p>
             )}
             <ModalVistaPreviaDocumento

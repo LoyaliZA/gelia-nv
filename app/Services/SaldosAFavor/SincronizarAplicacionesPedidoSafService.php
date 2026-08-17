@@ -4,6 +4,7 @@ namespace App\Services\SaldosAFavor;
 
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\SafPedidoAplicacion;
+use App\Support\SaldosAFavor\AlcanceSaf;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -44,7 +45,7 @@ class SincronizarAplicacionesPedidoSafService
                 $montoTotal,
                 $usuarioId,
                 null,
-                ['pedido_bma_id' => $pedido->id]
+                array_merge(AlcanceSaf::desdePedido($pedido), ['pedido_bma_id' => $pedido->id])
             );
 
             $total = 0.0;
