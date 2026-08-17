@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Self-check RF-04: Tipo+cliente → pesaje → Continuar pedido → resto.
+ * Self-check: Cliente → tipo → PDF → pesaje → respuesta → dirección → paquetería → cotización → pago → remisión.
  * Uso: php tests/Unit/ControlPedidos/check_form_pedido_progressive.php
  */
 
@@ -22,23 +22,50 @@ $checks = [
     ['flag puedeContinuarPedido', str_contains($form, 'puedeContinuarPedido')],
     ['boton Continuar pedido', str_contains($form, 'Continuar pedido')],
     ['sin Conservar como borrador UI', ! str_contains($form, 'Conservar como borrador')],
-    ['un solo bloque Pesaje CEDIS', substr_count($form, 'Pesaje CEDIS') === 1],
-    ['sin label Tipo CEDIS falso', ! str_contains($form, 'Tipo (CEDIS)')],
+    ['sin Datos generales como sección', ! str_contains($form, 'Datos generales')],
     ['label Tipo de pedido', str_contains($form, 'Tipo de pedido')],
     ['pesaje gated', str_contains($form, '{mostrarPesaje && (')],
     ['resto gated', str_contains($form, '{mostrarRestoPedido && (')],
     ['logistica gated', str_contains($form, '{mostrarLogisticaPostPesaje && (')],
+    ['mapa nSec', str_contains($form, 'const nSec = requiereLogistica')],
+    ['pesaje listo cuenta como respondido', str_contains($form, "estatus_envio === 'pesaje_listo'")],
+    ['bind pedido creado sin remount', str_contains($form, 'onPedidoCreado')],
 ];
 
-$iTipo = strpos($form, '1. Tipo de pedido y cliente');
-$iPesaje = strpos($form, '2. Pesaje CEDIS');
-$iDatos = strpos($form, '3. Datos generales');
-$iDir = strpos($form, '4. Dirección de envío');
+$titulos = [
+    'Cliente y productos',
+    'Tipo de entrega',
+    'PDF o archivo del pedido',
+    'Solicitud de pesaje',
+    'Respuesta de cajas y pesos',
+    'ArrowRight className="w-5 h-5" /> Continuar pedido',
+    'Dirección de envío',
+    'Paquetería y seguro',
+    '{nSec.cot}. Cotización',
+    '{nSec.pago}. Pago',
+    '{nSec.rem}. Remisión',
+];
+$prev = -1;
+$ordenOk = true;
+foreach ($titulos as $t) {
+    $i = strpos($form, $t);
+    if ($i === false || ($prev >= 0 && $i <= $prev)) {
+        $ordenOk = false;
+        break;
+    }
+    $prev = $i;
+}
+$checks[] = ['orden captura según flujo real', $ordenOk];
+
 $iContinuar = strpos($form, 'ArrowRight className="w-5 h-5" /> Continuar pedido');
+$iResp = strpos($form, 'Respuesta de cajas y pesos');
 $checks[] = [
-    'orden tipo < pesaje < continuar < datos < dirección',
-    $iTipo !== false && $iPesaje !== false && $iContinuar !== false && $iDatos !== false && $iDir !== false
-        && $iTipo < $iPesaje && $iPesaje < $iContinuar && $iContinuar < $iDatos && $iDatos < $iDir,
+    'continuar dentro de respuesta de cajas',
+    $iContinuar !== false && $iResp !== false && $iResp < $iContinuar,
+];
+$checks[] = [
+    'copy continuar dirección cotización pago',
+    str_contains($form, 'dirección, cotización y pago'),
 ];
 
 foreach ($checks as [$label, $ok]) {

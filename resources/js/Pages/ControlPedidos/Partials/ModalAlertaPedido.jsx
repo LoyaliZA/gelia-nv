@@ -14,8 +14,9 @@ const CONFIG = {
 
 export default function ModalAlertaPedido({ abierto, tipo = 'info', titulo, mensaje, onClose }) {
     useEffect(() => {
-        if (abierto) document.body.style.overflow = 'hidden';
-        else document.body.style.overflow = '';
+        if (abierto) {
+            document.body.style.overflow = 'hidden';
+        } else document.body.style.overflow = '';
         return () => { document.body.style.overflow = ''; };
     }, [abierto]);
 

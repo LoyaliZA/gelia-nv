@@ -40,7 +40,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
-    const [modalForm, setModalForm] = useState({ abierto: false, pedido: null, recuperarBorrador: false });
+    const [modalForm, setModalForm] = useState({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
     const [confirmarBorradorNuevo, setConfirmarBorradorNuevo] = useState(false);
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
@@ -67,20 +67,18 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     useEffect(() => {
         const filas = pedidosVista?.data || [];
         const refrescar = (m) => {
-            if (!m.abierto || !m.pedido?.id) return m;
-            const fresco = filas.find((p) => p.id === m.pedido.id);
+            if (!m.abierto) return m;
+            const idVivo = m.pedido?.id || m.pedidoIdVivo;
+            if (!idVivo) return m;
+            const fresco = filas.find((p) => p.id === idVivo);
             if (!fresco) return m;
-            // Misma fila del listado: actualizar si cambió algo relevante de CEDIS/servidor.
-            if (
-                fresco.updated_at === m.pedido.updated_at
+            const mismo = fresco.updated_at === m.pedido.updated_at
                 && fresco.pesaje_respondido_at === m.pedido.pesaje_respondido_at
                 && fresco.estatus_envio === m.pedido.estatus_envio
                 && fresco.catalogo_estatus_pedido_id === m.pedido.catalogo_estatus_pedido_id
                 && Number(fresco.peso_real_kg) === Number(m.pedido.peso_real_kg)
-                && Number(fresco.numero_cajas) === Number(m.pedido.numero_cajas)
-            ) {
-                return m;
-            }
+                && Number(fresco.numero_cajas) === Number(m.pedido.numero_cajas);
+            if (mismo) return m;
             return { ...m, pedido: fresco };
         };
         setModalForm(refrescar);
@@ -123,10 +121,13 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     // Notificación en vivo (pesaje listo, errores CEDIS, etc.): refrescar al instante si el modal está abierto.
     useEffect(() => {
         const onNotification = (e) => {
-            const pedidoId = Number(e.detail?.pedido_bma_id);
-            const tipo = String(e.detail?.tipo || '');
+            const pedidoId = Number(e.detail?.pedido_bma_id || e.detail?.data?.pedido_bma_id);
+            const tipo = String(e.detail?.tipo || e.detail?.data?.tipo || '');
+            const modalId = Number(modalForm.pedido?.id);
             if (!pedidoId || !tipo.startsWith('pedido_')) return;
-            if (!modalForm.abierto || Number(modalForm.pedido?.id) !== pedidoId) return;
+            if (!modalForm.abierto) return;
+            const vivoId = modalId || Number(modalForm.pedidoIdVivo);
+            if (vivoId && vivoId !== pedidoId) return;
             cargar(
                 { tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 },
                 { silencioso: true }
@@ -134,7 +135,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         };
         window.addEventListener('notification-received', onNotification);
         return () => window.removeEventListener('notification-received', onNotification);
-    }, [modalForm.abierto, modalForm.pedido?.id, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
+    }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
 
     const onTabChange = (tab) => {
         setTabActiva(tab);
@@ -158,17 +159,19 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             setConfirmarBorradorNuevo(true);
             return;
         }
-        setModalForm({ abierto: true, pedido: null, recuperarBorrador: false });
+        setModalForm({ abierto: true, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
     };
     const abrirNuevoLimpio = () => {
         setConfirmarBorradorNuevo(false);
-        setModalForm({ abierto: true, pedido: null, recuperarBorrador: false });
+        setModalForm({ abierto: true, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
     };
     const abrirNuevoConBorrador = () => {
         setConfirmarBorradorNuevo(false);
-        setModalForm({ abierto: true, pedido: null, recuperarBorrador: true });
+        setModalForm({ abierto: true, pedido: null, recuperarBorrador: true, instancia: 'new-draft' });
     };
-    const abrirEditar = (pedido) => setModalForm({ abierto: true, pedido, recuperarBorrador: false });
+    const abrirEditar = (pedido) => {
+        setModalForm({ abierto: true, pedido, recuperarBorrador: false, instancia: `edit-${pedido.id}` });
+    };
     const abrirVer = (pedido) => setModalDetalle({ abierto: true, pedido });
     const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
 
@@ -255,13 +258,25 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
             {modalForm.abierto ? (
                 <ModalFormPedido
-                    key={modalForm.pedido?.id ?? (modalForm.recuperarBorrador ? 'new-draft' : 'new-clean')}
+                    key={modalForm.instancia ?? (modalForm.recuperarBorrador ? 'new-draft' : 'new-clean')}
                     abierto
                     pedido={modalForm.pedido}
                     recuperarBorrador={modalForm.recuperarBorrador}
+                    onPedidoCreado={(p) => {
+                        setModalForm((m) => {
+                            if (!m.abierto || !p?.id) return m;
+                            return {
+                                ...m,
+                                pedidoIdVivo: p.id,
+                                pedido: m.pedido?.id ? m.pedido : { ...(m.pedido || {}), id: p.id, folio: p.folio || m.pedido?.folio },
+                            };
+                        });
+                    }}
                     catalogos={catalogos}
                     direccionesNormalizadas={direcciones_normalizadas}
-                    onClose={() => setModalForm({ abierto: false, pedido: null, recuperarBorrador: false })}
+                    onClose={() => {
+                        setModalForm({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean', pedidoIdVivo: null });
+                    }}
                 />
             ) : null}
             <ModalAnexarPagoEnvio

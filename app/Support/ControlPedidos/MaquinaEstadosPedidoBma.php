@@ -175,6 +175,28 @@ final class MaquinaEstadosPedidoBma
         return self::LABELS_HITO[$hito] ?? $hito;
     }
 
+    /**
+     * Volvió a PENDIENTE_AUXILIAR tras un rechazo o reporte (no el primer envío desde borrador).
+     */
+    public static function esPendienteReRevision(PedidoBma $pedido): bool
+    {
+        if ($pedido->estatus?->fase_ciclo !== CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR) {
+            return false;
+        }
+
+        $historial = $pedido->relationLoaded('historial') ? $pedido->historial : collect();
+
+        $ultimaEntrada = $historial
+            ->filter(fn ($h) => $h->estatusNuevo?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR)
+            ->sortByDesc('id')
+            ->first();
+
+        $faseAnterior = $ultimaEntrada?->estatusAnterior?->fase_ciclo;
+
+        return $faseAnterior !== null
+            && $faseAnterior !== CatalogoEstatusPedido::FASE_BORRADOR;
+    }
+
     public static function faseDestinoEmpaque(PedidoBma $pedido): string
     {
         $pedido->loadMissing(['paqueteria', 'origen']);

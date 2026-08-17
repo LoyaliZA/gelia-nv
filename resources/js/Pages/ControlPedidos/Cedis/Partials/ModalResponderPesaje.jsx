@@ -15,6 +15,7 @@ import {
     calcularPesoCobradoGuia,
     etiquetaAlmacen,
     etiquetasInstanciaRevision,
+    etiquetaEnvio,
 } from '../../Partials/pedidosBmaStyles';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../../utils/geliaTheme';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
@@ -958,7 +959,7 @@ export default function ModalResponderPesaje({
                                     return (
                                         <div key={idx} className="p-4 rounded-xl border theme-border theme-element space-y-3">
                                             <div className="flex items-center justify-between gap-2">
-                                                <p className="text-sm font-black theme-text-main m-0">Envío {idx + 1}</p>
+                                                <p className="text-sm font-black theme-text-main m-0">{etiquetaEnvio(idx, { tipo_caja: tiposCaja.find((t) => String(t.id) === String(envio.catalogo_tipo_caja_id)) })}</p>
                                                 <button type="button" onClick={() => quitarEnvio(idx)} disabled={envios.length <= 1} className="p-2 min-h-[40px] min-w-[40px] rounded-xl border theme-border theme-element outline-none disabled:opacity-40 inline-flex items-center justify-center theme-text-main" aria-label={`Quitar envío ${idx + 1}`}>
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>

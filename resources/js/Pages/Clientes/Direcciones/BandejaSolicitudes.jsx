@@ -469,7 +469,7 @@ export default function BandejaSolicitudes({
                                     page: 1,
                                 })}
                             />
-                            Con remisión
+                            Con nota de compra
                         </label>
                         <button type="button" className={THEME_BTN_PRIMARY} onClick={() => aplicar({ page: 1 })}>
                             Filtrar
@@ -520,7 +520,7 @@ export default function BandejaSolicitudes({
                                                     <span className={chipEstado(s.estado)}>{labelEstadoSolicitud(s.estado)}</span>
                                                     {s.anexa_remision && (
                                                         <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest theme-text-muted">
-                                                            <FileText className="w-3 h-3" /> Remisión
+                                                            <FileText className="w-3 h-3" /> Nota de compra
                                                         </span>
                                                     )}
                                                 </div>

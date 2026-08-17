@@ -113,7 +113,7 @@ export default function RevisarSolicitud({
                             </span>
                             {solicitud.anexa_remision && (
                                 <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-700 border border-amber-500/30">
-                                    Con remisión
+                                    Nota de compra
                                 </span>
                             )}
                         </div>

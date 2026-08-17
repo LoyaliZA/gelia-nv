@@ -10,6 +10,7 @@ import {
     THEME_LABEL,
     BTN_PRIMARY,
     BTN_SECONDARY,
+    etiquetaEnvio,
 } from '../../Partials/pedidosBmaStyles';
 
 const SECCION = `${THEME_LABEL} mb-2 block`;
@@ -107,11 +108,11 @@ export default function ModalLiberarResguardoAbierto({
                             <p className="text-sm font-bold theme-text-main m-0">
                                 Peso: {pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : '—'}
                                 {' · '}
-                                Cajas: {pedido.numero_cajas ?? '—'}
+                                Envíos: {pedido.numero_cajas ?? '—'}
                             </p>
                             {cajasPesaje.length > 0 && [...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
                                 <p key={c.id || idx} className="text-xs theme-text-muted font-bold m-0">
-                                    Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
+                                    {etiquetaEnvio(idx, c)}
                                     {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
                                 </p>
                             ))}
@@ -131,7 +132,7 @@ export default function ModalLiberarResguardoAbierto({
                                 {errors.peso_real_kg && <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{errors.peso_real_kg}</p>}
                             </div>
                             <div>
-                                <label className={SECCION}>N° de cajas *</label>
+                                <label className={SECCION}>N° de envíos *</label>
                                 <select
                                     value={data.numero_cajas === '' || data.numero_cajas == null ? '' : String(data.numero_cajas)}
                                     onChange={(e) => setData('numero_cajas', e.target.value)}

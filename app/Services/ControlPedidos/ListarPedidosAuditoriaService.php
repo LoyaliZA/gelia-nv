@@ -40,7 +40,7 @@ class ListarPedidosAuditoriaService
     private function anexarFlagsVista(PedidoBma $pedido): PedidoBma
     {
         $hito = MaquinaEstadosPedidoBma::hitoAuditoria($pedido);
-        $pedido->setAttribute('pendiente_re_revision', $this->esPendienteReRevision($pedido));
+        $pedido->setAttribute('pendiente_re_revision', MaquinaEstadosPedidoBma::esPendienteReRevision($pedido));
         $pedido->setAttribute('hito_auditoria', $hito);
         $pedido->setAttribute('hito_auditoria_etiqueta', MaquinaEstadosPedidoBma::etiquetaHito($hito));
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());
@@ -51,26 +51,6 @@ class ListarPedidosAuditoriaService
         $pedido->setAttribute('tiene_alerta_saf', $incidenciasSaf->isNotEmpty());
 
         return $pedido;
-    }
-
-    /**
-     * Volvió a PENDIENTE_AUXILIAR tras un rechazo o reporte (no el primer envío desde borrador).
-     */
-    private function esPendienteReRevision(PedidoBma $pedido): bool
-    {
-        if ($pedido->estatus?->fase_ciclo !== CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR) {
-            return false;
-        }
-
-        $ultimaEntrada = $pedido->historial
-            ->filter(fn ($h) => $h->estatusNuevo?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR)
-            ->sortByDesc('id')
-            ->first();
-
-        $faseAnterior = $ultimaEntrada?->estatusAnterior?->fase_ciclo;
-
-        return $faseAnterior !== null
-            && $faseAnterior !== CatalogoEstatusPedido::FASE_BORRADOR;
     }
 
     public function metricas(?User $usuario = null): array

@@ -8,6 +8,21 @@ import {
     GELIA_SEGMENT_TABS_TRACK,
 } from '../../../utils/geliaTheme';
 
+export const LABEL_NOTA_COMPRA_PREGUNTA = '¿Deseas que la nota de compra vaya dentro de tu envío?';
+export const LABEL_NOTA_COMPRA_CAMPO = 'Nota de compra en el envío';
+export const LABEL_GUIA_EMPRESA = 'Guía generada por la empresa';
+export const LABEL_GUIA_CLIENTE = 'Guía proporcionada por el cliente';
+
+export const etiquetaOrigenGuia = (pedido) => (
+    Boolean(pedido?.cliente_proporciona_guia) ? LABEL_GUIA_CLIENTE : LABEL_GUIA_EMPRESA
+);
+
+export const etiquetaEnvio = (idx, caja) => {
+    const n = Number(idx) + 1;
+    const tipo = caja?.tipo_caja?.nombre || caja?.tipoCaja?.nombre;
+    return tipo ? `Envío ${n}: ${tipo}` : `Envío ${n}`;
+};
+
 /**
  * Diferir cierre/acción de modal apilado para que el mismo clic no atraviese
  * al overlay padre (p. ej. borrador de pedido) tras desmontar el portal.
@@ -440,12 +455,22 @@ export const badgeCorregirGuia = () => ({
     ...badgeClaseEstatusPedido({ color_hex: '#EF4444' }),
 });
 
+export const badgePendienteRevision = () => ({
+    label: 'Revisión',
+    ...badgeClaseEstatusPedido({ color_hex: '#EAB308' }),
+});
+
 export const badgePendienteReRevision = () => ({
-    label: 'Revisar nuevamente',
+    label: 'Nueva revisión',
     ...badgeClaseEstatusPedido({ color_hex: '#22C55E' }),
 });
 
 export const esPendienteReRevision = (pedido) => Boolean(pedido?.pendiente_re_revision);
+
+export const badgeAuditoriaRevision = (pedido) => {
+    if (pedido?.estatus?.fase_ciclo !== 'PENDIENTE_AUXILIAR') return null;
+    return esPendienteReRevision(pedido) ? badgePendienteReRevision() : badgePendienteRevision();
+};
 
 export const camposIncorrectosDe = (pedido) => (
     Array.isArray(pedido?.campos_incorrectos) ? pedido.campos_incorrectos : []
@@ -477,7 +502,7 @@ export const badgeAuditoriaSemantico = (fase, esResguardo = false) => {
         return badgeResguardoSemantico();
     }
     const map = {
-        PENDIENTE_AUXILIAR: { hex: '#EAB308', label: 'Pendiente' },
+        PENDIENTE_AUXILIAR: { hex: '#EAB308', label: 'Revisión' },
         EN_CEDIS: { hex: '#22C55E', label: 'Aprobado' },
         INCIDENCIA_CEDIS: { hex: '#22C55E', label: 'Aprobado' },
         PENDIENTE_DE_GUIA: { hex: '#22C55E', label: 'Aprobado' },
@@ -879,11 +904,11 @@ export const validarCamposEnvioPedido = (data, {
         if (tienePesajeRespondido) {
             if (data.peso_real_kg === '' || data.peso_real_kg == null) faltantes.push('peso real (pesaje CEDIS)');
             if (!data.catalogo_tipo_caja_id) faltantes.push('tipo de caja (pesaje CEDIS)');
-            if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de cajas (pesaje CEDIS)');
+            if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de envíos (pesaje CEDIS)');
         } else if (!omiteCosto) {
             if (data.peso_real_kg === '' || data.peso_real_kg == null) faltantes.push('peso real');
             if (!data.catalogo_tipo_caja_id) faltantes.push('tipo de caja');
-            if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de cajas');
+            if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de envíos');
         }
 
         if (!guiaCliente) {

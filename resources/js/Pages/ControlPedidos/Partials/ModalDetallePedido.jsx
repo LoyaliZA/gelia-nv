@@ -14,6 +14,9 @@ import {
     badgeGuiaLista,
     badgeEstadoFisico,
     badgesRetrasoSla,
+    etiquetaOrigenGuia,
+    etiquetaEnvio,
+    LABEL_NOTA_COMPRA_CAMPO,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
     BTN_SECONDARY,
@@ -120,6 +123,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
                             <Campo label="Peso cobrado guía" value={pedido.peso_cobrado_guia_kg != null ? `${pedido.peso_cobrado_guia_kg} kg` : null} />
                             <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
+                            <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
                             <Campo label="Tipo guía" value={pedido.tipo_guia?.nombre} />
                             <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                             <Campo label="Resguardo" value={pedido.es_resguardo ? 'Sí' : 'No'} />
@@ -129,7 +133,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                     ? formatearFechaHoraAuditoria(pedido.resguardo_apartado_at)
                                     : (pedido.es_resguardo ? 'Pendiente' : '—')}
                             />
-                            <Campo label="Nota de compra en el envío" value={pedido.anexar_remision ? 'Sí' : 'No'} />
+                            <Campo label={LABEL_NOTA_COMPRA_CAMPO} value={pedido.anexar_remision ? 'Sí' : 'No'} />
                             <Campo label="C.P." value={pedido.codigo_postal} />
                             <Campo label="Total a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} />
                         </div>
@@ -139,7 +143,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                                 {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
                                     <div key={c.id || idx} className="space-y-1">
                                         <p className="text-xs font-black theme-text-main m-0">
-                                            Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
+                                            {etiquetaEnvio(idx, c)}
                                             <span className="ml-2 font-bold theme-text-muted">
                                                 {(c.estatus_recoleccion || 'pendiente') === 'recolectada' ? 'Recolectada' : 'Pendiente'}
                                             </span>

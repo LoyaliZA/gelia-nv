@@ -31,6 +31,10 @@ import {
     LABELS_MOTIVO_REPESAJE,
     LABELS_ESTATUS_POR_FASE,
     formatearFechaNegocio,
+    LABEL_NOTA_COMPRA_PREGUNTA,
+    LABEL_GUIA_EMPRESA,
+    LABEL_GUIA_CLIENTE,
+    etiquetaEnvio,
 } from './pedidosBmaStyles';
 import ModalAlertaPedido from './ModalAlertaPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
@@ -175,6 +179,7 @@ export default function ModalFormPedido({
     catalogos = {},
     direccionesNormalizadas = false,
     recuperarBorrador = false,
+    onPedidoCreado = null,
 }) {
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
@@ -212,6 +217,7 @@ export default function ModalFormPedido({
     const pedidoBdIdRef = useRef(pedido?.id || null);
     const ultimoFingerprintBd = useRef('');
     const ultimoSyncCedis = useRef('');
+    const direccionSuciaRef = useRef(false);
     const autoguardandoBd = useRef(false);
     const ignoreOverlayCloseUntil = useRef(0);
     const [pedidoBdId, setPedidoBdId] = useState(pedido?.id || null);
@@ -318,7 +324,10 @@ export default function ModalFormPedido({
     const esMunicipioDiferido = !data.es_resguardo && Boolean(paqueteriaSeleccionada?.permite_costo_diferido);
     const logisticaBloqueada = esResguardoComplementario && Boolean(data.pedido_principal_id);
     const camposEnvioBloqueados = esResguardoAbierto || esResguardoComplementario;
-    const tienePesajeRespondido = Boolean(pedido?.pesaje_respondido_at);
+    const tienePesajeRespondido = Boolean(pedido?.pesaje_respondido_at)
+        || pedido?.estatus_envio === 'pesaje_listo'
+        || (pedido?.cajas || []).length > 0
+        || pedido?.estatus?.fase_ciclo === 'PESAJE_RESPONDIDO';
     const pendientePesaje = pedido?.estatus_envio === 'pendiente_pesaje';
     const guiaCliente = Boolean(data.cliente_proporciona_guia);
     const envioPorCobrar = Boolean(data.envio_por_cobrar);
@@ -344,18 +353,21 @@ export default function ModalFormPedido({
     });
     const labelCostoEnvio = etiquetaCostoEnvio(paqueteriaSeleccionada);
     const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
+    direccionSuciaRef.current = direccionSucia;
 
-    // Sin tipo elegido: solo Tipo + Cliente. Con Envío: pesaje primero; resto al responder (o Continuar legacy).
+    // Sin tipo: cliente + tipo. Con Envío: pesaje primero; resto al responder (o Continuar legacy).
     const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id);
-    const enfocadoEnPesaje = fasePedido === 'PESAJE_PENDIENTE';
+    const enfocadoEnPesaje = fasePedido === 'PESAJE_PENDIENTE' && !tienePesajeRespondido;
     // Pesaje listo/pendiente debe verse aunque falte origen en el form (p. ej. fila sin origen_id).
     const mostrarPesaje = (tieneTipo && requiereLogistica) || tienePesajeRespondido || pendientePesaje;
     const mostrarRestoPedido = Boolean(data.origen_id) && (!requiereLogistica || (cotizacionHabilitada && !enfocadoEnPesaje));
 
     const mostrarLogisticaPostPesaje = mostrarPesaje && mostrarRestoPedido;
-    const mostrarPagosYCierre = mostrarRestoPedido;
     // «Enviar» tras pesaje respondido (auto-borrador) o Continuar legacy / flujo sin pesaje.
     const mostrarEnviarPedido = mostrarRestoPedido;
+    const nSec = requiereLogistica
+        ? { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, cot: 8, pago: 9, rem: 10 }
+        : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, cot: 8, pago: 3, rem: 4 };
     const totalCobrar = calcularTotalCobrar(
         data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
         saldoFavorCalculado
@@ -522,7 +534,7 @@ export default function ModalFormPedido({
             setPdfLocalOk(false);
             setEstadoAuto({ local: null, bd: null });
         }
-    }, [abierto, pedido?.id, recuperarBorrador]);
+    }, [abierto, recuperarBorrador]);
 
     // Autocarga cuando CEDIS (u otro proceso) actualiza el mismo pedido con el modal abierto.
     useEffect(() => {
@@ -558,8 +570,15 @@ export default function ModalFormPedido({
             catalogo_paqueteria_id: pedido.catalogo_paqueteria_id || prev.catalogo_paqueteria_id || '',
             catalogo_tipo_guia_id: pedido.catalogo_tipo_guia_id || prev.catalogo_tipo_guia_id || '',
         }));
-        if (pedido.pesaje_respondido_at) {
+        if (pedido.pesaje_respondido_at || pedido.estatus_envio === 'pesaje_listo') {
             setPesoVolumetrico(pedido.peso_volumetrico_kg ?? '');
+        }
+        if (pedido.cliente_id) {
+            cargarDireccionCliente(pedido.cliente_id, {
+                silencioso: true,
+                conservarSeleccion: true,
+                direccionId: pedido.cliente_direccion_id,
+            });
         }
         setEstadoAuto((s) => ({ ...s, bd: 'Actualizado desde servidor' }));
     }, [
@@ -644,6 +663,7 @@ export default function ModalFormPedido({
             }
             setEstadoAuto((s) => ({ ...s, bd: `Servidor · ${res.folio || `#${res.id}`}` }));
             if (eraNuevo) {
+                onPedidoCreado?.({ id: res.id, folio: res.folio });
                 router.reload({ only: ['pedidos', 'metricas'], preserveState: true, preserveScroll: true });
             }
             return res.id;
@@ -880,13 +900,16 @@ export default function ModalFormPedido({
             return;
         }
 
-        setCargandoDireccion(true);
-        setMsgDireccion('');
-        setSinDireccionPrincipal(false);
+        if (!silencioso) {
+            setCargandoDireccion(true);
+            setMsgDireccion('');
+            setSinDireccionPrincipal(false);
+        }
         try {
             const response = await axios.get(`/api/clientes/id/${clienteId}/direccion-envio`);
             const dirs = response.data?.direcciones || [];
             setDireccionesCliente(dirs);
+            if (silencioso && direccionSuciaRef.current) return;
 
             const idSeleccion = conservarSeleccion
                 ? (direccionId || data.cliente_direccion_id)
@@ -923,17 +946,34 @@ export default function ModalFormPedido({
                 }
             }
         } catch {
+            if (silencioso) return;
             setAlertaDireccion(false);
             setDireccionesCliente([]);
             setSinDireccionPrincipal(true);
             aplicarDireccionSeleccionada(null);
-            if (!silencioso) {
-                setMsgDireccion('No se pudo obtener la dirección del cliente. Registre una dirección en el catálogo.');
-            }
+            setMsgDireccion('No se pudo obtener la dirección del cliente. Registre una dirección en el catálogo.');
         } finally {
             setCargandoDireccion(false);
         }
     };
+
+    useEffect(() => {
+        if (!abierto || !data.cliente_id) return undefined;
+        const clienteId = data.cliente_id;
+        const direccionId = data.cliente_direccion_id;
+        const recargar = () => cargarDireccionCliente(clienteId, {
+            silencioso: true,
+            conservarSeleccion: true,
+            direccionId,
+        });
+        const onFocus = () => recargar();
+        window.addEventListener('focus', onFocus);
+        const t = setInterval(recargar, 15000);
+        return () => {
+            window.removeEventListener('focus', onFocus);
+            clearInterval(t);
+        };
+    }, [abierto, data.cliente_id, data.cliente_direccion_id]);
 
     const onCambiarCamposDireccion = (nuevos) => {
         setCamposDireccion(nuevos);
@@ -1240,11 +1280,6 @@ export default function ModalFormPedido({
                     return;
                 }
                 setPdfLocalOk(true);
-                setAlertaEnvio({
-                    abierto: true,
-                    mensaje: page?.props?.flash?.success || 'PDF o foto del pedido adjuntado.',
-                    tipo: 'success',
-                });
             },
         });
     };
@@ -1427,9 +1462,41 @@ export default function ModalFormPedido({
                         </div>
                     )}
 
-                    {/* 1. Tipo + cliente; el resto depende del flujo (pesaje o datos del pedido) */}
+                    {/* 1. Cliente y productos */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>1. Tipo de pedido y cliente</p>
+                        <p className={SECCION}>{nSec.cliente}. Cliente y productos</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="relative">
+                                <label className={SECCION}>Número de cliente *</label>
+                                <div className="theme-field-with-icon">
+                                    <Search className="theme-field-icon w-4 h-4" />
+                                    <input type="text" value={data.numero_cliente} disabled={logisticaBloqueada} onChange={(e) => manejarBusquedaCliente(e.target.value)} placeholder="Buscar cliente..." className={`${THEME_INPUT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`} />
+                                </div>
+                                {infoCliente && <p className="text-xs font-bold mt-2 theme-text-main">{infoCliente.nombre}</p>}
+                                {mostrarDropdown && (
+                                    <div className="absolute z-50 mt-1 w-full theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-2">
+                                        {buscandoCliente ? <p className="p-3 text-xs theme-text-muted font-bold">Buscando...</p> : listaClientes.map((c) => (
+                                            <button key={c.id} type="button" onClick={() => seleccionarCliente(c)} className="w-full text-left p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold uppercase theme-text-main">
+                                                {c.numero_cliente} — {c.nombre}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div>
+                                <label className={SECCION}>Fecha</label>
+                                <input type="date" value={data.fecha} onChange={(e) => setData('fecha', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
+                            </div>
+                            <div>
+                                <label className={SECCION}>Total mercancía *</label>
+                                <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* 2. Tipo de entrega */}
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{nSec.tipo}. Tipo de entrega</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className={SECCION}>Tipo de pedido *</label>
@@ -1456,270 +1523,8 @@ export default function ModalFormPedido({
                                     </p>
                                 )}
                             </div>
-                            <div className="relative">
-                                <label className={SECCION}>Número de cliente *</label>
-                                <div className="theme-field-with-icon">
-                                    <Search className="theme-field-icon w-4 h-4" />
-                                    <input type="text" value={data.numero_cliente} disabled={logisticaBloqueada} onChange={(e) => manejarBusquedaCliente(e.target.value)} placeholder="Buscar cliente..." className={`${THEME_INPUT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`} />
-                                </div>
-                                {infoCliente && <p className="text-xs font-bold mt-2 theme-text-main">{infoCliente.nombre}</p>}
-                                {mostrarDropdown && (
-                                    <div className="absolute z-50 mt-1 w-full theme-surface border theme-border rounded-xl shadow-xl max-h-48 overflow-y-auto p-2">
-                                        {buscandoCliente ? <p className="p-3 text-xs theme-text-muted font-bold">Buscando...</p> : listaClientes.map((c) => (
-                                            <button key={c.id} type="button" onClick={() => seleccionarCliente(c)} className="w-full text-left p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-xs font-bold uppercase theme-text-main">
-                                                {c.numero_cliente} — {c.nombre}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            {tieneTipo && !requiereLogistica && (
-                                <div>
-                                    <label className={SECCION}>Total mercancía *</label>
-                                    <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
-                                </div>
-                            )}
-                        </div>
-                    </section>
-
-                    {mostrarPesaje && (
-                    <section className={SECCION_WRAP}>
-                        <p className={SECCION}>2. Pesaje CEDIS</p>
-                        {pedido?.estatus_envio && LABELS_ESTATUS_ENVIO[pedido.estatus_envio] && (
-                            <p className="text-xs font-bold theme-text-muted mb-3 m-0">
-                                Estado envío: {LABELS_ESTATUS_ENVIO[pedido.estatus_envio]}
-                            </p>
-                        )}
-                        {pendientePesaje && (
-                            <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale} className="mb-4">
-                                Consulta de pesaje enviada. Cuando CEDIS responda verá aquí el peso, medidas y detalle físico.
-                            </AvisoOperativoPedido>
-                        )}
-                        {tienePesajeRespondido && !pendientePesaje && puedeContinuarPedido && (
-                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
-                                CEDIS ya respondió. Pulse «Continuar pedido» para desbloquear el resto del formulario (pedidos que aún figuran en pesaje pendiente).
-                            </AvisoOperativoPedido>
-                        )}
-                        {tienePesajeRespondido && !pendientePesaje && !puedeContinuarPedido && (
-                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
-                                CEDIS registró el peso y las cajas. Ya puede cotizar (paquetería y costos) y enviar; el comprobante de pago se solicita después. Si agrega piezas, suba un segundo PDF/foto y solicite re-pesaje.
-                            </AvisoOperativoPedido>
-                        )}
-                        {!tienePesajeRespondido && !pendientePesaje && (
-                            <AvisoOperativoPedido label="Paso requerido" tono="info" icon={Scale} className="mb-4">
-                                Indique el total, adjunte el PDF o foto del pedido y solicite el pesaje. No se requiere comprobante de pago en este paso.
-                            </AvisoOperativoPedido>
-                        )}
-                        <div className="space-y-4">
-                            {!tienePesajeRespondido && !pendientePesaje && (
-                                <div className="max-w-md">
-                                    <label className={SECCION}>Total mercancía *</label>
-                                    <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
-                                </div>
-                            )}
-                            {(tienePesajeRespondido || pendientePesaje) && Number(data.total_mercancia || 0) > 0 && (
-                                <p className="text-xs font-bold theme-text-muted m-0">
-                                    Total mercancía: {formatearMoneda(data.total_mercancia)}
-                                </p>
-                            )}
-                            <div>
-                                <label className={SECCION}>PDF o foto del pedido</label>
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
-                                        <FileText className="w-4 h-4 theme-text-muted" />
-                                        <span className="text-xs font-black uppercase">
-                                            {tienePdfPedido ? 'Reemplazar archivo' : 'Adjuntar PDF o foto'}
-                                        </span>
-                                        <input type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirPdfPedido} disabled={procesandoPesaje} />
-                                    </label>
-                                    {tienePdfPedido && (
-                                        pdfPedidoDoc?.url
-                                            ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setVistaPrevia(pdfPedidoDoc)}
-                                                    className="text-xs font-bold underline outline-none"
-                                                    style={{ color: 'var(--color-primario)' }}
-                                                >
-                                                    {labelSoportePedido(pdfPedidoDoc)}
-                                                </button>
-                                            )
-                                            : <span className="text-xs font-bold text-emerald-600">Archivo adjuntado</span>
-                                    )}
-                                </div>
-                            </div>
-                            {!tienePesajeRespondido && !pendientePesaje && (
-                                <button
-                                    type="button"
-                                    onClick={solicitarPesaje}
-                                    disabled={procesandoPesaje || processing || !data.cliente_id || Number(data.total_mercancia || 0) <= 0}
-                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
-                                >
-                                    <Scale className="w-4 h-4" /> Solicitar pesaje a CEDIS
-                                </button>
-                            )}
-                            {!data.cliente_id && !tienePesajeRespondido && !pendientePesaje && (
-                                <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione el cliente para poder solicitar el pesaje.</p>
-                            )}
-                            {data.cliente_id && Number(data.total_mercancia || 0) <= 0 && !tienePesajeRespondido && !pendientePesaje && (
-                                <p className="text-[10px] font-bold text-amber-600 m-0">Indique el total de mercancía para poder solicitar el pesaje.</p>
-                            )}
-                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && (
-                                <div className="space-y-3 p-3 rounded-xl border theme-border">
-                                    <div>
-                                        <label className={SECCION}>Piezas adicionales (PDF o foto)</label>
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
-                                                <ImagePlus className="w-4 h-4 theme-text-muted" />
-                                                <span className="text-xs font-black uppercase">
-                                                    {tieneAnexoPiezas ? 'Reemplazar anexo' : 'Adjuntar anexo'}
-                                                </span>
-                                                <input type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirAnexoPiezas} disabled={procesandoPesaje} />
-                                            </label>
-                                            {anexoPiezasDoc?.url && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setVistaPrevia(anexoPiezasDoc)}
-                                                    className="text-xs font-bold underline outline-none"
-                                                    style={{ color: 'var(--color-primario)' }}
-                                                >
-                                                    {labelSoportePedido(anexoPiezasDoc)}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-wrap items-end gap-3">
-                                        <div className="min-w-[200px] flex-1">
-                                            <label className={SECCION}>Re-pesaje (cambio de pedido)</label>
-                                            <select value={motivoRepesaje} onChange={(e) => setMotivoRepesaje(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
-                                                <option value="">Motivo…</option>
-                                                {Object.entries(LABELS_MOTIVO_REPESAJE).map(([k, label]) => (
-                                                    <option key={k} value={k}>{label}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <button type="button" onClick={solicitarRepesaje} disabled={procesandoPesaje || !motivoRepesaje} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
-                                            <Scale className="w-4 h-4" /> Solicitar re-pesaje
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {tienePesajeRespondido && (
-                            <div className="mt-6 pt-6 border-t theme-border space-y-4">
-                                <p className={SECCION}>Respuesta de pesaje y detalles</p>
-                                <SeccionRevisionFisicaPedido
-                                    pedido={pedido}
-                                    onVerDoc={setVistaPrevia}
-                                    titulo="Revisión física CEDIS"
-                                    puedeAtender={Boolean(pedido?.puede_mutar)}
-                                    puedeCancelar={Boolean(pedido?.puede_cancelar)}
-                                />
-                                {cajasPesaje.length > 0 ? (
-                                    <div className="space-y-3">
-                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
-                                        {[...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
-                                            <div key={c.id || idx} className="p-4 rounded-xl border theme-border theme-element space-y-2">
-                                                <p className="text-sm font-black theme-text-main m-0">Envío {idx + 1}</p>
-                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                                                    <p className="m-0 theme-text-muted font-bold">Tipo: <span className="theme-text-main">{c.tipo_caja?.nombre || '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Largo: <span className="theme-text-main">{c.largo != null ? `${c.largo} cm` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Ancho: <span className="theme-text-main">{c.ancho != null ? `${c.ancho} cm` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Alto: <span className="theme-text-main">{c.alto != null ? `${c.alto} cm` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Real: <span className="theme-text-main">{c.peso_real_kg != null ? `${c.peso_real_kg} kg` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Vol.: <span className="theme-text-main">{c.peso_volumetrico_kg != null ? `${c.peso_volumetrico_kg} kg` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{c.peso_cobrado_kg != null ? `${c.peso_cobrado_kg} kg` : '—'}</span></p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : null}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className={SECCION}>Núm. envíos</label>
-                                        <input type="text" readOnly value={data.numero_cajas ?? cajasPesaje.length ?? '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
-                                    </div>
-                                    <div>
-                                        <label className={SECCION}>Peso real total (kg)</label>
-                                        <input type="text" readOnly value={data.peso_real_kg !== '' && data.peso_real_kg != null ? data.peso_real_kg : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
-                                    </div>
-                                    <div>
-                                        <label className={SECCION}>Peso volumétrico total (kg)</label>
-                                        <input type="text" readOnly value={pesoVolumetrico !== '' && pesoVolumetrico != null ? pesoVolumetrico : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
-                                    </div>
-                                    <div>
-                                        <label className={SECCION}>Peso cobrado guía total (kg)</label>
-                                        <input
-                                            type="text"
-                                            readOnly
-                                            value={data.peso_cobrado_guia_kg !== '' && data.peso_cobrado_guia_kg != null ? data.peso_cobrado_guia_kg : '—'}
-                                            className={`${THEME_INPUT} w-full py-3 opacity-60`}
-                                            title="Suma del mayor entre peso real y volumétrico de cada envío"
-                                        />
-                                    </div>
-                                </div>
-                                {puedeContinuarPedido && (
-                                    <div className="mt-2 p-4 rounded-xl border-2 border-orange-500/50 bg-orange-500/10 space-y-4">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 m-0">
-                                            Siguiente paso
-                                        </p>
-                                        <p className="text-sm font-bold theme-text-main m-0 leading-snug pb-1">
-                                            Continúe el pedido para capturar datos generales, dirección, costos y pagos.
-                                        </p>
-                                        <button
-                                            type="button"
-                                            onClick={continuarPedido}
-                                            disabled={procesandoPesaje || processing}
-                                            className={`${BTN_PRIMARY} w-full sm:w-auto flex items-center justify-center gap-2 outline-none min-h-[48px] px-6 mt-1 text-sm font-black uppercase tracking-widest ring-2 ring-orange-400/60`}
-                                            style={{ backgroundColor: '#EA580C' }}
-                                        >
-                                            <ArrowRight className="w-5 h-5" /> Continuar pedido
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </section>
-                    )}
-
-                    {mostrarRestoPedido && (
-                    <section className={SECCION_WRAP}>
-                        <p className={SECCION}>{requiereLogistica ? '3. Datos generales' : '2. Datos generales'}</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className={SECCION}>Folio de Pedido *</label>
-                                <input
-                                    type="text"
-                                    value={data.folio_remision}
-                                    onChange={(e) => setData('folio_remision', e.target.value)}
-                                    placeholder="Número de folio del pedido..."
-                                    className={`${THEME_INPUT} w-full py-3`}
-                                />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Folio interno</label>
-                                <input type="text" readOnly value={pedido?.folio || 'Se asignará al guardar'} className={`${THEME_INPUT} w-full py-3 text-[11px] opacity-50`} />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Status</label>
-                                <input
-                                    type="text"
-                                    readOnly
-                                    value={etiquetaEstatusPedido(pedido?.estatus, { esResguardo: pedido?.es_resguardo }) || 'Borrador'}
-                                    className={`${THEME_INPUT} w-full py-3 opacity-60`}
-                                />
-                            </div>
-                            <div>
-                                <label className={SECCION}>Fecha</label>
-                                <input type="date" value={data.fecha} onChange={(e) => setData('fecha', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
-                            </div>
-                            {requiereLogistica && (
-                                <div>
-                                    <label className={SECCION}>Total mercancía *</label>
-                                    <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
-                                </div>
-                            )}
+                            {tieneTipo && (
+                            <>
                             <div>
                                 <label className={SECCION}>Almacén de salida</label>
                                 <select value={data.almacen_id} disabled={logisticaBloqueada} onChange={(e) => setData('almacen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
@@ -1931,24 +1736,202 @@ export default function ModalFormPedido({
                                     )}
                                 </div>
                             )}
-                            {!data.es_resguardo && requiereLogistica && esMunicipioDiferido && (
-                                <div className="md:col-span-2 flex items-start gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
-                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 m-0">
-                                        Paquetería local/regional: el costo de envío puede anexarse después. Peso, cajas y costo son opcionales al registrar.
-                                    </p>
-                                </div>
+                            </>
                             )}
-                            {!data.es_resguardo && requiereLogistica && data.catalogo_paqueteria_id && !esMunicipioDiferido && (
-                                <div className="md:col-span-2 flex items-start gap-2 p-3 rounded-xl border theme-border theme-element">
-                                    <p className="text-xs font-bold theme-text-muted m-0">
-                                        Envío comercial: capture peso, cajas y costo al registrar el pedido.
-                                    </p>
+                        </div>
+                    </section>
+
+                    {mostrarPesaje && (
+                    <>
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{nSec.pdf}. PDF o archivo del pedido</p>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                                <FileText className="w-4 h-4 theme-text-muted" />
+                                <span className="text-xs font-black uppercase">
+                                    {tienePdfPedido ? 'Reemplazar archivo' : 'Adjuntar PDF o foto'}
+                                </span>
+                                <input type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirPdfPedido} disabled={procesandoPesaje} />
+                            </label>
+                            {tienePdfPedido && (
+                                pdfPedidoDoc?.url
+                                    ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setVistaPrevia(pdfPedidoDoc)}
+                                            className="text-xs font-bold underline outline-none"
+                                            style={{ color: 'var(--color-primario)' }}
+                                        >
+                                            {labelSoportePedido(pdfPedidoDoc)}
+                                        </button>
+                                    )
+                                    : <span className="text-xs font-bold text-emerald-600">Archivo adjuntado</span>
+                            )}
+                        </div>
+                    </section>
+
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{nSec.solPesaje}. Solicitud de pesaje</p>
+                        {pedido?.estatus_envio && LABELS_ESTATUS_ENVIO[pedido.estatus_envio] && (
+                            <p className="text-xs font-bold theme-text-muted mb-3 m-0">
+                                Estado envío: {LABELS_ESTATUS_ENVIO[pedido.estatus_envio]}
+                            </p>
+                        )}
+                        {pendientePesaje && (
+                            <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale} className="mb-4">
+                                Consulta de pesaje enviada. Cuando CEDIS responda verá aquí el peso, medidas y detalle físico.
+                            </AvisoOperativoPedido>
+                        )}
+                        {tienePesajeRespondido && !pendientePesaje && puedeContinuarPedido && (
+                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
+                                CEDIS ya respondió. Pulse «Continuar pedido» para desbloquear el resto del formulario (pedidos que aún figuran en pesaje pendiente).
+                            </AvisoOperativoPedido>
+                        )}
+                        {tienePesajeRespondido && !pendientePesaje && !puedeContinuarPedido && (
+                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
+                                CEDIS registró el peso y las cajas. Ya puede cotizar (paquetería y costos) y enviar; el comprobante de pago se solicita después. Si agrega piezas, suba un segundo PDF/foto y solicite re-pesaje.
+                            </AvisoOperativoPedido>
+                        )}
+                        {!tienePesajeRespondido && !pendientePesaje && (
+                            <AvisoOperativoPedido label="Paso requerido" tono="info" icon={Scale} className="mb-4">
+                                Indique el total, adjunte el PDF o foto del pedido y solicite el pesaje. No se requiere comprobante de pago en este paso.
+                            </AvisoOperativoPedido>
+                        )}
+                        <div className="space-y-4">
+                            {!tienePesajeRespondido && !pendientePesaje && (
+                                <button
+                                    type="button"
+                                    onClick={solicitarPesaje}
+                                    disabled={procesandoPesaje || processing || !data.cliente_id || Number(data.total_mercancia || 0) <= 0}
+                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
+                                >
+                                    <Scale className="w-4 h-4" /> Solicitar pesaje a CEDIS
+                                </button>
+                            )}
+                            {!data.cliente_id && !tienePesajeRespondido && !pendientePesaje && (
+                                <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione el cliente para poder solicitar el pesaje.</p>
+                            )}
+                            {data.cliente_id && Number(data.total_mercancia || 0) <= 0 && !tienePesajeRespondido && !pendientePesaje && (
+                                <p className="text-[10px] font-bold text-amber-600 m-0">Indique el total de mercancía para poder solicitar el pesaje.</p>
+                            )}
+                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && (
+                                <div className="space-y-3 p-3 rounded-xl border theme-border">
+                                    <div>
+                                        <label className={SECCION}>Piezas adicionales (PDF o foto)</label>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                                                <ImagePlus className="w-4 h-4 theme-text-muted" />
+                                                <span className="text-xs font-black uppercase">
+                                                    {tieneAnexoPiezas ? 'Reemplazar anexo' : 'Adjuntar anexo'}
+                                                </span>
+                                                <input type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirAnexoPiezas} disabled={procesandoPesaje} />
+                                            </label>
+                                            {anexoPiezasDoc?.url && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setVistaPrevia(anexoPiezasDoc)}
+                                                    className="text-xs font-bold underline outline-none"
+                                                    style={{ color: 'var(--color-primario)' }}
+                                                >
+                                                    {labelSoportePedido(anexoPiezasDoc)}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-end gap-3">
+                                        <div className="min-w-[200px] flex-1">
+                                            <label className={SECCION}>Re-pesaje (cambio de pedido)</label>
+                                            <select value={motivoRepesaje} onChange={(e) => setMotivoRepesaje(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
+                                                <option value="">Motivo…</option>
+                                                {Object.entries(LABELS_MOTIVO_REPESAJE).map(([k, label]) => (
+                                                    <option key={k} value={k}>{label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <button type="button" onClick={solicitarRepesaje} disabled={procesandoPesaje || !motivoRepesaje} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
+                                            <Scale className="w-4 h-4" /> Solicitar re-pesaje
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
                     </section>
 
+                    {tienePesajeRespondido && (
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{nSec.resp}. Respuesta de cajas y pesos</p>
+                                <SeccionRevisionFisicaPedido
+                                    pedido={pedido}
+                                    onVerDoc={setVistaPrevia}
+                                    titulo="Revisión física CEDIS"
+                                    puedeAtender={Boolean(pedido?.puede_mutar)}
+                                    puedeCancelar={Boolean(pedido?.puede_cancelar)}
+                                />
+                                {cajasPesaje.length > 0 ? (
+                                    <div className="space-y-3">
+                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
+                                        {[...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                            <div key={c.id || idx} className="p-4 rounded-xl border theme-border theme-element space-y-2">
+                                                <p className="text-sm font-black theme-text-main m-0">{etiquetaEnvio(idx, c)}</p>
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                                                    <p className="m-0 theme-text-muted font-bold">Tipo: <span className="theme-text-main">{c.tipo_caja?.nombre || '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Largo: <span className="theme-text-main">{c.largo != null ? `${c.largo} cm` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Ancho: <span className="theme-text-main">{c.ancho != null ? `${c.ancho} cm` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Alto: <span className="theme-text-main">{c.alto != null ? `${c.alto} cm` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Real: <span className="theme-text-main">{c.peso_real_kg != null ? `${c.peso_real_kg} kg` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Vol.: <span className="theme-text-main">{c.peso_volumetrico_kg != null ? `${c.peso_volumetrico_kg} kg` : '—'}</span></p>
+                                                    <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{c.peso_cobrado_kg != null ? `${c.peso_cobrado_kg} kg` : '—'}</span></p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : null}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={SECCION}>Núm. envíos</label>
+                                        <input type="text" readOnly value={data.numero_cajas ?? cajasPesaje.length ?? '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
+                                    </div>
+                                    <div>
+                                        <label className={SECCION}>Peso real total (kg)</label>
+                                        <input type="text" readOnly value={data.peso_real_kg !== '' && data.peso_real_kg != null ? data.peso_real_kg : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
+                                    </div>
+                                    <div>
+                                        <label className={SECCION}>Peso volumétrico total (kg)</label>
+                                        <input type="text" readOnly value={pesoVolumetrico !== '' && pesoVolumetrico != null ? pesoVolumetrico : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
+                                    </div>
+                                    <div>
+                                        <label className={SECCION}>Peso cobrado guía total (kg)</label>
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={data.peso_cobrado_guia_kg !== '' && data.peso_cobrado_guia_kg != null ? data.peso_cobrado_guia_kg : '—'}
+                                            className={`${THEME_INPUT} w-full py-3 opacity-60`}
+                                            title="Suma del mayor entre peso real y volumétrico de cada envío"
+                                        />
+                                    </div>
+                                </div>
+                                {puedeContinuarPedido && (
+                                    <div className="mt-2 p-4 rounded-xl border-2 border-orange-500/50 bg-orange-500/10 space-y-4">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 m-0">
+                                            Siguiente paso
+                                        </p>
+                                        <p className="text-sm font-bold theme-text-main m-0 leading-snug pb-1">
+                                            Continúe el pedido para capturar dirección, cotización y pago.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={continuarPedido}
+                                            disabled={procesandoPesaje || processing}
+                                            className={`${BTN_PRIMARY} w-full sm:w-auto flex items-center justify-center gap-2 outline-none min-h-[48px] px-6 mt-1 text-sm font-black uppercase tracking-widest ring-2 ring-orange-400/60`}
+                                            style={{ backgroundColor: '#EA580C' }}
+                                        >
+                                            <ArrowRight className="w-5 h-5" /> Continuar pedido
+                                        </button>
+                                    </div>
+                                )}
+                    </section>
+                    )}
+                    </>
                     )}
 
 
@@ -1957,7 +1940,7 @@ export default function ModalFormPedido({
                     {/* Dirección de envío */}
                     <section className={SECCION_WRAP}>
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                            <p className={`${THEME_LABEL} m-0`}>4. Dirección de envío{guiaCliente ? ' (opcional)' : ''}</p>
+                            <p className={`${THEME_LABEL} m-0`}>{nSec.dir}. Dirección de envío{guiaCliente ? ' (opcional)' : ''}</p>
                             {can('clientes.direcciones.generar_enlace') && infoCliente?.id && (
                                 <button
                                     type="button"
@@ -2128,19 +2111,32 @@ export default function ModalFormPedido({
                         </div>
                     </section>
 
-                    {/* 5. Envío y costos (logística) */}
+                    {/* 7. Paquetería y seguro */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>5. Envío y costos</p>
+                        <p className={SECCION}>{nSec.paq}. Paquetería y seguro</p>
                         <div className="space-y-4">
-                            <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? 'opacity-50' : 'cursor-pointer'} p-4 rounded-xl border theme-border theme-element`}>
-                                <input
-                                    type="checkbox"
-                                    checked={guiaCliente}
-                                    disabled={logisticaBloqueada}
-                                    onChange={(e) => marcarGuiaCliente(e.target.checked)}
-                                />
-                                <span className="text-sm font-bold">El cliente utilizará su propia guía.</span>
-                            </label>
+                            <div className={`space-y-2 p-4 rounded-xl border theme-border theme-element ${logisticaBloqueada ? 'opacity-50' : ''}`}>
+                                <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? '' : 'cursor-pointer'}`}>
+                                    <input
+                                        type="radio"
+                                        name="origen_guia"
+                                        checked={!guiaCliente}
+                                        disabled={logisticaBloqueada}
+                                        onChange={() => marcarGuiaCliente(false)}
+                                    />
+                                    <span className="text-sm font-bold">{LABEL_GUIA_EMPRESA}</span>
+                                </label>
+                                <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? '' : 'cursor-pointer'}`}>
+                                    <input
+                                        type="radio"
+                                        name="origen_guia"
+                                        checked={guiaCliente}
+                                        disabled={logisticaBloqueada}
+                                        onChange={() => marcarGuiaCliente(true)}
+                                    />
+                                    <span className="text-sm font-bold">{LABEL_GUIA_CLIENTE}</span>
+                                </label>
+                            </div>
                             {guiaCliente && (
                                 <div className="flex items-start gap-2 p-3 rounded-xl border border-sky-500/40 bg-sky-500/10">
                                     <p className="text-xs font-bold text-sky-700 dark:text-sky-400 m-0">
@@ -2199,17 +2195,6 @@ export default function ModalFormPedido({
                                         </p>
                                     </div>
                                 )}
-                                {!guiaCliente && !envioPorCobrar && (
-                                <div>
-                                    <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido || omiteCostoPorTarifaPeso ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
-                                    <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} className={`w-full py-3 ${camposEnvioBloqueados ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
-                                    {omiteCostoPorTarifaPeso && (
-                                        <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                                            Se calculará con el pesaje CEDIS según la tarifa por peso de la paquetería.
-                                        </p>
-                                    )}
-                                </div>
-                                )}
                                 {!guiaCliente && (
                                 <div className={wrapIncorrecto('tipo_guia')}>
                                     <label className={SECCION}>Tipo de guía</label>
@@ -2229,38 +2214,23 @@ export default function ModalFormPedido({
                                 </div>
                                 )}
                             </div>
+                            {!data.es_resguardo && esMunicipioDiferido && (
+                                <div className="flex items-start gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 m-0">
+                                        Paquetería local/regional: el costo de envío puede anexarse después. Peso, cajas y costo son opcionales al registrar.
+                                    </p>
+                                </div>
+                            )}
+                            {!data.es_resguardo && data.catalogo_paqueteria_id && !esMunicipioDiferido && (
+                                <div className="flex items-start gap-2 p-3 rounded-xl border theme-border theme-element">
+                                    <p className="text-xs font-bold theme-text-muted m-0">
+                                        Envío comercial: capture peso, cajas y costo al registrar el pedido.
+                                    </p>
+                                </div>
+                            )}
 
                             <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-xl border theme-border theme-element">
-                                <label className="flex items-center gap-2 theme-text-main cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={data.aplica_saldo_favor}
-                                        onChange={(e) => {
-                                            const on = e.target.checked;
-                                            setData('aplica_saldo_favor', on);
-                                            if (!on) {
-                                                setData('saf_aplicaciones', []);
-                                                setData('saldo_a_favor', '');
-                                                setSafFifoItems([]);
-                                            } else {
-                                                const disponible = Number(safCuenta?.disponible || 0);
-                                                const sugerido = disponible > 0 ? disponible : '';
-                                                setData('saldo_a_favor', sugerido);
-                                                if (sugerido) aplicarFifoSaf(sugerido);
-                                            }
-                                        }}
-                                    />
-                                    <span className="text-sm font-bold">Saldo a favor</span>
-                                    {safCuenta && (
-                                        <span className="text-xs text-emerald-600 font-semibold">
-                                            Disp. {formatearMoneda(safCuenta.disponible)}
-                                        </span>
-                                    )}
-                                    {cargandoSaf && <span className="text-xs theme-text-muted">Consultando…</span>}
-                                    <span className="text-[10px] theme-text-muted font-bold">
-                                        Solo saldos del mismo almacén/área. Un saldo generado aquí aplica a partir del siguiente pedido.
-                                    </span>
-                                </label>
                                 {!guiaCliente && tieneCoberturaSeguro && (
                                     <label className="flex items-center gap-2 theme-text-main cursor-pointer">
                                         <input
@@ -2279,52 +2249,8 @@ export default function ModalFormPedido({
                                 </label>
                             </div>
 
-                            {(data.aplica_saldo_favor || (!guiaCliente && data.aplica_seguro) || data.envia_a_otra_persona || (!guiaCliente && tieneCoberturaSeguro)) && (
+                            {((!guiaCliente && data.aplica_seguro) || data.envia_a_otra_persona || (!guiaCliente && tieneCoberturaSeguro)) && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {data.aplica_saldo_favor && (
-                                        <div className="md:col-span-2 space-y-2">
-                                            <label className={SECCION}>Monto a aplicar (FIFO: vence primero)</label>
-                                            <InputMoneda
-                                                value={data.saldo_a_favor}
-                                                onChange={(v) => {
-                                                    setData('saldo_a_favor', v);
-                                                    aplicarFifoSaf(v);
-                                                }}
-                                                className="w-full max-w-xs py-3"
-                                            />
-                                            <p className="text-xs theme-text-muted m-0">
-                                                El sistema reparte automáticamente el saldo más antiguo primero. No se elige crédito a crédito.
-                                            </p>
-                                            {safFifoItems.length > 0 && (
-                                                <div className="space-y-1 border theme-border rounded-lg p-2">
-                                                    {safFifoItems.map((i) => {
-                                                        const parcial = Number(i.monto) + 0.001 < Number(i.disponible);
-                                                        return (
-                                                            <div key={i.saf_credito_id} className="flex justify-between gap-2 text-xs">
-                                                                <span className="font-bold">{i.folio} · vence {i.fecha_vencimiento}</span>
-                                                                <span>
-                                                                    {formatearMoneda(i.monto)}
-                                                                    {parcial && (
-                                                                        <span className="ml-2 text-amber-600 font-semibold">
-                                                                            (se sugiere usar completo: {formatearMoneda(i.disponible)})
-                                                                        </span>
-                                                                    )}
-                                                                </span>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                            {(safCuenta?.creditos_usables || []).length === 0 && (
-                                                <div className="text-xs theme-text-muted">
-                                                    {data.cliente_id
-                                                        ? 'El cliente no tiene saldo disponible en el libro.'
-                                                        : 'Seleccione un cliente para consultar su saldo.'}
-                                                </div>
-                                            )}
-                                            <div className="text-sm font-bold text-emerald-700">Total saldo: {formatearMoneda(saldoFavorCalculado)}</div>
-                                        </div>
-                                    )}
                                     {!guiaCliente && tieneCoberturaSeguro && (
                                         <div>
                                             <label className={SECCION}>Costo de seguro (calculado)</label>
@@ -2341,14 +2267,58 @@ export default function ModalFormPedido({
                             )}
                         </div>
                     </section>
+
+                    {/* 8. Cotización */}
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{nSec.cot}. Cotización</p>
+                        <div className="space-y-4">
+                            {!guiaCliente && !envioPorCobrar && (
+                                <div className="max-w-md">
+                                    <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido || omiteCostoPorTarifaPeso ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
+                                    <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} className={`w-full py-3 ${camposEnvioBloqueados ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
+                                    {omiteCostoPorTarifaPeso && (
+                                        <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
+                                            Se calculará con el pesaje CEDIS según la tarifa por peso de la paquetería.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
+                                <div className="flex justify-between theme-text-muted font-bold"><span>{labelCostoEnvio}</span><span>{formatearMoneda(guiaCliente || envioPorCobrar ? 0 : data.costo_envio)}</span></div>
+                                <div className="flex justify-between theme-text-muted font-bold">
+                                    <span>Costo del seguro</span>
+                                    <span>{data.aplica_seguro ? formatearMoneda(data.costo_seguro) : formatearMoneda(0)}</span>
+                                </div>
+                                <div className="flex justify-between theme-text-muted font-bold">
+                                    <span>Total a cubrir</span>
+                                    <span>{formatearMoneda(resumenCoberturaVivo.total_a_cubrir)}</span>
+                                </div>
+                                <div className="flex justify-between text-emerald-600 font-bold">
+                                    <span>Saldo a favor aplicado</span>
+                                    <span>- {formatearMoneda(data.aplica_saldo_favor ? saldoFavorCalculado : 0)}</span>
+                                </div>
+                                {resumenCoberturaVivo.excedente_generado > 0.01 && (
+                                    <div className="flex justify-between font-bold" style={{ color: '#3B82F6' }}>
+                                        <span>Excedente generado (este pedido)</span>
+                                        <span>{formatearMoneda(resumenCoberturaVivo.excedente_generado)}</span>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="mt-4 p-4 rounded-2xl border-2" style={{ borderColor: 'var(--color-primario)' }}>
+                                <p className="text-[10px] font-black uppercase theme-text-muted m-0">Total a cobrar ahora</p>
+                                <p className="text-[10px] theme-text-muted font-bold m-0">Después del saldo a favor aplicado</p>
+                                <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(totalCobrar)}</p>
+                            </div>
+                        </div>
+                    </section>
                     </>
                     )}
 
-                    {mostrarPagosYCierre && (
+                    {mostrarRestoPedido && (
                     <>
-                    {/* Pagos y comentarios */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>{requiereLogistica ? '6. Pagos y comentarios' : '3. Pagos y comentarios'}</p>
+                        <p className={SECCION}>{nSec.pago}. Pago</p>
                         <div className="space-y-4">
                             <SeccionPagosExhibicion
                                 pedidoId={idPedidoAcciones}
@@ -2383,54 +2353,140 @@ export default function ModalFormPedido({
                                     </div>
                                 </div>
                             )}
+                            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-xl border theme-border theme-element">
+                                <label className="flex items-center gap-2 theme-text-main cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={data.aplica_saldo_favor}
+                                        onChange={(e) => {
+                                            const on = e.target.checked;
+                                            setData('aplica_saldo_favor', on);
+                                            if (!on) {
+                                                setData('saf_aplicaciones', []);
+                                                setData('saldo_a_favor', '');
+                                                setSafFifoItems([]);
+                                            } else {
+                                                const disponible = Number(safCuenta?.disponible || 0);
+                                                const sugerido = disponible > 0 ? disponible : '';
+                                                setData('saldo_a_favor', sugerido);
+                                                if (sugerido) aplicarFifoSaf(sugerido);
+                                            }
+                                        }}
+                                    />
+                                    <span className="text-sm font-bold">Saldo a favor</span>
+                                    {safCuenta && (
+                                        <span className="text-xs text-emerald-600 font-semibold">
+                                            Disp. {formatearMoneda(safCuenta.disponible)}
+                                        </span>
+                                    )}
+                                    {cargandoSaf && <span className="text-xs theme-text-muted">Consultando…</span>}
+                                    <span className="text-[10px] theme-text-muted font-bold">
+                                        Solo saldos del mismo almacén/área. Un saldo generado aquí aplica a partir del siguiente pedido.
+                                    </span>
+                                </label>
+                            </div>
+                            {data.aplica_saldo_favor && (
+                                <div className="space-y-2">
+                                    <label className={SECCION}>Monto a aplicar (FIFO: vence primero)</label>
+                                    <InputMoneda
+                                        value={data.saldo_a_favor}
+                                        onChange={(v) => {
+                                            setData('saldo_a_favor', v);
+                                            aplicarFifoSaf(v);
+                                        }}
+                                        className="w-full max-w-xs py-3"
+                                    />
+                                    <p className="text-xs theme-text-muted m-0">
+                                        El sistema reparte automáticamente el saldo más antiguo primero. No se elige crédito a crédito.
+                                    </p>
+                                    {safFifoItems.length > 0 && (
+                                        <div className="space-y-1 border theme-border rounded-lg p-2">
+                                            {safFifoItems.map((i) => {
+                                                const parcial = Number(i.monto) + 0.001 < Number(i.disponible);
+                                                return (
+                                                    <div key={i.saf_credito_id} className="flex justify-between gap-2 text-xs">
+                                                        <span className="font-bold">{i.folio} · vence {i.fecha_vencimiento}</span>
+                                                        <span>
+                                                            {formatearMoneda(i.monto)}
+                                                            {parcial && (
+                                                                <span className="ml-2 text-amber-600 font-semibold">
+                                                                    (se sugiere usar completo: {formatearMoneda(i.disponible)})
+                                                                </span>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {(safCuenta?.creditos_usables || []).length === 0 && (
+                                        <div className="text-xs theme-text-muted">
+                                            {data.cliente_id
+                                                ? 'El cliente no tiene saldo disponible en el libro.'
+                                                : 'Seleccione un cliente para consultar su saldo.'}
+                                        </div>
+                                    )}
+                                    <div className="text-sm font-bold text-emerald-700">Total saldo: {formatearMoneda(saldoFavorCalculado)}</div>
+                                </div>
+                            )}
+                            {!requiereLogistica && (
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
+                                    <div className="flex justify-between text-emerald-600 font-bold">
+                                        <span>Saldo a favor aplicado</span>
+                                        <span>- {formatearMoneda(data.aplica_saldo_favor ? saldoFavorCalculado : 0)}</span>
+                                    </div>
+                                    <div className="mt-4 p-4 rounded-2xl border-2" style={{ borderColor: 'var(--color-primario)' }}>
+                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">Total a cobrar ahora</p>
+                                        <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(totalCobrar)}</p>
+                                    </div>
+                                </div>
+                            )}
                             <div>
                                 <label className={SECCION}>Comentarios para Drive / Almacén</label>
                                 <textarea placeholder="Notas adicionales..." value={data.comentarios_drive} onChange={(e) => setData('comentarios_drive', e.target.value)} className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`} />
                             </div>
+                        </div>
+                    </section>
+
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{nSec.rem}. Remisión</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className={SECCION}>Nota de compra en el envío</label>
+                                <label className={SECCION}>Folio de Pedido *</label>
+                                <input
+                                    type="text"
+                                    value={data.folio_remision}
+                                    onChange={(e) => setData('folio_remision', e.target.value)}
+                                    placeholder="Número de folio del pedido..."
+                                    className={`${THEME_INPUT} w-full py-3`}
+                                />
+                            </div>
+                            <div>
+                                <label className={SECCION}>Folio interno</label>
+                                <input type="text" readOnly value={pedido?.folio || 'Se asignará al guardar'} className={`${THEME_INPUT} w-full py-3 text-[11px] opacity-50`} />
+                            </div>
+                            <div>
+                                <label className={SECCION}>Status</label>
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={etiquetaEstatusPedido(pedido?.estatus, { esResguardo: pedido?.es_resguardo }) || 'Borrador'}
+                                    className={`${THEME_INPUT} w-full py-3 opacity-60`}
+                                />
+                            </div>
+                            <div>
+                                <label className={SECCION}>{LABEL_NOTA_COMPRA_PREGUNTA}</label>
                                 <select
                                     value={data.anexar_remision ? '1' : '0'}
                                     disabled={logisticaBloqueada}
                                     onChange={(e) => setData('anexar_remision', e.target.value === '1')}
-                                    className={`${THEME_SELECT} w-full py-3 max-w-xs ${logisticaBloqueada ? 'opacity-50' : ''}`}
+                                    className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
                                 >
                                     <option value="0">NO</option>
                                     <option value="1">SÍ</option>
                                 </select>
                             </div>
-                        </div>
-                    </section>
-
-                    {/* Desglose de montos */}
-                    <section className={SECCION_WRAP}>
-                        <p className={SECCION}>{requiereLogistica ? '7. Desglose de montos' : '4. Desglose de montos'}</p>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
-                            <div className="flex justify-between theme-text-muted font-bold"><span>{labelCostoEnvio}</span><span>{formatearMoneda(guiaCliente || envioPorCobrar ? 0 : data.costo_envio)}</span></div>
-                            <div className="flex justify-between theme-text-muted font-bold">
-                                <span>Costo del seguro</span>
-                                <span>{data.aplica_seguro ? formatearMoneda(data.costo_seguro) : formatearMoneda(0)}</span>
-                            </div>
-                            <div className="flex justify-between theme-text-muted font-bold">
-                                <span>Total a cubrir</span>
-                                <span>{formatearMoneda(resumenCoberturaVivo.total_a_cubrir)}</span>
-                            </div>
-                            <div className="flex justify-between text-emerald-600 font-bold">
-                                <span>Saldo a favor aplicado</span>
-                                <span>- {formatearMoneda(data.aplica_saldo_favor ? saldoFavorCalculado : 0)}</span>
-                            </div>
-                            {resumenCoberturaVivo.excedente_generado > 0.01 && (
-                                <div className="flex justify-between font-bold" style={{ color: '#3B82F6' }}>
-                                    <span>Excedente generado (este pedido)</span>
-                                    <span>{formatearMoneda(resumenCoberturaVivo.excedente_generado)}</span>
-                                </div>
-                            )}
-                        </div>
-                        <div className="mt-4 p-4 rounded-2xl border-2" style={{ borderColor: 'var(--color-primario)' }}>
-                            <p className="text-[10px] font-black uppercase theme-text-muted m-0">Total a cobrar ahora</p>
-                            <p className="text-[10px] theme-text-muted font-bold m-0">Después del saldo a favor aplicado</p>
-                            <p className="text-2xl font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(totalCobrar)}</p>
                         </div>
                     </section>
                     </>

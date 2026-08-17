@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Copy, Check, Download, Eye } from 'lucide-react';
-import { BTN_SECONDARY, guiaPdfDe, formatearFechaHoraAuditoria } from './pedidosBmaStyles';
+import { BTN_SECONDARY, guiaPdfDe, formatearFechaHoraAuditoria, etiquetaOrigenGuia } from './pedidosBmaStyles';
 
 export default function SeccionGuiaRastreo({ pedido, onVerPdf, compact = false }) {
     const [copiado, setCopiado] = useState(false);
@@ -31,7 +31,7 @@ export default function SeccionGuiaRastreo({ pedido, onVerPdf, compact = false }
 
     return (
         <div className={`${compact ? 'mb-4' : 'mb-6'} p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 space-y-3`}>
-            <p className="text-[9px] font-black uppercase theme-text-muted m-0">Guía de rastreo</p>
+            <p className="text-[9px] font-black uppercase theme-text-muted m-0">{etiquetaOrigenGuia(pedido)}</p>
 
             {tieneRastreo && (
                 <div className="flex items-center gap-3 flex-wrap">

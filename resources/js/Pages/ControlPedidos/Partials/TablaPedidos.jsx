@@ -21,6 +21,8 @@ import {
     esFasePreVenta,
     FASES_PRE_VENTA,
     badgesRetrasoSla,
+    badgeAuditoriaRevision,
+    etiquetaOrigenGuia,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import BotonAccionCubico from './BotonAccionCubico';
@@ -113,6 +115,7 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
         : null;
     const badgeSinEx = mostrarBadgeSinExistencias(pedido) ? badgeSinExistencias() : null;
     const badgesSla = badgesRetrasoSla(pedido);
+    const badgeRevision = badgeAuditoriaRevision(pedido);
 
     return (
         <div className={`${geliaCardClass()} p-4 space-y-3 ${esRechazado ? 'ring-1 ring-red-500/30' : ''}`}>
@@ -128,6 +131,9 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <span className={badge.className} style={badge.style}>{badge.label}</span>
+                    {badgeRevision && (
+                        <span className={badgeRevision.className} style={badgeRevision.style}>{badgeRevision.label}</span>
+                    )}
                     {badgeEnvio && (
                         <span className={badgeEnvio.className} style={badgeEnvio.style}>{badgeEnvio.label}</span>
                     )}
@@ -156,11 +162,13 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                     const f = textoFuentesPagoCompacto(pedido.fuentes_pago);
                     return <span title={f.completo || undefined}>{f.texto}</span>;
                 })()}
+                <span>·</span>
+                <span className="normal-case">{etiquetaOrigenGuia(pedido)}</span>
             </div>
             <p className="text-lg font-black m-0" style={{ color: 'var(--color-primario)' }}>{formatearMoneda(pedido.total_a_cobrar)}</p>
             {guiaLista && pedido.numero_rastreo && (
                 <p className="text-xs font-black font-mono theme-text-main m-0">
-                    Guía: {pedido.numero_rastreo}
+                    {etiquetaOrigenGuia(pedido)}: {pedido.numero_rastreo}
                 </p>
             )}
             {esRechazado && pedido.motivo_rechazo && (
@@ -285,6 +293,7 @@ export default function TablaPedidos({
                                 : null;
                             const badgeSinEx = mostrarBadgeSinExistencias(pedido) ? badgeSinExistencias() : null;
                             const badgesSla = badgesRetrasoSla(pedido);
+                            const badgeRevision = badgeAuditoriaRevision(pedido);
                             return (
                                 <tr key={pedido.id} className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${esRechazado ? 'bg-red-500/5' : ''}`}>
                                     <td className="px-5 py-4">
@@ -313,6 +322,9 @@ export default function TablaPedidos({
                                         <span className={badge.className} style={badge.style}>
                                             {badge.label}
                                         </span>
+                                        {badgeRevision && (
+                                            <span className={`${badgeRevision.className} mt-1.5 block w-fit`} style={badgeRevision.style}>{badgeRevision.label}</span>
+                                        )}
                                         {badgeEnvio && (
                                             <span className={`${badgeEnvio.className} mt-1.5 block w-fit`} style={badgeEnvio.style}>{badgeEnvio.label}</span>
                                         )}
@@ -330,7 +342,7 @@ export default function TablaPedidos({
                                         )}
                                         {guiaLista && pedido.numero_rastreo && (
                                             <p className="text-[9px] font-bold font-mono theme-text-main mt-1 m-0">
-                                                Guía: {pedido.numero_rastreo}
+                                                {etiquetaOrigenGuia(pedido)}: {pedido.numero_rastreo}
                                             </p>
                                         )}
                                     </td>

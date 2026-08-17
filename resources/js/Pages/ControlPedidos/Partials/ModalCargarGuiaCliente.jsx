@@ -9,6 +9,7 @@ import {
     THEME_LABEL,
     BTN_PRIMARY,
     BTN_SECONDARY,
+    LABEL_GUIA_CLIENTE,
 } from './pedidosBmaStyles';
 
 const SECCION = `${THEME_LABEL} mb-2 block`;
@@ -49,7 +50,7 @@ export default function ModalCargarGuiaCliente({ abierto, onClose, pedido }) {
             >
                 <div className="flex items-start justify-between gap-3">
                     <div>
-                        <p className={`${THEME_LABEL} m-0`}>Cargar guía del cliente</p>
+                        <p className={`${THEME_LABEL} m-0`}>{LABEL_GUIA_CLIENTE}</p>
                         <p className="text-xs theme-text-muted font-bold mt-1 m-0">
                             Folio {pedido.folio_remision || pedido.folio || pedido.id}
                         </p>

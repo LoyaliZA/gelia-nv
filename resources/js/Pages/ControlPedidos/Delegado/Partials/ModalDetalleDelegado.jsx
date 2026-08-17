@@ -21,6 +21,7 @@ import {
     BTN_SECONDARY,
     guiaPdfDe,
     tieneErrorGuiaReportado,
+    etiquetaOrigenGuia,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
@@ -311,6 +312,7 @@ export default function ModalDetalleDelegado({
                             )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <CampoConCopia label="Paquetería" value={pedido.paqueteria?.nombre} />
+                                <CampoConCopia label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} copiar={false} />
                                 <CampoConCopia label="Tipo de guía" value={pedido.tipo_guia?.nombre || pedido.tipoGuia?.nombre} />
                                 <CampoConCopia label="Destinatario" value={dir?.nombre_destinatario || pedido.envia_otra_persona} />
                                 <CampoConCopia label="Teléfono" value={dir?.telefono_destinatario} />

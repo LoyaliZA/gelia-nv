@@ -19,6 +19,7 @@ import {
     formatearFechaHoraAuditoria,
     BTN_PRIMARY,
     tieneGuiaPdfDisponible,
+    etiquetaOrigenGuia,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
@@ -150,9 +151,9 @@ function TarjetaPedido({
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">{pedido.paqueteria?.nombre || '—'}</p>
                 </div>
                 <div>
-                    <p className="text-[9px] font-black m-0 opacity-70">Cajas / Guía</p>
+                    <p className="text-[9px] font-black m-0 opacity-70">Envíos / Guía</p>
                     <p className="text-xs theme-text-main m-0 mt-0.5 normal-case">
-                        {pedido.numero_cajas ?? '—'} · {pedido.tipo_guia?.nombre || '—'}
+                        {pedido.numero_cajas ?? '—'} · {etiquetaOrigenGuia(pedido)}
                     </p>
                 </div>
                 </>
@@ -182,7 +183,7 @@ function TarjetaPedido({
                 </AvisoOperativoPedido>
             )}
             {fase === 'PENDIENTE_GUIA_CLIENTE' && (
-                <AvisoOperativoPedido label="Guía del cliente" tono="info">
+                <AvisoOperativoPedido label={etiquetaOrigenGuia(pedido)} tono="info">
                     Esperando guía del cliente (vendedora). Solo lectura hasta que cargue la guía.
                 </AvisoOperativoPedido>
             )}

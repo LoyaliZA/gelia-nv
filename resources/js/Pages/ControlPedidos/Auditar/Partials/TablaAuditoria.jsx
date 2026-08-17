@@ -3,6 +3,7 @@ import { Eye, AlertTriangle, History, PackagePlus } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import {
     badgeAuditoriaSemantico,
+    badgeAuditoriaRevision,
     badgeEstatusEnvio,
     badgeCorregirRemision,
     badgePendienteReRevision,
@@ -59,9 +60,6 @@ function CardAuditoria({
                     <span className={badge.className} style={badge.style}>{badge.label}</span>
                     {badgeHito && (
                         <span className={badgeHito.className} style={badgeHito.style}>{badgeHito.label}</span>
-                    )}
-                    {badgeReRevision && (
-                        <span className={badgeReRevision.className} style={badgeReRevision.style}>{badgeReRevision.label}</span>
                     )}
                     {badgeRemision && (
                         <span className={badgeRemision.className} style={badgeRemision.style}>{badgeRemision.label}</span>
@@ -133,7 +131,7 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBi
         <div className={`${geliaCardClass()} overflow-hidden`}>
             <div className="md:hidden p-4 space-y-3">
                 {items.map((pedido) => {
-                    const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
+                    const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
                     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
                         faseCiclo: pedido.estatus?.fase_ciclo,
                     });
@@ -173,7 +171,7 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBi
                     </thead>
                     <tbody>
                         {items.map((pedido) => {
-                            const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
+                            const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
                             const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
                                 faseCiclo: pedido.estatus?.fase_ciclo,
                             });
@@ -250,9 +248,6 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBi
                                         <span className={badge.className} style={badge.style}>{badge.label}</span>
                                         {badgeHito && (
                                             <span className={`${badgeHito.className} mt-1.5 block w-fit`} style={badgeHito.style}>{badgeHito.label}</span>
-                                        )}
-                                        {badgeReRevision && (
-                                            <span className={`${badgeReRevision.className} mt-1.5 block w-fit`} style={badgeReRevision.style}>{badgeReRevision.label}</span>
                                         )}
                                         {badgeRemision && (
                                             <span className={`${badgeRemision.className} mt-1.5 block w-fit`} style={badgeRemision.style}>{badgeRemision.label}</span>

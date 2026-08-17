@@ -6,15 +6,18 @@ import {
 } from 'lucide-react';
 import {
     badgeAuditoriaSemantico,
+    badgeAuditoriaRevision,
     badgeEstatusEnvio,
     badgeConComplementos,
     badgeCorregirRemision,
-    badgePendienteReRevision,
     badgeHitoAuditoria,
     esPendienteReRevision,
     formatearMoneda,
     etiquetaAlmacen,
     etiquetaCostoEnvio,
+    etiquetaOrigenGuia,
+    etiquetaEnvio,
+    LABEL_NOTA_COMPRA_CAMPO,
     formatearFechaNegocio,
     formatearFechaHoraAuditoria,
     THEME_MODAL_OVERLAY,
@@ -85,12 +88,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     if (!abierto || !pedido) return null;
 
     const fase = pedido.estatus?.fase_ciclo;
-    const badge = badgeAuditoriaSemantico(fase, pedido.es_resguardo);
+    const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(fase, pedido.es_resguardo);
     const badgeHito = badgeHitoAuditoria(pedido.hito_auditoria);
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { faseCiclo: fase });
     const badgeComp = badgeConComplementos(pedido);
     const badgeRemision = tieneErrorRemision(pedido) ? badgeCorregirRemision() : null;
-    const badgeReRevision = esPendienteReRevision(pedido) ? badgePendienteReRevision() : null;
+    const reRevision = esPendienteReRevision(pedido);
     const esPendiente = fase === 'PENDIENTE_AUXILIAR';
     const puedeLiberarResguardo = Boolean(pedido.es_resguardo) && (esPendiente || fase === 'EN_CEDIS');
     const requiereCapturaLiberacion = Boolean(pedido.es_resguardo)
@@ -252,9 +255,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 {badgeHito && (
                                     <span className={`${badgeHito.className} inline-flex`} style={badgeHito.style}>{badgeHito.label}</span>
                                 )}
-                                {badgeReRevision && (
-                                    <span className={`${badgeReRevision.className} inline-flex`} style={badgeReRevision.style}>{badgeReRevision.label}</span>
-                                )}
                                 {badgeRemision && (
                                     <span className={`${badgeRemision.className} inline-flex`} style={badgeRemision.style}>{badgeRemision.label}</span>
                                 )}
@@ -279,7 +279,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 {pedido.es_resguardo && (
                                     <p className="text-xs font-black uppercase text-blue-600 mt-1 m-0">En resguardo — mercancía bloqueada en almacén</p>
                                 )}
-                                {badgeReRevision && (
+                                {reRevision && (
                                     <p className="text-[10px] text-emerald-600 font-bold mt-2 m-0">
                                         Corregido y reenviado — dar luz verde si todo está en orden
                                     </p>
@@ -388,9 +388,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         : (pedido.banco?.nombre ? [pedido.banco.nombre] : [])
                                     ).join(', ') || '—'}
                                 />
-                                <Campo label="Nota de compra en el envío" value={pedido.anexar_remision ? 'Sí' : 'No'} />
+                                <Campo label={LABEL_NOTA_COMPRA_CAMPO} value={pedido.anexar_remision ? 'Sí' : 'No'} />
                                 <Campo label="Saldo a favor aplicado" value={Number(pedido.saldo_a_favor) > 0 ? formatearMoneda(pedido.saldo_a_favor) : '—'} />
-                                <Campo label="N° de cajas" value={pedido.numero_cajas} />
+                                <Campo label="N° de envíos" value={pedido.numero_cajas} />
                                 <Campo label="Capturado por" value={pedido.vendedor?.name} />
                             </div>
                         </section>
@@ -476,9 +476,10 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             )}
                             <div className="grid grid-cols-2 gap-4">
                                 <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
+                                <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
                                 <Campo label="Tipo caja" value={pedido.tipo_caja?.nombre} />
                                 <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
-                                <Campo label="N° cajas" value={pedido.numero_cajas} />
+                                <Campo label="N° envíos" value={pedido.numero_cajas} />
                                 <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                                 <Campo label="Pesaje CEDIS" value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
                             </div>
@@ -487,7 +488,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de envíos</p>
                                     {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
                                         <p key={c.id || idx} className="text-xs font-bold theme-text-main m-0">
-                                            Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
+                                            {etiquetaEnvio(idx, c)}
                                             {c.peso_real_kg != null ? ` · real ${c.peso_real_kg} kg` : ''}
                                             {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
                                         </p>

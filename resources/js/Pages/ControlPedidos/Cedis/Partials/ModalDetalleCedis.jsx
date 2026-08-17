@@ -26,6 +26,9 @@ import {
     etiquetasInstanciaRevision,
     revisionSinExistenciaAbierta,
     LABELS_RESOLUCION_SIN_EXISTENCIA,
+    etiquetaOrigenGuia,
+    etiquetaEnvio,
+    LABEL_NOTA_COMPRA_CAMPO,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
@@ -392,7 +395,7 @@ export default function ModalDetalleCedis({
                             <p className={SECCION}>Empaque y guía</p>
                             <div className="space-y-3">
                                 <AvisoOperativoPedido
-                                    label="Nota de compra en el envío"
+                                    label={LABEL_NOTA_COMPRA_CAMPO}
                                     tono={pedido.anexar_remision ? 'success' : 'warning'}
                                     icon={FileText}
                                 >
@@ -630,7 +633,8 @@ export default function ModalDetalleCedis({
                                 <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
                                 <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
-                                <Campo label="N° de cajas" value={pedido.numero_cajas} />
+                                <Campo label="N° de envíos" value={pedido.numero_cajas} />
+                                <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
                                 <Campo label="Tipo de guía" value={pedido.tipo_guia?.nombre} />
                                 <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
                                 <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
@@ -671,7 +675,7 @@ export default function ModalDetalleCedis({
                                                     )}
                                                     <div className="min-w-0 flex-1">
                                                         <p className="text-xs font-black theme-text-main m-0">
-                                                            Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
+                                                            {etiquetaEnvio(idx, c)}
                                                             <span className="ml-2 font-bold theme-text-muted">
                                                                 {pendiente ? 'Pendiente' : 'Recolectada'}
                                                             </span>
