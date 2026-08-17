@@ -24,14 +24,6 @@ class ResolverDestinatariosAlertaSolicitudService
         ?int $excluirUserId = null,
     ): Collection {
         if ($permisos === []) {
-            // #region agent log
-            $this->agentDebugLog('A', 'ResolverDestinatarios:porDepartamento', 'early empty', [
-                'departamento_id' => $departamentoId,
-                'permisos' => $permisos,
-                'excluir' => $excluirUserId,
-            ]);
-            // #endregion
-
             return collect();
         }
 
@@ -54,22 +46,7 @@ class ResolverDestinatariosAlertaSolicitudService
             ->when($excluirUserId !== null, fn ($q) => $q->where('id', '!=', $excluirUserId))
             ->get();
 
-        $final = $operativos->merge($supervisores)->unique('id')->values();
-
-        // #region agent log
-        $this->agentDebugLog('A', 'ResolverDestinatarios:porDepartamento', 'resolved', [
-            'departamento_id' => $departamentoId,
-            'permisos' => $permisos,
-            'excluir' => $excluirUserId,
-            'operativos_ids' => $operativos->pluck('id')->values()->all(),
-            'supervisores_ids' => $supervisores->pluck('id')->values()->all(),
-            'final_ids' => $final->pluck('id')->values()->all(),
-            'super_admin_in_final' => $final->contains(fn (User $u) => $u->hasRole('Super Admin')),
-            'runId' => 'post-fix',
-        ]);
-        // #endregion
-
-        return $final;
+        return $operativos->merge($supervisores)->unique('id')->values();
     }
 
     /**
@@ -98,33 +75,6 @@ class ResolverDestinatariosAlertaSolicitudService
             )
             ->values();
 
-        // #region agent log
-        $this->agentDebugLog('B', 'ResolverDestinatarios:conVendedorOpcional', 'merged', [
-            'incluir_vendedor' => $incluirVendedor,
-            'vendedor_id' => $vendedor?->id,
-            'final_ids' => $merged->pluck('id')->values()->all(),
-            'super_admin_in_final' => $merged->contains(fn (User $u) => $u->hasRole('Super Admin')),
-            'runId' => 'post-fix',
-        ]);
-        // #endregion
-
         return $merged;
     }
-
-    // #region agent log
-    private function agentDebugLog(string $hypothesisId, string $location, string $message, array $data = []): void
-    {
-        $line = json_encode([
-            'sessionId' => '80055b',
-            'runId' => $data['runId'] ?? 'pre-fix',
-            'hypothesisId' => $hypothesisId,
-            'location' => $location,
-            'message' => $message,
-            'data' => $data,
-            'timestamp' => (int) round(microtime(true) * 1000),
-        ], JSON_UNESCAPED_UNICODE);
-
-        @file_put_contents(base_path('.cursor/debug-80055b.log'), $line . "\n", FILE_APPEND | LOCK_EX);
-    }
-    // #endregion
 }
