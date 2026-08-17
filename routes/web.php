@@ -28,6 +28,7 @@ use App\Http\Controllers\ControlPedidos\PedidoBmaCedisController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaDelegadoController;
 use App\Http\Controllers\ControlPedidos\DireccionesAuxiliarController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaSaldosPagosController;
+use App\Http\Controllers\ControlPedidos\PlazosRetrasoPedidoBmaController;
 use App\Http\Controllers\SaldosAFavor\SaldosAFavorController;
 use App\Http\Controllers\SaldosAFavor\CajaSaldosAFavorController;
 use App\Http\Controllers\SaldosAFavor\ConfigurarSaldosAFavorController;
@@ -509,6 +510,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [PedidoBmaController::class, 'index'])->name('index');
         Route::get('/listado', [PedidoBmaController::class, 'listado'])->name('listado');
         Route::get('/exportar', [PedidoBmaController::class, 'exportar'])->middleware('can:control_pedidos.exportar')->name('exportar');
+    });
+
+    Route::middleware(['can:control_pedidos.configurar_plazos'])->prefix('control-pedidos/plazos')->name('control_pedidos.plazos.')->group(function () {
+        Route::get('/', [PlazosRetrasoPedidoBmaController::class, 'index'])->name('index');
+        Route::put('/', [PlazosRetrasoPedidoBmaController::class, 'update'])->name('update');
     });
 
     // Descarga autenticada de documentos (visibilidad por VisibilidadPedidoBma::puedeConsultar).

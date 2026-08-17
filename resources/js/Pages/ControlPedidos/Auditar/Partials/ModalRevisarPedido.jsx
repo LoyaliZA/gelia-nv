@@ -87,7 +87,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const fase = pedido.estatus?.fase_ciclo;
     const badge = badgeAuditoriaSemantico(fase, pedido.es_resguardo);
     const badgeHito = badgeHitoAuditoria(pedido.hito_auditoria);
-    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
+    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, { faseCiclo: fase });
     const badgeComp = badgeConComplementos(pedido);
     const badgeRemision = tieneErrorRemision(pedido) ? badgeCorregirRemision() : null;
     const badgeReRevision = esPendienteReRevision(pedido) ? badgePendienteReRevision() : null;

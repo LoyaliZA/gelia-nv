@@ -199,11 +199,28 @@ trait ResuelveDatosPedidoBma
         }
 
         $clienteProporcionaGuia = filter_var($datos['cliente_proporciona_guia'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $envioPorCobrar = filter_var($datos['envio_por_cobrar'] ?? false, FILTER_VALIDATE_BOOLEAN);
         if ($clienteProporcionaGuia) {
+            $envioPorCobrar = false;
             $datos['costo_envio'] = null;
             $datos['aplica_seguro'] = false;
             $datos['catalogo_tipo_guia_id'] = null;
             $datos['catalogo_zona_id'] = null;
+        }
+        if ($envioPorCobrar) {
+            $datos['costo_envio'] = null;
+        }
+
+        $costoVacio = ! isset($datos['costo_envio']) || $datos['costo_envio'] === '' || $datos['costo_envio'] === null;
+        if (! $clienteProporcionaGuia && ! $envioPorCobrar && $costoVacio && ! empty($datos['catalogo_paqueteria_id'])) {
+            $paqTarifa = CatalogoPaqueteriaPedido::find($datos['catalogo_paqueteria_id']);
+            $pesoTarifa = isset($datos['peso_cobrado_guia_kg']) && $datos['peso_cobrado_guia_kg'] !== '' && $datos['peso_cobrado_guia_kg'] !== null
+                ? (float) $datos['peso_cobrado_guia_kg']
+                : null;
+            $costoTarifa = $paqTarifa?->calcularCostoEnvio($pesoTarifa);
+            if ($costoTarifa !== null) {
+                $datos['costo_envio'] = $costoTarifa;
+            }
         }
 
         $totales = $this->resolverTotales($datos);
@@ -248,6 +265,7 @@ trait ResuelveDatosPedidoBma
                 ? true
                 : filter_var($datos['es_resguardo'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'cliente_proporciona_guia' => $clienteProporcionaGuia,
+            'envio_por_cobrar' => $envioPorCobrar,
             'anexar_remision' => filter_var($datos['anexar_remision'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'comentarios_drive' => $datos['comentarios_drive'] ?? null,
         ], $envioTienda, $envia, $totales);
@@ -258,6 +276,7 @@ trait ResuelveDatosPedidoBma
             $attrs['costo_seguro'] = 0;
             $attrs['catalogo_tipo_guia_id'] = null;
             $attrs['catalogo_zona_id'] = null;
+            $attrs['envio_por_cobrar'] = false;
         }
 
         if ($esResguardoAbierto || $esComplementario) {

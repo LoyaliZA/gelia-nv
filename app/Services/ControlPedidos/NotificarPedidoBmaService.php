@@ -23,10 +23,17 @@ class NotificarPedidoBmaService
         ?int $excluirUsuarioId = null,
         bool $incluirVendedora = true,
         array $extras = [],
+        bool $incluirGerentes = false,
     ): void {
-        $enviar = function () use ($pedido, $tipoAlerta, $mensaje, $permisos, $excluirUsuarioId, $incluirVendedora, $extras) {
+        $enviar = function () use ($pedido, $tipoAlerta, $mensaje, $permisos, $excluirUsuarioId, $incluirVendedora, $extras, $incluirGerentes) {
             try {
-                $destinatarios = $this->resolverDestinatarios($pedido, $permisos, $excluirUsuarioId, $incluirVendedora);
+                $destinatarios = $this->resolverDestinatarios(
+                    $pedido,
+                    $permisos,
+                    $excluirUsuarioId,
+                    $incluirVendedora,
+                    $incluirGerentes
+                );
                 if ($destinatarios->isEmpty()) {
                     return;
                 }
@@ -60,13 +67,25 @@ class NotificarPedidoBmaService
         array $permisos,
         ?int $excluirUsuarioId,
         bool $incluirVendedora,
+        bool $incluirGerentes = false,
     ): Collection {
-        $usuarios = User::permission($permisos)->get();
+        $usuarios = $permisos === []
+            ? collect()
+            : User::permission($permisos)->get();
 
         if ($incluirVendedora && $pedido->vendedor_id) {
             $vendedor = User::find($pedido->vendedor_id);
             if ($vendedor) {
                 $usuarios = $usuarios->push($vendedor);
+            }
+        }
+
+        if ($incluirGerentes && $pedido->vendedor_id) {
+            $vendedorConGerentes = User::with('gerentes')->find($pedido->vendedor_id);
+            if ($vendedorConGerentes) {
+                foreach ($vendedorConGerentes->gerentes as $gerente) {
+                    $usuarios = $usuarios->push($gerente);
+                }
             }
         }
 

@@ -59,6 +59,8 @@ export default function PanelVincularImagenes({
     credencialesOk,
     onChanged,
     onImportStarted,
+    convertirWebp = true,
+    modo1280 = 'none',
 }) {
     const [rows, setRows] = useState([]);
     const [permitirVarias, setPermitirVarias] = useState(false);
@@ -150,6 +152,8 @@ export default function PanelVincularImagenes({
                 const body = new FormData();
                 listos.forEach((r) => body.append('imagenes[]', r.file, r.filename || r.file.name));
                 body.append('reemplazar', reemplazar ? '1' : '0');
+                body.append('convertir_webp', convertirWebp ? '1' : '0');
+                body.append('modo_1280', modo1280);
                 const res = await fetch(route('tiendanube.imagenes.importar.archivos'), {
                     method: 'POST',
                     headers: {
@@ -181,6 +185,8 @@ export default function PanelVincularImagenes({
                 const body = new FormData();
                 body.append('file', row.file);
                 body.append('reemplazar', reemplazar ? '1' : '0');
+                body.append('convertir_webp', convertirWebp ? '1' : '0');
+                body.append('modo_1280', modo1280);
                 if (row.parsed?.position) {
                     body.append('position', String(row.parsed.position));
                 }

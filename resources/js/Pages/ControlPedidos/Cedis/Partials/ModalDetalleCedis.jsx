@@ -7,6 +7,7 @@ import {
 import {
     badgeEmpaqueSemantico,
     badgeRetrasoGuia,
+    badgesRetrasoSla,
     badgeConComplementos,
     complementosDe,
     esPedidoEmpacadoCedis,
@@ -15,6 +16,7 @@ import {
     etiquetaCostoEnvio,
     formatearFechaHoraAuditoria,
     badgeEstadoFisico,
+    esFasePreVenta,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
     THEME_LABEL,
@@ -61,6 +63,8 @@ export default function ModalDetalleCedis({
     const [confirmacion, setConfirmacion] = useState(null);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [reporteSinEx, setReporteSinEx] = useState({ descripcion: '', comentario: '' });
+    const [seleccionEnvios, setSeleccionEnvios] = useState({});
+    const [guiasEnvio, setGuiasEnvio] = useState({});
 
     useEffect(() => {
         if (abierto && pedidoInicial) {
@@ -68,6 +72,16 @@ export default function ModalDetalleCedis({
             setProcesando(false);
             setConfirmacion(null);
             setDocPreview(null);
+            const pendientes = [...(pedidoInicial.cajas || [])]
+                .filter((c) => (c.estatus_recoleccion || 'pendiente') === 'pendiente');
+            const sel = {};
+            const guias = {};
+            pendientes.forEach((c) => {
+                sel[c.id] = pendientes.length === 1;
+                guias[c.id] = c.numero_rastreo || '';
+            });
+            setSeleccionEnvios(sel);
+            setGuiasEnvio(guias);
         }
     }, [abierto, pedidoInicial?.id]);
 
@@ -76,6 +90,7 @@ export default function ModalDetalleCedis({
     const fase = pedido.estatus?.fase_ciclo;
     const badgeEmpaque = badgeEmpaqueSemantico(fase, pedido.es_resguardo, Boolean(pedido.resguardo_apartado_at));
     const badgeRetraso = pedido.guia_retraso ? badgeRetrasoGuia() : null;
+    const badgesSla = badgesRetrasoSla(pedido);
     const badgeComp = badgeConComplementos(pedido);
     const complementos = complementosDe(pedido);
     const comprobantes = comprobantesDe(pedido);
@@ -120,10 +135,34 @@ export default function ModalDetalleCedis({
     const puedeReportarSinEx = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.empacado_at;
     const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
     const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
+    const cajasPendientes = cajasOrdenadas.filter((c) => (c.estatus_recoleccion || 'pendiente') === 'pendiente');
+    const cajasRecolectadasCount = pedido.cajas_recolectadas
+        ?? cajasOrdenadas.filter((c) => c.estatus_recoleccion === 'recolectada').length;
+    const cajasPendientesCount = pedido.cajas_pendientes ?? cajasPendientes.length;
+    const idsSeleccionados = Object.entries(seleccionEnvios).filter(([, v]) => v).map(([id]) => Number(id));
+    const seleccionCompletaPendientes = cajasPendientes.length > 0
+        && idsSeleccionados.length === cajasPendientes.length
+        && cajasPendientes.every((c) => idsSeleccionados.includes(Number(c.id)));
+    const etiquetaBotonEnviar = cajasOrdenadas.length === 0 || (cajasPendientes.length > 0 && seleccionCompletaPendientes)
+        ? 'Marcar enviado'
+        : 'Marcar recolectadas';
     const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const mostrarGuia = tieneGuiaPdfDisponible(pedido) || Boolean(pedido.numero_rastreo)
         || fase === 'PENDIENTE_DE_ENVIO' || fase === 'ENVIADO';
+
+    const payloadCajasEnviar = () => {
+        if (cajasOrdenadas.length === 0) return undefined;
+        if (cajasPendientes.length === 1 && idsSeleccionados.length === 0) {
+            const c = cajasPendientes[0];
+            const guia = (guiasEnvio[c.id] || '').trim();
+            return [{ id: c.id, ...(guia ? { numero_rastreo: guia } : {}) }];
+        }
+        return idsSeleccionados.map((id) => {
+            const guia = (guiasEnvio[id] || '').trim();
+            return { id, ...(guia ? { numero_rastreo: guia } : {}) };
+        });
+    };
 
     const ejecutarConfirmacion = () => {
         const accion = confirmacion;
@@ -144,14 +183,35 @@ export default function ModalDetalleCedis({
         }
 
         if (accion === 'enviar') {
+            const cajas = payloadCajasEnviar();
+            if (cajasPendientes.length > 1 && (!cajas || cajas.length === 0)) {
+                setAlerta({
+                    abierto: true,
+                    tipo: 'error',
+                    titulo: 'Selección requerida',
+                    mensaje: 'Selecciona qué envíos recolectó la paquetería.',
+                });
+                return;
+            }
             setProcesando(true);
-            router.post(route('control_pedidos.cedis.marcar_enviado', pedido.id), {}, {
+            router.post(route('control_pedidos.cedis.marcar_enviado', pedido.id), {
+                ...(cajas ? { cajas } : {}),
+            }, {
                 preserveScroll: true,
                 onSuccess: () => {
-                    setAlerta({ abierto: true, tipo: 'success', titulo: 'Recolección', mensaje: 'Paquetería confirmada: el pedido fue recogido.' });
+                    const completo = cajasOrdenadas.length === 0 || seleccionCompletaPendientes
+                        || (cajasPendientes.length <= 1);
+                    setAlerta({
+                        abierto: true,
+                        tipo: 'success',
+                        titulo: completo ? 'Enviado' : 'Recolección parcial',
+                        mensaje: completo
+                            ? 'Pedido marcado como enviado.'
+                            : 'Se registraron los envíos recolectados; el pedido sigue pendiente mientras queden cajas.',
+                    });
                     onClose();
                 },
-                onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo confirmar la recolección.' }),
+                onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo registrar la recolección.' }),
                 onFinish: () => setProcesando(false),
             });
             return;
@@ -202,7 +262,16 @@ export default function ModalDetalleCedis({
             variante: 'primary',
         }
         : confirmacion === 'enviar'
-            ? { titulo: 'Confirmar recolección', mensaje: '¿Confirmas que la paquetería recogió el paquete? Empacado no significa enviado.', etiquetaConfirmar: 'Paquetería recogió', variante: 'primary' }
+            ? {
+                titulo: seleccionCompletaPendientes || cajasOrdenadas.length === 0
+                    ? 'Confirmar envío'
+                    : 'Confirmar recolección parcial',
+                mensaje: seleccionCompletaPendientes || cajasOrdenadas.length === 0
+                    ? 'Al confirmar, el pedido sale a recolección y el estado se actualiza para auxiliar, CEDIS y logística.'
+                    : `Se marcarán ${idsSeleccionados.length} de ${cajasPendientes.length} envíos pendientes. El pedido seguirá en pendiente de envío.`,
+                etiquetaConfirmar: etiquetaBotonEnviar,
+                variante: 'primary',
+            }
             : confirmacion === 'reabrir'
                 ? { titulo: 'Reabrir recolección', mensaje: 'El pedido volverá a pendiente de recolección. Solo si la paquetería no recogió.', etiquetaConfirmar: 'Reabrir', variante: 'danger' }
                 : confirmacion === 'reportar_sin_ex'
@@ -235,6 +304,9 @@ export default function ModalDetalleCedis({
                                         {badgeRetraso.label}
                                     </span>
                                 )}
+                                {badgesSla.map((b) => (
+                                    <span key={b.label} className={b.className} style={b.style}>{b.label}</span>
+                                ))}
                                 {badgeComp && (
                                     <span className={badgeComp.className} style={badgeComp.style}>
                                         {badgeComp.label}
@@ -302,6 +374,11 @@ export default function ModalDetalleCedis({
                                         Esperando captura de guía por delegado
                                     </AvisoOperativoPedido>
                                 )}
+                                {fase === 'PENDIENTE_GUIA_CLIENTE' && (
+                                    <AvisoOperativoPedido label="Estatus" tono="info">
+                                        Esperando guía del cliente (vendedora). No liberar el paquete hasta que cargue la guía.
+                                    </AvisoOperativoPedido>
+                                )}
                                 {fase === 'PENDIENTE_DE_ENVIO' && (
                                     <AvisoOperativoPedido label="Estatus" tono="info">
                                         Listo para verificación y envío en almacén
@@ -360,7 +437,7 @@ export default function ModalDetalleCedis({
                                                             <span className={b.className} style={b.style}>{b.label}</span>
                                                         </div>
                                                         {r.comentario && <p className="text-xs theme-text-muted font-bold m-0">{r.comentario}</p>}
-                                                        {r.estado_fisico === 'sin_existencia' && (
+                                                        {r.estado_fisico === 'sin_existencia' && esFasePreVenta(pedido?.estatus?.fase_ciclo) && (
                                                             <p className="text-[10px] font-black uppercase text-sky-600 m-0">
                                                                 Sin existencias en CEDIS — Ventas debe proceder.
                                                                 {r.resolucion ? ` (${LABELS_RESOLUCION_SIN_EXISTENCIA[r.resolucion] || r.resolucion})` : ''}
@@ -561,14 +638,83 @@ export default function ModalDetalleCedis({
                             </div>
                             {(pedido.cajas || []).length > 0 && (
                                 <div className="mt-3 space-y-2">
-                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de envíos (pesaje)</p>
-                                    {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
-                                        <p key={c.id || idx} className="text-xs font-bold theme-text-main m-0">
-                                            Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
-                                            {c.peso_real_kg != null ? ` · real ${c.peso_real_kg} kg` : ''}
-                                            {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
-                                        </p>
-                                    ))}
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de envíos (pesaje)</p>
+                                        {cajasOrdenadas.length > 0 && (cajasRecolectadasCount > 0 || fase === 'PENDIENTE_DE_ENVIO') && (
+                                            <span className="text-[10px] font-black uppercase theme-text-muted">
+                                                {cajasRecolectadasCount}/{cajasOrdenadas.length} recolectadas
+                                            </span>
+                                        )}
+                                    </div>
+                                    {cajasOrdenadas.map((c, idx) => {
+                                        const pendiente = (c.estatus_recoleccion || 'pendiente') === 'pendiente';
+                                        const evidenciasCaja = evidenciasEnvio.filter(
+                                            (d) => String(d.relacion_id) === String(c.id),
+                                        );
+                                        return (
+                                            <div
+                                                key={c.id || idx}
+                                                className="rounded-xl border theme-border p-3 space-y-2"
+                                            >
+                                                <div className="flex items-start gap-2">
+                                                    {puedeMarcarEnviado && pendiente && (
+                                                        <input
+                                                            type="checkbox"
+                                                            className="mt-1"
+                                                            checked={Boolean(seleccionEnvios[c.id])}
+                                                            onChange={(e) => setSeleccionEnvios((prev) => ({
+                                                                ...prev,
+                                                                [c.id]: e.target.checked,
+                                                            }))}
+                                                            aria-label={`Recolectar envío ${idx + 1}`}
+                                                        />
+                                                    )}
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs font-black theme-text-main m-0">
+                                                            Envío {idx + 1}: {c.tipo_caja?.nombre || 'Caja'}
+                                                            <span className="ml-2 font-bold theme-text-muted">
+                                                                {pendiente ? 'Pendiente' : 'Recolectada'}
+                                                            </span>
+                                                        </p>
+                                                        <p className="text-xs font-bold theme-text-muted m-0 mt-1">
+                                                            {c.largo != null ? `${c.largo}` : '—'}×{c.ancho != null ? `${c.ancho}` : '—'}×{c.alto != null ? `${c.alto}` : '—'} cm
+                                                            {c.peso_volumetrico_kg != null ? ` · vol ${c.peso_volumetrico_kg} kg` : ''}
+                                                            {c.peso_real_kg != null ? ` · real ${c.peso_real_kg} kg` : ''}
+                                                            {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
+                                                        </p>
+                                                        {(c.numero_rastreo || pedido.numero_rastreo) && (
+                                                            <p className="text-xs font-bold theme-text-muted m-0 mt-0.5">
+                                                                Guía: {c.numero_rastreo || pedido.numero_rastreo}
+                                                            </p>
+                                                        )}
+                                                        {evidenciasCaja.length > 0 && (
+                                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                                {evidenciasCaja.map((d) => (
+                                                                    <MiniaturaDocumento
+                                                                        key={d.id}
+                                                                        documento={d}
+                                                                        onVer={() => setDocPreview(d)}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        {puedeMarcarEnviado && pendiente && (
+                                                            <input
+                                                                type="text"
+                                                                className="mt-2 w-full text-xs font-bold rounded-lg border theme-border theme-element px-2 py-1.5 outline-none"
+                                                                placeholder="Guía de este envío (opcional si ya hay guía del pedido)"
+                                                                value={guiasEnvio[c.id] || ''}
+                                                                onChange={(e) => setGuiasEnvio((prev) => ({
+                                                                    ...prev,
+                                                                    [c.id]: e.target.value,
+                                                                }))}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
                             {pedido.comentarios_drive && (
@@ -664,10 +810,10 @@ export default function ModalDetalleCedis({
                             <button
                                 type="button"
                                 onClick={() => setConfirmacion('enviar')}
-                                disabled={procesando}
+                                disabled={procesando || (cajasPendientes.length > 1 && idsSeleccionados.length === 0)}
                                 className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto sm:ml-auto`}
                             >
-                                <Truck className="w-4 h-4" /> Paquetería recogió
+                                <Truck className="w-4 h-4" /> {etiquetaBotonEnviar}
                             </button>
                         )}
                         {puedeReabrirEnvio && (

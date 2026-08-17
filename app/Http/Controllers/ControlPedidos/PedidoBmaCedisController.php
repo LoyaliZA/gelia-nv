@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ControlPedidos\ConfirmarStockSinExistenciaPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\MarcarEnviadoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\MarcarResguardoApartadoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarErrorDatosPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ReportarIncidenciaEmpaqueRequest;
@@ -74,17 +75,30 @@ class PedidoBmaCedisController extends Controller
         return redirect()->back()->with('success', 'Pedido marcado como empacado.');
     }
 
-    public function marcarEnviado(PedidoBma $pedidoBma, MarcarEnviadoPedidoBmaService $service): RedirectResponse
-    {
+    public function marcarEnviado(
+        MarcarEnviadoPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        MarcarEnviadoPedidoBmaService $service
+    ): RedirectResponse {
         Gate::authorize('control_pedidos.cedis');
 
+        $cajas = $request->validated('cajas');
+
         try {
-            $service->ejecutar($pedidoBma->load(['estatus', 'paqueteria', 'origen']), Auth::id());
+            $pedido = $service->ejecutar(
+                $pedidoBma->load(['estatus', 'paqueteria', 'origen', 'cajas']),
+                Auth::id(),
+                $cajas
+            );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Paquetería confirmada: el pedido fue recogido.');
+        $completo = $pedido->estatus?->fase_ciclo === \App\Models\ControlPedidos\CatalogoEstatusPedido::FASE_ENVIADO;
+
+        return redirect()->back()->with('success', $completo
+            ? 'Paquetería confirmada: el pedido fue recogido.'
+            : 'Se registraron los envíos recolectados; el pedido sigue pendiente mientras queden cajas.');
     }
 
     public function reabrirEnvio(PedidoBma $pedidoBma, ReabrirEnvioPedidoBmaService $service): RedirectResponse

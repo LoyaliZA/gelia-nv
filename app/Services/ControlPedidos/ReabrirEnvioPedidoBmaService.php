@@ -39,6 +39,12 @@ class ReabrirEnvioPedidoBmaService
                 'catalogo_estatus_pedido_id' => $estatusNuevo->id,
             ]);
 
+            $pedido->cajas()->update([
+                'estatus_recoleccion' => \App\Models\ControlPedidos\PedidoBmaCaja::ESTATUS_PENDIENTE,
+                'recolectada_at' => null,
+                'recolectada_por_id' => null,
+            ]);
+
             $this->historialService->registrarTransicion(
                 $pedido->id,
                 $usuarioId,

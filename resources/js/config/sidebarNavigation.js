@@ -35,6 +35,7 @@ import {
     ClipboardCheck,
     Link2,
     MapPin,
+    Clock,
     BookOpen,
     Bot,
 } from 'lucide-react';
@@ -143,6 +144,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: FileSpreadsheet,
             href: () => routeHref('control_pedidos.delegado.index', '/control-pedidos/delegado'),
             active: (url) => url.startsWith('/control-pedidos/delegado'),
+        },
+        can('control_pedidos.configurar_plazos') && {
+            type: 'link',
+            id: 'control_pedidos_plazos',
+            label: 'Plazos de retraso',
+            icon: Clock,
+            href: () => routeHref('control_pedidos.plazos.index', '/control-pedidos/plazos'),
+            active: (url) => url.startsWith('/control-pedidos/plazos'),
         },
         can('clientes.direcciones.ver') && {
             type: 'link',

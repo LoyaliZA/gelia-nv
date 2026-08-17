@@ -14,14 +14,16 @@ class RegistrarHistorialPedidoService
      */
     public function ejecutar(
         int $pedidoId,
-        int $usuarioId,
+        ?int $usuarioId,
         ?int $estatusAnteriorId,
         int $estatusNuevoId,
         ?string $comentarios = null,
         ?string $accion = null,
         ?array $evidencia = null,
     ): PedidoBmaHistorialEstado {
-        [$rol, $departamento] = $this->snapshotActor($usuarioId);
+        [$rol, $departamento] = $usuarioId
+            ? $this->snapshotActor($usuarioId)
+            : ['Sistema', null];
 
         return PedidoBmaHistorialEstado::create([
             'pedido_bma_id' => $pedidoId,

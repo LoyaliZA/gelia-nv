@@ -50,6 +50,8 @@ final class AccionesHistorialPedidoBma
     public const DECISION_SIN_EXISTENCIA = 'decision_sin_existencia';
     public const STOCK_SIN_EXISTENCIA = 'stock_sin_existencia';
     public const REPORTE_SIN_EXISTENCIA = 'reporte_sin_existencia';
+    public const RETRASO_EMPAQUE = 'retraso_empaque';
+    public const RETRASO_RECOLECCION = 'retraso_recoleccion';
 
     /** @var array<string, string> */
     public const ETIQUETAS = [
@@ -96,6 +98,8 @@ final class AccionesHistorialPedidoBma
         self::DECISION_SIN_EXISTENCIA => 'Decisión por sin existencias',
         self::STOCK_SIN_EXISTENCIA => 'Existencias confirmadas (CEDIS)',
         self::REPORTE_SIN_EXISTENCIA => 'CEDIS reportó sin existencias',
+        self::RETRASO_EMPAQUE => 'Retraso de empaque',
+        self::RETRASO_RECOLECCION => 'Retraso de recolección',
     ];
 
     public static function etiqueta(?string $accion): ?string

@@ -662,24 +662,19 @@ class CatalogoController extends Controller
     // --- CONTROL PEDIDOS: PAQUETERÍAS ---
     public function storePaqueteriaPedido(Request $request)
     {
-        CatalogoPaqueteriaPedido::create($request->validate([
-            'nombre' => 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre',
-            'categoria' => 'required|in:comercial,local_regional',
-            'permite_costo_diferido' => 'boolean',
-            'activo' => 'boolean',
-        ]));
+        CatalogoPaqueteriaPedido::create($this->payloadPaqueteriaPedido(
+            $request->validate($this->reglasPaqueteriaPedido())
+        ));
 
         return back()->with('success', 'Paquetería registrada.');
     }
 
     public function updatePaqueteriaPedido(Request $request, $id)
     {
-        CatalogoPaqueteriaPedido::findOrFail($id)->update($request->validate([
-            'nombre' => 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre,' . $id,
-            'categoria' => 'required|in:comercial,local_regional',
-            'permite_costo_diferido' => 'boolean',
-            'activo' => 'boolean',
-        ]));
+        $validated = $this->payloadPaqueteriaPedido(
+            $request->validate($this->reglasPaqueteriaPedido($id))
+        );
+        CatalogoPaqueteriaPedido::findOrFail($id)->update($validated);
 
         return back()->with('success', 'Paquetería actualizada.');
     }
@@ -692,6 +687,37 @@ class CatalogoController extends Controller
         CatalogoPaqueteriaPedido::findOrFail($id)->delete();
 
         return back()->with('success', 'Paquetería eliminada.');
+    }
+
+    private function reglasPaqueteriaPedido($id = null): array
+    {
+        $unique = $id
+            ? 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre,'.$id
+            : 'required|string|max:255|unique:catalogo_paqueterias_pedido,nombre';
+
+        return [
+            'nombre' => $unique,
+            'categoria' => 'required|in:comercial,local_regional',
+            'permite_costo_diferido' => 'boolean',
+            'activo' => 'boolean',
+            'modalidad_tarifa' => 'nullable|in:fija,por_peso',
+            'tarifa_monto' => 'nullable|numeric|min:0',
+            'tarifa_unidad_peso' => 'nullable|in:kg,g',
+            'tarifa_paso_peso' => 'nullable|numeric|min:0',
+        ];
+    }
+
+    private function payloadPaqueteriaPedido(array $validated): array
+    {
+        if (($validated['categoria'] ?? '') === CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL
+            || empty($validated['modalidad_tarifa'])) {
+            $validated['modalidad_tarifa'] = null;
+            $validated['tarifa_monto'] = null;
+            $validated['tarifa_unidad_peso'] = null;
+            $validated['tarifa_paso_peso'] = null;
+        }
+
+        return $validated;
     }
 
     // --- CONTROL PEDIDOS: TIPOS DE CAJA ---

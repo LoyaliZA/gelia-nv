@@ -35,6 +35,8 @@ export const ALERTAS_TIPOS = {
     pedido_error_cedis: 'Error CEDIS (pedido)',
     pedido_error_estado: 'Estado de error (pedido)',
     pedido_guia_retraso: 'Retraso por corrección de guía',
+    pedido_retraso_empaque: 'Retraso de empaque',
+    pedido_retraso_recoleccion: 'Retraso de recolección',
     pedido_resguardo_apartado: 'Resguardo apartado (CEDIS)',
     pedido_consulta_pesaje: 'Consulta de pesaje (CEDIS)',
     pedido_pesaje_listo: 'Pesaje listo (vendedora)',

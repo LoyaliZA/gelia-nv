@@ -89,6 +89,7 @@ class PedidoBma extends Model
         'motivo_repesaje',
         'aplica_seguro',
         'cliente_proporciona_guia',
+        'envio_por_cobrar',
         'costo_seguro',
         'total_a_cobrar',
         'catalogo_estatus_pedido_id',
@@ -131,6 +132,7 @@ class PedidoBma extends Model
         'fecha' => 'date',
         'aplica_seguro' => 'boolean',
         'cliente_proporciona_guia' => 'boolean',
+        'envio_por_cobrar' => 'boolean',
         'es_resguardo' => 'boolean',
         'resguardo_apartado_at' => 'datetime',
         'anexar_remision' => 'boolean',
@@ -412,6 +414,20 @@ class PedidoBma extends Model
     public function cajas(): HasMany
     {
         return $this->hasMany(PedidoBmaCaja::class, 'pedido_bma_id')->orderBy('orden');
+    }
+
+    public function getCajasRecolectadasAttribute(): int
+    {
+        $cajas = $this->relationLoaded('cajas') ? $this->cajas : $this->cajas()->get();
+
+        return $cajas->filter(fn (PedidoBmaCaja $c) => $c->estaRecolectada())->count();
+    }
+
+    public function getCajasPendientesAttribute(): int
+    {
+        $cajas = $this->relationLoaded('cajas') ? $this->cajas : $this->cajas()->get();
+
+        return $cajas->filter(fn (PedidoBmaCaja $c) => $c->estaPendiente())->count();
     }
 
     public function revisionesProducto(): HasMany

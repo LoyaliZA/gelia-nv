@@ -21,7 +21,14 @@ class PedidoBmaCaja extends Model
         'peso_volumetrico_kg',
         'peso_cobrado_kg',
         'catalogo_tipo_guia_id',
+        'estatus_recoleccion',
+        'recolectada_at',
+        'recolectada_por_id',
+        'numero_rastreo',
     ];
+
+    public const ESTATUS_PENDIENTE = 'pendiente';
+    public const ESTATUS_RECOLECTADA = 'recolectada';
 
     protected $casts = [
         'cantidad' => 'integer',
@@ -32,7 +39,18 @@ class PedidoBmaCaja extends Model
         'peso_real_kg' => 'float',
         'peso_volumetrico_kg' => 'float',
         'peso_cobrado_kg' => 'float',
+        'recolectada_at' => 'datetime',
     ];
+
+    public function estaPendiente(): bool
+    {
+        return ($this->estatus_recoleccion ?: self::ESTATUS_PENDIENTE) === self::ESTATUS_PENDIENTE;
+    }
+
+    public function estaRecolectada(): bool
+    {
+        return $this->estatus_recoleccion === self::ESTATUS_RECOLECTADA;
+    }
 
     public function pedido(): BelongsTo
     {

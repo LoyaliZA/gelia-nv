@@ -22,12 +22,15 @@ class TiendanubeImageImport extends Model
         'extract_path',
         'mensaje_error',
         'reemplazar_primera',
+        'convertir_webp',
+        'modo_1280',
     ];
 
     protected function casts(): array
     {
         return [
             'reemplazar_primera' => 'boolean',
+            'convertir_webp' => 'boolean',
         ];
     }
 

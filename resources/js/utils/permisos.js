@@ -96,6 +96,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'control_pedidos.cancelar': 'Permite cancelar un pedido BMA en fases tempranas (pre-guía / pre-envío).',
     'control_pedidos.reabrir': 'Permite reabrir un pedido enviado a pendiente de recolección si la paquetería no recogió.',
     'control_pedidos.configurar_catalogos': 'Permite administrar catálogos del módulo de control de pedidos.',
+    'control_pedidos.configurar_plazos': 'Permite configurar plazos de retraso de empaque y recolección.',
     'control_pedidos.direccion.seleccionar': 'Permite seleccionar una dirección normalizada en pedidos BMA.',
     'control_pedidos.direccion.cambiar': 'Permite cambiar la dirección de un pedido con auditoría.',
     'control_pedidos.direccion.cambiar_despues_remision': 'Permite cambiar dirección después de que exista remisión.',
@@ -233,6 +234,7 @@ export const ETIQUETAS_PERMISOS = {
     'control_pedidos.cedis': 'gestionar cedis',
     'control_pedidos.delegado': 'asignar / actualizar guías',
     'control_pedidos.configurar_catalogos': 'configurar catálogos',
+    'control_pedidos.configurar_plazos': 'configurar plazos de retraso',
     'control_pedidos.auditar': 'auditar pedidos',
     'control_pedidos.cancelar': 'cancelar pedido',
     'control_pedidos.reabrir': 'reabrir envío',
@@ -297,6 +299,12 @@ export const SUBMODULOS_UI_POR_MODULO = {
             label: 'Catálogos',
             descripcion: 'Administrar catálogos del módulo (orígenes, paqueterías, etc.)',
             permisos: ['control_pedidos.configurar_catalogos'],
+        },
+        {
+            id: 'plazos',
+            label: 'Plazos de retraso',
+            descripcion: 'Configurar plazos de empaque y recolección',
+            permisos: ['control_pedidos.configurar_plazos'],
         },
     ],
     saldos_favor: [

@@ -138,6 +138,11 @@ export const LABELS_ESTATUS_ENVIO = {
     pesaje_listo: 'Pesaje listo — cotizar envío',
 };
 
+/** Fases pre-venta donde badges de pesaje / obs. CEDIS pueden mostrarse junto al ciclo. */
+export const FASES_PRE_VENTA = ['BORRADOR', 'PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'];
+
+export const esFasePreVenta = (faseCiclo) => !faseCiclo || FASES_PRE_VENTA.includes(faseCiclo);
+
 /** Revisión de exhibición (pedido_bma_pagos.estado_revision). */
 export const LABELS_ESTADO_REVISION_PAGO = {
     pendiente: 'Pendiente de revisión',
@@ -290,8 +295,14 @@ export const badgeEstadoFisico = (estado) => {
     };
 };
 
-export const badgeEstatusEnvio = (estatusEnvio) => {
+export const badgeEstatusEnvio = (estatusEnvio, { faseCiclo = null, forzarPesaje = false } = {}) => {
     if (!estatusEnvio || estatusEnvio === 'completo') return null;
+    // Pesaje no debe encimarse con fases posteriores (salvo vista CEDIS / forzarPesaje).
+    if (['pendiente_pesaje', 'pesaje_listo'].includes(estatusEnvio)
+        && !forzarPesaje
+        && !esFasePreVenta(faseCiclo)) {
+        return null;
+    }
     const colores = {
         pendiente_regularizacion: '#F59E0B',
         pendiente_revision_anexo: '#8B5CF6',
@@ -384,6 +395,35 @@ export const badgeRetrasoGuia = () => ({
     label: 'Retraso',
     ...badgeClaseEstatusPedido({ color_hex: '#F59E0B' }),
 });
+
+export const badgeRetrasoEmpaque = () => ({
+    label: 'Retraso de empaque',
+    ...badgeClaseEstatusPedido({ color_hex: '#EA580C' }),
+});
+
+export const badgeRetrasoRecoleccion = () => ({
+    label: 'Retraso de recolección',
+    ...badgeClaseEstatusPedido({ color_hex: '#C2410C' }),
+});
+
+/** Activo mientras no se empacó (independiente del badge de guía). */
+export const tieneRetrasoEmpaqueActivo = (pedido) => (
+    Boolean(pedido?.retraso_empaque_alertado_at) && !pedido?.empacado_at
+);
+
+/** Activo mientras no está enviado/cancelado. */
+export const tieneRetrasoRecoleccionActivo = (pedido) => {
+    if (!pedido?.retraso_recoleccion_alertado_at) return false;
+    const fase = pedido?.estatus?.fase_ciclo;
+    return !['ENVIADO', 'CANCELADO', 'ENTREGADO'].includes(fase);
+};
+
+export const badgesRetrasoSla = (pedido) => {
+    const out = [];
+    if (tieneRetrasoEmpaqueActivo(pedido)) out.push(badgeRetrasoEmpaque());
+    if (tieneRetrasoRecoleccionActivo(pedido)) out.push(badgeRetrasoRecoleccion());
+    return out;
+};
 
 export const badgeErrorDatos = () => ({
     label: 'Error datos',
@@ -544,6 +584,10 @@ export const pedidoTieneSinExistenciaAbierta = (pedido) => {
     return revs.some(revisionSinExistenciaAbierta);
 };
 
+/** Badge operativo solo mientras Ventas aún puede actuar (misma ventana que obs. CEDIS). */
+export const mostrarBadgeSinExistencias = (pedido) => (
+    pedidoTieneSinExistencias(pedido) && esFasePreVenta(pedido?.estatus?.fase_ciclo)
+);
 /** Departamentos a mostrar: principal (como área principal); si no hay, los M2M asignados. */
 export const nombresDepartamentosVendedor = (vendedor) => {
     if (!vendedor) return [];
@@ -709,10 +753,42 @@ export const calcSeguroPedido = (nombrePaqueteria, envio, totalMercancia) => ({
 /** Etiqueta de costo según categoría de paquetería (comercial vs local/taxi). */
 export const etiquetaCostoEnvio = (paqueteria) => {
     if (!paqueteria) return 'Costo de envío';
+    if (paqueteria.modalidad_tarifa === 'fija') {
+        return 'Costo de transporte (tarifa fija)';
+    }
+    if (paqueteria.modalidad_tarifa === 'por_peso') {
+        return 'Costo de transporte (por peso)';
+    }
     if (paqueteria.categoria === 'comercial' || paqueteriaTieneCobertura(paqueteria.nombre)) {
         return 'Costo de envío';
     }
     return 'Costo de transporte / taxi';
+};
+
+/** Espeja CatalogoPaqueteriaPedido::calcularCostoEnvio (solo locales). */
+export const calcularCostoTarifaLocal = (paqueteria, pesoCobradoKg = null) => {
+    if (!paqueteria || paqueteria.categoria === 'comercial' || !paqueteria.modalidad_tarifa) {
+        return null;
+    }
+    const monto = paqueteria.tarifa_monto != null && paqueteria.tarifa_monto !== ''
+        ? Number(paqueteria.tarifa_monto)
+        : null;
+    if (monto == null || Number.isNaN(monto)) return null;
+
+    if (paqueteria.modalidad_tarifa === 'fija') {
+        return Math.round(monto * 100) / 100;
+    }
+    if (paqueteria.modalidad_tarifa !== 'por_peso') return null;
+    if (pesoCobradoKg == null || Number(pesoCobradoKg) <= 0) return null;
+
+    const paso = Number(paqueteria.tarifa_paso_peso || 0);
+    if (!(paso > 0)) return null;
+
+    const peso = Number(pesoCobradoKg);
+    const pesoEnUnidad = paqueteria.tarifa_unidad_peso === 'g' ? peso * 1000 : peso;
+    let pasos = Math.ceil(pesoEnUnidad / paso);
+    if (pasos < 1) pasos = 1;
+    return Math.round(pasos * monto * 100) / 100;
 };
 
 /**
@@ -723,6 +799,7 @@ export const esCotizacionLista = ({
     requiereLogistica = true,
     cotizacionHabilitada = false,
     guiaCliente = false,
+    envioPorCobrar = false,
     esResguardoComplementario = false,
     omiteCosto = false,
     catalogo_paqueteria_id = '',
@@ -735,7 +812,7 @@ export const esCotizacionLista = ({
         return Number(total_mercancia || 0) > 0;
     }
     if (!cotizacionHabilitada) return false;
-    if (guiaCliente || esResguardoComplementario) return true;
+    if (guiaCliente || envioPorCobrar || esResguardoComplementario) return true;
     if (!catalogo_paqueteria_id) return false;
     if (!omiteCosto && (costo_envio === '' || costo_envio == null)) return false;
     if (!catalogo_tipo_guia_id) return false;
@@ -764,9 +841,18 @@ export const validarCamposEnvioPedido = (data, {
     esResguardoComplementario = false,
     tienePesajeRespondido = false,
     pagoPendiente = null,
+    paqueteria = null,
 } = {}) => {
     const faltantes = [];
-    const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario;
+    const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario
+        || Boolean(data.cliente_proporciona_guia)
+        || Boolean(data.envio_por_cobrar)
+        || (
+            !tienePesajeRespondido
+            && paqueteria
+            && paqueteria.categoria !== 'comercial'
+            && paqueteria.modalidad_tarifa === 'por_peso'
+        );
     const guiaCliente = Boolean(data.cliente_proporciona_guia);
 
     if (requiereLogistica && !esResguardoComplementario && !tienePesajeRespondido) {

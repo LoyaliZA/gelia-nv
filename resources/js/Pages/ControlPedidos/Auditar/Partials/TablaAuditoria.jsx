@@ -134,7 +134,9 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBi
             <div className="md:hidden p-4 space-y-3">
                 {items.map((pedido) => {
                     const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
-                    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
+                    const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
+                        faseCiclo: pedido.estatus?.fase_ciclo,
+                    });
                     const fase = pedido.estatus?.fase_ciclo;
                     return (
                         <CardAuditoria
@@ -172,7 +174,9 @@ export default function TablaAuditoria({ pedidos, onRevisar, onAnexarEnvio, onBi
                     <tbody>
                         {items.map((pedido) => {
                             const badge = badgeAuditoriaSemantico(pedido.estatus?.fase_ciclo, pedido.es_resguardo);
-                            const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio);
+                            const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
+                                faseCiclo: pedido.estatus?.fase_ciclo,
+                            });
                             const fase = pedido.estatus?.fase_ciclo;
                             const esRechazado = fase === 'RECHAZADO_VENDEDORA';
                             const esIncidenciaCedis = fase === 'INCIDENCIA_CEDIS' || Boolean(pedido.detalle_incidencia_empaque);
