@@ -110,12 +110,6 @@ class NotificationBrowserService {
 
             this._selectedVoice = this._pickBestVoice(voices);
             this._voicesReady = true;
-
-            if (this._selectedVoice) {
-                console.info(
-                    `[NotificationBrowserService] Voz seleccionada: "${this._selectedVoice.name}" (${this._selectedVoice.lang})`
-                );
-            }
         };
 
         trySelect();
