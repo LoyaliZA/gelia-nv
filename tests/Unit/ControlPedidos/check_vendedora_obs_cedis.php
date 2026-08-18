@@ -20,6 +20,9 @@ $alerta = file_get_contents($root.'/app/Notifications/AlertaPedidoBma.php');
 
 $checks = [
     ['tab OBS_CEDIS en TABS', str_contains($styles, "id: 'OBS_CEDIS'")],
+    ['tabs pedidos principales', str_contains($styles, 'TABS_PEDIDOS_PRINCIPALES')],
+    ['tabs pedidos subfiltros', str_contains($styles, 'TABS_PEDIDOS_SUBFILTROS')],
+    ['filtros filas Estado / Envío', str_contains($filtros, 'Estado') && str_contains($filtros, 'Envío y colas')],
     ['badge Observaciones CEDIS', str_contains($styles, 'badgeObservacionesCedis')],
     ['badge Sin existencias', str_contains($styles, 'badgeSinExistencias')],
     ['helper pedidoTieneSinExistencias', str_contains($styles, 'pedidoTieneSinExistencias')],

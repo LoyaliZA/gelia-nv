@@ -118,6 +118,7 @@ describe('agruparModulosPorSeccionSidebar', () => {
     it('ordena módulos según secciones del sidebar', () => {
         const agrupados = {
             facturas: [{ name: 'facturas.ver_listado' }],
+            saldos_favor: [{ name: 'saldos_favor.ver' }],
             control_pedidos: [{ name: 'control_pedidos.cedis' }],
             usuarios: [{ name: 'usuarios.gestionar' }],
         };
@@ -126,5 +127,7 @@ describe('agruparModulosPorSeccionSidebar', () => {
         expect(secciones[0].modulos[0].modulo).toBe('control_pedidos');
         expect(secciones[0].modulos[0].label).toBe('Gestión de pedidos');
         expect(secciones[1].label).toBe('Finanzas');
+        expect(secciones[1].modulos.map((m) => m.modulo)).toEqual(['facturas', 'saldos_favor']);
+        expect(secciones.some((s) => s.id === 'otros')).toBe(false);
     });
 });

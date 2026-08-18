@@ -32,6 +32,8 @@ $assert(str_contains($vis, 'idsVendedoresVisibles'), 'helper ids vendedores');
 $assert(str_contains($vis, 'puedeMutarComoVendedora'), 'helper mutar vendedora');
 $assert(str_contains($vis, 'puedeConsultar'), 'helper consultar');
 $assert(str_contains($vis, 'colaboradores()'), 'gerente vía colaboradores');
+$assert(str_contains($vis, 'excluirBorradoresAjenos'), 'listado oculta borradores ajenos');
+$assert(str_contains($vis, 'esBorradorAjeno'), 'consulta rechaza borrador ajeno');
 
 $assert(str_contains($listar, 'VisibilidadPedidoBma::aplicarAlcanceListadoBma'), 'listado usa helper');
 $assert(str_contains($listar, 'puede_editar'), 'listado anexa puede_editar');

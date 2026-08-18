@@ -1111,8 +1111,8 @@ export const SECCIONES_SIDEBAR_PERMISOS = [
     {
         id: 'finanzas',
         label: 'Finanzas',
-        descripcion: 'Contabilidad, facturas y cobranza',
-        modulos: ['contabilidad', 'facturas', 'cobranza'],
+        descripcion: 'Contabilidad, facturas, cobranza y saldos a favor',
+        modulos: ['contabilidad', 'facturas', 'cobranza', 'saldos_favor'],
     },
     {
         id: 'herramientas',

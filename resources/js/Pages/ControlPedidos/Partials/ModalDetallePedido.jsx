@@ -43,8 +43,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
     const puedeAtender = Boolean(pedido?.puede_mutar)
-        || Number(pedido?.vendedor_id) === Number(auth?.user?.id)
-        || Boolean(auth?.user?.roles?.includes('Super Admin'));
+        || Number(pedido?.vendedor_id) === Number(auth?.user?.id);
 
     if (!abierto || !pedido) return null;
 
@@ -169,7 +168,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             pedido={pedido}
                             onVerDoc={setDocPreview}
                             puedeAtender={puedeAtender}
-                            puedeCancelar={Boolean(pedido?.puede_cancelar) || can('control_pedidos.cancelar')}
+                            puedeCancelar={Boolean(pedido?.puede_cancelar)}
                         />
                         <div className="mt-4 space-y-3">
                             <div className="flex items-center justify-between gap-2">

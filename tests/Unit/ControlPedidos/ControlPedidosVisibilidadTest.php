@@ -20,6 +20,16 @@ class ControlPedidosVisibilidadTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withoutMiddleware([
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+            \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+        ]);
+    }
+
     public function test_vendedora_no_ve_pedido_ajeno_y_gerente_si_consulta(): void
     {
         $vendedoraA = User::factory()->create(['name' => 'Vendedora A']);
@@ -27,7 +37,7 @@ class ControlPedidosVisibilidadTest extends TestCase
         $gerente = User::factory()->create(['name' => 'Gerente']);
         $gerente->colaboradores()->attach($vendedoraA->id);
 
-        $estatus = CatalogoEstatusPedido::create([
+        $borrador = CatalogoEstatusPedido::create([
             'codigo_interno' => 'BORRADOR_VIS',
             'nombre_visual' => 'Borrador',
             'color_hex' => '#94A3B8',
@@ -35,22 +45,38 @@ class ControlPedidosVisibilidadTest extends TestCase
             'orden' => 1,
             'activo' => true,
         ]);
+        $enCurso = CatalogoEstatusPedido::create([
+            'codigo_interno' => 'AUX_VIS',
+            'nombre_visual' => 'Pendiente auxiliar',
+            'color_hex' => '#3B82F6',
+            'fase_ciclo' => CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
+            'orden' => 2,
+            'activo' => true,
+        ]);
 
         $pedidoA = PedidoBma::create([
             'folio' => 'PED-A-'.uniqid(),
             'fecha' => now()->toDateString(),
             'vendedor_id' => $vendedoraA->id,
-            'catalogo_estatus_pedido_id' => $estatus->id,
+            'catalogo_estatus_pedido_id' => $enCurso->id,
             'total_mercancia' => 100,
             'costo_envio' => 0,
             'es_resguardo' => false,
         ]);
-
+        $borradorA = PedidoBma::create([
+            'folio' => 'PED-A-BORR-'.uniqid(),
+            'fecha' => now()->toDateString(),
+            'vendedor_id' => $vendedoraA->id,
+            'catalogo_estatus_pedido_id' => $borrador->id,
+            'total_mercancia' => 40,
+            'costo_envio' => 0,
+            'es_resguardo' => false,
+        ]);
         $pedidoB = PedidoBma::create([
             'folio' => 'PED-B-'.uniqid(),
             'fecha' => now()->toDateString(),
             'vendedor_id' => $vendedoraB->id,
-            'catalogo_estatus_pedido_id' => $estatus->id,
+            'catalogo_estatus_pedido_id' => $enCurso->id,
             'total_mercancia' => 100,
             'costo_envio' => 0,
             'es_resguardo' => false,
@@ -58,19 +84,68 @@ class ControlPedidosVisibilidadTest extends TestCase
 
         $listadoA = app(ListarPedidosBmaService::class)->ejecutar($vendedoraA, [], false);
         $this->assertTrue($listadoA->contains('id', $pedidoA->id));
+        $this->assertTrue($listadoA->contains('id', $borradorA->id));
         $this->assertFalse($listadoA->contains('id', $pedidoB->id));
 
         $listadoGerente = app(ListarPedidosBmaService::class)->ejecutar($gerente, [], false);
         $this->assertTrue($listadoGerente->contains('id', $pedidoA->id));
+        $this->assertFalse($listadoGerente->contains('id', $borradorA->id));
         $this->assertFalse($listadoGerente->contains('id', $pedidoB->id));
 
         $this->assertTrue(VisibilidadPedidoBma::puedeConsultarEnListadoBma($gerente, $pedidoA));
+        $this->assertFalse(VisibilidadPedidoBma::puedeConsultarEnListadoBma($gerente, $borradorA));
         $this->assertFalse(VisibilidadPedidoBma::puedeMutarComoVendedora($gerente, $pedidoA));
         $this->assertTrue(VisibilidadPedidoBma::puedeMutarComoVendedora($vendedoraA, $pedidoA));
         $this->assertFalse(VisibilidadPedidoBma::puedeMutarComoVendedora($vendedoraB, $pedidoA));
 
         $pedidoGerente = $listadoGerente->firstWhere('id', $pedidoA->id);
         $this->assertFalse((bool) $pedidoGerente->puede_editar);
+    }
+
+    public function test_admin_ve_borrador_ajeno_pero_no_lo_edita(): void
+    {
+        Role::findOrCreate('Super Admin', 'web');
+        $admin = User::factory()->create(['name' => 'Super Admin']);
+        $admin->assignRole('Super Admin');
+        $vendedora = User::factory()->create(['name' => 'Vendedora']);
+
+        $estatus = CatalogoEstatusPedido::create([
+            'codigo_interno' => 'BORRADOR_ADMIN',
+            'nombre_visual' => 'Borrador',
+            'color_hex' => '#94A3B8',
+            'fase_ciclo' => CatalogoEstatusPedido::FASE_BORRADOR,
+            'orden' => 1,
+            'activo' => true,
+        ]);
+        $pedido = PedidoBma::create([
+            'folio' => 'PED-ADM-'.uniqid(),
+            'fecha' => now()->toDateString(),
+            'vendedor_id' => $vendedora->id,
+            'catalogo_estatus_pedido_id' => $estatus->id,
+            'total_mercancia' => 80,
+            'costo_envio' => 0,
+            'es_resguardo' => false,
+        ]);
+
+        $listado = app(ListarPedidosBmaService::class)->ejecutar($admin, [], false);
+        $this->assertTrue($listado->contains('id', $pedido->id));
+        $this->assertTrue(VisibilidadPedidoBma::puedeConsultar($admin, $pedido));
+        $this->assertFalse(VisibilidadPedidoBma::puedeMutarComoVendedora($admin, $pedido));
+
+        $visto = $listado->firstWhere('id', $pedido->id);
+        $this->assertFalse((bool) $visto->puede_editar);
+        $this->assertFalse((bool) $visto->puede_mutar);
+
+        $this->actingAs($admin)
+            ->getJson(route('control_pedidos.pagos.resumen', $pedido))
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->post(route('control_pedidos.pagos.store', $pedido), [
+                'monto' => 10,
+                'forma_pago' => 'efectivo',
+            ])
+            ->assertForbidden();
     }
 
     public function test_documento_requiere_consulta_autorizada(): void
@@ -171,7 +246,7 @@ class ControlPedidosVisibilidadTest extends TestCase
             'costo_envio' => 0,
             'es_resguardo' => false,
         ]);
-        PedidoBma::create([
+        $borradorPedido = PedidoBma::create([
             'folio' => 'PED-BORR-'.uniqid(),
             'fecha' => now()->toDateString(),
             'vendedor_id' => $vendedoraA->id,
@@ -184,6 +259,7 @@ class ControlPedidosVisibilidadTest extends TestCase
         $listadoGerente = app(ListarPedidosBmaService::class)->ejecutar($gerente, [], false);
         $this->assertTrue($listadoGerente->contains('id', $pedidoA->id));
         $this->assertFalse($listadoGerente->contains('id', $pedidoB->id));
+        $this->assertFalse($listadoGerente->contains('id', $borradorPedido->id));
 
         $audA = app(ListarPedidosAuditoriaService::class)->ejecutar([], false, $auxiliar);
         $this->assertTrue($audA->contains('id', $pedidoA->id));

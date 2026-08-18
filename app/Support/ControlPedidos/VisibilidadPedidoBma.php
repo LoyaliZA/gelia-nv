@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Builder;
 /**
  * Reglas de aislamiento Control Pedidos:
  * - Vendedora: solo sus pedidos (mutar/consultar propios).
- * - Gerente: consulta pedidos de colaboradores y de su departamento; muta solo los propios.
+ * - Gerente: consulta pedidos de colaboradores y de su departamento, excepto borradores ajenos; muta solo los propios.
+ * - Super Admin: consulta todos (omnisciencia); muta solo los propios como vendedora.
  * - Auxiliar: bandeja de auditoría del departamento (permiso + fase).
  * - CEDIS/Delegado: bandeja por permiso + fase (sin filtro dept).
  */
@@ -113,22 +114,23 @@ final class VisibilidadPedidoBma
         }
 
         $query->whereIn('vendedor_id', $ids);
+        self::excluirBorradoresAjenos($query, $usuario);
     }
 
     public static function puedeMutarComoVendedora(User $usuario, PedidoBma $pedido): bool
+    {
+        return (int) $pedido->vendedor_id === (int) $usuario->id;
+    }
+
+    /** Consulta en panel BMA: propios + equipo del gerente (sin borradores ajenos). */
+    public static function puedeConsultarEnListadoBma(User $usuario, PedidoBma $pedido): bool
     {
         if (self::esAdmin($usuario)) {
             return true;
         }
 
-        return (int) $pedido->vendedor_id === (int) $usuario->id;
-    }
-
-    /** Consulta en panel BMA: propios + equipo del gerente. */
-    public static function puedeConsultarEnListadoBma(User $usuario, PedidoBma $pedido): bool
-    {
-        if (self::esAdmin($usuario)) {
-            return true;
+        if (self::esBorradorAjeno($usuario, $pedido)) {
+            return false;
         }
 
         $ids = self::idsVendedoresVisibles($usuario) ?? [];
@@ -184,6 +186,34 @@ final class VisibilidadPedidoBma
         }
 
         return in_array((int) $pedido->vendedor_id, $ids, true);
+    }
+
+    private static function esBorradorAjeno(User $usuario, PedidoBma $pedido): bool
+    {
+        if ((int) $pedido->vendedor_id === (int) $usuario->id) {
+            return false;
+        }
+
+        $pedido->loadMissing('estatus');
+
+        return $pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_BORRADOR;
+    }
+
+    private static function excluirBorradoresAjenos(Builder $query, User $usuario): void
+    {
+        $idsBorrador = CatalogoEstatusPedido::query()
+            ->where('fase_ciclo', CatalogoEstatusPedido::FASE_BORRADOR)
+            ->pluck('id')
+            ->all();
+
+        if ($idsBorrador === []) {
+            return;
+        }
+
+        $query->where(function (Builder $q) use ($usuario, $idsBorrador) {
+            $q->where('vendedor_id', (int) $usuario->id)
+                ->orWhereNotIn('catalogo_estatus_pedido_id', $idsBorrador);
+        });
     }
 
     private static function enBandejaCedis(PedidoBma $pedido, ?string $fase): bool

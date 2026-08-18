@@ -154,6 +154,10 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         cargar({ tab: tabActiva, q: busqueda || undefined, page });
     };
 
+    const onActualizar = () => {
+        cargar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 });
+    };
+
     const abrirNuevo = () => {
         if (hayBorradorPedidoLocal()) {
             setConfirmarBorradorNuevo(true);
@@ -228,6 +232,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         busqueda={busqueda}
                         onTabChange={onTabChange}
                         onBuscar={onBuscar}
+                        onActualizar={onActualizar}
                         metricas={metricasVista}
                         pedidos={pedidosVista}
                         onIrAPagina={onIrAPagina}

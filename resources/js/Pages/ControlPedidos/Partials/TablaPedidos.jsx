@@ -227,6 +227,7 @@ export default function TablaPedidos({
         && ['BORRADOR', 'PESAJE_PENDIENTE'].includes(pedido.estatus?.fase_ciclo);
 
     const puedeCancelar = (pedido) => Boolean(pedido.puede_cancelar)
+        && puedeMutarPedido(pedido)
         && can('control_pedidos.cancelar')
         && pedido.estatus?.fase_ciclo !== 'CANCELADO';
 

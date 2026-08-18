@@ -100,18 +100,26 @@ export const etiquetaEstatusPedido = (estatus, { esResguardo = false } = {}) => 
     return estatus?.nombre_visual || fase || '—';
 };
 
-export const TABS_PEDIDOS = [
+export const TABS_PEDIDOS_PRINCIPALES = [
     { id: 'TODAS', label: 'Todas' },
     { id: 'BORRADORES', label: 'Borradores' },
     { id: 'PESAJE_PENDIENTE', label: 'Pesaje pendiente' },
     { id: 'PESAJE_RESPONDIDO', label: 'Pesaje respondido' },
+    { id: 'PENDIENTE_AUXILIAR', label: 'Pendiente de auditoría' },
+    { id: 'RECHAZADAS', label: 'Rechazadas' },
+];
+
+export const TABS_PEDIDOS_SUBFILTROS = [
     { id: 'OBS_CEDIS', label: 'Obs. CEDIS' },
     { id: 'SIN_EXISTENCIA', label: 'Sin existencias' },
-    { id: 'PENDIENTE_AUXILIAR', label: 'Pendiente de auditoría' },
     { id: 'EN_CEDIS', label: 'Pendiente de empaque' },
     { id: 'PENDIENTE_GUIA_CLIENTE', label: 'Guía del cliente' },
     { id: 'ENVIADOS', label: 'Enviados' },
-    { id: 'RECHAZADAS', label: 'Rechazadas' },
+];
+
+export const TABS_PEDIDOS = [
+    ...TABS_PEDIDOS_PRINCIPALES,
+    ...TABS_PEDIDOS_SUBFILTROS,
 ];
 
 /** Estado del ciclo: filtros principales de la bandeja auxiliar. */
