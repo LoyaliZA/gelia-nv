@@ -176,7 +176,8 @@ final class MaquinaEstadosPedidoBma
     }
 
     /**
-     * Volvió a PENDIENTE_AUXILIAR tras un rechazo o reporte (no el primer envío desde borrador).
+     * Volvió a PENDIENTE_AUXILIAR más de una vez (rechazo, error o reenvío).
+     * El primer envío desde borrador o pesaje no cuenta.
      */
     public static function esPendienteReRevision(PedidoBma $pedido): bool
     {
@@ -186,15 +187,16 @@ final class MaquinaEstadosPedidoBma
 
         $historial = $pedido->relationLoaded('historial') ? $pedido->historial : collect();
 
-        $ultimaEntrada = $historial
-            ->filter(fn ($h) => $h->estatusNuevo?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR)
-            ->sortByDesc('id')
-            ->first();
+        return $historial
+            ->filter(function ($h) {
+                $nueva = $h->estatusNuevo?->fase_ciclo;
+                $anterior = $h->estatusAnterior?->fase_ciclo;
 
-        $faseAnterior = $ultimaEntrada?->estatusAnterior?->fase_ciclo;
-
-        return $faseAnterior !== null
-            && $faseAnterior !== CatalogoEstatusPedido::FASE_BORRADOR;
+                return $nueva === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR
+                    && $anterior !== null
+                    && $anterior !== CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR;
+            })
+            ->count() > 1;
     }
 
     public static function faseDestinoEmpaque(PedidoBma $pedido): string

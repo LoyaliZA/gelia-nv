@@ -6,6 +6,8 @@
 :root {
     --color-primario: #ec4899;
     --color-peligro: #dc2626;
+    --color-exito: #059669;
+    --color-info: #3B82F6;
     --font-principal: 'Inter', sans-serif;
     --font-scale: 1;
 

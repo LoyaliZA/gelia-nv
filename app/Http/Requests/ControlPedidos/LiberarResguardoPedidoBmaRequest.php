@@ -9,7 +9,7 @@ class LiberarResguardoPedidoBmaRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('control_pedidos.auditar') ?? false;
+        return $this->user()?->can('control_pedidos.liberar_resguardo') ?? false;
     }
 
     public function rules(): array

@@ -22,6 +22,8 @@ use App\Services\ControlPedidos\RechazarAnexoEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RechazarPedidoBmaService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use App\Services\ControlPedidos\ValidarPagoPedidoBmaService;
+use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Support\ControlPedidos\RevisionEnCursoPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -119,7 +121,7 @@ class PedidoBmaAuditoriaController extends Controller
 
     public function aprobar(PedidoBma $pedidoBma, AprobarPedidoBmaService $service): RedirectResponse
     {
-        Gate::authorize('control_pedidos.auditar');
+        Gate::authorize('control_pedidos.auditar.aprobar');
         $this->assertPedidoVisible($pedidoBma);
 
         try {
@@ -171,7 +173,7 @@ class PedidoBmaAuditoriaController extends Controller
         PedidoBma $pedidoBma,
         LiberarResguardoPedidoBmaService $service
     ): RedirectResponse {
-        Gate::authorize('control_pedidos.auditar');
+        Gate::authorize('control_pedidos.liberar_resguardo');
         $this->assertPedidoVisible($pedidoBma);
 
         try {
@@ -263,6 +265,27 @@ class PedidoBmaAuditoriaController extends Controller
             ->resolver($incidencia, Auth::id(), $datos['nota'] ?? 'Corregido en auditoría; se continúa el pedido.');
 
         return redirect()->back()->with('success', 'Incidencia de saldo a favor marcada como revisada.');
+    }
+
+    public function marcarRevisionEnCurso(PedidoBma $pedidoBma): JsonResponse
+    {
+        Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
+        $pedidoBma->loadMissing('estatus');
+        if ($pedidoBma->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR) {
+            RevisionEnCursoPedidoBma::marcar($pedidoBma->id, (int) Auth::id());
+        }
+
+        return response()->json(['ok' => true, 'en_revision_ahora' => RevisionEnCursoPedidoBma::activa($pedidoBma->id)]);
+    }
+
+    public function soltarRevisionEnCurso(PedidoBma $pedidoBma): JsonResponse
+    {
+        Gate::authorize('control_pedidos.auditar');
+        $this->assertPedidoVisible($pedidoBma);
+        RevisionEnCursoPedidoBma::soltar($pedidoBma->id, (int) Auth::id());
+
+        return response()->json(['ok' => true, 'en_revision_ahora' => false]);
     }
 
     private function assertPedidoVisible(PedidoBma $pedido): void

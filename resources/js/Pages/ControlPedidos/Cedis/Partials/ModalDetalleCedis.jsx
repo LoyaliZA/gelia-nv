@@ -40,6 +40,7 @@ import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 import ListaErroresPedido from '../../Partials/ListaErroresPedido';
 import { THEME_INPUT, THEME_TEXTAREA } from '../../../../utils/geliaTheme';
+import useDispositivoCampo from '../../../Activos/Partials/useDispositivoCampo';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
@@ -60,6 +61,7 @@ export default function ModalDetalleCedis({
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const puedeReabrir = permisos.includes('control_pedidos.reabrir') || auth?.user?.roles?.includes('Super Admin');
+    const puedeEnviar = permisos.includes('control_pedidos.cedis.enviar') || auth?.user?.roles?.includes('Super Admin');
     const [pedido, setPedido] = useState(pedidoInicial);
     const [procesando, setProcesando] = useState(false);
     const [docPreview, setDocPreview] = useState(null);
@@ -68,6 +70,8 @@ export default function ModalDetalleCedis({
     const [reporteSinEx, setReporteSinEx] = useState({ descripcion: '', comentario: '' });
     const [seleccionEnvios, setSeleccionEnvios] = useState({});
     const [guiasEnvio, setGuiasEnvio] = useState({});
+    const [revisionExistenciasId, setRevisionExistenciasId] = useState(null);
+    const { esCampo } = useDispositivoCampo();
 
     useEffect(() => {
         if (abierto && pedidoInicial) {
@@ -136,7 +140,7 @@ export default function ModalDetalleCedis({
     const haySinExAbierta = revisiones.some(revisionSinExistenciaAbierta);
     const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !haySinExAbierta;
     const puedeReportarSinEx = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.empacado_at;
-    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
+    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar);
     const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
     const cajasPendientes = cajasOrdenadas.filter((c) => (c.estatus_recoleccion || 'pendiente') === 'pendiente');
     const cajasRecolectadasCount = pedido.cajas_recolectadas
@@ -252,6 +256,22 @@ export default function ModalDetalleCedis({
                 onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo reabrir el envío.' }),
                 onFinish: () => setProcesando(false),
             });
+            return;
+        }
+
+        if (accion === 'existencias' && revisionExistenciasId) {
+            setProcesando(true);
+            router.post(route('control_pedidos.cedis.confirmar_stock_sin_existencia', pedido.id), {
+                revision_id: revisionExistenciasId,
+            }, {
+                preserveScroll: true,
+                onSuccess: () => setAlerta({ abierto: true, tipo: 'success', titulo: 'Existencias', mensaje: 'Se confirmó que ya hay existencias. El estado físico se conserva.' }),
+                onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo confirmar existencias.' }),
+                onFinish: () => {
+                    setProcesando(false);
+                    setRevisionExistenciasId(null);
+                },
+            });
         }
     };
 
@@ -279,11 +299,13 @@ export default function ModalDetalleCedis({
                 ? { titulo: 'Reabrir recolección', mensaje: 'El pedido volverá a pendiente de recolección. Solo si la paquetería no recogió.', etiquetaConfirmar: 'Reabrir', variante: 'danger' }
                 : confirmacion === 'reportar_sin_ex'
                     ? { titulo: 'Reportar sin existencias', mensaje: 'El pedido quedará detenido y se avisará a Ventas.', etiquetaConfirmar: 'Reportar', variante: 'danger' }
+                    : confirmacion === 'existencias'
+                        ? { titulo: 'Confirmar existencias', mensaje: '¿Confirmar que ya hay existencias de esta pieza?', etiquetaConfirmar: 'Ya hay existencias', variante: 'primary' }
                     : null;
 
     return createPortal(
         <>
-            <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+            <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={esCampo ? undefined : onClose}>
                 <div
                     className={`${THEME_MODAL_SHELL} max-w-3xl w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
@@ -409,6 +431,20 @@ export default function ModalDetalleCedis({
                             </div>
                         </section>
 
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>Dirección de entrega</p>
+                            <DireccionPedidoResumen
+                                conCopia
+                                direccion={pedido.direccion_vigente || pedido.direccionVigente}
+                                domicilioLegacy={pedido.domicilio_entrega}
+                                codigoPostal={pedido.codigo_postal}
+                                codigoDireccion={codigoDireccionCliente(
+                                    pedido.cliente?.numero_cliente,
+                                    (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
+                                )}
+                            />
+                        </section>
+
                         {tieneRevisionFisica && (
                             <section className={SECCION_WRAP}>
                                 <p className={SECCION}>Revisión física</p>
@@ -451,17 +487,10 @@ export default function ModalDetalleCedis({
                                                                 type="button"
                                                                 disabled={procesando}
                                                                 onClick={() => {
-                                                                    setProcesando(true);
-                                                                    router.post(route('control_pedidos.cedis.confirmar_stock_sin_existencia', pedido.id), {
-                                                                        revision_id: r.id,
-                                                                    }, {
-                                                                        preserveScroll: true,
-                                                                        onSuccess: () => setAlerta({ abierto: true, tipo: 'success', titulo: 'Existencias', mensaje: 'Se confirmó que ya hay existencias. El estado físico se conserva.' }),
-                                                                        onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo confirmar existencias.' }),
-                                                                        onFinish: () => setProcesando(false),
-                                                                    });
+                                                                    setRevisionExistenciasId(r.id);
+                                                                    setConfirmacion('existencias');
                                                                 }}
-                                                                className={`${BTN_SECONDARY} text-xs min-h-[40px]`}
+                                                                className={`${BTN_SECONDARY} text-xs min-h-[44px]`}
                                                             >
                                                                 Ya hay existencias
                                                             </button>
@@ -543,7 +572,7 @@ export default function ModalDetalleCedis({
                                         type="button"
                                         disabled={procesando}
                                         onClick={() => setConfirmacion('reportar_sin_ex')}
-                                        className={`${BTN_SECONDARY} text-xs min-h-[40px] border-sky-500/40 text-sky-700`}
+                                        className={`${BTN_SECONDARY} text-xs min-h-[44px] border-sky-500/40 text-sky-700`}
                                     >
                                         Reportar sin existencias
                                     </button>
@@ -563,7 +592,7 @@ export default function ModalDetalleCedis({
                                             <button
                                                 type="button"
                                                 onClick={() => setDocPreview(remision)}
-                                                className="text-xs font-bold inline-flex items-center gap-1 mt-1 outline-none min-h-[40px]"
+                                                className="text-xs font-bold inline-flex items-center gap-1 mt-1 outline-none min-h-[44px]"
                                                 style={{ color: 'var(--color-primario)' }}
                                             >
                                                 Ver remisión PDF
@@ -610,7 +639,7 @@ export default function ModalDetalleCedis({
                                                         <button
                                                             type="button"
                                                             onClick={() => setDocPreview(rem)}
-                                                            className="text-xs font-bold inline-flex items-center gap-1 outline-none min-h-[40px]"
+                                                            className="text-xs font-bold inline-flex items-center gap-1 outline-none min-h-[44px]"
                                                             style={{ color: 'var(--color-primario)' }}
                                                         >
                                                             <FileText className="w-3.5 h-3.5" /> Ver remisión
@@ -729,19 +758,10 @@ export default function ModalDetalleCedis({
                             )}
                         </section>
 
-                        {/* 5. Dirección / costos (secundario) */}
+                        {/* 5. Costos */}
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Dirección y costos</p>
+                            <p className={SECCION}>Costos</p>
                             <div className="space-y-3">
-                                <DireccionPedidoResumen
-                                    direccion={pedido.direccion_vigente || pedido.direccionVigente}
-                                    domicilioLegacy={pedido.domicilio_entrega}
-                                    codigoPostal={pedido.codigo_postal}
-                                    codigoDireccion={codigoDireccionCliente(
-                                        pedido.cliente?.numero_cliente,
-                                        (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
-                                    )}
-                                />
                                 <Campo label="Código postal" value={pedido.codigo_postal} />
                                 <Campo label="Reexpedición / Zona" value={pedido.zona?.nombre} />
                                 {pedido.es_resguardo && (
@@ -774,7 +794,7 @@ export default function ModalDetalleCedis({
                                             + (pedido.aplica_seguro ? Number(pedido.costo_seguro || 0) : 0)
                                         )}</span>
                                     </div>
-                                    <div className="flex justify-between text-emerald-600 font-bold">
+                                    <div className="flex justify-between font-bold" style={{ color: 'var(--color-exito)' }}>
                                         <span>Saldo a favor aplicado</span>
                                         <span>- {formatearMoneda(pedido.saldo_a_favor)}</span>
                                     </div>
@@ -786,7 +806,7 @@ export default function ModalDetalleCedis({
                         </section>
                     </div>
 
-                    <div className="gelia-modal-footer flex flex-col-reverse sm:flex-row sm:flex-wrap gap-3 p-4 md:p-6 border-t theme-border shrink-0">
+                    <div className="gelia-modal-footer flex flex-col-reverse sm:flex-row sm:flex-wrap gap-3 p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] border-t theme-border shrink-0">
                         <button type="button" onClick={onClose} className={`${BTN_SECONDARY} theme-element border theme-border outline-none min-h-[44px] w-full sm:w-auto`}>
                             Cerrar
                         </button>

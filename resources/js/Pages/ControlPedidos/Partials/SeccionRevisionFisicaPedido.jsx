@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { badgeEstadoFisico, etiquetasInstanciaRevision, LABELS_RESOLUCION_SIN_EXISTENCIA, revisionSinExistenciaAbierta } from './pedidosBmaStyles';
+import { ChevronDown } from 'lucide-react';
+import { badgeEstadoFisico, etiquetasInstanciaRevision, LABELS_RESOLUCION_SIN_EXISTENCIA, revisionSinExistenciaAbierta, BTN_SECONDARY } from './pedidosBmaStyles';
 import { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import ModalAtenderSinExistencia from './ModalAtenderSinExistencia';
-import { BTN_SECONDARY } from './pedidosBmaStyles';
+
+const MAX_PRODUCTOS_OK_ABIERTOS = 3;
 
 /**
  * Revisión física CEDIS (detalle + formulario vendedora).
@@ -13,6 +15,7 @@ export default function SeccionRevisionFisicaPedido({
     if (!pedido) return null;
 
     const [revisionActiva, setRevisionActiva] = useState(null);
+    const [listaOkAbierta, setListaOkAbierta] = useState(false);
     const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
     const evidenciasCondicion = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_condicion');
     const revisiones = [...(pedido.revisiones_producto || pedido.revisionesProducto || [])]
@@ -50,6 +53,26 @@ export default function SeccionRevisionFisicaPedido({
     const hayAbierta = revisiones.some(revisionSinExistenciaAbierta);
 
     if (!tieneRevisionFisica) return null;
+
+    const filasOk = revisionesOk.map((r) => {
+        const tag = instancias[indiceRevision(r)];
+        const b = badgeEstadoFisico(r.estado_fisico);
+        return (
+            <div
+                key={r.id || `${r.descripcion_producto}-${indiceRevision(r)}`}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border theme-border theme-element min-h-[44px]"
+            >
+                {tag && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black tabular-nums theme-element border theme-border theme-text-main shrink-0">
+                        {tag}
+                    </span>
+                )}
+                <p className="text-sm font-bold theme-text-main m-0 break-words line-clamp-1 min-w-0 flex-1">{r.descripcion_producto}</p>
+                {b && <span className={b.className} style={b.style}>{b.label}</span>}
+            </div>
+        );
+    });
+    const productosOkCompactos = revisionesOk.length > MAX_PRODUCTOS_OK_ABIERTOS;
 
     return (
         <div className="mt-4 space-y-4">
@@ -138,12 +161,33 @@ export default function SeccionRevisionFisicaPedido({
             {revisionesOk.length > 0 && (
                 <div className="space-y-1">
                     <p className="text-[9px] font-black uppercase theme-text-muted m-0">Productos OK</p>
-                    <p className="text-xs font-bold theme-text-main m-0">
-                        {revisionesOk.map((r) => {
-                            const tag = instancias[indiceRevision(r)];
-                            return tag ? `${r.descripcion_producto} (${tag})` : r.descripcion_producto;
-                        }).join(' · ')}
-                    </p>
+                    {productosOkCompactos ? (
+                        <details
+                            className="rounded-xl border theme-border overflow-hidden"
+                            open={listaOkAbierta}
+                            onToggle={(e) => setListaOkAbierta(e.target.open)}
+                        >
+                            <summary className="flex items-center justify-between gap-2 px-3 py-3 cursor-pointer list-none min-h-[48px] theme-element">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-black theme-text-main m-0">
+                                        {revisionesOk.length} productos OK
+                                    </p>
+                                    <p className="text-[10px] theme-text-muted font-bold m-0 mt-1 line-clamp-2">
+                                        {revisionesOk.map((r) => {
+                                            const tag = instancias[indiceRevision(r)];
+                                            return tag ? `${r.descripcion_producto} (${tag})` : r.descripcion_producto;
+                                        }).join(' · ')}
+                                    </p>
+                                </div>
+                                <ChevronDown className={`w-4 h-4 theme-text-muted shrink-0 transition-transform ${listaOkAbierta ? 'rotate-180' : ''}`} />
+                            </summary>
+                            <div className="p-3 space-y-2 border-t theme-border max-h-[40vh] overflow-y-auto">
+                                {filasOk}
+                            </div>
+                        </details>
+                    ) : (
+                        <div className="space-y-2">{filasOk}</div>
+                    )}
                 </div>
             )}
             {evidenciasLote.length > 0 && onVerDoc && (

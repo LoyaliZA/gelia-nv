@@ -7,11 +7,15 @@ import {
     THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, BTN_PRIMARY, BTN_SECONDARY, deferModalAction,
     formatearFechaHoraAuditoria,
 } from './pedidosBmaStyles';
+import useDispositivoCampo from '../../Activos/Partials/useDispositivoCampo';
+import VisorPdfPaginas from './VisorPdfPaginas';
 
 const esPdf = (doc) => {
     const nombre = String(doc?.nombre_original || doc?.url || '').toLowerCase();
-    const mime = doc?.mime_type || doc?.mime || '';
-    return nombre.endsWith('.pdf') || mime === 'application/pdf';
+    const mime = String(doc?.mime_type || doc?.mime || '').toLowerCase();
+    if (nombre.endsWith('.pdf') || mime.includes('pdf')) return true;
+    if (doc?.tipo === 'pdf_pedido' && !mime.startsWith('image/')) return true;
+    return false;
 };
 
 const esImagen = (doc) => {
@@ -42,6 +46,7 @@ export default function ModalVistaPreviaDocumento({
     const [idx, setIdx] = useState(0);
     const [zoom, setZoom] = useState(1);
     const [rotacion, setRotacion] = useState(0);
+    const { esCampo, esMovil } = useDispositivoCampo();
 
     const ir = useCallback((delta) => {
         setIdx((prev) => {
@@ -95,6 +100,7 @@ export default function ModalVistaPreviaDocumento({
     const pdf = esPdf(actual);
     const imagen = esImagen(actual);
     const titulo = actual.nombre_original || actual.tipo || 'Vista previa';
+    const pdfEnPaginas = pdf && (esCampo || esMovil);
 
     const cerrar = (e) => {
         e?.stopPropagation?.();
@@ -142,7 +148,7 @@ export default function ModalVistaPreviaDocumento({
                 </div>
                 <div className="sm:hidden px-4 pt-3 shrink-0">
                     <button type="button" onClick={cerrar} className={`${BTN_PRIMARY} w-full min-h-[44px] inline-flex items-center justify-center gap-2`}>
-                        <X className="w-4 h-4" /> Cerrar vista de la foto
+                        <X className="w-4 h-4" /> Cerrar vista
                     </button>
                 </div>
                 <div className="gelia-modal-body flex-1 min-h-0 p-0 flex items-center justify-center theme-element relative overflow-auto">
@@ -151,7 +157,7 @@ export default function ModalVistaPreviaDocumento({
                             <button
                                 type="button"
                                 onClick={() => ir(-1)}
-                                className="absolute left-2 z-10 p-2 rounded-full theme-element border theme-border outline-none"
+                                className="absolute left-2 z-10 p-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-full theme-element border theme-border outline-none"
                                 aria-label="Anterior"
                             >
                                 <ChevronLeft className="w-5 h-5" />
@@ -159,7 +165,7 @@ export default function ModalVistaPreviaDocumento({
                             <button
                                 type="button"
                                 onClick={() => ir(1)}
-                                className="absolute right-2 z-10 p-2 rounded-full theme-element border theme-border outline-none"
+                                className="absolute right-2 z-10 p-2 min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-full theme-element border theme-border outline-none"
                                 aria-label="Siguiente"
                             >
                                 <ChevronRight className="w-5 h-5" />
@@ -167,12 +173,16 @@ export default function ModalVistaPreviaDocumento({
                         </>
                     )}
                     {pdf ? (
-                        <iframe
-                            src={actual.url}
-                            title={titulo}
-                            className="w-full border-0"
-                            style={{ height: 'min(70vh, calc(100dvh - 14rem))' }}
-                        />
+                        pdfEnPaginas ? (
+                            <VisorPdfPaginas url={actual.url} titulo={titulo} className="w-full self-stretch" />
+                        ) : (
+                            <iframe
+                                src={actual.url}
+                                title={titulo}
+                                className="w-full border-0"
+                                style={{ height: 'min(70vh, calc(100dvh - 14rem))' }}
+                            />
+                        )
                     ) : imagen ? (
                         <img
                             src={actual.url}
@@ -199,7 +209,7 @@ export default function ModalVistaPreviaDocumento({
                         </div>
                     )}
                 </div>
-                <div className="gelia-modal-footer p-4 md:p-6 flex flex-col sm:flex-row-reverse sm:flex-wrap justify-end gap-3 border-t theme-border">
+                <div className="gelia-modal-footer p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row-reverse sm:flex-wrap justify-end gap-3 border-t theme-border">
                     {imagen && (
                         <div className="flex flex-wrap gap-2 mr-auto">
                             <button type="button" className={`${BTN_SECONDARY} min-h-[44px] px-3`} onClick={() => setZoom((z) => Math.min(z + 0.25, 3))} aria-label="Acercar">

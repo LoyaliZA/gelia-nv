@@ -72,7 +72,7 @@ export default function FiltrosCedis({
                 <button
                     type="button"
                     onClick={onActualizar}
-                    className={`${BTN_SECONDARY} flex items-center justify-center gap-2 outline-none shrink-0 w-full sm:w-auto`}
+                    className={`${BTN_SECONDARY} flex items-center justify-center gap-2 outline-none shrink-0 w-full sm:w-auto min-h-[44px]`}
                 >
                     <RefreshCw className="w-4 h-4" /> Actualizar
                 </button>
@@ -84,7 +84,7 @@ export default function FiltrosCedis({
                     type="button"
                     onClick={() => setFiltrosAbiertos((v) => !v)}
                     aria-expanded={filtrosAbiertos}
-                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border theme-border theme-element outline-none"
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 min-h-[44px] rounded-xl border theme-border theme-element outline-none"
                 >
                     <span className="min-w-0 text-left">
                         <span className="block text-[9px] font-black uppercase tracking-widest theme-text-muted">Filtro</span>

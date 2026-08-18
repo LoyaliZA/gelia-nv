@@ -41,7 +41,7 @@ export default function SeccionGuiaRastreo({ pedido, onVerPdf, compact = false }
                     <button
                         type="button"
                         onClick={copiarGuia}
-                        className={`${BTN_SECONDARY} flex items-center gap-2 text-xs outline-none shrink-0`}
+                        className={`${BTN_SECONDARY} flex items-center gap-2 text-xs outline-none shrink-0 min-h-[44px]`}
                     >
                         {copiado ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                         {copiado ? 'Copiado' : 'Copiar'}
@@ -61,7 +61,7 @@ export default function SeccionGuiaRastreo({ pedido, onVerPdf, compact = false }
                         <button
                             type="button"
                             onClick={abrirPdf}
-                            className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs outline-none`}
+                            className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs outline-none min-h-[44px]`}
                         >
                             <Eye className="w-4 h-4" /> Ver / Descargar guía
                         </button>
@@ -71,7 +71,7 @@ export default function SeccionGuiaRastreo({ pedido, onVerPdf, compact = false }
                             download={guiaPdf.nombre_original || 'guia.pdf'}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs outline-none no-underline`}
+                            className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs outline-none no-underline min-h-[44px]`}
                         >
                             <Download className="w-4 h-4" /> Descargar guía
                         </a>

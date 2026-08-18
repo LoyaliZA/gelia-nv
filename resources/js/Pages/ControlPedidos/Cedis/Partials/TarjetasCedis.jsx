@@ -34,7 +34,7 @@ const pdfPedidoDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo ==
 const anexoPiezasDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'anexo_piezas');
 
 function TarjetaPedido({
-    pedido, onVerDetalle, onResponderPesaje, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento, onBitacora, puedeReabrir,
+    pedido, onVerDetalle, onResponderPesaje, onReportarErrorDatos, onMarcarApartado, onSolicitarConfirmacion, onVerDocumento, onBitacora, puedeReabrir, puedeEnviar,
 }) {
     const fase = pedido.estatus?.fase_ciclo;
     const pendientePesaje = pedido.estatus_envio === 'pendiente_pesaje';
@@ -50,7 +50,7 @@ function TarjetaPedido({
     const esErrorCedis = fase === 'INCIDENCIA_CEDIS';
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo;
-    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO';
+    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar);
     const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
     const cajasPedido = pedido.cajas || [];
     const cajasPendientesCount = pedido.cajas_pendientes
@@ -159,6 +159,18 @@ function TarjetaPedido({
                 </>
                 )}
             </div>
+            {requiereLogistica && (() => {
+                const dir = pedido.direccion_vigente || pedido.direccionVigente || {};
+                const dest = dir.nombre_destinatario;
+                const cp = pedido.codigo_postal || dir.codigo_postal;
+                if (!dest && !cp) return null;
+                return (
+                    <p className="text-xs font-bold theme-text-main m-0">
+                        {dest || 'Destinatario —'}
+                        {cp ? ` · CP ${cp}` : ''}
+                    </p>
+                );
+            })()}
 
             {esErrorCedis && (pedido.detalle_incidencia_empaque || pedido.detalle_error_datos) && (
                 <AvisoOperativoPedido label="Error reportado" tono="danger" icon={AlertTriangle}>
@@ -239,9 +251,7 @@ function TarjetaPedido({
                     {puedeReportarError && (
                         <BotonAccionCubico icon={AlertTriangle} label="Reportar" onClick={() => onReportarErrorDatos?.(pedido)} tone="warn" conLabel className="col-span-2" />
                     )}
-                    {!pendientePesaje && (
-                        <BotonAccionCubico icon={Eye} label="Detalle" onClick={() => onVerDetalle(pedido)} conLabel />
-                    )}
+                    <BotonAccionCubico icon={Eye} label="Detalle" onClick={() => onVerDetalle(pedido)} conLabel />
                     {onBitacora && (
                         <BotonAccionCubico
                             icon={History}
@@ -264,6 +274,7 @@ export default function TarjetasCedis({
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const puedeReabrir = permisos.includes('control_pedidos.reabrir') || auth?.user?.roles?.includes('Super Admin');
+    const puedeEnviar = permisos.includes('control_pedidos.cedis.enviar') || auth?.user?.roles?.includes('Super Admin');
     const [confirmacion, setConfirmacion] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
     const items = pedidos?.data || [];
@@ -320,6 +331,7 @@ export default function TarjetasCedis({
                         onVerDocumento={setDocPreview}
                         onBitacora={onBitacora}
                         puedeReabrir={puedeReabrir}
+                        puedeEnviar={puedeEnviar}
                     />
                 ))}
             </div>

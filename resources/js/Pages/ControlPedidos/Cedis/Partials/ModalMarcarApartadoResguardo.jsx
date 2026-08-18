@@ -10,16 +10,20 @@ import {
     BTN_SECONDARY,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import { esDispositivoCampo } from '../../../Activos/Partials/useDispositivoCampo';
 
 export default function ModalMarcarApartadoResguardo({ abierto, onClose, pedido }) {
     const inputRef = useRef(null);
+    const camaraRef = useRef(null);
+    const galeriaRef = useRef(null);
     const [archivos, setArchivos] = useState([]);
     const [previews, setPreviews] = useState([]);
     const [detalle, setDetalle] = useState('');
     const [procesando, setProcesando] = useState(false);
     const [error, setError] = useState('');
     const [esMovil, setEsMovil] = useState(false);
+    const [quitarIdx, setQuitarIdx] = useState(null);
 
     useEffect(() => {
         if (abierto) {
@@ -81,7 +85,8 @@ export default function ModalMarcarApartadoResguardo({ abierto, onClose, pedido 
     };
 
     return createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-center py-4`} onClick={onClose}>
+        <>
+        <div className={`${THEME_MODAL_OVERLAY} items-center py-4`} onClick={esMovil ? undefined : onClose}>
             <div className={`${THEME_MODAL_SHELL} max-w-lg w-full`} onClick={(e) => e.stopPropagation()}>
                 <div className="p-5 border-b theme-border flex justify-between items-start gap-3">
                     <div>
@@ -94,51 +99,80 @@ export default function ModalMarcarApartadoResguardo({ abierto, onClose, pedido 
                             Confirma que las piezas de este resguardo ya están apartadas. Se notificará a quien realizó el pedido.
                         </p>
                     </div>
-                    <button type="button" onClick={onClose} className="p-2 rounded-full theme-text-muted outline-none" aria-label="Cerrar">
+                    <button type="button" onClick={onClose} className="p-2 min-h-[44px] min-w-[44px] rounded-full theme-text-muted outline-none inline-flex items-center justify-center" aria-label="Cerrar">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <form onSubmit={enviar} className="p-5 space-y-4">
+                <form onSubmit={enviar} className="p-5 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
                     <div>
                         <p className={`${THEME_LABEL} mb-2`}>Evidencia fotográfica <span className="text-red-500">*</span></p>
-                        <button
-                            type="button"
-                            onClick={() => inputRef.current?.click()}
-                            className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs outline-none`}
-                        >
-                            {esMovil ? <Camera className="w-4 h-4" /> : <ImagePlus className="w-4 h-4" />}
-                            {esMovil ? 'Tomar foto' : 'Adjuntar imagen o captura'}
-                        </button>
-                        <p className="text-[10px] theme-text-muted font-bold mt-1.5 m-0">
-                            {esMovil
-                                ? 'Se abrirá la cámara trasera. Puedes tomar varias fotos.'
-                                : 'Selecciona una imagen del equipo o una captura de pantalla.'}
-                        </p>
-                        <input
-                            ref={inputRef}
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/jpg"
-                            multiple={!esMovil}
-                            capture={esMovil ? 'environment' : undefined}
-                            className="hidden"
-                            onChange={(e) => {
-                                agregarArchivos(e.target.files);
-                                e.target.value = '';
-                            }}
-                        />
+                        {esMovil ? (
+                            <div className="grid grid-cols-2 gap-2">
+                                <button type="button" onClick={() => camaraRef.current?.click()} className={`${BTN_SECONDARY} min-h-[44px] inline-flex items-center justify-center gap-2 text-xs outline-none`}>
+                                    <Camera className="w-4 h-4" /> Tomar foto
+                                </button>
+                                <button type="button" onClick={() => galeriaRef.current?.click()} className={`${BTN_SECONDARY} min-h-[44px] inline-flex items-center justify-center gap-2 text-xs outline-none`}>
+                                    <ImagePlus className="w-4 h-4" /> Galería
+                                </button>
+                                <input
+                                    ref={camaraRef}
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        agregarArchivos(e.target.files);
+                                        e.target.value = '';
+                                    }}
+                                />
+                                <input
+                                    ref={galeriaRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/jpg"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        agregarArchivos(e.target.files);
+                                        e.target.value = '';
+                                    }}
+                                />
+                            </div>
+                        ) : (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => inputRef.current?.click()}
+                                    className={`${BTN_SECONDARY} inline-flex items-center gap-2 text-xs outline-none min-h-[44px]`}
+                                >
+                                    <ImagePlus className="w-4 h-4" />
+                                    Adjuntar imagen o captura
+                                </button>
+                                <input
+                                    ref={inputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/jpg"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        agregarArchivos(e.target.files);
+                                        e.target.value = '';
+                                    }}
+                                />
+                            </>
+                        )}
                         {previews.length > 0 && (
                             <div className="flex flex-wrap gap-2 mt-3">
                                 {previews.map((p, idx) => (
-                                    <div key={`${p.name}-${idx}`} className="relative w-20 h-20 rounded-xl overflow-hidden border theme-border">
+                                    <div key={`${p.name}-${idx}`} className="relative min-w-[44px] min-h-[44px] w-20 h-20 rounded-xl overflow-hidden border theme-border">
                                         <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
                                         <button
                                             type="button"
-                                            onClick={() => quitar(idx)}
-                                            className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white outline-none"
+                                            onClick={() => setQuitarIdx(idx)}
+                                            className="absolute top-1 right-1 p-1 min-h-[44px] min-w-[44px] rounded-full bg-black/50 text-white outline-none inline-flex items-center justify-center"
                                             aria-label="Quitar"
                                         >
-                                            <Trash2 className="w-3 h-3" />
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 ))}
@@ -160,19 +194,32 @@ export default function ModalMarcarApartadoResguardo({ abierto, onClose, pedido 
 
                     {error && <p className="text-xs text-red-500 font-bold m-0">{error}</p>}
 
-                    <div className="flex flex-wrap gap-3 justify-end">
-                        <button type="button" onClick={onClose} className={`${BTN_SECONDARY} outline-none`}>Cancelar</button>
+                    <div className="flex flex-col-reverse sm:flex-row flex-wrap gap-3 sm:justify-end">
+                        <button type="button" onClick={onClose} className={`${BTN_SECONDARY} outline-none min-h-[44px] w-full sm:w-auto`}>Cancelar</button>
                         <button
                             type="submit"
                             disabled={procesando || archivos.length === 0}
-                            className={`${BTN_PRIMARY} outline-none disabled:opacity-50`}
+                            className={`${BTN_PRIMARY} outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto`}
                         >
                             {procesando ? 'Guardando…' : 'Confirmar apartado'}
                         </button>
                     </div>
                 </form>
             </div>
-        </div>,
+        </div>
+        <ModalConfirmarAccion
+            abierto={quitarIdx != null}
+            titulo="Quitar evidencia"
+            mensaje="¿Quitar esta foto? No se puede deshacer."
+            etiquetaConfirmar="Quitar"
+            variante="danger"
+            onClose={() => setQuitarIdx(null)}
+            onConfirm={() => {
+                if (quitarIdx != null) quitar(quitarIdx);
+                setQuitarIdx(null);
+            }}
+        />
+        </>,
         document.body
     );
 }

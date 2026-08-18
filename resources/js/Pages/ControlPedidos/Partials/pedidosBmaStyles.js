@@ -318,6 +318,12 @@ export const badgeEstatusEnvio = (estatusEnvio, { faseCiclo = null, forzarPesaje
         && !esFasePreVenta(faseCiclo)) {
         return null;
     }
+    // La fase de ciclo ya nombra el pesaje: no repetir Pendiente CEDIS / Pesaje listo.
+    const duplicaFase = !forzarPesaje && (
+        (estatusEnvio === 'pendiente_pesaje' && faseCiclo === 'PESAJE_PENDIENTE')
+        || (estatusEnvio === 'pesaje_listo' && faseCiclo === 'PESAJE_RESPONDIDO')
+    );
+    if (duplicaFase) return null;
     const colores = {
         pendiente_regularizacion: '#F59E0B',
         pendiente_revision_anexo: '#8B5CF6',
@@ -469,7 +475,11 @@ export const esPendienteReRevision = (pedido) => Boolean(pedido?.pendiente_re_re
 
 export const badgeAuditoriaRevision = (pedido) => {
     if (pedido?.estatus?.fase_ciclo !== 'PENDIENTE_AUXILIAR') return null;
-    return esPendienteReRevision(pedido) ? badgePendienteReRevision() : badgePendienteRevision();
+    const enCurso = Boolean(pedido?.en_revision_ahora);
+    const reRev = esPendienteReRevision(pedido);
+    if (enCurso) return badgePendienteRevision();
+    if (reRev) return badgePendienteReRevision();
+    return null;
 };
 
 export const camposIncorrectosDe = (pedido) => (
@@ -502,7 +512,7 @@ export const badgeAuditoriaSemantico = (fase, esResguardo = false) => {
         return badgeResguardoSemantico();
     }
     const map = {
-        PENDIENTE_AUXILIAR: { hex: '#EAB308', label: 'Revisión' },
+        PENDIENTE_AUXILIAR: { hex: '#EAB308', label: 'Pendiente de auditoría' },
         EN_CEDIS: { hex: '#22C55E', label: 'Aprobado' },
         INCIDENCIA_CEDIS: { hex: '#22C55E', label: 'Aprobado' },
         PENDIENTE_DE_GUIA: { hex: '#22C55E', label: 'Aprobado' },
@@ -880,53 +890,60 @@ export const validarCamposEnvioPedido = (data, {
         );
     const guiaCliente = Boolean(data.cliente_proporciona_guia);
 
+    const claves = [];
+    const marcar = (clave, label) => {
+        claves.push(clave);
+        faltantes.push(label);
+    };
+
     if (requiereLogistica && !esResguardoComplementario && !tienePesajeRespondido) {
         return {
             valido: false,
             faltantes: ['pesaje CEDIS'],
-            mensaje: 'Debe solicitar y recibir el pesaje de CEDIS antes de enviar el pedido al auxiliar.',
+            claves: ['pesaje'],
+            mensaje: 'Hay campos faltantes.',
         };
     }
 
-    if (!String(data.folio_remision || '').trim()) faltantes.push('folio de pedido');
-    if (!data.cliente_id) faltantes.push('cliente');
-    if (!data.origen_id) faltantes.push('tipo de pedido');
-    if (!data.almacen_id) faltantes.push('almacén de salida');
-    if (Number(data.total_mercancia || 0) <= 0) faltantes.push('total de mercancía');
+    if (!String(data.folio_remision || '').trim()) marcar('folio_remision', 'folio de pedido');
+    if (!data.cliente_id) marcar('cliente', 'cliente');
+    if (!data.origen_id) marcar('origen', 'tipo de pedido');
+    if (!data.almacen_id) marcar('almacen', 'almacén de salida');
+    if (Number(data.total_mercancia || 0) <= 0) marcar('total_mercancia', 'total de mercancía');
 
     if (pagoPendiente == null) {
-        faltantes.push('exhibiciones de pago (guarde el borrador y registre los abonos que cubran el total)');
+        marcar('pago', 'exhibiciones de pago (guarde el borrador y registre los abonos que cubran el total)');
     } else if (Number(pagoPendiente) > 0.01) {
-        faltantes.push(mensajePagoFaltante(pagoPendiente));
+        marcar('pago', mensajePagoFaltante(pagoPendiente));
     }
 
     if (requiereLogistica) {
         if (tienePesajeRespondido) {
-            if (data.peso_real_kg === '' || data.peso_real_kg == null) faltantes.push('peso real (pesaje CEDIS)');
-            if (!data.catalogo_tipo_caja_id) faltantes.push('tipo de caja (pesaje CEDIS)');
-            if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de envíos (pesaje CEDIS)');
+            if (data.peso_real_kg === '' || data.peso_real_kg == null) marcar('peso_real', 'peso real (pesaje CEDIS)');
+            if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja (pesaje CEDIS)');
+            if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'número de envíos (pesaje CEDIS)');
         } else if (!omiteCosto) {
-            if (data.peso_real_kg === '' || data.peso_real_kg == null) faltantes.push('peso real');
-            if (!data.catalogo_tipo_caja_id) faltantes.push('tipo de caja');
-            if (data.numero_cajas === '' || data.numero_cajas == null) faltantes.push('número de envíos');
+            if (data.peso_real_kg === '' || data.peso_real_kg == null) marcar('peso_real', 'peso real');
+            if (!data.catalogo_tipo_caja_id) marcar('tipo_caja', 'tipo de caja');
+            if (data.numero_cajas === '' || data.numero_cajas == null) marcar('numero_envios', 'número de envíos');
         }
 
         if (!guiaCliente) {
-            if (!data.catalogo_tipo_guia_id) faltantes.push('tipo de guía');
-            if (!data.catalogo_paqueteria_id) faltantes.push('paquetería');
-            if (!data.catalogo_zona_id) faltantes.push('reexpedición');
+            if (!data.catalogo_tipo_guia_id) marcar('tipo_guia', 'tipo de guía');
+            if (!data.catalogo_paqueteria_id) marcar('paqueteria', 'paquetería');
+            if (!data.catalogo_zona_id) marcar('reexpedicion', 'reexpedición');
             if (!omiteCosto && (data.costo_envio === '' || data.costo_envio == null)) {
-                faltantes.push('costo de envío');
+                marcar('costo_envio', 'costo de envío');
             }
-            if (!String(data.codigo_postal || '').trim()) faltantes.push('código postal');
+            if (!String(data.codigo_postal || '').trim()) marcar('codigo_postal', 'código postal');
             if (direccionesNormalizadas) {
                 const tieneDir = String(data.cliente_direccion_id || '').trim();
                 const excepcion = Boolean(data.direccion_manual_excepcion) && String(data.domicilio_entrega || '').trim();
                 if (!tieneDir && !excepcion) {
-                    faltantes.push('dirección de envío verificada o excepción manual');
+                    marcar('domicilio', 'dirección de envío verificada o excepción manual');
                 }
             } else if (!String(data.domicilio_entrega || '').trim()) {
-                faltantes.push('domicilio de entrega');
+                marcar('domicilio', 'domicilio de entrega');
             }
         }
     }
@@ -934,8 +951,7 @@ export const validarCamposEnvioPedido = (data, {
     return {
         valido: faltantes.length === 0,
         faltantes,
-        mensaje: faltantes.length
-            ? `Complete los campos requeridos: ${faltantes.join(', ')}.`
-            : null,
+        claves,
+        mensaje: faltantes.length ? 'Hay campos faltantes.' : null,
     };
 };

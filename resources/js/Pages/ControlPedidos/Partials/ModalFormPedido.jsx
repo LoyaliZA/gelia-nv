@@ -36,7 +36,6 @@ import {
     LABEL_GUIA_CLIENTE,
     etiquetaEnvio,
 } from './pedidosBmaStyles';
-import ModalAlertaPedido from './ModalAlertaPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
@@ -118,6 +117,24 @@ function limpiarBorradorLocal() {
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-8 last:border-0';
+const WRAP_FALTANTE = 'rounded-xl p-2 ring-2 ring-[var(--color-peligro)] bg-[color-mix(in_srgb,var(--color-peligro)_10%,transparent)]';
+const COLOR_EXITO = { color: 'var(--color-exito)' };
+const COLOR_INFO = { color: 'var(--color-info)' };
+
+const mensajeAxios = (err, fallback) => {
+    const payload = err?.response?.data;
+    if (typeof payload?.message === 'string' && payload.message) return payload.message;
+    const first = Object.values(payload?.errors || {})[0];
+    if (Array.isArray(first) && first[0]) return first[0];
+    if (typeof first === 'string') return first;
+    return fallback;
+};
+
+const headersJsonCsrf = () => ({
+    Accept: 'application/json',
+    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
+    'X-Requested-With': 'XMLHttpRequest',
+});
 
 function formDefaults(pedido = null, tiposOperacion = []) {
     const tipoCodigo = pedido?.tipo_operacion_envio?.codigo
@@ -200,7 +217,12 @@ export default function ModalFormPedido({
     const [previews, setPreviews] = useState([]);
     const [docsEliminar, setDocsEliminar] = useState([]);
     const [pesoVolumetrico, setPesoVolumetrico] = useState(pedido?.peso_volumetrico_kg ?? '');
-    const [alertaEnvio, setAlertaEnvio] = useState({ abierto: false, mensaje: '', tipo: 'error' });
+    const [intentoEnviar, setIntentoEnviar] = useState(false);
+    const [avisoForm, setAvisoForm] = useState(null);
+    const [avisoPdf, setAvisoPdf] = useState(null);
+    const [avisoPesaje, setAvisoPesaje] = useState(null);
+    const [pdfDocLocal, setPdfDocLocal] = useState(null);
+    const [anexoLocalOk, setAnexoLocalOk] = useState(false);
     const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
     const [candidatosPrincipal, setCandidatosPrincipal] = useState([]);
     const [buscandoPrincipal, setBuscandoPrincipal] = useState(false);
@@ -220,6 +242,7 @@ export default function ModalFormPedido({
     const direccionSuciaRef = useRef(false);
     const autoguardandoBd = useRef(false);
     const ignoreOverlayCloseUntil = useRef(0);
+    const cuerpoFormRef = useRef(null);
     const [pedidoBdId, setPedidoBdId] = useState(pedido?.id || null);
     const [estadoAuto, setEstadoAuto] = useState({ local: null, bd: null });
     const [motivoRepesaje, setMotivoRepesaje] = useState('');
@@ -366,8 +389,8 @@ export default function ModalFormPedido({
     // «Enviar» tras pesaje respondido (auto-borrador) o Continuar legacy / flujo sin pesaje.
     const mostrarEnviarPedido = mostrarRestoPedido;
     const nSec = requiereLogistica
-        ? { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, cot: 8, pago: 9, rem: 10 }
-        : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, cot: 8, pago: 3, rem: 4 };
+        ? { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, saf: 8, cot: 9, pago: 10, rem: 11 }
+        : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, saf: 8, cot: 8, pago: 3, rem: 4 };
     const totalCobrar = calcularTotalCobrar(
         data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
         saldoFavorCalculado
@@ -411,10 +434,11 @@ export default function ModalFormPedido({
         }
         setData('origen_id', nuevoId);
     };
-    const pdfPedidoDoc = (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id));
+    const pdfPedidoDoc = (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id))
+        || pdfDocLocal;
     const anexoPiezasDoc = (pedido?.documentos || []).find((d) => d.tipo === 'anexo_piezas' && !docsEliminar.includes(d.id));
     const tienePdfPedido = Boolean(pdfPedidoDoc) || pdfLocalOk;
-    const tieneAnexoPiezas = Boolean(anexoPiezasDoc);
+    const tieneAnexoPiezas = Boolean(anexoPiezasDoc) || anexoLocalOk;
     const labelSoportePedido = (doc) => {
         const mime = String(doc?.mime_type || '');
         const nombre = String(doc?.nombre_original || '').toLowerCase();
@@ -426,7 +450,7 @@ export default function ModalFormPedido({
     const paqueteriasComerciales = (catalogos.paqueterias || []).filter((p) => p.categoria === 'comercial');
     const paqueteriasLocales = (catalogos.paqueterias || []).filter((p) => p.categoria !== 'comercial');
 
-    const modalAnidadoAbierto = confirmarActualizarDir || alertaEnvio.abierto || Boolean(vistaPrevia) || modalLinkDireccion;
+    const modalAnidadoAbierto = confirmarActualizarDir || Boolean(vistaPrevia) || modalLinkDireccion;
 
     useEffect(() => {
         // Tras cerrar un modal hijo, ignorar clics al overlay del borrador un instante.
@@ -463,12 +487,17 @@ export default function ModalFormPedido({
             setMsgDireccion('');
             setDocsEliminar([]);
             setPreviews([]);
-            setAlertaEnvio({ abierto: false, mensaje: '' });
             setDireccionesCliente([]);
             setMostrarExcepcion(false);
             setEstadoAuto({ local: null, bd: null });
             setMotivoRepesaje('');
             setPdfLocalOk(false);
+            setPdfDocLocal(null);
+            setAnexoLocalOk(false);
+            setIntentoEnviar(false);
+            setAvisoForm(null);
+            setAvisoPdf(null);
+            setAvisoPesaje(null);
             if (pedido.cliente_id) {
                 cargarDireccionCliente(pedido.cliente_id, {
                     silencioso: true,
@@ -507,13 +536,18 @@ export default function ModalFormPedido({
             setMsgDireccion('');
             setPreviews([]);
             setDocsEliminar([]);
-            setAlertaEnvio({ abierto: false, mensaje: '' });
             if (!borrador?.cliente_id) {
                 setDireccionesCliente([]);
             }
             setMostrarExcepcion(Boolean(borrador?.direccion_manual_excepcion));
             setMotivoRepesaje('');
             setPdfLocalOk(false);
+            setPdfDocLocal(null);
+            setAnexoLocalOk(false);
+            setIntentoEnviar(false);
+            setAvisoForm(null);
+            setAvisoPdf(null);
+            setAvisoPesaje(null);
             setEstadoAuto({ local: borrador ? 'Borrador local recuperado' : null, bd: idBd ? `Borrador #${idBd}` : null });
         } else {
             // Nuevo pedido en limpio: no reutilizar borrador local ni el id en BD.
@@ -527,11 +561,16 @@ export default function ModalFormPedido({
             setMsgDireccion('');
             setPreviews([]);
             setDocsEliminar([]);
-            setAlertaEnvio({ abierto: false, mensaje: '' });
             setDireccionesCliente([]);
             setMostrarExcepcion(false);
             setMotivoRepesaje('');
             setPdfLocalOk(false);
+            setPdfDocLocal(null);
+            setAnexoLocalOk(false);
+            setIntentoEnviar(false);
+            setAvisoForm(null);
+            setAvisoPdf(null);
+            setAvisoPesaje(null);
             setEstadoAuto({ local: null, bd: null });
         }
     }, [abierto, recuperarBorrador]);
@@ -636,7 +675,6 @@ export default function ModalFormPedido({
                 : data.comentarios_drive;
             payload.enviar = false;
 
-            const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
             let url = '/control-pedidos/autoguardar';
             try {
                 url = route('control_pedidos.autoguardar');
@@ -644,11 +682,7 @@ export default function ModalFormPedido({
                 /* ziggy stale */
             }
             const { data: res } = await axios.post(url, payload, {
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': csrf,
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
+                headers: headersJsonCsrf(),
             });
             const eraNuevo = !pedidoBdIdRef.current;
             pedidoBdIdRef.current = res.id;
@@ -664,7 +698,6 @@ export default function ModalFormPedido({
             setEstadoAuto((s) => ({ ...s, bd: `Servidor · ${res.folio || `#${res.id}`}` }));
             if (eraNuevo) {
                 onPedidoCreado?.({ id: res.id, folio: res.folio });
-                router.reload({ only: ['pedidos', 'metricas'], preserveState: true, preserveScroll: true });
             }
             return res.id;
         } finally {
@@ -673,17 +706,22 @@ export default function ModalFormPedido({
     };
 
     /** Devuelve el id del pedido en BD, creando el borrador si aún no existe. */
-    const asegurarPedidoEnBd = async () => {
+    const asegurarPedidoEnBd = async ({ zona = 'form' } = {}) => {
         if (idPedidoAcciones) return idPedidoAcciones;
         if (!tieneContenidoParaBd(data)) {
-            setAlertaEnvio({ abierto: true, mensaje: 'Capture al menos el origen y el cliente antes de continuar.' });
+            const msg = 'Capture al menos el origen y el cliente antes de continuar.';
+            if (zona === 'pdf') setAvisoPdf({ tipo: 'error', mensaje: msg });
+            else if (zona === 'pesaje') setAvisoPesaje({ tipo: 'error', mensaje: msg });
+            else setAvisoForm({ tipo: 'error', mensaje: msg });
             return null;
         }
         try {
             return await persistirBorradorBd();
         } catch (err) {
-            const msg = err?.response?.data?.message || 'No se pudo guardar el borrador en el servidor.';
-            setAlertaEnvio({ abierto: true, mensaje: msg });
+            const msg = mensajeAxios(err, 'No se pudo guardar el borrador en el servidor.');
+            if (zona === 'pdf') setAvisoPdf({ tipo: 'error', mensaje: msg });
+            else if (zona === 'pesaje') setAvisoPesaje({ tipo: 'error', mensaje: msg });
+            else setAvisoForm({ tipo: 'error', mensaje: msg });
             return null;
         }
     };
@@ -990,7 +1028,7 @@ export default function ModalFormPedido({
     const confirmarGuardarDireccion = async () => {
         setConfirmarActualizarDir(false);
         if (!data.cliente_id || !data.cliente_direccion_id) {
-            setAlertaEnvio({ abierto: true, mensaje: 'Seleccione un cliente y una dirección del catálogo.' });
+            setAvisoForm({ tipo: 'error', mensaje: 'Seleccione un cliente y una dirección del catálogo.' });
             return;
         }
         setGuardandoDireccion(true);
@@ -1010,10 +1048,10 @@ export default function ModalFormPedido({
                 });
                 aplicarDireccionSeleccionada(nueva);
             }
-            setAlertaEnvio({ abierto: true, mensaje: res.data?.message || 'Dirección actualizada.', tipo: 'success' });
+            setAvisoForm({ tipo: 'success', mensaje: res.data?.message || 'Dirección actualizada.' });
         } catch (err) {
-            const msg = err?.response?.data?.message || 'No se pudo actualizar la dirección.';
-            setAlertaEnvio({ abierto: true, mensaje: msg, tipo: 'error' });
+            const msg = mensajeAxios(err, 'No se pudo actualizar la dirección.');
+            setAvisoForm({ tipo: 'error', mensaje: msg });
         } finally {
             setGuardandoDireccion(false);
         }
@@ -1165,18 +1203,19 @@ export default function ModalFormPedido({
     };
 
     const guardar = (enviarPedido = false, { cerrar = true, alTerminar = null } = {}) => {
-        setAlertaEnvio({ abierto: false, mensaje: '' });
+        setAvisoForm(null);
 
             if (enviarPedido) {
+            setIntentoEnviar(true);
             if (esResguardoComplementario && !data.pedido_principal_id) {
-                setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el pedido principal a complementar.' });
+                setAvisoForm({ tipo: 'error', mensaje: 'Seleccione el pedido principal a complementar.' });
                 return;
             }
             if (requiereLogistica && pendientePesaje) {
-                setAlertaEnvio({ abierto: true, mensaje: 'Espere la respuesta de pesaje de CEDIS antes de enviar.' });
+                setAvisoForm({ tipo: 'error', mensaje: 'Espere la respuesta de pesaje de CEDIS antes de enviar.' });
                 return;
             }
-            const { valido, mensaje } = validarCamposEnvioPedido(data, {
+            const { valido, claves } = validarCamposEnvioPedido(data, {
                 requiereLogistica,
                 direccionesNormalizadas,
                 esMunicipioDiferido,
@@ -1187,7 +1226,13 @@ export default function ModalFormPedido({
                 paqueteria: paqueteriaSeleccionada,
             });
             if (!valido) {
-                setAlertaEnvio({ abierto: true, mensaje });
+                requestAnimationFrame(() => {
+                    const clave = claves?.[0];
+                    const nodo = clave
+                        ? cuerpoFormRef.current?.querySelector(`[data-campo="${clave}"]`)
+                        : null;
+                    nodo?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
                 return;
             }
         }
@@ -1198,7 +1243,7 @@ export default function ModalFormPedido({
             preserveScroll: true,
             onSuccess: (page) => {
                 if (page?.props?.flash?.error) {
-                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error });
+                    setAvisoForm({ tipo: 'error', mensaje: page.props.flash.error });
                     return;
                 }
                 if (!cerrar) {
@@ -1259,7 +1304,10 @@ export default function ModalFormPedido({
         onFinish: () => setProcesandoPesaje(false),
         onError: (errs) => {
             const msg = Object.values(errs || {})[0];
-            setAlertaEnvio({ abierto: true, mensaje: typeof msg === 'string' ? msg : 'No se pudo completar la acción de pesaje.', tipo: 'error' });
+            setAvisoPesaje({
+                tipo: 'error',
+                mensaje: typeof msg === 'string' ? msg : 'No se pudo completar la acción de pesaje.',
+            });
         },
     };
 
@@ -1267,44 +1315,45 @@ export default function ModalFormPedido({
         const file = e.target.files?.[0];
         e.target.value = '';
         if (!file) return;
-        const id = await asegurarPedidoEnBd();
+        setAvisoPdf(null);
+        const id = await asegurarPedidoEnBd({ zona: 'pdf' });
         if (!id) return;
         const fd = new FormData();
         fd.append('pdf_pedido', file);
-        router.post(route('control_pedidos.pdf_pedido.store', id), fd, {
-            ...optsPesaje,
-            forceFormData: true,
-            onSuccess: (page) => {
-                if (page?.props?.flash?.error) {
-                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error, tipo: 'error' });
-                    return;
-                }
-                setPdfLocalOk(true);
-            },
-        });
+        setProcesandoPesaje(true);
+        try {
+            const { data: res } = await axios.post(route('control_pedidos.pdf_pedido.store', id), fd, {
+                headers: headersJsonCsrf(),
+            });
+            setPdfLocalOk(true);
+            if (res?.documento) setPdfDocLocal(res.documento);
+            setAvisoPdf({ tipo: 'success', mensaje: 'Cargado y listo.' });
+        } catch (err) {
+            setAvisoPdf({ tipo: 'error', mensaje: mensajeAxios(err, 'No se pudo adjuntar el PDF o foto.') });
+        } finally {
+            setProcesandoPesaje(false);
+        }
     };
 
     const subirAnexoPiezas = async (e) => {
         const file = e.target.files?.[0];
         e.target.value = '';
         if (!file || !idPedidoAcciones) return;
+        setAvisoPesaje(null);
         const fd = new FormData();
         fd.append('anexo_piezas', file);
-        router.post(route('control_pedidos.anexo_piezas.store', idPedidoAcciones), fd, {
-            ...optsPesaje,
-            forceFormData: true,
-            onSuccess: (page) => {
-                if (page?.props?.flash?.error) {
-                    setAlertaEnvio({ abierto: true, mensaje: page.props.flash.error, tipo: 'error' });
-                    return;
-                }
-                setAlertaEnvio({
-                    abierto: true,
-                    mensaje: page?.props?.flash?.success || 'Anexo de piezas adicionales adjuntado.',
-                    tipo: 'success',
-                });
-            },
-        });
+        setProcesandoPesaje(true);
+        try {
+            await axios.post(route('control_pedidos.anexo_piezas.store', idPedidoAcciones), fd, {
+                headers: headersJsonCsrf(),
+            });
+            setAnexoLocalOk(true);
+            setAvisoPesaje({ tipo: 'success', mensaje: 'Anexo de piezas adjuntado.' });
+        } catch (err) {
+            setAvisoPesaje({ tipo: 'error', mensaje: mensajeAxios(err, 'No se pudo adjuntar el anexo.') });
+        } finally {
+            setProcesandoPesaje(false);
+        }
     };
 
     const postSolicitudPesaje = (id) => {
@@ -1313,78 +1362,68 @@ export default function ModalFormPedido({
             onSuccess: (page) => {
                 const err = page?.props?.flash?.error;
                 if (err) {
-                    setAlertaEnvio({ abierto: true, mensaje: err, tipo: 'error' });
+                    setAvisoPesaje({ tipo: 'error', mensaje: err });
                     return;
                 }
-                setAlertaEnvio({
-                    abierto: true,
-                    mensaje: page?.props?.flash?.success || 'Consulta de pesaje enviada a CEDIS.',
-                    tipo: 'success',
-                });
+                setAvisoPesaje({ tipo: 'success', mensaje: page?.props?.flash?.success || 'Consulta de pesaje enviada a CEDIS.' });
             },
         });
     };
 
     const solicitarPesaje = async () => {
-        setAlertaEnvio({ abierto: false, mensaje: '' });
+        setAvisoPesaje(null);
         if (!data.cliente_id) {
-            setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el cliente antes de solicitar el pesaje.' });
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione el cliente antes de solicitar el pesaje.' });
             return;
         }
         if (Number(data.total_mercancia || 0) <= 0) {
-            setAlertaEnvio({ abierto: true, mensaje: 'Indique el total de mercancía (productos) antes de solicitar el pesaje.' });
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Indique el total de mercancía (productos) antes de solicitar el pesaje.' });
             return;
         }
         if (!tienePdfPedido) {
-            setAlertaEnvio({ abierto: true, mensaje: 'Adjunte el PDF o una foto del pedido antes de solicitar el pesaje.' });
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Adjunte el PDF o una foto del pedido antes de solicitar el pesaje.' });
             return;
         }
-        const id = await asegurarPedidoEnBd();
+        const id = await asegurarPedidoEnBd({ zona: 'pesaje' });
         if (!id) return;
         postSolicitudPesaje(id);
     };
 
     const solicitarRepesaje = () => {
         if (!idPedidoAcciones || !motivoRepesaje) {
-            setAlertaEnvio({ abierto: true, mensaje: 'Seleccione el motivo del re-pesaje (cambio de pedido).' });
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione el motivo del re-pesaje (cambio de pedido).' });
             return;
         }
         if (motivoRepesaje === 'anexo_piezas' && !tieneAnexoPiezas) {
-            setAlertaEnvio({ abierto: true, mensaje: 'Adjunte el PDF o foto de las piezas adicionales antes de solicitar el re-pesaje.' });
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Adjunte el PDF o foto de las piezas adicionales antes de solicitar el re-pesaje.' });
             return;
         }
+        setAvisoPesaje(null);
         router.post(route('control_pedidos.solicitar_repesaje', idPedidoAcciones), { motivo: motivoRepesaje }, {
             ...optsPesaje,
             onSuccess: (page) => {
                 const err = page?.props?.flash?.error;
                 if (err) {
-                    setAlertaEnvio({ abierto: true, mensaje: err, tipo: 'error' });
+                    setAvisoPesaje({ tipo: 'error', mensaje: err });
                     return;
                 }
-                setAlertaEnvio({
-                    abierto: true,
-                    mensaje: page?.props?.flash?.success || 'Re-pesaje solicitado a CEDIS.',
-                    tipo: 'success',
-                });
+                setAvisoPesaje({ tipo: 'success', mensaje: page?.props?.flash?.success || 'Re-pesaje solicitado a CEDIS.' });
             },
         });
     };
 
     const continuarPedido = () => {
         if (!idPedidoAcciones) return;
+        setAvisoPesaje(null);
         router.post(route('control_pedidos.volver_borrador', idPedidoAcciones), {}, {
             ...optsPesaje,
             onSuccess: (page) => {
                 const err = page?.props?.flash?.error;
                 if (err) {
-                    setAlertaEnvio({ abierto: true, mensaje: err, tipo: 'error' });
+                    setAvisoPesaje({ tipo: 'error', mensaje: err });
                     return;
                 }
-                setAlertaEnvio({
-                    abierto: true,
-                    mensaje: page?.props?.flash?.success || 'Pedido listo para continuar.',
-                    tipo: 'success',
-                });
+                setAvisoPesaje({ tipo: 'success', mensaje: page?.props?.flash?.success || 'Pedido listo para continuar.' });
             },
         });
     };
@@ -1395,8 +1434,92 @@ export default function ModalFormPedido({
     const wrapIncorrecto = (key) => (esCampoIncorrecto(key)
         ? 'rounded-xl ring-2 ring-orange-500/70 bg-orange-500/10 p-2'
         : '');
+    const esCampoFaltante = (clave) => intentoEnviar && (validacionEnvio.claves || []).includes(clave);
+    const wrapFaltante = (clave) => (esCampoFaltante(clave) ? WRAP_FALTANTE : '');
+    const wrapCampo = (clave, claveIncorrecto = clave) => wrapFaltante(clave) || wrapIncorrecto(claveIncorrecto);
     const etiquetasIncorrectas = Object.fromEntries(
         CAMPOS_ERROR_DATOS.map((c) => [c.id, c.label])
+    );
+
+    const bloqueSafControles = (
+        <>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-xl border theme-border theme-element">
+                <label className="flex items-center gap-2 theme-text-main cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={data.aplica_saldo_favor}
+                        onChange={(e) => {
+                            const on = e.target.checked;
+                            setData('aplica_saldo_favor', on);
+                            if (!on) {
+                                setData('saf_aplicaciones', []);
+                                setData('saldo_a_favor', '');
+                                setSafFifoItems([]);
+                            } else {
+                                const disponible = Number(safCuenta?.disponible || 0);
+                                const sugerido = disponible > 0 ? disponible : '';
+                                setData('saldo_a_favor', sugerido);
+                                if (sugerido) aplicarFifoSaf(sugerido);
+                            }
+                        }}
+                    />
+                    <span className="text-sm font-bold">Saldo a favor</span>
+                    {safCuenta && (
+                        <span className="text-xs font-semibold" style={COLOR_EXITO}>
+                            Disp. {formatearMoneda(safCuenta.disponible)}
+                        </span>
+                    )}
+                    {cargandoSaf && <span className="text-xs theme-text-muted">Consultando…</span>}
+                    <span className="text-[10px] theme-text-muted font-bold">
+                        Solo saldos del mismo almacén/área. Un saldo generado aquí aplica a partir del siguiente pedido.
+                    </span>
+                </label>
+            </div>
+            {data.aplica_saldo_favor && (
+                <div className="space-y-2">
+                    <label className={SECCION}>Monto a aplicar (FIFO: vence primero)</label>
+                    <InputMoneda
+                        value={data.saldo_a_favor}
+                        onChange={(v) => {
+                            setData('saldo_a_favor', v);
+                            aplicarFifoSaf(v);
+                        }}
+                        className="w-full max-w-xs py-3"
+                    />
+                    <p className="text-xs theme-text-muted m-0">
+                        El sistema reparte automáticamente el saldo más antiguo primero. No se elige crédito a crédito.
+                    </p>
+                    {safFifoItems.length > 0 && (
+                        <div className="space-y-1 border theme-border rounded-lg p-2">
+                            {safFifoItems.map((i) => {
+                                const parcial = Number(i.monto) + 0.001 < Number(i.disponible);
+                                return (
+                                    <div key={i.saf_credito_id} className="flex justify-between gap-2 text-xs">
+                                        <span className="font-bold">{i.folio} · vence {i.fecha_vencimiento}</span>
+                                        <span>
+                                            {formatearMoneda(i.monto)}
+                                            {parcial && (
+                                                <span className="ml-2 text-amber-600 font-semibold">
+                                                    (se sugiere usar completo: {formatearMoneda(i.disponible)})
+                                                </span>
+                                            )}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {(safCuenta?.creditos_usables || []).length === 0 && (
+                        <div className="text-xs theme-text-muted">
+                            {data.cliente_id
+                                ? 'El cliente no tiene saldo disponible en el libro.'
+                                : 'Seleccione un cliente para consultar su saldo.'}
+                        </div>
+                    )}
+                    <div className="text-sm font-bold" style={COLOR_EXITO}>Total saldo: {formatearMoneda(saldoFavorCalculado)}</div>
+                </div>
+            )}
+        </>
     );
 
     const cerrarOverlayBorrador = (e) => {
@@ -1441,7 +1564,36 @@ export default function ModalFormPedido({
                     </button>
                 </div>
 
-                <div className="gelia-modal-body p-5 md:p-8 space-y-8">
+                <div className="gelia-modal-body p-5 md:p-8 space-y-8" ref={cuerpoFormRef}>
+                    {avisoForm && (
+                        <div
+                            className="p-4 rounded-xl border flex items-start gap-3"
+                            style={{
+                                borderColor: avisoForm.tipo === 'success' ? 'color-mix(in srgb, var(--color-exito) 45%, transparent)' : 'color-mix(in srgb, var(--color-peligro) 50%, transparent)',
+                                backgroundColor: avisoForm.tipo === 'success' ? 'color-mix(in srgb, var(--color-exito) 10%, transparent)' : 'color-mix(in srgb, var(--color-peligro) 10%, transparent)',
+                            }}
+                        >
+                            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: avisoForm.tipo === 'success' ? 'var(--color-exito)' : 'var(--color-peligro)' }} />
+                            <div className="min-w-0">
+                                <p className="text-sm font-black m-0" style={{ color: avisoForm.tipo === 'success' ? 'var(--color-exito)' : 'var(--color-peligro)' }}>
+                                    {avisoForm.tipo === 'success' ? 'Listo' : 'Atención'}
+                                </p>
+                                <p className="text-xs font-bold theme-text-main mt-1 m-0">{avisoForm.mensaje}</p>
+                            </div>
+                        </div>
+                    )}
+                    {intentoEnviar && !enviarPedidoListo && (
+                        <div
+                            className="p-4 rounded-xl border flex items-start gap-3"
+                            style={{
+                                borderColor: 'color-mix(in srgb, var(--color-peligro) 50%, transparent)',
+                                backgroundColor: 'color-mix(in srgb, var(--color-peligro) 10%, transparent)',
+                            }}
+                        >
+                            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--color-peligro)' }} />
+                            <p className="text-sm font-black m-0" style={{ color: 'var(--color-peligro)' }}>Hay campos faltantes</p>
+                        </div>
+                    )}
                     {camposIncorrectos.length > 0 && (
                         <div className="p-4 rounded-xl border border-orange-500/50 bg-orange-500/10 flex items-start gap-3">
                             <AlertTriangle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
@@ -1466,7 +1618,8 @@ export default function ModalFormPedido({
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.cliente}. Cliente y productos</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="relative">
+                            <div className="relative" data-campo="cliente">
+                                <div className={wrapCampo('cliente')}>
                                 <label className={SECCION}>Número de cliente *</label>
                                 <div className="theme-field-with-icon">
                                     <Search className="theme-field-icon w-4 h-4" />
@@ -1482,12 +1635,13 @@ export default function ModalFormPedido({
                                         ))}
                                     </div>
                                 )}
+                                </div>
                             </div>
                             <div>
                                 <label className={SECCION}>Fecha</label>
                                 <input type="date" value={data.fecha} onChange={(e) => setData('fecha', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                             </div>
-                            <div>
+                            <div className={wrapCampo('total_mercancia')} data-campo="total_mercancia">
                                 <label className={SECCION}>Total mercancía *</label>
                                 <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
                             </div>
@@ -1498,7 +1652,7 @@ export default function ModalFormPedido({
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.tipo}. Tipo de entrega</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
+                            <div className={wrapCampo('origen')} data-campo="origen">
                                 <label className={SECCION}>Tipo de pedido *</label>
                                 <select
                                     value={data.origen_id}
@@ -1525,7 +1679,7 @@ export default function ModalFormPedido({
                             </div>
                             {tieneTipo && (
                             <>
-                            <div>
+                            <div className={wrapCampo('almacen')} data-campo="almacen">
                                 <label className={SECCION}>Almacén de salida</label>
                                 <select value={data.almacen_id} disabled={logisticaBloqueada} onChange={(e) => setData('almacen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                     <option value="">Seleccionar...</option>
@@ -1745,6 +1899,7 @@ export default function ModalFormPedido({
                     <>
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.pdf}. PDF o archivo del pedido</p>
+                        <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-3">
                             <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
                                 <FileText className="w-4 h-4 theme-text-muted" />
@@ -1765,14 +1920,36 @@ export default function ModalFormPedido({
                                             {labelSoportePedido(pdfPedidoDoc)}
                                         </button>
                                     )
-                                    : <span className="text-xs font-bold text-emerald-600">Archivo adjuntado</span>
+                                    : <span className="text-xs font-bold" style={COLOR_EXITO}>Cargado y listo</span>
                             )}
+                            {procesandoPesaje && !avisoPdf && (
+                                <span className="text-xs font-bold theme-text-muted">Subiendo…</span>
+                            )}
+                        </div>
+                        {avisoPdf && (
+                            <p
+                                className="text-xs font-bold m-0"
+                                style={{ color: avisoPdf.tipo === 'success' ? 'var(--color-exito)' : 'var(--color-peligro)' }}
+                            >
+                                {avisoPdf.mensaje}
+                            </p>
+                        )}
                         </div>
                     </section>
 
-                    <section className={SECCION_WRAP}>
+                    <section className={SECCION_WRAP} data-campo="pesaje">
                         <p className={SECCION}>{nSec.solPesaje}. Solicitud de pesaje</p>
-                        {pedido?.estatus_envio && LABELS_ESTATUS_ENVIO[pedido.estatus_envio] && (
+                        {avisoPesaje && (
+                            <p
+                                className="text-xs font-bold m-0 mb-3"
+                                style={{ color: avisoPesaje.tipo === 'success' ? 'var(--color-exito)' : 'var(--color-peligro)' }}
+                            >
+                                {avisoPesaje.mensaje}
+                            </p>
+                        )}
+                        {pedido?.estatus_envio && LABELS_ESTATUS_ENVIO[pedido.estatus_envio]
+                            && !(pedido.estatus_envio === 'pendiente_pesaje' && fasePedido === 'PESAJE_PENDIENTE')
+                            && !(pedido.estatus_envio === 'pesaje_listo' && fasePedido === 'PESAJE_RESPONDIDO') && (
                             <p className="text-xs font-bold theme-text-muted mb-3 m-0">
                                 Estado envío: {LABELS_ESTATUS_ENVIO[pedido.estatus_envio]}
                             </p>
@@ -1868,7 +2045,7 @@ export default function ModalFormPedido({
                                     puedeCancelar={Boolean(pedido?.puede_cancelar)}
                                 />
                                 {cajasPesaje.length > 0 ? (
-                                    <div className="space-y-3">
+                                    <div className="space-y-3" data-campo="tipo_caja">
                                         <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
                                         {[...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
                                             <div key={c.id || idx} className="p-4 rounded-xl border theme-border theme-element space-y-2">
@@ -1887,11 +2064,11 @@ export default function ModalFormPedido({
                                     </div>
                                 ) : null}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
+                                    <div className={wrapCampo('numero_envios')} data-campo="numero_envios">
                                         <label className={SECCION}>Núm. envíos</label>
                                         <input type="text" readOnly value={data.numero_cajas ?? cajasPesaje.length ?? '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
                                     </div>
-                                    <div>
+                                    <div className={wrapCampo('peso_real')} data-campo="peso_real">
                                         <label className={SECCION}>Peso real total (kg)</label>
                                         <input type="text" readOnly value={data.peso_real_kg !== '' && data.peso_real_kg != null ? data.peso_real_kg : '—'} className={`${THEME_INPUT} w-full py-3 opacity-60`} />
                                     </div>
@@ -1972,7 +2149,16 @@ export default function ModalFormPedido({
                                 </div>
                             </div>
                         )}
-                        <div className={`space-y-4 ${!cotizacionHabilitada ? 'opacity-60 pointer-events-none' : ''} ${(esCampoIncorrecto('domicilio') || esCampoIncorrecto('ciudad_estado') || esCampoIncorrecto('referencia') || esCampoIncorrecto('destinatario') || esCampoIncorrecto('telefono')) ? 'rounded-xl ring-2 ring-orange-500/40 bg-orange-500/5 p-3' : ''}`}>
+                        <div
+                            className={`space-y-4 ${!cotizacionHabilitada ? 'opacity-60 pointer-events-none' : ''} ${
+                                wrapFaltante('domicilio')
+                                || wrapFaltante('codigo_postal')
+                                || ((esCampoIncorrecto('domicilio') || esCampoIncorrecto('ciudad_estado') || esCampoIncorrecto('referencia') || esCampoIncorrecto('destinatario') || esCampoIncorrecto('telefono'))
+                                    ? 'rounded-xl ring-2 ring-orange-500/40 bg-orange-500/5 p-3'
+                                    : '')
+                            }`}
+                            data-campo="domicilio"
+                        >
                             {puedeSeleccionar && !mostrarExcepcion && (
                                 <div className="space-y-3">
                                     <label className={`${SECCION} m-0`}>Seleccionar dirección del catálogo</label>
@@ -2070,6 +2256,7 @@ export default function ModalFormPedido({
                                                 value={data.codigo_postal}
                                                 onChange={(e) => setData('codigo_postal', e.target.value)}
                                                 className={`${THEME_INPUT} w-full py-3`}
+                                                data-campo="codigo_postal"
                                             />
                                             <input
                                                 type="text"
@@ -2163,9 +2350,8 @@ export default function ModalFormPedido({
                                 </div>
                             )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
+                                <div className={wrapCampo('paqueteria')} data-campo="paqueteria">
                                     <label className={SECCION}>Paquetería{guiaCliente ? ' (opcional)' : ''}</label>
-                                    <div className={wrapIncorrecto('paqueteria')}>
                                     <select value={data.catalogo_paqueteria_id} disabled={logisticaBloqueada} onChange={(e) => manejarPaqueteria(e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                         <option value="">Seleccionar...</option>
                                         {paqueteriasComerciales.length > 0 && (
@@ -2185,7 +2371,6 @@ export default function ModalFormPedido({
                                             </optgroup>
                                         )}
                                     </select>
-                                    </div>
                                 </div>
                                 {!guiaCliente && !tieneCoberturaSeguro && data.catalogo_paqueteria_id && (
                                     <div id="seg-warn" className="md:col-span-2 flex items-start gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
@@ -2196,7 +2381,7 @@ export default function ModalFormPedido({
                                     </div>
                                 )}
                                 {!guiaCliente && (
-                                <div className={wrapIncorrecto('tipo_guia')}>
+                                <div className={wrapCampo('tipo_guia')} data-campo="tipo_guia">
                                     <label className={SECCION}>Tipo de guía</label>
                                     <select value={data.catalogo_tipo_guia_id} disabled={logisticaBloqueada || !cotizacionHabilitada} onChange={(e) => setData('catalogo_tipo_guia_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada || !cotizacionHabilitada ? 'opacity-50' : ''}`}>
                                         <option value="">{cotizacionHabilitada ? 'Seleccionar...' : 'Tras pesaje CEDIS...'}</option>
@@ -2205,7 +2390,7 @@ export default function ModalFormPedido({
                                 </div>
                                 )}
                                 {!guiaCliente && (
-                                <div>
+                                <div className={wrapCampo('reexpedicion')} data-campo="reexpedicion">
                                     <label className={SECCION}>Reexpedición</label>
                                     <select value={data.catalogo_zona_id} disabled={logisticaBloqueada} onChange={(e) => setData('catalogo_zona_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                         <option value="">Seleccionar...</option>
@@ -2258,7 +2443,7 @@ export default function ModalFormPedido({
                                         </div>
                                     )}
                                     {data.envia_a_otra_persona && (
-                                        <div className={`md:col-span-2 ${wrapIncorrecto('destinatario')}`}>
+                                        <div className={`md:col-span-2 ${wrapCampo('destinatario')}`}>
                                             <label className={SECCION}>Nombre del destinatario</label>
                                             <input type="text" placeholder="Nombre completo" value={data.envia_otra_persona} onChange={(e) => setData('envia_otra_persona', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                                         </div>
@@ -2268,12 +2453,19 @@ export default function ModalFormPedido({
                         </div>
                     </section>
 
-                    {/* 8. Cotización */}
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{nSec.saf}. Saldo a favor</p>
+                        <div className="space-y-4">
+                            {bloqueSafControles}
+                        </div>
+                    </section>
+
+                    {/* 9. Cotización */}
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.cot}. Cotización</p>
                         <div className="space-y-4">
                             {!guiaCliente && !envioPorCobrar && (
-                                <div className="max-w-md">
+                                <div className={`max-w-md ${wrapCampo('costo_envio')}`} data-campo="costo_envio">
                                     <label className={SECCION}>{labelCostoEnvio}{esMunicipioDiferido || omiteCostoPorTarifaPeso ? ' (opcional)' : ''}{camposEnvioBloqueados ? ' (bloqueado)' : ''}</label>
                                     <InputMoneda value={camposEnvioBloqueados ? '' : data.costo_envio} onChange={(v) => setData('costo_envio', v)} className={`w-full py-3 ${camposEnvioBloqueados ? 'opacity-50 pointer-events-none' : ''}`} placeholder="" />
                                     {omiteCostoPorTarifaPeso && (
@@ -2294,12 +2486,12 @@ export default function ModalFormPedido({
                                     <span>Total a cubrir</span>
                                     <span>{formatearMoneda(resumenCoberturaVivo.total_a_cubrir)}</span>
                                 </div>
-                                <div className="flex justify-between text-emerald-600 font-bold">
+                                <div className="flex justify-between font-bold" style={COLOR_EXITO}>
                                     <span>Saldo a favor aplicado</span>
                                     <span>- {formatearMoneda(data.aplica_saldo_favor ? saldoFavorCalculado : 0)}</span>
                                 </div>
                                 {resumenCoberturaVivo.excedente_generado > 0.01 && (
-                                    <div className="flex justify-between font-bold" style={{ color: '#3B82F6' }}>
+                                    <div className="flex justify-between font-bold" style={COLOR_INFO}>
                                         <span>Excedente generado (este pedido)</span>
                                         <span>{formatearMoneda(resumenCoberturaVivo.excedente_generado)}</span>
                                     </div>
@@ -2317,7 +2509,7 @@ export default function ModalFormPedido({
 
                     {mostrarRestoPedido && (
                     <>
-                    <section className={SECCION_WRAP}>
+                    <section className={`${SECCION_WRAP} ${wrapCampo('pago')}`} data-campo="pago">
                         <p className={SECCION}>{nSec.pago}. Pago</p>
                         <div className="space-y-4">
                             <SeccionPagosExhibicion
@@ -2353,86 +2545,11 @@ export default function ModalFormPedido({
                                     </div>
                                 </div>
                             )}
-                            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-4 rounded-xl border theme-border theme-element">
-                                <label className="flex items-center gap-2 theme-text-main cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={data.aplica_saldo_favor}
-                                        onChange={(e) => {
-                                            const on = e.target.checked;
-                                            setData('aplica_saldo_favor', on);
-                                            if (!on) {
-                                                setData('saf_aplicaciones', []);
-                                                setData('saldo_a_favor', '');
-                                                setSafFifoItems([]);
-                                            } else {
-                                                const disponible = Number(safCuenta?.disponible || 0);
-                                                const sugerido = disponible > 0 ? disponible : '';
-                                                setData('saldo_a_favor', sugerido);
-                                                if (sugerido) aplicarFifoSaf(sugerido);
-                                            }
-                                        }}
-                                    />
-                                    <span className="text-sm font-bold">Saldo a favor</span>
-                                    {safCuenta && (
-                                        <span className="text-xs text-emerald-600 font-semibold">
-                                            Disp. {formatearMoneda(safCuenta.disponible)}
-                                        </span>
-                                    )}
-                                    {cargandoSaf && <span className="text-xs theme-text-muted">Consultando…</span>}
-                                    <span className="text-[10px] theme-text-muted font-bold">
-                                        Solo saldos del mismo almacén/área. Un saldo generado aquí aplica a partir del siguiente pedido.
-                                    </span>
-                                </label>
-                            </div>
-                            {data.aplica_saldo_favor && (
-                                <div className="space-y-2">
-                                    <label className={SECCION}>Monto a aplicar (FIFO: vence primero)</label>
-                                    <InputMoneda
-                                        value={data.saldo_a_favor}
-                                        onChange={(v) => {
-                                            setData('saldo_a_favor', v);
-                                            aplicarFifoSaf(v);
-                                        }}
-                                        className="w-full max-w-xs py-3"
-                                    />
-                                    <p className="text-xs theme-text-muted m-0">
-                                        El sistema reparte automáticamente el saldo más antiguo primero. No se elige crédito a crédito.
-                                    </p>
-                                    {safFifoItems.length > 0 && (
-                                        <div className="space-y-1 border theme-border rounded-lg p-2">
-                                            {safFifoItems.map((i) => {
-                                                const parcial = Number(i.monto) + 0.001 < Number(i.disponible);
-                                                return (
-                                                    <div key={i.saf_credito_id} className="flex justify-between gap-2 text-xs">
-                                                        <span className="font-bold">{i.folio} · vence {i.fecha_vencimiento}</span>
-                                                        <span>
-                                                            {formatearMoneda(i.monto)}
-                                                            {parcial && (
-                                                                <span className="ml-2 text-amber-600 font-semibold">
-                                                                    (se sugiere usar completo: {formatearMoneda(i.disponible)})
-                                                                </span>
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                    {(safCuenta?.creditos_usables || []).length === 0 && (
-                                        <div className="text-xs theme-text-muted">
-                                            {data.cliente_id
-                                                ? 'El cliente no tiene saldo disponible en el libro.'
-                                                : 'Seleccione un cliente para consultar su saldo.'}
-                                        </div>
-                                    )}
-                                    <div className="text-sm font-bold text-emerald-700">Total saldo: {formatearMoneda(saldoFavorCalculado)}</div>
-                                </div>
-                            )}
+                            {!requiereLogistica && bloqueSafControles}
                             {!requiereLogistica && (
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
-                                    <div className="flex justify-between text-emerald-600 font-bold">
+                                    <div className="flex justify-between font-bold" style={COLOR_EXITO}>
                                         <span>Saldo a favor aplicado</span>
                                         <span>- {formatearMoneda(data.aplica_saldo_favor ? saldoFavorCalculado : 0)}</span>
                                     </div>
@@ -2452,7 +2569,7 @@ export default function ModalFormPedido({
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.rem}. Remisión</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
+                            <div className={wrapCampo('folio_remision')} data-campo="folio_remision">
                                 <label className={SECCION}>Folio de Pedido *</label>
                                 <input
                                     type="text"
@@ -2494,9 +2611,9 @@ export default function ModalFormPedido({
 
                 </div>
                     <section className="gelia-modal-footer flex flex-col gap-3 p-5 md:p-6 shrink-0">
-                        {mostrarEnviarPedido && !enviarPedidoListo && validacionEnvio.mensaje ? (
-                            <p className="text-xs font-bold text-amber-700 dark:text-amber-400 m-0 leading-snug">
-                                {validacionEnvio.mensaje}
+                        {mostrarEnviarPedido && intentoEnviar && !enviarPedidoListo ? (
+                            <p className="text-xs font-bold m-0 leading-snug" style={{ color: 'var(--color-peligro)' }}>
+                                Hay campos faltantes.
                             </p>
                         ) : null}
                         {Object.keys(errors).length > 0 && (
@@ -2524,7 +2641,13 @@ export default function ModalFormPedido({
                             setAlertaDireccion(false);
                             setMsgDireccion('');
                             setDocsEliminar([]);
-                            setAlertaEnvio({ abierto: false, mensaje: '' });
+                            setIntentoEnviar(false);
+                            setAvisoForm(null);
+                            setAvisoPdf(null);
+                            setAvisoPesaje(null);
+                            setPdfLocalOk(false);
+                            setPdfDocLocal(null);
+                            setAnexoLocalOk(false);
                             if (!modoEdicion) {
                                 limpiarBorradorLocal();
                                 // Conserva pedidoBdId para no crear borradores huérfanos; el próximo autoguardado limpia campos en BD.
@@ -2558,16 +2681,6 @@ export default function ModalFormPedido({
                             direccionId: data.cliente_direccion_id,
                         });
                     }
-                }}
-            />
-            <ModalAlertaPedido
-                abierto={Boolean(abierto) && alertaEnvio.abierto}
-                tipo={alertaEnvio.tipo || 'error'}
-                titulo={alertaEnvio.tipo === 'success' ? 'Listo' : 'Campos incompletos'}
-                mensaje={alertaEnvio.mensaje}
-                onClose={() => {
-                    ignoreOverlayCloseUntil.current = Date.now() + 400;
-                    setAlertaEnvio({ abierto: false, mensaje: '', tipo: 'error' });
                 }}
             />
             <ModalVistaPreviaDocumento

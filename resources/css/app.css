@@ -39,4 +39,6 @@
     --color-theme-border: var(--theme-border);
     --color-primario: var(--color-primario);
     --color-peligro: var(--color-peligro);
+    --color-exito: var(--color-exito);
+    --color-info: var(--color-info);
 }

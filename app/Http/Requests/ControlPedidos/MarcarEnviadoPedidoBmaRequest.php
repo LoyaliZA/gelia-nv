@@ -8,7 +8,7 @@ class MarcarEnviadoPedidoBmaRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('control_pedidos.cedis') ?? false;
+        return $this->user()?->can('control_pedidos.cedis.enviar') ?? false;
     }
 
     public function rules(): array

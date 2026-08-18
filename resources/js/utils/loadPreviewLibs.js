@@ -1,8 +1,11 @@
 const XLSX_CDN = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
 const MAMMOTH_CDN = 'https://cdn.jsdelivr.net/npm/mammoth@1.11.0/mammoth.browser.min.js';
+const PDFJS_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+const PDFJS_WORKER = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
 let xlsxPromise = null;
 let mammothPromise = null;
+let pdfjsPromise = null;
 
 function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -62,4 +65,23 @@ export function loadMammoth() {
     }
 
     return mammothPromise;
+}
+
+export function loadPdfJs() {
+    if (typeof window !== 'undefined' && window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+        return Promise.resolve(window.pdfjsLib);
+    }
+
+    if (!pdfjsPromise) {
+        pdfjsPromise = loadScript(PDFJS_CDN).then(() => {
+            if (!window.pdfjsLib) {
+                throw new Error('PDF.js no disponible');
+            }
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+            return window.pdfjsLib;
+        });
+    }
+
+    return pdfjsPromise;
 }

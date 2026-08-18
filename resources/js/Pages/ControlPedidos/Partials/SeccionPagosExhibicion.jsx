@@ -469,7 +469,7 @@ export default function SeccionPagosExhibicion({
                             <strong>{formatearMoneda(pendiente)}</strong>
                         </div>
                     ) : excedenteGenerado > 0.01 ? (
-                        <div className="col-span-2" style={{ color: '#3B82F6' }}>
+                        <div className="col-span-2" style={{ color: 'var(--color-info)' }}>
                             Excedente generado (este pedido):{' '}
                             <strong>{formatearMoneda(excedenteGenerado)}</strong>
                         </div>
@@ -480,7 +480,7 @@ export default function SeccionPagosExhibicion({
                         </div>
                     )}
                     {Number(safAplicado) > 0.01 && (
-                        <div className="col-span-2 text-emerald-600">
+                        <div className="col-span-2" style={{ color: 'var(--color-exito)' }}>
                             Saldo a favor aplicado:{' '}
                             <strong>- {formatearMoneda(safAplicado)}</strong>
                         </div>

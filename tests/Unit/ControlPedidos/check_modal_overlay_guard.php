@@ -29,5 +29,10 @@ $assert(str_contains($form, 'preserveState: true'), 'ModalFormPedido preserveSta
 $assert(str_contains($form, 'ignoreOverlayCloseUntil'), 'ModalFormPedido guarda overlay');
 $assert(str_contains($form, 'cerrarOverlayBorrador'), 'ModalFormPedido overlay protegido');
 $assert(str_contains($index, 'if (modalForm.abierto) return'), 'Index no muestra flash sobre borrador abierto');
+$assert(str_contains($form, 'WRAP_FALTANTE'), 'validación resalta contenedores, no modal');
+$assert(! str_contains($form, 'import ModalAlertaPedido'), 'form sin ModalAlertaPedido');
+$assert(! str_contains($form, 'control_pedidos.pdf_pedido.store') || str_contains($form, 'axios.post(route(\'control_pedidos.pdf_pedido.store\''), 'PDF se sube con axios');
+$assert(! str_contains($form, "router.post(route('control_pedidos.pdf_pedido.store'"), 'PDF no usa router.post');
+$assert(str_contains($js, 'claves'), 'validarCamposEnvioPedido expone claves');
 
 exit($fallos > 0 ? 1 : 0);

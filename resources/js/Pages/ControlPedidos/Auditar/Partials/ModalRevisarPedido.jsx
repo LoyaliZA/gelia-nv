@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import {
     X, CheckCircle2, AlertTriangle, FileText, Upload, Trash2, MapPin,
 } from 'lucide-react';
@@ -85,6 +86,34 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         }
     }, [abierto, pedidoInicial?.id]);
 
+    useEffect(() => {
+        if (!abierto || !pedidoInicial?.id) return undefined;
+        if (pedidoInicial?.estatus?.fase_ciclo !== 'PENDIENTE_AUXILIAR') return undefined;
+        const url = route('control_pedidos.auditar.revision_en_curso', pedidoInicial.id);
+        const ping = () => axios.post(url).catch(() => {});
+        const soltar = () => {
+            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            fetch(url, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': token || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    Accept: 'application/json',
+                },
+                credentials: 'same-origin',
+                keepalive: true,
+            }).catch(() => {});
+        };
+        ping();
+        const t = setInterval(ping, 15000);
+        window.addEventListener('pagehide', soltar);
+        return () => {
+            clearInterval(t);
+            window.removeEventListener('pagehide', soltar);
+            soltar();
+        };
+    }, [abierto, pedidoInicial?.id, pedidoInicial?.estatus?.fase_ciclo]);
+
     if (!abierto || !pedido) return null;
 
     const fase = pedido.estatus?.fase_ciclo;
@@ -95,7 +124,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const badgeRemision = tieneErrorRemision(pedido) ? badgeCorregirRemision() : null;
     const reRevision = esPendienteReRevision(pedido);
     const esPendiente = fase === 'PENDIENTE_AUXILIAR';
-    const puedeLiberarResguardo = Boolean(pedido.es_resguardo) && (esPendiente || fase === 'EN_CEDIS');
+    const puedeLiberarResguardo = Boolean(pedido.es_resguardo)
+        && (esPendiente || fase === 'EN_CEDIS')
+        && can('control_pedidos.liberar_resguardo');
     const requiereCapturaLiberacion = Boolean(pedido.es_resguardo)
         && (pedido.tipo_operacion_envio?.codigo === 'RESGUARDO_ABIERTO'
             || pedido.estatus_envio === 'pendiente_liberacion');
@@ -103,7 +134,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const comprobantes = comprobantesDe(pedido);
     const remision = remisionDe(pedido);
     const pagoValidado = Boolean(pedido.pago_validado_at);
-    const puedeAprobar = esPendiente && pagoValidado && Boolean(remision);
+    const puedeAprobar = esPendiente && pagoValidado && Boolean(remision)
+        && can('control_pedidos.auditar.aprobar');
+    const muestraAprobar = esPendiente && can('control_pedidos.auditar.aprobar');
     const anexoPendiente = anexoEnvioPendienteDe(pedido);
     const puedeRevisarAnexo = Boolean(anexoPendiente) && pedido.estatus_envio === 'pendiente_revision_anexo';
     const puedeAnexar = puedeAnexarPagoEnvio(pedido);
@@ -524,7 +557,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         + (pedido.aplica_seguro ? Number(pedido.costo_seguro || 0) : 0)
                                     )}</span>
                                 </div>
-                                <div className="flex justify-between text-emerald-600 font-bold">
+                                <div className="flex justify-between font-bold" style={{ color: 'var(--color-exito)' }}>
                                     <span>Saldo a favor aplicado</span>
                                     <span>- {formatearMoneda(pedido.saldo_a_favor)}</span>
                                 </div>
@@ -700,20 +733,20 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             </button>
                         )}
                         {esPendiente && (
-                            <>
-                                <button type="button" onClick={() => setErrorDatosAbierto(true)} disabled={procesando} className={`${BTN_SECONDARY} theme-element border border-red-500/40 text-red-500 outline-none`}>
-                                    Reportar error
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setConfirmacion({ accion: 'aprobar' })}
-                                    disabled={!puedeAprobar || procesando}
-                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 ml-auto`}
-                                    title={!pagoValidado ? 'Valide el pago antes de aprobar' : !remision ? 'Adjunte la remisión PDF antes de aprobar' : ''}
-                                >
-                                    <CheckCircle2 className="w-4 h-4" /> Aprobar y enviar a Registro General
-                                </button>
-                            </>
+                            <button type="button" onClick={() => setErrorDatosAbierto(true)} disabled={procesando} className={`${BTN_SECONDARY} theme-element border border-red-500/40 text-red-500 outline-none`}>
+                                Reportar error
+                            </button>
+                        )}
+                        {muestraAprobar && (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmacion({ accion: 'aprobar' })}
+                                disabled={!puedeAprobar || procesando}
+                                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 ml-auto`}
+                                title={!pagoValidado ? 'Valide el pago antes de aprobar' : !remision ? 'Adjunte la remisión PDF antes de aprobar' : ''}
+                            >
+                                <CheckCircle2 className="w-4 h-4" /> Aprobar y enviar a Registro General
+                            </button>
                         )}
                     </div>
                 </div>

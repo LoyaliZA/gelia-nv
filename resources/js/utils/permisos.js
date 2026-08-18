@@ -91,10 +91,14 @@ export const DESCRIPCIONES_PERMISOS = {
     'control_pedidos.exportar': 'Permite exportar el listado de pedidos en CSV.',
     'control_pedidos.ver_detalle': 'Permite ver el detalle completo de un pedido.',
     'control_pedidos.auditar': 'Permite acceder al panel de auditoría de pedidos (auxiliar).',
+    'control_pedidos.auditar.aprobar': 'Permite aprobar un pedido auditado y enviarlo a CEDIS.',
     'control_pedidos.cedis': 'Permite acceder al panel de control de empaque en CEDIS.',
+    'control_pedidos.cedis.enviar': 'Permite confirmar que la paquetería recogió el paquete (marcar enviado).',
     'control_pedidos.delegado': 'Permite acceder al panel de delegado (asignación de guías y PDF).',
+    'control_pedidos.delegado.importar': 'Permite importar guías de forma masiva desde CSV o Excel.',
     'control_pedidos.cancelar': 'Permite cancelar un pedido BMA en fases tempranas (pre-guía / pre-envío).',
     'control_pedidos.reabrir': 'Permite reabrir un pedido enviado a pendiente de recolección si la paquetería no recogió.',
+    'control_pedidos.liberar_resguardo': 'Permite liberar un pedido en resguardo (inventario y, si aplica, cobro de envío).',
     'control_pedidos.configurar_catalogos': 'Permite administrar catálogos del módulo de control de pedidos.',
     'control_pedidos.configurar_plazos': 'Permite configurar plazos de retraso de empaque y recolección.',
     'control_pedidos.direccion.seleccionar': 'Permite seleccionar una dirección normalizada en pedidos BMA.',
@@ -232,18 +236,26 @@ export const DESCRIPCIONES_PERMISOS = {
 export const ETIQUETAS_PERMISOS = {
     'almacenes.ver': 'almacenes · grupo',
     'control_pedidos.cedis': 'gestionar cedis',
+    'control_pedidos.cedis.enviar': 'confirmar recolección',
     'control_pedidos.delegado': 'asignar / actualizar guías',
+    'control_pedidos.delegado.importar': 'importar guías',
     'control_pedidos.configurar_catalogos': 'configurar catálogos',
     'control_pedidos.configurar_plazos': 'configurar plazos de retraso',
     'control_pedidos.auditar': 'auditar pedidos',
+    'control_pedidos.auditar.aprobar': 'aprobar pedido',
     'control_pedidos.cancelar': 'cancelar pedido',
     'control_pedidos.reabrir': 'reabrir envío',
+    'control_pedidos.liberar_resguardo': 'liberar resguardo',
 };
 
 /** Permisos de excepción / estados avanzados (resalte en permisos específicos). */
 export const PERMISOS_EXCEPCION = new Set([
     'control_pedidos.direccion.cambiar_despues_remision',
     'control_pedidos.direccion.cambiar_despues_guia',
+    'control_pedidos.auditar.aprobar',
+    'control_pedidos.liberar_resguardo',
+    'control_pedidos.cedis.enviar',
+    'control_pedidos.delegado.importar',
 ]);
 
 export function esPermisoExcepcion(permisoName) {
@@ -280,19 +292,23 @@ export const SUBMODULOS_UI_POR_MODULO = {
             id: 'auditar',
             label: 'Auditar pedidos',
             descripcion: 'Panel de auditoría (validar, remisión, aprobar / rechazar)',
-            permisos: ['control_pedidos.auditar'],
+            permisos: [
+                'control_pedidos.auditar',
+                'control_pedidos.auditar.aprobar',
+                'control_pedidos.liberar_resguardo',
+            ],
         },
         {
             id: 'cedis',
             label: 'Control pedidos CEDIS',
             descripcion: 'Empaque, recolección y reapertura excepcional de envío',
-            permisos: ['control_pedidos.cedis', 'control_pedidos.reabrir'],
+            permisos: ['control_pedidos.cedis', 'control_pedidos.reabrir', 'control_pedidos.cedis.enviar'],
         },
         {
             id: 'delegado',
             label: 'Actualizar guías',
             descripcion: 'Asignación de guías, PDF e importación (delegado)',
-            permisos: ['control_pedidos.delegado'],
+            permisos: ['control_pedidos.delegado', 'control_pedidos.delegado.importar'],
         },
         {
             id: 'catalogos',

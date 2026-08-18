@@ -4,7 +4,9 @@ namespace Tests\Unit\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaHistorialEstado;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\RevisionEnCursoPedidoBma;
 use Tests\TestCase;
 
 class ControlPedidosMaquinaEstadosTest extends TestCase
@@ -117,5 +119,48 @@ class ControlPedidosMaquinaEstadosTest extends TestCase
             CatalogoEstatusPedido::FASE_CANCELADO,
             CatalogoEstatusPedido::FASE_BORRADOR
         ));
+    }
+
+    public function test_re_revision_solo_tras_segunda_entrada_a_auxiliar(): void
+    {
+        $aux = new CatalogoEstatusPedido(['fase_ciclo' => CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR]);
+        $pesaje = new CatalogoEstatusPedido(['fase_ciclo' => CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO]);
+        $rechazo = new CatalogoEstatusPedido(['fase_ciclo' => CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA]);
+
+        $pedido = new PedidoBma;
+        $pedido->setRelation('estatus', $aux);
+
+        $primerEnvio = new PedidoBmaHistorialEstado;
+        $primerEnvio->id = 1;
+        $primerEnvio->setRelation('estatusNuevo', $aux);
+        $primerEnvio->setRelation('estatusAnterior', $pesaje);
+
+        $hito = new PedidoBmaHistorialEstado;
+        $hito->id = 2;
+        $hito->setRelation('estatusNuevo', $aux);
+        $hito->setRelation('estatusAnterior', $aux);
+
+        $pedido->setRelation('historial', collect([$primerEnvio, $hito]));
+        $this->assertFalse(MaquinaEstadosPedidoBma::esPendienteReRevision($pedido));
+
+        $reenvio = new PedidoBmaHistorialEstado;
+        $reenvio->id = 3;
+        $reenvio->setRelation('estatusNuevo', $aux);
+        $reenvio->setRelation('estatusAnterior', $rechazo);
+
+        $pedido->setRelation('historial', collect([$primerEnvio, $hito, $reenvio]));
+        $this->assertTrue(MaquinaEstadosPedidoBma::esPendienteReRevision($pedido));
+    }
+
+    public function test_revision_en_curso_caduca_con_soltar(): void
+    {
+        config(['cache.default' => 'array']);
+        $this->assertFalse(RevisionEnCursoPedidoBma::activa(99));
+        RevisionEnCursoPedidoBma::marcar(99, 7);
+        $this->assertTrue(RevisionEnCursoPedidoBma::activa(99));
+        RevisionEnCursoPedidoBma::soltar(99, 8);
+        $this->assertTrue(RevisionEnCursoPedidoBma::activa(99));
+        RevisionEnCursoPedidoBma::soltar(99, 7);
+        $this->assertFalse(RevisionEnCursoPedidoBma::activa(99));
     }
 }

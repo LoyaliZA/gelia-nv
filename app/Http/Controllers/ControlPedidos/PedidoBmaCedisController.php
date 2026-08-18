@@ -80,7 +80,7 @@ class PedidoBmaCedisController extends Controller
         PedidoBma $pedidoBma,
         MarcarEnviadoPedidoBmaService $service
     ): RedirectResponse {
-        Gate::authorize('control_pedidos.cedis');
+        Gate::authorize('control_pedidos.cedis.enviar');
 
         $cajas = $request->validated('cajas');
 

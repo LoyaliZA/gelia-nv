@@ -1,4 +1,6 @@
 import React from 'react';
+import BotonCopiar from './BotonCopiar';
+import { textoDomicilioCompleto } from './textoDireccionGuia';
 
 /**
  * Resumen estructurado de dirección (snapshot, listado verificado o excepción manual).
@@ -11,6 +13,7 @@ export default function DireccionPedidoResumen({
     codigoDireccion = null,
     className = '',
     compact = false,
+    conCopia = false,
 }) {
     const d = direccion || {};
     const tieneEstructura = Boolean(
@@ -29,12 +32,9 @@ export default function DireccionPedidoResumen({
         .filter(Boolean)
         .join(' / ');
     const textoLegacy = domicilioLegacy || d.domicilio_legacy || d.direccion_resumida;
-
-    if (compact && !tieneEstructura) {
-        return (
-            <p className={`text-sm theme-text-main m-0 ${className}`}>{textoLegacy || '—'}</p>
-        );
-    }
+    const telefono = d.telefono_destinatario;
+    const textoCompleto = textoDomicilioCompleto(d, textoLegacy, cp);
+    const telHref = telefono ? `tel:${String(telefono).replace(/[^\d+]/g, '')}` : null;
 
     const Campo = ({ label, valor }) => (
         <div>
@@ -43,11 +43,40 @@ export default function DireccionPedidoResumen({
         </div>
     );
 
+    const CampoTel = () => (
+        <div>
+            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mb-0.5">Teléfono</p>
+            {telHref ? (
+                <a href={telHref} className="text-sm font-bold theme-text-main m-0 break-words underline underline-offset-2">
+                    {telefono}
+                </a>
+            ) : (
+                <p className="text-sm font-bold theme-text-main m-0">—</p>
+            )}
+        </div>
+    );
+
+    const barraCopia = conCopia && textoCompleto ? (
+        <BotonCopiar texto={textoCompleto} etiqueta="Copiar dirección" />
+    ) : null;
+
+    if (compact) {
+        return (
+            <div className={`rounded-xl border theme-border theme-element p-3 space-y-2 ${className}`}>
+                {d.nombre_destinatario && <Campo label="Destinatario" valor={d.nombre_destinatario} />}
+                {conCopia ? <CampoTel /> : (telefono ? <Campo label="Teléfono" valor={telefono} /> : null)}
+                <Campo label="Domicilio" valor={textoCompleto || textoLegacy || '—'} />
+                {barraCopia}
+            </div>
+        );
+    }
+
     if (!tieneEstructura) {
         return (
-            <div className={`rounded-xl border theme-border theme-element p-4 ${className}`}>
+            <div className={`rounded-xl border theme-border theme-element p-4 space-y-3 ${className}`}>
                 <Campo label="Domicilio" valor={textoLegacy} />
-                {cp && <div className="mt-3"><Campo label="C.P." valor={cp} /></div>}
+                {cp && <Campo label="C.P." valor={cp} />}
+                {barraCopia}
             </div>
         );
     }
@@ -61,7 +90,7 @@ export default function DireccionPedidoResumen({
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Campo label="Destinatario" valor={d.nombre_destinatario} />
-                <Campo label="Teléfono" valor={d.telefono_destinatario} />
+                {conCopia ? <CampoTel /> : <Campo label="Teléfono" valor={telefono} />}
                 <Campo label="Calle" valor={d.calle} />
                 <Campo label="Número" valor={numero} />
                 <Campo label="Colonia" valor={d.colonia} />
@@ -69,12 +98,13 @@ export default function DireccionPedidoResumen({
                 <Campo label="Estado" valor={d.estado} />
                 <Campo label="C.P." valor={cp} />
             </div>
-            {!compact && (d.referencias || d.indicaciones_entrega) && (
+            {(d.referencias || d.indicaciones_entrega) && (
                 <div className="grid grid-cols-1 gap-3 pt-1 border-t theme-border">
                     {d.referencias && <Campo label="Referencias" valor={d.referencias} />}
                     {d.indicaciones_entrega && <Campo label="Indicaciones" valor={d.indicaciones_entrega} />}
                 </div>
             )}
+            {barraCopia}
         </div>
     );
 }

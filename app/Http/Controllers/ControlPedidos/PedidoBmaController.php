@@ -370,13 +370,28 @@ class PedidoBmaController extends Controller
         PedidoBma $pedidoBma,
         ListarPedidosBmaService $listarService,
         GestionarPdfPedidoBmaService $service
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
-            $service->subir($pedidoBma->load('estatus'), $request->file('pdf_pedido'));
+            $pedido = $service->subir($pedidoBma->load('estatus'), $request->file('pdf_pedido'));
         } catch (\InvalidArgumentException|\RuntimeException $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
             return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        if ($request->expectsJson()) {
+            $documento = $pedido->documentos
+                ->firstWhere('tipo', PedidoBmaDocumento::TIPO_PDF_PEDIDO);
+
+            return response()->json([
+                'ok' => true,
+                'mensaje' => 'PDF o foto del pedido adjuntado.',
+                'documento' => $documento,
+            ]);
         }
 
         return redirect()->back()->with('success', 'PDF o foto del pedido adjuntado.');
@@ -387,13 +402,24 @@ class PedidoBmaController extends Controller
         PedidoBma $pedidoBma,
         ListarPedidosBmaService $listarService,
         GestionarPdfPedidoBmaService $service
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
             $service->subirAnexoPiezas($pedidoBma->load('estatus'), $request->file('anexo_piezas'));
         } catch (\InvalidArgumentException|\RuntimeException $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
             return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'mensaje' => 'Anexo de piezas adicionales adjuntado.',
+            ]);
         }
 
         return redirect()->back()->with('success', 'Anexo de piezas adicionales adjuntado.');

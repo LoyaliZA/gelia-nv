@@ -1,9 +1,12 @@
 import React, { useRef } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Download, Upload } from 'lucide-react';
 import { BTN_PRIMARY, BTN_SECONDARY } from '../../Partials/pedidosBmaStyles';
+import { puedePermiso } from '../../../../utils/permisos';
 
 export default function PanelImportExport({ onAlerta }) {
+    const { auth } = usePage().props;
+    const puedeImportar = puedePermiso(auth, 'control_pedidos.delegado.importar');
     const inputRef = useRef(null);
 
     const exportarPlantilla = () => {
@@ -35,20 +38,24 @@ export default function PanelImportExport({ onAlerta }) {
             >
                 <Download className="w-4 h-4" /> Descargar plantilla CSV
             </button>
-            <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
-            >
-                <Upload className="w-4 h-4" /> Subir guías completadas
-            </button>
-            <input
-                ref={inputRef}
-                type="file"
-                accept=".csv,.txt,.xlsx,.xls"
-                className="hidden"
-                onChange={manejarArchivo}
-            />
+            {puedeImportar && (
+                <>
+                    <button
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
+                    >
+                        <Upload className="w-4 h-4" /> Subir guías completadas
+                    </button>
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        accept=".csv,.txt,.xlsx,.xls"
+                        className="hidden"
+                        onChange={manejarArchivo}
+                    />
+                </>
+            )}
         </div>
     );
 }

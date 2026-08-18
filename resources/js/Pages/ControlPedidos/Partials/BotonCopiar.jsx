@@ -21,7 +21,7 @@ export default function BotonCopiar({ texto, etiqueta = 'Copiar', className = ''
         <button
             type="button"
             onClick={copiar}
-            className={`${BTN_SECONDARY} inline-flex items-center gap-1.5 text-[10px] outline-none shrink-0 ${className}`}
+            className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-[10px] outline-none shrink-0 min-h-[44px] ${className}`}
             aria-label={`${etiqueta}: ${texto}`}
         >
             {copiado ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}

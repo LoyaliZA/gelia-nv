@@ -8,7 +8,7 @@ class ImportarGuiasPedidoRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('control_pedidos.delegado') ?? false;
+        return $this->user()?->can('control_pedidos.delegado.importar') ?? false;
     }
 
     public function rules(): array

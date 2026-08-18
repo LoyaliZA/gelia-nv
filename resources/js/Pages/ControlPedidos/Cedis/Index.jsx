@@ -92,13 +92,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
         cargar({ tab: tabActiva, q: busqueda || undefined, page });
     };
 
-    const abrirDetalle = (pedido) => {
-        if (pedido?.estatus_envio === 'pendiente_pesaje') {
-            setModalPesaje({ abierto: true, pedido });
-            return;
-        }
-        setModalDetalle({ abierto: true, pedido });
-    };
+    const abrirDetalle = (pedido) => setModalDetalle({ abierto: true, pedido });
     const abrirPesaje = (pedido) => setModalPesaje({ abierto: true, pedido });
     const abrirErrorDatos = (pedido) => setModalErrorDatos({ abierto: true, pedido });
     const abrirApartado = (pedido) => setModalApartado({ abierto: true, pedido });
@@ -119,7 +113,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
                     <p className="hidden md:block text-sm theme-text-muted font-bold mt-2 m-0">Bandeja de pesaje y empaque para almacén</p>
                 </header>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-4">
+                <div className="md:hidden -mx-1 overflow-x-auto snap-x snap-mandatory flex gap-2 pb-1" role="tablist" aria-label="Estado de empaque">
                     {KPI_CONFIG.map(({ key, label, tab, icon: Icon, color }) => {
                         const activo = tabActiva === tab;
                         return (
@@ -128,17 +122,43 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
                                 type="button"
                                 onClick={() => onTabChange(tab)}
                                 aria-pressed={activo}
-                                className={`${geliaCardClass()} p-3 md:p-5 text-left outline-none transition-shadow ${
+                                className={`${geliaCardClass()} snap-start shrink-0 min-w-[9.5rem] p-3 min-h-[72px] text-left outline-none ${
                                     activo ? 'ring-2 ring-[var(--color-primario)]' : ''
                                 }`}
                             >
-                                <div className="flex items-center gap-1.5 md:gap-2 mb-1 md:mb-2 min-w-0">
-                                    <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" style={{ color }} />
-                                    <span className="text-[10px] md:text-[9px] font-black uppercase tracking-wide theme-text-muted truncate leading-tight">
+                                <div className="flex items-center gap-1.5 mb-1 min-w-0">
+                                    <Icon className="w-3.5 h-3.5 shrink-0" style={{ color }} />
+                                    <span className="text-[10px] font-black uppercase tracking-wide theme-text-muted truncate leading-tight">
                                         {label}
                                     </span>
                                 </div>
-                                <p className="text-2xl md:text-3xl font-black m-0 tabular-nums" style={{ color }}>
+                                <p className="text-2xl font-black m-0 tabular-nums" style={{ color }}>
+                                    {metricasVista[key] ?? 0}
+                                </p>
+                            </button>
+                        );
+                    })}
+                </div>
+                <div className="hidden md:grid grid-cols-3 lg:grid-cols-6 gap-4">
+                    {KPI_CONFIG.map(({ key, label, tab, icon: Icon, color }) => {
+                        const activo = tabActiva === tab;
+                        return (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => onTabChange(tab)}
+                                aria-pressed={activo}
+                                className={`${geliaCardClass()} p-5 text-left outline-none transition-shadow ${
+                                    activo ? 'ring-2 ring-[var(--color-primario)]' : ''
+                                }`}
+                            >
+                                <div className="flex items-center gap-2 mb-2 min-w-0">
+                                    <Icon className="w-4 h-4 shrink-0" style={{ color }} />
+                                    <span className="text-[9px] font-black uppercase tracking-wide theme-text-muted truncate leading-tight">
+                                        {label}
+                                    </span>
+                                </div>
+                                <p className="text-3xl font-black m-0 tabular-nums" style={{ color }}>
                                     {metricasVista[key] ?? 0}
                                 </p>
                             </button>

@@ -40,6 +40,7 @@ $checks = [
             && strpos($modal, 'Revisión física de productos') < strpos($modal, 'Envíos'))],
     ['detalle Productos con detalle', str_contains($seccion, 'Productos con detalle') || str_contains($detalle, 'Productos con detalle')],
     ['detalle Productos OK', str_contains($seccion, 'Productos OK') || str_contains($detalle, 'Productos OK')],
+    ['productos OK compactos >3', str_contains($seccion, 'MAX_PRODUCTOS_OK_ABIERTOS') && str_contains($seccion, 'productosOkCompactos')],
     ['detalle Evidencias del lote', str_contains($seccion, 'Evidencias del lote') || str_contains($detalle, 'Evidencias del lote')],
     ['detalle Foto por envío', str_contains($seccion, 'Foto por envío') || str_contains($detalle, 'Foto por envío')],
     ['detalle filtra revision_producto', str_contains($seccion, "relacion_tipo === 'revision_producto'") || str_contains($detalle, "relacion_tipo === 'revision_producto'")],

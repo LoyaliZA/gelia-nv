@@ -26,8 +26,17 @@ $mostrarBadgePesaje = static function (string $estatusEnvio, ?string $fase, bool
     }
     $preVenta = $fase === null || $fase === ''
         || in_array($fase, ['BORRADOR', 'PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'], true);
+    if (! $preVenta) {
+        return false;
+    }
+    if ($estatusEnvio === 'pendiente_pesaje' && $fase === 'PESAJE_PENDIENTE') {
+        return false;
+    }
+    if ($estatusEnvio === 'pesaje_listo' && $fase === 'PESAJE_RESPONDIDO') {
+        return false;
+    }
 
-    return $preVenta;
+    return true;
 };
 
 $checks = [
@@ -36,8 +45,7 @@ $checks = [
         && str_contains($servicio, 'catalogo_estatus_pedido_id')],
     ['historial usa estatusNuevo', str_contains($servicio, '$estatusNuevo->id')],
     ['JS esFasePreVenta', str_contains($styles, 'esFasePreVenta')],
-    ['JS badgeEstatusEnvio filtra pesaje', str_contains($styles, 'forzarPesaje')
-        && str_contains($styles, "['pendiente_pesaje', 'pesaje_listo']")],
+    ['JS oculta pesaje que duplica fase', str_contains($styles, 'duplicaFase')],
     ['TablaPedidos pasa faseCiclo', str_contains($tabla, 'faseCiclo:')],
     ['TablaPedidos obs solo pre-venta', str_contains($tabla, 'esFasePreVenta')],
     ['CEDIS forzarPesaje', str_contains($cedis, 'forzarPesaje: true')],
@@ -56,7 +64,8 @@ foreach ($checks as [$label, $ok]) {
 $logicChecks = [
     ['pesaje_listo + BORRADOR visible', $mostrarBadgePesaje('pesaje_listo', 'BORRADOR') === true],
     ['pesaje_listo + PESAJE_PENDIENTE visible', $mostrarBadgePesaje('pesaje_listo', 'PESAJE_PENDIENTE') === true],
-    ['pesaje_listo + PESAJE_RESPONDIDO visible', $mostrarBadgePesaje('pesaje_listo', 'PESAJE_RESPONDIDO') === true],
+    ['pesaje_listo + PESAJE_RESPONDIDO oculto (duplica fase)', $mostrarBadgePesaje('pesaje_listo', 'PESAJE_RESPONDIDO') === false],
+    ['pendiente_pesaje + PESAJE_PENDIENTE oculto (duplica fase)', $mostrarBadgePesaje('pendiente_pesaje', 'PESAJE_PENDIENTE') === false],
     ['pesaje_listo + EN_CEDIS oculto', $mostrarBadgePesaje('pesaje_listo', 'EN_CEDIS') === false],
     ['pesaje_listo + PENDIENTE_AUXILIAR oculto', $mostrarBadgePesaje('pesaje_listo', 'PENDIENTE_AUXILIAR') === false],
     ['pendiente_pesaje + EN_CEDIS oculto', $mostrarBadgePesaje('pendiente_pesaje', 'EN_CEDIS') === false],

@@ -19,6 +19,10 @@ describe('etiquetaPermisoEnMatriz', () => {
     it('aplica overrides de verbo', () => {
         expect(etiquetaPermisoEnMatriz('control_pedidos.cedis')).toBe('gestionar cedis');
         expect(etiquetaPermisoEnMatriz('control_pedidos.delegado')).toBe('asignar / actualizar guías');
+        expect(etiquetaPermisoEnMatriz('control_pedidos.auditar.aprobar')).toBe('aprobar pedido');
+        expect(etiquetaPermisoEnMatriz('control_pedidos.liberar_resguardo')).toBe('liberar resguardo');
+        expect(etiquetaPermisoEnMatriz('control_pedidos.cedis.enviar')).toBe('confirmar recolección');
+        expect(etiquetaPermisoEnMatriz('control_pedidos.delegado.importar')).toBe('importar guías');
     });
 });
 
@@ -33,9 +37,13 @@ describe('etiquetaPermiso (fuera de matriz)', () => {
 });
 
 describe('esPermisoExcepcion', () => {
-    it('marca solo los cambiar_despues_*', () => {
+    it('marca cambiar_despues_* y cierres de estación', () => {
         expect(esPermisoExcepcion('control_pedidos.direccion.cambiar_despues_remision')).toBe(true);
         expect(esPermisoExcepcion('control_pedidos.direccion.cambiar_despues_guia')).toBe(true);
+        expect(esPermisoExcepcion('control_pedidos.auditar.aprobar')).toBe(true);
+        expect(esPermisoExcepcion('control_pedidos.liberar_resguardo')).toBe(true);
+        expect(esPermisoExcepcion('control_pedidos.cedis.enviar')).toBe(true);
+        expect(esPermisoExcepcion('control_pedidos.delegado.importar')).toBe(true);
         expect(esPermisoExcepcion('control_pedidos.direccion.cambiar')).toBe(false);
         expect(esPermisoExcepcion('control_pedidos.cedis')).toBe(false);
     });
@@ -47,8 +55,12 @@ describe('agruparPermisosPorSubmodulo', () => {
             'control_pedidos.ver_listado',
             'control_pedidos.cedis',
             'control_pedidos.reabrir',
+            'control_pedidos.cedis.enviar',
             'control_pedidos.auditar',
+            'control_pedidos.auditar.aprobar',
+            'control_pedidos.liberar_resguardo',
             'control_pedidos.delegado',
+            'control_pedidos.delegado.importar',
             'control_pedidos.configurar_catalogos',
             'control_pedidos.configurar_plazos',
             'control_pedidos.direccion.seleccionar',
@@ -59,7 +71,11 @@ describe('agruparPermisosPorSubmodulo', () => {
             'registrar', 'auditar', 'cedis', 'delegado', 'catalogos', 'plazos',
         ]);
         expect(grupos.find((g) => g.id === 'cedis').permisos.map((p) => p.name))
-            .toEqual(['control_pedidos.cedis', 'control_pedidos.reabrir']);
+            .toEqual(['control_pedidos.cedis', 'control_pedidos.reabrir', 'control_pedidos.cedis.enviar']);
+        expect(grupos.find((g) => g.id === 'auditar').permisos.map((p) => p.name))
+            .toEqual(['control_pedidos.auditar', 'control_pedidos.auditar.aprobar', 'control_pedidos.liberar_resguardo']);
+        expect(grupos.find((g) => g.id === 'delegado').permisos.map((p) => p.name))
+            .toEqual(['control_pedidos.delegado', 'control_pedidos.delegado.importar']);
         expect(grupos.find((g) => g.id === 'registrar').permisos.map((p) => p.name))
             .toContain('control_pedidos.direccion.seleccionar');
     });
@@ -89,6 +105,10 @@ describe('agruparPermisosPorSubmodulo', () => {
 describe('descripcionPermiso', () => {
     it('tiene descripción visible para permisos de control_pedidos y cobranza', () => {
         expect(descripcionPermiso('control_pedidos.cedis')).toMatch(/CEDIS/i);
+        expect(descripcionPermiso('control_pedidos.auditar.aprobar')).toMatch(/aprobar/i);
+        expect(descripcionPermiso('control_pedidos.cedis.enviar')).toMatch(/recog/i);
+        expect(descripcionPermiso('control_pedidos.delegado.importar')).toMatch(/importar/i);
+        expect(descripcionPermiso('control_pedidos.liberar_resguardo')).toMatch(/resguardo/i);
         expect(descripcionPermiso('cobranza.ver')).toMatch(/cobranza|Credibox/i);
         expect(descripcionPermiso('rh.ver')).toMatch(/Humanos|RH/i);
     });

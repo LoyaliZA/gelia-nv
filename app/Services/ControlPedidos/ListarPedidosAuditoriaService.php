@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\RevisionEnCursoPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -41,6 +42,7 @@ class ListarPedidosAuditoriaService
     {
         $hito = MaquinaEstadosPedidoBma::hitoAuditoria($pedido);
         $pedido->setAttribute('pendiente_re_revision', MaquinaEstadosPedidoBma::esPendienteReRevision($pedido));
+        $pedido->setAttribute('en_revision_ahora', RevisionEnCursoPedidoBma::activa($pedido->id));
         $pedido->setAttribute('hito_auditoria', $hito);
         $pedido->setAttribute('hito_auditoria_etiqueta', MaquinaEstadosPedidoBma::etiquetaHito($hito));
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());

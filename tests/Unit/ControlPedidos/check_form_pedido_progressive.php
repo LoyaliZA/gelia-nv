@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Self-check: Cliente → tipo → PDF → pesaje → respuesta → dirección → paquetería → cotización → pago → remisión.
+ * Self-check: Cliente → tipo → PDF → pesaje → respuesta → dirección → paquetería → saldo a favor → cotización → pago → remisión.
  * Uso: php tests/Unit/ControlPedidos/check_form_pedido_progressive.php
  */
 
@@ -27,7 +27,7 @@ $checks = [
     ['pesaje gated', str_contains($form, '{mostrarPesaje && (')],
     ['resto gated', str_contains($form, '{mostrarRestoPedido && (')],
     ['logistica gated', str_contains($form, '{mostrarLogisticaPostPesaje && (')],
-    ['mapa nSec', str_contains($form, 'const nSec = requiereLogistica')],
+    ['mapa nSec', str_contains($form, 'const nSec = requiereLogistica') && str_contains($form, 'saf: 8')],
     ['pesaje listo cuenta como respondido', str_contains($form, "estatus_envio === 'pesaje_listo'")],
     ['bind pedido creado sin remount', str_contains($form, 'onPedidoCreado')],
 ];
@@ -41,6 +41,7 @@ $titulos = [
     'ArrowRight className="w-5 h-5" /> Continuar pedido',
     'Dirección de envío',
     'Paquetería y seguro',
+    '{nSec.saf}. Saldo a favor',
     '{nSec.cot}. Cotización',
     '{nSec.pago}. Pago',
     '{nSec.rem}. Remisión',

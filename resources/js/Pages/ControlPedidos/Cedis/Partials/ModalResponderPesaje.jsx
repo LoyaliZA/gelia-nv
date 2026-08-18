@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
-import { X, Scale, Plus, Trash2, FileText, ChevronDown, ImagePlus, Search } from 'lucide-react';
+import { X, Scale, Plus, Trash2, FileText, ChevronDown, ImagePlus, Search, Camera, ExternalLink } from 'lucide-react';
 import {
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
@@ -22,7 +22,12 @@ import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import ModalVistaPreviaDocumento from '../../Partials/ModalVistaPreviaDocumento';
+import VisorPdfPaginas from '../../Partials/VisorPdfPaginas';
+import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
+import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
+import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import InputConEscanner from '../../../../Components/Escanner/InputConEscanner';
+import useDispositivoCampo, { esDispositivoCampo } from '../../../Activos/Partials/useDispositivoCampo';
 
 const SECCION = `${THEME_LABEL} mb-2 block`;
 const ESTADOS = Object.keys(LABELS_ESTADO_FISICO);
@@ -140,6 +145,11 @@ function GaleriaEvidencias({
     label = 'Evidencias',
     obligatorio = false,
 }) {
+    const camaraRef = useRef(null);
+    const galeriaRef = useRef(null);
+    const [quitarIdx, setQuitarIdx] = useState(null);
+    const esMovil = esDispositivoCampo();
+
     const agregar = (lista) => {
         const nuevos = Array.from(lista || []);
         if (!nuevos.length) return;
@@ -164,28 +174,61 @@ function GaleriaEvidencias({
     return (
         <div className="space-y-2">
             <label className={SECCION}>{label}{obligatorio ? ' *' : ''}</label>
-            <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
-                <ImagePlus className="w-4 h-4 theme-text-muted" />
-                <span className="text-xs font-black uppercase">
-                    {archivos.length ? `${archivos.length} archivo(s)` : 'Adjuntar fotos'}
-                </span>
-                <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                        agregar(e.target.files);
-                        e.target.value = '';
-                    }}
-                />
-            </label>
+            {esMovil ? (
+                <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => camaraRef.current?.click()} className={`${BTN_SECONDARY} min-h-[44px] w-full inline-flex items-center justify-center gap-2 text-xs`}>
+                        <Camera className="w-4 h-4" /> Tomar foto
+                    </button>
+                    <button type="button" onClick={() => galeriaRef.current?.click()} className={`${BTN_SECONDARY} min-h-[44px] w-full inline-flex items-center justify-center gap-2 text-xs`}>
+                        <ImagePlus className="w-4 h-4" /> Galería
+                    </button>
+                    <input
+                        ref={camaraRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                            agregar(e.target.files);
+                            e.target.value = '';
+                        }}
+                    />
+                    <input
+                        ref={galeriaRef}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                            agregar(e.target.files);
+                            e.target.value = '';
+                        }}
+                    />
+                </div>
+            ) : (
+                <label className="flex items-center gap-2 px-4 py-3 min-h-[44px] border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                    <ImagePlus className="w-4 h-4 theme-text-muted" />
+                    <span className="text-xs font-black uppercase">
+                        {archivos.length ? `${archivos.length} archivo(s)` : 'Adjuntar fotos'}
+                    </span>
+                    <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                            agregar(e.target.files);
+                            e.target.value = '';
+                        }}
+                    />
+                </label>
+            )}
             {previews.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                     {previews.map((p, idx) => {
                         const esPdf = (p.mime || '').includes('pdf') || String(p.name || '').toLowerCase().endsWith('.pdf');
                         return (
-                            <div key={`${p.url}-${idx}`} className="relative w-20 h-20 rounded-xl overflow-hidden border theme-border theme-element group">
+                            <div key={`${p.url}-${idx}`} className="relative min-w-[44px] min-h-[44px] w-20 h-20 rounded-xl overflow-hidden border theme-border theme-element group">
                                 <button type="button" className="w-full h-full outline-none" onClick={() => onVer(docs, idx)} title="Ver evidencia">
                                     {esPdf ? (
                                         <div className="w-full h-full flex items-center justify-center text-[9px] font-black uppercase theme-text-muted">PDF</div>
@@ -195,17 +238,29 @@ function GaleriaEvidencias({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => quitar(idx)}
-                                    className="absolute top-1 right-1 p-1 min-h-[28px] min-w-[28px] rounded-full theme-element border theme-border outline-none inline-flex items-center justify-center"
+                                    onClick={() => setQuitarIdx(idx)}
+                                    className="absolute top-1 right-1 p-1 min-h-[44px] min-w-[44px] rounded-full theme-element border theme-border outline-none inline-flex items-center justify-center"
                                     aria-label="Quitar evidencia"
                                 >
-                                    <Trash2 className="w-3 h-3 theme-text-main" />
+                                    <Trash2 className="w-3.5 h-3.5 theme-text-main" />
                                 </button>
                             </div>
                         );
                     })}
                 </div>
             )}
+            <ModalConfirmarAccion
+                abierto={quitarIdx != null}
+                titulo="Quitar evidencia"
+                mensaje="¿Quitar esta foto? No se puede deshacer."
+                etiquetaConfirmar="Quitar"
+                variante="danger"
+                onClose={() => setQuitarIdx(null)}
+                onConfirm={() => {
+                    if (quitarIdx != null) quitar(quitarIdx);
+                    setQuitarIdx(null);
+                }}
+            />
         </div>
     );
 }
@@ -230,6 +285,10 @@ export default function ModalResponderPesaje({
     const avisoPiezasRef = useRef(false);
     const skipAutosaveRef = useRef(true);
     const hydratingRef = useRef(false);
+    const envioNuevoRef = useRef(null);
+    const focusNuevoEnvioRef = useRef(false);
+    const [confirmacion, setConfirmacion] = useState(null);
+    const { esCampo, esMovil } = useDispositivoCampo();
 
     const revocarPreviews = (lista) => {
         (lista || []).forEach((p) => {
@@ -332,6 +391,14 @@ export default function ModalResponderPesaje({
     }, [envios.length]);
 
     useEffect(() => {
+        if (!focusNuevoEnvioRef.current) return;
+        focusNuevoEnvioRef.current = false;
+        const el = envioNuevoRef.current;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el?.querySelector('select')?.focus();
+    }, [envios.length]);
+
+    useEffect(() => {
         if (!abierto || !pedido?.id || skipAutosaveRef.current || hydratingRef.current) return undefined;
 
         const timer = window.setTimeout(() => {
@@ -396,7 +463,23 @@ export default function ModalResponderPesaje({
                 </button>
             );
         }
-        // PDF embebido siempre (no tarjeta "tocar para ver").
+        if (esCampo || esMovil) {
+            return (
+                <div className={`overflow-hidden ${PREVIEW_SURFACE}`}>
+                    <VisorPdfPaginas url={doc.url} titulo={doc.nombre_original || titulo} maxHeight="min(50dvh, 420px)" />
+                    <div className="p-2 border-t theme-border">
+                        <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`${BTN_SECONDARY} w-full min-h-[44px] inline-flex items-center justify-center gap-2 text-xs no-underline`}
+                        >
+                            <ExternalLink className="w-4 h-4" /> Abrir en pestaña
+                        </a>
+                    </div>
+                </div>
+            );
+        }
         return (
             <div className={`overflow-hidden ${PREVIEW_SURFACE}`}>
                 <iframe
@@ -427,7 +510,10 @@ export default function ModalResponderPesaje({
         }));
     };
 
-    const agregarEnvio = () => setEnvios((prev) => [...prev, envioVacio()]);
+    const agregarEnvio = () => {
+        focusNuevoEnvioRef.current = true;
+        setEnvios((prev) => [...prev, envioVacio()]);
+    };
     const quitarEnvio = (idx) => {
         setEnvios((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
     };
@@ -560,7 +646,6 @@ export default function ModalResponderPesaje({
     };
 
     const confirmar = () => {
-        const cajas = [];
         for (let i = 0; i < envios.length; i++) {
             const e = envios[i];
             const tipoId = Number(e.catalogo_tipo_caja_id);
@@ -589,15 +674,6 @@ export default function ModalResponderPesaje({
                 setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Indique el peso volumétrico.' });
                 return;
             }
-
-            cajas.push({
-                catalogo_tipo_caja_id: tipoId,
-                largo,
-                ancho,
-                alto,
-                peso_real_kg: pesoReal,
-                peso_volumetrico_kg: pesoVol,
-            });
         }
 
         for (let i = 0; i < envios.length; i++) {
@@ -644,6 +720,18 @@ export default function ModalResponderPesaje({
             }
         }
 
+        setConfirmacion('registrar');
+    };
+
+    const enviarPesaje = () => {
+        const cajas = envios.map((e) => ({
+            catalogo_tipo_caja_id: Number(e.catalogo_tipo_caja_id),
+            largo: Number(e.largo),
+            ancho: Number(e.ancho),
+            alto: Number(e.alto),
+            peso_real_kg: Number(e.peso_real_kg),
+            peso_volumetrico_kg: Number(e.peso_volumetrico_kg),
+        }));
         const form = new FormData();
         cajas.forEach((c, i) => {
             Object.entries(c).forEach(([k, v]) => form.append(`cajas[${i}][${k}]`, String(v)));
@@ -682,6 +770,18 @@ export default function ModalResponderPesaje({
                 setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: typeof msg === 'string' ? msg : 'No se pudo guardar el pesaje.' });
             },
         });
+    };
+
+    const hayDatosPesaje = revisiones.length > 0
+        || envios.some((e) => e.peso_real_kg || e.catalogo_tipo_caja_id)
+        || evidenciasPorEnvio.some((s) => s.archivos?.length);
+
+    const pedirCerrar = () => {
+        if (hayDatosPesaje) {
+            setConfirmacion('cerrar');
+            return;
+        }
+        onClose();
     };
 
     const totalCobrado = envios.reduce((acc, e) => {
@@ -786,7 +886,7 @@ export default function ModalResponderPesaje({
 
     return createPortal(
         <>
-            <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
+            <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`}>
                 <div
                     className={`${THEME_MODAL_SHELL} max-w-3xl w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
@@ -800,7 +900,7 @@ export default function ModalResponderPesaje({
                                 {pedido.cliente?.nombre || '—'} · {formatearFechaNegocio(pedido.fecha)}
                             </p>
                         </div>
-                        <button type="button" onClick={onClose} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border outline-none shrink-0 inline-flex items-center justify-center theme-text-main" aria-label="Cerrar">
+                        <button type="button" onClick={pedirCerrar} className="p-2 min-h-[44px] min-w-[44px] rounded-xl theme-element border theme-border outline-none shrink-0 inline-flex items-center justify-center theme-text-main" aria-label="Cerrar">
                             <X className="w-4 h-4" />
                         </button>
                     </div>
@@ -817,7 +917,7 @@ export default function ModalResponderPesaje({
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
                                     <label className={`${SECCION} m-0`}>PDF o foto del pedido</label>
                                     {pdfPedido?.url && (
-                                        <button type="button" onClick={() => abrirGaleria([pdfPedido], 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[40px]`}>
+                                        <button type="button" onClick={() => abrirGaleria([pdfPedido], 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[44px]`}>
                                             <FileText className="w-3.5 h-3.5" /> Ver
                                         </button>
                                     )}
@@ -828,13 +928,28 @@ export default function ModalResponderPesaje({
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between gap-2 flex-wrap">
                                         <label className={`${SECCION} m-0`}>Piezas adicionales</label>
-                                        <button type="button" onClick={() => abrirGaleria([anexoPiezas], 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[40px]`}>
+                                        <button type="button" onClick={() => abrirGaleria([anexoPiezas], 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[44px]`}>
                                             <FileText className="w-3.5 h-3.5" /> Ver
                                         </button>
                                     </div>
                                     {renderSoporte(anexoPiezas, 'Anexo de piezas')}
                                 </div>
                             )}
+                        </div>
+
+                        <div className="space-y-2 p-4 rounded-xl border theme-border theme-element">
+                            <p className={`${SECCION} m-0`}>Dirección de entrega</p>
+                            <DireccionPedidoResumen
+                                compact
+                                conCopia
+                                direccion={pedido.direccion_vigente || pedido.direccionVigente}
+                                domicilioLegacy={pedido.domicilio_entrega}
+                                codigoPostal={pedido.codigo_postal}
+                                codigoDireccion={codigoDireccionCliente(
+                                    pedido.cliente?.numero_cliente,
+                                    (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
+                                )}
+                            />
                         </div>
 
                         <div className="space-y-4 p-4 rounded-xl border theme-border theme-element">
@@ -852,7 +967,7 @@ export default function ModalResponderPesaje({
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
                                     <p className="text-xs font-black uppercase theme-text-muted m-0">Productos revisados</p>
-                                    <button type="button" onClick={() => document.getElementById('cedis-sku-pesaje')?.focus()} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[40px]`}>
+                                    <button type="button" onClick={() => document.getElementById('cedis-sku-pesaje')?.focus()} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px]`}>
                                         <Plus className="w-3.5 h-3.5" /> Producto
                                     </button>
                                 </div>
@@ -881,7 +996,7 @@ export default function ModalResponderPesaje({
                                     }}
                                 />
                                 <div className="flex flex-wrap gap-2">
-                                    <button type="button" onClick={() => buscarProductos(skuQuery, { autoAgregar: true })} disabled={skuCargando || String(skuQuery).trim().length < 2 || !almacenBusquedaId} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[40px] outline-none`}>
+                                    <button type="button" onClick={() => buscarProductos(skuQuery, { autoAgregar: true })} disabled={skuCargando || String(skuQuery).trim().length < 2 || !almacenBusquedaId} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
                                         <Search className="w-3.5 h-3.5" /> {skuCargando ? 'Buscando…' : 'Buscar y agregar'}
                                     </button>
                                 </div>
@@ -943,12 +1058,7 @@ export default function ModalResponderPesaje({
                         </div>
 
                         <div>
-                            <div className="flex items-center justify-between gap-2 mb-3">
-                                <label className={`${SECCION} m-0`}>Envíos</label>
-                                <button type="button" onClick={agregarEnvio} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 outline-none min-h-[40px]`}>
-                                    <Plus className="w-3.5 h-3.5" /> Otro envío
-                                </button>
-                            </div>
+                            <label className={`${SECCION} m-0 mb-3`}>Envíos</label>
                             <p className="text-[10px] theme-text-muted font-bold m-0 mb-3">
                                 Por cada caja adjunte la foto del lote de productos que van en ese envío.
                             </p>
@@ -956,11 +1066,12 @@ export default function ModalResponderPesaje({
                                 {envios.map((envio, idx) => {
                                     const cobrado = calcularPesoCobradoGuia(envio.peso_real_kg, envio.peso_volumetrico_kg);
                                     const slot = evidenciasPorEnvio[idx] || slotEnvioVacio();
+                                    const esUltimo = idx === envios.length - 1;
                                     return (
-                                        <div key={idx} className="p-4 rounded-xl border theme-border theme-element space-y-3">
+                                        <div key={idx} ref={esUltimo ? envioNuevoRef : undefined} className="p-4 rounded-xl border theme-border theme-element space-y-3">
                                             <div className="flex items-center justify-between gap-2">
                                                 <p className="text-sm font-black theme-text-main m-0">{etiquetaEnvio(idx, { tipo_caja: tiposCaja.find((t) => String(t.id) === String(envio.catalogo_tipo_caja_id)) })}</p>
-                                                <button type="button" onClick={() => quitarEnvio(idx)} disabled={envios.length <= 1} className="p-2 min-h-[40px] min-w-[40px] rounded-xl border theme-border theme-element outline-none disabled:opacity-40 inline-flex items-center justify-center theme-text-main" aria-label={`Quitar envío ${idx + 1}`}>
+                                                <button type="button" onClick={() => envios.length > 1 && setConfirmacion({ tipo: 'quitar_envio', idx })} disabled={envios.length <= 1} className="p-2 min-h-[44px] min-w-[44px] rounded-xl border theme-border theme-element outline-none disabled:opacity-40 inline-flex items-center justify-center theme-text-main" aria-label={`Quitar envío ${idx + 1}`}>
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -1005,7 +1116,7 @@ export default function ModalResponderPesaje({
                                                 )}
                                                 <div>
                                                     <label className={SECCION}>Peso real (kg) *</label>
-                                                    <input type="number" step="0.0001" min="0" inputMode="decimal" value={envio.peso_real_kg} onChange={(e) => actualizarEnvio(idx, 'peso_real_kg', e.target.value)} className={`${THEME_INPUT} w-full py-3 min-h-[44px]`} placeholder="0.0000" />
+                                                    <input type="number" step="0.0001" min="0" inputMode="decimal" value={envio.peso_real_kg} onChange={(e) => actualizarEnvio(idx, 'peso_real_kg', e.target.value)} onFocus={(e) => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={`${THEME_INPUT} w-full py-3 min-h-[44px] text-base`} placeholder="0.0000" />
                                                 </div>
                                             </div>
                                             <GaleriaEvidencias
@@ -1022,6 +1133,9 @@ export default function ModalResponderPesaje({
                                     );
                                 })}
                             </div>
+                            <button type="button" onClick={agregarEnvio} className={`${BTN_SECONDARY} w-full min-h-[44px] text-xs flex items-center justify-center gap-1.5 outline-none mt-3`}>
+                                <Plus className="w-3.5 h-3.5" /> Otro envío
+                            </button>
                             {envios.length > 1 && (
                                 <p className="text-xs theme-text-muted font-bold m-0 mt-3">
                                     Total peso cobrado: {Math.round(totalCobrado * 10000) / 10000} kg · {envios.length} envíos
@@ -1031,8 +1145,8 @@ export default function ModalResponderPesaje({
 
                     </div>
 
-                    <div className="gelia-modal-footer flex flex-col-reverse sm:flex-row flex-wrap gap-3 sm:justify-end p-4 md:p-6 border-t theme-border shrink-0">
-                        <button type="button" onClick={onClose} className={`${BTN_SECONDARY} outline-none min-h-[44px] w-full sm:w-auto`} disabled={procesando}>Cancelar</button>
+                    <div className="gelia-modal-footer flex flex-col-reverse sm:flex-row flex-wrap gap-3 sm:justify-end p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] border-t theme-border shrink-0">
+                        <button type="button" onClick={pedirCerrar} className={`${BTN_SECONDARY} outline-none min-h-[44px] w-full sm:w-auto`} disabled={procesando}>Cancelar</button>
                         <button type="button" onClick={confirmar} disabled={procesando} className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none min-h-[44px] w-full sm:w-auto`}>
                             <Scale className="w-4 h-4" /> {procesando ? 'Guardando…' : 'Registrar pesaje'}
                         </button>
@@ -1051,6 +1165,37 @@ export default function ModalResponderPesaje({
                 documentos={galeria.documentos}
                 indice={galeria.indice}
                 onClose={() => setGaleria({ abierto: false, documentos: [], indice: 0 })}
+            />
+            <ModalConfirmarAccion
+                abierto={Boolean(confirmacion)}
+                titulo={confirmacion === 'registrar'
+                    ? 'Confirmar pesaje'
+                    : confirmacion === 'cerrar'
+                        ? 'Cerrar pesaje'
+                        : confirmacion?.tipo === 'quitar_envio'
+                            ? 'Quitar envío'
+                            : ''}
+                mensaje={confirmacion === 'registrar'
+                    ? `Se registrarán ${envios.length} envío(s), ${revisiones.length} producto(s) y ${Math.round(totalCobrado * 10000) / 10000} kg cobrados.`
+                    : confirmacion === 'cerrar'
+                        ? '¿Cerrar? El borrador se conserva.'
+                        : confirmacion?.tipo === 'quitar_envio'
+                            ? 'Se quitará este envío y sus fotos. No se puede deshacer.'
+                            : ''}
+                etiquetaConfirmar={confirmacion === 'registrar'
+                    ? 'Registrar pesaje'
+                    : confirmacion === 'cerrar'
+                        ? 'Cerrar'
+                        : 'Quitar'}
+                variante={confirmacion === 'registrar' ? 'primary' : 'danger'}
+                onClose={() => setConfirmacion(null)}
+                onConfirm={() => {
+                    const acc = confirmacion;
+                    setConfirmacion(null);
+                    if (acc === 'registrar') enviarPesaje();
+                    else if (acc === 'cerrar') onClose();
+                    else if (acc?.tipo === 'quitar_envio') quitarEnvio(acc.idx);
+                }}
             />
         </>,
         document.body

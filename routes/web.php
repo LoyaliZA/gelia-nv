@@ -588,6 +588,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/anexo-envio/aprobar', [PedidoBmaAuditoriaController::class, 'aprobarAnexoEnvio'])->name('anexo_envio.aprobar');
         Route::post('/{pedidoBma}/anexo-envio/rechazar', [PedidoBmaAuditoriaController::class, 'rechazarAnexoEnvio'])->name('anexo_envio.rechazar');
         Route::post('/{pedidoBma}/incidencias-saf/{incidencia}/resolver', [PedidoBmaAuditoriaController::class, 'resolverIncidenciaSaf'])->name('incidencias_saf.resolver');
+        Route::post('/{pedidoBma}/revision-en-curso', [PedidoBmaAuditoriaController::class, 'marcarRevisionEnCurso'])->name('revision_en_curso');
+        Route::delete('/{pedidoBma}/revision-en-curso', [PedidoBmaAuditoriaController::class, 'soltarRevisionEnCurso'])->name('revision_en_curso.soltar');
     });
 
     // Submódulo Direcciones (Auxiliar) — sin acceso al módulo Clientes
