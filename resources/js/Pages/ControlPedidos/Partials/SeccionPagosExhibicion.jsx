@@ -14,7 +14,7 @@ import {
     calcularResumenCoberturaPago,
     mensajePagoFaltante,
 } from './pedidosBmaStyles';
-import { THEME_INPUT, THEME_SELECT } from '../../../utils/geliaTheme';
+import { THEME_SELECT } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import ModalMotivoRechazo from './ModalMotivoRechazo';
@@ -550,18 +550,13 @@ export default function SeccionPagosExhibicion({
                             )}
                         </div>
                     )}
-                    <div>
-                        <label className={`${THEME_LABEL} mb-1.5 block`}>Referencia</label>
-                        <input
-                            className={`${THEME_INPUT} w-full py-2.5`}
-                            value={form.data.referencia}
-                            onChange={(e) => form.setData('referencia', e.target.value)}
-                        />
-                    </div>
                     <div className="md:col-span-2">
                         <label className={`${THEME_LABEL} mb-1.5 block`}>
                             {editandoId ? 'Comprobante (opcional al editar)' : 'Comprobante (obligatorio)'}
                         </label>
+                        <p className="text-[10px] theme-text-muted font-bold m-0 mb-1.5 -mt-0.5">
+                            La referencia del cliente aparece en el comprobante; no es necesario capturarla aparte.
+                        </p>
                         <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
                             <ImagePlus className="w-4 h-4 theme-text-muted" />
                             <span className="text-xs font-black uppercase">

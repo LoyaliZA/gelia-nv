@@ -390,6 +390,9 @@ export default function ModalFormPedido({
     const mostrarLogisticaPostPesaje = mostrarPesaje && mostrarRestoPedido;
     // «Enviar» tras pesaje respondido (auto-borrador) o Continuar legacy / flujo sin pesaje.
     const mostrarEnviarPedido = mostrarRestoPedido;
+    // Pago solo cuando ya hay total a cobrar (post-pesaje/cotización o tienda con mercancía).
+    // No interrumpe solicitar pesaje: esa sección vive fuera de mostrarRestoPedido.
+    const mostrarSeccionPago = mostrarRestoPedido && cotizacionLista;
     const nSec = requiereLogistica
         ? { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, saf: 8, cot: 9, pago: 10, rem: 11 }
         : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, saf: 8, cot: 8, pago: 4, rem: 5 };
@@ -2548,11 +2551,13 @@ export default function ModalFormPedido({
                     </>
                     )}
 
-                    {mostrarRestoPedido && (
-                    <>
+                    {mostrarSeccionPago && (
                     <section className={`${SECCION_WRAP} ${wrapCampo('pago')}`} data-campo="pago">
                         <p className={SECCION}>{nSec.pago}. Pago</p>
                         <div className="space-y-4">
+                            <p className="text-[10px] font-bold theme-text-muted m-0 -mt-1">
+                                Registre el pago cuando el cliente transfiera: elija banco receptor y adjunte el comprobante. La referencia va en el comprobante (no es necesario capturarla).
+                            </p>
                             <SeccionPagosExhibicion
                                 pedidoId={idPedidoAcciones}
                                 bancos={catalogos.bancos || []}
@@ -2565,11 +2570,7 @@ export default function ModalFormPedido({
                                 costoSeguro={data.costo_seguro}
                                 saldoAFavorAplicado={data.aplica_saldo_favor ? saldoFavorCalculado : 0}
                                 onResumenChange={(r) => setPagoResumen(r)}
-                                mensajeBloqueo={!cotizacionLista
-                                    ? (requiereLogistica && !tienePesajeRespondido && !esResguardoComplementario
-                                        ? 'Complete el pesaje CEDIS y la cotización antes de registrar pagos.'
-                                        : 'Complete la cotización (paquetería y costos) antes de registrar pagos.')
-                                    : null}
+                                mensajeBloqueo={null}
                             />
                             {docsExistentes.length > 0 && (
                                 <div>
@@ -2600,13 +2601,23 @@ export default function ModalFormPedido({
                                     </div>
                                 </div>
                             )}
-                            <div>
-                                <label className={SECCION}>Comentarios para Drive / Almacén</label>
-                                <textarea placeholder="Notas adicionales..." value={data.comentarios_drive} onChange={(e) => setData('comentarios_drive', e.target.value)} className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`} />
-                            </div>
                         </div>
                     </section>
+                    )}
 
+                    {mostrarRestoPedido && !mostrarSeccionPago && (
+                    <section className={SECCION_WRAP} data-campo="pago">
+                        <p className={SECCION}>{nSec.pago}. Pago</p>
+                        <AvisoOperativoPedido label="Más adelante" tono="info" icon={Scale} className="mb-0">
+                            {requiereLogistica
+                                ? 'Complete el pesaje CEDIS y la cotización. El monto, banco y comprobante se capturan después, cuando el cliente transfiera.'
+                                : 'Indique el total de mercancía. El pago (banco y comprobante) se captura después, cuando el cliente transfiera.'}
+                        </AvisoOperativoPedido>
+                    </section>
+                    )}
+
+                    {mostrarRestoPedido && (
+                    <>
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.rem}. Remisión</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2644,6 +2655,10 @@ export default function ModalFormPedido({
                                     <option value="0">NO</option>
                                     <option value="1">SÍ</option>
                                 </select>
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className={SECCION}>Comentarios para Drive / Almacén</label>
+                                <textarea placeholder="Notas adicionales..." value={data.comentarios_drive} onChange={(e) => setData('comentarios_drive', e.target.value)} className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`} />
                             </div>
                         </div>
                     </section>

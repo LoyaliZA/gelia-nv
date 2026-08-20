@@ -640,29 +640,8 @@ export default function ModalResponderPesaje({
     const quitarRevision = (idx) => {
         const rev = revisiones[idx];
         if (!rev) return;
-        if (rev.estado_fisico !== 'sin_existencia') {
-            setRevisiones((prev) => prev.map((r, i) => (i === idx ? {
-                ...r,
-                estado_fisico: 'sin_existencia',
-                expandido: true,
-            } : r)));
-            setAlerta({
-                abierto: true,
-                tipo: 'warning',
-                titulo: 'No omita la pieza',
-                mensaje: 'Si no hay existencias, márquela así (comentario obligatorio). No la quite de la revisión.',
-            });
-            return;
-        }
-        if (!String(rev.comentario || '').trim()) {
-            setAlerta({
-                abierto: true,
-                tipo: 'error',
-                titulo: 'Sin existencias',
-                mensaje: 'Indique un comentario para Ventas. La pieza debe quedar revisada, no omitida.',
-            });
-            actualizarRevision(idx, 'expandido', true);
-        }
+        revocarPreviews(rev.previews);
+        setRevisiones((prev) => prev.filter((_, i) => i !== idx));
     };
 
     const agregarProducto = (producto) => {
@@ -719,12 +698,13 @@ export default function ModalResponderPesaje({
             const json = await resp.json();
             const lote = json.data || [];
             setSkuResultados(lote);
-            if (autoAgregar) {
-                const exacto = lote.find((p) => String(p.sku).toLowerCase() === q.toLowerCase()
-                    || String(p.codigo_barras || '').toLowerCase() === q.toLowerCase());
-                if (exacto) {
-                    agregarProducto(exacto);
-                } else if (lote.length === 1) {
+            const exacto = lote.find((p) => String(p.sku).toLowerCase() === q.toLowerCase()
+                || String(p.codigo_barras || '').toLowerCase() === q.toLowerCase());
+            // Coincidencia exacta de SKU/código: agregar siempre (pistola/móvil no dependen solo de Enter).
+            if (exacto) {
+                agregarProducto(exacto);
+            } else if (autoAgregar) {
+                if (lote.length === 1) {
                     agregarProducto(lote[0]);
                 } else if (lote.length === 0) {
                     setSkuError('Sin coincidencias en el inventario de este almacén.');
@@ -837,7 +817,7 @@ export default function ModalResponderPesaje({
                 abierto: true,
                 tipo: 'warning',
                 titulo: 'Piezas por revisar',
-                mensaje: `El pedido tiene ${piezasPedido} piezas y solo revisó ${revisiones.length}. Si falta alguna, márquela Sin existencias; no la omita. Confirme de nuevo para continuar.`,
+                mensaje: `El pedido tiene ${piezasPedido} piezas y solo revisó ${revisiones.length}. Confirme de nuevo para continuar, o agregue las piezas faltantes. Si falta stock, márquela Sin existencias; si agregó una de más, elimínela.`,
             });
             return;
         }
@@ -974,10 +954,11 @@ export default function ModalResponderPesaje({
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            quitarRevision(idx);
+                            setConfirmacion({ tipo: 'quitar_pieza', idx });
                         }}
                         className="p-2 min-h-[40px] min-w-[40px] rounded-xl border theme-border theme-element outline-none inline-flex items-center justify-center theme-text-main shrink-0"
-                        aria-label="Marcar sin existencias"
+                        aria-label="Eliminar pieza de la revisión"
+                        title="Eliminar pieza (agregada por error)"
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
@@ -1110,7 +1091,7 @@ export default function ModalResponderPesaje({
                             </div>
                             <p className="text-[10px] theme-text-muted font-bold m-0">
                                 Cada producto se agrega en Bueno. Expanda solo si CEDIS debe cambiar el estado o adjuntar evidencia individual.
-                                Si no hay existencias, márquela Sin existencias (no la omita).
+                                Si no hay existencias reales, márquela Sin existencias. Si agregó una pieza por error, elimínela con el ícono de basura.
                             </p>
 
                             <div className="space-y-2">
@@ -1333,14 +1314,18 @@ export default function ModalResponderPesaje({
                         ? 'Cerrar pesaje'
                         : confirmacion?.tipo === 'quitar_envio'
                             ? 'Quitar envío'
-                            : ''}
+                            : confirmacion?.tipo === 'quitar_pieza'
+                                ? 'Eliminar pieza'
+                                : ''}
                 mensaje={confirmacion === 'registrar'
                     ? `Se registrarán ${envios.length} envío(s), ${revisiones.length} producto(s) y ${Math.round(totalCobrado * 10000) / 10000} kg cobrados.`
                     : confirmacion === 'cerrar'
                         ? '¿Cerrar? El borrador se conserva.'
                         : confirmacion?.tipo === 'quitar_envio'
                             ? 'Se quitará este envío y sus fotos. No se puede deshacer.'
-                            : ''}
+                            : confirmacion?.tipo === 'quitar_pieza'
+                                ? 'Se eliminará esta pieza de la revisión (p. ej. agregada por error). Si no hay stock, use el estado Sin existencias.'
+                                : ''}
                 etiquetaConfirmar={confirmacion === 'registrar'
                     ? 'Registrar pesaje'
                     : confirmacion === 'cerrar'
@@ -1357,6 +1342,7 @@ export default function ModalResponderPesaje({
                         onClose();
                     }
                     else if (acc?.tipo === 'quitar_envio') quitarEnvio(acc.idx);
+                    else if (acc?.tipo === 'quitar_pieza') quitarRevision(acc.idx);
                 }}
             />
             <ModalSesionEvidenciaCedis
