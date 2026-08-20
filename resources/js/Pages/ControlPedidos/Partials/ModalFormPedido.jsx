@@ -383,6 +383,8 @@ export default function ModalFormPedido({
     const enfocadoEnPesaje = fasePedido === 'PESAJE_PENDIENTE' && !tienePesajeRespondido;
     // Pesaje listo/pendiente debe verse aunque falte origen en el form (p. ej. fila sin origen_id).
     const mostrarPesaje = (tieneTipo && requiereLogistica) || tienePesajeRespondido || pendientePesaje;
+    // Tienda no tiene pesaje, pero sí debe adjuntar PDF/foto del pedido (antes de pago).
+    const mostrarPdfPedido = mostrarPesaje || (tieneTipo && !requiereLogistica);
     const mostrarRestoPedido = Boolean(data.origen_id) && (!requiereLogistica || (cotizacionHabilitada && !enfocadoEnPesaje));
 
     const mostrarLogisticaPostPesaje = mostrarPesaje && mostrarRestoPedido;
@@ -390,7 +392,7 @@ export default function ModalFormPedido({
     const mostrarEnviarPedido = mostrarRestoPedido;
     const nSec = requiereLogistica
         ? { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, saf: 8, cot: 9, pago: 10, rem: 11 }
-        : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, saf: 8, cot: 8, pago: 3, rem: 4 };
+        : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, saf: 8, cot: 8, pago: 4, rem: 5 };
     const totalCobrar = calcularTotalCobrar(
         data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
         saldoFavorCalculado
@@ -406,6 +408,11 @@ export default function ModalFormPedido({
     const pagoPendienteVivo = !idPedidoAcciones
         ? null
         : (pagoResumen == null ? null : resumenCoberturaVivo.pendiente);
+    const pdfPedidoDoc = (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id))
+        || pdfDocLocal;
+    const anexoPiezasDoc = (pedido?.documentos || []).find((d) => d.tipo === 'anexo_piezas' && !docsEliminar.includes(d.id));
+    const tienePdfPedido = Boolean(pdfPedidoDoc) || pdfLocalOk;
+    const tieneAnexoPiezas = Boolean(anexoPiezasDoc) || anexoLocalOk;
     const validacionEnvio = validarCamposEnvioPedido(data, {
         requiereLogistica,
         direccionesNormalizadas,
@@ -413,6 +420,7 @@ export default function ModalFormPedido({
         esResguardoAbierto,
         esResguardoComplementario,
         tienePesajeRespondido,
+        tienePdfPedido,
         pagoPendiente: pagoPendienteVivo,
         paqueteria: paqueteriaSeleccionada,
     });
@@ -434,11 +442,6 @@ export default function ModalFormPedido({
         }
         setData('origen_id', nuevoId);
     };
-    const pdfPedidoDoc = (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id))
-        || pdfDocLocal;
-    const anexoPiezasDoc = (pedido?.documentos || []).find((d) => d.tipo === 'anexo_piezas' && !docsEliminar.includes(d.id));
-    const tienePdfPedido = Boolean(pdfPedidoDoc) || pdfLocalOk;
-    const tieneAnexoPiezas = Boolean(anexoPiezasDoc) || anexoLocalOk;
     const labelSoportePedido = (doc) => {
         const mime = String(doc?.mime_type || '');
         const nombre = String(doc?.nombre_original || '').toLowerCase();
@@ -1697,7 +1700,7 @@ export default function ModalFormPedido({
                                     <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
                                         {requiereLogistica
                                             ? 'Envío: solicite el pesaje a CEDIS; al responder podrá cotizar y completar el pedido.'
-                                            : 'Tienda/mostrador: sin pesaje ni datos de guía.'}
+                                            : 'Tienda/mostrador: adjunte el PDF o foto del pedido; luego registre el pago (sin pesaje ni guía).'}
                                     </p>
                                 ) : (
                                     <p className="text-[10px] font-bold text-amber-600 mt-1.5 m-0">
@@ -1923,11 +1926,15 @@ export default function ModalFormPedido({
                         </div>
                     </section>
 
-                    {mostrarPesaje && (
-                    <>
-                    <section className={SECCION_WRAP}>
+                    {mostrarPdfPedido && (
+                    <section className={`${SECCION_WRAP} ${wrapCampo('pdf_pedido')}`} data-campo="pdf_pedido">
                         <p className={SECCION}>{nSec.pdf}. PDF o archivo del pedido</p>
                         <div className="space-y-2">
+                        {!requiereLogistica && (
+                            <p className="text-[10px] font-bold theme-text-muted m-0 -mt-1">
+                                Adjunte el PDF o una foto del pedido de tienda. El comprobante de pago se carga en la sección de pago.
+                            </p>
+                        )}
                         <div className="flex flex-wrap items-center gap-3">
                             <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
                                 <FileText className="w-4 h-4 theme-text-muted" />
@@ -1964,7 +1971,10 @@ export default function ModalFormPedido({
                         )}
                         </div>
                     </section>
+                    )}
 
+                    {mostrarPesaje && (
+                    <>
                     <section className={SECCION_WRAP} data-campo="pesaje">
                         <p className={SECCION}>{nSec.solPesaje}. Solicitud de pesaje</p>
                         {avisoPesaje && (

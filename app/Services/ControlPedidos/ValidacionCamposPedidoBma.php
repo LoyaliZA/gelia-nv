@@ -55,6 +55,9 @@ trait ValidacionCamposPedidoBma
         if ($pedido->total_mercancia <= 0) {
             $faltantes[] = 'total de mercancía';
         }
+        if (! $pedido->tienePdfPedido()) {
+            $faltantes[] = 'PDF o foto del pedido';
+        }
 
         if ($requiereLogistica) {
             if ($tienePesaje) {

@@ -34,5 +34,8 @@ $assert(! str_contains($form, 'import ModalAlertaPedido'), 'form sin ModalAlerta
 $assert(! str_contains($form, 'control_pedidos.pdf_pedido.store') || str_contains($form, 'axios.post(route(\'control_pedidos.pdf_pedido.store\''), 'PDF se sube con axios');
 $assert(! str_contains($form, "router.post(route('control_pedidos.pdf_pedido.store'"), 'PDF no usa router.post');
 $assert(str_contains($js, 'claves'), 'validarCamposEnvioPedido expone claves');
+$assert(str_contains($form, 'mostrarPdfPedido'), 'ModalFormPedido muestra PDF también en tienda');
+$assert(str_contains($form, 'data-campo="pdf_pedido"'), 'sección PDF con data-campo para scroll');
+$assert(str_contains($js, 'tienePdfPedido'), 'validarCamposEnvioPedido exige PDF');
 
 exit($fallos > 0 ? 1 : 0);

@@ -888,6 +888,7 @@ export const validarCamposEnvioPedido = (data, {
     esResguardoAbierto = false,
     esResguardoComplementario = false,
     tienePesajeRespondido = false,
+    tienePdfPedido = false,
     pagoPendiente = null,
     paqueteria = null,
 } = {}) => {
@@ -923,6 +924,7 @@ export const validarCamposEnvioPedido = (data, {
     if (!data.origen_id) marcar('origen', 'tipo de pedido');
     if (!data.almacen_id) marcar('almacen', 'almacén de salida');
     if (Number(data.total_mercancia || 0) <= 0) marcar('total_mercancia', 'total de mercancía');
+    if (!tienePdfPedido) marcar('pdf_pedido', 'PDF o foto del pedido');
 
     if (pagoPendiente == null) {
         marcar('pago', 'exhibiciones de pago (guarde el borrador y registre los abonos que cubran el total)');

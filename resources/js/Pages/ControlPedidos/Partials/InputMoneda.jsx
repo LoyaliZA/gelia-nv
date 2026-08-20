@@ -8,9 +8,32 @@ function formatearMonedaInput(valor) {
 }
 
 function parseMonedaInput(texto) {
-    const limpio = String(texto ?? '').replace(/[^\d.,]/g, '').replace(',', '.');
-    if (limpio === '' || limpio === '.') return '';
-    const n = parseFloat(limpio);
+    let s = String(texto ?? '').replace(/[^\d.,]/g, '');
+    if (s === '' || s === '.' || s === ',') return '';
+
+    const lastComma = s.lastIndexOf(',');
+    const lastDot = s.lastIndexOf('.');
+
+    if (lastComma > lastDot) {
+        // 1.234,56 o 1234,56 → coma decimal
+        s = s.replace(/\./g, '').replace(',', '.');
+    } else if (lastDot > lastComma) {
+        // 1,234.56 o $4,850.00 → punto decimal, coma miles
+        s = s.replace(/,/g, '');
+    } else if (lastComma !== -1) {
+        // solo comas: 1,23 → decimal; 1,234 → miles
+        const parts = s.split(',');
+        if (parts.length === 2 && parts[1].length <= 2) {
+            s = `${parts[0]}.${parts[1]}`;
+        } else {
+            s = s.replace(/,/g, '');
+        }
+    } else if ((s.match(/\./g) || []).length > 1) {
+        // 1.234.567 → solo miles
+        s = s.replace(/\./g, '');
+    }
+
+    const n = parseFloat(s);
     return Number.isNaN(n) ? '' : Math.round(n * 100) / 100;
 }
 
