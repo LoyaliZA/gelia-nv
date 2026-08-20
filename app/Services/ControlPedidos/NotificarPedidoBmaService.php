@@ -38,6 +38,14 @@ class NotificarPedidoBmaService
                     return;
                 }
 
+                if ($excluirUsuarioId && empty($extras['actor_nombre'])) {
+                    $actor = User::query()->find($excluirUsuarioId);
+                    if ($actor) {
+                        $extras['actor_id'] = $actor->id;
+                        $extras['actor_nombre'] = $actor->name;
+                    }
+                }
+
                 Notification::send(
                     $destinatarios,
                     new AlertaPedidoBma($pedido, $tipoAlerta, $mensaje, $extras)

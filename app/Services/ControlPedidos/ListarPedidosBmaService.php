@@ -32,6 +32,7 @@ class ListarPedidosBmaService
             'zona',
             'documentos',
             'revisionesProducto',
+            'pesajeRespondidoPor:id,name',
             'direccionVigente',
             'historial.usuario',
             'historial.estatusAnterior',
@@ -45,7 +46,7 @@ class ListarPedidosBmaService
             VisibilidadPedidoBma::aplicarAlcanceListadoBma($query, $usuario);
         }
 
-        $this->aplicarFiltros($query, $filtros);
+        $this->aplicarFiltros($query, $filtros, $usuario);
 
         if (! $paginar) {
             return $query->get()->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
@@ -80,6 +81,9 @@ class ListarPedidosBmaService
             'rechazadas' => (clone $base)->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0)->count(),
             'obs_cedis' => (clone $base)->where('tiene_observaciones_fisicas', true)->count(),
             'sin_existencia' => (clone $base)->whereHas('revisionesProducto', fn ($q) => $q->sinExistenciaAbierta())->count(),
+            'eliminadas' => $usuario?->can('control_pedidos.eliminados')
+                ? (clone $base)->onlyTrashed()->whereNotNull('eliminacion_registro_at')->count()
+                : 0,
         ];
     }
 
@@ -100,7 +104,7 @@ class ListarPedidosBmaService
         return $pedido;
     }
 
-    private function aplicarFiltros(Builder $query, array $filtros): void
+    private function aplicarFiltros(Builder $query, array $filtros, ?User $usuario = null): void
     {
         if (!empty($filtros['q'])) {
             $termino = trim($filtros['q']);
@@ -115,6 +119,21 @@ class ListarPedidosBmaService
         }
 
         $tab = strtoupper($filtros['tab'] ?? 'TODAS');
+
+        if ($tab === 'ELIMINADAS') {
+            if (! $usuario?->can('control_pedidos.eliminados')) {
+                $query->whereRaw('0 = 1');
+
+                return;
+            }
+
+            $query->onlyTrashed()
+                ->whereNotNull('eliminacion_registro_at')
+                ->with(['eliminacionRegistroPor:id,name', 'auditoriasRegistro.usuario:id,name']);
+
+            return;
+        }
+
         $idsPorFase = $this->idsPorFase();
 
         match ($tab) {

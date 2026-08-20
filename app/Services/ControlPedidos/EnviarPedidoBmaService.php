@@ -44,13 +44,16 @@ class EnviarPedidoBmaService
         $this->pagosService->generarExcedenteSiAplica($pedido, $usuarioId);
 
         if (config('control_pedidos.direcciones_normalizadas')) {
-            $pedido->loadMissing('origen');
+            $pedido->loadMissing(['origen', 'direccionVigente']);
             if (
                 $pedido->origen?->requiere_logistica
                 && ! $pedido->cliente_proporciona_guia
                 && ! $pedido->cliente_direccion_id
+                && ! CrearSnapshotDireccionPedido::manualEstaCompleta($pedido->direccionVigente)
             ) {
-                throw new \InvalidArgumentException('Debe seleccionar una dirección de envío verificada.');
+                throw new \InvalidArgumentException(
+                    'Debe seleccionar una dirección de envío verificada o completar la dirección manual (excepción).'
+                );
             }
         }
 

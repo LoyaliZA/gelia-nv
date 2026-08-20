@@ -50,6 +50,7 @@ final class AccionesHistorialPedidoBma
     public const DECISION_SIN_EXISTENCIA = 'decision_sin_existencia';
     public const STOCK_SIN_EXISTENCIA = 'stock_sin_existencia';
     public const REPORTE_SIN_EXISTENCIA = 'reporte_sin_existencia';
+    public const SESION_EVIDENCIA = 'sesion_evidencia';
     public const RETRASO_EMPAQUE = 'retraso_empaque';
     public const RETRASO_RECOLECCION = 'retraso_recoleccion';
 
@@ -98,6 +99,7 @@ final class AccionesHistorialPedidoBma
         self::DECISION_SIN_EXISTENCIA => 'Decisión por sin existencias',
         self::STOCK_SIN_EXISTENCIA => 'Existencias confirmadas (CEDIS)',
         self::REPORTE_SIN_EXISTENCIA => 'CEDIS reportó sin existencias',
+        self::SESION_EVIDENCIA => 'Sesión de evidencias con celular',
         self::RETRASO_EMPAQUE => 'Retraso de empaque',
         self::RETRASO_RECOLECCION => 'Retraso de recolección',
     ];

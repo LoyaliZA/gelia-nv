@@ -12,6 +12,7 @@ export default function InputConEscanner({
     readOnly = false,
     multiline = false,
     escaneoContinuo = false,
+    mostrarBotonCamara = true,
 }) {
     const [modalAbierto, setModalAbierto] = useState(false);
 
@@ -35,15 +36,17 @@ export default function InputConEscanner({
                     className={`${className} ${inputClassName} flex-1 min-w-0`}
                     {...restInputProps}
                 />
-                <button
-                    type="button"
-                    onClick={() => setModalAbierto(true)}
-                    className={`${THEME_BTN_ICON} shrink-0 self-stretch min-w-[44px]`}
-                    title={`Escanear ${label || 'código'}`}
-                    aria-label={`Escanear ${label || 'código'}`}
-                >
-                    <ScanLine className="w-4 h-4" />
-                </button>
+                {mostrarBotonCamara ? (
+                    <button
+                        type="button"
+                        onClick={() => setModalAbierto(true)}
+                        className={`${THEME_BTN_ICON} shrink-0 self-stretch min-w-[44px]`}
+                        title={`Escanear ${label || 'código'}`}
+                        aria-label={`Escanear ${label || 'código'}`}
+                    >
+                        <ScanLine className="w-4 h-4" />
+                    </button>
+                ) : null}
             </div>
 
             <ModalEscanearCodigo

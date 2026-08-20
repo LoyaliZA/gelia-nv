@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
-import { X, Scale, Plus, Trash2, FileText, ChevronDown, ImagePlus, Search, Camera, ExternalLink } from 'lucide-react';
+import { X, Scale, Plus, Trash2, FileText, ChevronDown, ImagePlus, Search, Camera, ExternalLink, Smartphone } from 'lucide-react';
 import {
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
@@ -27,6 +27,8 @@ import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import InputConEscanner from '../../../../Components/Escanner/InputConEscanner';
+import { desbloquearBipAudio, reproducirBipConfirmacion, reproducirBipError } from '../../../../Components/Escanner/bipScanner';
+import ModalSesionEvidenciaCedis from './ModalSesionEvidenciaCedis';
 import useDispositivoCampo, { esDispositivoCampo } from '../../../Activos/Partials/useDispositivoCampo';
 
 const SECCION = `${THEME_LABEL} mb-2 block`;
@@ -36,7 +38,12 @@ const DRAFT_DB = 'cedis_pesaje_drafts_v1';
 const DRAFT_STORE = 'drafts';
 const MAX_PRODUCTOS_ABIERTOS = 3;
 
+const nuevoUuid = () => (typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
 const envioVacio = () => ({
+    client_uuid: nuevoUuid(),
     catalogo_tipo_caja_id: '',
     largo: '',
     ancho: '',
@@ -46,6 +53,7 @@ const envioVacio = () => ({
 });
 
 const revisionDesdeProducto = (producto) => ({
+    client_uuid: nuevoUuid(),
     producto_id: producto?.id || null,
     sku: producto?.sku || '',
     descripcion_producto: producto
@@ -162,14 +170,24 @@ function GaleriaEvidencias({
     };
 
     const quitar = (idx) => {
-        const nextFiles = archivos.filter((_, i) => i !== idx);
+        const p = previews[idx];
         const nextPreviews = [...previews];
         const [removed] = nextPreviews.splice(idx, 1);
+        if (p?.remoto) {
+            if (removed?.url && removed.url.startsWith('blob:')) URL.revokeObjectURL(removed.url);
+            onChange(archivos, nextPreviews);
+            return;
+        }
+        let localIdx = 0;
+        for (let i = 0; i < idx; i += 1) {
+            if (!previews[i]?.remoto) localIdx += 1;
+        }
+        const nextFiles = archivos.filter((_, i) => i !== localIdx);
         if (removed?.url) URL.revokeObjectURL(removed.url);
         onChange(nextFiles, nextPreviews);
     };
 
-    const docs = previews.map((p, i) => archivoADoc(archivos[i] || { name: p.name, type: p.mime }, p.url));
+        const docs = previews.map((p) => archivoADoc({ name: p.name, type: p.mime }, p.url));
 
     return (
         <div className="space-y-2">
@@ -209,7 +227,7 @@ function GaleriaEvidencias({
                 <label className="flex items-center gap-2 px-4 py-3 min-h-[44px] border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
                     <ImagePlus className="w-4 h-4 theme-text-muted" />
                     <span className="text-xs font-black uppercase">
-                        {archivos.length ? `${archivos.length} archivo(s)` : 'Adjuntar fotos'}
+                        {archivos.length || previews.some((x) => x.remoto) ? `${previews.length} archivo(s)` : 'Adjuntar fotos'}
                     </span>
                     <input
                         type="file"
@@ -234,6 +252,9 @@ function GaleriaEvidencias({
                                         <div className="w-full h-full flex items-center justify-center text-[9px] font-black uppercase theme-text-muted">PDF</div>
                                     ) : (
                                         <img src={p.url} alt={p.name} className="w-full h-full object-cover transition-opacity group-hover:opacity-90" />
+                                    )}
+                                    {p.remoto && (
+                                        <span className="absolute bottom-0 left-0 right-0 text-[8px] font-black uppercase text-center bg-black/50 text-white">Cel</span>
                                     )}
                                 </button>
                                 <button
@@ -278,6 +299,10 @@ export default function ModalResponderPesaje({
     const [skuResultados, setSkuResultados] = useState([]);
     const [skuCargando, setSkuCargando] = useState(false);
     const [skuError, setSkuError] = useState('');
+    const [sesionEvidencia, setSesionEvidencia] = useState(null);
+    const [modalQr, setModalQr] = useState(false);
+    const [celularConectado, setCelularConectado] = useState(false);
+    const skuPistolaRef = useRef(null);
     const [borradorMsg, setBorradorMsg] = useState(null);
     const [listaProductosAbierta, setListaProductosAbierta] = useState(false);
     const skuAbortRef = useRef(null);
@@ -286,6 +311,8 @@ export default function ModalResponderPesaje({
     const skipAutosaveRef = useRef(true);
     const hydratingRef = useRef(false);
     const envioNuevoRef = useRef(null);
+    const enviosRef = useRef(envios);
+    enviosRef.current = envios;
     const focusNuevoEnvioRef = useRef(false);
     const [confirmacion, setConfirmacion] = useState(null);
     const { esCampo, esMovil } = useDispositivoCampo();
@@ -330,7 +357,7 @@ export default function ModalResponderPesaje({
                 if (cancelado) return;
 
                 if (draft?.envios?.length) {
-                    setEnvios(draft.envios.map((e) => ({ ...envioVacio(), ...e })));
+                    setEnvios(draft.envios.map((e) => ({ ...envioVacio(), ...e, client_uuid: e.client_uuid || nuevoUuid() })));
                     setRevisiones((prev) => {
                         prev.forEach((r) => revocarPreviews(r.previews));
                         return (draft.revisiones || []).map((r) => {
@@ -338,6 +365,7 @@ export default function ModalResponderPesaje({
                             return {
                                 ...revisionDesdeProducto({ id: r.producto_id, sku: r.sku, descripcion: '' }),
                                 ...r,
+                                client_uuid: r.client_uuid || nuevoUuid(),
                                 evidencias,
                                 previews: previewsDesdeArchivos(evidencias),
                                 expandido: false,
@@ -420,6 +448,89 @@ export default function ModalResponderPesaje({
 
         return () => window.clearTimeout(timer);
     }, [abierto, pedido?.id, envios, revisiones, evidenciasPorEnvio]);
+
+    const anexarFotoRemota = (foto) => {
+        if (!foto?.objetivo_uuid) return;
+        const preview = {
+            name: foto.nombre || 'foto',
+            url: foto.url,
+            mime: foto.mime || 'image/jpeg',
+            remoto: true,
+            id: foto.id,
+        };
+        if (foto.objetivo_tipo === 'caja') {
+            setEvidenciasPorEnvio((prev) => {
+                const idxUuid = enviosRef.current.findIndex((e) => e.client_uuid === foto.objetivo_uuid);
+                const i = idxUuid >= 0 ? idxUuid : (foto.indice_caja ?? -1);
+                if (i < 0 || !prev[i]) return prev;
+                if (prev[i].previews.some((p) => p.id === foto.id)) return prev;
+                return prev.map((s, j) => (j === i ? { ...s, previews: [...s.previews, preview] } : s));
+            });
+            return;
+        }
+        setRevisiones((prev) => prev.map((r) => {
+            if (r.client_uuid !== foto.objetivo_uuid) return r;
+            if ((r.previews || []).some((p) => p.id === foto.id)) return r;
+            return { ...r, previews: [...(r.previews || []), preview], expandido: true };
+        }));
+    };
+
+    const sesionId = sesionEvidencia?.sesion_id || sesionEvidencia?.id;
+
+    useEffect(() => {
+        if (!abierto || !pedido?.id || !sesionId) return undefined;
+        const canalName = `pedido-bma.${pedido.id}.evidencias`;
+        if (window.Echo) {
+            const canal = window.Echo.private(canalName);
+            canal.listen('.evidencia-cedis.actualizada', (payload) => {
+                if (payload?.tipo === 'sesion_reclamada') setCelularConectado(true);
+                if (payload?.tipo === 'cancelada') {
+                    setSesionEvidencia(null);
+                    setCelularConectado(false);
+                    setModalQr(false);
+                }
+                if (payload?.tipo === 'foto' && payload.foto) anexarFotoRemota(payload.foto);
+            });
+        }
+        const poll = window.setInterval(async () => {
+            try {
+                const { data } = await window.axios.get(route('control_pedidos.cedis.sesion_evidencia.show', pedido.id));
+                (data.fotos || []).forEach(anexarFotoRemota);
+                if (data.estado === 'activa') setCelularConectado(true);
+            } catch {
+                // poll silencioso si Reverb no empuja
+            }
+        }, 4000);
+        return () => {
+            window.Echo?.leave(canalName);
+            window.clearInterval(poll);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [abierto, pedido?.id, sesionId]);
+
+    useEffect(() => {
+        if (!abierto || !pedido?.id || !sesionId) return undefined;
+        const t = window.setTimeout(() => {
+            const productos = revisiones.map((r) => ({
+                client_uuid: r.client_uuid,
+                sku: r.sku || '',
+                descripcion: r.descripcion_producto || '',
+            }));
+            const cajas = envios.map((e, i) => ({
+                client_uuid: e.client_uuid,
+                indice: i,
+                etiqueta: etiquetaEnvio(i, { tipo_caja: tiposCaja.find((t) => String(t.id) === String(e.catalogo_tipo_caja_id)) }),
+            }));
+            window.axios.put(route('control_pedidos.cedis.sesion_evidencia.snapshot', pedido.id), { productos, cajas }).catch(() => {});
+        }, 300);
+        return () => window.clearTimeout(t);
+    }, [abierto, pedido?.id, sesionId, revisiones, envios, tiposCaja]);
+
+    useEffect(() => {
+        if (!abierto || esCampo) return undefined;
+        const t = window.setTimeout(() => skuPistolaRef.current?.focus(), 200);
+        return () => window.clearTimeout(t);
+    }, [abierto, esCampo]);
 
     useEffect(() => () => {
         evidenciasPorEnvio.forEach((s) => revocarPreviews(s.previews));
@@ -559,6 +670,10 @@ export default function ModalResponderPesaje({
         setSkuError('');
         setSkuQuery('');
         setSkuResultados([]);
+        reproducirBipConfirmacion();
+        if (!esCampo) {
+            window.setTimeout(() => skuPistolaRef.current?.focus(), 50);
+        }
     };
 
     const buscarProductos = async (termino, { autoAgregar = false } = {}) => {
@@ -613,6 +728,7 @@ export default function ModalResponderPesaje({
                     agregarProducto(lote[0]);
                 } else if (lote.length === 0) {
                     setSkuError('Sin coincidencias en el inventario de este almacén.');
+                    reproducirBipError();
                 }
             }
         } catch (err) {
@@ -634,6 +750,7 @@ export default function ModalResponderPesaje({
             buscarProductos(v, { autoAgregar: true });
             return;
         }
+        // PC (pistola): listar al teclear; auto-agregar solo con Enter en onSkuKeyDown.
         skuDebounceRef.current = setTimeout(() => buscarProductos(v), 350);
     };
 
@@ -643,6 +760,34 @@ export default function ModalResponderPesaje({
             clearTimeout(skuDebounceRef.current);
             buscarProductos(skuQuery, { autoAgregar: true });
         }
+    };
+
+    const abrirSesionEvidencia = async () => {
+        desbloquearBipAudio();
+        try {
+            const { data } = await window.axios.post(route('control_pedidos.cedis.sesion_evidencia.store', pedido.id));
+            setSesionEvidencia(data);
+            setCelularConectado(false);
+            setModalQr(true);
+        } catch (err) {
+            setAlerta({
+                abierto: true,
+                tipo: 'error',
+                titulo: 'Evidencias',
+                mensaje: err.response?.data?.message || 'No se pudo generar el QR.',
+            });
+        }
+    };
+
+    const cancelarSesionEvidencia = async () => {
+        try {
+            await window.axios.post(route('control_pedidos.cedis.sesion_evidencia.cancelar', pedido.id));
+        } catch {
+            /* ignore */
+        }
+        setSesionEvidencia(null);
+        setCelularConectado(false);
+        setModalQr(false);
     };
 
     const confirmar = () => {
@@ -677,7 +822,9 @@ export default function ModalResponderPesaje({
         }
 
         for (let i = 0; i < envios.length; i++) {
-            if (!(evidenciasPorEnvio[i]?.archivos?.length)) {
+            const hayLocal = evidenciasPorEnvio[i]?.archivos?.length;
+            const hayRemota = evidenciasPorEnvio[i]?.previews?.some((p) => p.remoto);
+            if (!hayLocal && !hayRemota) {
                 setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${i + 1}`, mensaje: 'Adjunte al menos una foto del contenido de esta caja.' });
                 return;
             }
@@ -714,7 +861,7 @@ export default function ModalResponderPesaje({
                     return;
                 }
             }
-            if (requiereEvidencia(r.estado_fisico) && !r.evidencias?.length) {
+            if (requiereEvidencia(r.estado_fisico) && !r.evidencias?.length && !(r.previews || []).some((p) => p.remoto)) {
                 setAlerta({ abierto: true, tipo: 'error', titulo: `Producto ${i + 1}`, mensaje: 'Estado malo/dañado requiere evidencia.' });
                 return;
             }
@@ -735,6 +882,7 @@ export default function ModalResponderPesaje({
         const form = new FormData();
         cajas.forEach((c, i) => {
             Object.entries(c).forEach(([k, v]) => form.append(`cajas[${i}][${k}]`, String(v)));
+            if (envios[i]?.client_uuid) form.append(`cajas[${i}][client_uuid]`, envios[i].client_uuid);
         });
         form.append('estado_fisico_general', estadoGeneralDerivado);
         form.append('comentario_fisico_general', '');
@@ -749,6 +897,7 @@ export default function ModalResponderPesaje({
             form.append(`revisiones[${i}][comentario]`, r.comentario || '');
             form.append(`revisiones[${i}][unica_pieza]`, r.unica_pieza ? '1' : '0');
             form.append(`revisiones[${i}][mejor_ejemplar]`, r.mejor_ejemplar ? '1' : '0');
+            if (r.client_uuid) form.append(`revisiones[${i}][client_uuid]`, r.client_uuid);
             (r.evidencias || []).forEach((f, j) => form.append(`revisiones[${i}][evidencias][${j}]`, f));
         });
 
@@ -972,6 +1121,11 @@ export default function ModalResponderPesaje({
                                     </button>
                                 </div>
                                 <label className={SECCION}>SKU / código de barras</label>
+                                {!esCampo && (
+                                    <p className="text-[10px] font-black uppercase m-0 mb-1 text-emerald-600">
+                                        Pistola lista · escaneo continuo
+                                    </p>
+                                )}
                                 <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-2">
                                     Buscando en:{' '}
                                     <span className="theme-text-main">
@@ -988,16 +1142,21 @@ export default function ModalResponderPesaje({
                                     className=""
                                     inputProps={{
                                         id: 'cedis-sku-pesaje',
-                                        placeholder: 'Escanear o escribir SKU…',
+                                        ref: skuPistolaRef,
+                                        placeholder: esCampo ? 'Escanear o escribir SKU…' : 'Pistola: escanee y pulse Enter…',
                                         className: `${THEME_INPUT} w-full py-3 min-h-[44px]`,
                                         onKeyDown: onSkuKeyDown,
                                         autoComplete: 'off',
                                         disabled: !almacenBusquedaId,
+                                        onFocus: desbloquearBipAudio,
                                     }}
                                 />
                                 <div className="flex flex-wrap gap-2">
                                     <button type="button" onClick={() => buscarProductos(skuQuery, { autoAgregar: true })} disabled={skuCargando || String(skuQuery).trim().length < 2 || !almacenBusquedaId} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
                                         <Search className="w-3.5 h-3.5" /> {skuCargando ? 'Buscando…' : 'Buscar y agregar'}
+                                    </button>
+                                    <button type="button" onClick={abrirSesionEvidencia} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
+                                        <Smartphone className="w-3.5 h-3.5" /> Tomar evidencias con celular
                                     </button>
                                 </div>
                                 {skuError && <p className="text-[10px] font-bold text-amber-600 m-0">{skuError}</p>}
@@ -1193,9 +1352,19 @@ export default function ModalResponderPesaje({
                     const acc = confirmacion;
                     setConfirmacion(null);
                     if (acc === 'registrar') enviarPesaje();
-                    else if (acc === 'cerrar') onClose();
+                    else if (acc === 'cerrar') {
+                        cancelarSesionEvidencia();
+                        onClose();
+                    }
                     else if (acc?.tipo === 'quitar_envio') quitarEnvio(acc.idx);
                 }}
+            />
+            <ModalSesionEvidenciaCedis
+                abierto={modalQr}
+                sesion={sesionEvidencia}
+                conectado={celularConectado}
+                onCerrar={() => setModalQr(false)}
+                onCancelar={cancelarSesionEvidencia}
             />
         </>,
         document.body

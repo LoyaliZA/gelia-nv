@@ -8,6 +8,7 @@ use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\CatalogoTipoOperacionEnvio;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Support\Clientes\FormatearDireccionEstructurada;
 
 trait ResuelveDatosPedidoBma
 {
@@ -269,6 +270,21 @@ trait ResuelveDatosPedidoBma
             'anexar_remision' => filter_var($datos['anexar_remision'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'comentarios_drive' => $datos['comentarios_drive'] ?? null,
         ], $envioTienda, $envia, $totales);
+
+        if (filter_var($datos['direccion_manual_excepcion'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $attrs['cliente_direccion_id'] = null;
+            $campos = is_array($datos['direccion'] ?? null) ? $datos['direccion'] : [];
+            if ($campos !== []) {
+                $texto = FormatearDireccionEstructurada::ejecutar($campos);
+                if ($texto) {
+                    $attrs['domicilio_entrega'] = $texto;
+                }
+                $cp = trim((string) ($campos['codigo_postal'] ?? ''));
+                if ($cp !== '') {
+                    $attrs['codigo_postal'] = $cp;
+                }
+            }
+        }
 
         if ($clienteProporcionaGuia) {
             $attrs['costo_envio'] = null;

@@ -116,6 +116,8 @@ class PedidoBma extends Model
         'resolucion_financiera_cancelacion',
         'cancelado_por_id',
         'cancelado_at',
+        'eliminacion_registro_at',
+        'eliminacion_registro_por_id',
     ];
 
     protected $casts = [
@@ -139,6 +141,7 @@ class PedidoBma extends Model
         'envia_a_otra_persona' => 'boolean',
         'tiene_observaciones_fisicas' => 'boolean',
         'cancelado_at' => 'datetime',
+        'eliminacion_registro_at' => 'datetime',
         'saldo_a_favor' => 'decimal:2',
         'peso_real_kg' => 'decimal:4',
         'peso_volumetrico_kg' => 'decimal:4',
@@ -409,6 +412,21 @@ class PedidoBma extends Model
     public function documentos(): HasMany
     {
         return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')->orderBy('orden');
+    }
+
+    public function eliminacionRegistroPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'eliminacion_registro_por_id');
+    }
+
+    public function auditoriasRegistro(): HasMany
+    {
+        return $this->hasMany(AuditoriaPedidoBma::class, 'pedido_bma_id')->orderByDesc('created_at');
+    }
+
+    public function sesionesEvidencia(): HasMany
+    {
+        return $this->hasMany(PedidoBmaSesionEvidencia::class, 'pedido_bma_id');
     }
 
     public function cajas(): HasMany

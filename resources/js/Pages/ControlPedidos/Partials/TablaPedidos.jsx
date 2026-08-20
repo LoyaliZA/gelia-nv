@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck, Truck, Ban, Download } from 'lucide-react';
+import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck, Truck, Ban, Download, RotateCcw, FileSearch } from 'lucide-react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import {
     badgeEstatusPedido,
@@ -29,9 +29,34 @@ import BotonAccionCubico from './BotonAccionCubico';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 
 function AccionesPedido({
-    pedido, can, onVer, onEditar, onEliminar, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
-    puedeEditar, puedeEliminar, puedeCancelar, compact = false,
+    pedido, can, onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+    puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar, esPapelera = false, compact = false,
 }) {
+    if (esPapelera) {
+        const itemsPapelera = [];
+        if (can('control_pedidos.ver_detalle')) {
+            itemsPapelera.push(
+                <BotonAccionCubico key="ver" icon={Eye} label="Ver" onClick={() => onVer(pedido)} conLabel={compact} />
+            );
+        }
+        if (can('control_pedidos.eliminados') && onRestaurar) {
+            itemsPapelera.push(
+                <BotonAccionCubico key="restaurar" icon={RotateCcw} label="Restaurar" onClick={() => onRestaurar(pedido)} tone="teal" conLabel={compact} />
+            );
+        }
+        if (onVerAuditoria) {
+            itemsPapelera.push(
+                <BotonAccionCubico key="auditoria" icon={FileSearch} label="Auditoría" onClick={() => onVerAuditoria(pedido)} tone="purple" conLabel={compact} />
+            );
+        }
+        if (itemsPapelera.length === 0) return null;
+        return (
+            <div className={compact ? 'grid grid-cols-2 gap-2' : 'flex justify-end gap-1.5 overflow-visible'}>
+                {itemsPapelera}
+            </div>
+        );
+    }
+
     const puedeMutar = Boolean(pedido.puede_editar ?? pedido.puede_mutar);
     const puedeAnexar = puedeMutar
         && puedeAnexarPagoEnvio(pedido)
@@ -87,9 +112,14 @@ function AccionesPedido({
             <BotonAccionCubico key="cancelar" icon={Ban} label="Cancelar" onClick={() => onCancelar(pedido)} tone="warn" conLabel={compact} />
         );
     }
-    if (puedeEliminar(pedido)) {
+    if (puedeEliminarBorrador?.(pedido)) {
         items.push(
-            <BotonAccionCubico key="eliminar" icon={Trash2} label="Eliminar" onClick={() => onEliminar(pedido)} tone="danger" conLabel={compact} />
+            <BotonAccionCubico key="eliminar-borrador" icon={Trash2} label="Eliminar borrador" onClick={() => onEliminar(pedido)} tone="danger" conLabel={compact} />
+        );
+    }
+    if (puedeEliminarRegistro?.(pedido) && onEliminarRegistro) {
+        items.push(
+            <BotonAccionCubico key="eliminar-registro" icon={Trash2} label="Eliminar registro" onClick={() => onEliminarRegistro(pedido)} tone="danger" conLabel={compact} />
         );
     }
 
@@ -106,7 +136,7 @@ function AccionesPedido({
     );
 }
 
-function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEditar, onEliminar, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia, puedeEditar, puedeEliminar, puedeCancelar }) {
+function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar, esPapelera }) {
     const guiaLista = tieneGuiaLista(pedido);
     const badgeGuia = badgeGuiaLista();
     const fase = pedido.estatus?.fase_ciclo;
@@ -182,6 +212,9 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                 onVer={onVer}
                 onEditar={onEditar}
                 onEliminar={onEliminar}
+                onEliminarRegistro={onEliminarRegistro}
+                onRestaurar={onRestaurar}
+                onVerAuditoria={onVerAuditoria}
                 onCancelar={onCancelar}
                 onBitacora={onBitacora}
                 onVerGuia={onVerGuia}
@@ -189,8 +222,10 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                 onCompletarEnvio={onCompletarEnvio}
                 onCargarGuia={onCargarGuia}
                 puedeEditar={puedeEditar}
-                puedeEliminar={puedeEliminar}
+                puedeEliminarBorrador={puedeEliminarBorrador}
+                puedeEliminarRegistro={puedeEliminarRegistro}
                 puedeCancelar={puedeCancelar}
+                esPapelera={esPapelera}
                 compact
             />
         </div>
@@ -200,9 +235,13 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
 export default function TablaPedidos({
     pedidos,
     can,
+    tabActiva = 'TODAS',
     onVer,
     onEditar,
     onEliminar,
+    onEliminarRegistro,
+    onRestaurar,
+    onVerAuditoria,
     onCancelar,
     onBitacora,
     onAnexarEnvio,
@@ -211,22 +250,28 @@ export default function TablaPedidos({
 }) {
     const [docPreview, setDocPreview] = useState(null);
     const items = pedidos?.data || [];
+    const esPapelera = tabActiva === 'ELIMINADAS';
 
     const puedeMutarPedido = (pedido) => Boolean(pedido.puede_editar ?? pedido.puede_mutar);
 
     const fasesEditarUi = FASES_PRE_VENTA;
     const puedeEditar = (pedido) => {
+        if (esPapelera) return false;
         const fase = pedido.estatus?.fase_ciclo;
         return puedeMutarPedido(pedido)
             && can('control_pedidos.editar')
             && fasesEditarUi.includes(fase);
     };
 
-    const puedeEliminar = (pedido) => puedeMutarPedido(pedido)
+    const puedeEliminarBorrador = (pedido) => !esPapelera
+        && puedeMutarPedido(pedido)
         && can('control_pedidos.eliminar')
         && ['BORRADOR', 'PESAJE_PENDIENTE'].includes(pedido.estatus?.fase_ciclo);
 
-    const puedeCancelar = (pedido) => Boolean(pedido.puede_cancelar)
+    const puedeEliminarRegistro = (pedido) => !esPapelera && can('control_pedidos.eliminar_registro');
+
+    const puedeCancelar = (pedido) => !esPapelera
+        && Boolean(pedido.puede_cancelar)
         && puedeMutarPedido(pedido)
         && can('control_pedidos.cancelar')
         && pedido.estatus?.fase_ciclo !== 'CANCELADO';
@@ -253,6 +298,9 @@ export default function TablaPedidos({
                         onVer={onVer}
                         onEditar={onEditar}
                         onEliminar={onEliminar}
+                        onEliminarRegistro={onEliminarRegistro}
+                        onRestaurar={onRestaurar}
+                        onVerAuditoria={onVerAuditoria}
                         onCancelar={onCancelar}
                         onBitacora={onBitacora}
                         onVerGuia={setDocPreview}
@@ -260,8 +308,10 @@ export default function TablaPedidos({
                         onCompletarEnvio={onCompletarEnvio}
                         onCargarGuia={onCargarGuia}
                         puedeEditar={puedeEditar}
-                        puedeEliminar={puedeEliminar}
+                        puedeEliminarBorrador={puedeEliminarBorrador}
+                        puedeEliminarRegistro={puedeEliminarRegistro}
                         puedeCancelar={puedeCancelar}
+                        esPapelera={esPapelera}
                     />
                 ))}
             </div>
@@ -354,6 +404,9 @@ export default function TablaPedidos({
                                             onVer={onVer}
                                             onEditar={onEditar}
                                             onEliminar={onEliminar}
+                                            onEliminarRegistro={onEliminarRegistro}
+                                            onRestaurar={onRestaurar}
+                                            onVerAuditoria={onVerAuditoria}
                                             onCancelar={onCancelar}
                                             onBitacora={onBitacora}
                                             onVerGuia={setDocPreview}
@@ -361,8 +414,10 @@ export default function TablaPedidos({
                                             onCompletarEnvio={onCompletarEnvio}
                                             onCargarGuia={onCargarGuia}
                                             puedeEditar={puedeEditar}
-                                            puedeEliminar={puedeEliminar}
+                                            puedeEliminarBorrador={puedeEliminarBorrador}
+                                            puedeEliminarRegistro={puedeEliminarRegistro}
                                             puedeCancelar={puedeCancelar}
+                                            esPapelera={esPapelera}
                                         />
                                     </td>
                                 </tr>

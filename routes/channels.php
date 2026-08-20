@@ -49,3 +49,15 @@ Broadcast::channel('soporte.ticket.{ticketId}', function ($user, $ticketId) {
 
     return $user->can('soporte.gestionar');
 });
+
+Broadcast::channel('pedido-bma.{pedidoId}.evidencias', function ($user, $pedidoId) {
+    if (! $user->can('control_pedidos.cedis')) {
+        return false;
+    }
+    $pedido = \App\Models\ControlPedidos\PedidoBma::find($pedidoId);
+    if (! $pedido) {
+        return false;
+    }
+
+    return \App\Support\ControlPedidos\VisibilidadPedidoBma::puedeConsultar($user, $pedido);
+});

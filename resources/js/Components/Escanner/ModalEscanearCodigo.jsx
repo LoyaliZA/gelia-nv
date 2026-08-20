@@ -2,57 +2,11 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, AlertTriangle, Flashlight, FlashlightOff, X } from 'lucide-react';
 import { cargarHtml5Qrcode } from './cargarHtml5Qrcode';
+import { desbloquearBipAudio, reproducirBipConfirmacion } from './bipScanner';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_BTN_SECONDARY } from '@/utils/geliaTheme';
 
 const DEBOUNCE_ENTRE_ESCANEOS_MS = 1000;
 const DEBOUNCE_MISMO_CODIGO_MS = 2500;
-const BIP_SCANNER_SRC = '/assets/sound_efects/bip_scanner.mp3';
-
-let bipAudioEl = null;
-let bipAudioUnlocked = false;
-
-function obtenerBipAudio() {
-    if (!bipAudioEl) {
-        bipAudioEl = new Audio(BIP_SCANNER_SRC);
-        bipAudioEl.preload = 'auto';
-        bipAudioEl.volume = 1;
-    }
-    return bipAudioEl;
-}
-
-function desbloquearBipAudio() {
-    if (bipAudioUnlocked || typeof Audio === 'undefined') return;
-    const audio = obtenerBipAudio();
-    const prevMuted = audio.muted;
-    audio.muted = true;
-    const playPromise = audio.play();
-    if (playPromise?.then) {
-        playPromise
-            .then(() => {
-                audio.pause();
-                audio.currentTime = 0;
-                audio.muted = prevMuted;
-                bipAudioUnlocked = true;
-            })
-            .catch(() => {
-                audio.muted = prevMuted;
-            });
-    }
-}
-
-function reproducirBipConfirmacion() {
-    try {
-        if (typeof Audio === 'undefined') return;
-        const audio = obtenerBipAudio();
-        audio.currentTime = 0;
-        const playPromise = audio.play();
-        if (playPromise?.catch) {
-            playPromise.catch(() => {});
-        }
-    } catch {
-        // sin audio en este dispositivo
-    }
-}
 
 function esperarDom() {
     return new Promise((resolve) => {

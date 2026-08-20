@@ -30,7 +30,10 @@ class HardenSolicitudDireccionPublica
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('Referrer-Policy', 'no-referrer');
         $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-        $response->headers->set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+        $camera = str_starts_with((string) $request->route()?->getName(), 'cedis_evidencia.publicas.')
+            ? '(self)'
+            : '()';
+        $response->headers->set('Permissions-Policy', "geolocation=(), microphone=(), camera={$camera}");
         $response->headers->set('Content-Security-Policy', $this->contentSecurityPolicy());
 
         return $response;

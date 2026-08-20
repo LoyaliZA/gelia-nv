@@ -30,6 +30,7 @@ class RestrictFormHostname
         if (is_string($routeName) && (
             str_starts_with($routeName, 'direcciones.publicas.')
             || str_starts_with($routeName, 'datos_fiscales.publicas.')
+            || str_starts_with($routeName, 'cedis_evidencia.publicas.')
         )) {
             return $next($request);
         }

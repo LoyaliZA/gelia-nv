@@ -12,7 +12,7 @@ window.Pusher = Pusher;
 // Formularios públicos (otro host / sin auth): no hay canales privados ni UI realtime.
 const path = typeof window !== 'undefined' ? window.location.pathname : '';
 const isPublicForm =
-    path.startsWith('/direcciones-envio') || path.startsWith('/datos-fiscales');
+    path.startsWith('/direcciones-envio') || path.startsWith('/datos-fiscales') || path.startsWith('/cedis-evidencia');
 
 if (!isPublicForm) {
     window.Echo = new Echo({

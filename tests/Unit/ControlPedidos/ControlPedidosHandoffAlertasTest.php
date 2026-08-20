@@ -76,6 +76,29 @@ class ControlPedidosHandoffAlertasTest extends TestCase
         }
     }
 
+    public function test_voz_pesaje_usa_nombre_operador_cedis(): void
+    {
+        $pedido = new PedidoBma([
+            'id' => 99,
+            'folio' => 'PED-99',
+            'folio_remision' => 'REM-99',
+        ]);
+        $pedido->setRelation('vendedor', null);
+        $pedido->setRelation('cliente', null);
+        $pedido->setRelation('estatus', null);
+
+        $user = new User(['name' => 'Ana López']);
+        $alerta = new AlertaPedidoBma($pedido, 'pedido_pesaje_listo', 'CEDIS respondió el pesaje.', [
+            'actor_nombre' => 'Juan Pérez',
+        ]);
+        $data = $alerta->toBroadcast($user)->data;
+
+        $this->assertStringContainsString('Juan Pérez respondió el pesaje', $data['mensaje_voz']);
+        $this->assertStringContainsString('Juan Pérez respondió el pesaje', $data['mensaje']);
+        $this->assertStringNotContainsString('CEDIS respondió', $data['mensaje']);
+        $this->assertStringNotContainsString('CEDIS respondió', $data['mensaje_voz']);
+    }
+
     public function test_enviar_notifica_pendiente_auxiliar(): void
     {
         $this->expectNotificar('pedido_pendiente_auxiliar', ['control_pedidos.auditar'], false, $this->vendedora->id);

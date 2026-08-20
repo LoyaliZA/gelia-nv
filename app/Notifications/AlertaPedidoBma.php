@@ -28,6 +28,13 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
 
     private string $mensajeBase;
 
+    private const TIPOS_ACTOR_CEDIS = [
+        'pedido_pesaje_listo',
+        'pedido_sin_existencia',
+        'pedido_resguardo_apartado',
+        'pedido_incidencia_cedis',
+    ];
+
     private const ETIQUETAS_TIPO = [
         'pedido_error_datos' => 'Error de datos en pedido',
         'pedido_error_remision' => 'Error de remisión en pedido',
@@ -136,15 +143,33 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         return "{$etiqueta}: {$this->folio()}";
     }
 
+    private function nombreActorCedis(): string
+    {
+        $nombre = trim((string) ($this->extras['actor_nombre'] ?? ''));
+
+        return $nombre !== '' ? $nombre : 'CEDIS';
+    }
+
     private function construirMensajeVisible(): string
     {
-        return "{$this->mensajeBase} · {$this->folio()}";
+        $base = $this->mensajeBase;
+        if (in_array($this->tipoAlerta, self::TIPOS_ACTOR_CEDIS, true)) {
+            $actor = $this->nombreActorCedis();
+            if (str_starts_with($base, 'CEDIS')) {
+                $base = $actor.substr($base, strlen('CEDIS'));
+            } elseif ($this->tipoAlerta === 'pedido_incidencia_cedis') {
+                $base = "{$actor} reportó: {$base}";
+            }
+        }
+
+        return "{$base} · {$this->folio()}";
     }
 
     private function construirMensajeVoz(object $notifiable): string
     {
         $nombre = explode(' ', trim($notifiable->name ?? 'Usuario'))[0];
         $folio = $this->folio();
+        $actor = $this->nombreActorCedis();
 
         return match ($this->tipoAlerta) {
             'pedido_error_datos' => "Atención {$nombre}, se reportó un error de datos en el pedido {$folio}. Corrígelo y reenvía.",
@@ -153,21 +178,21 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
             'pedido_error_cedis' => "Atención {$nombre}, hay un error CEDIS en el pedido {$folio}. Corrígelo en empaque o pesaje.",
             'pedido_error_estado' => "Atención {$nombre}, se reportó un error en el pedido {$folio}. Solo el responsable puede corregirlo.",
             'pedido_guia_retraso' => "Atención {$nombre}, la guía del pedido {$folio} fue corregida y provoca un retraso.",
-            'pedido_resguardo_apartado' => "Atención {$nombre}, CEDIS apartó las piezas de tu pedido en resguardo {$folio}.",
+            'pedido_resguardo_apartado' => "Atención {$nombre}, {$actor} apartó las piezas de tu pedido en resguardo {$folio}.",
             'pedido_consulta_pesaje' => "Atención {$nombre}, hay una consulta de pesaje pendiente para el pedido {$folio}.",
             'pedido_pesaje_listo' => ! empty($this->extras['con_observaciones_fisicas'])
-                ? "Atención {$nombre}, CEDIS respondió el pesaje del pedido {$folio} con observaciones. Revísalas antes de cotizar el envío."
-                : "Atención {$nombre}, CEDIS respondió el pesaje del pedido {$folio}. Ya puedes cotizar el envío.",
+                ? "Atención {$nombre}, {$actor} respondió el pesaje del pedido {$folio} con observaciones. Revísalas antes de cotizar el envío."
+                : "Atención {$nombre}, {$actor} respondió el pesaje del pedido {$folio}. Ya puedes cotizar el envío.",
             'pedido_pendiente_auxiliar' => "Atención {$nombre}, el pedido {$folio} está pendiente de auditoría.",
             'pedido_aprobado' => "Atención {$nombre}, el pedido {$folio} fue aprobado.",
             'pedido_rechazado_auxiliar' => "Atención {$nombre}, tu pedido {$folio} fue rechazado, corrígelo y reenvía.",
-            'pedido_incidencia_cedis' => "Atención {$nombre}, hay un error de empaque en el pedido {$folio}.",
+            'pedido_incidencia_cedis' => "Atención {$nombre}, {$actor} reportó un error de empaque en el pedido {$folio}.",
             'pedido_pendiente_guia' => "Atención {$nombre}, el pedido {$folio} está pendiente de guía.",
             'pedido_pendiente_envio' => "Atención {$nombre}, el pedido {$folio} está empacado, pendiente de recolección.",
             'pedido_guia_asignada' => "Atención {$nombre}, se asignó guía al pedido {$folio}, pendiente de recolección.",
             'pedido_enviado' => "Atención {$nombre}, la paquetería recogió el pedido {$folio}.",
             'pedido_resguardo_liberado' => "Atención {$nombre}, se liberó el resguardo del pedido {$folio}, listo para CEDIS.",
-            'pedido_sin_existencia' => "Atención {$nombre}, CEDIS reportó producto sin existencias en el pedido {$folio}. El pedido está detenido hasta que elijas una acción.",
+            'pedido_sin_existencia' => "Atención {$nombre}, {$actor} reportó producto sin existencias en el pedido {$folio}. El pedido está detenido hasta que elijas una acción.",
             default => "{$nombre}, tienes una notificación sobre el pedido {$folio}.",
         };
     }

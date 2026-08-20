@@ -12,6 +12,7 @@ use App\Http\Requests\ControlPedidos\ReportarSinExistenciaPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ResponderPesajePedidoBmaRequest;
 use App\Models\Almacen;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaSesionEvidenciaFoto;
 use App\Services\ControlPedidos\GestionarSinExistenciaCedisPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosCedisService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
@@ -22,6 +23,8 @@ use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use App\Services\ControlPedidos\ResponderPesajePedidoBmaService;
 use App\Services\ControlPedidos\ReabrirEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
+use App\Services\ControlPedidos\SesionEvidenciaCedisService;
+use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -257,5 +260,96 @@ class PedidoBmaCedisController extends Controller
         }
 
         return redirect()->back()->with('success', 'Existencias confirmadas. El estado físico se conserva.');
+    }
+
+    public function crearSesionEvidencia(PedidoBma $pedidoBma, SesionEvidenciaCedisService $service): JsonResponse
+    {
+        Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+
+        $resultado = $service->generar($pedidoBma, Auth::id());
+
+        return response()->json([
+            'sesion_id' => $resultado['sesion']->id,
+            'url' => $resultado['url'],
+            'qr_data_uri' => $resultado['qr_data_uri'],
+            'expira_en' => $resultado['expira_en'],
+            'estado' => $resultado['sesion']->estado,
+        ]);
+    }
+
+    public function mostrarSesionEvidencia(PedidoBma $pedidoBma, SesionEvidenciaCedisService $service): JsonResponse
+    {
+        Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+
+        $sesion = $service->vigente($pedidoBma);
+        if (! $sesion) {
+            return response()->json(['sesion' => null]);
+        }
+
+        $sesion->load('fotos');
+
+        return response()->json([
+            'sesion_id' => $sesion->id,
+            'estado' => $sesion->estado,
+            'expira_en' => $sesion->expira_en?->toIso8601String(),
+            'fotos' => $sesion->fotos->map(fn ($f) => $service->fotoParaPc($f))->all(),
+        ]);
+    }
+
+    public function snapshotSesionEvidencia(Request $request, PedidoBma $pedidoBma, SesionEvidenciaCedisService $service): JsonResponse
+    {
+        Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+
+        $datos = $request->validate([
+            'productos' => ['nullable', 'array'],
+            'productos.*.client_uuid' => ['required', 'string', 'max:64'],
+            'productos.*.sku' => ['nullable', 'string', 'max:64'],
+            'productos.*.descripcion' => ['nullable', 'string', 'max:255'],
+            'cajas' => ['nullable', 'array'],
+            'cajas.*.client_uuid' => ['required', 'string', 'max:64'],
+            'cajas.*.indice' => ['nullable', 'integer', 'min:0'],
+            'cajas.*.etiqueta' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $service->guardarSnapshot($pedidoBma, $datos, Auth::id());
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function cancelarSesionEvidencia(PedidoBma $pedidoBma, SesionEvidenciaCedisService $service): JsonResponse
+    {
+        Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+
+        $service->cancelar($pedidoBma, Auth::id());
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function verFotoSesionEvidencia(
+        PedidoBma $pedidoBma,
+        PedidoBmaSesionEvidenciaFoto $foto,
+        SesionEvidenciaCedisService $service
+    ) {
+        Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+
+        $foto->load('sesion');
+        if ((int) $foto->sesion?->pedido_bma_id !== (int) $pedidoBma->id) {
+            abort(404);
+        }
+
+        $path = storage_path('app/public/'.$foto->ruta_archivo);
+        if (! is_file($path)) {
+            abort(404);
+        }
+
+        return response()->file($path, [
+            'Content-Type' => $foto->mime_type ?: 'image/jpeg',
+            'Cache-Control' => 'private, max-age=300',
+        ]);
     }
 }

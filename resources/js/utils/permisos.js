@@ -87,7 +87,9 @@ export const DESCRIPCIONES_PERMISOS = {
     'control_pedidos.ver_listado': 'Permite acceder al módulo de control de pedidos (vista vendedora).',
     'control_pedidos.crear': 'Permite crear y enviar pedidos BMA.',
     'control_pedidos.editar': 'Permite editar pedidos en borrador o rechazados.',
-    'control_pedidos.eliminar': 'Permite eliminar pedidos en borrador.',
+    'control_pedidos.eliminar': 'Permite eliminar borradores de pedidos en fase pre-venta (solo el dueño).',
+    'control_pedidos.eliminar_registro': 'Permite eliminar el registro de un pedido en cualquier fase, con motivo y auditoría.',
+    'control_pedidos.eliminados': 'Permite ver la papelera de registros eliminados por admin y restaurarlos.',
     'control_pedidos.exportar': 'Permite exportar el listado de pedidos en CSV.',
     'control_pedidos.ver_detalle': 'Permite ver el detalle completo de un pedido.',
     'control_pedidos.auditar': 'Permite acceder al panel de auditoría de pedidos (auxiliar).',
@@ -286,6 +288,15 @@ export const SUBMODULOS_UI_POR_MODULO = {
                 'control_pedidos.direccion.usar_manual',
                 'control_pedidos.direccion.cambiar_despues_remision',
                 'control_pedidos.direccion.cambiar_despues_guia',
+            ],
+        },
+        {
+            id: 'administracion',
+            label: 'Administración de registros',
+            descripcion: 'Eliminación administrativa con auditoría y papelera',
+            permisos: [
+                'control_pedidos.eliminar_registro',
+                'control_pedidos.eliminados',
             ],
         },
         {

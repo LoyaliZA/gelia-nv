@@ -71,6 +71,21 @@ Route::middleware(['throttle:30,1', \App\Http\Middleware\HardenSolicitudDireccio
     Route::post('/datos-fiscales', [DatosFiscalesPublicosController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('datos_fiscales.publicas.store');
+
+    Route::get('/cedis-evidencia/{codigo}', [\App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaPublicaController::class, 'show'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->name('cedis_evidencia.publicas.show');
+    Route::get('/cedis-evidencia/{codigo}/estado', [\App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaPublicaController::class, 'estado'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->middleware('throttle:60,1')
+        ->name('cedis_evidencia.publicas.estado');
+    Route::post('/cedis-evidencia/{codigo}/fotos', [\App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaPublicaController::class, 'subir'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->middleware('throttle:30,1')
+        ->name('cedis_evidencia.publicas.fotos');
+    Route::get('/cedis-evidencia/{codigo}/fotos/{foto}', [\App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaPublicaController::class, 'foto'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->name('cedis_evidencia.publicas.foto');
 });
 
 Route::post('/webhooks/tiendanube', \App\Http\Controllers\TiendanubeWebhookController::class)
@@ -565,6 +580,14 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{pedidoBma}', [PedidoBmaController::class, 'destroy'])->name('destroy');
     });
 
+    Route::middleware(['can:control_pedidos.eliminar_registro'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::delete('/{pedidoBma}/eliminar-registro', [PedidoBmaController::class, 'eliminarRegistro'])->name('eliminar_registro');
+    });
+
+    Route::middleware(['can:control_pedidos.eliminados'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+        Route::put('/{pedidoBma}/restaurar-registro', [PedidoBmaController::class, 'restaurarRegistro'])->name('restaurar_registro');
+    });
+
     Route::middleware(['can:control_pedidos.cancelar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::get('/{pedidoBma}/cancelar/preview', [PedidoBmaController::class, 'previewCancelacion'])->name('cancelar.preview');
         Route::post('/{pedidoBma}/cancelar', [PedidoBmaController::class, 'cancelar'])->name('cancelar');
@@ -640,6 +663,11 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/responder-pesaje', [PedidoBmaCedisController::class, 'responderPesaje'])->name('responder_pesaje');
         Route::post('/{pedidoBma}/reportar-sin-existencia', [PedidoBmaCedisController::class, 'reportarSinExistencia'])->name('reportar_sin_existencia');
         Route::post('/{pedidoBma}/confirmar-stock-sin-existencia', [PedidoBmaCedisController::class, 'confirmarStockSinExistencia'])->name('confirmar_stock_sin_existencia');
+        Route::post('/{pedidoBma}/sesion-evidencia', [PedidoBmaCedisController::class, 'crearSesionEvidencia'])->name('sesion_evidencia.store');
+        Route::get('/{pedidoBma}/sesion-evidencia', [PedidoBmaCedisController::class, 'mostrarSesionEvidencia'])->name('sesion_evidencia.show');
+        Route::put('/{pedidoBma}/sesion-evidencia/snapshot', [PedidoBmaCedisController::class, 'snapshotSesionEvidencia'])->name('sesion_evidencia.snapshot');
+        Route::post('/{pedidoBma}/sesion-evidencia/cancelar', [PedidoBmaCedisController::class, 'cancelarSesionEvidencia'])->name('sesion_evidencia.cancelar');
+        Route::get('/{pedidoBma}/sesion-evidencia/fotos/{foto}', [PedidoBmaCedisController::class, 'verFotoSesionEvidencia'])->name('sesion_evidencia.foto');
     });
 
     Route::middleware(['can:control_pedidos.delegado'])->prefix('control-pedidos/delegado')->name('control_pedidos.delegado.')->group(function () {

@@ -122,6 +122,11 @@ export const TABS_PEDIDOS = [
     ...TABS_PEDIDOS_SUBFILTROS,
 ];
 
+/** Papelera admin: fila aparte de los filtros operativos. */
+export const TABS_PEDIDOS_ADMIN = [
+    { id: 'ELIMINADAS', label: 'Eliminados' },
+];
+
 /** Estado del ciclo: filtros principales de la bandeja auxiliar. */
 export const TABS_AUDITORIA_PRINCIPALES = [
     { id: 'PENDIENTES', label: 'Pendientes' },

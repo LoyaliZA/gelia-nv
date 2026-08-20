@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoTipoOperacionEnvio;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,7 @@ class CrearPedidoBmaService
         private GenerarFolioPedidoBmaService $folioService,
         private RegistrarHistorialPedidoService $historialService,
         private SincronizarAplicacionesPedidoSafService $safPedido,
+        private CrearSnapshotDireccionPedido $crearSnapshot,
     ) {}
 
     public function ejecutar(array $datos, int $vendedorId): PedidoBma
@@ -59,6 +61,16 @@ class CrearPedidoBmaService
 
             if (array_key_exists('saf_aplicaciones', $datos)) {
                 $this->safPedido->reservarParaPedido($pedido, $datos['saf_aplicaciones'] ?? [], $vendedorId);
+            }
+
+            if (filter_var($datos['direccion_manual_excepcion'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                && is_array($datos['direccion'] ?? null)) {
+                $this->crearSnapshot->ejecutarManual(
+                    $pedido,
+                    $datos['direccion'],
+                    $vendedorId,
+                    $datos['motivo_direccion_manual'] ?? null
+                );
             }
 
             $this->historialService->registrarCreacion($pedido->id, $vendedorId, $estatusBorrador->id);

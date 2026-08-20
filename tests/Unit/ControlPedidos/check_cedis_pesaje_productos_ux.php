@@ -11,6 +11,7 @@ $root = dirname(__DIR__, 3);
 $modal = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/ModalResponderPesaje.jsx');
 $escaner = file_get_contents($root.'/resources/js/Components/Escanner/ModalEscanearCodigo.jsx');
 $input = file_get_contents($root.'/resources/js/Components/Escanner/InputConEscanner.jsx');
+$bip = file_get_contents($root.'/resources/js/Components/Escanner/bipScanner.js');
 $request = file_get_contents($root.'/app/Http/Requests/ControlPedidos/ResponderPesajePedidoBmaRequest.php');
 $service = file_get_contents($root.'/app/Services/ControlPedidos/ResponderPesajePedidoBmaService.php');
 $docModel = file_get_contents($root.'/app/Models/ControlPedidos/PedidoBmaDocumento.php');
@@ -29,7 +30,8 @@ $checks = [
     ['escaneoContinuo en pesaje', str_contains($modal, 'escaneoContinuo')],
     ['ModalEscanearCodigo continuo', str_contains($escaner, 'continuo = false') && str_contains($escaner, 'continuoRef')],
     ['debounce continuo', str_contains($escaner, 'DEBOUNCE_ENTRE_ESCANEOS_MS') || str_contains($escaner, 'DEBOUNCE_CONTINUO_MS')],
-    ['bip confirmación escaneo', str_contains($escaner, 'bip_scanner.mp3') && str_contains($escaner, 'reproducirBipConfirmacion')],
+    ['bip confirmación escaneo', (str_contains($escaner, 'bip_scanner.mp3') || str_contains($bip, 'bip_scanner.mp3'))
+        && (str_contains($escaner, 'reproducirBipConfirmacion') || str_contains($bip, 'reproducirBipConfirmacion'))],
     ['InputConEscanner no cierra en continuo', str_contains($input, 'escaneoContinuo') && str_contains($input, 'if (!escaneoContinuo)')],
     ['request evidencias_envios', str_contains($request, 'evidencias_envios')],
     ['const RELACION_ENVIO_CAJA', str_contains($docModel, "RELACION_ENVIO_CAJA = 'envio_caja'")],
@@ -65,6 +67,13 @@ $checks = [
         file_get_contents($root.'/app/Models/Almacen.php'),
         'permite_busqueda_productos'
     )],
+    ['pistola PC lista al teclear y Enter agrega', str_contains($modal, 'Pistola lista')
+        && str_contains($modal, 'skuPistolaRef')
+        && str_contains($modal, "e.key === 'Enter'")
+        && str_contains($modal, 'setTimeout(() => buscarProductos(v), 350)')
+        && str_contains($modal, 'auto-agregar solo con Enter')],
+    ['botón evidencias celular', str_contains($modal, 'Tomar evidencias con celular')
+        && str_contains($modal, 'ModalSesionEvidenciaCedis')],
 ];
 
 foreach ($checks as [$label, $ok]) {

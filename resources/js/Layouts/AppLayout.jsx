@@ -57,6 +57,7 @@ const MOBILE_SIDEBAR_LAYOUT_TOPBAR = 'mobile_topbar';
 
 export default function AppLayout({ children, fullScreen = false }) {
     const { props: { auth, tonos_alertas = [] }, url } = usePage();
+    const pageKey = String(url || '').split('?')[0];
 
     const { needsPrompt, activarNotificaciones } = useWebPush(auth);
     const [promptDismissed, setPromptDismissed] = useState(false);
@@ -83,6 +84,15 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     const addToast = (notif) => {
         const id = Date.now();
+        const mensaje = String(notif?.mensaje || '');
+        const now = Date.now();
+        if (typeof window !== 'undefined' && mensaje) {
+            if (window.__geliaLastToastMsg === mensaje && now - (window.__geliaLastToastAt || 0) < 1500) {
+                return;
+            }
+            window.__geliaLastToastMsg = mensaje;
+            window.__geliaLastToastAt = now;
+        }
         setToasts(prev => [...prev, { id, ...notif }]);
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
@@ -100,9 +110,17 @@ export default function AppLayout({ children, fullScreen = false }) {
     }, []);
 
     const reloadAuthSilencioso = useCallback(() => {
-        if (typeof document !== 'undefined' && document.querySelector('[data-gelia-unsaved-form="1"]')) {
+        if (typeof document !== 'undefined' && (
+            document.querySelector('[data-gelia-unsaved-form="1"]')
+            || document.querySelector('[data-gelia-modal="1"]')
+        )) {
             return;
         }
+        const now = Date.now();
+        if (typeof window !== 'undefined' && now - (window.__geliaLastAuthReloadAt || 0) < 1500) {
+            return;
+        }
+        if (typeof window !== 'undefined') window.__geliaLastAuthReloadAt = now;
         router.reload({
             only: ['auth'],
             preserveScroll: true,
@@ -237,6 +255,15 @@ export default function AppLayout({ children, fullScreen = false }) {
             echoChannel
                 .notification((notification) => {
                     const payload = normalizeNotificationPayload(notification);
+                    const notifKey = String(payload.id || `${payload.tipo || ''}:${payload.pedido_bma_id || ''}:${payload.mensaje || ''}`);
+                    const now = Date.now();
+                    if (typeof window !== 'undefined' && window.__geliaNotifKey === notifKey && now - (window.__geliaNotifAt || 0) < 1500) {
+                        return;
+                    }
+                    if (typeof window !== 'undefined') {
+                        window.__geliaNotifKey = notifKey;
+                        window.__geliaNotifAt = now;
+                    }
                     const prefs = resolveAlertasPrefs(auth);
                     const tipo = getTipoAlerta(payload);
 
@@ -686,7 +713,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                     )}
                     <main className={mainClassName}>
                         <div
-                            key={url}
+                            key={pageKey}
                             className={`gelia-app-content ${GELIA_PREVENT_OVERFLOW_X} ${isPageFullscreen ? 'h-full' : ''}`}
                         >
                             <div

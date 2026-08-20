@@ -18,6 +18,7 @@ class ResponderPesajePedidoBmaService
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private SesionEvidenciaCedisService $sesionEvidencia,
     ) {}
 
     /**
@@ -51,6 +52,15 @@ class ResponderPesajePedidoBmaService
         ));
 
         $revisiones = $this->normalizarRevisiones($revisionFisica['revisiones'] ?? []);
+        foreach ($revisiones as $rev) {
+            if (PedidoBmaRevisionProducto::requiereEvidencia($rev['estado_fisico'])
+                && $rev['evidencias'] === []
+                && ! $this->sesionEvidencia->tieneFotoProducto($pedido, $rev['client_uuid'])) {
+                throw new \InvalidArgumentException(
+                    "El producto «{$rev['descripcion_producto']}» en estado malo/dañado requiere evidencia."
+                );
+            }
+        }
         $evidenciasEnvios = $this->normalizarEvidenciasEnvios(
             $revisionFisica['evidencias_envios'] ?? [],
             count($lineas)
@@ -62,9 +72,12 @@ class ResponderPesajePedidoBmaService
             (string) ($revisionFisica['estado_fisico_general'] ?? PedidoBmaRevisionProducto::ESTADO_BUENO)
         );
 
-        // Foto del lote por cada caja (siempre).
-        foreach ($lineas as $i => $_linea) {
-            if (($evidenciasEnvios[$i] ?? []) === []) {
+        // Foto del lote por cada caja (siempre): local o sesión celular.
+        foreach ($lineas as $i => $linea) {
+            $uuid = (string) ($linea['client_uuid'] ?? '');
+            $hayLocal = ($evidenciasEnvios[$i] ?? []) !== [];
+            $haySesion = $uuid !== '' && $this->sesionEvidencia->tieneFotoCaja($pedido, $uuid, $i);
+            if (! $hayLocal && ! $haySesion) {
                 throw new \InvalidArgumentException('Adjunte al menos una foto del contenido del envío '.($i + 1).'.');
             }
         }
@@ -93,6 +106,8 @@ class ResponderPesajePedidoBmaService
             $orden = 0;
             /** @var list<PedidoBmaCaja> $cajasCreadas */
             $cajasCreadas = [];
+            $productoUuidARevisionId = [];
+            $cajaUuidACajaId = [];
 
             foreach ($lineas as $linea) {
                 $tipo = $tipos->get($linea['catalogo_tipo_caja_id']);
@@ -100,7 +115,7 @@ class ResponderPesajePedidoBmaService
                 $pesoVol = $linea['peso_volumetrico_kg'];
                 $pesoCobrado = PedidoBma::calcularPesoCobradoGuia($pesoReal, $pesoVol);
 
-                $cajasCreadas[] = PedidoBmaCaja::create([
+                $cajasCreadas[] = $cajaNueva = PedidoBmaCaja::create([
                     'pedido_bma_id' => $pedido->id,
                     'catalogo_tipo_caja_id' => $tipo->id,
                     'cantidad' => 1,
@@ -113,6 +128,10 @@ class ResponderPesajePedidoBmaService
                     'peso_cobrado_kg' => $pesoCobrado,
                     'catalogo_tipo_guia_id' => null,
                 ]);
+                $cajaUuidACajaId['idx:'.$orden] = $cajaNueva->id;
+                if (($linea['client_uuid'] ?? '') !== '') {
+                    $cajaUuidACajaId[$linea['client_uuid']] = $cajaNueva->id;
+                }
 
                 $pesoRealTotal += $pesoReal;
                 $pesoVolumetricoTotal += $pesoVol;
@@ -205,6 +224,9 @@ class ResponderPesajePedidoBmaService
                     'unica_pieza' => $rev['unica_pieza'],
                     'mejor_ejemplar' => $rev['mejor_ejemplar'],
                 ]);
+                if ($rev['client_uuid'] !== '') {
+                    $productoUuidARevisionId[$rev['client_uuid']] = $row->id;
+                }
 
                 foreach ($rev['evidencias'] as $file) {
                     $this->guardarEvidencia(
@@ -218,6 +240,13 @@ class ResponderPesajePedidoBmaService
                     );
                 }
             }
+
+            $ordenDoc = $this->sesionEvidencia->promover(
+                $pedido,
+                $productoUuidARevisionId,
+                $cajaUuidACajaId,
+                $ordenDoc
+            );
 
             $detalleHist = sprintf(
                 'Pesaje CEDIS respondido: %.4f kg cobrados, %d envío(s). Estado físico: %s.%s',
@@ -343,6 +372,7 @@ class ResponderPesajePedidoBmaService
                 'alto' => round($alto, 2),
                 'peso_real_kg' => round($pesoReal, 4),
                 'peso_volumetrico_kg' => round($pesoVol, 4),
+                'client_uuid' => trim((string) ($linea['client_uuid'] ?? '')),
             ];
         }
 
@@ -434,9 +464,13 @@ class ResponderPesajePedidoBmaService
                 );
             }
             if (PedidoBmaRevisionProducto::requiereEvidencia($estado) && $evidencias === []) {
-                throw new \InvalidArgumentException(
-                    "El producto «{$desc}» en estado malo/dañado requiere evidencia."
-                );
+                $uuid = trim((string) ($rev['client_uuid'] ?? ''));
+                // ponytail: la foto de sesión se valida con el pedido en ejecutar(); aquí solo archivos locales.
+                if ($uuid === '') {
+                    throw new \InvalidArgumentException(
+                        "El producto «{$desc}» en estado malo/dañado requiere evidencia."
+                    );
+                }
             }
 
             $sku = trim((string) ($rev['sku'] ?? ''));
@@ -453,6 +487,7 @@ class ResponderPesajePedidoBmaService
                 'unica_pieza' => filter_var($rev['unica_pieza'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'mejor_ejemplar' => filter_var($rev['mejor_ejemplar'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'evidencias' => $evidencias,
+                'client_uuid' => trim((string) ($rev['client_uuid'] ?? '')),
             ];
         }
 

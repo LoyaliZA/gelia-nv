@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ControlPedidos\CancelarPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\EliminarRegistroPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\StorePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\UpdatePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
@@ -25,10 +26,12 @@ use App\Services\ControlPedidos\Direcciones\ActualizarCamposDireccionPedidoServi
 use App\Services\ControlPedidos\Direcciones\CambiarDireccionPedido;
 use App\Services\ControlPedidos\CancelarPedidoBmaService;
 use App\Services\ControlPedidos\EliminarPedidoBmaService;
+use App\Services\ControlPedidos\EliminarRegistroPedidoBmaService;
 use App\Services\ControlPedidos\EnviarPedidoBmaService;
 use App\Services\ControlPedidos\GestionarPdfPedidoBmaService;
 use App\Services\ControlPedidos\LiberarResguardoPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosBmaService;
+use App\Services\ControlPedidos\RestaurarRegistroPedidoBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\SolicitarPesajePedidoBmaService;
 use App\Services\ControlPedidos\SolicitarRepesajePedidoBmaService;
@@ -596,6 +599,41 @@ class PedidoBmaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Pedido eliminado.');
+    }
+
+    public function eliminarRegistro(
+        EliminarRegistroPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        EliminarRegistroPedidoBmaService $eliminarRegistroService
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.eliminar_registro');
+
+        try {
+            $eliminarRegistroService->ejecutar(
+                $pedidoBma,
+                Auth::id(),
+                $request->validated('motivo')
+            );
+        } catch (\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Registro eliminado. Quedó en la papelera administrativa.');
+    }
+
+    public function restaurarRegistro(
+        int $pedidoBma,
+        RestaurarRegistroPedidoBmaService $restaurarService
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.eliminados');
+
+        try {
+            $restaurarService->ejecutar($pedidoBma, Auth::id());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()->with('error', collect($e->errors())->flatten()->first());
+        }
+
+        return redirect()->back()->with('success', 'Registro restaurado.');
     }
 
     public function cancelar(

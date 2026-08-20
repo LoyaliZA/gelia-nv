@@ -25,6 +25,11 @@ class FormPublicUrl
         return self::base().'/datos-fiscales/'.ltrim($codigo, '/');
     }
 
+    public static function cedisEvidenciaShow(string $codigo): string
+    {
+        return self::base().'/cedis-evidencia/'.ltrim($codigo, '/');
+    }
+
     public static function host(): ?string
     {
         $host = parse_url(self::base(), PHP_URL_HOST);

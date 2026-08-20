@@ -12,6 +12,8 @@ import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
 import ModalCancelarPedido from './Partials/ModalCancelarPedido';
 import ModalAlertaPedido from './Partials/ModalAlertaPedido';
 import ModalConfirmarAccion from './Partials/ModalConfirmarAccion';
+import ModalAuditoriaEliminacionPedido from './Partials/ModalAuditoriaEliminacionPedido';
+import ModalEliminarRegistroPedido from './Partials/ModalEliminarRegistroPedido';
 import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
 import ModalAnexarPagoEnvio from './Partials/ModalAnexarPagoEnvio';
 import ModalCargarGuiaCliente from './Partials/ModalCargarGuiaCliente';
@@ -45,7 +47,10 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
+    const [pedidoAEliminarRegistro, setPedidoAEliminarRegistro] = useState(null);
     const [pedidoACancelar, setPedidoACancelar] = useState(null);
+    const [pedidoRestaurar, setPedidoRestaurar] = useState(null);
+    const [pedidoAuditoria, setPedidoAuditoria] = useState(null);
     const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
     const [modalAnexo, setModalAnexo] = useState({ abierto: false, pedido: null });
     const [modalCompletarEnvio, setModalCompletarEnvio] = useState({ abierto: false, pedido: null });
@@ -53,9 +58,13 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
     const refrescoPendiente = useRef(false);
+    const flashMostradoRef = useRef(null);
 
     useEffect(() => {
         // Con el borrador abierto, el feedback va en el propio formulario (evitar alerta Index + click-through).
+        const token = flash?.success || flash?.error || null;
+        if (!token || flashMostradoRef.current === token) return;
+        flashMostradoRef.current = token;
         if (modalForm.abierto) return;
         if (flash?.success) {
             setAlerta({ abierto: true, tipo: 'success', titulo: 'Operación exitosa', mensaje: flash.success });
@@ -95,7 +104,10 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         || modalLinkDireccion
         || confirmarBorradorNuevo
         || Boolean(pedidoAEliminar)
-        || Boolean(pedidoACancelar);
+        || Boolean(pedidoAEliminarRegistro)
+        || Boolean(pedidoACancelar)
+        || Boolean(pedidoRestaurar)
+        || Boolean(pedidoAuditoria);
 
     useEffect(() => {
         const params = {
@@ -186,6 +198,27 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         router.delete(route('control_pedidos.destroy', id), { preserveScroll: true });
     };
 
+    const confirmarEliminarRegistro = (motivo, onFinish) => {
+        const pedido = pedidoAEliminarRegistro;
+        if (!pedido) {
+            onFinish?.();
+            return;
+        }
+        router.delete(route('control_pedidos.eliminar_registro', pedido.id), {
+            data: { motivo },
+            preserveScroll: true,
+            onFinish: () => onFinish?.(),
+            onSuccess: () => setPedidoAEliminarRegistro(null),
+        });
+    };
+
+    const confirmarRestaurar = () => {
+        if (!pedidoRestaurar) return;
+        const id = pedidoRestaurar.id;
+        setPedidoRestaurar(null);
+        router.put(route('control_pedidos.restaurar_registro', id), {}, { preserveScroll: true });
+    };
+
     const exportarCsv = () => {
         window.location.href = route('control_pedidos.exportar', { tab: tabActiva, q: busqueda || '' });
     };
@@ -237,6 +270,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         pedidos={pedidosVista}
                         onIrAPagina={onIrAPagina}
                         buscando={cargando}
+                        can={can}
                     />
                 </div>
 
@@ -249,10 +283,14 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     <TablaPedidos
                         pedidos={pedidosVista}
                         can={can}
+                        tabActiva={tabActiva}
                         onVer={abrirVer}
                         onBitacora={abrirBitacora}
                         onEditar={abrirEditar}
                         onEliminar={setPedidoAEliminar}
+                        onEliminarRegistro={setPedidoAEliminarRegistro}
+                        onRestaurar={setPedidoRestaurar}
+                        onVerAuditoria={setPedidoAuditoria}
                         onCancelar={setPedidoACancelar}
                         onAnexarEnvio={(pedido) => setModalAnexo({ abierto: true, pedido })}
                         onCompletarEnvio={(pedido) => setModalCompletarEnvio({ abierto: true, pedido })}
@@ -318,6 +356,26 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 abierto={Boolean(pedidoACancelar)}
                 pedido={pedidoACancelar}
                 onClose={() => setPedidoACancelar(null)}
+            />
+            <ModalConfirmarAccion
+                abierto={Boolean(pedidoRestaurar)}
+                titulo="Restaurar registro"
+                mensaje={`¿Restaurar el pedido ${pedidoRestaurar?.folio_remision || pedidoRestaurar?.folio || ''}? Volverá a aparecer en el listado operativo.`}
+                etiquetaConfirmar="Restaurar"
+                variante="primary"
+                onClose={() => setPedidoRestaurar(null)}
+                onConfirm={confirmarRestaurar}
+            />
+            <ModalAuditoriaEliminacionPedido
+                abierto={Boolean(pedidoAuditoria)}
+                pedido={pedidoAuditoria}
+                onClose={() => setPedidoAuditoria(null)}
+            />
+            <ModalEliminarRegistroPedido
+                abierto={Boolean(pedidoAEliminarRegistro)}
+                pedido={pedidoAEliminarRegistro}
+                onClose={() => setPedidoAEliminarRegistro(null)}
+                onConfirm={confirmarEliminarRegistro}
             />
             <ModalConfirmarAccion
                 abierto={Boolean(pedidoAEliminar)}

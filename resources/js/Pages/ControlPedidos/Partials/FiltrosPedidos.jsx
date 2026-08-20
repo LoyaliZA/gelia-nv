@@ -8,6 +8,7 @@ import {
     TABS_PEDIDOS,
     TABS_PEDIDOS_PRINCIPALES,
     TABS_PEDIDOS_SUBFILTROS,
+    TABS_PEDIDOS_ADMIN,
 } from './pedidosBmaStyles';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 
@@ -85,6 +86,7 @@ export default function FiltrosPedidos({
     pedidos = null,
     onIrAPagina,
     buscando = false,
+    can = () => false,
 }) {
     const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
 
@@ -101,13 +103,16 @@ export default function FiltrosPedidos({
             PENDIENTE_GUIA_CLIENTE: metricas.pendiente_guia_cliente,
             ENVIADOS: metricas.enviados,
             RECHAZADAS: metricas.rechazadas,
+            ELIMINADAS: metricas.eliminadas,
         };
         return map[tabId];
     };
 
-    const tabActual = TABS_PEDIDOS.find((t) => t.id === tabActiva) || TABS_PEDIDOS[0];
+    const mostrarEliminadas = can('control_pedidos.eliminados');
+    const tabActual = [...TABS_PEDIDOS, ...(mostrarEliminadas ? TABS_PEDIDOS_ADMIN : [])].find((t) => t.id === tabActiva) || TABS_PEDIDOS[0];
     const conteoActual = conteoTab(tabActual.id);
     const esSubfiltro = TABS_PEDIDOS_SUBFILTROS.some((t) => t.id === tabActiva);
+    const esPapelera = tabActiva === 'ELIMINADAS';
 
     const elegirTab = (id) => {
         onTabChange(id);
@@ -197,6 +202,19 @@ export default function FiltrosPedidos({
                                 conteoTab={conteoTab}
                             />
                         </div>
+                        {mostrarEliminadas && (
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-2 ml-0.5">
+                                    Administración
+                                </p>
+                                <GridTabsMovil
+                                    tabs={TABS_PEDIDOS_ADMIN}
+                                    tabActiva={tabActiva}
+                                    onElegir={elegirTab}
+                                    conteoTab={conteoTab}
+                                />
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -226,6 +244,20 @@ export default function FiltrosPedidos({
                         ariaLabel="Subfiltros de envío y colas"
                     />
                 </div>
+                {mostrarEliminadas && (
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1.5 ml-0.5">
+                            Administración
+                        </p>
+                        <SegmentoTabs
+                            tabs={TABS_PEDIDOS_ADMIN}
+                            tabActiva={tabActiva}
+                            onTabChange={onTabChange}
+                            conteoTab={conteoTab}
+                            ariaLabel="Papelera administrativa"
+                        />
+                    </div>
+                )}
             </div>
 
             {pedidos && onIrAPagina && (

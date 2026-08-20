@@ -30,6 +30,7 @@ $checks = [
     ['mapa nSec', str_contains($form, 'const nSec = requiereLogistica') && str_contains($form, 'saf: 8')],
     ['pesaje listo cuenta como respondido', str_contains($form, "estatus_envio === 'pesaje_listo'")],
     ['bind pedido creado sin remount', str_contains($form, 'onPedidoCreado')],
+    ['quién respondió el pesaje', str_contains($form, 'Respondió:')],
 ];
 
 $titulos = [

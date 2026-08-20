@@ -488,7 +488,17 @@ export default function ModalFormPedido({
             setDocsEliminar([]);
             setPreviews([]);
             setDireccionesCliente([]);
-            setMostrarExcepcion(false);
+            const snap = pedido.direccion_vigente || pedido.direccionVigente;
+            const esManual = snap?.origen === 'manual'
+                || (!pedido.cliente_direccion_id && Boolean(snap?.calle || snap?.referencias));
+            if (esManual && snap) {
+                setMostrarExcepcion(true);
+                setCamposDireccion(camposDesdeDireccion(snap));
+                setData('direccion_manual_excepcion', true);
+            } else {
+                setMostrarExcepcion(false);
+                setCamposDireccion({ ...CAMPOS_DIRECCION_VACIOS });
+            }
             setEstadoAuto({ local: null, bd: null });
             setMotivoRepesaje('');
             setPdfLocalOk(false);
@@ -540,6 +550,9 @@ export default function ModalFormPedido({
                 setDireccionesCliente([]);
             }
             setMostrarExcepcion(Boolean(borrador?.direccion_manual_excepcion));
+            if (borrador?.direccion) {
+                setCamposDireccion({ ...CAMPOS_DIRECCION_VACIOS, ...borrador.direccion });
+            }
             setMotivoRepesaje('');
             setPdfLocalOk(false);
             setPdfDocLocal(null);
@@ -647,12 +660,27 @@ export default function ModalFormPedido({
         setData('origen_id', origenId);
     }, [abierto, pedido?.id, pedido?.origen_id, pedido?.origen?.id, data.origen_id, setData]);
 
+    const conDireccionManual = (d) => {
+        const manual = Boolean(d.direccion_manual_excepcion)
+            || mostrarExcepcion
+            || (!d.cliente_direccion_id && direccionesCliente.length === 0);
+        if (!manual) return d;
+        return {
+            ...d,
+            direccion_manual_excepcion: true,
+            direccion: camposDireccion,
+            domicilio_entrega: resumirCamposDireccion(camposDireccion),
+            codigo_postal: camposDireccion.codigo_postal || d.codigo_postal || '',
+            cliente_direccion_id: '',
+        };
+    };
+
     /** Guarda el borrador en BD (sin archivos) y devuelve su id. */
     const persistirBorradorBd = async () => {
         autoguardandoBd.current = true;
         setEstadoAuto((s) => ({ ...s, bd: 'Servidor · guardando…' }));
         try {
-            const base = serializarBorrador(data);
+            const base = serializarBorrador(conDireccionManual(data));
             const payload = {};
             Object.entries(base).forEach(([k, v]) => {
                 if (typeof v === 'boolean') {
@@ -1260,7 +1288,7 @@ export default function ModalFormPedido({
             },
         };
         if (idDestino) {
-            transform((d) => ({
+            transform((d) => conDireccionManual({
                 ...d,
                 _method: 'put',
                 enviar: enviarPedido,
@@ -1278,7 +1306,7 @@ export default function ModalFormPedido({
             }));
             post(route('control_pedidos.update', idDestino), config);
         } else {
-            transform((d) => ({
+            transform((d) => conDireccionManual({
                 ...d,
                 enviar: enviarPedido,
                 saldo_a_favor: d.aplica_saldo_favor
@@ -1530,7 +1558,7 @@ export default function ModalFormPedido({
     };
 
     const modal = abierto ? createPortal(
-        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={cerrarOverlayBorrador}>
+        <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} data-gelia-modal="1" onClick={cerrarOverlayBorrador}>
             <div
                 className={`${THEME_MODAL_SHELL} max-w-4xl w-full flex flex-col text-left ${data.es_resguardo ? 'ring-2 ring-blue-500/50' : ''}`}
                 style={{ maxHeight: 'calc(100dvh - 2rem)', ...(data.es_resguardo ? { backgroundColor: 'color-mix(in srgb, #3B82F6 6%, var(--color-surface))' } : {}) }}
@@ -2037,6 +2065,14 @@ export default function ModalFormPedido({
                     {tienePesajeRespondido && (
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.resp}. Respuesta de cajas y pesos</p>
+                        {(pedido?.pesaje_respondido_por?.name || pedido?.pesajeRespondidoPor?.name) && (
+                            <p className="text-xs font-bold theme-text-main m-0 mb-3">
+                                Respondió: {pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name}
+                                {pedido.pesaje_respondido_at
+                                    ? ` · ${formatearFechaNegocio(pedido.pesaje_respondido_at)}`
+                                    : ''}
+                            </p>
+                        )}
                                 <SeccionRevisionFisicaPedido
                                     pedido={pedido}
                                     onVerDoc={setVistaPrevia}
@@ -2239,24 +2275,19 @@ export default function ModalFormPedido({
                                         )}
                                     </div>
                                     {(mostrarExcepcion || (puedeManual && direccionesCliente.length === 0)) && (
-                                        <div className="space-y-2">
-                                            <textarea
-                                                placeholder="Domicilio completo (excepción manual)…"
-                                                value={data.domicilio_entrega}
-                                                onChange={(e) => {
-                                                    setData('domicilio_entrega', e.target.value);
+                                        <div className="space-y-3">
+                                            <CamposDireccionPedido
+                                                valores={camposDireccion}
+                                                onChange={(nuevos) => {
+                                                    setCamposDireccion(nuevos);
                                                     setData('direccion_manual_excepcion', true);
                                                     setData('cliente_direccion_id', '');
+                                                    setData('domicilio_entrega', resumirCamposDireccion(nuevos));
+                                                    setData('codigo_postal', nuevos.codigo_postal || '');
                                                 }}
-                                                className={`${THEME_TEXTAREA} w-full py-3 min-h-[80px]`}
-                                            />
-                                            <input
-                                                type="text"
-                                                placeholder="C.P."
-                                                value={data.codigo_postal}
-                                                onChange={(e) => setData('codigo_postal', e.target.value)}
-                                                className={`${THEME_INPUT} w-full py-3`}
-                                                data-campo="codigo_postal"
+                                                disabled={logisticaBloqueada}
+                                                sucio={false}
+                                                puedeEditar={!logisticaBloqueada}
                                             />
                                             <input
                                                 type="text"

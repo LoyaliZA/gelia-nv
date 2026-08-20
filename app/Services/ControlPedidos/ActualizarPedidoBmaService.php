@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\Cliente;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,7 @@ class ActualizarPedidoBmaService
 
     public function __construct(
         private SincronizarAplicacionesPedidoSafService $safPedido,
+        private CrearSnapshotDireccionPedido $crearSnapshot,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, array $datos, int $usuarioId): PedidoBma
@@ -74,7 +76,17 @@ class ActualizarPedidoBmaService
                 $this->safPedido->reservarParaPedido($pedido->fresh(), $datos['saf_aplicaciones'] ?? [], $usuarioId);
             }
 
-            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja', 'cajas.tipoGuia']);
+            if (filter_var($datos['direccion_manual_excepcion'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                && is_array($datos['direccion'] ?? null)) {
+                $this->crearSnapshot->ejecutarManual(
+                    $pedido->fresh(),
+                    $datos['direccion'],
+                    $usuarioId,
+                    $datos['motivo_direccion_manual'] ?? null
+                );
+            }
+
+            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja', 'cajas.tipoGuia', 'direccionVigente']);
         });
     }
 
