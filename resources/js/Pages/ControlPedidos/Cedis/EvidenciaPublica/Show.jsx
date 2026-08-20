@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
-import { compressImageToWebp, validateImageSource } from '../../../utils/compressImage';
-import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../utils/geliaTheme';
+import { compressImageToWebp, validateImageSource } from '../../../../utils/compressImage';
+import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
 
 export default function EvidenciaPublicaShow({
     codigo = '',
