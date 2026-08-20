@@ -50,6 +50,9 @@ final class AccionesHistorialPedidoBma
     public const DECISION_SIN_EXISTENCIA = 'decision_sin_existencia';
     public const STOCK_SIN_EXISTENCIA = 'stock_sin_existencia';
     public const REPORTE_SIN_EXISTENCIA = 'reporte_sin_existencia';
+    public const CIERRE_CONSULTA = 'cierre_consulta';
+    public const REABRIR_CONSULTA = 'reabrir_consulta';
+    public const ACTUALIZAR_CONSULTA = 'actualizar_consulta';
     public const SESION_EVIDENCIA = 'sesion_evidencia';
     public const RETRASO_EMPAQUE = 'retraso_empaque';
     public const RETRASO_RECOLECCION = 'retraso_recoleccion';
@@ -61,6 +64,9 @@ final class AccionesHistorialPedidoBma
         self::SOLICITUD_PESAJE => 'Solicitud de pesaje',
         self::RESPUESTA_PESAJE => 'Respuesta de CEDIS (pesaje)',
         self::SOLICITUD_REPESAJE => 'Solicitud de re-pesaje',
+        self::CIERRE_CONSULTA => 'Cierre de consulta CEDIS',
+        self::REABRIR_CONSULTA => 'Reapertura de consulta CEDIS',
+        self::ACTUALIZAR_CONSULTA => 'Actualización de consulta CEDIS',
         self::ENVIO_AUXILIAR => 'Envío a auxiliar',
         self::VOLVER_BORRADOR => 'Conservado como borrador',
         self::VALIDACION_PAGO => 'Validación del pago',

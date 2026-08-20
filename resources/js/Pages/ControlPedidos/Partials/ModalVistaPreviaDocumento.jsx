@@ -257,15 +257,19 @@ export function MiniaturaDocumento({ documento, onVer, className = 'block w-20 h
         <button
             type="button"
             onClick={() => onVer(documento)}
-            className={`${className} outline-none hover:border-[var(--color-primario)] transition-colors`}
+            className={`${className} group outline-none hover:border-[var(--color-primario)] transition-colors`}
             title={documento.nombre_original || 'Ver documento'}
         >
             {pdf ? (
-                <div className="w-full h-full flex items-center justify-center theme-element text-[9px] font-black uppercase theme-text-muted">
-                    PDF
+                <div className="w-full h-full flex flex-col items-center justify-center gap-0.5 theme-element text-[9px] font-black uppercase theme-text-muted group-hover:scale-105 transition-transform duration-200">
+                    <span>PDF</span>
                 </div>
             ) : (
-                <img src={documento.url} alt={documento.nombre_original} className="w-full h-full object-cover" />
+                <img
+                    src={documento.url}
+                    alt={documento.nombre_original}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                />
             )}
         </button>
     );

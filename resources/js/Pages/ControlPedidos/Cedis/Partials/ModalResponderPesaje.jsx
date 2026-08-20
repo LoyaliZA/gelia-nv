@@ -289,6 +289,8 @@ function GaleriaEvidencias({
 export default function ModalResponderPesaje({
     abierto, onClose, pedido, tiposCaja = [], almacenesBusqueda = [],
 }) {
+    const soloRevisiones = Boolean(pedido?.es_consulta_mercancia)
+        || pedido?.origen?.requiere_logistica === false;
     const [envios, setEnvios] = useState([envioVacio()]);
     const [procesando, setProcesando] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'error', titulo: '', mensaje: '' });
@@ -315,6 +317,8 @@ export default function ModalResponderPesaje({
     enviosRef.current = envios;
     const focusNuevoEnvioRef = useRef(false);
     const [confirmacion, setConfirmacion] = useState(null);
+    /** Snapshot al abrir actualización: para resumen antes → después. */
+    const [baselineConsulta, setBaselineConsulta] = useState(null);
     const { esCampo, esMovil } = useDispositivoCampo();
 
     const revocarPreviews = (lista) => {
@@ -327,6 +331,7 @@ export default function ModalResponderPesaje({
         setEnvios([envioVacio()]);
         setProcesando(false);
         setAlerta({ abierto: false, tipo: 'error', titulo: '', mensaje: '' });
+        setBaselineConsulta(null);
         setEvidenciasPorEnvio((prev) => {
             prev.forEach((s) => revocarPreviews(s.previews));
             return [slotEnvioVacio()];
@@ -343,6 +348,21 @@ export default function ModalResponderPesaje({
         setBorradorMsg(null);
         avisoPiezasRef.current = false;
     };
+
+    const claveProducto = (r) => String(r.sku || r.descripcion_producto || '').trim().toLowerCase();
+
+    const snapshotConsulta = (revs, cajas) => ({
+        productos: (revs || []).map((r) => ({
+            clave: claveProducto(r),
+            label: r.descripcion_producto || r.sku || '—',
+            estado: r.estado_fisico || 'bueno',
+        })),
+        envios: (cajas || []).length,
+        pesoCobrado: (cajas || []).reduce((acc, c) => {
+            const cob = calcularPesoCobradoGuia(c.peso_real_kg, c.peso_volumetrico_kg);
+            return acc + (cob === '' || cob == null ? 0 : Number(cob));
+        }, 0),
+    });
 
     useEffect(() => {
         if (!abierto || !pedido?.id) return undefined;
@@ -390,8 +410,75 @@ export default function ModalResponderPesaje({
                     setSkuError('');
                     setListaProductosAbierta(false);
                     setBorradorMsg('Borrador recuperado');
+                    if (pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje) {
+                        const cajasPrevias = pedido.cajas || pedido.cajas_pesaje || [];
+                        const revsPrevias = pedido.revisiones_producto || pedido.revisionesProducto || [];
+                        if (cajasPrevias.length || revsPrevias.length) {
+                            setBaselineConsulta(snapshotConsulta(
+                                revsPrevias,
+                                soloRevisiones ? [] : cajasPrevias.map((c) => ({
+                                    peso_real_kg: c.peso_real_kg,
+                                    peso_volumetrico_kg: c.peso_volumetrico_kg,
+                                })),
+                            ));
+                        }
+                    }
                 } else {
-                    resetFormularioVacio();
+                    // Precarga respuesta previa (actualización de consulta).
+                    const cajasPrevias = pedido.cajas || pedido.cajas_pesaje || [];
+                    const revsPrevias = pedido.revisiones_producto || pedido.revisionesProducto || [];
+                    if (cajasPrevias.length || revsPrevias.length) {
+                        if (!soloRevisiones && cajasPrevias.length) {
+                            setEnvios(cajasPrevias.map((c) => ({
+                                ...envioVacio(),
+                                catalogo_tipo_caja_id: String(c.catalogo_tipo_caja_id || c.tipo_caja?.id || ''),
+                                largo: c.largo ?? '',
+                                ancho: c.ancho ?? '',
+                                alto: c.alto ?? '',
+                                peso_real_kg: c.peso_real_kg ?? '',
+                                peso_volumetrico_kg: c.peso_volumetrico_kg ?? '',
+                            })));
+                            setEvidenciasPorEnvio(cajasPrevias.map(() => slotEnvioVacio()));
+                        } else {
+                            setEnvios([envioVacio()]);
+                            setEvidenciasPorEnvio([slotEnvioVacio()]);
+                        }
+                        setRevisiones((prev) => {
+                            prev.forEach((r) => revocarPreviews(r.previews));
+                            return revsPrevias.map((r) => ({
+                                ...revisionDesdeProducto({
+                                    id: r.producto_id,
+                                    sku: r.sku,
+                                    descripcion: String(r.descripcion_producto || '').replace(/^[^—]+—\s*/, ''),
+                                }),
+                                producto_id: r.producto_id,
+                                sku: r.sku || '',
+                                descripcion_producto: r.descripcion_producto || '',
+                                estado_fisico: r.estado_fisico || 'bueno',
+                                comentario: r.comentario || '',
+                                unica_pieza: Boolean(r.unica_pieza),
+                                mejor_ejemplar: Boolean(r.mejor_ejemplar),
+                                evidencias: [],
+                                previews: [],
+                                expandido: false,
+                            }));
+                        });
+                        if (pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje) {
+                            setBaselineConsulta(snapshotConsulta(
+                                revsPrevias,
+                                soloRevisiones ? [] : cajasPrevias.map((c) => ({
+                                    peso_real_kg: c.peso_real_kg,
+                                    peso_volumetrico_kg: c.peso_volumetrico_kg,
+                                })),
+                            ));
+                        } else {
+                            setBaselineConsulta(null);
+                        }
+                        setProcesando(false);
+                        setBorradorMsg(pedido.consulta_actualizacion_pendiente ? 'Precarga: respuesta anterior' : null);
+                    } else {
+                        resetFormularioVacio();
+                    }
                 }
             } catch {
                 if (!cancelado) resetFormularioVacio();
@@ -550,7 +637,7 @@ export default function ModalResponderPesaje({
     };
 
     const pdfPedido = (pedido.documentos || []).find((d) => d.tipo === 'pdf_pedido');
-    const anexoPiezas = (pedido.documentos || []).find((d) => d.tipo === 'anexo_piezas');
+    const anexosPiezas = (pedido.documentos || []).filter((d) => d.tipo === 'anexo_piezas');
     const severidadEstado = { bueno: 0, regular: 1, sin_existencia: 2, malo: 3, danado: 4 };
     const estadoGeneralDerivado = revisiones.reduce((acc, r) => {
         const s = r.estado_fisico || 'bueno';
@@ -771,43 +858,48 @@ export default function ModalResponderPesaje({
     };
 
     const confirmar = () => {
-        for (let i = 0; i < envios.length; i++) {
-            const e = envios[i];
-            const tipoId = Number(e.catalogo_tipo_caja_id);
-            const pesoReal = Number(e.peso_real_kg);
-            const pesoVol = Number(e.peso_volumetrico_kg);
-            const largo = Number(e.largo);
-            const ancho = Number(e.ancho);
-            const alto = Number(e.alto);
-            const n = i + 1;
+        if (!soloRevisiones) {
+            for (let i = 0; i < envios.length; i++) {
+                const e = envios[i];
+                const tipoId = Number(e.catalogo_tipo_caja_id);
+                const pesoReal = Number(e.peso_real_kg);
+                const pesoVol = Number(e.peso_volumetrico_kg);
+                const largo = Number(e.largo);
+                const ancho = Number(e.ancho);
+                const alto = Number(e.alto);
+                const n = i + 1;
 
-            if (!tipoId) {
-                setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Seleccione el tipo de caja.' });
-                return;
+                if (!tipoId) {
+                    setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Seleccione el tipo de caja.' });
+                    return;
+                }
+                if (e.largo === '' || Number.isNaN(largo) || largo < 0
+                    || e.ancho === '' || Number.isNaN(ancho) || ancho < 0
+                    || e.alto === '' || Number.isNaN(alto) || alto < 0) {
+                    setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Indique largo, ancho y alto válidos.' });
+                    return;
+                }
+                if (e.peso_real_kg === '' || Number.isNaN(pesoReal) || pesoReal < 0) {
+                    setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Indique el peso real en kg.' });
+                    return;
+                }
+                if (e.peso_volumetrico_kg === '' || Number.isNaN(pesoVol) || pesoVol < 0) {
+                    setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Indique el peso volumétrico.' });
+                    return;
+                }
             }
-            if (e.largo === '' || Number.isNaN(largo) || largo < 0
-                || e.ancho === '' || Number.isNaN(ancho) || ancho < 0
-                || e.alto === '' || Number.isNaN(alto) || alto < 0) {
-                setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Indique largo, ancho y alto válidos.' });
-                return;
-            }
-            if (e.peso_real_kg === '' || Number.isNaN(pesoReal) || pesoReal < 0) {
-                setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Indique el peso real en kg.' });
-                return;
-            }
-            if (e.peso_volumetrico_kg === '' || Number.isNaN(pesoVol) || pesoVol < 0) {
-                setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${n}`, mensaje: 'Indique el peso volumétrico.' });
-                return;
-            }
-        }
 
-        for (let i = 0; i < envios.length; i++) {
-            const hayLocal = evidenciasPorEnvio[i]?.archivos?.length;
-            const hayRemota = evidenciasPorEnvio[i]?.previews?.some((p) => p.remoto);
-            if (!hayLocal && !hayRemota) {
-                setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${i + 1}`, mensaje: 'Adjunte al menos una foto del contenido de esta caja.' });
-                return;
+            for (let i = 0; i < envios.length; i++) {
+                const hayLocal = evidenciasPorEnvio[i]?.archivos?.length;
+                const hayRemota = evidenciasPorEnvio[i]?.previews?.some((p) => p.remoto);
+                if (!hayLocal && !hayRemota) {
+                    setAlerta({ abierto: true, tipo: 'error', titulo: `Envío ${i + 1}`, mensaje: 'Adjunte al menos una foto del contenido de esta caja.' });
+                    return;
+                }
             }
+        } else if (revisiones.length === 0) {
+            setAlerta({ abierto: true, tipo: 'error', titulo: 'Productos', mensaje: 'Revise al menos un producto.' });
+            return;
         }
 
         const piezasPedido = Number(pedido.cantidad_piezas || 0);
@@ -851,14 +943,16 @@ export default function ModalResponderPesaje({
     };
 
     const enviarPesaje = () => {
-        const cajas = envios.map((e) => ({
-            catalogo_tipo_caja_id: Number(e.catalogo_tipo_caja_id),
-            largo: Number(e.largo),
-            ancho: Number(e.ancho),
-            alto: Number(e.alto),
-            peso_real_kg: Number(e.peso_real_kg),
-            peso_volumetrico_kg: Number(e.peso_volumetrico_kg),
-        }));
+        const cajas = soloRevisiones
+            ? []
+            : envios.map((e) => ({
+                catalogo_tipo_caja_id: Number(e.catalogo_tipo_caja_id),
+                largo: Number(e.largo),
+                ancho: Number(e.ancho),
+                alto: Number(e.alto),
+                peso_real_kg: Number(e.peso_real_kg),
+                peso_volumetrico_kg: Number(e.peso_volumetrico_kg),
+            }));
         const form = new FormData();
         cajas.forEach((c, i) => {
             Object.entries(c).forEach(([k, v]) => form.append(`cajas[${i}][${k}]`, String(v)));
@@ -866,9 +960,11 @@ export default function ModalResponderPesaje({
         });
         form.append('estado_fisico_general', estadoGeneralDerivado);
         form.append('comentario_fisico_general', '');
-        evidenciasPorEnvio.forEach((slot, i) => {
-            (slot.archivos || []).forEach((f, j) => form.append(`evidencias_envios[${i}][${j}]`, f));
-        });
+        if (!soloRevisiones) {
+            evidenciasPorEnvio.forEach((slot, i) => {
+                (slot.archivos || []).forEach((f, j) => form.append(`evidencias_envios[${i}][${j}]`, f));
+            });
+        }
         revisiones.forEach((r, i) => {
             form.append(`revisiones[${i}][descripcion_producto]`, r.descripcion_producto);
             if (r.producto_id) form.append(`revisiones[${i}][producto_id]`, String(r.producto_id));
@@ -917,6 +1013,26 @@ export default function ModalResponderPesaje({
         const cobrado = calcularPesoCobradoGuia(e.peso_real_kg, e.peso_volumetrico_kg);
         return acc + (cobrado === '' ? 0 : Number(cobrado));
     }, 0);
+
+    const resumenAntesDespues = (() => {
+        if (!baselineConsulta) return null;
+        const despues = snapshotConsulta(revisiones, soloRevisiones ? [] : envios);
+        const antesKeys = new Set(baselineConsulta.productos.map((p) => p.clave).filter(Boolean));
+        const despuesKeys = new Set(despues.productos.map((p) => p.clave).filter(Boolean));
+        const agregados = despues.productos.filter((p) => p.clave && !antesKeys.has(p.clave));
+        const retirados = baselineConsulta.productos.filter((p) => p.clave && !despuesKeys.has(p.clave));
+        const mismos = despues.productos.filter((p) => p.clave && antesKeys.has(p.clave));
+        return {
+            antes: baselineConsulta,
+            despues,
+            agregados,
+            retirados,
+            mismos,
+            cambioEnvios: !soloRevisiones && baselineConsulta.envios !== despues.envios,
+            cambioPeso: !soloRevisiones
+                && Math.abs((baselineConsulta.pesoCobrado || 0) - (despues.pesoCobrado || 0)) > 0.0001,
+        };
+    })();
 
     const productosCompactos = revisiones.length > MAX_PRODUCTOS_ABIERTOS;
     const productosConDetalle = revisiones.filter((r) => (
@@ -1024,7 +1140,9 @@ export default function ModalResponderPesaje({
                 >
                     <div className="p-4 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                         <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mb-1">Responder pesaje</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mb-1">
+                                {soloRevisiones ? 'Responder consulta mercancía' : 'Responder pesaje'}
+                            </p>
                             <EncabezadoFolioPedido pedido={pedido} />
                             <p className="text-xs theme-text-muted m-0 mt-1">
                                 {pedido.cliente?.nombre || '—'} · {formatearFechaNegocio(pedido.fecha)}
@@ -1036,10 +1154,80 @@ export default function ModalResponderPesaje({
                     </div>
 
                     <div className="gelia-modal-body p-4 md:p-6 space-y-5">
-                        {pedido.motivo_repesaje && (
-                            <AvisoOperativoPedido label="Re-pesaje" tono="warning" icon={Scale}>
-                                Motivo: {LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje}
+                        {(pedido.motivo_repesaje || pedido.consulta_actualizacion_pendiente) && (
+                            <AvisoOperativoPedido label="Actualización de consulta" tono="warning" icon={Scale}>
+                                Motivo: {LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}
+                                . Revise el resumen antes → después, ajuste piezas/cajas y guarde.
                             </AvisoOperativoPedido>
+                        )}
+
+                        {resumenAntesDespues && (
+                            <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
+                                <p className={`${SECCION} m-0`}>Antes → después</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                    <div className="rounded-lg border theme-border p-3 space-y-1">
+                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">Antes (CEDIS)</p>
+                                        <p className="m-0 font-bold theme-text-main">
+                                            {resumenAntesDespues.antes.productos.length} producto(s)
+                                            {!soloRevisiones && (
+                                                <> · {resumenAntesDespues.antes.envios} envío(s) · {Math.round((resumenAntesDespues.antes.pesoCobrado || 0) * 10000) / 10000} kg</>
+                                            )}
+                                        </p>
+                                        <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
+                                            {resumenAntesDespues.antes.productos.slice(0, 12).map((p, i) => (
+                                                <li key={`a-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
+                                            ))}
+                                            {resumenAntesDespues.antes.productos.length > 12 && (
+                                                <li>+{resumenAntesDespues.antes.productos.length - 12} más</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                    <div className="rounded-lg border theme-border p-3 space-y-1" style={{ borderColor: 'color-mix(in srgb, var(--color-primario) 45%, transparent)' }}>
+                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">Después (a guardar)</p>
+                                        <p className="m-0 font-bold theme-text-main">
+                                            {resumenAntesDespues.despues.productos.length} producto(s)
+                                            {!soloRevisiones && (
+                                                <> · {resumenAntesDespues.despues.envios} envío(s) · {Math.round((resumenAntesDespues.despues.pesoCobrado || 0) * 10000) / 10000} kg</>
+                                            )}
+                                        </p>
+                                        <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
+                                            {resumenAntesDespues.despues.productos.slice(0, 12).map((p, i) => (
+                                                <li key={`d-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
+                                            ))}
+                                            {resumenAntesDespues.despues.productos.length > 12 && (
+                                                <li>+{resumenAntesDespues.despues.productos.length - 12} más</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wide">
+                                    {resumenAntesDespues.agregados.length > 0 && (
+                                        <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700">
+                                            +{resumenAntesDespues.agregados.length} agregada(s)
+                                        </span>
+                                    )}
+                                    {resumenAntesDespues.retirados.length > 0 && (
+                                        <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-700">
+                                            −{resumenAntesDespues.retirados.length} retirada(s)
+                                        </span>
+                                    )}
+                                    {resumenAntesDespues.mismos.length > 0 && (
+                                        <span className="px-2 py-1 rounded-lg theme-element theme-text-muted border theme-border">
+                                            {resumenAntesDespues.mismos.length} sin cambio de SKU
+                                        </span>
+                                    )}
+                                    {resumenAntesDespues.cambioEnvios && (
+                                        <span className="px-2 py-1 rounded-lg bg-amber-500/15 text-amber-800">
+                                            Envios {resumenAntesDespues.antes.envios} → {resumenAntesDespues.despues.envios}
+                                        </span>
+                                    )}
+                                    {resumenAntesDespues.cambioPeso && (
+                                        <span className="px-2 py-1 rounded-lg bg-amber-500/15 text-amber-800">
+                                            Peso cobrado cambió (se puede invalidar costo de envío)
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
                         )}
 
                         <div className="space-y-4 p-4 rounded-xl border theme-border theme-element">
@@ -1054,15 +1242,31 @@ export default function ModalResponderPesaje({
                                 </div>
                                 {renderSoporte(pdfPedido, 'Soporte del pedido')}
                             </div>
-                            {anexoPiezas?.url && (
+                            {anexosPiezas.length > 0 && (
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                                        <label className={`${SECCION} m-0`}>Piezas adicionales</label>
-                                        <button type="button" onClick={() => abrirGaleria([anexoPiezas], 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[44px]`}>
+                                        <label className={`${SECCION} m-0`}>Piezas adicionales ({anexosPiezas.length})</label>
+                                        <button type="button" onClick={() => abrirGaleria(anexosPiezas, 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[44px]`}>
                                             <FileText className="w-3.5 h-3.5" /> Ver
                                         </button>
                                     </div>
-                                    {renderSoporte(anexoPiezas, 'Anexo de piezas')}
+                                    <div className="flex flex-wrap gap-2">
+                                        {anexosPiezas.map((doc, idx) => (
+                                            <button
+                                                key={doc.id || idx}
+                                                type="button"
+                                                onClick={() => abrirGaleria(anexosPiezas, idx)}
+                                                className="relative w-20 h-20 rounded-xl overflow-hidden border theme-border theme-element outline-none group"
+                                                title={doc.nombre_original || 'Ver anexo'}
+                                            >
+                                                {esImagenDoc(doc) ? (
+                                                    <img src={doc.url} alt={doc.nombre_original || 'Anexo'} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-[9px] font-black uppercase theme-text-muted group-hover:scale-105 transition-transform">PDF</div>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1197,6 +1401,7 @@ export default function ModalResponderPesaje({
                             )}
                         </div>
 
+                        {!soloRevisiones && (
                         <div>
                             <label className={`${SECCION} m-0 mb-3`}>Envíos</label>
                             <p className="text-[10px] theme-text-muted font-bold m-0 mb-3">
@@ -1282,13 +1487,14 @@ export default function ModalResponderPesaje({
                                 </p>
                             )}
                         </div>
+                        )}
 
                     </div>
 
                     <div className="gelia-modal-footer flex flex-col-reverse sm:flex-row flex-wrap gap-3 sm:justify-end p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] border-t theme-border shrink-0">
                         <button type="button" onClick={pedirCerrar} className={`${BTN_SECONDARY} outline-none min-h-[44px] w-full sm:w-auto`} disabled={procesando}>Cancelar</button>
                         <button type="button" onClick={confirmar} disabled={procesando} className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none min-h-[44px] w-full sm:w-auto`}>
-                            <Scale className="w-4 h-4" /> {procesando ? 'Guardando…' : 'Registrar pesaje'}
+                            <Scale className="w-4 h-4" /> {procesando ? 'Guardando…' : (soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')}
                         </button>
                     </div>
                 </div>
@@ -1309,16 +1515,25 @@ export default function ModalResponderPesaje({
             <ModalConfirmarAccion
                 abierto={Boolean(confirmacion)}
                 titulo={confirmacion === 'registrar'
-                    ? 'Confirmar pesaje'
+                    ? (soloRevisiones ? 'Confirmar consulta' : 'Confirmar pesaje')
                     : confirmacion === 'cerrar'
-                        ? 'Cerrar pesaje'
+                        ? (soloRevisiones ? 'Cerrar consulta' : 'Cerrar pesaje')
                         : confirmacion?.tipo === 'quitar_envio'
                             ? 'Quitar envío'
                             : confirmacion?.tipo === 'quitar_pieza'
                                 ? 'Eliminar pieza'
                                 : ''}
                 mensaje={confirmacion === 'registrar'
-                    ? `Se registrarán ${envios.length} envío(s), ${revisiones.length} producto(s) y ${Math.round(totalCobrado * 10000) / 10000} kg cobrados.`
+                    ? (resumenAntesDespues
+                        ? `Antes ${resumenAntesDespues.antes.productos.length} prod. → después ${resumenAntesDespues.despues.productos.length} prod.`
+                            + (resumenAntesDespues.agregados.length ? ` (+${resumenAntesDespues.agregados.length})` : '')
+                            + (resumenAntesDespues.retirados.length ? ` (−${resumenAntesDespues.retirados.length})` : '')
+                            + (soloRevisiones
+                                ? '.'
+                                : ` · ${envios.length} envío(s), ${Math.round(totalCobrado * 10000) / 10000} kg.`)
+                        : (soloRevisiones
+                            ? `Se registrarán ${revisiones.length} producto(s) en la consulta de mercancía.`
+                            : `Se registrarán ${envios.length} envío(s), ${revisiones.length} producto(s) y ${Math.round(totalCobrado * 10000) / 10000} kg cobrados.`))
                     : confirmacion === 'cerrar'
                         ? '¿Cerrar? El borrador se conserva.'
                         : confirmacion?.tipo === 'quitar_envio'
@@ -1327,7 +1542,7 @@ export default function ModalResponderPesaje({
                                 ? 'Se eliminará esta pieza de la revisión (p. ej. agregada por error). Si no hay stock, use el estado Sin existencias.'
                                 : ''}
                 etiquetaConfirmar={confirmacion === 'registrar'
-                    ? 'Registrar pesaje'
+                    ? (soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')
                     : confirmacion === 'cerrar'
                         ? 'Cerrar'
                         : 'Quitar'}

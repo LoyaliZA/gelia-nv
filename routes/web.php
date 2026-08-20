@@ -549,6 +549,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/anexo-piezas', [PedidoBmaController::class, 'subirAnexoPiezas'])->name('anexo_piezas.store');
         Route::post('/{pedidoBma}/solicitar-pesaje', [PedidoBmaController::class, 'solicitarPesaje'])->name('solicitar_pesaje');
         Route::post('/{pedidoBma}/solicitar-repesaje', [PedidoBmaController::class, 'solicitarRepesaje'])->name('solicitar_repesaje');
+        Route::post('/{pedidoBma}/cerrar-consulta', [PedidoBmaController::class, 'cerrarConsulta'])->name('cerrar_consulta');
+        Route::post('/{pedidoBma}/reabrir-consulta', [PedidoBmaController::class, 'reabrirConsulta'])->name('reabrir_consulta');
         Route::post('/{pedidoBma}/atender-sin-existencia', [PedidoBmaController::class, 'atenderSinExistencia'])->name('atender_sin_existencia');
         Route::post('/{pedidoBma}/volver-borrador', [PedidoBmaController::class, 'volverBorrador'])->name('volver_borrador');
         Route::post('/actualizar-campos-direccion', [PedidoBmaController::class, 'actualizarCamposDireccion'])->name('actualizar_campos_direccion');

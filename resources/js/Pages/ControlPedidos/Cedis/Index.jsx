@@ -15,7 +15,7 @@ import ModalBitacoraPedido from '../Partials/ModalBitacoraPedido';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 const KPI_CONFIG = [
-    { key: 'pendientes_pesaje', label: 'Pendientes pesaje', tab: 'PENDIENTES_PESAJE', icon: Scale, color: '#F97316' },
+    { key: 'pendientes_pesaje', label: 'Pendientes consulta', tab: 'PENDIENTES_PESAJE', icon: Scale, color: '#F97316' },
     { key: 'empacados', label: 'Pendiente de empaque', tab: 'EMPACADOS', icon: Clock, color: '#EAB308' },
     { key: 'pendientes_guia', label: 'Pendientes de guía', tab: 'PENDIENTES_GUIA', icon: Package, color: '#A855F7' },
     { key: 'pendientes_envio', label: 'Pendiente de recolección', tab: 'PENDIENTES_ENVIO', icon: Package, color: '#0EA5E9' },

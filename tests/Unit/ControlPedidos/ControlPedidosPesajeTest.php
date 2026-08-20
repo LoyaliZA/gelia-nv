@@ -120,6 +120,80 @@ class ControlPedidosPesajeTest extends TestCase
         $this->assertFalse($empacado->puedeSolicitarRepesaje());
     }
 
+    public function test_tienda_puede_solicitar_consulta_mercancia(): void
+    {
+        $origen = new CatalogoOrigenPedido(['requiere_logistica' => false]);
+        $estatus = new CatalogoEstatusPedido(['fase_ciclo' => CatalogoEstatusPedido::FASE_BORRADOR]);
+        $pedido = new PedidoBma(['estatus_envio' => null, 'pesaje_respondido_at' => null]);
+        $pedido->setRelation('origen', $origen);
+        $pedido->setRelation('estatus', $estatus);
+
+        $this->assertTrue($pedido->esConsultaMercancia());
+        $this->assertTrue($pedido->puedeSolicitarPesaje());
+    }
+
+    public function test_cierre_consulta_gates(): void
+    {
+        $estatus = new CatalogoEstatusPedido(['fase_ciclo' => CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO]);
+        $abierta = new PedidoBma([
+            'pesaje_respondido_at' => now(),
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
+            'consulta_cerrada_at' => null,
+            'consulta_actualizacion_pendiente' => false,
+        ]);
+        $abierta->setRelation('estatus', $estatus);
+        $this->assertTrue($abierta->puedeCerrarConsulta());
+        $this->assertFalse($abierta->consultaCerrada());
+
+        $cerrada = new PedidoBma([
+            'pesaje_respondido_at' => now(),
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
+            'consulta_cerrada_at' => now(),
+        ]);
+        $cerrada->setRelation('estatus', $estatus);
+        $this->assertTrue($cerrada->consultaCerrada());
+        $this->assertFalse($cerrada->puedeCerrarConsulta());
+
+        $pendiente = new PedidoBma([
+            'pesaje_respondido_at' => now(),
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE,
+            'consulta_cerrada_at' => null,
+        ]);
+        $pendiente->setRelation('estatus', $estatus);
+        $this->assertFalse($pendiente->puedeCerrarConsulta());
+    }
+
+    public function test_enviar_bloqueado_sin_consulta_cerrada(): void
+    {
+        $origen = new CatalogoOrigenPedido(['requiere_logistica' => true]);
+        $pedido = new PedidoBma([
+            'folio_remision' => 'REM-1',
+            'cliente_id' => 1,
+            'origen_id' => 1,
+            'catalogo_banco_id' => 1,
+            'almacen_id' => 1,
+            'total_mercancia' => 100,
+            'pesaje_respondido_at' => now(),
+            'pesaje_solicitado_at' => now(),
+            'consulta_cerrada_at' => null,
+        ]);
+        $pedido->setRelation('origen', $origen);
+        $pedido->setRelation('tipoOperacionEnvio', null);
+
+        $validador = new class {
+            use ValidacionCamposPedidoBma;
+
+            public function check(PedidoBma $p): void
+            {
+                $this->validarCamposRequeridos($p);
+            }
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('cerrar la consulta CEDIS');
+        $validador->check($pedido);
+    }
+
     public function test_enviar_sin_pesaje_exige_consulta_cedis(): void
     {
         $origen = new CatalogoOrigenPedido(['requiere_logistica' => true]);
@@ -289,6 +363,7 @@ class ControlPedidosPesajeTest extends TestCase
         $pedido->shouldReceive('esMunicipioDiferido')->andReturn(false);
         $pedido->shouldReceive('esResguardoAbierto')->andReturn(false);
         $pedido->shouldReceive('esResguardoComplementario')->andReturn(false);
+        $pedido->shouldReceive('tienePdfPedido')->andReturn(true);
 
         $pedido->forceFill([
             'folio_remision' => 'REM-COT-1',
@@ -298,6 +373,7 @@ class ControlPedidosPesajeTest extends TestCase
             'almacen_id' => 1,
             'total_mercancia' => 1000,
             'pesaje_respondido_at' => now(),
+            'consulta_cerrada_at' => now(),
             'peso_real_kg' => 2,
             'catalogo_tipo_caja_id' => 1,
             'numero_cajas' => 1,

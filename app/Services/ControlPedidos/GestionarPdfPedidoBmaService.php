@@ -48,7 +48,7 @@ class GestionarPdfPedidoBmaService
         });
     }
 
-    public function subirAnexoPiezas(PedidoBma $pedido, UploadedFile $archivo): PedidoBma
+    public function subirAnexoPiezas(PedidoBma $pedido, UploadedFile $archivo): PedidoBmaDocumento
     {
         if (! $pedido->esEditablePorVendedora() && ! $pedido->puedeSolicitarRepesaje()) {
             throw new \RuntimeException('No se puede adjuntar el anexo de piezas en el estado actual.');
@@ -61,22 +61,19 @@ class GestionarPdfPedidoBmaService
         $this->assertSoporteValido($archivo);
 
         return DB::transaction(function () use ($pedido, $archivo) {
-            $this->eliminarExistentes($pedido, PedidoBmaDocumento::TIPO_ANEXO_PIEZAS);
+            $orden = (int) $pedido->documentos()
+                ->where('tipo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS)
+                ->max('orden');
 
             $ruta = $archivo->store("pedidos_bma/anexo_piezas/{$pedido->id}", 'public');
 
-            $pedido->documentos()->create([
+            return $pedido->documentos()->create([
                 'tipo' => PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
                 'ruta_archivo' => $ruta,
                 'nombre_original' => $archivo->getClientOriginalName(),
                 'mime_type' => $archivo->getMimeType(),
                 'tamano_bytes' => $archivo->getSize(),
-                'orden' => 0,
-            ]);
-
-            return $pedido->fresh([
-                'cliente', 'estatus', 'documentos', 'banco', 'almacen',
-                'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'cajas.tipoCaja', 'cajas.tipoGuia',
+                'orden' => $orden + 1,
             ]);
         });
     }

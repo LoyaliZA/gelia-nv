@@ -33,14 +33,24 @@ class ResponderPesajePedidoBmaService
      */
     public function ejecutar(PedidoBma $pedido, int $usuarioId, array $lineasCaja, array $revisionFisica = []): PedidoBma
     {
-        $pedido->loadMissing('estatus');
+        $pedido->loadMissing(['estatus', 'origen']);
 
         if (! $pedido->puedeResponderPesaje()) {
-            throw new \RuntimeException('Este pedido no está pendiente de pesaje.');
+            throw new \RuntimeException(
+                $pedido->esConsultaMercancia()
+                    ? 'Este pedido no está pendiente de consulta de mercancía.'
+                    : 'Este pedido no está pendiente de pesaje.'
+            );
         }
 
-        $lineas = $this->normalizarLineas($lineasCaja);
-        if ($lineas === []) {
+        $soloRevisiones = $pedido->esConsultaMercancia();
+        $pesoAntes = (float) ($pedido->peso_cobrado_guia_kg ?? 0);
+        $cajasAntes = (int) ($pedido->numero_cajas ?? 0);
+        $costoEnvioAntes = $pedido->costo_envio;
+        $esActualizacion = (bool) $pedido->consulta_actualizacion_pendiente;
+
+        $lineas = $soloRevisiones ? [] : $this->normalizarLineas($lineasCaja);
+        if (! $soloRevisiones && $lineas === []) {
             throw new \InvalidArgumentException('Debe indicar al menos un envío con tipo de caja y pesos.');
         }
 
@@ -52,6 +62,10 @@ class ResponderPesajePedidoBmaService
         ));
 
         $revisiones = $this->normalizarRevisiones($revisionFisica['revisiones'] ?? []);
+        if ($soloRevisiones && $revisiones === []) {
+            throw new \InvalidArgumentException('Debe revisar al menos un producto para la consulta de mercancía.');
+        }
+
         foreach ($revisiones as $rev) {
             if (PedidoBmaRevisionProducto::requiereEvidencia($rev['estado_fisico'])
                 && $rev['evidencias'] === []
@@ -61,10 +75,12 @@ class ResponderPesajePedidoBmaService
                 );
             }
         }
-        $evidenciasEnvios = $this->normalizarEvidenciasEnvios(
-            $revisionFisica['evidencias_envios'] ?? [],
-            count($lineas)
-        );
+        $evidenciasEnvios = $soloRevisiones
+            ? []
+            : $this->normalizarEvidenciasEnvios(
+                $revisionFisica['evidencias_envios'] ?? [],
+                count($lineas)
+            );
 
         // Estado general se deriva de productos (default Bueno); ya no se captura en UI.
         $estadoGeneral = $this->derivarEstadoGeneral(
@@ -72,28 +88,34 @@ class ResponderPesajePedidoBmaService
             (string) ($revisionFisica['estado_fisico_general'] ?? PedidoBmaRevisionProducto::ESTADO_BUENO)
         );
 
-        // Foto del lote por cada caja (siempre): local o sesión celular.
-        foreach ($lineas as $i => $linea) {
-            $uuid = (string) ($linea['client_uuid'] ?? '');
-            $hayLocal = ($evidenciasEnvios[$i] ?? []) !== [];
-            $haySesion = $uuid !== '' && $this->sesionEvidencia->tieneFotoCaja($pedido, $uuid, $i);
-            if (! $hayLocal && ! $haySesion) {
-                throw new \InvalidArgumentException('Adjunte al menos una foto del contenido del envío '.($i + 1).'.');
+        if (! $soloRevisiones) {
+            // Foto del lote por cada caja (siempre): local o sesión celular.
+            foreach ($lineas as $i => $linea) {
+                $uuid = (string) ($linea['client_uuid'] ?? '');
+                $hayLocal = ($evidenciasEnvios[$i] ?? []) !== [];
+                $haySesion = $uuid !== '' && $this->sesionEvidencia->tieneFotoCaja($pedido, $uuid, $i);
+                if (! $hayLocal && ! $haySesion) {
+                    throw new \InvalidArgumentException('Adjunte al menos una foto del contenido del envío '.($i + 1).'.');
+                }
             }
         }
 
-        $tipos = CatalogoTipoCajaPedido::query()
-            ->whereIn('id', array_column($lineas, 'catalogo_tipo_caja_id'))
-            ->get()
-            ->keyBy('id');
+        $tipos = collect();
+        if (! $soloRevisiones) {
+            $tipos = CatalogoTipoCajaPedido::query()
+                ->whereIn('id', array_column($lineas, 'catalogo_tipo_caja_id'))
+                ->get()
+                ->keyBy('id');
 
-        if ($tipos->count() !== count(array_unique(array_column($lineas, 'catalogo_tipo_caja_id')))) {
-            throw new \InvalidArgumentException('Una o más cajas del catálogo no existen.');
+            if ($tipos->count() !== count(array_unique(array_column($lineas, 'catalogo_tipo_caja_id')))) {
+                throw new \InvalidArgumentException('Una o más cajas del catálogo no existen.');
+            }
         }
 
         return DB::transaction(function () use (
             $pedido, $usuarioId, $lineas, $tipos,
-            $estadoGeneral, $comentarioGeneral, $evidenciasGenerales, $evidenciasEnvios, $revisiones
+            $estadoGeneral, $comentarioGeneral, $evidenciasGenerales, $evidenciasEnvios, $revisiones,
+            $soloRevisiones, $pesoAntes, $cajasAntes, $costoEnvioAntes, $esActualizacion
         ) {
             PedidoBmaCaja::where('pedido_bma_id', $pedido->id)->delete();
             PedidoBmaRevisionProducto::where('pedido_bma_id', $pedido->id)->delete();
@@ -145,7 +167,7 @@ class ResponderPesajePedidoBmaService
                 $orden++;
             }
 
-            if ($cajaPrincipalId === null) {
+            if (! $soloRevisiones && $cajaPrincipalId === null) {
                 $cajaPrincipalId = $lineas[0]['catalogo_tipo_caja_id'];
             }
 
@@ -170,12 +192,22 @@ class ResponderPesajePedidoBmaService
                 throw new \RuntimeException('No se encontró el estatus de pesaje respondido.');
             }
 
-            $pedido->update([
-                'peso_real_kg' => round($pesoRealTotal, 4),
-                'peso_volumetrico_kg' => round($pesoVolumetricoTotal, 4),
-                'peso_cobrado_guia_kg' => round($pesoCobradoTotal, 4),
-                'numero_cajas' => $numeroCajas,
-                'catalogo_tipo_caja_id' => $cajaPrincipalId,
+            $cambioPesos = ! $soloRevisiones && (
+                abs($pesoAntes - $pesoCobradoTotal) > 0.0001
+                || $cajasAntes !== $numeroCajas
+            );
+            // Invalidar costo solo si la actualización cambia pesos/cajas (Envío).
+            $costoEnvio = ($esActualizacion && $cambioPesos) ? null : $costoEnvioAntes;
+            $totalACobrar = $pedido->total_a_cobrar;
+            if ($esActualizacion && $cambioPesos && $costoEnvioAntes !== null) {
+                $mercancia = (float) $pedido->total_mercancia;
+                $seguro = (bool) $pedido->aplica_seguro;
+                $costoSeguro = (float) ($pedido->costo_seguro ?? 0);
+                $saldoFavor = (float) ($pedido->saldo_a_favor ?? 0);
+                $totalACobrar = PedidoBma::calcularTotal($mercancia, 0, $seguro, $costoSeguro, $saldoFavor);
+            }
+
+            $datosPedido = [
                 'catalogo_estatus_pedido_id' => $estatusNuevo->id,
                 'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
                 'pesaje_respondido_at' => now(),
@@ -183,7 +215,31 @@ class ResponderPesajePedidoBmaService
                 'estado_fisico_general' => $estadoGeneral,
                 'comentario_fisico_general' => $comentarioGeneral !== '' ? $comentarioGeneral : null,
                 'tiene_observaciones_fisicas' => $tieneObs,
-            ]);
+                'consulta_actualizacion_pendiente' => false,
+                'consulta_cerrada_at' => null,
+                'consulta_cerrada_por_id' => null,
+                'motivo_repesaje' => null,
+            ];
+
+            if ($soloRevisiones) {
+                $datosPedido['peso_real_kg'] = null;
+                $datosPedido['peso_volumetrico_kg'] = null;
+                $datosPedido['peso_cobrado_guia_kg'] = null;
+                $datosPedido['numero_cajas'] = null;
+                $datosPedido['catalogo_tipo_caja_id'] = null;
+            } else {
+                $datosPedido['peso_real_kg'] = round($pesoRealTotal, 4);
+                $datosPedido['peso_volumetrico_kg'] = round($pesoVolumetricoTotal, 4);
+                $datosPedido['peso_cobrado_guia_kg'] = round($pesoCobradoTotal, 4);
+                $datosPedido['numero_cajas'] = $numeroCajas;
+                $datosPedido['catalogo_tipo_caja_id'] = $cajaPrincipalId;
+                $datosPedido['costo_envio'] = $costoEnvio;
+                if ($esActualizacion && $cambioPesos) {
+                    $datosPedido['total_a_cobrar'] = $totalACobrar;
+                }
+            }
+
+            $pedido->update($datosPedido);
 
             $ordenDoc = (int) $pedido->documentos()->max('orden') + 1;
             foreach ($evidenciasGenerales as $file) {
@@ -248,15 +304,24 @@ class ResponderPesajePedidoBmaService
                 $ordenDoc
             );
 
-            $detalleHist = sprintf(
-                'Pesaje CEDIS respondido: %.4f kg cobrados, %d envío(s). Estado físico: %s.%s',
-                $pesoCobradoTotal,
-                $numeroCajas,
-                PedidoBmaRevisionProducto::LABELS[$estadoGeneral] ?? $estadoGeneral,
-                $tieneSinExistencia
-                    ? ' Sin existencias — pedido detenido hasta que Ventas elija acción.'
-                    : ($tieneObs ? ' Con observaciones — Ventas debe revisar.' : '')
-            );
+            $detalleHist = $soloRevisiones
+                ? sprintf(
+                    'Consulta de mercancía respondida: %d producto(s). Estado físico: %s.%s',
+                    count($revisiones),
+                    PedidoBmaRevisionProducto::LABELS[$estadoGeneral] ?? $estadoGeneral,
+                    $tieneSinExistencia
+                        ? ' Sin existencias — pedido detenido hasta que Ventas elija acción.'
+                        : ($tieneObs ? ' Con observaciones — Ventas debe revisar.' : '')
+                )
+                : sprintf(
+                    'Pesaje CEDIS respondido: %.4f kg cobrados, %d envío(s). Estado físico: %s.%s',
+                    $pesoCobradoTotal,
+                    $numeroCajas,
+                    PedidoBmaRevisionProducto::LABELS[$estadoGeneral] ?? $estadoGeneral,
+                    $tieneSinExistencia
+                        ? ' Sin existencias — pedido detenido hasta que Ventas elija acción.'
+                        : ($tieneObs ? ' Con observaciones — Ventas debe revisar.' : '')
+                );
 
             $this->historialService->ejecutar(
                 $pedido->id,
@@ -284,9 +349,13 @@ class ResponderPesajePedidoBmaService
                     ]
                 );
             } else {
-                $tituloNotif = $tieneObs
-                    ? 'CEDIS respondió el pesaje con observaciones físicas'
-                    : 'CEDIS respondió el pesaje de tu pedido';
+                $tituloNotif = $soloRevisiones
+                    ? ($tieneObs
+                        ? 'CEDIS respondió la consulta de mercancía con observaciones'
+                        : 'CEDIS respondió la consulta de mercancía')
+                    : ($tieneObs
+                        ? 'CEDIS respondió el pesaje con observaciones físicas'
+                        : 'CEDIS respondió el pesaje de tu pedido');
                 $urlNotif = $tieneObs
                     ? '/control-pedidos?tab=OBS_CEDIS'.($folioQ !== '' ? '&q='.rawurlencode($folioQ) : '')
                     : '/control-pedidos'.($folioQ !== '' ? '?q='.rawurlencode($folioQ) : '');

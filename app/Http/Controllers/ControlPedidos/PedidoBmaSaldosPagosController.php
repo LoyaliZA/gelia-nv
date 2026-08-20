@@ -63,6 +63,10 @@ class PedidoBmaSaldosPagosController extends Controller
         RegistrarPagoPedidoBmaService $service,
     ): RedirectResponse {
         VisibilidadPedidoBma::assertPuedeMutarComoVendedora(Auth::user(), $pedidoBma);
+        $pedidoBma->loadMissing('origen');
+        if ($pedidoBma->requiereConsultaCerradaParaProceder() && ! $pedidoBma->consultaCerrada()) {
+            return back()->with('error', 'Cierre la consulta CEDIS antes de registrar el pago.');
+        }
         $forma = $request->input('forma_pago');
         $datos = $request->validate([
             'monto' => ['required', 'numeric', 'min:0.01'],

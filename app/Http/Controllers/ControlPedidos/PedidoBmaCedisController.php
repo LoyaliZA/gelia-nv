@@ -196,9 +196,9 @@ class PedidoBmaCedisController extends Controller
 
         try {
             $service->ejecutar(
-                $pedidoBma->load('estatus'),
+                $pedidoBma->load(['estatus', 'origen']),
                 Auth::id(),
-                $request->validated('cajas'),
+                $request->validated('cajas') ?? [],
                 [
                     'estado_fisico_general' => $request->validated('estado_fisico_general'),
                     'comentario_fisico_general' => $request->validated('comentario_fisico_general'),
@@ -218,7 +218,11 @@ class PedidoBmaCedisController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Pesaje registrado. Se notificó a la vendedora.');
+        $label = $pedidoBma->fresh(['origen'])->esConsultaMercancia()
+            ? 'Consulta de mercancía registrada. Se notificó a la vendedora.'
+            : 'Pesaje registrado. Se notificó a la vendedora.';
+
+        return redirect()->back()->with('success', $label);
     }
 
     public function reportarSinExistencia(

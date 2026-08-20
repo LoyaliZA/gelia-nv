@@ -97,6 +97,9 @@ class ListarPedidosBmaService
         $pedido->setAttribute('puede_mutar', $puedeEditar);
         $pedido->setAttribute('puede_cancelar', $puedeEditar && $pedido->puedeCancelarDirecto());
         $pedido->setAttribute('tiene_sin_existencia_abierta', $pedido->tieneSinExistenciaAbierta());
+        $pedido->setAttribute('consulta_cerrada', $pedido->consultaCerrada());
+        $pedido->setAttribute('puede_cerrar_consulta', $puedeEditar && $pedido->puedeCerrarConsulta());
+        $pedido->setAttribute('es_consulta_mercancia', $pedido->esConsultaMercancia());
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());
         $pedido->setAttribute('pendiente_re_revision', MaquinaEstadosPedidoBma::esPendienteReRevision($pedido));
         $pedido->setAttribute('en_revision_ahora', RevisionEnCursoPedidoBma::activa($pedido->id));

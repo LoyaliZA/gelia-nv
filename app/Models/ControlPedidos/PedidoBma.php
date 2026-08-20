@@ -83,6 +83,9 @@ class PedidoBma extends Model
         'pesaje_solicitado_at',
         'pesaje_respondido_at',
         'pesaje_respondido_por_id',
+        'consulta_cerrada_at',
+        'consulta_cerrada_por_id',
+        'consulta_actualizacion_pendiente',
         'estado_fisico_general',
         'comentario_fisico_general',
         'tiene_observaciones_fisicas',
@@ -130,6 +133,8 @@ class PedidoBma extends Model
         'error_datos_at' => 'datetime',
         'pesaje_solicitado_at' => 'datetime',
         'pesaje_respondido_at' => 'datetime',
+        'consulta_cerrada_at' => 'datetime',
+        'consulta_actualizacion_pendiente' => 'boolean',
         'campos_incorrectos' => 'array',
         'fecha' => 'date',
         'aplica_seguro' => 'boolean',
@@ -498,15 +503,53 @@ class PedidoBma extends Model
         }
 
         $this->loadMissing('origen');
-        if (! ($this->origen?->requiere_logistica ?? true)) {
-            return false;
-        }
+        // Envío y Tienda: ambos usan consulta CEDIS (pesaje / mercancía).
 
         if ($this->estatus_envio === self::ESTATUS_ENVIO_PENDIENTE_PESAJE) {
             return false;
         }
 
         return ! $this->tienePesajeRespondido();
+    }
+
+    public function esConsultaMercancia(): bool
+    {
+        $this->loadMissing('origen');
+
+        return ! (bool) ($this->origen?->requiere_logistica ?? true);
+    }
+
+    public function consultaCerrada(): bool
+    {
+        return $this->consulta_cerrada_at !== null;
+    }
+
+    public function puedeCerrarConsulta(): bool
+    {
+        if ($this->consultaCerrada()) {
+            return false;
+        }
+        if (! $this->esEditablePorVendedora()) {
+            return false;
+        }
+        if ($this->estatus_envio === self::ESTATUS_ENVIO_PENDIENTE_PESAJE) {
+            return false;
+        }
+        if ($this->consulta_actualizacion_pendiente) {
+            return false;
+        }
+
+        return $this->tienePesajeRespondido();
+    }
+
+    /** Tras Fase 2: Envío y Tienda exigen cierre (salvo complemento de resguardo). */
+    public function requiereConsultaCerradaParaProceder(): bool
+    {
+        if ($this->esResguardoComplementario()) {
+            return false;
+        }
+
+        return true;
     }
 
     public function puedeResponderPesaje(): bool

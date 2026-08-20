@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Self-check: Cliente → tipo → PDF → pesaje → respuesta → dirección → paquetería → saldo a favor → cotización → pago → remisión.
+ * Self-check: Cliente → tipo → PDF → consulta → respuesta → monto → dirección → …
  * Uso: php tests/Unit/ControlPedidos/check_form_pedido_progressive.php
  */
 
@@ -12,7 +12,7 @@ $form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/Mod
 $checks = [
     ['sin cascada mostrarTrasTipo', ! str_contains($form, 'mostrarTrasTipo')],
     ['flag tieneTipo', str_contains($form, 'const tieneTipo')],
-    ['gate pesaje exige tipo o pesaje en curso', str_contains($form, 'mostrarPesaje = (tieneTipo && requiereLogistica)')
+    ['gate pesaje exige tipo o pesaje en curso', str_contains($form, 'mostrarPesaje = tieneTipo')
         && str_contains($form, 'tienePesajeRespondido')],
     ['gate resto exige origen y cotización', str_contains($form, 'mostrarRestoPedido = Boolean(data.origen_id)')
         && str_contains($form, 'cotizacionHabilitada')],
@@ -27,19 +27,27 @@ $checks = [
     ['pesaje gated', str_contains($form, '{mostrarPesaje && (')],
     ['resto gated', str_contains($form, '{mostrarRestoPedido && (')],
     ['logistica gated', str_contains($form, '{mostrarLogisticaPostPesaje && (')],
-    ['mapa nSec', str_contains($form, 'const nSec = requiereLogistica') && str_contains($form, 'saf: 8')],
+    ['mapa nSec', str_contains($form, 'const nSec = requiereLogistica') && str_contains($form, 'saf: 9')],
     ['pesaje listo cuenta como respondido', str_contains($form, "estatus_envio === 'pesaje_listo'")],
     ['bind pedido creado sin remount', str_contains($form, 'onPedidoCreado')],
     ['quién respondió el pesaje', str_contains($form, 'Respondió:')],
+    ['monto gated por mostrarMontoMercancia', str_contains($form, 'mostrarMontoMercancia')],
+    ['cerrar consulta en UI', str_contains($form, 'Cerrar consulta')],
+    ['gate consultaCerrada', str_contains($form, 'consultaCerrada')],
+    ['copy continuar dirección cotización pago', str_contains($form, 'dirección, cotización y pago')],
+    ['actualizar consulta (no solo re-pesaje)', str_contains($form, 'Actualizar consulta')],
+    ['anexos multiple input', str_contains($form, 'multiple accept="application/pdf')],
+    ['galeria anexos local', str_contains($form, 'anexoDocsLocal')],
+    ['miniaturas anexo', str_contains($form, 'MiniaturaDocumento')],
 ];
 
 $titulos = [
-    'Cliente y productos',
+    '{nSec.cliente}. Cliente',
     'Tipo de entrega',
     'PDF o archivo del pedido',
-    'Solicitud de pesaje',
-    'Respuesta de cajas y pesos',
-    'ArrowRight className="w-5 h-5" /> Continuar pedido',
+    '{nSec.solPesaje}. {labelConsulta}',
+    'Continuar pedido',
+    '{nSec.monto}. Total de mercancía',
     'Dirección de envío',
     'Paquetería y seguro',
     '{nSec.saf}. Saldo a favor',
@@ -59,15 +67,16 @@ foreach ($titulos as $t) {
 }
 $checks[] = ['orden captura según flujo real', $ordenOk];
 
-$iContinuar = strpos($form, 'ArrowRight className="w-5 h-5" /> Continuar pedido');
-$iResp = strpos($form, 'Respuesta de cajas y pesos');
+$iCliente = strpos($form, '{nSec.cliente}. Cliente');
+$iMonto = strpos($form, '{nSec.monto}. Total de mercancía');
+$iResp = strpos($form, '{nSec.resp}.');
 $checks[] = [
-    'continuar dentro de respuesta de cajas',
-    $iContinuar !== false && $iResp !== false && $iResp < $iContinuar,
+    'monto después de respuesta CEDIS',
+    $iMonto !== false && $iResp !== false && $iResp < $iMonto,
 ];
 $checks[] = [
-    'copy continuar dirección cotización pago',
-    str_contains($form, 'dirección, cotización y pago'),
+    'monto no en bloque cliente',
+    $iCliente !== false && $iMonto !== false && $iCliente < $iMonto,
 ];
 
 foreach ($checks as [$label, $ok]) {

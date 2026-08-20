@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm, usePage, router } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, Search, Save, Send, RotateCcw, ImagePlus, Trash2, AlertTriangle, PenLine, Link2, Cloud, HardDrive, Scale, FileText, ArrowRight,
+    X, Search, Save, Send, RotateCcw, ImagePlus, Trash2, AlertTriangle, PenLine, Link2, Cloud, HardDrive, Scale, FileText, ArrowRight, CheckCircle2,
 } from 'lucide-react';
 import GeliaLoader from '../../../Components/GeliaLoader';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
@@ -36,7 +36,7 @@ import {
     LABEL_GUIA_CLIENTE,
     etiquetaEnvio,
 } from './pedidosBmaStyles';
-import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
@@ -223,6 +223,7 @@ export default function ModalFormPedido({
     const [avisoPesaje, setAvisoPesaje] = useState(null);
     const [pdfDocLocal, setPdfDocLocal] = useState(null);
     const [anexoLocalOk, setAnexoLocalOk] = useState(false);
+    const [anexoDocsLocal, setAnexoDocsLocal] = useState([]);
     const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
     const [candidatosPrincipal, setCandidatosPrincipal] = useState([]);
     const [buscandoPrincipal, setBuscandoPrincipal] = useState(false);
@@ -247,6 +248,10 @@ export default function ModalFormPedido({
     const [estadoAuto, setEstadoAuto] = useState({ local: null, bd: null });
     const [motivoRepesaje, setMotivoRepesaje] = useState('');
     const [procesandoPesaje, setProcesandoPesaje] = useState(false);
+    /** Optimistic: tras solicitar, hide botón aunque modalForm.pedido aún no refresque. */
+    const [consultaPendienteLocal, setConsultaPendienteLocal] = useState(
+        () => pedido?.estatus_envio === 'pendiente_pesaje'
+    );
     const [pdfLocalOk, setPdfLocalOk] = useState(false);
     const [vistaPrevia, setVistaPrevia] = useState(null);
     const [camposDireccion, setCamposDireccion] = useState({ ...CAMPOS_DIRECCION_VACIOS });
@@ -347,11 +352,23 @@ export default function ModalFormPedido({
     const esMunicipioDiferido = !data.es_resguardo && Boolean(paqueteriaSeleccionada?.permite_costo_diferido);
     const logisticaBloqueada = esResguardoComplementario && Boolean(data.pedido_principal_id);
     const camposEnvioBloqueados = esResguardoAbierto || esResguardoComplementario;
+    useEffect(() => {
+        if (pedido?.estatus_envio === 'pendiente_pesaje') {
+            setConsultaPendienteLocal(true);
+        } else if (pedido?.estatus_envio && pedido.estatus_envio !== 'pendiente_pesaje') {
+            setConsultaPendienteLocal(false);
+        }
+    }, [pedido?.id, pedido?.estatus_envio]);
+
     const tienePesajeRespondido = Boolean(pedido?.pesaje_respondido_at)
         || pedido?.estatus_envio === 'pesaje_listo'
         || (pedido?.cajas || []).length > 0
         || pedido?.estatus?.fase_ciclo === 'PESAJE_RESPONDIDO';
-    const pendientePesaje = pedido?.estatus_envio === 'pendiente_pesaje';
+    const pendientePesaje = pedido?.estatus_envio === 'pendiente_pesaje' || consultaPendienteLocal;
+    const consultaCerrada = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
+    const puedeCerrarConsulta = Boolean(pedido?.puede_cerrar_consulta);
+    const esConsultaMercancia = Boolean(pedido?.es_consulta_mercancia) || !requiereLogistica;
+    const labelConsulta = esConsultaMercancia ? 'Consulta de mercancía' : 'Consulta de pesaje';
     const guiaCliente = Boolean(data.cliente_proporciona_guia);
     const envioPorCobrar = Boolean(data.envio_por_cobrar);
     const pesoCajasSoloLectura = tienePesajeRespondido || pendientePesaje || camposEnvioBloqueados;
@@ -378,24 +395,30 @@ export default function ModalFormPedido({
     const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
     direccionSuciaRef.current = direccionSucia;
 
-    // Sin tipo: cliente + tipo. Con Envío: pesaje primero; resto al responder (o Continuar legacy).
+    // Sin tipo: cliente + tipo. Con Envío/Tienda: consulta CEDIS primero; monto/pago tras cierre.
     const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id);
     const enfocadoEnPesaje = fasePedido === 'PESAJE_PENDIENTE' && !tienePesajeRespondido;
-    // Pesaje listo/pendiente debe verse aunque falte origen en el form (p. ej. fila sin origen_id).
-    const mostrarPesaje = (tieneTipo && requiereLogistica) || tienePesajeRespondido || pendientePesaje;
-    // Tienda no tiene pesaje, pero sí debe adjuntar PDF/foto del pedido (antes de pago).
+    const mostrarPesaje = tieneTipo || tienePesajeRespondido || pendientePesaje;
     const mostrarPdfPedido = mostrarPesaje || (tieneTipo && !requiereLogistica);
     const mostrarRestoPedido = Boolean(data.origen_id) && (!requiereLogistica || (cotizacionHabilitada && !enfocadoEnPesaje));
 
-    const mostrarLogisticaPostPesaje = mostrarPesaje && mostrarRestoPedido;
-    // «Enviar» tras pesaje respondido (auto-borrador) o Continuar legacy / flujo sin pesaje.
+    const mostrarLogisticaPostPesaje = requiereLogistica && mostrarPesaje && mostrarRestoPedido;
     const mostrarEnviarPedido = mostrarRestoPedido;
-    // Pago solo cuando ya hay total a cobrar (post-pesaje/cotización o tienda con mercancía).
-    // No interrumpe solicitar pesaje: esa sección vive fuera de mostrarRestoPedido.
-    const mostrarSeccionPago = mostrarRestoPedido && cotizacionLista;
+    // Envío: sección pago visible tras respuesta CEDIS; registro solo con consulta cerrada + cotización.
+    // Tienda: sección pago tras cerrar consulta.
+    const mostrarSeccionPago = mostrarRestoPedido && (
+        requiereLogistica
+            ? (tienePesajeRespondido && !pendientePesaje)
+            : consultaCerrada
+    );
+    const puedeRegistrarPago = Boolean(idPedidoAcciones)
+        && consultaCerrada
+        && (requiereLogistica ? cotizacionLista : Number(data.total_mercancia || 0) > 0);
+    const requiereConsultaCerradaUi = !esResguardoComplementario;
     const nSec = requiereLogistica
-        ? { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, saf: 8, cot: 9, pago: 10, rem: 11 }
-        : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, dir: 6, paq: 7, saf: 8, cot: 8, pago: 4, rem: 5 };
+        ? { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, monto: 6, dir: 7, paq: 8, saf: 9, cot: 10, pago: 11, rem: 12 }
+        : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, monto: 6, pago: 7, rem: 8 };
+    const mostrarMontoMercancia = consultaCerrada && !pendientePesaje && !esResguardoComplementario;
     const totalCobrar = calcularTotalCobrar(
         data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
         saldoFavorCalculado
@@ -413,9 +436,13 @@ export default function ModalFormPedido({
         : (pagoResumen == null ? null : resumenCoberturaVivo.pendiente);
     const pdfPedidoDoc = (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id))
         || pdfDocLocal;
-    const anexoPiezasDoc = (pedido?.documentos || []).find((d) => d.tipo === 'anexo_piezas' && !docsEliminar.includes(d.id));
+    const anexosPiezasDocs = (() => {
+        const fromPedido = (pedido?.documentos || []).filter((d) => d.tipo === 'anexo_piezas' && !docsEliminar.includes(d.id));
+        const ids = new Set(fromPedido.map((d) => d.id));
+        return [...fromPedido, ...anexoDocsLocal.filter((d) => d?.id && !ids.has(d.id))];
+    })();
     const tienePdfPedido = Boolean(pdfPedidoDoc) || pdfLocalOk;
-    const tieneAnexoPiezas = Boolean(anexoPiezasDoc) || anexoLocalOk;
+    const tieneAnexoPiezas = anexosPiezasDocs.length > 0 || anexoLocalOk;
     const validacionEnvio = validarCamposEnvioPedido(data, {
         requiereLogistica,
         direccionesNormalizadas,
@@ -426,6 +453,8 @@ export default function ModalFormPedido({
         tienePdfPedido,
         pagoPendiente: pagoPendienteVivo,
         paqueteria: paqueteriaSeleccionada,
+        consultaCerrada,
+        requiereConsultaCerrada: requiereConsultaCerradaUi,
     });
     const enviarPedidoListo = validacionEnvio.valido
         && !(esResguardoComplementario && !data.pedido_principal_id)
@@ -445,18 +474,21 @@ export default function ModalFormPedido({
         }
         setData('origen_id', nuevoId);
     };
-    const labelSoportePedido = (doc) => {
-        const mime = String(doc?.mime_type || '');
-        const nombre = String(doc?.nombre_original || '').toLowerCase();
-        if (mime.startsWith('image/') || /\.(jpe?g|png|webp)$/.test(nombre)) return 'Ver foto';
-        return 'Ver PDF';
+    const abrirVistaPrevia = (docOrDocs, indice = 0) => {
+        if (Array.isArray(docOrDocs)) {
+            setVistaPrevia({ documentos: docOrDocs.filter((d) => d?.url), indice });
+            return;
+        }
+        if (docOrDocs?.url) {
+            setVistaPrevia({ documentos: [docOrDocs], indice: 0 });
+        }
     };
     const cajasPesaje = pedido?.cajas || [];
     const tieneCoberturaSeguro = paqueteriaTieneCobertura(paqueteriaSeleccionada?.nombre);
     const paqueteriasComerciales = (catalogos.paqueterias || []).filter((p) => p.categoria === 'comercial');
     const paqueteriasLocales = (catalogos.paqueterias || []).filter((p) => p.categoria !== 'comercial');
 
-    const modalAnidadoAbierto = confirmarActualizarDir || Boolean(vistaPrevia) || modalLinkDireccion;
+    const modalAnidadoAbierto = confirmarActualizarDir || Boolean(vistaPrevia?.documentos?.length) || modalLinkDireccion;
 
     useEffect(() => {
         // Tras cerrar un modal hijo, ignorar clics al overlay del borrador un instante.
@@ -510,6 +542,7 @@ export default function ModalFormPedido({
             setPdfLocalOk(false);
             setPdfDocLocal(null);
             setAnexoLocalOk(false);
+            setAnexoDocsLocal([]);
             setIntentoEnviar(false);
             setAvisoForm(null);
             setAvisoPdf(null);
@@ -563,6 +596,7 @@ export default function ModalFormPedido({
             setPdfLocalOk(false);
             setPdfDocLocal(null);
             setAnexoLocalOk(false);
+            setAnexoDocsLocal([]);
             setIntentoEnviar(false);
             setAvisoForm(null);
             setAvisoPdf(null);
@@ -586,6 +620,7 @@ export default function ModalFormPedido({
             setPdfLocalOk(false);
             setPdfDocLocal(null);
             setAnexoLocalOk(false);
+            setAnexoDocsLocal([]);
             setIntentoEnviar(false);
             setAvisoForm(null);
             setAvisoPdf(null);
@@ -1200,7 +1235,6 @@ export default function ModalFormPedido({
     const manejarArchivos = (e) => agregarArchivos(e.target.files);
 
     const handlePaste = (e) => {
-        if (!cotizacionLista) return;
         const items = e.clipboardData?.items;
         if (!items) return;
         const pasted = [];
@@ -1210,9 +1244,24 @@ export default function ModalFormPedido({
                 if (file) pasted.push(file);
             }
         }
-        if (pasted.length) {
+        if (!pasted.length) return;
+
+        if (cotizacionLista && consultaCerrada) {
             e.preventDefault();
             agregarArchivos(pasted);
+            return;
+        }
+
+        // Actualizar consulta: pegar anexos de piezas (uno o varios).
+        if (tienePesajeRespondido && !pendientePesaje && idPedidoAcciones && !pedido?.empacado_at) {
+            e.preventDefault();
+            (async () => {
+                for (let i = 0; i < pasted.length; i += 1) {
+                    const img = pasted[i];
+                    const file = new File([img], `anexo-paste-${Date.now()}-${i}.png`, { type: img.type || 'image/png' });
+                    await subirAnexoPiezasArchivo(file);
+                }
+            })();
         }
     };
 
@@ -1369,24 +1418,36 @@ export default function ModalFormPedido({
         }
     };
 
-    const subirAnexoPiezas = async (e) => {
-        const file = e.target.files?.[0];
-        e.target.value = '';
+    const subirAnexoPiezasArchivo = async (file) => {
         if (!file || !idPedidoAcciones) return;
         setAvisoPesaje(null);
         const fd = new FormData();
         fd.append('anexo_piezas', file);
         setProcesandoPesaje(true);
         try {
-            await axios.post(route('control_pedidos.anexo_piezas.store', idPedidoAcciones), fd, {
+            const { data: res } = await axios.post(route('control_pedidos.anexo_piezas.store', idPedidoAcciones), fd, {
                 headers: headersJsonCsrf(),
             });
             setAnexoLocalOk(true);
+            if (res?.documento) {
+                setAnexoDocsLocal((prev) => {
+                    if (prev.some((d) => d.id === res.documento.id)) return prev;
+                    return [...prev, res.documento];
+                });
+            }
             setAvisoPesaje({ tipo: 'success', mensaje: 'Anexo de piezas adjuntado.' });
         } catch (err) {
             setAvisoPesaje({ tipo: 'error', mensaje: mensajeAxios(err, 'No se pudo adjuntar el anexo.') });
         } finally {
             setProcesandoPesaje(false);
+        }
+    };
+
+    const subirAnexoPiezas = async (e) => {
+        const files = Array.from(e.target.files || []);
+        e.target.value = '';
+        for (const file of files) {
+            await subirAnexoPiezasArchivo(file);
         }
     };
 
@@ -1399,7 +1460,11 @@ export default function ModalFormPedido({
                     setAvisoPesaje({ tipo: 'error', mensaje: err });
                     return;
                 }
-                setAvisoPesaje({ tipo: 'success', mensaje: page?.props?.flash?.success || 'Consulta de pesaje enviada a CEDIS.' });
+                setConsultaPendienteLocal(true);
+                setAvisoPesaje({
+                    tipo: 'success',
+                    mensaje: page?.props?.flash?.success || `${labelConsulta} enviada a CEDIS.`,
+                });
             },
         });
     };
@@ -1407,29 +1472,67 @@ export default function ModalFormPedido({
     const solicitarPesaje = async () => {
         setAvisoPesaje(null);
         if (!data.cliente_id) {
-            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione el cliente antes de solicitar el pesaje.' });
-            return;
-        }
-        if (Number(data.total_mercancia || 0) <= 0) {
-            setAvisoPesaje({ tipo: 'error', mensaje: 'Indique el total de mercancía (productos) antes de solicitar el pesaje.' });
+            setAvisoPesaje({ tipo: 'error', mensaje: `Seleccione el cliente antes de solicitar la ${labelConsulta.toLowerCase()}.` });
             return;
         }
         if (!tienePdfPedido) {
-            setAvisoPesaje({ tipo: 'error', mensaje: 'Adjunte el PDF o una foto del pedido antes de solicitar el pesaje.' });
+            setAvisoPesaje({ tipo: 'error', mensaje: `Adjunte el PDF o una foto del pedido antes de solicitar la ${labelConsulta.toLowerCase()}.` });
             return;
         }
+        if (procesandoPesaje || pendientePesaje) return;
+        setProcesandoPesaje(true);
         const id = await asegurarPedidoEnBd({ zona: 'pesaje' });
-        if (!id) return;
+        if (!id) {
+            setProcesandoPesaje(false);
+            return;
+        }
         postSolicitudPesaje(id);
+    };
+
+    const cerrarConsulta = () => {
+        if (!idPedidoAcciones) return;
+        setProcesandoPesaje(true);
+        router.post(route('control_pedidos.cerrar_consulta', idPedidoAcciones), {}, {
+            preserveScroll: true,
+            onFinish: () => setProcesandoPesaje(false),
+            onSuccess: (page) => {
+                const err = page?.props?.flash?.error;
+                if (err) {
+                    setAvisoPesaje({ tipo: 'error', mensaje: err });
+                    return;
+                }
+                setAvisoPesaje({ tipo: 'success', mensaje: page?.props?.flash?.success || 'Consulta cerrada.' });
+            },
+            onError: () => setAvisoPesaje({ tipo: 'error', mensaje: 'No se pudo cerrar la consulta.' }),
+        });
+    };
+
+    const reabrirConsulta = () => {
+        if (!idPedidoAcciones) return;
+        if (!window.confirm('¿Reabrir la consulta? El monto y el pago quedarán bloqueados hasta cerrarla de nuevo.')) return;
+        setProcesandoPesaje(true);
+        router.post(route('control_pedidos.reabrir_consulta', idPedidoAcciones), {}, {
+            preserveScroll: true,
+            onFinish: () => setProcesandoPesaje(false),
+            onSuccess: (page) => {
+                const err = page?.props?.flash?.error;
+                if (err) {
+                    setAvisoPesaje({ tipo: 'error', mensaje: err });
+                    return;
+                }
+                setAvisoPesaje({ tipo: 'success', mensaje: page?.props?.flash?.success || 'Consulta reabierta.' });
+            },
+            onError: () => setAvisoPesaje({ tipo: 'error', mensaje: 'No se pudo reabrir la consulta.' }),
+        });
     };
 
     const solicitarRepesaje = () => {
         if (!idPedidoAcciones || !motivoRepesaje) {
-            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione el motivo del re-pesaje (cambio de pedido).' });
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione el motivo de la actualización (anexo, retiro o surtido).' });
             return;
         }
         if (motivoRepesaje === 'anexo_piezas' && !tieneAnexoPiezas) {
-            setAvisoPesaje({ tipo: 'error', mensaje: 'Adjunte el PDF o foto de las piezas adicionales antes de solicitar el re-pesaje.' });
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Adjunte el PDF o foto de las piezas adicionales antes de actualizar la consulta.' });
             return;
         }
         setAvisoPesaje(null);
@@ -1648,9 +1751,9 @@ export default function ModalFormPedido({
                         </div>
                     )}
 
-                    {/* 1. Cliente y productos */}
+                    {/* 1. Cliente */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>{nSec.cliente}. Cliente y productos</p>
+                        <p className={SECCION}>{nSec.cliente}. Cliente</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="relative" data-campo="cliente">
                                 <div className={wrapCampo('cliente')}>
@@ -1675,10 +1778,6 @@ export default function ModalFormPedido({
                                 <label className={SECCION}>Fecha</label>
                                 <input type="date" value={data.fecha} onChange={(e) => setData('fecha', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                             </div>
-                            <div className={wrapCampo('total_mercancia')} data-campo="total_mercancia">
-                                <label className={SECCION}>Total mercancía *</label>
-                                <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
-                            </div>
                         </div>
                     </section>
 
@@ -1702,8 +1801,8 @@ export default function ModalFormPedido({
                                 {origenSeleccionado ? (
                                     <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
                                         {requiereLogistica
-                                            ? 'Envío: solicite el pesaje a CEDIS; al responder podrá cotizar y completar el pedido.'
-                                            : 'Tienda/mostrador: adjunte el PDF o foto del pedido; luego registre el pago (sin pesaje ni guía).'}
+                                            ? 'Envío: solicite el pesaje a CEDIS; al responder y cerrar la consulta podrá capturar el monto, cotizar y pagar.'
+                                            : 'Tienda/mostrador: solicite consulta de mercancía a CEDIS; al cerrarla capture el monto y el pago (sin cajas ni guía).'}
                                     </p>
                                 ) : (
                                     <p className="text-[10px] font-bold text-amber-600 mt-1.5 m-0">
@@ -1946,19 +2045,14 @@ export default function ModalFormPedido({
                                 </span>
                                 <input type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirPdfPedido} disabled={procesandoPesaje} />
                             </label>
-                            {tienePdfPedido && (
-                                pdfPedidoDoc?.url
-                                    ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => setVistaPrevia(pdfPedidoDoc)}
-                                            className="text-xs font-bold underline outline-none"
-                                            style={{ color: 'var(--color-primario)' }}
-                                        >
-                                            {labelSoportePedido(pdfPedidoDoc)}
-                                        </button>
-                                    )
-                                    : <span className="text-xs font-bold" style={COLOR_EXITO}>Cargado y listo</span>
+                            {pdfPedidoDoc?.url && (
+                                <MiniaturaDocumento
+                                    documento={pdfPedidoDoc}
+                                    onVer={() => abrirVistaPrevia(pdfPedidoDoc)}
+                                />
+                            )}
+                            {tienePdfPedido && !pdfPedidoDoc?.url && (
+                                <span className="text-xs font-bold" style={COLOR_EXITO}>Cargado y listo</span>
                             )}
                             {procesandoPesaje && !avisoPdf && (
                                 <span className="text-xs font-bold theme-text-muted">Subiendo…</span>
@@ -1979,7 +2073,7 @@ export default function ModalFormPedido({
                     {mostrarPesaje && (
                     <>
                     <section className={SECCION_WRAP} data-campo="pesaje">
-                        <p className={SECCION}>{nSec.solPesaje}. Solicitud de pesaje</p>
+                        <p className={SECCION}>{nSec.solPesaje}. {labelConsulta}</p>
                         {avisoPesaje && (
                             <p
                                 className="text-xs font-bold m-0 mb-3"
@@ -1997,22 +2091,30 @@ export default function ModalFormPedido({
                         )}
                         {pendientePesaje && (
                             <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale} className="mb-4">
-                                Consulta de pesaje enviada. Cuando CEDIS responda verá aquí el peso, medidas y detalle físico.
+                                {labelConsulta} enviada. Cuando CEDIS responda verá aquí el detalle
+                                {esConsultaMercancia ? ' de piezas y estado físico.' : ' de peso, medidas y estado físico.'}
                             </AvisoOperativoPedido>
                         )}
                         {tienePesajeRespondido && !pendientePesaje && puedeContinuarPedido && (
-                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
-                                CEDIS ya respondió. Pulse «Continuar pedido» para desbloquear el resto del formulario (pedidos que aún figuran en pesaje pendiente).
+                            <AvisoOperativoPedido label="Respuesta lista" tono="success" icon={Scale} className="mb-4">
+                                CEDIS ya respondió. Pulse «Continuar pedido» para desbloquear el resto del formulario.
                             </AvisoOperativoPedido>
                         )}
-                        {tienePesajeRespondido && !pendientePesaje && !puedeContinuarPedido && (
-                            <AvisoOperativoPedido label="Pesaje listo" tono="success" icon={Scale} className="mb-4">
-                                CEDIS registró el peso y las cajas. Ya puede cotizar (paquetería y costos) y enviar; el comprobante de pago se solicita después. Si agrega piezas, suba un segundo PDF/foto y solicite re-pesaje.
+                        {tienePesajeRespondido && !pendientePesaje && !puedeContinuarPedido && !consultaCerrada && (
+                            <AvisoOperativoPedido label="Confirme con el cliente" tono="info" icon={CheckCircle2} className="mb-4">
+                                Revise las piezas con el cliente y cierre la consulta para capturar el monto y el pago.
+                                Si hay cambios, use «Actualizar consulta» (anexo/retiro).
+                            </AvisoOperativoPedido>
+                        )}
+                        {consultaCerrada && (
+                            <AvisoOperativoPedido label="Consulta cerrada" tono="success" icon={CheckCircle2} className="mb-4">
+                                Ya puede capturar el total de mercancía y el pago.
+                                {requiereLogistica ? ' Complete también la cotización de envío.' : ''}
                             </AvisoOperativoPedido>
                         )}
                         {!tienePesajeRespondido && !pendientePesaje && (
                             <AvisoOperativoPedido label="Paso requerido" tono="info" icon={Scale} className="mb-4">
-                                Indique el total, adjunte el PDF o foto del pedido y solicite el pesaje. No se requiere comprobante de pago en este paso.
+                                Adjunta el PDF o foto del pedido y solicite la {labelConsulta.toLowerCase()}. El monto se captura después de cerrarla.
                             </AvisoOperativoPedido>
                         )}
                         <div className="space-y-4">
@@ -2020,45 +2122,69 @@ export default function ModalFormPedido({
                                 <button
                                     type="button"
                                     onClick={solicitarPesaje}
-                                    disabled={procesandoPesaje || processing || !data.cliente_id || Number(data.total_mercancia || 0) <= 0}
+                                    disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido}
                                     className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
                                 >
-                                    <Scale className="w-4 h-4" /> Solicitar pesaje a CEDIS
+                                    <Scale className="w-4 h-4" /> Solicitar {labelConsulta.toLowerCase()} a CEDIS
                                 </button>
                             )}
                             {!data.cliente_id && !tienePesajeRespondido && !pendientePesaje && (
-                                <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione el cliente para poder solicitar el pesaje.</p>
+                                <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione el cliente para poder solicitar la consulta.</p>
                             )}
-                            {data.cliente_id && Number(data.total_mercancia || 0) <= 0 && !tienePesajeRespondido && !pendientePesaje && (
-                                <p className="text-[10px] font-bold text-amber-600 m-0">Indique el total de mercancía para poder solicitar el pesaje.</p>
+                            {data.cliente_id && !tienePdfPedido && !tienePesajeRespondido && !pendientePesaje && (
+                                <p className="text-[10px] font-bold text-amber-600 m-0">Adjunte el PDF o foto del pedido para solicitar la consulta.</p>
+                            )}
+                            {puedeCerrarConsulta && (
+                                <button
+                                    type="button"
+                                    onClick={cerrarConsulta}
+                                    disabled={procesandoPesaje}
+                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
+                                >
+                                    <CheckCircle2 className="w-4 h-4" /> Cerrar consulta / Confirmar mercancía con cliente
+                                </button>
+                            )}
+                            {consultaCerrada && !pendientePesaje && !pedido?.empacado_at && (
+                                <button
+                                    type="button"
+                                    onClick={reabrirConsulta}
+                                    disabled={procesandoPesaje}
+                                    className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}
+                                >
+                                    Reabrir consulta
+                                </button>
                             )}
                             {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && (
                                 <div className="space-y-3 p-3 rounded-xl border theme-border">
                                     <div>
-                                        <label className={SECCION}>Piezas adicionales (PDF o foto)</label>
+                                        <label className={SECCION}>Piezas adicionales (PDF o fotos)</label>
                                         <div className="flex flex-wrap items-center gap-3">
                                             <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
                                                 <ImagePlus className="w-4 h-4 theme-text-muted" />
                                                 <span className="text-xs font-black uppercase">
-                                                    {tieneAnexoPiezas ? 'Reemplazar anexo' : 'Adjuntar anexo'}
+                                                    {tieneAnexoPiezas ? 'Agregar más' : 'Adjuntar anexos'}
                                                 </span>
-                                                <input type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirAnexoPiezas} disabled={procesandoPesaje} />
+                                                <input type="file" multiple accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirAnexoPiezas} disabled={procesandoPesaje} />
                                             </label>
-                                            {anexoPiezasDoc?.url && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setVistaPrevia(anexoPiezasDoc)}
-                                                    className="text-xs font-bold underline outline-none"
-                                                    style={{ color: 'var(--color-primario)' }}
-                                                >
-                                                    {labelSoportePedido(anexoPiezasDoc)}
-                                                </button>
-                                            )}
                                         </div>
+                                        {anexosPiezasDocs.length > 0 && (
+                                            <div className="flex flex-wrap gap-2 mt-3">
+                                                {anexosPiezasDocs.map((doc, idx) => (
+                                                    <MiniaturaDocumento
+                                                        key={doc.id || doc.url || idx}
+                                                        documento={doc}
+                                                        onVer={() => abrirVistaPrevia(anexosPiezasDocs, idx)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                        <p className="text-[10px] theme-text-muted font-bold m-0 mt-2">
+                                            Puede pegar una o varias capturas (Ctrl+V). Clic en miniatura abre el visor; en fotos también se agrandan al pasar el cursor.
+                                        </p>
                                     </div>
                                     <div className="flex flex-wrap items-end gap-3">
                                         <div className="min-w-[200px] flex-1">
-                                            <label className={SECCION}>Re-pesaje (cambio de pedido)</label>
+                                            <label className={SECCION}>Actualizar consulta</label>
                                             <select value={motivoRepesaje} onChange={(e) => setMotivoRepesaje(e.target.value)} className={`${THEME_SELECT} w-full py-3`}>
                                                 <option value="">Motivo…</option>
                                                 {Object.entries(LABELS_MOTIVO_REPESAJE).map(([k, label]) => (
@@ -2067,7 +2193,7 @@ export default function ModalFormPedido({
                                             </select>
                                         </div>
                                         <button type="button" onClick={solicitarRepesaje} disabled={procesandoPesaje || !motivoRepesaje} className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}>
-                                            <Scale className="w-4 h-4" /> Solicitar re-pesaje
+                                            <Scale className="w-4 h-4" /> Actualizar consulta
                                         </button>
                                     </div>
                                 </div>
@@ -2077,7 +2203,7 @@ export default function ModalFormPedido({
 
                     {tienePesajeRespondido && (
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>{nSec.resp}. Respuesta de cajas y pesos</p>
+                        <p className={SECCION}>{nSec.resp}. {esConsultaMercancia ? 'Respuesta de mercancía' : 'Respuesta de cajas y pesos'}</p>
                         {(pedido?.pesaje_respondido_por?.name || pedido?.pesajeRespondidoPor?.name) && (
                             <p className="text-xs font-bold theme-text-main m-0 mb-3">
                                 Respondió: {pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name}
@@ -2088,11 +2214,13 @@ export default function ModalFormPedido({
                         )}
                                 <SeccionRevisionFisicaPedido
                                     pedido={pedido}
-                                    onVerDoc={setVistaPrevia}
+                                    onVerDoc={abrirVistaPrevia}
                                     titulo="Revisión física CEDIS"
                                     puedeAtender={Boolean(pedido?.puede_mutar)}
                                     puedeCancelar={Boolean(pedido?.puede_cancelar)}
                                 />
+                                {!esConsultaMercancia && (
+                                <>
                                 {cajasPesaje.length > 0 ? (
                                     <div className="space-y-3" data-campo="tipo_caja">
                                         <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
@@ -2136,6 +2264,8 @@ export default function ModalFormPedido({
                                         />
                                     </div>
                                 </div>
+                                </>
+                                )}
                                 {puedeContinuarPedido && (
                                     <div className="mt-2 p-4 rounded-xl border-2 border-orange-500/50 bg-orange-500/10 space-y-4">
                                         <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 m-0">
@@ -2160,6 +2290,18 @@ export default function ModalFormPedido({
                     </>
                     )}
 
+                    {mostrarMontoMercancia && (
+                    <section className={SECCION_WRAP} data-campo="total_mercancia">
+                        <p className={SECCION}>{nSec.monto}. Total de mercancía</p>
+                        <AvisoOperativoPedido label="Pedido final" tono="info" icon={CheckCircle2} className="mb-4">
+                            Capture el monto solo cuando la mercancía ya está confirmada con el cliente (consulta CEDIS cerrada).
+                        </AvisoOperativoPedido>
+                        <div className={wrapCampo('total_mercancia')}>
+                            <label className={SECCION}>Total mercancía *</label>
+                            <InputMoneda value={data.total_mercancia} onChange={(v) => setData('total_mercancia', v)} className="w-full py-3" />
+                        </div>
+                    </section>
+                    )}
 
                     {mostrarLogisticaPostPesaje && (
                     <>
@@ -2562,7 +2704,7 @@ export default function ModalFormPedido({
                                 pedidoId={idPedidoAcciones}
                                 bancos={catalogos.bancos || []}
                                 formasPago={catalogos.formas_pago || []}
-                                puedeRegistrar={Boolean(idPedidoAcciones) && cotizacionLista}
+                                puedeRegistrar={puedeRegistrarPago}
                                 puedeGenerarSaldo={false}
                                 totalMercancia={data.total_mercancia}
                                 costoEnvio={guiaCliente ? 0 : data.costo_envio}
@@ -2570,7 +2712,11 @@ export default function ModalFormPedido({
                                 costoSeguro={data.costo_seguro}
                                 saldoAFavorAplicado={data.aplica_saldo_favor ? saldoFavorCalculado : 0}
                                 onResumenChange={(r) => setPagoResumen(r)}
-                                mensajeBloqueo={null}
+                                mensajeBloqueo={!consultaCerrada
+                                    ? 'Cierre la consulta CEDIS antes de registrar el pago.'
+                                    : (requiereLogistica && !cotizacionLista
+                                        ? 'Complete la cotización de envío antes de registrar el pago.'
+                                        : null)}
                             />
                             {docsExistentes.length > 0 && (
                                 <div>
@@ -2610,8 +2756,10 @@ export default function ModalFormPedido({
                         <p className={SECCION}>{nSec.pago}. Pago</p>
                         <AvisoOperativoPedido label="Más adelante" tono="info" icon={Scale} className="mb-0">
                             {requiereLogistica
-                                ? 'Complete el pesaje CEDIS y la cotización. El monto, banco y comprobante se capturan después, cuando el cliente transfiera.'
-                                : 'Indique el total de mercancía. El pago (banco y comprobante) se captura después, cuando el cliente transfiera.'}
+                                ? (tienePesajeRespondido && !consultaCerrada
+                                    ? 'Cierre la consulta CEDIS y complete la cotización. Luego registre banco y comprobante.'
+                                    : 'Complete el pesaje CEDIS, cierre la consulta y la cotización. El pago se captura después.')
+                                : 'Solicite la consulta de mercancía, ciérrela con el cliente y capture el monto. Luego registre el pago.'}
                         </AvisoOperativoPedido>
                     </section>
                     )}
@@ -2704,6 +2852,7 @@ export default function ModalFormPedido({
                             setPdfLocalOk(false);
                             setPdfDocLocal(null);
                             setAnexoLocalOk(false);
+                            setAnexoDocsLocal([]);
                             if (!modoEdicion) {
                                 limpiarBorradorLocal();
                                 // Conserva pedidoBdId para no crear borradores huérfanos; el próximo autoguardado limpia campos en BD.
@@ -2740,8 +2889,9 @@ export default function ModalFormPedido({
                 }}
             />
             <ModalVistaPreviaDocumento
-                abierto={Boolean(abierto) && Boolean(vistaPrevia)}
-                documento={vistaPrevia}
+                abierto={Boolean(abierto) && Boolean(vistaPrevia?.documentos?.length)}
+                documentos={vistaPrevia?.documentos || []}
+                indice={vistaPrevia?.indice || 0}
                 onClose={() => {
                     ignoreOverlayCloseUntil.current = Date.now() + 400;
                     setVistaPrevia(null);

@@ -18,13 +18,27 @@ class SolicitarPesajePedidoBmaService
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
         $pedido->loadMissing(['estatus', 'origen']);
+        $fase = $pedido->estatus?->fase_ciclo;
+
+        // Idempotente: ya enviada a CEDIS (doble clic / UI stale) → éxito sin error.
+        if ($pedido->estatus_envio === PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE
+            && $fase === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE
+            && ! $pedido->tienePesajeRespondido()) {
+            return $pedido->fresh([
+                'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'cajas.tipoGuia', 'tipoCaja', 'origen',
+            ]);
+        }
 
         if (! $pedido->puedeSolicitarPesaje()) {
-            throw new \RuntimeException('Este pedido no puede solicitar pesaje en su estado actual.');
+            throw new \RuntimeException(
+                $pedido->esConsultaMercancia()
+                    ? 'Este pedido no puede solicitar consulta de mercancía en su estado actual.'
+                    : 'Este pedido no puede solicitar pesaje en su estado actual.'
+            );
         }
 
         if (! $pedido->tienePdfPedido()) {
-            throw new \InvalidArgumentException('Debe adjuntar el PDF o una foto del pedido antes de solicitar el pesaje.');
+            throw new \InvalidArgumentException('Debe adjuntar el PDF o una foto del pedido antes de solicitar la consulta a CEDIS.');
         }
 
         MaquinaEstadosPedidoBma::assertTransicion(
@@ -34,10 +48,13 @@ class SolicitarPesajePedidoBmaService
 
         $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE);
         if (! $estatusNuevo) {
-            throw new \RuntimeException('No se encontró el estatus de pesaje pendiente.');
+            throw new \RuntimeException('No se encontró el estatus de consulta pendiente.');
         }
 
-        return DB::transaction(function () use ($pedido, $usuarioId, $estatusNuevo) {
+        $esMercancia = $pedido->esConsultaMercancia();
+        $label = $esMercancia ? 'Consulta de mercancía' : 'Consulta de pesaje';
+
+        return DB::transaction(function () use ($pedido, $usuarioId, $estatusNuevo, $esMercancia, $label) {
             $estatusAnterior = $pedido->estatus;
 
             $pedido->update([
@@ -47,6 +64,9 @@ class SolicitarPesajePedidoBmaService
                 'pesaje_respondido_at' => null,
                 'pesaje_respondido_por_id' => null,
                 'motivo_repesaje' => null,
+                'consulta_cerrada_at' => null,
+                'consulta_cerrada_por_id' => null,
+                'consulta_actualizacion_pendiente' => false,
             ]);
 
             $this->historialService->ejecutar(
@@ -54,14 +74,16 @@ class SolicitarPesajePedidoBmaService
                 $usuarioId,
                 $estatusAnterior->id,
                 $estatusNuevo->id,
-                'Consulta de pesaje enviada a CEDIS.',
+                "{$label} enviada a CEDIS.",
                 AccionesHistorialPedidoBma::SOLICITUD_PESAJE
             );
 
             $this->notificarService->ejecutar(
                 $pedido->fresh(),
                 'pedido_consulta_pesaje',
-                'Nueva consulta de pesaje pendiente',
+                $esMercancia
+                    ? 'Nueva consulta de mercancía pendiente'
+                    : 'Nueva consulta de pesaje pendiente',
                 ['control_pedidos.cedis'],
                 $usuarioId,
                 false,
@@ -69,7 +91,7 @@ class SolicitarPesajePedidoBmaService
             );
 
             return $pedido->fresh([
-                'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'cajas.tipoGuia', 'tipoCaja',
+                'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'cajas.tipoGuia', 'tipoCaja', 'origen',
             ]);
         });
     }

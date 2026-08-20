@@ -40,6 +40,12 @@ trait ValidacionCamposPedidoBma
             );
         }
 
+                        if ($pedido->requiereConsultaCerradaParaProceder() && ! $pedido->consultaCerrada()) {
+            throw new \InvalidArgumentException(
+                'Debe cerrar la consulta CEDIS (confirmar mercancía con el cliente) antes de enviar el pedido.'
+            );
+        }
+
         if (empty(trim((string) ($pedido->folio_remision ?? '')))) {
             $faltantes[] = 'folio de pedido';
         }
@@ -52,7 +58,8 @@ trait ValidacionCamposPedidoBma
         if (! $pedido->almacen_id) {
             $faltantes[] = 'almacén de salida';
         }
-        if ($pedido->total_mercancia <= 0) {
+        // Pedido final: monto obligatorio al enviar (solo se llega aquí con consulta cerrada, salvo complemento).
+        if ((float) $pedido->total_mercancia <= 0) {
             $faltantes[] = 'total de mercancía';
         }
         if (! $pedido->tienePdfPedido()) {

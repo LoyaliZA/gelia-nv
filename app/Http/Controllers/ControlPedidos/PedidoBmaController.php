@@ -35,6 +35,8 @@ use App\Services\ControlPedidos\RestaurarRegistroPedidoBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\SolicitarPesajePedidoBmaService;
 use App\Services\ControlPedidos\SolicitarRepesajePedidoBmaService;
+use App\Services\ControlPedidos\CerrarConsultaPedidoBmaService;
+use App\Services\ControlPedidos\ReabrirConsultaPedidoBmaService;
 use App\Services\ControlPedidos\VolverBorradorPedidoBmaService;
 use App\Support\Clientes\FormatearDireccionEstructurada;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
@@ -409,7 +411,7 @@ class PedidoBmaController extends Controller
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
-            $service->subirAnexoPiezas($pedidoBma->load('estatus'), $request->file('anexo_piezas'));
+            $documento = $service->subirAnexoPiezas($pedidoBma->load('estatus'), $request->file('anexo_piezas'));
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             if ($request->expectsJson()) {
                 return response()->json(['message' => $e->getMessage()], 422);
@@ -422,6 +424,7 @@ class PedidoBmaController extends Controller
             return response()->json([
                 'ok' => true,
                 'mensaje' => 'Anexo de piezas adicionales adjuntado.',
+                'documento' => $documento->fresh(),
             ]);
         }
 
@@ -474,6 +477,50 @@ class PedidoBmaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Re-pesaje solicitado a CEDIS.');
+    }
+
+    public function cerrarConsulta(
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        CerrarConsultaPedidoBmaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $service->ejecutar($pedidoBma->load(['estatus', 'origen', 'vendedor']), Auth::id());
+        } catch (Throwable $e) {
+            return $this->responderErrorOperacionPedido(
+                $e,
+                $pedidoBma,
+                'cerrar_consulta',
+                'No se pudo cerrar la consulta. Intente de nuevo o contacte a soporte.'
+            );
+        }
+
+        return redirect()->back()->with('success', 'Consulta CEDIS cerrada. Ya puede capturar el monto y el pago.');
+    }
+
+    public function reabrirConsulta(
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        ReabrirConsultaPedidoBmaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $service->ejecutar($pedidoBma->load(['estatus', 'origen', 'vendedor']), Auth::id());
+        } catch (Throwable $e) {
+            return $this->responderErrorOperacionPedido(
+                $e,
+                $pedidoBma,
+                'reabrir_consulta',
+                'No se pudo reabrir la consulta. Intente de nuevo o contacte a soporte.'
+            );
+        }
+
+        return redirect()->back()->with('success', 'Consulta CEDIS reabierta. El monto y el pago quedan bloqueados hasta cerrar de nuevo.');
     }
 
     public function atenderSinExistencia(

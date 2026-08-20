@@ -891,6 +891,8 @@ export const validarCamposEnvioPedido = (data, {
     tienePdfPedido = false,
     pagoPendiente = null,
     paqueteria = null,
+    consultaCerrada = false,
+    requiereConsultaCerrada = false,
 } = {}) => {
     const faltantes = [];
     const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario
@@ -919,11 +921,23 @@ export const validarCamposEnvioPedido = (data, {
         };
     }
 
+    if (requiereConsultaCerrada && !consultaCerrada) {
+        return {
+            valido: false,
+            faltantes: ['cierre de consulta CEDIS'],
+            claves: ['consulta_cerrada'],
+            mensaje: 'Cierre la consulta CEDIS (confirme mercancía con el cliente) antes de enviar.',
+        };
+    }
+
     if (!String(data.folio_remision || '').trim()) marcar('folio_remision', 'folio de pedido');
     if (!data.cliente_id) marcar('cliente', 'cliente');
     if (!data.origen_id) marcar('origen', 'tipo de pedido');
     if (!data.almacen_id) marcar('almacen', 'almacén de salida');
-    if (Number(data.total_mercancia || 0) <= 0) marcar('total_mercancia', 'total de mercancía');
+    // Monto solo obligatorio con consulta cerrada (pedido final post-pesaje/consulta).
+    if (consultaCerrada || !requiereConsultaCerrada) {
+        if (Number(data.total_mercancia || 0) <= 0) marcar('total_mercancia', 'total de mercancía');
+    }
     if (!tienePdfPedido) marcar('pdf_pedido', 'PDF o foto del pedido');
 
     if (pagoPendiente == null) {

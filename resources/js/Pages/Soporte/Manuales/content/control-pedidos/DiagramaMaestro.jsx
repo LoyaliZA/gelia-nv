@@ -68,14 +68,14 @@ export default function DiagramaMaestro() {
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
                 <Lane title="1 · Vendedora · Registrar">
                     <Node>Crear / autoguardar → <strong>BORRADOR</strong></Node>
-                    <Arrow label="PDF o foto del pedido (sin comprobante)" />
-                    <Node tone="mute">Solicitar pesaje → <strong>PESAJE_PENDIENTE</strong></Node>
-                    <Arrow label="CEDIS responde" />
-                    <Node tone="ok"><strong>PESAJE_RESPONDIDO</strong> (peso / cajas). Si agrega piezas: re-pesaje</Node>
-                    <Arrow label="Comprobante + cotización OK" />
+                    <Arrow label="PDF o foto (Envío o Tienda)" />
+                    <Node tone="mute">Solicitar consulta CEDIS → <strong>PESAJE_PENDIENTE</strong></Node>
+                    <Arrow label="CEDIS responde (pesaje o mercancía)" />
+                    <Node tone="ok"><strong>PESAJE_RESPONDIDO</strong>. Cerrar consulta → monto → pago</Node>
+                    <Arrow label="Actualizar consulta si hay anexo/retiro" />
                     <Node tone="ok">Enviar → <strong>PENDIENTE_AUDITORÍA</strong></Node>
                     <p className="text-[9px] theme-text-muted m-0 pt-1 leading-relaxed">
-                        Pre-venta: conservar borrador o eliminar si el cliente no compra. Al enviar: limpia remisión y pago validado; notifica auxiliar.
+                        Sin cierre de consulta no hay monto editable, pago ni enviar. Tienda: sin cajas/kg. Envío: cotización tras pesaje.
                     </p>
                 </Lane>
 

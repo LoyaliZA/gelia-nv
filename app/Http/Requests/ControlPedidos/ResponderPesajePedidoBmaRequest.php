@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\ControlPedidos;
 
+use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -16,15 +17,10 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
     public function rules(): array
     {
         $estados = PedidoBmaRevisionProducto::ESTADOS;
+        $pedido = $this->route('pedidoBma');
+        $soloRevisiones = $pedido instanceof PedidoBma && $pedido->esConsultaMercancia();
 
-        return [
-            'cajas' => ['required', 'array', 'min:1'],
-            'cajas.*.catalogo_tipo_caja_id' => ['required', 'integer', 'exists:catalogo_tipos_caja_pedido,id'],
-            'cajas.*.largo' => ['required', 'numeric', 'min:0'],
-            'cajas.*.ancho' => ['required', 'numeric', 'min:0'],
-            'cajas.*.alto' => ['required', 'numeric', 'min:0'],
-            'cajas.*.peso_real_kg' => ['required', 'numeric', 'min:0'],
-            'cajas.*.peso_volumetrico_kg' => ['required', 'numeric', 'min:0'],
+        $rules = [
             'estado_fisico_general' => ['nullable', 'string', Rule::in($estados)],
             'comentario_fisico_general' => ['nullable', 'string', 'max:2000'],
             'evidencias_generales' => ['nullable', 'array'],
@@ -32,7 +28,7 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'evidencias_envios' => ['nullable', 'array'],
             'evidencias_envios.*' => ['nullable', 'array'],
             'evidencias_envios.*.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
-            'revisiones' => ['nullable', 'array'],
+            'revisiones' => [$soloRevisiones ? 'required' : 'nullable', 'array', $soloRevisiones ? 'min:1' : 'nullable'],
             'revisiones.*.descripcion_producto' => ['required_with:revisiones', 'string', 'max:255'],
             'revisiones.*.producto_id' => ['nullable', 'integer'],
             'revisiones.*.sku' => ['nullable', 'string', 'max:64'],
@@ -43,8 +39,22 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'revisiones.*.evidencias' => ['nullable', 'array'],
             'revisiones.*.evidencias.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
             'revisiones.*.client_uuid' => ['nullable', 'string', 'max:64'],
-            'cajas.*.client_uuid' => ['nullable', 'string', 'max:64'],
         ];
+
+        if ($soloRevisiones) {
+            $rules['cajas'] = ['nullable', 'array'];
+        } else {
+            $rules['cajas'] = ['required', 'array', 'min:1'];
+            $rules['cajas.*.catalogo_tipo_caja_id'] = ['required', 'integer', 'exists:catalogo_tipos_caja_pedido,id'];
+            $rules['cajas.*.largo'] = ['required', 'numeric', 'min:0'];
+            $rules['cajas.*.ancho'] = ['required', 'numeric', 'min:0'];
+            $rules['cajas.*.alto'] = ['required', 'numeric', 'min:0'];
+            $rules['cajas.*.peso_real_kg'] = ['required', 'numeric', 'min:0'];
+            $rules['cajas.*.peso_volumetrico_kg'] = ['required', 'numeric', 'min:0'];
+            $rules['cajas.*.client_uuid'] = ['nullable', 'string', 'max:64'];
+        }
+
+        return $rules;
     }
 
     public function messages(): array
@@ -55,6 +65,8 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'cajas.*.catalogo_tipo_caja_id.required' => 'Cada envío requiere tipo de caja.',
             'cajas.*.peso_real_kg.required' => 'Cada envío requiere peso real.',
             'cajas.*.peso_volumetrico_kg.required' => 'Cada envío requiere peso volumétrico.',
+            'revisiones.required' => 'Revise al menos un producto.',
+            'revisiones.min' => 'Revise al menos un producto.',
         ];
     }
 
