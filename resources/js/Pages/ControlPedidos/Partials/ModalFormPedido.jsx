@@ -45,7 +45,7 @@ import CamposDireccionPedido, {
     camposDesdeDireccion,
     resumirCamposDireccion,
 } from './CamposDireccionPedido';
-import { resolverReexpedicionForm } from './resolverReexpedicionForm';
+import { resolverReexpedicionForm, separarCostoEnvioDeReexpedicion, costoEnvioParaPersistir } from './resolverReexpedicionForm';
 import ModalConfirmarAccion from './ModalConfirmarAccion';
 import SeccionPagosExhibicion from './SeccionPagosExhibicion';
 import { CAMPOS_ERROR_DATOS } from './ModalReportarErrorDatos';
@@ -237,6 +237,8 @@ export default function ModalFormPedido({
     const abortBusqueda = useRef(null);
     const costoReexpedicionAplicado = useRef(0);
     const matchReexpedicionKey = useRef(null);
+    const rexStripHechoRef = useRef(false);
+    const [costoReexpedicion, setCostoReexpedicion] = useState(0);
     const pedidoBdIdRef = useRef(pedido?.id || null);
     const ultimoFingerprintBd = useRef('');
     const ultimoSyncCedis = useRef('');
@@ -421,12 +423,17 @@ export default function ModalFormPedido({
         : { cliente: 1, tipo: 2, pdf: 3, solPesaje: 4, resp: 5, monto: 6, pago: 7, rem: 8 };
     const mostrarMontoMercancia = consultaCerrada && !pendientePesaje && !esResguardoComplementario;
     const totalCobrar = calcularTotalCobrar(
-        data.total_mercancia, data.costo_envio, data.aplica_seguro, data.costo_seguro,
+        data.total_mercancia,
+        (guiaCliente ? 0 : Number(data.costo_envio || 0)) + (guiaCliente ? 0 : Number(costoReexpedicion || 0)),
+        data.aplica_seguro,
+        data.costo_seguro,
         saldoFavorCalculado
     );
     const resumenCoberturaVivo = calcularResumenCoberturaPago({
         totalMercancia: data.total_mercancia,
-        costoEnvio: guiaCliente ? 0 : data.costo_envio,
+        costoEnvio: guiaCliente
+            ? 0
+            : Number(data.costo_envio || 0) + Number(costoReexpedicion || 0),
         aplicaSeguro: Boolean(data.aplica_seguro),
         costoSeguro: data.costo_seguro,
         saldoAFavorAplicado: data.aplica_saldo_favor ? saldoFavorCalculado : 0,
@@ -504,6 +511,8 @@ export default function ModalFormPedido({
         setVistaPrevia(null);
         costoReexpedicionAplicado.current = 0;
         matchReexpedicionKey.current = null;
+        rexStripHechoRef.current = false;
+        setCostoReexpedicion(0);
         ultimoFingerprintBd.current = '';
         ultimoSyncCedis.current = '';
         if (pedido) {
@@ -654,17 +663,34 @@ export default function ModalFormPedido({
 
         // Inertia setData(object) REEMPLAZA todo el form; hay que mergear con updater.
         const origenId = pedido.origen_id ?? pedido.origen?.id ?? null;
-        setData((prev) => ({
-            ...prev,
-            ...(origenId ? { origen_id: origenId } : {}),
-            peso_real_kg: pedido.peso_real_kg ?? '',
-            numero_cajas: pedido.numero_cajas ?? '',
-            peso_cobrado_guia_kg: pedido.peso_cobrado_guia_kg ?? '',
-            catalogo_tipo_caja_id: pedido.catalogo_tipo_caja_id || '',
-            costo_envio: pedido.costo_envio ?? prev.costo_envio ?? '',
-            catalogo_paqueteria_id: pedido.catalogo_paqueteria_id || prev.catalogo_paqueteria_id || '',
-            catalogo_tipo_guia_id: pedido.catalogo_tipo_guia_id || prev.catalogo_tipo_guia_id || '',
-        }));
+        setData((prev) => {
+            const paqId = pedido.catalogo_paqueteria_id || prev.catalogo_paqueteria_id || '';
+            const cp = prev.codigo_postal || pedido.codigo_postal || '';
+            const rex = resolverReexpedicionForm({
+                codigoPostal: cp,
+                paqueteriaId: paqId,
+                reexpediciones: catalogos.reexpediciones || [],
+                zonas: catalogos.zonas || [],
+            });
+            const rawEnvio = pedido.costo_envio ?? prev.costo_envio ?? '';
+            const { base } = separarCostoEnvioDeReexpedicion(rawEnvio, rex.costoAplicado);
+            if (rex.costoAplicado !== costoReexpedicionAplicado.current) {
+                costoReexpedicionAplicado.current = rex.costoAplicado;
+                matchReexpedicionKey.current = rex.matchKey;
+                setCostoReexpedicion(rex.costoAplicado);
+            }
+            return {
+                ...prev,
+                ...(origenId ? { origen_id: origenId } : {}),
+                peso_real_kg: pedido.peso_real_kg ?? '',
+                numero_cajas: pedido.numero_cajas ?? '',
+                peso_cobrado_guia_kg: pedido.peso_cobrado_guia_kg ?? '',
+                catalogo_tipo_caja_id: pedido.catalogo_tipo_caja_id || '',
+                costo_envio: base,
+                catalogo_paqueteria_id: paqId || prev.catalogo_paqueteria_id || '',
+                catalogo_tipo_guia_id: pedido.catalogo_tipo_guia_id || prev.catalogo_tipo_guia_id || '',
+            };
+        });
         if (pedido.pesaje_respondido_at || pedido.estatus_envio === 'pesaje_listo') {
             setPesoVolumetrico(pedido.peso_volumetrico_kg ?? '');
         }
@@ -732,6 +758,9 @@ export default function ModalFormPedido({
                     payload[k] = v === '' ? null : v;
                 }
             });
+            if (!data.cliente_proporciona_guia && !data.envio_por_cobrar) {
+                payload.costo_envio = costoEnvioParaPersistir(data.costo_envio, costoReexpedicion);
+            }
             payload.pedido_id = pedidoBdIdRef.current || undefined;
             payload.saldo_a_favor = data.aplica_saldo_favor
                 ? (Number(data.saldo_a_favor) || (data.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
@@ -872,31 +901,30 @@ export default function ModalFormPedido({
             paqueteriaId: data.catalogo_paqueteria_id,
             reexpediciones: catalogos.reexpediciones || [],
             zonas: catalogos.zonas || [],
-            costoEnvioActual: data.costo_envio,
-            costoAplicadoPrevio: costoReexpedicionAplicado.current,
         });
-        if (resolved.matchKey === matchReexpedicionKey.current
-            && Number(resolved.costoAplicado) === Number(costoReexpedicionAplicado.current)) {
-            return;
-        }
-        // En edición, la primera sync asume que costo_envio ya incluye el adicional.
-        if (modoEdicion && matchReexpedicionKey.current === null && resolved.matchKey) {
+        const mismoMatch = resolved.matchKey === matchReexpedicionKey.current
+            && Number(resolved.costoAplicado) === Number(costoReexpedicionAplicado.current);
+
+        if (!mismoMatch) {
             matchReexpedicionKey.current = resolved.matchKey;
             costoReexpedicionAplicado.current = resolved.costoAplicado;
+            setCostoReexpedicion(resolved.costoAplicado);
             if (resolved.zonaId !== '' && String(resolved.zonaId) !== String(data.catalogo_zona_id)) {
                 setData('catalogo_zona_id', resolved.zonaId);
             }
-            return;
         }
-        matchReexpedicionKey.current = resolved.matchKey;
-        costoReexpedicionAplicado.current = resolved.costoAplicado;
-        if (resolved.zonaId !== '' && String(resolved.zonaId) !== String(data.catalogo_zona_id)) {
-            setData('catalogo_zona_id', resolved.zonaId);
+
+        // Pedidos viejos: costo_envio traía flete+reexpedición mezclados; separar una vez al abrir.
+        if (!rexStripHechoRef.current) {
+            rexStripHechoRef.current = true;
+            if (resolved.costoAplicado > 0 && data.costo_envio !== '' && data.costo_envio != null) {
+                const { base } = separarCostoEnvioDeReexpedicion(data.costo_envio, resolved.costoAplicado);
+                if (Number(base) !== Number(data.costo_envio)) {
+                    setData('costo_envio', base);
+                }
+            }
         }
-        if (Number(resolved.costoEnvio) !== Number(data.costo_envio || 0)) {
-            setData('costo_envio', resolved.costoEnvio);
-        }
-    }, [abierto, requiereLogistica, modoEdicion, data.codigo_postal, data.catalogo_paqueteria_id, catalogos.reexpediciones, catalogos.zonas]);
+    }, [abierto, requiereLogistica, data.codigo_postal, data.catalogo_paqueteria_id, catalogos.reexpediciones, catalogos.zonas]);
 
     useEffect(() => {
         if (!data.catalogo_paqueteria_id) {
@@ -912,6 +940,7 @@ export default function ModalFormPedido({
         }
 
         const paq = (catalogos.paqueterias || []).find((p) => String(p.id) === String(data.catalogo_paqueteria_id));
+        // Seguro sobre flete base + mercancía (sin reexpedición).
         const costo = calcCostoSeguro(paq?.nombre, data.costo_envio, data.total_mercancia);
         setData('costo_seguro', costo);
 
@@ -927,6 +956,9 @@ export default function ModalFormPedido({
             setData('costo_envio', '');
             setData('aplica_seguro', false);
             setData('costo_seguro', 0);
+            setCostoReexpedicion(0);
+            costoReexpedicionAplicado.current = 0;
+            matchReexpedicionKey.current = null;
             setData('catalogo_tipo_guia_id', '');
             setData('catalogo_zona_id', '');
         }
@@ -1290,7 +1322,7 @@ export default function ModalFormPedido({
     const guardar = (enviarPedido = false, { cerrar = true, alTerminar = null } = {}) => {
         setAvisoForm(null);
 
-            if (enviarPedido) {
+        if (enviarPedido) {
             setIntentoEnviar(true);
             if (esResguardoComplementario && !data.pedido_principal_id) {
                 setAvisoForm({ tipo: 'error', mensaje: 'Seleccione el pedido principal a complementar.' });
@@ -1300,19 +1332,17 @@ export default function ModalFormPedido({
                 setAvisoForm({ tipo: 'error', mensaje: 'Espere la respuesta de pesaje de CEDIS antes de enviar.' });
                 return;
             }
-            const { valido, claves } = validarCamposEnvioPedido(data, {
-                requiereLogistica,
-                direccionesNormalizadas,
-                esMunicipioDiferido,
-                esResguardoAbierto,
-                esResguardoComplementario,
-                tienePesajeRespondido,
-                pagoPendiente: pagoPendienteVivo,
-                paqueteria: paqueteriaSeleccionada,
-            });
-            if (!valido) {
+            // Misma validación que enviarPedidoListo (tienePdfPedido, consultaCerrada, etc.).
+            if (!validacionEnvio.valido) {
+                const lista = (validacionEnvio.faltantes || []).join(', ');
+                setAvisoForm({
+                    tipo: 'error',
+                    mensaje: lista
+                        ? `Complete: ${lista}.`
+                        : (validacionEnvio.mensaje || 'Hay campos faltantes.'),
+                });
                 requestAnimationFrame(() => {
-                    const clave = claves?.[0];
+                    const clave = validacionEnvio.claves?.[0];
                     const nodo = clave
                         ? cuerpoFormRef.current?.querySelector(`[data-campo="${clave}"]`)
                         : null;
@@ -1323,6 +1353,27 @@ export default function ModalFormPedido({
         }
 
         const idDestino = modoEdicion ? pedido.id : pedidoBdIdRef.current;
+        const payloadEnvio = (d) => {
+            const omitEnvio = Boolean(d.cliente_proporciona_guia) || Boolean(d.envio_por_cobrar);
+            return conDireccionManual({
+                ...d,
+                costo_envio: omitEnvio
+                    ? (d.costo_envio === '' || d.costo_envio == null ? '' : 0)
+                    : costoEnvioParaPersistir(d.costo_envio, costoReexpedicion),
+                enviar: undefined,
+                saldo_a_favor: d.aplica_saldo_favor
+                    ? (Number(d.saldo_a_favor) || (d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
+                    : 0,
+                saf_aplicaciones: d.aplica_saldo_favor && Number(d.saldo_a_favor) > 0
+                    ? (d.saf_aplicaciones?.length
+                        ? d.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
+                        : [{ monto: Number(d.saldo_a_favor) }])
+                    : [],
+                comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
+                    ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
+                    : d.comentarios_drive,
+            });
+        };
         const config = {
             forceFormData: true,
             preserveScroll: true,
@@ -1345,39 +1396,10 @@ export default function ModalFormPedido({
             },
         };
         if (idDestino) {
-            transform((d) => conDireccionManual({
-                ...d,
-                _method: 'put',
-                enviar: enviarPedido,
-                saldo_a_favor: d.aplica_saldo_favor
-                    ? (Number(d.saldo_a_favor) || (d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
-                    : 0,
-                saf_aplicaciones: d.aplica_saldo_favor && Number(d.saldo_a_favor) > 0
-                    ? (d.saf_aplicaciones?.length
-                        ? d.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
-                        : [{ monto: Number(d.saldo_a_favor) }])
-                    : [],
-                comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
-                    ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
-                    : d.comentarios_drive,
-            }));
+            transform((d) => ({ ...payloadEnvio(d), _method: 'put', enviar: enviarPedido }));
             post(route('control_pedidos.update', idDestino), config);
         } else {
-            transform((d) => conDireccionManual({
-                ...d,
-                enviar: enviarPedido,
-                saldo_a_favor: d.aplica_saldo_favor
-                    ? (Number(d.saldo_a_favor) || (d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
-                    : 0,
-                saf_aplicaciones: d.aplica_saldo_favor && Number(d.saldo_a_favor) > 0
-                    ? (d.saf_aplicaciones?.length
-                        ? d.saf_aplicaciones.filter((i) => Number(i.monto) > 0)
-                        : [{ monto: Number(d.saldo_a_favor) }])
-                    : [],
-                comentarios_drive: d.direccion_manual_excepcion && d.motivo_direccion_manual
-                    ? `${d.comentarios_drive || ''}\n[Excepción dirección] ${d.motivo_direccion_manual}`.trim()
-                    : d.comentarios_drive,
-            }));
+            transform((d) => ({ ...payloadEnvio(d), enviar: enviarPedido }));
             post(route('control_pedidos.store'), config);
         }
     };
@@ -1730,7 +1752,14 @@ export default function ModalFormPedido({
                             }}
                         >
                             <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--color-peligro)' }} />
-                            <p className="text-sm font-black m-0" style={{ color: 'var(--color-peligro)' }}>Hay campos faltantes</p>
+                            <div className="min-w-0">
+                                <p className="text-sm font-black m-0" style={{ color: 'var(--color-peligro)' }}>Hay campos faltantes</p>
+                                {(validacionEnvio.faltantes || []).length > 0 && (
+                                    <p className="text-xs font-bold theme-text-main mt-1 m-0">
+                                        {validacionEnvio.faltantes.join(', ')}.
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     )}
                     {camposIncorrectos.length > 0 && (
@@ -2622,6 +2651,15 @@ export default function ModalFormPedido({
                                         <option value="">Seleccionar...</option>
                                         {(catalogos.zonas || []).map((z) => <option key={z.id} value={z.id}>{z.nombre}</option>)}
                                     </select>
+                                    {Number(costoReexpedicion) > 0 ? (
+                                        <p className="text-[10px] font-bold mt-1 m-0" style={{ color: 'var(--color-exito)' }}>
+                                            Cargo automático por CP: {formatearMoneda(costoReexpedicion)}
+                                        </p>
+                                    ) : (
+                                        <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
+                                            El cargo se aplica si el CP + paquetería están en el catálogo de reexpedición (no basta elegir la zona).
+                                        </p>
+                                    )}
                                 </div>
                                 )}
                             </div>
@@ -2703,11 +2741,20 @@ export default function ModalFormPedido({
                                             Se calculará con el pesaje CEDIS según la tarifa por peso de la paquetería.
                                         </p>
                                     )}
+                                    {Number(costoReexpedicion) > 0 && (
+                                        <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
+                                            Reexpedición por CP/paquetería: {formatearMoneda(costoReexpedicion)} (se suma aparte al cobro).
+                                        </p>
+                                    )}
                                 </div>
                             )}
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(data.total_mercancia)}</span></div>
                                 <div className="flex justify-between theme-text-muted font-bold"><span>{labelCostoEnvio}</span><span>{formatearMoneda(guiaCliente || envioPorCobrar ? 0 : data.costo_envio)}</span></div>
+                                <div className="flex justify-between theme-text-muted font-bold">
+                                    <span>Reexpedición</span>
+                                    <span>{formatearMoneda(guiaCliente || envioPorCobrar ? 0 : costoReexpedicion)}</span>
+                                </div>
                                 <div className="flex justify-between theme-text-muted font-bold">
                                     <span>Costo del seguro</span>
                                     <span>{data.aplica_seguro ? formatearMoneda(data.costo_seguro) : formatearMoneda(0)}</span>
@@ -2751,7 +2798,9 @@ export default function ModalFormPedido({
                                 puedeRegistrar={puedeRegistrarPago}
                                 puedeGenerarSaldo={false}
                                 totalMercancia={data.total_mercancia}
-                                costoEnvio={guiaCliente ? 0 : data.costo_envio}
+                                costoEnvio={guiaCliente
+                                    ? 0
+                                    : Number(data.costo_envio || 0) + Number(costoReexpedicion || 0)}
                                 aplicaSeguro={Boolean(data.aplica_seguro)}
                                 costoSeguro={data.costo_seguro}
                                 saldoAFavorAplicado={data.aplica_saldo_favor ? saldoFavorCalculado : 0}
@@ -2860,7 +2909,9 @@ export default function ModalFormPedido({
                     <section className="gelia-modal-footer flex flex-col gap-3 p-5 md:p-6 shrink-0">
                         {mostrarEnviarPedido && intentoEnviar && !enviarPedidoListo ? (
                             <p className="text-xs font-bold m-0 leading-snug" style={{ color: 'var(--color-peligro)' }}>
-                                Hay campos faltantes.
+                                {(validacionEnvio.faltantes || []).length
+                                    ? `Falta: ${validacionEnvio.faltantes.join(', ')}.`
+                                    : 'Hay campos faltantes.'}
                             </p>
                         ) : null}
                         {Object.keys(errors).length > 0 && (

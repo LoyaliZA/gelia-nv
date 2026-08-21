@@ -38,6 +38,9 @@ $assert(str_contains($form, 'mostrarSeccionPago'), 'Pago se oculta hasta cotizac
 $assert(str_contains($form, 'mostrarPdfPedido'), 'ModalFormPedido muestra PDF también en tienda');
 $assert(str_contains($form, 'data-campo="pdf_pedido"'), 'sección PDF con data-campo para scroll');
 $assert(str_contains($js, 'tienePdfPedido'), 'validarCamposEnvioPedido exige PDF');
+$assert(str_contains($form, 'if (!validacionEnvio.valido)'), 'enviar usa la misma validacionEnvio (no otra llamada incompleta)');
+$assert(str_contains($form, 'Complete: ${lista}'), 'al fallar envío lista faltantes en aviso');
+$assert(str_contains($form, 'validacionEnvio.faltantes.join'), 'banner/footer muestran faltantes');
 
 $pagosUi = file_get_contents(__DIR__.'/../../../resources/js/Pages/ControlPedidos/Partials/SeccionPagosExhibicion.jsx');
 $assert(! str_contains($pagosUi, 'mb-1.5 block`}>Referencia') && ! str_contains($pagosUi, ">Referencia</label>"), 'Referencia no se captura en UI de exhibiciones');
