@@ -108,12 +108,12 @@ trait ValidacionCamposPedidoBma
             }
 
             if (! $guiaCliente) {
+                if (! $pedido->catalogo_paqueteria_id) {
+                    $faltantes[] = 'paquetería';
+                }
                 if (! $esResguardoAbierto) {
                     if (! $pedido->catalogo_tipo_guia_id) {
                         $faltantes[] = 'tipo de guía';
-                    }
-                    if (! $pedido->catalogo_paqueteria_id) {
-                        $faltantes[] = 'paquetería';
                     }
                     if (! $pedido->catalogo_zona_id) {
                         $faltantes[] = 'reexpedición';

@@ -98,6 +98,10 @@ class ResponderPesajePedidoBmaService
                     throw new \InvalidArgumentException('Adjunte al menos una foto del contenido del envío '.($i + 1).'.');
                 }
             }
+        } elseif ($evidenciasGenerales === [] && ! $this->sesionEvidencia->tieneAlgunaFotoCaja($pedido)) {
+            throw new \InvalidArgumentException(
+                'Adjunte al menos una foto de cómo quedan los productos (evidencia final del pedido).'
+            );
         }
 
         $tipos = collect();
@@ -250,7 +254,9 @@ class ResponderPesajePedidoBmaService
                     $ordenDoc++,
                     PedidoBmaDocumento::RELACION_REVISION_GENERAL,
                     null,
-                    $comentarioGeneral !== '' ? $comentarioGeneral : 'Foto del lote'
+                    $comentarioGeneral !== '' ? $comentarioGeneral : (
+                        $soloRevisiones ? 'Evidencia final del lote (tienda)' : 'Foto del lote'
+                    )
                 );
             }
 
@@ -306,7 +312,7 @@ class ResponderPesajePedidoBmaService
 
             $detalleHist = $soloRevisiones
                 ? sprintf(
-                    'Consulta de mercancía respondida: %d producto(s). Estado físico: %s.%s',
+                    'Consulta de mercancía respondida: %d producto(s), evidencia final del lote. Estado físico: %s.%s',
                     count($revisiones),
                     PedidoBmaRevisionProducto::LABELS[$estadoGeneral] ?? $estadoGeneral,
                     $tieneSinExistencia

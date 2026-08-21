@@ -186,6 +186,12 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                 <p className="text-[9px] theme-text-muted m-0">{pedido.cliente?.numero_cliente}</p>
             </div>
             <div className="flex flex-wrap gap-2 text-[10px] font-bold theme-text-muted uppercase">
+                {pedido.paqueteria?.nombre && (
+                    <>
+                        <span className="normal-case theme-text-main">{pedido.paqueteria.nombre}</span>
+                        <span>·</span>
+                    </>
+                )}
                 <span>{etiquetaAlmacen(pedido.almacen)}</span>
                 <span>·</span>
                 {(() => {
@@ -323,6 +329,7 @@ export default function TablaPedidos({
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Folio_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Fecha_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Cliente_</th>
+                            <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Paquetería_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Almacén_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Banco_</th>
                             <th className="px-5 py-4 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">Total_</th>
@@ -361,6 +368,9 @@ export default function TablaPedidos({
                                     <td className="px-5 py-4">
                                         <p className="text-xs font-black theme-text-main uppercase m-0">{pedido.cliente?.nombre}</p>
                                         <p className="text-[9px] theme-text-muted m-0">{pedido.cliente?.numero_cliente}</p>
+                                    </td>
+                                    <td className="px-5 py-4 text-xs font-bold theme-text-main">
+                                        {pedido.paqueteria?.nombre || '—'}
                                     </td>
                                     <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase">{etiquetaAlmacen(pedido.almacen)}</td>
                                     <td className="px-5 py-4 text-xs font-bold theme-text-muted uppercase" title={textoFuentesPagoCompacto(pedido.fuentes_pago).completo || undefined}>

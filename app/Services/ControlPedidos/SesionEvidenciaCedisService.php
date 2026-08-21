@@ -250,13 +250,22 @@ class SesionEvidenciaCedisService
                 $relacionTipo = PedidoBmaDocumento::RELACION_REVISION_PRODUCTO;
                 $relacionId = $productoUuidARevisionId[$foto->objetivo_uuid] ?? null;
             } elseif ($foto->objetivo_tipo === PedidoBmaSesionEvidenciaFoto::OBJETIVO_CAJA) {
-                $relacionTipo = PedidoBmaDocumento::RELACION_ENVIO_CAJA;
                 $relacionId = $cajaUuidACajaId[$foto->objetivo_uuid] ?? null;
                 if (! $relacionId && $foto->indice_caja !== null) {
                     $relacionId = $cajaUuidACajaId['idx:'.$foto->indice_caja] ?? null;
                 }
+                if ($relacionId) {
+                    $relacionTipo = PedidoBmaDocumento::RELACION_ENVIO_CAJA;
+                } else {
+                    // Tienda: snapshot manda “caja” sintética = evidencia final del lote.
+                    $relacionTipo = PedidoBmaDocumento::RELACION_REVISION_GENERAL;
+                    $relacionId = null;
+                }
             }
-            if (! $relacionTipo || ! $relacionId) {
+            if ($relacionTipo === null) {
+                continue;
+            }
+            if ($relacionTipo !== PedidoBmaDocumento::RELACION_REVISION_GENERAL && ! $relacionId) {
                 continue;
             }
 
@@ -267,7 +276,9 @@ class SesionEvidenciaCedisService
                 'mime_type' => $foto->mime_type,
                 'tamano_bytes' => $foto->tamano_bytes,
                 'orden' => $orden++,
-                'comentario' => 'Evidencia desde celular',
+                'comentario' => $relacionTipo === PedidoBmaDocumento::RELACION_REVISION_GENERAL
+                    ? 'Evidencia final del lote (celular)'
+                    : 'Evidencia desde celular',
                 'relacion_tipo' => $relacionTipo,
                 'relacion_id' => $relacionId,
             ]);
@@ -308,6 +319,18 @@ class SesionEvidenciaCedisService
                 $q->where('objetivo_uuid', $uuid)
                     ->orWhere('indice_caja', $indice);
             })
+            ->exists();
+    }
+
+    public function tieneAlgunaFotoCaja(PedidoBma $pedido): bool
+    {
+        $sesion = $this->vigente($pedido);
+        if (! $sesion) {
+            return false;
+        }
+
+        return $sesion->fotos()
+            ->where('objetivo_tipo', PedidoBmaSesionEvidenciaFoto::OBJETIVO_CAJA)
             ->exists();
     }
 

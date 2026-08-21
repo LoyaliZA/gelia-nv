@@ -960,9 +960,9 @@ export const validarCamposEnvioPedido = (data, {
         }
 
         if (!guiaCliente) {
+            if (!data.catalogo_paqueteria_id) marcar('paqueteria', 'paquetería');
             if (!esResguardoAbierto) {
                 if (!data.catalogo_tipo_guia_id) marcar('tipo_guia', 'tipo de guía');
-                if (!data.catalogo_paqueteria_id) marcar('paqueteria', 'paquetería');
                 if (!data.catalogo_zona_id) marcar('reexpedicion', 'reexpedición');
                 if (!String(data.codigo_postal || '').trim()) marcar('codigo_postal', 'código postal');
                 if (direccionesNormalizadas) {

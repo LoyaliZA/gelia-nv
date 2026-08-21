@@ -295,6 +295,9 @@ export default function ModalResponderPesaje({
     const [procesando, setProcesando] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'error', titulo: '', mensaje: '' });
     const [evidenciasPorEnvio, setEvidenciasPorEnvio] = useState([slotEnvioVacio()]);
+    /** Tienda (sin cajas): fotos del lote final, como el contenido de un envío en pesaje. */
+    const [evidenciasLote, setEvidenciasLote] = useState(slotEnvioVacio());
+    const loteUuidRef = useRef(nuevoUuid());
     const [revisiones, setRevisiones] = useState([]);
     const [galeria, setGaleria] = useState({ abierto: false, documentos: [], indice: 0 });
     const [skuQuery, setSkuQuery] = useState('');
@@ -370,14 +373,23 @@ export default function ModalResponderPesaje({
         let cancelado = false;
         skipAutosaveRef.current = true;
         hydratingRef.current = true;
+        loteUuidRef.current = nuevoUuid();
+        setEvidenciasLote((prev) => {
+            revocarPreviews(prev.previews);
+            return slotEnvioVacio();
+        });
 
         (async () => {
             try {
                 const draft = await leerBorradorPesaje(pedido.id);
                 if (cancelado) return;
 
-                if (draft?.envios?.length) {
-                    setEnvios(draft.envios.map((e) => ({ ...envioVacio(), ...e, client_uuid: e.client_uuid || nuevoUuid() })));
+                if (draft?.envios?.length || (soloRevisiones && draft?.revisiones?.length) || draft?.evidenciasLote) {
+                    setEnvios(
+                        draft.envios?.length
+                            ? draft.envios.map((e) => ({ ...envioVacio(), ...e, client_uuid: e.client_uuid || nuevoUuid() }))
+                            : [envioVacio()]
+                    );
                     setRevisiones((prev) => {
                         prev.forEach((r) => revocarPreviews(r.previews));
                         return (draft.revisiones || []).map((r) => {
@@ -402,6 +414,16 @@ export default function ModalResponderPesaje({
                         });
                         return slots.length ? slots : [slotEnvioVacio()];
                     });
+                    if (draft.evidenciasLote) {
+                        const archivos = Array.isArray(draft.evidenciasLote.archivos)
+                            ? draft.evidenciasLote.archivos.filter((f) => f instanceof Blob)
+                            : [];
+                        setEvidenciasLote((prev) => {
+                            revocarPreviews(prev.previews);
+                            return { archivos, previews: previewsDesdeArchivos(archivos) };
+                        });
+                    }
+                    if (draft.loteUuid) loteUuidRef.current = draft.loteUuid;
                     setProcesando(false);
                     setAlerta({ abierto: false, tipo: 'error', titulo: '', mensaje: '' });
                     setGaleria({ abierto: false, documentos: [], indice: 0 });
@@ -526,6 +548,8 @@ export default function ModalResponderPesaje({
                 evidenciasPorEnvio: evidenciasPorEnvio.map((s) => ({
                     archivos: s.archivos || [],
                 })),
+                evidenciasLote: { archivos: evidenciasLote.archivos || [] },
+                loteUuid: loteUuidRef.current,
                 savedAt: new Date().toISOString(),
             };
             guardarBorradorPesaje(pedido.id, payload)
@@ -534,7 +558,7 @@ export default function ModalResponderPesaje({
         }, 700);
 
         return () => window.clearTimeout(timer);
-    }, [abierto, pedido?.id, envios, revisiones, evidenciasPorEnvio]);
+    }, [abierto, pedido?.id, envios, revisiones, evidenciasPorEnvio, evidenciasLote]);
 
     const anexarFotoRemota = (foto) => {
         if (!foto?.objetivo_uuid) return;
@@ -546,6 +570,13 @@ export default function ModalResponderPesaje({
             id: foto.id,
         };
         if (foto.objetivo_tipo === 'caja') {
+            if (soloRevisiones || foto.objetivo_uuid === loteUuidRef.current) {
+                setEvidenciasLote((prev) => {
+                    if (prev.previews.some((p) => p.id === foto.id)) return prev;
+                    return { ...prev, previews: [...prev.previews, preview] };
+                });
+                return;
+            }
             setEvidenciasPorEnvio((prev) => {
                 const idxUuid = enviosRef.current.findIndex((e) => e.client_uuid === foto.objetivo_uuid);
                 const i = idxUuid >= 0 ? idxUuid : (foto.indice_caja ?? -1);
@@ -603,15 +634,21 @@ export default function ModalResponderPesaje({
                 sku: r.sku || '',
                 descripcion: r.descripcion_producto || '',
             }));
-            const cajas = envios.map((e, i) => ({
-                client_uuid: e.client_uuid,
-                indice: i,
-                etiqueta: etiquetaEnvio(i, { tipo_caja: tiposCaja.find((t) => String(t.id) === String(e.catalogo_tipo_caja_id)) }),
-            }));
+            const cajas = soloRevisiones
+                ? [{
+                    client_uuid: loteUuidRef.current,
+                    indice: 0,
+                    etiqueta: 'Evidencia final (lote)',
+                }]
+                : envios.map((e, i) => ({
+                    client_uuid: e.client_uuid,
+                    indice: i,
+                    etiqueta: etiquetaEnvio(i, { tipo_caja: tiposCaja.find((t) => String(t.id) === String(e.catalogo_tipo_caja_id)) }),
+                }));
             window.axios.put(route('control_pedidos.cedis.sesion_evidencia.snapshot', pedido.id), { productos, cajas }).catch(() => {});
         }, 300);
         return () => window.clearTimeout(t);
-    }, [abierto, pedido?.id, sesionId, revisiones, envios, tiposCaja]);
+    }, [abierto, pedido?.id, sesionId, revisiones, envios, tiposCaja, soloRevisiones]);
 
     useEffect(() => {
         if (!abierto || esCampo) return undefined;
@@ -621,6 +658,7 @@ export default function ModalResponderPesaje({
 
     useEffect(() => () => {
         evidenciasPorEnvio.forEach((s) => revocarPreviews(s.previews));
+        revocarPreviews(evidenciasLote.previews);
         revisiones.forEach((r) => revocarPreviews(r.previews));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -900,6 +938,18 @@ export default function ModalResponderPesaje({
         } else if (revisiones.length === 0) {
             setAlerta({ abierto: true, tipo: 'error', titulo: 'Productos', mensaje: 'Revise al menos un producto.' });
             return;
+        } else {
+            const hayLocal = evidenciasLote.archivos?.length;
+            const hayRemota = evidenciasLote.previews?.some((p) => p.remoto);
+            if (!hayLocal && !hayRemota) {
+                setAlerta({
+                    abierto: true,
+                    tipo: 'error',
+                    titulo: 'Evidencia final',
+                    mensaje: 'Adjunte al menos una foto de cómo quedan los productos (lote del pedido).',
+                });
+                return;
+            }
         }
 
         const piezasPedido = Number(pedido.cantidad_piezas || 0);
@@ -960,6 +1010,9 @@ export default function ModalResponderPesaje({
         });
         form.append('estado_fisico_general', estadoGeneralDerivado);
         form.append('comentario_fisico_general', '');
+        if (soloRevisiones) {
+            (evidenciasLote.archivos || []).forEach((f, j) => form.append(`evidencias_generales[${j}]`, f));
+        }
         if (!soloRevisiones) {
             evidenciasPorEnvio.forEach((slot, i) => {
                 (slot.archivos || []).forEach((f, j) => form.append(`evidencias_envios[${i}][${j}]`, f));
@@ -999,7 +1052,8 @@ export default function ModalResponderPesaje({
 
     const hayDatosPesaje = revisiones.length > 0
         || envios.some((e) => e.peso_real_kg || e.catalogo_tipo_caja_id)
-        || evidenciasPorEnvio.some((s) => s.archivos?.length);
+        || evidenciasPorEnvio.some((s) => s.archivos?.length)
+        || evidenciasLote.archivos?.length;
 
     const pedirCerrar = () => {
         if (hayDatosPesaje) {
@@ -1400,6 +1454,25 @@ export default function ModalResponderPesaje({
                                 <div className="space-y-2">{listaProductos}</div>
                             )}
                         </div>
+
+                        {soloRevisiones && (
+                        <div>
+                            <label className={`${SECCION} m-0 mb-3`}>Evidencia final del pedido</label>
+                            <p className="text-[10px] theme-text-muted font-bold m-0 mb-3">
+                                Sin cajas ni pesos: adjunte foto(s) de cómo quedan todos los productos juntos (igual que el lote de un envío en pesaje).
+                            </p>
+                            <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
+                                <GaleriaEvidencias
+                                    archivos={evidenciasLote.archivos}
+                                    previews={evidenciasLote.previews}
+                                    obligatorio
+                                    label="Fotos del lote (productos del pedido)"
+                                    onChange={(files, previews) => setEvidenciasLote({ archivos: files, previews })}
+                                    onVer={abrirGaleria}
+                                />
+                            </div>
+                        </div>
+                        )}
 
                         {!soloRevisiones && (
                         <div>

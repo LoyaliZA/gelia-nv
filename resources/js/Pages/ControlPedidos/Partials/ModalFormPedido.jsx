@@ -1906,7 +1906,7 @@ export default function ModalFormPedido({
                                         <div className="flex items-start gap-2 p-3 rounded-xl border border-blue-500/40 bg-blue-500/10">
                                             <AlertTriangle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                                             <p className="text-xs font-bold text-blue-700 dark:text-blue-400 m-0">
-                                                Envío diferido: dirección, paquetería y costo se capturan al Completar envío cuando libere el resguardo. Ahora solo mercancía, consulta CEDIS y pago.
+                                                Envío diferido: dirección y costo se capturan al Completar envío. Capture ya el folio Wizerp y la paquetería junto al archivo del pedido.
                                             </p>
                                         </div>
                                     )}
@@ -2032,13 +2032,56 @@ export default function ModalFormPedido({
 
                     {mostrarPdfPedido && (
                     <section className={`${SECCION_WRAP} ${wrapCampo('pdf_pedido')}`} data-campo="pdf_pedido">
-                        <p className={SECCION}>{nSec.pdf}. PDF o archivo del pedido</p>
-                        <div className="space-y-2">
+                        <p className={SECCION}>
+                            {nSec.pdf}. {requiereLogistica ? 'Folio, paquetería y archivo del pedido' : 'Folio y archivo del pedido'}
+                        </p>
+                        <div className="space-y-4">
                         {!requiereLogistica && (
                             <p className="text-[10px] font-bold theme-text-muted m-0 -mt-1">
-                                Adjunte el PDF o una foto del pedido de tienda. El comprobante de pago se carga en la sección de pago.
+                                Capture el folio Wizerp y adjunte el PDF o foto. El comprobante de pago se carga en la sección de pago.
                             </p>
                         )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className={wrapCampo('folio_remision')} data-campo="folio_remision">
+                                <label className={SECCION}>Folio de pedido *</label>
+                                <input
+                                    type="text"
+                                    value={data.folio_remision}
+                                    onChange={(e) => setData('folio_remision', e.target.value)}
+                                    placeholder="Folio generado por Wizerp..."
+                                    className={`${THEME_INPUT} w-full py-3`}
+                                />
+                            </div>
+                            {requiereLogistica && (
+                                <div className={wrapCampo('paqueteria')} data-campo="paqueteria">
+                                    <label className={SECCION}>Paquetería{guiaCliente ? ' (opcional)' : ' *'}</label>
+                                    <select
+                                        value={data.catalogo_paqueteria_id}
+                                        disabled={logisticaBloqueada}
+                                        onChange={(e) => manejarPaqueteria(e.target.value)}
+                                        className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
+                                    >
+                                        <option value="">Seleccionar...</option>
+                                        {paqueteriasComerciales.length > 0 && (
+                                            <optgroup label="Comercial (FedEx, DHL…)">
+                                                {paqueteriasComerciales.map((p) => (
+                                                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                        {paqueteriasLocales.length > 0 && (
+                                            <optgroup label="Local / Regional (municipio)">
+                                                {paqueteriasLocales.map((p) => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.nombre}{p.permite_costo_diferido ? ' · costo diferido' : ''}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
                         <div className="flex flex-wrap items-center gap-3">
                             <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
                                 <FileText className="w-4 h-4 theme-text-muted" />
@@ -2317,7 +2360,7 @@ export default function ModalFormPedido({
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.dir}. Envío (diferido)</p>
                         <AvisoOperativoPedido label="Resguardo abierto" tono="info" icon={AlertTriangle} className="mb-0">
-                            Dirección, paquetería y costo de envío se capturan después, con «Completar envío», cuando el cliente libere el resguardo.
+                            Dirección y costo de envío se capturan después, con «Completar envío». Folio y paquetería ya se capturan con el archivo del pedido.
                         </AvisoOperativoPedido>
                     </section>
                     )}
@@ -2505,7 +2548,7 @@ export default function ModalFormPedido({
 
                     {/* 7. Paquetería y seguro */}
                     <section className={SECCION_WRAP}>
-                        <p className={SECCION}>{nSec.paq}. Paquetería y seguro</p>
+                        <p className={SECCION}>{nSec.paq}. Guía y seguro</p>
                         <div className="space-y-4">
                             <div className={`space-y-2 p-4 rounded-xl border theme-border theme-element ${logisticaBloqueada ? 'opacity-50' : ''}`}>
                                 <label className={`flex items-center gap-2 theme-text-main ${logisticaBloqueada ? '' : 'cursor-pointer'}`}>
@@ -2555,28 +2598,6 @@ export default function ModalFormPedido({
                                 </div>
                             )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className={wrapCampo('paqueteria')} data-campo="paqueteria">
-                                    <label className={SECCION}>Paquetería{guiaCliente ? ' (opcional)' : ''}</label>
-                                    <select value={data.catalogo_paqueteria_id} disabled={logisticaBloqueada} onChange={(e) => manejarPaqueteria(e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
-                                        <option value="">Seleccionar...</option>
-                                        {paqueteriasComerciales.length > 0 && (
-                                            <optgroup label="Comercial (FedEx, DHL…)">
-                                                {paqueteriasComerciales.map((p) => (
-                                                    <option key={p.id} value={p.id}>{p.nombre}</option>
-                                                ))}
-                                            </optgroup>
-                                        )}
-                                        {paqueteriasLocales.length > 0 && (
-                                            <optgroup label="Local / Regional (municipio)">
-                                                {paqueteriasLocales.map((p) => (
-                                                    <option key={p.id} value={p.id}>
-                                                        {p.nombre}{p.permite_costo_diferido ? ' · costo diferido' : ''}
-                                                    </option>
-                                                ))}
-                                            </optgroup>
-                                        )}
-                                    </select>
-                                </div>
                                 {!guiaCliente && !tieneCoberturaSeguro && data.catalogo_paqueteria_id && (
                                     <div id="seg-warn" className="md:col-span-2 flex items-start gap-2 p-3 rounded-xl border border-amber-500/40 bg-amber-500/10">
                                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -2792,14 +2813,13 @@ export default function ModalFormPedido({
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.rem}. Remisión</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className={wrapCampo('folio_remision')} data-campo="folio_remision">
-                                <label className={SECCION}>Folio de Pedido *</label>
+                            <div>
+                                <label className={SECCION}>Folio de pedido</label>
                                 <input
                                     type="text"
-                                    value={data.folio_remision}
-                                    onChange={(e) => setData('folio_remision', e.target.value)}
-                                    placeholder="Número de folio del pedido..."
-                                    className={`${THEME_INPUT} w-full py-3`}
+                                    readOnly
+                                    value={data.folio_remision || '—'}
+                                    className={`${THEME_INPUT} w-full py-3 opacity-60`}
                                 />
                             </div>
                             <div>

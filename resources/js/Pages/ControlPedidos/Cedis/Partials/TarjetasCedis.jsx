@@ -116,7 +116,7 @@ function TarjetaPedido({
                     {pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje
                         ? `Actualización (${LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}). Revise el anexo/PDF y confirme.`
                         : (pedido.origen?.requiere_logistica === false
-                            ? 'Revise el PDF o foto y registre el estado físico de las piezas (sin cajas).'
+                            ? 'Revise el PDF o foto, registre el estado de las piezas y la evidencia final del lote (sin cajas ni pesos).'
                             : 'Revise el PDF o foto del pedido y registre peso y cajas.')}
                 </AvisoOperativoPedido>
             )}

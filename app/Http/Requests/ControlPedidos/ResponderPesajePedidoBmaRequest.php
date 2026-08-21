@@ -67,6 +67,7 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'cajas.*.peso_volumetrico_kg.required' => 'Cada envío requiere peso volumétrico.',
             'revisiones.required' => 'Revise al menos un producto.',
             'revisiones.min' => 'Revise al menos un producto.',
+            'evidencias_generales.*.mimes' => 'La evidencia final debe ser imagen o PDF.',
         ];
     }
 

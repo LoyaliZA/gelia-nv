@@ -36,8 +36,8 @@ describe('resguardo abierto — envío diferido', () => {
         numero_cajas: 1,
     };
 
-    it('no exige dirección ni paquetería al enviar', () => {
-        const r = validarCamposEnvioPedido(baseEnvio, {
+    it('no exige dirección al enviar (sí paquetería)', () => {
+        const sinPaq = validarCamposEnvioPedido(baseEnvio, {
             requiereLogistica: true,
             direccionesNormalizadas: true,
             esResguardoAbierto: true,
@@ -47,10 +47,23 @@ describe('resguardo abierto — envío diferido', () => {
             consultaCerrada: true,
             requiereConsultaCerrada: true,
         });
-        expect(r.valido).toBe(true);
-        expect(r.claves).not.toContain('domicilio');
-        expect(r.claves).not.toContain('paqueteria');
-        expect(r.claves).not.toContain('codigo_postal');
+        expect(sinPaq.valido).toBe(false);
+        expect(sinPaq.claves).toContain('paqueteria');
+        expect(sinPaq.claves).not.toContain('domicilio');
+
+        const conPaq = validarCamposEnvioPedido({ ...baseEnvio, catalogo_paqueteria_id: 9 }, {
+            requiereLogistica: true,
+            direccionesNormalizadas: true,
+            esResguardoAbierto: true,
+            tienePesajeRespondido: true,
+            tienePdfPedido: true,
+            pagoPendiente: 0,
+            consultaCerrada: true,
+            requiereConsultaCerrada: true,
+        });
+        expect(conPaq.valido).toBe(true);
+        expect(conPaq.claves).not.toContain('domicilio');
+        expect(conPaq.claves).not.toContain('codigo_postal');
     });
 
     it('cotización lista sin paquetería (pago mercancía)', () => {

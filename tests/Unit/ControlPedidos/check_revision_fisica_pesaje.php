@@ -23,6 +23,7 @@ $checks = [
     ['doc tipo evidencia_condicion', str_contains($doc, 'TIPO_EVIDENCIA_CONDICION')],
     ['servicio deriva estado general', str_contains($servicio, 'derivarEstadoGeneral')],
     ['servicio exige evidencia malo', str_contains($servicio, 'malo/dañado requiere')],
+    ['servicio exige evidencia final tienda', str_contains($servicio, 'evidencia final del pedido')],
     ['servicio flags unica/mejor', str_contains($servicio, 'unica_pieza') && str_contains($servicio, 'mejor_ejemplar')],
     ['servicio persiste sku', str_contains($servicio, "'sku' =>")],
     ['request estado_fisico_general opcional', str_contains($request, "'estado_fisico_general' => ['nullable'")],
@@ -30,6 +31,8 @@ $checks = [
     ['UI sin Estado general', ! str_contains($modal, 'Estado general')],
     ['UI Única pieza', str_contains($modal, 'Única pieza')],
     ['UI Mejor ejemplar', str_contains($modal, 'Mejor ejemplar')],
+    ['UI evidencia final tienda', str_contains($modal, 'Evidencia final del pedido')],
+    ['UI fotos lote tienda', str_contains($modal, 'Fotos del lote (productos del pedido)')],
 ];
 
 require_once $root.'/vendor/autoload.php';

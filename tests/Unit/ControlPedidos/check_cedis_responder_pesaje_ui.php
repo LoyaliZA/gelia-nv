@@ -25,6 +25,10 @@ $checks = [
     ['visor cierre móvil', str_contains($visor, 'Cerrar vista de la foto')],
     ['middleware CEDIS en buscar', str_contains($routes, 'control_pedidos.cedis')
         && str_contains($routes, "name('productos.buscar')")],
+    ['evidencia final tienda (sin cajas)', str_contains($modal, 'Evidencia final del pedido')
+        && str_contains($modal, 'evidencias_generales')],
+    ['loteUuid para QR celular tienda', str_contains($modal, 'loteUuidRef')
+        && str_contains($modal, 'Evidencia final (lote)')],
 ];
 
 foreach ($checks as [$label, $ok]) {
