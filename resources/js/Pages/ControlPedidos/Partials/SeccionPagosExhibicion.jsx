@@ -16,8 +16,9 @@ import {
 } from './pedidosBmaStyles';
 import { THEME_SELECT } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
-import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import ModalMotivoRechazo from './ModalMotivoRechazo';
+import { archivosImagenDesdeClipboard, documentoDesdeArchivoLocal } from './archivosDesdeClipboard';
 
 const formaRequiereBanco = (forma, formasPago = []) => {
     const found = formasPago.find((f) => f.codigo === forma);
@@ -86,6 +87,7 @@ export default function SeccionPagosExhibicion({
     const [editandoId, setEditandoId] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
     const [revisionModal, setRevisionModal] = useState(null); // { pago, estado }
+    const [comprobantePreviewUrl, setComprobantePreviewUrl] = useState(null);
 
     const form = useForm({
         monto: '',
@@ -97,6 +99,25 @@ export default function SeccionPagosExhibicion({
     });
 
     const requiereBanco = formaRequiereBanco(form.data.forma_pago, formas);
+
+    const asignarComprobante = (file) => {
+        setComprobantePreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return file ? URL.createObjectURL(file) : null;
+        });
+        form.setData('comprobante', file || null);
+        form.clearErrors('comprobante');
+    };
+
+    const pegarComprobante = (e) => {
+        const pasted = archivosImagenDesdeClipboard(e.clipboardData);
+        if (!pasted.length) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const img = pasted[0];
+        const file = new File([img], `comprobante-paste-${Date.now()}.png`, { type: img.type || 'image/png' });
+        asignarComprobante(file);
+    };
 
     const mezclarResumenVivo = (base, listaPagos) => {
         const tieneTotalesVivos = totalMercancia != null || saldoAFavorAplicado != null;
@@ -186,6 +207,10 @@ export default function SeccionPagosExhibicion({
         form.setData('forma_pago', 'transferencia');
         form.clearErrors();
         setEditandoId(null);
+        setComprobantePreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+        });
     };
 
     const registrar = (e) => {
@@ -228,6 +253,10 @@ export default function SeccionPagosExhibicion({
             comprobante: null,
         });
         form.clearErrors();
+        setComprobantePreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+        });
     };
 
     const eliminarPago = (p) => {
@@ -344,7 +373,7 @@ export default function SeccionPagosExhibicion({
     const excedenteGenerado = Number(resumen?.excedente_generado ?? resumen?.excedente ?? 0);
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-3" onPaste={mostrarFormulario ? pegarComprobante : undefined}>
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                     <p className={`${THEME_LABEL} mb-0`}>Exhibiciones de pago</p>
@@ -381,6 +410,19 @@ export default function SeccionPagosExhibicion({
                                 className="flex flex-wrap items-center justify-between gap-2 text-sm border theme-border theme-element rounded-xl px-3 py-2.5"
                             >
                                 <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                    {p.url && (
+                                        <MiniaturaDocumento
+                                            documento={{
+                                                id: `pago-${p.id}`,
+                                                url: p.url,
+                                                nombre_original: p.nombre_original || `Comprobante #${p.numero_exhibicion}`,
+                                                mime_type: p.mime_type,
+                                                tipo: 'comprobante',
+                                            }}
+                                            onVer={() => abrirComprobante(p)}
+                                            className="block w-12 h-12 rounded-lg overflow-hidden border theme-border theme-element cursor-pointer shrink-0"
+                                        />
+                                    )}
                                     <span className="font-bold theme-text-main">
                                         #{p.numero_exhibicion} · {p.banco?.nombre || forma || '—'}
                                     </span>
@@ -392,7 +434,7 @@ export default function SeccionPagosExhibicion({
                                             className="text-[10px] font-black uppercase outline-none"
                                             style={{ color: 'var(--color-primario)' }}
                                         >
-                                            Comprobante
+                                            Ver
                                         </button>
                                     )}
                                 </div>
@@ -503,6 +545,7 @@ export default function SeccionPagosExhibicion({
             {mostrarFormulario && (
                 <form
                     onSubmit={registrar}
+                    onPaste={pegarComprobante}
                     className="grid grid-cols-1 md:grid-cols-2 gap-3 border theme-border theme-element rounded-xl p-4"
                 >
                     <div>
@@ -555,20 +598,34 @@ export default function SeccionPagosExhibicion({
                             {editandoId ? 'Comprobante (opcional al editar)' : 'Comprobante (obligatorio)'}
                         </label>
                         <p className="text-[10px] theme-text-muted font-bold m-0 mb-1.5 -mt-0.5">
-                            La referencia del cliente aparece en el comprobante; no es necesario capturarla aparte.
+                            La referencia del cliente aparece en el comprobante. Puede pegar una captura (Ctrl+V).
                         </p>
-                        <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
-                            <ImagePlus className="w-4 h-4 theme-text-muted" />
-                            <span className="text-xs font-black uppercase">
-                                {form.data.comprobante?.name || 'Adjuntar comprobante'}
-                            </span>
-                            <input
-                                type="file"
-                                accept="image/*,application/pdf"
-                                className="hidden"
-                                onChange={(e) => form.setData('comprobante', e.target.files?.[0] || null)}
-                            />
-                        </label>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <label className="flex items-center gap-2 px-4 py-3 border theme-border border-dashed rounded-xl cursor-pointer w-fit theme-element theme-text-main">
+                                <ImagePlus className="w-4 h-4 theme-text-muted" />
+                                <span className="text-xs font-black uppercase">
+                                    {form.data.comprobante?.name || 'Adjuntar comprobante'}
+                                </span>
+                                <input
+                                    type="file"
+                                    accept="image/*,application/pdf"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        asignarComprobante(e.target.files?.[0] || null);
+                                        e.target.value = '';
+                                    }}
+                                />
+                            </label>
+                            {form.data.comprobante && comprobantePreviewUrl && (
+                                <MiniaturaDocumento
+                                    documento={documentoDesdeArchivoLocal(form.data.comprobante, comprobantePreviewUrl)}
+                                    onVer={(doc) => setDocPreview({
+                                        indice: 0,
+                                        documentos: [doc],
+                                    })}
+                                />
+                            )}
+                        </div>
                         {form.errors.comprobante && (
                             <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{form.errors.comprobante}</p>
                         )}
@@ -609,10 +666,10 @@ export default function SeccionPagosExhibicion({
             )}
             <ModalVistaPreviaDocumento
                 abierto={Boolean(docPreview)}
-                documentos={comprobantesGaleria}
+                documentos={docPreview?.documentos || comprobantesGaleria}
                 indice={docPreview?.indice || 0}
                 onClose={() => setDocPreview(null)}
-                onChangeIndice={(i) => setDocPreview({ indice: i })}
+                onChangeIndice={(i) => setDocPreview((prev) => ({ ...(prev || {}), indice: i }))}
             />
             <ModalMotivoRechazo
                 abierto={Boolean(revisionModal)}

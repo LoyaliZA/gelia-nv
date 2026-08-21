@@ -604,6 +604,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/listado', [PedidoBmaAuditoriaController::class, 'listado'])->name('listado');
         Route::post('/{pedidoBma}/validar-pago', [PedidoBmaAuditoriaController::class, 'validarPago'])->name('validar_pago');
         Route::post('/{pedidoBma}/remision', [PedidoBmaAuditoriaController::class, 'subirRemision'])->name('remision.store');
+        Route::put('/{pedidoBma}/folio-remision', [PedidoBmaAuditoriaController::class, 'actualizarFolioRemision'])->name('folio_remision.update');
         Route::delete('/{pedidoBma}/remision', [PedidoBmaAuditoriaController::class, 'eliminarRemision'])->name('remision.destroy');
         Route::post('/{pedidoBma}/aprobar', [PedidoBmaAuditoriaController::class, 'aprobar'])->name('aprobar');
         Route::post('/{pedidoBma}/rechazar', [PedidoBmaAuditoriaController::class, 'rechazar'])->name('rechazar');

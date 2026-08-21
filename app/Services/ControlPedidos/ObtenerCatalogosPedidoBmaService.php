@@ -40,7 +40,7 @@ class ObtenerCatalogosPedidoBmaService
             'tipos_caja' => CatalogoTipoCajaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'peso_volumetrico', 'medidas', 'largo', 'ancho', 'alto']),
             'paqueterias' => CatalogoPaqueteriaPedido::where('activo', true)->orderBy('categoria')->orderBy('nombre')->get(['id', 'nombre', 'categoria', 'permite_costo_diferido']),
             'tipos_guia' => CatalogoTipoGuiaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
-            'zonas' => CatalogoZonaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
+            'zonas' => CatalogoZonaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'costo_adicional']),
             'envios_tienda' => CatalogoEnvioTienda::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'es_otro']),
             'reexpediciones' => CatalogoReexpedicionPedido::where('activo', true)
                 ->orderBy('codigo_postal')

@@ -123,9 +123,11 @@ export function gruposErrorParaPedido(pedido, vista = 'delegado') {
     const esResguardo = Boolean(pedido?.es_resguardo);
 
     return GRUPOS_ERROR_DATOS
-        .filter((g) => !(vista === 'auditar' && g.id === 'auxiliar'))
         .map((g) => ({
             ...g,
+            label: vista === 'auditar' && g.id === 'auxiliar'
+                ? 'Mi error (remisión / pago) — se registra y corrijo aquí'
+                : g.label,
             campos: g.campos.filter((c) => campoAplicaAlContexto(c.id, origenCat, esResguardo)),
         }))
         .filter((g) => g.campos.length > 0);
@@ -218,6 +220,9 @@ export default function ModalReportarErrorDatos({ abierto, onClose, onSuccess, p
     const copyDestino = (() => {
         if (!cola.activo) {
             return 'Seleccione los datos incorrectos. Solo quien corresponda podrá corregir; el resto será notificado.';
+        }
+        if (origen === 'auditar' && cola.activo.id === 'auxiliar' && cola.pendientes.length === 0) {
+            return 'Se registrará en bitácora y se avisará a otras áreas. El pedido sigue en su bandeja para que lo corrija aquí (sin retrasar CEDIS/guías).';
         }
         let texto = `Primero irá a ${cola.activo.destino} para corregir.`;
         if (cola.pendientes.length > 0) {

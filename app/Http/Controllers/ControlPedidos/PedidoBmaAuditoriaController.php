@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ControlPedidos\ActualizarFolioRemisionPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\LiberarResguardoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\RechazarAnexoEnvioPedidoBmaRequest;
@@ -90,6 +91,25 @@ class PedidoBmaAuditoriaController extends Controller
         return $redirect;
     }
 
+    public function actualizarFolioRemision(
+        ActualizarFolioRemisionPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        GestionarRemisionPedidoBmaService $service
+    ): RedirectResponse {
+        $this->assertPedidoVisible($pedidoBma);
+        try {
+            $service->actualizarFolioRemision(
+                $pedidoBma,
+                (string) $request->validated('folio_remision'),
+                Auth::id()
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Folio de pedido actualizado.');
+    }
+
     public function subirRemision(
         SubirRemisionPedidoBmaRequest $request,
         PedidoBma $pedidoBma,
@@ -165,7 +185,7 @@ class PedidoBmaAuditoriaController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Error reportado al área correspondiente.');
+        return redirect()->back()->with('success', 'Error reportado: quedó en bitácora y se notificó a las áreas involucradas.');
     }
 
     public function liberarResguardo(

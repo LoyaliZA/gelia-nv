@@ -46,6 +46,7 @@ import ModalCambiarDireccion from '../../Partials/ModalCambiarDireccion';
 import ModalLiberarResguardoAbierto from './ModalLiberarResguardoAbierto';
 import SeccionPagosExhibicion from '../../Partials/SeccionPagosExhibicion';
 import ListaErroresPedido from '../../Partials/ListaErroresPedido';
+import { THEME_INPUT } from '../../../../utils/geliaTheme';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
 const SECCION_WRAP = 'border-b theme-border pb-6 last:border-0';
@@ -73,10 +74,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [liberarCapturaAbierto, setLiberarCapturaAbierto] = useState(false);
     const [cambiarDir, setCambiarDir] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
+    const [folioRemision, setFolioRemision] = useState('');
 
     useEffect(() => {
         if (abierto && pedidoInicial) {
             setPedido(pedidoInicial);
+            setFolioRemision(pedidoInicial.folio_remision || '');
             setProcesando(false);
             setConfirmacion(null);
             setMotivoAnexoAbierto(false);
@@ -175,6 +178,29 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             forceFormData: true,
             onSuccess: () => recargarPedido('Remisión adjuntada correctamente.'),
             onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo adjuntar la remisión.' }),
+        });
+    };
+
+    const guardarFolioRemision = () => {
+        const limpio = folioRemision.trim();
+        if (!limpio) {
+            setAlerta({ abierto: true, tipo: 'error', titulo: 'Folio', mensaje: 'Indique el folio de pedido (Wizerp).' });
+            return;
+        }
+        if (limpio === String(pedido.folio_remision || '')) return;
+        setProcesando(true);
+        router.put(route('control_pedidos.auditar.folio_remision.update', pedido.id), {
+            folio_remision: limpio,
+        }, {
+            preserveScroll: true,
+            onFinish: () => setProcesando(false),
+            onSuccess: () => recargarPedido('Folio de pedido actualizado.'),
+            onError: (errors) => setAlerta({
+                abierto: true,
+                tipo: 'error',
+                titulo: 'Folio',
+                mensaje: errors?.folio_remision || 'No se pudo actualizar el folio.',
+            }),
         });
     };
 
@@ -408,7 +434,30 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             <div className="grid grid-cols-2 gap-4">
                                 <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
                                 <Campo label="Nombre" value={pedido.cliente?.nombre} />
-                                <Campo label="Folio de Pedido" value={pedido.folio_remision} />
+                                {esPendiente ? (
+                                    <div className="col-span-2 sm:col-span-1">
+                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Folio de Pedido</p>
+                                        <div className="flex gap-2 mt-0.5">
+                                            <input
+                                                type="text"
+                                                value={folioRemision}
+                                                onChange={(e) => setFolioRemision(e.target.value)}
+                                                className={`${THEME_INPUT} w-full py-2 text-sm`}
+                                                placeholder="Folio Wizerp..."
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={guardarFolioRemision}
+                                                disabled={procesando || folioRemision.trim() === String(pedido.folio_remision || '')}
+                                                className={`${BTN_SECONDARY} shrink-0 text-[10px] font-black uppercase px-3 outline-none disabled:opacity-40`}
+                                            >
+                                                Guardar
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Campo label="Folio de Pedido" value={pedido.folio_remision} />
+                                )}
                                 <Campo label="Folio interno" value={pedido.folio} />
                                 <Campo label="Fecha pedido" value={formatearFechaNegocio(pedido.fecha)} />
                                 <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />

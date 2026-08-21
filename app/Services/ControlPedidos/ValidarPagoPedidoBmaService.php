@@ -4,14 +4,16 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
-use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
+use Illuminate\Support\Facades\DB;
 
 class ValidarPagoPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private RegistrarPagoPedidoBmaService $pagos,
+        private AvanzarColaErroresPedidoBmaService $colaErroresService,
     ) {}
 
     /**
@@ -31,6 +33,21 @@ class ValidarPagoPedidoBmaService
                 'pago_validado_por_id' => $usuarioId,
             ]);
 
+            $antes = CamposIncorrectosPedidoBma::filtrar($pedido->campos_incorrectos ?? []);
+            $restantes = $this->colaErroresService->quitarCampos(
+                $pedido,
+                ['pago_validado'],
+                $usuarioId,
+                'Pago revalidado'
+            );
+            if ($restantes !== $antes) {
+                $pedido->update(
+                    $restantes === []
+                        ? $this->colaErroresService->attrsColaVacia()
+                        : $this->colaErroresService->attrsColaPendiente($restantes)
+                );
+            }
+
             $resumen = $this->pagos->resumenPago($pedido->fresh());
 
             $this->historialService->registrarTransicion(
@@ -46,6 +63,7 @@ class ValidarPagoPedidoBmaService
                 'cliente', 'estatus', 'documentos', 'banco', 'almacen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'envioTienda', 'pagoValidadoPor',
                 'pagosExhibicion.banco',
+                'errores',
             ]);
 
             return [

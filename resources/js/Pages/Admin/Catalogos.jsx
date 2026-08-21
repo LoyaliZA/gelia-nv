@@ -37,6 +37,7 @@ import TablaTiposCajaPedido from './Partials/Catalogos/TablaTiposCajaPedido';
 import TablaPaqueteriasPedido from './Partials/Catalogos/TablaPaqueteriasPedido';
 import TablaOrigenesPedido from './Partials/Catalogos/TablaOrigenesPedido';
 import TablaReexpedicionPedido from './Partials/Catalogos/TablaReexpedicionPedido';
+import TablaZonasPedido from './Partials/Catalogos/TablaZonasPedido';
 import TablaCatalogoFiscal from './Partials/Catalogos/TablaCatalogoFiscal';
 
 function normalizarBusqueda(texto) {
@@ -310,7 +311,7 @@ export default function Catalogos({
                                 <TablaCatalogoPedidoGenerico datos={f(tipos_guia_pedido)} titulo="Tipos de Guía_" icon={Map} routePrefix="tipos_guia_pedido" loaderMessage="Guardando Guía_" />
                             )}
                             {tabActiva === 'zonas_pedido' && (
-                                <TablaCatalogoPedidoGenerico datos={f(zonas_pedido)} titulo="Zonas Pedido_" icon={MapPin} routePrefix="zonas_pedido" loaderMessage="Guardando Zona_" />
+                                <TablaZonasPedido datos={f(zonas_pedido)} auth={auth} />
                             )}
                             {tabActiva === 'reexpedicion_pedido' && (
                                 <TablaReexpedicionPedido datos={f(reexpedicion_pedido)} paqueterias={paqueterias_pedido} />

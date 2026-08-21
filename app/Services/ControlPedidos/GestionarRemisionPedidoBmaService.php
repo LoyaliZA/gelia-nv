@@ -13,6 +13,7 @@ class GestionarRemisionPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
+        private AvanzarColaErroresPedidoBmaService $colaErroresService,
     ) {}
 
     public function subir(PedidoBma $pedido, UploadedFile $archivo, int $usuarioId): PedidoBma
@@ -51,11 +52,64 @@ class GestionarRemisionPedidoBmaService
                 ['ruta' => $ruta, 'nombre' => $nombre]
             );
 
+            $this->resolverCamposAuxiliar($pedido, ['remision'], $usuarioId, "Remisión corregida: {$nombre}");
+
             return $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'banco', 'almacen',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'envioTienda', 'pagoValidadoPor',
+                'errores',
             ]);
         });
+    }
+
+    public function actualizarFolioRemision(PedidoBma $pedido, string $folio, int $usuarioId): PedidoBma
+    {
+        if (! $pedido->esAuditablePorAuxiliar()) {
+            throw new \RuntimeException('Solo se puede corregir el folio en pedidos pendientes de revisión.');
+        }
+
+        $folio = trim($folio);
+        if ($folio === '') {
+            throw new \InvalidArgumentException('Indique el folio de pedido (Wizerp).');
+        }
+
+        return DB::transaction(function () use ($pedido, $folio, $usuarioId) {
+            $antes = (string) ($pedido->folio_remision ?? '');
+            $pedido->update(['folio_remision' => $folio]);
+
+            $estatusId = $pedido->catalogo_estatus_pedido_id;
+            $this->historialService->ejecutar(
+                $pedido->id,
+                $usuarioId,
+                $estatusId,
+                $estatusId,
+                $antes !== '' && $antes !== $folio
+                    ? "Folio de pedido corregido: {$antes} → {$folio}"
+                    : "Folio de pedido actualizado: {$folio}",
+                AccionesHistorialPedidoBma::CORRECCION
+            );
+
+            $this->resolverCamposAuxiliar($pedido, ['folio_remision'], $usuarioId, "Folio corregido: {$folio}");
+
+            return $pedido->fresh([
+                'cliente', 'estatus', 'documentos', 'banco', 'almacen',
+                'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'envioTienda', 'pagoValidadoPor',
+                'errores',
+            ]);
+        });
+    }
+
+    /**
+     * @param  list<string>  $campos
+     */
+    private function resolverCamposAuxiliar(PedidoBma $pedido, array $campos, int $usuarioId, string $correccion): void
+    {
+        $restantes = $this->colaErroresService->quitarCampos($pedido, $campos, $usuarioId, $correccion);
+        if ($restantes === []) {
+            $pedido->update($this->colaErroresService->attrsColaVacia());
+        } else {
+            $pedido->update($this->colaErroresService->attrsColaPendiente($restantes));
+        }
     }
 
     public function eliminar(PedidoBma $pedido, int $usuarioId): PedidoBma

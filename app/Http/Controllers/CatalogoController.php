@@ -797,6 +797,7 @@ class CatalogoController extends Controller
     {
         CatalogoZonaPedido::create($request->validate([
             'nombre' => 'required|string|max:255|unique:catalogo_zonas_pedido,nombre',
+            'costo_adicional' => 'nullable|numeric|min:0',
             'activo' => 'boolean',
         ]));
 
@@ -807,6 +808,7 @@ class CatalogoController extends Controller
     {
         CatalogoZonaPedido::findOrFail($id)->update($request->validate([
             'nombre' => 'required|string|max:255|unique:catalogo_zonas_pedido,nombre,' . $id,
+            'costo_adicional' => 'nullable|numeric|min:0',
             'activo' => 'boolean',
         ]));
 

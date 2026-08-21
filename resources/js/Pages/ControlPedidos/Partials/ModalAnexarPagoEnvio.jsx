@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm } from '@inertiajs/react';
 import { X, Upload } from 'lucide-react';
-import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
+import { THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
 import InputMoneda from './InputMoneda';
 import {
     THEME_MODAL_OVERLAY,
@@ -11,6 +11,8 @@ import {
     BTN_PRIMARY,
     BTN_SECONDARY,
 } from './pedidosBmaStyles';
+import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
+import { archivosImagenDesdeClipboard, documentoDesdeArchivoLocal } from './archivosDesdeClipboard';
 
 const SECCION = `${THEME_LABEL} mb-2 block`;
 
@@ -27,12 +29,25 @@ export default function ModalAnexarPagoEnvio({
         comentarios: '',
         comprobante: null,
     });
-    const [previewNombre, setPreviewNombre] = useState('');
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [docPreview, setDocPreview] = useState(null);
+
+    const asignarComprobante = (file) => {
+        setPreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return file ? URL.createObjectURL(file) : null;
+        });
+        setData('comprobante', file || null);
+    };
 
     useEffect(() => {
         if (!abierto) return;
         reset();
-        setPreviewNombre('');
+        setPreviewUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+        });
+        setDocPreview(null);
         setData({
             monto: '',
             catalogo_banco_id: '',
@@ -44,6 +59,9 @@ export default function ModalAnexarPagoEnvio({
     if (!abierto || !pedido) return null;
 
     const folio = pedido.folio_remision || pedido.folio;
+    const docLocal = data.comprobante && previewUrl
+        ? documentoDesdeArchivoLocal(data.comprobante, previewUrl)
+        : null;
 
     const enviar = (e) => {
         e.preventDefault();
@@ -64,6 +82,13 @@ export default function ModalAnexarPagoEnvio({
                 style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                 onClick={(e) => e.stopPropagation()}
                 onSubmit={enviar}
+                onPaste={(e) => {
+                    const pasted = archivosImagenDesdeClipboard(e.clipboardData);
+                    if (!pasted.length) return;
+                    e.preventDefault();
+                    const img = pasted[0];
+                    asignarComprobante(new File([img], `comprobante-paste-${Date.now()}.png`, { type: img.type || 'image/png' }));
+                }}
             >
                 <div className="flex items-center justify-between p-5 border-b theme-border shrink-0">
                     <div>
@@ -97,22 +122,29 @@ export default function ModalAnexarPagoEnvio({
                     </div>
                     <div>
                         <label className={SECCION}>Comprobante *</label>
-                        <label className="flex items-center gap-2 p-4 rounded-xl border theme-border theme-element cursor-pointer">
-                            <Upload className="w-4 h-4 theme-text-muted" />
-                            <span className="text-xs font-bold theme-text-main">
-                                {previewNombre || 'Adjuntar imagen o PDF'}
-                            </span>
-                            <input
-                                type="file"
-                                accept="image/*,.pdf"
-                                className="hidden"
-                                onChange={(e) => {
-                                    const file = e.target.files?.[0] || null;
-                                    setData('comprobante', file);
-                                    setPreviewNombre(file?.name || '');
-                                }}
-                            />
-                        </label>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <label className="flex items-center gap-2 p-4 rounded-xl border theme-border theme-element cursor-pointer">
+                                <Upload className="w-4 h-4 theme-text-muted" />
+                                <span className="text-xs font-bold theme-text-main">
+                                    {data.comprobante?.name || 'Adjuntar imagen o PDF'}
+                                </span>
+                                <input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        asignarComprobante(e.target.files?.[0] || null);
+                                        e.target.value = '';
+                                    }}
+                                />
+                            </label>
+                            {docLocal && (
+                                <MiniaturaDocumento documento={docLocal} onVer={() => setDocPreview(docLocal)} />
+                            )}
+                        </div>
+                        <p className="text-[10px] theme-text-muted font-bold m-0 mt-2">
+                            Puede pegar una captura (Ctrl+V).
+                        </p>
                         {errors.comprobante && <p className="text-[10px] text-red-500 font-bold mt-1 m-0">{errors.comprobante}</p>}
                     </div>
                     <div>
@@ -133,6 +165,11 @@ export default function ModalAnexarPagoEnvio({
                         {processing ? 'Guardando...' : 'Anexar pago'}
                     </button>
                 </div>
+                <ModalVistaPreviaDocumento
+                    abierto={Boolean(docPreview)}
+                    documento={docPreview}
+                    onClose={() => setDocPreview(null)}
+                />
             </form>
         </div>,
         document.body

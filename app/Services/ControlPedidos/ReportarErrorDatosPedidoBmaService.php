@@ -54,10 +54,14 @@ class ReportarErrorDatosPedidoBmaService
             throw new \InvalidArgumentException('Seleccione al menos un dato incorrecto.');
         }
 
-        // La auxiliar no se reporta a sí misma: remisión se corrige en su bandeja, no vía este flujo.
-        if ($duenoActivo === CamposIncorrectosPedidoBma::DUENO_AUXILIAR
-            && $fase === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR) {
-            throw new \InvalidArgumentException('Seleccione datos de la vendedora, CEDIS o de guía. La remisión se corrige aquí mismo en auditoría.');
+        // Solo campos de auxiliar + pedido ya en su bandeja: bitácora y aviso, sin cambiar de fase.
+        $duenosCola = CamposIncorrectosPedidoBma::duenosEnCola($campos);
+        if (
+            $duenoActivo === CamposIncorrectosPedidoBma::DUENO_AUXILIAR
+            && $fase === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR
+            && $duenosCola === [CamposIncorrectosPedidoBma::DUENO_AUXILIAR]
+        ) {
+            return $this->ejecutarAutoReporteAuxiliar($pedido, $usuarioId, $campos, $detalle);
         }
 
         $destino = CamposIncorrectosPedidoBma::destinoPara($duenoActivo);
@@ -192,6 +196,90 @@ class ReportarErrorDatosPedidoBmaService
                     ['url' => '/control-pedidos/cedis?q='.$q]
                 );
             }
+
+            return $pedido;
+        });
+    }
+
+    /**
+     * Auto-reporte de auxiliar en su propia bandeja: registra bitácora, notifica a otras áreas
+     * y deja el pedido en PENDIENTE_AUXILIAR para corregir en sitio.
+     *
+     * @param  list<string>  $campos
+     */
+    private function ejecutarAutoReporteAuxiliar(
+        PedidoBma $pedido,
+        int $usuarioId,
+        array $campos,
+        string $detalle
+    ): PedidoBma {
+        return DB::transaction(function () use ($pedido, $usuarioId, $campos, $detalle) {
+            $etiquetas = CamposIncorrectosPedidoBma::etiquetasDe($campos);
+            $resumenCampos = implode(', ', $etiquetas);
+            $comentario = "Auto-reporte auxiliar (corrige en auditoría): {$resumenCampos}";
+            if ($detalle !== '') {
+                $comentario .= ". Detalle: {$detalle}";
+            }
+
+            $previos = CamposIncorrectosPedidoBma::filtrar($pedido->campos_incorrectos ?? []);
+            $merged = CamposIncorrectosPedidoBma::filtrar(array_merge($previos, $campos));
+
+            $attrs = [
+                'campos_incorrectos' => $merged,
+                'detalle_error_datos' => $detalle !== '' ? $detalle : ($pedido->detalle_error_datos ?: null),
+                'error_datos_at' => now(),
+                'error_datos_por_id' => $usuarioId,
+                'motivo_rechazo' => $comentario,
+            ];
+
+            if (CamposIncorrectosPedidoBma::invalidanRemision($campos)) {
+                $this->eliminarRemisiones($pedido);
+                $attrs['pago_validado_at'] = null;
+                $attrs['pago_validado_por_id'] = null;
+            } elseif (in_array('pago_validado', $campos, true)) {
+                $attrs['pago_validado_at'] = null;
+                $attrs['pago_validado_por_id'] = null;
+            }
+
+            $pedido->update($attrs);
+
+            $this->registrarBitacora($pedido, $usuarioId, $campos, $detalle);
+
+            $estatusId = $pedido->catalogo_estatus_pedido_id;
+            $this->historialService->ejecutar(
+                $pedido->id,
+                $usuarioId,
+                $estatusId,
+                $estatusId,
+                $comentario,
+                AccionesHistorialPedidoBma::ERROR_DATOS
+            );
+
+            $pedido = $pedido->fresh([
+                'cliente', 'estatus', 'vendedor', 'documentos', 'paqueteria', 'direccionVigente',
+                'errores',
+            ]);
+
+            $q = urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id));
+            $extra = $detalle !== '' ? " Detalle: {$detalle}" : '';
+            $mensajeInfo = "La auxiliar registró un error propio y lo corregirá en auditoría: {$resumenCampos}.{$extra}";
+
+            $this->notificarService->ejecutar(
+                $pedido,
+                'pedido_error_estado',
+                $mensajeInfo,
+                [
+                    'control_pedidos.cedis',
+                    'control_pedidos.delegado',
+                ],
+                $usuarioId,
+                true,
+                [
+                    'url' => '/control-pedidos?q='.$q,
+                    'solo_informativo' => true,
+                    'campos_incorrectos' => $campos,
+                ]
+            );
 
             return $pedido;
         });

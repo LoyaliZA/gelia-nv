@@ -37,6 +37,7 @@ import {
     etiquetaEnvio,
 } from './pedidosBmaStyles';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
+import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
@@ -45,7 +46,7 @@ import CamposDireccionPedido, {
     camposDesdeDireccion,
     resumirCamposDireccion,
 } from './CamposDireccionPedido';
-import { resolverReexpedicionForm, separarCostoEnvioDeReexpedicion, costoEnvioParaPersistir } from './resolverReexpedicionForm';
+import { resolverReexpedicionForm, separarCostoEnvioDeReexpedicion, costoEnvioParaPersistir, costoReexpedicionDeZona } from './resolverReexpedicionForm';
 import ModalConfirmarAccion from './ModalConfirmarAccion';
 import SeccionPagosExhibicion from './SeccionPagosExhibicion';
 import { CAMPOS_ERROR_DATOS } from './ModalReportarErrorDatos';
@@ -665,12 +666,14 @@ export default function ModalFormPedido({
         const origenId = pedido.origen_id ?? pedido.origen?.id ?? null;
         setData((prev) => {
             const paqId = pedido.catalogo_paqueteria_id || prev.catalogo_paqueteria_id || '';
+            const zonaId = pedido.catalogo_zona_id || prev.catalogo_zona_id || '';
             const cp = prev.codigo_postal || pedido.codigo_postal || '';
             const rex = resolverReexpedicionForm({
                 codigoPostal: cp,
                 paqueteriaId: paqId,
                 reexpediciones: catalogos.reexpediciones || [],
                 zonas: catalogos.zonas || [],
+                zonaIdSeleccionada: zonaId,
             });
             const rawEnvio = pedido.costo_envio ?? prev.costo_envio ?? '';
             const { base } = separarCostoEnvioDeReexpedicion(rawEnvio, rex.costoAplicado);
@@ -689,6 +692,7 @@ export default function ModalFormPedido({
                 costo_envio: base,
                 catalogo_paqueteria_id: paqId || prev.catalogo_paqueteria_id || '',
                 catalogo_tipo_guia_id: pedido.catalogo_tipo_guia_id || prev.catalogo_tipo_guia_id || '',
+                ...(zonaId ? { catalogo_zona_id: zonaId } : {}),
             };
         });
         if (pedido.pesaje_respondido_at || pedido.estatus_envio === 'pesaje_listo') {
@@ -901,30 +905,46 @@ export default function ModalFormPedido({
             paqueteriaId: data.catalogo_paqueteria_id,
             reexpediciones: catalogos.reexpediciones || [],
             zonas: catalogos.zonas || [],
+            zonaIdSeleccionada: data.catalogo_zona_id,
         });
-        const mismoMatch = resolved.matchKey === matchReexpedicionKey.current
-            && Number(resolved.costoAplicado) === Number(costoReexpedicionAplicado.current);
+        const mismoMatch = resolved.matchKey === matchReexpedicionKey.current;
 
         if (!mismoMatch) {
             matchReexpedicionKey.current = resolved.matchKey;
-            costoReexpedicionAplicado.current = resolved.costoAplicado;
-            setCostoReexpedicion(resolved.costoAplicado);
-            if (resolved.zonaId !== '' && String(resolved.zonaId) !== String(data.catalogo_zona_id)) {
-                setData('catalogo_zona_id', resolved.zonaId);
+            // CP+paquetería solo sugiere zona; el monto lo define costo_adicional de la zona.
+            if (resolved.zonaIdSugerida !== '' && String(resolved.zonaIdSugerida) !== String(data.catalogo_zona_id)) {
+                setData('catalogo_zona_id', resolved.zonaIdSugerida);
             }
         }
 
         // Pedidos viejos: costo_envio traía flete+reexpedición mezclados; separar una vez al abrir.
         if (!rexStripHechoRef.current) {
             rexStripHechoRef.current = true;
-            if (resolved.costoAplicado > 0 && data.costo_envio !== '' && data.costo_envio != null) {
-                const { base } = separarCostoEnvioDeReexpedicion(data.costo_envio, resolved.costoAplicado);
+            const costoZona = costoReexpedicionDeZona(catalogos.zonas, data.catalogo_zona_id || resolved.zonaIdSugerida);
+            if (costoZona > 0 && data.costo_envio !== '' && data.costo_envio != null) {
+                const { base } = separarCostoEnvioDeReexpedicion(data.costo_envio, costoZona);
                 if (Number(base) !== Number(data.costo_envio)) {
                     setData('costo_envio', base);
                 }
             }
         }
     }, [abierto, requiereLogistica, data.codigo_postal, data.catalogo_paqueteria_id, catalogos.reexpediciones, catalogos.zonas]);
+
+    // Cargo de reexpedición = costo_adicional de la zona elegida (Admin → Zonas Pedido).
+    useEffect(() => {
+        if (!abierto || !requiereLogistica || guiaCliente) {
+            if (costoReexpedicion !== 0) {
+                setCostoReexpedicion(0);
+                costoReexpedicionAplicado.current = 0;
+            }
+            return;
+        }
+        const costo = costoReexpedicionDeZona(catalogos.zonas, data.catalogo_zona_id);
+        if (Number(costo) !== Number(costoReexpedicionAplicado.current)) {
+            costoReexpedicionAplicado.current = costo;
+            setCostoReexpedicion(costo);
+        }
+    }, [abierto, requiereLogistica, guiaCliente, data.catalogo_zona_id, catalogos.zonas]);
 
     useEffect(() => {
         if (!data.catalogo_paqueteria_id) {
@@ -1269,22 +1289,8 @@ export default function ModalFormPedido({
     const manejarArchivos = (e) => agregarArchivos(e.target.files);
 
     const handlePaste = (e) => {
-        const items = e.clipboardData?.items;
-        if (!items) return;
-        const pasted = [];
-        for (const item of items) {
-            if (item.type.indexOf('image') !== -1) {
-                const file = item.getAsFile();
-                if (file) pasted.push(file);
-            }
-        }
+        const pasted = archivosImagenDesdeClipboard(e.clipboardData);
         if (!pasted.length) return;
-
-        if (cotizacionLista && consultaCerrada) {
-            e.preventDefault();
-            agregarArchivos(pasted);
-            return;
-        }
 
         // Actualizar consulta: pegar anexos de piezas (uno o varios).
         if (tienePesajeRespondido && !pendientePesaje && idPedidoAcciones && !pedido?.empacado_at) {
@@ -1296,6 +1302,18 @@ export default function ModalFormPedido({
                     await subirAnexoPiezasArchivo(file);
                 }
             })();
+            return;
+        }
+
+        // Comprobante: SeccionPagosExhibicion detiene el bubbling en su form.
+        if (mostrarSeccionPago && puedeRegistrarPago) return;
+
+        // PDF/foto del pedido (flujo temprano).
+        if (mostrarPdfPedido && !procesandoPesaje) {
+            e.preventDefault();
+            const img = pasted[0];
+            const file = new File([img], `pedido-paste-${Date.now()}.png`, { type: img.type || 'image/png' });
+            subirPdfPedidoArchivo(file);
         }
     };
 
@@ -1418,10 +1436,8 @@ export default function ModalFormPedido({
         },
     };
 
-    const subirPdfPedido = async (e) => {
-        const file = e.target.files?.[0];
-        e.target.value = '';
-        if (!file) return;
+    const subirPdfPedidoArchivo = async (file) => {
+        if (!file || procesandoPesaje) return;
         setAvisoPdf(null);
         const id = await asegurarPedidoEnBd({ zona: 'pdf' });
         if (!id) return;
@@ -1440,6 +1456,22 @@ export default function ModalFormPedido({
         } finally {
             setProcesandoPesaje(false);
         }
+    };
+
+    const subirPdfPedido = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        await subirPdfPedidoArchivo(file);
+    };
+
+    const pegarPdfPedido = (e) => {
+        const pasted = archivosImagenDesdeClipboard(e.clipboardData);
+        if (!pasted.length) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const img = pasted[0];
+        const file = new File([img], `pedido-paste-${Date.now()}.png`, { type: img.type || 'image/png' });
+        subirPdfPedidoArchivo(file);
     };
 
     const subirAnexoPiezasArchivo = async (file) => {
@@ -2060,7 +2092,7 @@ export default function ModalFormPedido({
                     </section>
 
                     {mostrarPdfPedido && (
-                    <section className={`${SECCION_WRAP} ${wrapCampo('pdf_pedido')}`} data-campo="pdf_pedido">
+                    <section className={`${SECCION_WRAP} ${wrapCampo('pdf_pedido')}`} data-campo="pdf_pedido" onPaste={pegarPdfPedido}>
                         <p className={SECCION}>
                             {nSec.pdf}. {requiereLogistica ? 'Folio, paquetería y archivo del pedido' : 'Folio y archivo del pedido'}
                         </p>
@@ -2140,6 +2172,9 @@ export default function ModalFormPedido({
                                 <span className="text-xs font-bold theme-text-muted">Subiendo…</span>
                             )}
                         </div>
+                        <p className="text-[10px] theme-text-muted font-bold m-0 mt-2">
+                            Puede pegar una captura (Ctrl+V). Clic en la miniatura abre el visor.
+                        </p>
                         {avisoPdf && (
                             <p
                                 className="text-xs font-bold m-0"
@@ -2653,11 +2688,11 @@ export default function ModalFormPedido({
                                     </select>
                                     {Number(costoReexpedicion) > 0 ? (
                                         <p className="text-[10px] font-bold mt-1 m-0" style={{ color: 'var(--color-exito)' }}>
-                                            Cargo automático por CP: {formatearMoneda(costoReexpedicion)}
+                                            Cargo de zona: {formatearMoneda(costoReexpedicion)}
                                         </p>
                                     ) : (
                                         <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                                            El cargo se aplica si el CP + paquetería están en el catálogo de reexpedición (no basta elegir la zona).
+                                            Al elegir «Con reexpedición» se aplica el monto configurado en Admin → Zonas Pedido (aunque el CP no esté en el catálogo).
                                         </p>
                                     )}
                                 </div>
@@ -2743,7 +2778,7 @@ export default function ModalFormPedido({
                                     )}
                                     {Number(costoReexpedicion) > 0 && (
                                         <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
-                                            Reexpedición por CP/paquetería: {formatearMoneda(costoReexpedicion)} (se suma aparte al cobro).
+                                            Reexpedición (zona): {formatearMoneda(costoReexpedicion)} (se suma aparte al cobro).
                                         </p>
                                     )}
                                 </div>
@@ -2819,9 +2854,11 @@ export default function ModalFormPedido({
                                     </p>
                                     <div className="flex flex-wrap gap-3 mt-3">
                                         {docsExistentes.map((doc) => (
-                                            <div key={doc.id} className="relative w-20 h-20 rounded-xl overflow-hidden border theme-border">
-                                                <img src={doc.url} alt={doc.nombre_original} className="w-full h-full object-cover" />
-                                            </div>
+                                            <MiniaturaDocumento
+                                                key={doc.id}
+                                                documento={doc}
+                                                onVer={() => abrirVistaPrevia(doc)}
+                                            />
                                         ))}
                                     </div>
                                 </div>

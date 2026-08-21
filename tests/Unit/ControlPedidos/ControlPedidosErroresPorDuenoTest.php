@@ -400,16 +400,24 @@ class ControlPedidosErroresPorDuenoTest extends TestCase
         $this->assertSame(['numero_rastreo'], $actualizado->campos_incorrectos);
     }
 
-    public function test_auxiliar_no_puede_reportar_solo_remision_a_si_misma(): void
+    public function test_auxiliar_auto_reporta_remision_sin_cambiar_fase(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-
         $pedido = $this->crearPedidoPendienteAuxiliar();
-        app(ReportarErrorDatosPedidoBmaService::class)->ejecutar(
+        $faseAntes = $pedido->estatus->fase_ciclo;
+
+        $actualizado = app(ReportarErrorDatosPedidoBmaService::class)->ejecutar(
             $pedido->fresh(['estatus', 'documentos']),
             $this->usuario->id,
-            ['remision'],
-            ''
+            ['remision', 'folio_remision'],
+            'Me equivoqué de PDF'
+        );
+
+        $this->assertSame($faseAntes, $actualizado->estatus->fase_ciclo);
+        $this->assertEqualsCanonicalizing(['remision', 'folio_remision'], $actualizado->campos_incorrectos);
+        $this->assertStringContainsString('Auto-reporte auxiliar', (string) $actualizado->motivo_rechazo);
+        $this->assertNull($actualizado->pago_validado_at);
+        $this->assertFalse(
+            $actualizado->documentos()->where('tipo', 'remision')->exists()
         );
     }
 

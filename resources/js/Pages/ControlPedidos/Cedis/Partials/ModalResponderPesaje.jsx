@@ -26,6 +26,7 @@ import VisorPdfPaginas from '../../Partials/VisorPdfPaginas';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
+import { archivosImagenDesdeClipboard } from '../../Partials/archivosDesdeClipboard';
 import InputConEscanner from '../../../../Components/Escanner/InputConEscanner';
 import { desbloquearBipAudio, reproducirBipConfirmacion, reproducirBipError } from '../../../../Components/Escanner/bipScanner';
 import ModalSesionEvidenciaCedis from './ModalSesionEvidenciaCedis';
@@ -190,7 +191,19 @@ function GaleriaEvidencias({
         const docs = previews.map((p) => archivoADoc({ name: p.name, type: p.mime }, p.url));
 
     return (
-        <div className="space-y-2">
+        <div
+            className="space-y-2"
+            onPaste={(e) => {
+                const pasted = archivosImagenDesdeClipboard(e.clipboardData);
+                if (!pasted.length) return;
+                e.preventDefault();
+                agregar(pasted.map((img, i) => new File(
+                    [img],
+                    `evidencia-paste-${Date.now()}-${i}.png`,
+                    { type: img.type || 'image/png' }
+                )));
+            }}
+        >
             <label className={SECCION}>{label}{obligatorio ? ' *' : ''}</label>
             {esMovil ? (
                 <div className="grid grid-cols-2 gap-2">
@@ -270,6 +283,9 @@ function GaleriaEvidencias({
                     })}
                 </div>
             )}
+            <p className="text-[10px] theme-text-muted font-bold m-0">
+                Puede pegar capturas (Ctrl+V). Clic en la miniatura abre el visor.
+            </p>
             <ModalConfirmarAccion
                 abierto={quitarIdx != null}
                 titulo="Quitar evidencia"

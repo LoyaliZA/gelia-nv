@@ -6,50 +6,64 @@ import {
     resolverReexpedicionForm,
     separarCostoEnvioDeReexpedicion,
     costoEnvioParaPersistir,
+    costoReexpedicionDeZona,
 } from './resolverReexpedicionForm';
 
-describe('resolverReexpedicionForm', () => {
+describe('resolverReexpedicionForm — cargo por zona', () => {
     const zonas = [
-        { id: 1, nombre: 'Sin reexpedición' },
-        { id: 2, nombre: 'Con reexpedición' },
+        { id: 1, nombre: 'Sin reexpedición', costo_adicional: 0 },
+        { id: 2, nombre: 'Con reexpedición', costo_adicional: 150 },
     ];
     const reexpediciones = [
-        { codigo_postal: '64000', paqueteria_id: 9, costo_adicional: 150 },
+        { codigo_postal: '64000', paqueteria_id: 9, costo_adicional: 85 },
     ];
 
-    it('devuelve cargo aparte sin tocar un costo_envio', () => {
-        const r = resolverReexpedicionForm({
-            codigoPostal: '64000',
-            paqueteriaId: 9,
-            reexpediciones,
-            zonas,
-        });
-        expect(r.costoAplicado).toBe(150);
-        expect(r.zonaId).toBe(2);
-        expect(r.matchKey).toBe('64000|9');
-        expect(r.costoEnvio).toBeUndefined();
-    });
-
-    it('sin match: zona sin y cargo 0', () => {
+    it('elige Con reexpedición a mano → 150 aunque CP no esté en catálogo', () => {
         const r = resolverReexpedicionForm({
             codigoPostal: '99999',
             paqueteriaId: 9,
             reexpediciones,
             zonas,
+            zonaIdSeleccionada: 2,
+        });
+        expect(r.costoAplicado).toBe(150);
+        expect(r.matchKey).toBeNull();
+        expect(r.zonaIdSugerida).toBe(1);
+    });
+
+    it('match CP sugiere Con; monto sigue siendo el de la zona (150), no el del catálogo CP', () => {
+        const r = resolverReexpedicionForm({
+            codigoPostal: '64000',
+            paqueteriaId: 9,
+            reexpediciones,
+            zonas,
+            zonaIdSeleccionada: '',
+        });
+        expect(r.matchKey).toBe('64000|9');
+        expect(r.zonaIdSugerida).toBe(2);
+        expect(r.costoAplicado).toBe(150);
+    });
+
+    it('Sin reexpedición → 0', () => {
+        const r = resolverReexpedicionForm({
+            codigoPostal: '64000',
+            paqueteriaId: 9,
+            reexpediciones,
+            zonas,
+            zonaIdSeleccionada: 1,
         });
         expect(r.costoAplicado).toBe(0);
-        expect(r.zonaId).toBe(1);
-        expect(r.matchKey).toBeNull();
     });
 });
 
-describe('separar / persistir costo', () => {
-    it('separa flete histórico mezclado', () => {
-        expect(separarCostoEnvioDeReexpedicion(350, 150)).toEqual({ base: 200, reexpedicion: 150 });
+describe('helpers', () => {
+    it('costoReexpedicionDeZona', () => {
+        expect(costoReexpedicionDeZona([{ id: 2, costo_adicional: 150 }], 2)).toBe(150);
+        expect(costoReexpedicionDeZona([{ id: 1, costo_adicional: 0 }], 1)).toBe(0);
     });
 
-    it('persiste suma para BD', () => {
+    it('separa / persiste', () => {
+        expect(separarCostoEnvioDeReexpedicion(350, 150)).toEqual({ base: 200, reexpedicion: 150 });
         expect(costoEnvioParaPersistir(200, 150)).toBe(350);
-        expect(costoEnvioParaPersistir('', 150)).toBe(150);
     });
 });
