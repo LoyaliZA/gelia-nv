@@ -895,6 +895,7 @@ export const validarCamposEnvioPedido = (data, {
     paqueteria = null,
     consultaCerrada = false,
     requiereConsultaCerrada = false,
+    manualDireccionCompleta = null,
 } = {}) => {
     const faltantes = [];
     const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario
@@ -967,9 +968,17 @@ export const validarCamposEnvioPedido = (data, {
                 if (!String(data.codigo_postal || '').trim()) marcar('codigo_postal', 'código postal');
                 if (direccionesNormalizadas) {
                     const tieneDir = String(data.cliente_direccion_id || '').trim();
-                    const excepcion = Boolean(data.direccion_manual_excepcion) && String(data.domicilio_entrega || '').trim();
-                    if (!tieneDir && !excepcion) {
-                        marcar('domicilio', 'dirección de envío verificada o excepción manual');
+                    const excepcionFlag = Boolean(data.direccion_manual_excepcion);
+                    const domicilioTxt = String(data.domicilio_entrega || '').trim();
+                    const camposOk = manualDireccionCompleta === true
+                        || (manualDireccionCompleta == null && excepcionFlag && domicilioTxt);
+                    if (!tieneDir && !(excepcionFlag && camposOk)) {
+                        marcar(
+                            'domicilio',
+                            excepcionFlag
+                                ? 'dirección manual completa (destinatario, calle, colonia, CP, municipio, estado)'
+                                : 'dirección de envío verificada o excepción manual completa'
+                        );
                     }
                 } else if (!String(data.domicilio_entrega || '').trim()) {
                     marcar('domicilio', 'domicilio de entrega');

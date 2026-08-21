@@ -38,7 +38,7 @@ import {
 } from './pedidosBmaStyles';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
-import { elegirDireccionParaPedido } from './elegirDireccionParaPedido';
+import { elegirDireccionParaPedido, manualDireccionCompleta, faltantesManualDireccion } from './elegirDireccionParaPedido';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
@@ -126,9 +126,11 @@ const COLOR_INFO = { color: 'var(--color-info)' };
 const mensajeAxios = (err, fallback) => {
     const payload = err?.response?.data;
     if (typeof payload?.message === 'string' && payload.message) return payload.message;
-    const first = Object.values(payload?.errors || {})[0];
-    if (Array.isArray(first) && first[0]) return first[0];
-    if (typeof first === 'string') return first;
+    const errs = payload?.errors;
+    if (errs && typeof errs === 'object') {
+        const msgs = Object.values(errs).flatMap((v) => (Array.isArray(v) ? v : [v])).filter(Boolean);
+        if (msgs.length) return msgs.slice(0, 4).join(' · ');
+    }
     return fallback;
 };
 
@@ -468,6 +470,8 @@ export default function ModalFormPedido({
         paqueteria: paqueteriaSeleccionada,
         consultaCerrada,
         requiereConsultaCerrada: requiereConsultaCerradaUi,
+        manualDireccionCompleta: Boolean(data.direccion_manual_excepcion)
+            && manualDireccionCompleta(camposDireccion),
     });
     const enviarPedidoListo = validacionEnvio.valido
         && !(esResguardoComplementario && !data.pedido_principal_id)
@@ -737,15 +741,15 @@ export default function ModalFormPedido({
     }, [abierto, pedido?.id, pedido?.origen_id, pedido?.origen?.id, data.origen_id, setData]);
 
     const conDireccionManual = (d) => {
-        const manual = Boolean(d.direccion_manual_excepcion)
+        const capturaActiva = Boolean(d.direccion_manual_excepcion)
             || mostrarExcepcion
             || (!d.cliente_direccion_id && direccionesCliente.length === 0);
-        if (!manual) return d;
+        if (!capturaActiva) return d;
         return {
             ...d,
             direccion_manual_excepcion: true,
             direccion: camposDireccion,
-            domicilio_entrega: resumirCamposDireccion(camposDireccion),
+            domicilio_entrega: resumirCamposDireccion(camposDireccion) || d.domicilio_entrega || '',
             codigo_postal: camposDireccion.codigo_postal || d.codigo_postal || '',
             cliente_direccion_id: '',
         };
@@ -1091,21 +1095,21 @@ export default function ModalFormPedido({
                 });
                 setMsgDireccion(tienePrincipal
                     ? ''
-                    : 'Este cliente no tiene dirección principal verificada. Se preseleccionó una dirección del catálogo; puede cambiarla o marcar una principal después.');
+                    : 'Este cliente no tiene dirección principal verificada. Se preseleccionó una del catálogo; puede cambiarla o marcar una como principal.');
                 return;
             }
 
             aplicarDireccionSeleccionada(null);
-            if (!silencioso) {
-                setMsgDireccion('Este cliente no tiene direcciones verificadas. Capture la dirección y guárdela en el catálogo, o genere el link de registro.');
-            }
+            setMsgDireccion(
+                'Este cliente no tiene direcciones verificadas en el catálogo. Capture los datos y pulse «Guardar como dirección principal», o genere el link de registro.'
+            );
         } catch {
             if (silencioso) return;
             setAlertaDireccion(false);
             setDireccionesCliente([]);
             setSinDireccionPrincipal(true);
             aplicarDireccionSeleccionada(null);
-            setMsgDireccion('No se pudo obtener la dirección del cliente. Registre una dirección en el catálogo.');
+            setMsgDireccion('No se pudo obtener la dirección del cliente. Capture y guarde en el catálogo, o genere el link de registro.');
         } finally {
             setCargandoDireccion(false);
         }
@@ -1178,8 +1182,12 @@ export default function ModalFormPedido({
             setAvisoForm({ tipo: 'error', mensaje: 'Seleccione un cliente antes de guardar la dirección.' });
             return;
         }
-        if (!String(camposDireccion.calle || '').trim() && !camposDireccion.domicilio_irregular) {
-            setAvisoForm({ tipo: 'error', mensaje: 'Complete la dirección antes de guardarla en el catálogo.' });
+        const faltan = faltantesManualDireccion(camposDireccion);
+        if (faltan.length) {
+            setAvisoForm({
+                tipo: 'error',
+                mensaje: `Complete antes de guardar: ${faltan.join(', ')}.`,
+            });
             return;
         }
         setGuardandoDireccion(true);
@@ -1187,7 +1195,7 @@ export default function ModalFormPedido({
             const res = await axios.post(route('control_pedidos.registrar_direccion_catalogo'), {
                 cliente_id: data.cliente_id,
                 pedido_id: idPedidoAcciones || null,
-                es_principal: Boolean(esPrincipal),
+                es_principal: Boolean(esPrincipal) || direccionesCliente.length === 0,
                 ...camposDireccion,
             }, { headers: headersJsonCsrf() });
             const nueva = res.data?.direccion;
@@ -1197,6 +1205,7 @@ export default function ModalFormPedido({
                     return [nueva, ...resto];
                 });
                 setMostrarExcepcion(false);
+                setDireccionSucia(false);
                 aplicarDireccionSeleccionada(nueva);
                 if (nueva.es_principal) setSinDireccionPrincipal(false);
                 setMsgDireccion('');
@@ -2475,12 +2484,15 @@ export default function ModalFormPedido({
                                 </button>
                             )}
                         </div>
-                        {(msgDireccion || sinDireccionPrincipal) && (
+                        {(msgDireccion || (sinDireccionPrincipal && !data.cliente_direccion_id)) && (
                             <div className="mb-4 p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex items-start gap-3">
                                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                 <div className="min-w-0 space-y-2">
                                     <p className="text-xs font-bold theme-text-main m-0">
-                                        {msgDireccion || 'Este cliente no tiene una dirección principal registrada. Debe registrar los datos de dirección.'}
+                                        {msgDireccion
+                                            || (direccionesCliente.length === 0
+                                                ? 'Este cliente no tiene direcciones verificadas. Capture los datos abajo y pulse «Guardar como dirección principal».'
+                                                : 'Este cliente no tiene dirección principal. Elija una del listado o guarde una nueva como principal.')}
                                     </p>
                                     {can('clientes.direcciones.generar_enlace') && infoCliente?.id && (
                                         <button
@@ -2624,11 +2636,18 @@ export default function ModalFormPedido({
                                                 </div>
                                             )}
                                             <p className="text-[10px] theme-text-muted font-bold m-0">
-                                                Guardar en catálogo permite reutilizarla en próximos pedidos. También puede continuar solo con excepción de este pedido.
+                                                {direccionesCliente.length === 0
+                                                    ? 'La primera dirección del cliente debe guardarse como principal para poder enviar el pedido y registrar el pago.'
+                                                    : 'Guardar en catálogo vincula la dirección al pedido. «Adicional» no reemplaza la principal.'}
                                             </p>
+                                            {Boolean(data.direccion_manual_excepcion) && !manualDireccionCompleta(camposDireccion) && (
+                                                <p className="text-[10px] font-bold m-0" style={{ color: 'var(--color-peligro)' }}>
+                                                    Falta: {faltantesManualDireccion(camposDireccion).join(', ') || 'datos de dirección'}.
+                                                </p>
+                                            )}
                                             <input
                                                 type="text"
-                                                placeholder="Motivo de la excepción (requerido al enviar si no guarda en catálogo)"
+                                                placeholder="Motivo de la excepción (solo si no guarda en catálogo)"
                                                 value={data.motivo_direccion_manual}
                                                 onChange={(e) => setData('motivo_direccion_manual', e.target.value)}
                                                 className={`${THEME_INPUT} w-full py-3`}
