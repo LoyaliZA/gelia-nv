@@ -9,6 +9,7 @@ use App\Http\Requests\ControlPedidos\StorePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\UpdatePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\AnexarPagoEnvioPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\ActualizarCamposDireccionPedidoRequest;
+use App\Http\Requests\ControlPedidos\RegistrarDireccionDesdePedidoRequest;
 use App\Http\Requests\ControlPedidos\CargarGuiaClientePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\CompletarEnvioResguardoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\AtenderSinExistenciaPedidoBmaRequest;
@@ -23,6 +24,7 @@ use App\Services\ControlPedidos\AtenderSinExistenciaPedidoBmaService;
 use App\Services\ControlPedidos\CargarGuiaClientePedidoBmaService;
 use App\Services\ControlPedidos\CrearPedidoBmaService;
 use App\Services\ControlPedidos\Direcciones\ActualizarCamposDireccionPedidoService;
+use App\Services\ControlPedidos\Direcciones\RegistrarDireccionDesdePedidoService;
 use App\Services\ControlPedidos\Direcciones\CambiarDireccionPedido;
 use App\Services\ControlPedidos\CancelarPedidoBmaService;
 use App\Services\ControlPedidos\EliminarPedidoBmaService;
@@ -293,6 +295,62 @@ class PedidoBmaController extends Controller
         return response()->json([
             'ok' => true,
             'message' => 'Dirección actualizada (nueva versión) y registrada en auditoría.',
+            'direccion' => [
+                'id' => $dir->id,
+                'numero_direccion' => $dir->numero_direccion,
+                'etiqueta' => $dir->etiqueta,
+                'tipo_direccion' => $dir->tipo_direccion,
+                'nombre_destinatario' => $dir->nombre_destinatario,
+                'telefono_destinatario' => $dir->telefono_destinatario,
+                'calle' => $dir->calle,
+                'numero_exterior' => $dir->numero_exterior,
+                'numero_interior' => $dir->numero_interior,
+                'colonia' => $dir->colonia,
+                'codigo_postal' => $dir->codigo_postal,
+                'municipio' => $dir->municipio,
+                'ciudad' => $dir->ciudad,
+                'estado' => $dir->estado,
+                'pais' => $dir->pais,
+                'referencias' => $dir->referencias,
+                'indicaciones_entrega' => $dir->indicaciones_entrega,
+                'domicilio_irregular' => (bool) $dir->domicilio_irregular,
+                'anexa_remision' => (bool) $dir->anexa_remision,
+                'direccion_resumida' => FormatearDireccionEstructurada::resumida($dir),
+                'es_principal' => (bool) $dir->es_principal,
+                'estado_verificacion' => $dir->estado_verificacion,
+            ],
+            'pedido_id' => $resultado['pedido']?->id,
+        ]);
+    }
+
+    public function registrarDireccionCatalogo(
+        RegistrarDireccionDesdePedidoRequest $request,
+        RegistrarDireccionDesdePedidoService $service,
+    ): JsonResponse {
+        $datos = $request->validated();
+        $pedido = ! empty($datos['pedido_id'])
+            ? PedidoBma::query()->findOrFail((int) $datos['pedido_id'])
+            : null;
+
+        try {
+            $resultado = $service->ejecutar(
+                (int) $datos['cliente_id'],
+                $datos,
+                (bool) $datos['es_principal'],
+                Auth::id(),
+                $pedido,
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $dir = $resultado['direccion'];
+
+        return response()->json([
+            'ok' => true,
+            'message' => $dir->es_principal
+                ? 'Dirección guardada como principal y vinculada al pedido.'
+                : 'Dirección guardada como adicional y vinculada al pedido.',
             'direccion' => [
                 'id' => $dir->id,
                 'numero_direccion' => $dir->numero_direccion,

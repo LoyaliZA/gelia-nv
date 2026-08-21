@@ -38,6 +38,7 @@ import {
 } from './pedidosBmaStyles';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
+import { elegirDireccionParaPedido } from './elegirDireccionParaPedido';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
@@ -244,6 +245,7 @@ export default function ModalFormPedido({
     const ultimoFingerprintBd = useRef('');
     const ultimoSyncCedis = useRef('');
     const direccionSuciaRef = useRef(false);
+    const capturaManualRef = useRef(false);
     const autoguardandoBd = useRef(false);
     const ignoreOverlayCloseUntil = useRef(0);
     const cuerpoFormRef = useRef(null);
@@ -398,6 +400,7 @@ export default function ModalFormPedido({
     const labelCostoEnvio = etiquetaCostoEnvio(paqueteriaSeleccionada);
     const idPedidoAcciones = modoEdicion ? pedido?.id : pedidoBdId;
     direccionSuciaRef.current = direccionSucia;
+    capturaManualRef.current = Boolean(mostrarExcepcion || data.direccion_manual_excepcion);
 
     // Sin tipo: cliente + tipo. Con Envío/Tienda: consulta CEDIS primero; monto/pago tras cierre.
     const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id);
@@ -1070,41 +1073,31 @@ export default function ModalFormPedido({
             const response = await axios.get(`/api/clientes/id/${clienteId}/direccion-envio`);
             const dirs = response.data?.direcciones || [];
             setDireccionesCliente(dirs);
-            if (silencioso && direccionSuciaRef.current) return;
+            // No pisar captura en curso (edición de catálogo o excepción manual).
+            if (silencioso && (direccionSuciaRef.current || capturaManualRef.current)) return;
 
             const idSeleccion = conservarSeleccion
                 ? (direccionId || data.cliente_direccion_id)
                 : null;
-            const seleccionada = idSeleccion
-                ? dirs.find((d) => String(d.id) === String(idSeleccion))
-                : null;
-            const principal = dirs.find((d) => d.es_principal) || null;
-            const tienePrincipal = Boolean(principal) || Boolean(response.data?.tiene_direccion_principal);
+            const elegida = elegirDireccionParaPedido(dirs, { direccionId: idSeleccion });
+            const tienePrincipal = Boolean(dirs.find((d) => d.es_principal))
+                || Boolean(response.data?.tiene_direccion_principal);
 
-            if (!tienePrincipal) {
-                setSinDireccionPrincipal(true);
-                setAlertaDireccion(false);
-                if (!seleccionada) {
-                    aplicarDireccionSeleccionada(null);
-                } else {
-                    aplicarDireccionSeleccionada(seleccionada);
-                }
-                if (!silencioso) {
-                    setMsgDireccion('Este cliente no tiene una dirección principal registrada. Debe registrar los datos de dirección antes de continuar.');
-                }
+            setSinDireccionPrincipal(!tienePrincipal);
+
+            if (elegida) {
+                aplicarDireccionSeleccionada(elegida, {
+                    marcarAlerta: !conservarSeleccion && !tienePrincipal,
+                });
+                setMsgDireccion(tienePrincipal
+                    ? ''
+                    : 'Este cliente no tiene dirección principal verificada. Se preseleccionó una dirección del catálogo; puede cambiarla o marcar una principal después.');
                 return;
             }
 
-            setSinDireccionPrincipal(false);
-            const elegida = seleccionada || principal;
-            if (elegida) {
-                aplicarDireccionSeleccionada(elegida, { marcarAlerta: !conservarSeleccion });
-                setMsgDireccion('');
-            } else {
-                aplicarDireccionSeleccionada(null);
-                if (!silencioso) {
-                    setMsgDireccion('Este cliente no tiene direcciones verificadas. Solicite el registro de dirección.');
-                }
+            aplicarDireccionSeleccionada(null);
+            if (!silencioso) {
+                setMsgDireccion('Este cliente no tiene direcciones verificadas. Capture la dirección y guárdela en el catálogo, o genere el link de registro.');
             }
         } catch {
             if (silencioso) return;
@@ -1175,6 +1168,42 @@ export default function ModalFormPedido({
         } catch (err) {
             const msg = mensajeAxios(err, 'No se pudo actualizar la dirección.');
             setAvisoForm({ tipo: 'error', mensaje: msg });
+        } finally {
+            setGuardandoDireccion(false);
+        }
+    };
+
+    const registrarDireccionEnCatalogo = async (esPrincipal) => {
+        if (!data.cliente_id) {
+            setAvisoForm({ tipo: 'error', mensaje: 'Seleccione un cliente antes de guardar la dirección.' });
+            return;
+        }
+        if (!String(camposDireccion.calle || '').trim() && !camposDireccion.domicilio_irregular) {
+            setAvisoForm({ tipo: 'error', mensaje: 'Complete la dirección antes de guardarla en el catálogo.' });
+            return;
+        }
+        setGuardandoDireccion(true);
+        try {
+            const res = await axios.post(route('control_pedidos.registrar_direccion_catalogo'), {
+                cliente_id: data.cliente_id,
+                pedido_id: idPedidoAcciones || null,
+                es_principal: Boolean(esPrincipal),
+                ...camposDireccion,
+            }, { headers: headersJsonCsrf() });
+            const nueva = res.data?.direccion;
+            if (nueva) {
+                setDireccionesCliente((prev) => {
+                    const resto = prev.filter((d) => String(d.id) !== String(nueva.id));
+                    return [nueva, ...resto];
+                });
+                setMostrarExcepcion(false);
+                aplicarDireccionSeleccionada(nueva);
+                if (nueva.es_principal) setSinDireccionPrincipal(false);
+                setMsgDireccion('');
+            }
+            setAvisoForm({ tipo: 'success', mensaje: res.data?.message || 'Dirección guardada en el catálogo.' });
+        } catch (err) {
+            setAvisoForm({ tipo: 'error', mensaje: mensajeAxios(err, 'No se pudo guardar la dirección en el catálogo.') });
         } finally {
             setGuardandoDireccion(false);
         }
@@ -2548,6 +2577,7 @@ export default function ModalFormPedido({
                                                     setData('direccion_manual_excepcion', true);
                                                     setData('cliente_direccion_id', '');
                                                     setCamposDireccion({ ...CAMPOS_DIRECCION_VACIOS });
+                                                    setDireccionSucia(true);
                                                 }}
                                             >
                                                 <PenLine className="w-3.5 h-3.5" />
@@ -2561,18 +2591,44 @@ export default function ModalFormPedido({
                                                 valores={camposDireccion}
                                                 onChange={(nuevos) => {
                                                     setCamposDireccion(nuevos);
+                                                    setDireccionSucia(true);
                                                     setData('direccion_manual_excepcion', true);
                                                     setData('cliente_direccion_id', '');
                                                     setData('domicilio_entrega', resumirCamposDireccion(nuevos));
                                                     setData('codigo_postal', nuevos.codigo_postal || '');
                                                 }}
                                                 disabled={logisticaBloqueada}
-                                                sucio={false}
+                                                sucio={direccionSucia}
                                                 puedeEditar={!logisticaBloqueada}
                                             />
+                                            {can('clientes.direcciones.crear') && (
+                                                <div className="flex flex-wrap gap-2">
+                                                    <button
+                                                        type="button"
+                                                        disabled={guardandoDireccion || logisticaBloqueada}
+                                                        className={`${BTN_PRIMARY} text-xs outline-none disabled:opacity-50`}
+                                                        onClick={() => registrarDireccionEnCatalogo(true)}
+                                                    >
+                                                        {guardandoDireccion ? 'Guardando…' : 'Guardar como dirección principal'}
+                                                    </button>
+                                                    {direccionesCliente.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={guardandoDireccion || logisticaBloqueada}
+                                                            className={`${BTN_SECONDARY} text-xs outline-none disabled:opacity-50`}
+                                                            onClick={() => registrarDireccionEnCatalogo(false)}
+                                                        >
+                                                            Guardar como adicional
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                            <p className="text-[10px] theme-text-muted font-bold m-0">
+                                                Guardar en catálogo permite reutilizarla en próximos pedidos. También puede continuar solo con excepción de este pedido.
+                                            </p>
                                             <input
                                                 type="text"
-                                                placeholder="Motivo de la excepción (requerido al enviar)"
+                                                placeholder="Motivo de la excepción (requerido al enviar si no guarda en catálogo)"
                                                 value={data.motivo_direccion_manual}
                                                 onChange={(e) => setData('motivo_direccion_manual', e.target.value)}
                                                 className={`${THEME_INPUT} w-full py-3`}
@@ -2584,6 +2640,11 @@ export default function ModalFormPedido({
                                                     onClick={() => {
                                                         setMostrarExcepcion(false);
                                                         setData('direccion_manual_excepcion', false);
+                                                        setDireccionSucia(false);
+                                                        const elegida = elegirDireccionParaPedido(direccionesCliente, {
+                                                            direccionId: data.cliente_direccion_id,
+                                                        });
+                                                        aplicarDireccionSeleccionada(elegida);
                                                     }}
                                                 >
                                                     Volver al selector
@@ -2602,6 +2663,7 @@ export default function ModalFormPedido({
                                         setData('direccion_manual_excepcion', true);
                                         setData('cliente_direccion_id', '');
                                         setCamposDireccion({ ...CAMPOS_DIRECCION_VACIOS });
+                                        setDireccionSucia(true);
                                     }}
                                 >
                                     Usar excepción manual en su lugar

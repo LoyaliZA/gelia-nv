@@ -554,6 +554,9 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/atender-sin-existencia', [PedidoBmaController::class, 'atenderSinExistencia'])->name('atender_sin_existencia');
         Route::post('/{pedidoBma}/volver-borrador', [PedidoBmaController::class, 'volverBorrador'])->name('volver_borrador');
         Route::post('/actualizar-campos-direccion', [PedidoBmaController::class, 'actualizarCamposDireccion'])->name('actualizar_campos_direccion');
+        Route::post('/registrar-direccion-catalogo', [PedidoBmaController::class, 'registrarDireccionCatalogo'])
+            ->middleware('can:clientes.direcciones.crear')
+            ->name('registrar_direccion_catalogo');
         Route::middleware(['can:clientes.direcciones.generar_enlace'])->group(function () {
             Route::post('/cliente/{cliente}/enlace-direccion', [DireccionesAuxiliarController::class, 'generarEnlace'])
                 ->name('enlace_direccion');
