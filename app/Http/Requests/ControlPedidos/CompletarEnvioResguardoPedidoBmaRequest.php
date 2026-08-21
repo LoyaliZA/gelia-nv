@@ -4,6 +4,7 @@ namespace App\Http\Requests\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CompletarEnvioResguardoPedidoBmaRequest extends FormRequest
 {
@@ -22,10 +23,10 @@ class CompletarEnvioResguardoPedidoBmaRequest extends FormRequest
         $pedido?->loadMissing('tipoOperacionEnvio');
 
         $requiereCaptura = $pedido
-            && !$pedido->esComplemento()
+            && ! $pedido->esComplemento()
             && ($pedido->esResguardoAbierto() || $pedido->estatus_envio === PedidoBma::ESTATUS_ENVIO_PENDIENTE_LIBERACION);
 
-        if (!$requiereCaptura) {
+        if (! $requiereCaptura) {
             return [];
         }
 
@@ -36,7 +37,19 @@ class CompletarEnvioResguardoPedidoBmaRequest extends FormRequest
             ? ['nullable', 'integer', 'min:0', 'max:999']
             : ['required', 'integer', 'min:0', 'max:999'];
 
+        $clienteId = (int) ($pedido->cliente_id ?? 0);
+
         return [
+            'cliente_direccion_id' => [
+                'required',
+                'integer',
+                Rule::exists('cliente_direcciones', 'id')->where(fn ($q) => $q->where('cliente_id', $clienteId)),
+            ],
+            'codigo_postal' => ['required', 'string', 'max:10'],
+            'domicilio_entrega' => ['required', 'string', 'max:2000'],
+            'catalogo_paqueteria_id' => ['required', 'exists:catalogo_paqueterias_pedido,id'],
+            'catalogo_tipo_guia_id' => ['required', 'exists:catalogo_tipos_guia_pedido,id'],
+            'catalogo_zona_id' => ['required', 'exists:catalogo_zonas_pedido,id'],
             'peso_real_kg' => $pesoCajas,
             'numero_cajas' => $numCajas,
             'costo_envio' => ['required', 'numeric', 'gt:0'],

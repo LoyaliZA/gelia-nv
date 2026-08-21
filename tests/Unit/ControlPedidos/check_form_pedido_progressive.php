@@ -39,6 +39,9 @@ $checks = [
     ['anexos multiple input', str_contains($form, 'multiple accept="application/pdf')],
     ['galeria anexos local', str_contains($form, 'anexoDocsLocal')],
     ['miniaturas anexo', str_contains($form, 'MiniaturaDocumento')],
+    ['resguardo diferido aviso', str_contains($form, 'Envío (diferido)')],
+    ['resguardo en cotizacionLista', str_contains($form, 'esResguardoAbierto')],
+    ['pdf local gana a pedido stale', str_contains($form, 'const pdfPedidoDoc = pdfDocLocal')],
 ];
 
 $titulos = [

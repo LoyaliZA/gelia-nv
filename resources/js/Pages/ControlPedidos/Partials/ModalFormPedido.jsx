@@ -383,6 +383,7 @@ export default function ModalFormPedido({
         cotizacionHabilitada,
         guiaCliente,
         envioPorCobrar,
+        esResguardoAbierto,
         esResguardoComplementario,
         omiteCosto,
         catalogo_paqueteria_id: data.catalogo_paqueteria_id,
@@ -434,8 +435,9 @@ export default function ModalFormPedido({
     const pagoPendienteVivo = !idPedidoAcciones
         ? null
         : (pagoResumen == null ? null : resumenCoberturaVivo.pendiente);
-    const pdfPedidoDoc = (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id))
-        || pdfDocLocal;
+    // Tras reemplazar PDF, pdfDocLocal gana: pedido del modal suele quedar stale (mismo bug que anexos).
+    const pdfPedidoDoc = pdfDocLocal
+        || (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido' && !docsEliminar.includes(d.id));
     const anexosPiezasDocs = (() => {
         const fromPedido = (pedido?.documentos || []).filter((d) => d.tipo === 'anexo_piezas' && !docsEliminar.includes(d.id));
         const ids = new Set(fromPedido.map((d) => d.id));
@@ -1904,7 +1906,7 @@ export default function ModalFormPedido({
                                         <div className="flex items-start gap-2 p-3 rounded-xl border border-blue-500/40 bg-blue-500/10">
                                             <AlertTriangle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                                             <p className="text-xs font-bold text-blue-700 dark:text-blue-400 m-0">
-                                                Envío bloqueado hasta completar el resguardo. Peso, cajas y costo se capturan al Completar envío del folio principal.
+                                                Envío diferido: dirección, paquetería y costo se capturan al Completar envío cuando libere el resguardo. Ahora solo mercancía, consulta CEDIS y pago.
                                             </p>
                                         </div>
                                     )}
@@ -2046,10 +2048,18 @@ export default function ModalFormPedido({
                                 <input type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="hidden" onChange={subirPdfPedido} disabled={procesandoPesaje} />
                             </label>
                             {pdfPedidoDoc?.url && (
-                                <MiniaturaDocumento
-                                    documento={pdfPedidoDoc}
-                                    onVer={() => abrirVistaPrevia(pdfPedidoDoc)}
-                                />
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <MiniaturaDocumento
+                                        key={pdfPedidoDoc.id || pdfPedidoDoc.url}
+                                        documento={pdfPedidoDoc}
+                                        onVer={() => abrirVistaPrevia(pdfPedidoDoc)}
+                                    />
+                                    {pdfPedidoDoc.nombre_original && (
+                                        <span className="text-[10px] font-bold theme-text-muted truncate max-w-[10rem]" title={pdfPedidoDoc.nombre_original}>
+                                            {pdfPedidoDoc.nombre_original}
+                                        </span>
+                                    )}
+                                </div>
                             )}
                             {tienePdfPedido && !pdfPedidoDoc?.url && (
                                 <span className="text-xs font-bold" style={COLOR_EXITO}>Cargado y listo</span>
@@ -2303,7 +2313,16 @@ export default function ModalFormPedido({
                     </section>
                     )}
 
-                    {mostrarLogisticaPostPesaje && (
+                    {mostrarLogisticaPostPesaje && esResguardoAbierto && (
+                    <section className={SECCION_WRAP}>
+                        <p className={SECCION}>{nSec.dir}. Envío (diferido)</p>
+                        <AvisoOperativoPedido label="Resguardo abierto" tono="info" icon={AlertTriangle} className="mb-0">
+                            Dirección, paquetería y costo de envío se capturan después, con «Completar envío», cuando el cliente libere el resguardo.
+                        </AvisoOperativoPedido>
+                    </section>
+                    )}
+
+                    {mostrarLogisticaPostPesaje && !esResguardoAbierto && (
                     <>
                     {/* Dirección de envío */}
                     <section className={SECCION_WRAP}>
@@ -2638,7 +2657,11 @@ export default function ModalFormPedido({
                             )}
                         </div>
                     </section>
+                    </>
+                    )}
 
+                    {mostrarLogisticaPostPesaje && (
+                    <>
                     <section className={SECCION_WRAP}>
                         <p className={SECCION}>{nSec.saf}. Saldo a favor</p>
                         <div className="space-y-4">

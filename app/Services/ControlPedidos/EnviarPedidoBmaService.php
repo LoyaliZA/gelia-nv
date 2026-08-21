@@ -44,9 +44,10 @@ class EnviarPedidoBmaService
         $this->pagosService->generarExcedenteSiAplica($pedido, $usuarioId);
 
         if (config('control_pedidos.direcciones_normalizadas')) {
-            $pedido->loadMissing(['origen', 'direccionVigente']);
+            $pedido->loadMissing(['origen', 'direccionVigente', 'tipoOperacionEnvio']);
             if (
-                $pedido->origen?->requiere_logistica
+                ! $pedido->esResguardoAbierto()
+                && $pedido->origen?->requiere_logistica
                 && ! $pedido->cliente_proporciona_guia
                 && ! $pedido->cliente_direccion_id
                 && ! CrearSnapshotDireccionPedido::manualEstaCompleta($pedido->direccionVigente)

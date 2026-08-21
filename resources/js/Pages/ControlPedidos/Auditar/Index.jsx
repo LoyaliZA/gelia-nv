@@ -177,6 +177,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 abierto={modalRevisar.abierto}
                 pedido={modalRevisar.pedido}
                 bancos={catalogos.bancos || []}
+                catalogos={catalogos}
                 onClose={() => setModalRevisar({ abierto: false, pedido: null })}
             />
             <ModalBitacoraPedido

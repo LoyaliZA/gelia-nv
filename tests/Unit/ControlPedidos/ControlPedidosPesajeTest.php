@@ -266,6 +266,9 @@ class ControlPedidosPesajeTest extends TestCase
     {
         $this->assertSame(5.0, PedidoBma::calcularPesoCobradoGuia(3.0, 5.0));
         $this->assertSame(4.0, PedidoBma::calcularPesoCobradoGuia(4.0, 2.0));
+        $this->assertSame(9.0, PedidoBma::calcularPesoCobradoGuia(8.0, 8.13));
+        $this->assertSame(9.0, PedidoBma::calcularPesoCobradoGuia(8.13, 7.0));
+        $this->assertSame(8.0, PedidoBma::calcularPesoCobradoGuia(8.0, 8.0));
     }
 
     public function test_agregacion_pesos_por_envio_suma_maximos(): void

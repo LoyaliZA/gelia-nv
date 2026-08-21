@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaAnexoEnvio;
+use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\ReconciliarTotalPedidoSafService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,7 @@ class LiberarResguardoPedidoBmaService
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
         private ReconciliarTotalPedidoSafService $reconciliarSaf,
+        private CrearSnapshotDireccionPedido $crearSnapshot,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, ?array $captura = null, ?UploadedFile $comprobante = null): PedidoBma
@@ -88,6 +90,15 @@ class LiberarResguardoPedidoBmaService
         if (empty($captura['catalogo_banco_id'])) {
             throw new \InvalidArgumentException('El banco del pago de envío es obligatorio.');
         }
+        if (empty($captura['cliente_direccion_id'])) {
+            throw new \InvalidArgumentException('Debe seleccionar la dirección de envío.');
+        }
+        if (empty($captura['catalogo_paqueteria_id']) || empty($captura['catalogo_tipo_guia_id']) || empty($captura['catalogo_zona_id'])) {
+            throw new \InvalidArgumentException('Complete paquetería, tipo de guía y reexpedición.');
+        }
+        if (empty(trim((string) ($captura['codigo_postal'] ?? ''))) || empty(trim((string) ($captura['domicilio_entrega'] ?? '')))) {
+            throw new \InvalidArgumentException('El código postal y el domicilio de entrega son obligatorios.');
+        }
         if ($pedido->anexosEnvio()->where('estatus', PedidoBmaAnexoEnvio::ESTATUS_PENDIENTE)->exists()) {
             throw new \RuntimeException('Ya existe un anexo de envío pendiente de revisión.');
         }
@@ -103,6 +114,12 @@ class LiberarResguardoPedidoBmaService
 
             $attrs = [
                 'es_resguardo' => false,
+                'cliente_direccion_id' => (int) $captura['cliente_direccion_id'],
+                'codigo_postal' => trim((string) $captura['codigo_postal']),
+                'domicilio_entrega' => trim((string) $captura['domicilio_entrega']),
+                'catalogo_paqueteria_id' => (int) $captura['catalogo_paqueteria_id'],
+                'catalogo_tipo_guia_id' => (int) $captura['catalogo_tipo_guia_id'],
+                'catalogo_zona_id' => (int) $captura['catalogo_zona_id'],
                 'peso_real_kg' => $peso,
                 'peso_cobrado_guia_kg' => PedidoBma::calcularPesoCobradoGuia(
                     $peso,
@@ -133,6 +150,7 @@ class LiberarResguardoPedidoBmaService
 
                 $attrs['catalogo_estatus_pedido_id'] = $estatusNuevo->id;
                 $pedido->update($attrs);
+                $this->crearSnapshot->ejecutar($pedido->fresh(), $usuarioId, 'Liberación de resguardo abierto');
 
                 $this->reconciliarSaf->handle(
                     $pedido->fresh(),
@@ -154,6 +172,7 @@ class LiberarResguardoPedidoBmaService
                 $pasoACedis = true;
             } else {
                 $pedido->update($attrs);
+                $this->crearSnapshot->ejecutar($pedido->fresh(), $usuarioId, 'Liberación de resguardo abierto');
 
                 $this->reconciliarSaf->handle(
                     $pedido->fresh(),

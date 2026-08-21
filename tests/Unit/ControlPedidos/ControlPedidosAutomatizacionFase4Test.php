@@ -81,7 +81,7 @@ class ControlPedidosAutomatizacionFase4Test extends TestCase
 
     public function test_peso_cobrado_guia_es_el_mayor_entre_real_y_volumetrico(): void
     {
-        $this->assertSame(12.5, PedidoBma::calcularPesoCobradoGuia(12.5, 8.0));
+        $this->assertSame(13.0, PedidoBma::calcularPesoCobradoGuia(12.5, 8.0));
         $this->assertSame(10.0, PedidoBma::calcularPesoCobradoGuia(7.0, 10.0));
         $this->assertSame(5.0, PedidoBma::calcularPesoCobradoGuia(5.0, null));
         $this->assertSame(3.0, PedidoBma::calcularPesoCobradoGuia(null, 3.0));

@@ -60,7 +60,7 @@ const Campo = ({ label, value }) => (
 const comprobantesDe = (pedido) => (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' || !d.tipo);
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 
-export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoInicial, bancos = [] }) {
+export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoInicial, bancos = [], catalogos = {} }) {
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
@@ -789,6 +789,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 abierto={liberarCapturaAbierto}
                 pedido={pedido}
                 bancos={bancos}
+                catalogos={catalogos}
                 onClose={() => setLiberarCapturaAbierto(false)}
                 onSuccess={() => {
                     setLiberarCapturaAbierto(false);

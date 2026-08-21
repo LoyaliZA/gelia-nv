@@ -758,14 +758,14 @@ export const mensajePagoFaltante = (pendiente) => (
     `El total a cubrir no está completo. Faltan $${Number(pendiente).toFixed(2)}. Registre exhibiciones hasta cubrir mercancía, envío y seguro (menos el saldo a favor aplicado).`
 );
 
-/** Fórmula Drive: se cobra el mayor entre peso real y peso volumétrico. */
+/** max(real, volumétrico) redondeado al kg entero siguiente (ceil). Sin decimales. */
 export const calcularPesoCobradoGuia = (pesoReal, pesoVolumetrico) => {
     const real = pesoReal === '' || pesoReal == null ? null : Number(pesoReal);
     const vol = pesoVolumetrico === '' || pesoVolumetrico == null ? null : Number(pesoVolumetrico);
     if (real == null && vol == null) return '';
     const r = Number.isFinite(real) ? real : 0;
     const v = Number.isFinite(vol) ? vol : 0;
-    return String(Math.round(Math.max(r, v) * 10000) / 10000);
+    return String(Math.ceil(Math.max(r, v) - 1e-9));
 };
 
 const COMERCIALES_CON_COBERTURA = ['FEDEX', 'ESTAFETA', 'DHL'];
@@ -848,6 +848,7 @@ export const esCotizacionLista = ({
     cotizacionHabilitada = false,
     guiaCliente = false,
     envioPorCobrar = false,
+    esResguardoAbierto = false,
     esResguardoComplementario = false,
     omiteCosto = false,
     catalogo_paqueteria_id = '',
@@ -860,7 +861,8 @@ export const esCotizacionLista = ({
         return Number(total_mercancia || 0) > 0;
     }
     if (!cotizacionHabilitada) return false;
-    if (guiaCliente || envioPorCobrar || esResguardoComplementario) return true;
+    // Resguardo: envío/dirección se capturan al Completar envío; basta mercancía/consulta.
+    if (guiaCliente || envioPorCobrar || esResguardoAbierto || esResguardoComplementario) return true;
     if (!catalogo_paqueteria_id) return false;
     if (!omiteCosto && (costo_envio === '' || costo_envio == null)) return false;
     if (!catalogo_tipo_guia_id) return false;
@@ -958,21 +960,23 @@ export const validarCamposEnvioPedido = (data, {
         }
 
         if (!guiaCliente) {
-            if (!data.catalogo_tipo_guia_id) marcar('tipo_guia', 'tipo de guía');
-            if (!data.catalogo_paqueteria_id) marcar('paqueteria', 'paquetería');
-            if (!data.catalogo_zona_id) marcar('reexpedicion', 'reexpedición');
+            if (!esResguardoAbierto) {
+                if (!data.catalogo_tipo_guia_id) marcar('tipo_guia', 'tipo de guía');
+                if (!data.catalogo_paqueteria_id) marcar('paqueteria', 'paquetería');
+                if (!data.catalogo_zona_id) marcar('reexpedicion', 'reexpedición');
+                if (!String(data.codigo_postal || '').trim()) marcar('codigo_postal', 'código postal');
+                if (direccionesNormalizadas) {
+                    const tieneDir = String(data.cliente_direccion_id || '').trim();
+                    const excepcion = Boolean(data.direccion_manual_excepcion) && String(data.domicilio_entrega || '').trim();
+                    if (!tieneDir && !excepcion) {
+                        marcar('domicilio', 'dirección de envío verificada o excepción manual');
+                    }
+                } else if (!String(data.domicilio_entrega || '').trim()) {
+                    marcar('domicilio', 'domicilio de entrega');
+                }
+            }
             if (!omiteCosto && (data.costo_envio === '' || data.costo_envio == null)) {
                 marcar('costo_envio', 'costo de envío');
-            }
-            if (!String(data.codigo_postal || '').trim()) marcar('codigo_postal', 'código postal');
-            if (direccionesNormalizadas) {
-                const tieneDir = String(data.cliente_direccion_id || '').trim();
-                const excepcion = Boolean(data.direccion_manual_excepcion) && String(data.domicilio_entrega || '').trim();
-                if (!tieneDir && !excepcion) {
-                    marcar('domicilio', 'dirección de envío verificada o excepción manual');
-                }
-            } else if (!String(data.domicilio_entrega || '').trim()) {
-                marcar('domicilio', 'domicilio de entrega');
             }
         }
     }

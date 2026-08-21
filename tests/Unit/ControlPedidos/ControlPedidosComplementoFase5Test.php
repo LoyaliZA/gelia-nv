@@ -217,6 +217,11 @@ class ControlPedidosComplementoFase5Test extends TestCase
         $this->assertArrayHasKey('numero_cajas', $rules);
         $this->assertArrayHasKey('costo_envio', $rules);
         $this->assertArrayHasKey('comprobante', $rules);
+        $this->assertArrayHasKey('cliente_direccion_id', $rules);
+        $this->assertArrayHasKey('catalogo_paqueteria_id', $rules);
+        $this->assertArrayHasKey('catalogo_tipo_guia_id', $rules);
+        $this->assertArrayHasKey('catalogo_zona_id', $rules);
         $this->assertContains('required', $rules['peso_real_kg']);
+        $this->assertContains('required', $rules['cliente_direccion_id']);
     }
 }

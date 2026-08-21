@@ -947,7 +947,8 @@ class PedidoBma extends Model
     }
 
     /**
-     * Fórmula Drive: se cobra el mayor entre peso real y peso volumétrico de la caja.
+     * Peso cobrado guía: max(real, volumétrico) redondeado al kg entero siguiente (ceil).
+     * No se cobran decimales (ej. vol 8.13 → cobrado 9).
      */
     public static function calcularPesoCobradoGuia(?float $pesoReal, ?float $pesoVolumetrico): ?float
     {
@@ -955,6 +956,8 @@ class PedidoBma extends Model
             return null;
         }
 
-        return round(max((float) ($pesoReal ?? 0), (float) ($pesoVolumetrico ?? 0)), 4);
+        $max = max((float) ($pesoReal ?? 0), (float) ($pesoVolumetrico ?? 0));
+
+        return (float) (int) ceil($max - 1e-9);
     }
 }

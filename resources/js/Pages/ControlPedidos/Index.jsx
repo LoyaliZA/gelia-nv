@@ -332,6 +332,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 abierto={modalCompletarEnvio.abierto}
                 pedido={modalCompletarEnvio.pedido}
                 bancos={catalogos.bancos || []}
+                catalogos={catalogos}
                 routeName="control_pedidos.completar_envio_resguardo"
                 titulo="Completar envío del resguardo"
                 etiquetaConfirmar="Completar y anexar envío"
