@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\CatalogoTipoOperacionEnvio;
+use App\Models\ControlPedidos\CatalogoZonaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Support\Clientes\FormatearDireccionEstructurada;
 
@@ -85,7 +86,9 @@ trait ResuelveDatosPedidoBma
 
         $paqueteria = CatalogoPaqueteriaPedido::find($paqueteriaId);
         $calc = app(CalcularSeguroPedidoService::class);
-        $costo = $calc->calcularCosto($paqueteria?->nombre, $envio, $mercancia);
+        // costo_envio persiste flete+reexpedición; el seguro solo sobre flete base (como el form).
+        $envioParaSeguro = $this->envioBaseSinReexpedicion($datos, $envio);
+        $costo = $calc->calcularCosto($paqueteria?->nombre, $envioParaSeguro, $mercancia);
         $aplicaSeguro = $calc->tieneCobertura($paqueteria?->nombre)
             && filter_var($datos['aplica_seguro'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
@@ -93,6 +96,22 @@ trait ResuelveDatosPedidoBma
             'aplica_seguro' => $aplicaSeguro,
             'costo_seguro' => $costo,
         ];
+    }
+
+    /** Quita el cargo de zona «Con reexpedición» del envío mezclado en BD. */
+    protected function envioBaseSinReexpedicion(array $datos, float $envio): float
+    {
+        $zonaId = $datos['catalogo_zona_id'] ?? null;
+        if (! $zonaId) {
+            return $envio;
+        }
+
+        $rex = CatalogoZonaPedido::find($zonaId)?->costoReexpedicion() ?? 0.0;
+        if ($rex <= 0) {
+            return $envio;
+        }
+
+        return max(0.0, round($envio - $rex, 2));
     }
 
     protected function resolverEnvioTiendaDesdeOrigen(array $datos): array

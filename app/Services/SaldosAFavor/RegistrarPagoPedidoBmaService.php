@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafMotivo;
+use App\Services\ControlPedidos\CalcularSeguroPedidoService;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
@@ -265,11 +266,24 @@ class RegistrarPagoPedidoBmaService
             ? 0.0
             : (float) $pedido->costo_envio;
 
+        // costo_envio mezcla flete+reexpedición; cobertura de seguro solo sobre flete base.
+        $costoSeguro = (float) ($pedido->costo_seguro ?? 0);
+        if ($pedido->aplica_seguro) {
+            $pedido->loadMissing(['zona', 'paqueteria']);
+            $rex = $pedido->zona?->costoReexpedicion() ?? 0.0;
+            $envioBase = max(0.0, round($envio - $rex, 2));
+            $costoSeguro = app(CalcularSeguroPedidoService::class)->calcularCosto(
+                $pedido->paqueteria?->nombre,
+                $envioBase,
+                (float) ($pedido->total_mercancia ?? 0),
+            );
+        }
+
         $base = self::calcularResumenCobertura(
             (float) ($pedido->total_mercancia ?? 0),
             $envio,
             (bool) $pedido->aplica_seguro,
-            (float) ($pedido->costo_seguro ?? 0),
+            $costoSeguro,
             (float) ($pedido->saldo_a_favor ?? 0),
             $pagado,
         );

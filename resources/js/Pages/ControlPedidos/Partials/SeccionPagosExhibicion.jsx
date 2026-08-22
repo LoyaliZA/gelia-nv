@@ -224,11 +224,16 @@ export default function SeccionPagosExhibicion({
             return;
         }
 
+        const eraEdicion = Boolean(editandoId);
         const opts = {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => {
                 resetForm();
+                // Editar no implica dividir: si queda un solo pago, volver a modo único.
+                if (eraEdicion && pagos.length <= 1) {
+                    setDividido(false);
+                }
                 cargar();
             },
         };
@@ -243,7 +248,7 @@ export default function SeccionPagosExhibicion({
 
     const iniciarEdicion = (p) => {
         setEditandoId(p.id);
-        setDividido(true);
+        // ponytail: no forzar «Dividir»; editar un pago único no abre modo multi-exhibición.
         form.setData({
             monto: String(p.monto ?? ''),
             catalogo_banco_id: p.catalogo_banco_id ? String(p.catalogo_banco_id) : '',

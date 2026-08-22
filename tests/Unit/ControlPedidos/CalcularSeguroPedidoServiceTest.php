@@ -37,4 +37,18 @@ class CalcularSeguroPedidoServiceTest extends TestCase
     {
         $this->assertSame(0.0, $this->servicio->calcularCosto('ESTAFETA', 0, 0));
     }
+
+    /** Documenta el bug $3.75: 150 de reexpedición × 2.5% no debe entrar a la base del seguro. */
+    public function test_reexpedicion_ciento_cincuenta_no_debe_sumar_tres_setenta_cinco(): void
+    {
+        $flete = 200.0;
+        $reexpedicion = 150.0;
+        $mercancia = 1000.0;
+
+        $conRexMezclada = $this->servicio->calcularCosto('FEDEX', $flete + $reexpedicion, $mercancia);
+        $soloFlete = $this->servicio->calcularCosto('FEDEX', $flete, $mercancia);
+
+        $this->assertSame(3.75, round($conRexMezclada - $soloFlete, 2));
+        $this->assertSame(30.0, $soloFlete); // (200+1000)*0.025
+    }
 }

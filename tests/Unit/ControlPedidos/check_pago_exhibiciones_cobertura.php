@@ -77,6 +77,13 @@ $checks = [
     ['ResuelveDatos no persiste banco general', ! str_contains($resuelve, "'catalogo_banco_id' => \$datos['catalogo_banco_id']")],
     ['UI form sin banco general', ! preg_match('/label className=\{SECCION\}>Banco</', $form)],
     ['Seccion modo dividido toggle', str_contains($seccion, 'Dividir el pago entre diferentes métodos o bancos')],
+    // iniciarEdicion ya no fuerza dividido; el único setDividido(true) al cargar/toggle queda fuera de esa función.
+    ['Seccion editar no fuerza dividido', ! str_contains(
+        preg_match('/const iniciarEdicion = \(p\) => \{[\s\S]*?\n    \};/m', $seccion, $m) ? ($m[0] ?? '') : 'FAIL',
+        'setDividido(true)'
+    )],
+    ['Resuelve seguro sin reexpedicion', str_contains($resuelve, 'envioBaseSinReexpedicion')],
+    ['Resumen pago recalcula seguro sin rex', str_contains($registrar, 'costoReexpedicion')],
     ['Seccion confirmacion colapsar', str_contains($seccion, 'Al volver a pago único')],
     ['Seccion badgeCoberturaPago', str_contains($seccion, 'badgeCoberturaPago')],
     ['styles badgeCoberturaPago', str_contains($styles, 'badgeCoberturaPago')],
@@ -98,6 +105,14 @@ use App\Models\SaldosAFavor\PedidoBmaPago;
 $checks[] = ['transferencia requiere banco', PedidoBmaPago::formaRequiereBanco('transferencia') === true];
 $checks[] = ['deposito requiere banco', PedidoBmaPago::formaRequiereBanco('deposito') === true];
 $checks[] = ['efectivo no requiere banco', PedidoBmaPago::formaRequiereBanco('efectivo') === false];
+
+use App\Services\ControlPedidos\CalcularSeguroPedidoService;
+
+$seguro = new CalcularSeguroPedidoService();
+$checks[] = [
+    'reexpedicion 150 no entra al seguro (delta 3.75)',
+    abs($seguro->calcularCosto('FEDEX', 350, 1000) - $seguro->calcularCosto('FEDEX', 200, 1000) - 3.75) < 0.001,
+];
 
 foreach ($checks as [$label, $ok]) {
     if ($ok) {
