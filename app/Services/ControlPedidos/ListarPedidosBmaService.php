@@ -4,6 +4,7 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\RevisionEnCursoPedidoBma;
@@ -44,6 +45,17 @@ class ListarPedidosBmaService
             'complementos',
             'safAplicaciones.credito',
             'pagosExhibicion.banco',
+            'tareaPreparacionVigente.modalidad',
+            'tareaPreparacionVigente.almacen',
+            'tareaPreparacionVigente.productos',
+            'tareaPreparacionVigente.historial',
+            'tareaPreparacionVigente.paqueteria',
+            'tareaPreparacionVigente.caratulas',
+            'tareaPreparacionRespondida.modalidad',
+            'tareaPreparacionRespondida.almacen',
+            'tareaPreparacionRespondida.productos',
+            'tareaPreparacionRespondida.paqueteria',
+            'tareaPreparacionRespondida.caratulas',
         ])->orderByDesc('created_at');
 
         if ($usuario) {
@@ -108,8 +120,93 @@ class ListarPedidosBmaService
         $pedido->setAttribute('pendiente_re_revision', MaquinaEstadosPedidoBma::esPendienteReRevision($pedido));
         $pedido->setAttribute('en_revision_ahora', RevisionEnCursoPedidoBma::activa($pedido->id));
         $pedido->setAttribute('progreso', $this->progreso->calcular($pedido));
+        $pedido->setAttribute('usa_preparacion_tienda', $pedido->usaPreparacionTienda());
+        $pedido->setAttribute('tiene_traslado_cedis_pendiente', $pedido->tieneTrasladoCedisPendiente());
+        $pedido->setAttribute('tiene_caratula_municipal_pendiente', $pedido->tieneCaratulaMunicipalPendiente());
+        $pedido->setAttribute('tarea_preparacion', $this->serializarTareaPreparacion(
+            $this->resolverTareaPreparacionVista($pedido)
+        ));
 
         return $pedido;
+    }
+
+    private function resolverTareaPreparacionVista(PedidoBma $pedido): ?PedidoBmaTareaPreparacion
+    {
+        if ($pedido->relationLoaded('tareaPreparacionVigente') && $pedido->tareaPreparacionVigente) {
+            return $pedido->tareaPreparacionVigente;
+        }
+
+        if ($pedido->relationLoaded('tareaPreparacionRespondida') && $pedido->tareaPreparacionRespondida) {
+            return $pedido->tareaPreparacionRespondida;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function serializarTareaPreparacion(?PedidoBmaTareaPreparacion $tarea): ?array
+    {
+        if (! $tarea) {
+            return null;
+        }
+
+        $incidencia = null;
+        if ($tarea->estado === PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA) {
+            $hist = $tarea->relationLoaded('historial')
+                ? $tarea->historial->where('accion', 'incidencia')->sortByDesc('id')->first()
+                : $tarea->historial()->where('accion', 'incidencia')->latest('id')->first();
+            $incidencia = $hist?->meta_json;
+        }
+
+        return [
+            'id' => $tarea->id,
+            'estado' => $tarea->estado,
+            'estado_label' => PedidoBmaTareaPreparacion::LABELS[$tarea->estado] ?? $tarea->estado,
+            'version' => $tarea->version,
+            'observaciones_solicitud' => $tarea->observaciones_solicitud,
+            'observaciones_respuesta' => $tarea->observaciones_respuesta,
+            'fecha_limite' => $tarea->fecha_limite?->toIso8601String(),
+            'modalidad' => $tarea->modalidad ? [
+                'id' => $tarea->modalidad->id,
+                'codigo' => $tarea->modalidad->codigo,
+                'nombre' => $tarea->modalidad->nombre,
+            ] : null,
+            'almacen' => $tarea->almacen ? [
+                'id' => $tarea->almacen->id,
+                'nombre' => $tarea->almacen->nombre,
+                'codigo' => $tarea->almacen->codigo ?? null,
+            ] : null,
+            'productos' => $tarea->productos->map(fn ($p) => [
+                'id' => $p->id,
+                'descripcion_snapshot' => $p->descripcion_snapshot,
+                'sku' => $p->sku,
+                'producto_id' => $p->producto_id,
+                'cantidad_solicitada' => $p->cantidad_solicitada,
+                'cantidad_encontrada' => $p->cantidad_encontrada,
+                'estado_fisico' => $p->estado_fisico,
+                'observacion' => $p->observacion,
+            ])->values()->all(),
+            'incidencia' => $incidencia,
+            'requiere_traslado_cedis' => (bool) $tarea->requiere_traslado_cedis,
+            'progreso_traslado' => \App\Support\ControlPedidos\VisibilidadTareaPreparacion::progresoTraslado($tarea),
+            'progreso_caratula' => \App\Support\ControlPedidos\VisibilidadTareaPreparacion::progresoCaratula($tarea),
+            'motivo_rechazo_cedis' => $tarea->motivo_rechazo_cedis,
+            'enviada_cedis_at' => $tarea->enviada_cedis_at?->toIso8601String(),
+            'recibida_cedis_at' => $tarea->recibida_cedis_at?->toIso8601String(),
+            'entrega_municipal' => $tarea->modalidad?->esEnvioMunicipio() ? [
+                'destinatario_nombre' => $tarea->destinatario_nombre,
+                'municipio_destino' => $tarea->municipio_destino,
+                'modalidad_cobro' => $tarea->modalidad_cobro,
+                'transporte' => $tarea->paqueteria?->nombre,
+            ] : null,
+            'caratula' => ($c = $tarea->caratulaVigente()) ? [
+                'id' => $c->id,
+                'version' => $c->version,
+                'estado' => $c->estado,
+            ] : null,
+        ];
     }
 
     private function aplicarFiltros(Builder $query, array $filtros, ?User $usuario = null): void

@@ -19,11 +19,24 @@ class CatalogoPaqueteriaPedido extends Model
     protected $fillable = [
         'nombre', 'categoria', 'permite_costo_diferido', 'activo', 'costo_seguro_default',
         'modalidad_tarifa', 'tarifa_monto', 'tarifa_unidad_peso', 'tarifa_paso_peso',
+        'requiere_caratula', 'requiere_identificacion', 'requiere_remision', 'permite_por_cobrar',
+        'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
+        'plantilla_caratula', 'habilitado_envio_municipio', 'reglas_municipio_pendientes',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
         'permite_costo_diferido' => 'boolean',
+        'requiere_caratula' => 'boolean',
+        'requiere_identificacion' => 'boolean',
+        'requiere_remision' => 'boolean',
+        'permite_por_cobrar' => 'boolean',
+        'requiere_peso' => 'boolean',
+        'requiere_caja' => 'boolean',
+        'requiere_evidencia_conjunto' => 'boolean',
+        'habilitado_envio_municipio' => 'boolean',
+        'reglas_municipio_pendientes' => 'boolean',
+        'campos_destino_obligatorios' => 'array',
         'costo_seguro_default' => 'decimal:2',
         'tarifa_monto' => 'decimal:2',
         'tarifa_paso_peso' => 'decimal:4',
@@ -47,6 +60,31 @@ class CatalogoPaqueteriaPedido extends Model
     public function esLocalRegional(): bool
     {
         return $this->categoria === self::CATEGORIA_LOCAL_REGIONAL;
+    }
+
+    public function habilitadaParaEnvioMunicipio(): bool
+    {
+        return (bool) $this->activo
+            && (bool) $this->habilitado_envio_municipio
+            && ! (bool) $this->reglas_municipio_pendientes;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function reglasMunicipio(): array
+    {
+        return [
+            'requiere_caratula' => (bool) $this->requiere_caratula,
+            'requiere_identificacion' => (bool) $this->requiere_identificacion,
+            'requiere_remision' => (bool) $this->requiere_remision,
+            'permite_por_cobrar' => (bool) $this->permite_por_cobrar,
+            'requiere_peso' => (bool) $this->requiere_peso,
+            'requiere_caja' => (bool) $this->requiere_caja,
+            'requiere_evidencia_conjunto' => (bool) $this->requiere_evidencia_conjunto,
+            'campos_destino_obligatorios' => array_values($this->campos_destino_obligatorios ?? ['municipio', 'destinatario', 'telefono']),
+            'plantilla_caratula' => $this->plantilla_caratula ?: 'control_pedidos.caratula',
+        ];
     }
 
     public function calcularCostoEnvio(?float $pesoCobradoKg = null): ?float

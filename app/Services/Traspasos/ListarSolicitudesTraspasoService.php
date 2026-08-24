@@ -24,6 +24,9 @@ class ListarSolicitudesTraspasoService
             'auditorias.usuario:id,name',
             'auditorias.estadoNuevo:id,nombre',
             'auditorias.estadoAnterior:id,nombre',
+            'tareaPreparacion:id,pedido_bma_id,almacen_id,estado',
+            'tareaPreparacion.pedido:id,folio,folio_remision',
+            'tareaPreparacion.almacen:id,codigo,nombre',
         ])->orderByDesc('created_at');
 
         if ($usuario) {

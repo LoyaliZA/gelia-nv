@@ -461,6 +461,84 @@ class PedidoBma extends Model
         return $this->hasMany(PedidoBmaRevisionProducto::class, 'pedido_bma_id')->orderBy('orden');
     }
 
+    public function tareasPreparacion(): HasMany
+    {
+        return $this->hasMany(PedidoBmaTareaPreparacion::class, 'pedido_bma_id')->latest('id');
+    }
+
+    public function tareaPreparacionVigente(): HasOne
+    {
+        return $this->hasOne(PedidoBmaTareaPreparacion::class, 'pedido_bma_id')
+            ->whereIn('estado', [
+                PedidoBmaTareaPreparacion::ESTADO_PENDIENTE,
+                PedidoBmaTareaPreparacion::ESTADO_EN_ATENCION,
+                PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA,
+                PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
+                PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_TRASLADO,
+                PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA,
+                PedidoBmaTareaPreparacion::ESTADO_EN_TRASLADO,
+                PedidoBmaTareaPreparacion::ESTADO_RECHAZADA_CEDIS,
+            ])
+            ->latest('id');
+    }
+
+    public function tareaPreparacionRespondida(): HasOne
+    {
+        return $this->hasOne(PedidoBmaTareaPreparacion::class, 'pedido_bma_id')
+            ->whereIn('estado', [
+                PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
+                PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS,
+            ])
+            ->latest('id');
+    }
+
+    /** True si hay traslados obligatorios aún no recibidos en CEDIS. */
+    public function tieneTrasladoCedisPendiente(): bool
+    {
+        return $this->tareasPreparacion()
+            ->where('requiere_traslado_cedis', true)
+            ->whereNotIn('estado', [
+                PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS,
+                PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+                PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
+            ])
+            ->exists();
+    }
+
+    /** True si hay envío municipio sin carátula colocada (tarea no RESPONDIDA). */
+    public function tieneCaratulaMunicipalPendiente(): bool
+    {
+        return $this->tareasPreparacion()
+            ->whereHas('modalidad', fn ($q) => $q->where('codigo', \App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_MUNICIPIO))
+            ->whereNotIn('estado', [
+                PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
+                PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+                PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
+            ])
+            ->exists();
+    }
+
+    public function todasTareasTrasladoRecibidas(): bool
+    {
+        $obligatorias = $this->tareasPreparacion()
+            ->where('requiere_traslado_cedis', true)
+            ->whereNotIn('estado', [PedidoBmaTareaPreparacion::ESTADO_CANCELADA])
+            ->get();
+
+        if ($obligatorias->isEmpty()) {
+            return true;
+        }
+
+        return $obligatorias->every(
+            fn (PedidoBmaTareaPreparacion $t) => $t->estado === PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS
+        );
+    }
+
+    public function usaPreparacionTienda(): bool
+    {
+        return $this->tareasPreparacion()->exists();
+    }
+
     public function pesajeRespondidoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'pesaje_respondido_por_id');
@@ -512,6 +590,10 @@ class PedidoBma extends Model
             return false;
         }
 
+        if ($this->tareaPreparacionVigente()->exists()) {
+            return false;
+        }
+
         return ! $this->tienePesajeRespondido();
     }
 
@@ -540,6 +622,17 @@ class PedidoBma extends Model
         }
         if ($this->consulta_actualizacion_pendiente) {
             return false;
+        }
+
+        if ($this->usaPreparacionTienda()) {
+            if ($this->tareasPreparacion()->where('requiere_traslado_cedis', true)->exists()) {
+                return $this->todasTareasTrasladoRecibidas();
+            }
+            if ($this->tieneCaratulaMunicipalPendiente()) {
+                return false;
+            }
+
+            return $this->tareaPreparacionRespondida()->exists();
         }
 
         return $this->tienePesajeRespondido();

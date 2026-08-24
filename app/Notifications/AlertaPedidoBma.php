@@ -55,6 +55,16 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         'pedido_enviado' => 'Paquetería recogió el pedido',
         'pedido_resguardo_liberado' => 'Resguardo liberado',
         'pedido_sin_existencia' => 'Producto sin existencias',
+        'pedido_preparacion_tienda_nueva' => 'Nueva preparación en Tienda',
+        'pedido_preparacion_tienda_respondida' => 'Preparación en Tienda respondida',
+        'pedido_preparacion_tienda_incidencia' => 'Incidencia en preparación Tienda',
+        'pedido_preparacion_tienda_corregida' => 'Preparación Tienda corregida',
+        'pedido_preparacion_tienda_liberada' => 'Mercancía liberada en Tienda',
+        'pedido_preparacion_tienda_vencimiento' => 'Vencimiento de resguardo en Tienda',
+        'pedido_preparacion_tienda_lista_traslado' => 'Lista para traslado a CEDIS',
+        'pedido_preparacion_tienda_en_traslado' => 'Mercancía en traslado a CEDIS',
+        'pedido_preparacion_tienda_recibida_cedis' => 'CEDIS recibió traslado de Tienda',
+        'pedido_preparacion_tienda_rechazada_cedis' => 'CEDIS rechazó traslado de Tienda',
     ];
 
     public function __construct(PedidoBma $pedido, string $tipoAlerta, string $mensaje, array $extras = [])

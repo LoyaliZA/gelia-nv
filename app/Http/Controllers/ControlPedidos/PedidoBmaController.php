@@ -14,6 +14,8 @@ use App\Http\Requests\ControlPedidos\CargarGuiaClientePedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\CompletarEnvioResguardoPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\AtenderSinExistenciaPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SolicitarRepesajePedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\SolicitarPreparacionTiendaRequest;
+use App\Http\Requests\ControlPedidos\CorregirTareaPreparacionRequest;
 use App\Http\Requests\ControlPedidos\SubirAnexoPiezasPedidoBmaRequest;
 use App\Http\Requests\ControlPedidos\SubirPdfPedidoBmaRequest;
 use App\Models\ControlPedidos\PedidoBma;
@@ -36,6 +38,7 @@ use App\Services\ControlPedidos\ListarPedidosBmaService;
 use App\Services\ControlPedidos\RestaurarRegistroPedidoBmaService;
 use App\Services\ControlPedidos\ObtenerCatalogosPedidoBmaService;
 use App\Services\ControlPedidos\SolicitarPesajePedidoBmaService;
+use App\Services\ControlPedidos\CrearTareaPreparacionService;
 use App\Services\ControlPedidos\SolicitarRepesajePedidoBmaService;
 use App\Services\ControlPedidos\CerrarConsultaPedidoBmaService;
 use App\Services\ControlPedidos\ReabrirConsultaPedidoBmaService;
@@ -541,6 +544,45 @@ class PedidoBmaController extends Controller
         }
 
         return redirect()->back()->with('success', 'Consulta de pesaje enviada a CEDIS.');
+    }
+
+    public function solicitarPreparacionTienda(
+        SolicitarPreparacionTiendaRequest $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        CrearTareaPreparacionService $service,
+    ): RedirectResponse {
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $datos = $request->validated();
+            $service->ejecutar(
+                $pedidoBma->load(['estatus', 'origen', 'revisionesProducto', 'cliente']),
+                Auth::user(),
+                $datos['codigo_modalidad'],
+                (int) $datos['almacen_id'],
+                $datos['observaciones'] ?? null,
+                $datos['idempotencia_clave'] ?? null,
+                [
+                    'destinatario_es_cliente' => (bool) ($datos['destinatario_es_cliente'] ?? true),
+                    'destinatario_nombre' => $datos['destinatario_nombre'] ?? null,
+                    'destinatario_telefono' => $datos['destinatario_telefono'] ?? null,
+                    'municipio_destino' => $datos['municipio_destino'] ?? null,
+                    'direccion_referencia' => $datos['direccion_referencia'] ?? null,
+                    'catalogo_paqueteria_id' => $datos['catalogo_paqueteria_id'] ?? null,
+                    'modalidad_cobro' => $datos['modalidad_cobro'] ?? null,
+                ],
+            );
+        } catch (Throwable $e) {
+            return $this->responderErrorOperacionPedido(
+                $e,
+                $pedidoBma,
+                'solicitar_preparacion_tienda',
+                'No se pudo solicitar la preparación en Tienda.'
+            );
+        }
+
+        return redirect()->back()->with('success', 'Solicitud de preparación enviada a Tienda.');
     }
 
     public function solicitarRepesaje(

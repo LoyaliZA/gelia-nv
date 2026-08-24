@@ -58,6 +58,11 @@ class ConfirmarTraspasoCedisService
                 $usuario->id
             );
 
+            if ($fresh->tarea_preparacion_id) {
+                app(\App\Services\ControlPedidos\SincronizarTareaDesdeTraspasoService::class)
+                    ->desdeConfirmacion($fresh, $usuario);
+            }
+
             return $fresh;
         });
     }

@@ -84,6 +84,11 @@ class ResponderSolicitudTraspasoService
                 $this->notificar->listoParaCedis($fresh, $usuario->id);
             }
 
+            if ($esError && $fresh->tarea_preparacion_id) {
+                app(\App\Services\ControlPedidos\SincronizarTareaDesdeTraspasoService::class)
+                    ->desdeRechazo($fresh, $usuario, $datos['motivo'] ?? null);
+            }
+
             return $solicitud->fresh([
                 'vendedor',
                 'estado',

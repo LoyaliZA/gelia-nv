@@ -40,6 +40,7 @@ import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPrevi
 import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
 import { elegirDireccionParaPedido, manualDireccionCompleta, faltantesManualDireccion } from './elegirDireccionParaPedido';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
+import ModalCorregirPreparacionTienda from './ModalCorregirPreparacionTienda';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import TarjetaEnvioPedido from './TarjetaEnvioPedido';
 import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
@@ -284,6 +285,19 @@ export default function ModalFormPedidoLegado({
     const [consultaPendienteLocal, setConsultaPendienteLocal] = useState(
         () => pedido?.estatus_envio === 'pendiente_pesaje'
     );
+    const [codigoModalidadPreparacion, setCodigoModalidadPreparacion] = useState(
+        () => pedido?.tarea_preparacion?.modalidad?.codigo || ''
+    );
+    const [entregaMunicipal, setEntregaMunicipal] = useState(() => ({
+        destinatario_es_cliente: true,
+        destinatario_nombre: '',
+        destinatario_telefono: '',
+        municipio_destino: '',
+        direccion_referencia: '',
+        catalogo_paqueteria_id: '',
+        modalidad_cobro: 'PAGADO',
+    }));
+    const [modalCorregirPreparacion, setModalCorregirPreparacion] = useState(false);
     const [pdfLocalOk, setPdfLocalOk] = useState(false);
     const [vistaPrevia, setVistaPrevia] = useState(null);
     const [camposDireccion, setCamposDireccion] = useState({ ...CAMPOS_DIRECCION_VACIOS });
@@ -379,6 +393,52 @@ export default function ModalFormPedidoLegado({
         ? pedido.origen
         : null);
     const requiereLogistica = origenSeleccionado?.requiere_logistica ?? false;
+    const preparacionConfig = catalogos?.preparacion_config || {};
+    const modalidadesPreparacion = (preparacionConfig.modalidades_catalogo || [])
+        .filter((m) => (preparacionConfig.modalidades_habilitadas || []).includes(m.codigo))
+        .filter((m) => {
+            const esBodega = String(m.codigo || '').startsWith('ENVIO_BODEGA');
+            const esMunicipio = m.codigo === 'ENVIO_MUNICIPIO';
+            if (requiereLogistica) return esBodega || esMunicipio;
+            return !esBodega && !esMunicipio;
+        });
+    const flujoPreparacionTienda = Boolean(
+        preparacionConfig.activo
+        && can('control_pedidos.preparacion.solicitar')
+        && modalidadesPreparacion.length > 0
+    );
+    const almacenesPreparacion = (catalogos.almacenes || []).filter((a) => {
+        const hab = preparacionConfig.almacenes_habilitados || [];
+        return hab.length === 0 || hab.includes(a.id);
+    });
+    const tareaPreparacion = pedido?.tarea_preparacion || null;
+    const usaPreparacionTienda = Boolean(pedido?.usa_preparacion_tienda || tareaPreparacion);
+    const enFlujoTienda = flujoPreparacionTienda || usaPreparacionTienda;
+    const tareaConIncidencia = ['CON_INCIDENCIA', 'RECHAZADA_CEDIS'].includes(tareaPreparacion?.estado);
+    const puedeCorregirPreparacion = can('control_pedidos.preparacion.corregir') && tareaConIncidencia;
+    const esModalidadTransferencia = codigoModalidadPreparacion === 'RECOGE_TIENDA_TRANSFERENCIA'
+        || tareaPreparacion?.modalidad?.codigo === 'RECOGE_TIENDA_TRANSFERENCIA';
+    const esModalidadBodega = String(codigoModalidadPreparacion || tareaPreparacion?.modalidad?.codigo || '').startsWith('ENVIO_BODEGA');
+    const esModalidadMunicipio = (codigoModalidadPreparacion || tareaPreparacion?.modalidad?.codigo) === 'ENVIO_MUNICIPIO';
+    const progresoTraslado = tareaPreparacion?.progreso_traslado || [];
+    const progresoCaratula = tareaPreparacion?.progreso_caratula || [];
+    const trasladoCedisPendiente = Boolean(pedido?.tiene_traslado_cedis_pendiente);
+    const caratulaMunicipalPendiente = Boolean(pedido?.tiene_caratula_municipal_pendiente);
+    const paqueteriasMunicipio = catalogos.paqueterias_municipio || [];
+    const transporteMunicipalSel = paqueteriasMunicipio.find(
+        (p) => String(p.id) === String(entregaMunicipal.catalogo_paqueteria_id)
+    );
+    const requisitosMunicipioUi = transporteMunicipalSel ? [
+        transporteMunicipalSel.requiere_identificacion && 'Identificación',
+        transporteMunicipalSel.requiere_remision && 'Remisión',
+        transporteMunicipalSel.requiere_caja && 'Caja',
+        transporteMunicipalSel.requiere_peso && 'Peso',
+        transporteMunicipalSel.requiere_evidencia_conjunto && 'Evidencia',
+        transporteMunicipalSel.requiere_caratula && 'Carátula (Tienda)',
+    ].filter(Boolean) : [];
+    const camposDestinoObligatorios = transporteMunicipalSel?.campos_destino_obligatorios || ['municipio', 'destinatario', 'telefono'];
+    const pideDireccionMunicipal = camposDestinoObligatorios.includes('direccion')
+        || camposDestinoObligatorios.includes('direccion_referencia');
     const esResguardoAbierto = Boolean(data.es_resguardo) && (data.modo_resguardo || 'abierto') === 'abierto';
     const esResguardoComplementario = Boolean(data.es_resguardo) && data.modo_resguardo === 'complementario';
     const esMunicipioDiferido = !data.es_resguardo && Boolean(paqueteriaSeleccionada?.permite_costo_diferido);
@@ -400,7 +460,11 @@ export default function ModalFormPedidoLegado({
     const consultaCerrada = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
     const puedeCerrarConsulta = Boolean(pedido?.puede_cerrar_consulta);
     const esConsultaMercancia = Boolean(pedido?.es_consulta_mercancia) || !requiereLogistica;
-    const labelConsulta = esConsultaMercancia ? 'Consulta de mercancía' : 'Consulta de pesaje';
+    const labelConsulta = enFlujoTienda
+        ? (esModalidadBodega || tareaPreparacion?.requiere_traslado_cedis
+            ? 'Preparación Tienda → CEDIS'
+            : (esModalidadMunicipio ? 'Preparación Tienda → Municipio' : 'Preparación en Tienda'))
+        : (esConsultaMercancia ? 'Consulta de mercancía' : 'Consulta de pesaje');
     const guiaCliente = Boolean(data.cliente_proporciona_guia);
     const envioPorCobrar = Boolean(data.envio_por_cobrar);
     const pesoCajasSoloLectura = tienePesajeRespondido || pendientePesaje || camposEnvioBloqueados;
@@ -1666,6 +1730,40 @@ export default function ModalFormPedidoLegado({
         });
     };
 
+    const postSolicitudPreparacionTienda = (id) => {
+        const payload = {
+            codigo_modalidad: codigoModalidadPreparacion,
+            almacen_id: data.almacen_id,
+            idempotencia_clave: `prep-${id}-${Date.now()}`,
+        };
+        if (esModalidadMunicipio) {
+            Object.assign(payload, {
+                destinatario_es_cliente: Boolean(entregaMunicipal.destinatario_es_cliente),
+                destinatario_nombre: entregaMunicipal.destinatario_nombre || undefined,
+                destinatario_telefono: entregaMunicipal.destinatario_telefono || undefined,
+                municipio_destino: entregaMunicipal.municipio_destino,
+                direccion_referencia: entregaMunicipal.direccion_referencia || undefined,
+                catalogo_paqueteria_id: entregaMunicipal.catalogo_paqueteria_id,
+                modalidad_cobro: entregaMunicipal.modalidad_cobro || 'PAGADO',
+            });
+        }
+        router.post(route('control_pedidos.solicitar_preparacion_tienda', id), payload, {
+            ...optsPesaje,
+            onSuccess: (page) => {
+                const err = page?.props?.flash?.error;
+                if (err) {
+                    setAvisoPesaje({ tipo: 'error', mensaje: err });
+                    return;
+                }
+                setConsultaPendienteLocal(true);
+                setAvisoPesaje({
+                    tipo: 'success',
+                    mensaje: page?.props?.flash?.success || 'Solicitud de preparación enviada a Tienda.',
+                });
+            },
+        });
+    };
+
     const solicitarPesaje = async () => {
         setAvisoPesaje(null);
         if (!data.cliente_id) {
@@ -1684,6 +1782,53 @@ export default function ModalFormPedidoLegado({
             return;
         }
         postSolicitudPesaje(id);
+    };
+
+    const solicitarPreparacionTienda = async () => {
+        setAvisoPesaje(null);
+        if (!data.cliente_id) {
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione el cliente antes de solicitar preparación en Tienda.' });
+            return;
+        }
+        if (!tienePdfPedido) {
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Adjunte el PDF o foto del pedido antes de solicitar preparación.' });
+            return;
+        }
+        if (!codigoModalidadPreparacion) {
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione la modalidad de recolección en tienda.' });
+            return;
+        }
+        if (!data.almacen_id) {
+            setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione el almacén de preparación.' });
+            return;
+        }
+        if (esModalidadMunicipio) {
+            if (!entregaMunicipal.municipio_destino?.trim()) {
+                setAvisoPesaje({ tipo: 'error', mensaje: 'Indique el municipio o destino.' });
+                return;
+            }
+            if (!entregaMunicipal.catalogo_paqueteria_id) {
+                setAvisoPesaje({ tipo: 'error', mensaje: 'Seleccione el transporte municipal.' });
+                return;
+            }
+            if (!entregaMunicipal.destinatario_es_cliente
+                && !String(entregaMunicipal.destinatario_nombre || '').trim()) {
+                setAvisoPesaje({ tipo: 'error', mensaje: 'Indique el nombre del destinatario.' });
+                return;
+            }
+            if (pideDireccionMunicipal && !String(entregaMunicipal.direccion_referencia || '').trim()) {
+                setAvisoPesaje({ tipo: 'error', mensaje: 'Indique la dirección o referencia.' });
+                return;
+            }
+        }
+        if (procesandoPesaje || pendientePesaje) return;
+        setProcesandoPesaje(true);
+        const id = await asegurarPedidoEnBd({ zona: 'pesaje' });
+        if (!id) {
+            setProcesandoPesaje(false);
+            return;
+        }
+        postSolicitudPreparacionTienda(id);
     };
 
     const cerrarConsulta = () => {
@@ -2028,8 +2173,12 @@ export default function ModalFormPedidoLegado({
                                 {origenSeleccionado ? (
                                     <p className="text-[10px] font-bold theme-text-muted mt-1.5 m-0">
                                         {requiereLogistica
-                                            ? 'Envío: solicite el pesaje a CEDIS; al responder y cerrar la consulta podrá capturar el monto, cotizar y pagar.'
-                                            : 'Tienda/mostrador: solicite consulta de mercancía a CEDIS; al cerrarla capture el monto y el pago (sin cajas ni guía).'}
+                                            ? (flujoPreparacionTienda
+                                                ? 'Envío con piezas en Tienda: solicite preparación/traslado a CEDIS; al recibirlas en CEDIS podrá cerrar la consulta y continuar.'
+                                                : 'Envío: solicite el pesaje a CEDIS; al responder y cerrar la consulta podrá capturar el monto, cotizar y pagar.')
+                                            : (flujoPreparacionTienda
+                                                ? 'Tienda/mostrador: seleccione modalidad y almacén, luego solicite preparación en Tienda; al responder y cerrar la consulta capture el monto y el pago.'
+                                                : 'Tienda/mostrador: solicite consulta de mercancía a CEDIS; al cerrarla capture el monto y el pago (sin cajas ni guía).')}
                                     </p>
                                 ) : (
                                     <p className="text-[10px] font-bold text-amber-600 mt-1.5 m-0">
@@ -2048,11 +2197,116 @@ export default function ModalFormPedidoLegado({
                                     className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
                                 >
                                     <option value="">Seleccionar...</option>
-                                    {(catalogos.almacenes || []).map((a) => (
+                                    {(flujoPreparacionTienda ? almacenesPreparacion : (catalogos.almacenes || [])).map((a) => (
                                         <option key={a.id} value={String(a.id)}>{etiquetaAlmacen(a)}</option>
                                     ))}
                                 </select>
                             </div>
+                            {flujoPreparacionTienda && !usaPreparacionTienda && (
+                            <div className="md:col-span-2">
+                                <label className={SECCION}>Modalidad de recolección</label>
+                                <select
+                                    value={codigoModalidadPreparacion}
+                                    onChange={(e) => setCodigoModalidadPreparacion(e.target.value)}
+                                    className={`${THEME_SELECT} w-full py-3`}
+                                >
+                                    <option value="">Seleccionar...</option>
+                                    {modalidadesPreparacion.map((m) => (
+                                        <option key={m.codigo} value={m.codigo}>{m.nombre}</option>
+                                    ))}
+                                </select>
+                                {esModalidadTransferencia && (
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-sky-600 m-0 mt-2">
+                                        Pago por transferencia — la mercancía queda resguardada hasta que el cliente recoja.
+                                    </p>
+                                )}
+                                {esModalidadBodega && (
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-violet-600 m-0 mt-2">
+                                        Piezas provenientes de Tienda — se trasladarán a CEDIS vía traspaso.
+                                    </p>
+                                )}
+                                {esModalidadMunicipio && (
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-teal-700 m-0 mt-2">
+                                        Envío municipal — Tienda preparará e imprimirá carátula desde GELIA.
+                                    </p>
+                                )}
+                                {Boolean(data.pedido_principal_id) && esModalidadBodega && (
+                                    <p className="text-[10px] font-bold theme-text-muted m-0 mt-1">
+                                        Pedido complementario vinculado al principal.
+                                    </p>
+                                )}
+                            </div>
+                            )}
+                            {flujoPreparacionTienda && !usaPreparacionTienda && esModalidadMunicipio && (
+                                <div className="md:col-span-2 space-y-3 p-3 rounded-xl border theme-border">
+                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Datos de entrega municipal</p>
+                                    <label className="flex items-center gap-2 text-sm font-bold theme-text-main">
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(entregaMunicipal.destinatario_es_cliente)}
+                                            onChange={(e) => setEntregaMunicipal((s) => ({ ...s, destinatario_es_cliente: e.target.checked }))}
+                                        />
+                                        El destinatario es el cliente
+                                    </label>
+                                    {!entregaMunicipal.destinatario_es_cliente && (
+                                        <div className="grid sm:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className={SECCION}>Nombre destinatario</label>
+                                                <input className={`${THEME_INPUT} w-full py-3`} value={entregaMunicipal.destinatario_nombre}
+                                                    onChange={(e) => setEntregaMunicipal((s) => ({ ...s, destinatario_nombre: e.target.value }))} />
+                                            </div>
+                                            <div>
+                                                <label className={SECCION}>Teléfono</label>
+                                                <input className={`${THEME_INPUT} w-full py-3`} value={entregaMunicipal.destinatario_telefono}
+                                                    onChange={(e) => setEntregaMunicipal((s) => ({ ...s, destinatario_telefono: e.target.value }))} />
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="grid sm:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className={SECCION}>Municipio / destino *</label>
+                                            <input className={`${THEME_INPUT} w-full py-3`} value={entregaMunicipal.municipio_destino}
+                                                onChange={(e) => setEntregaMunicipal((s) => ({ ...s, municipio_destino: e.target.value }))} />
+                                        </div>
+                                        <div>
+                                            <label className={SECCION}>Transporte *</label>
+                                            <select className={`${THEME_SELECT} w-full py-3`} value={entregaMunicipal.catalogo_paqueteria_id}
+                                                onChange={(e) => setEntregaMunicipal((s) => ({ ...s, catalogo_paqueteria_id: e.target.value, modalidad_cobro: 'PAGADO' }))}>
+                                                <option value="">Seleccionar...</option>
+                                                {paqueteriasMunicipio.map((p) => (
+                                                    <option key={p.id} value={String(p.id)}>{p.nombre}</option>
+                                                ))}
+                                            </select>
+                                            {paqueteriasMunicipio.length === 0 && (
+                                                <p className="text-[10px] font-bold text-amber-600 m-0 mt-1">No hay transportes habilitados para municipio.</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <label className={SECCION}>Cobro</label>
+                                            <select className={`${THEME_SELECT} w-full py-3`} value={entregaMunicipal.modalidad_cobro}
+                                                onChange={(e) => setEntregaMunicipal((s) => ({ ...s, modalidad_cobro: e.target.value }))}>
+                                                <option value="PAGADO">Pagado</option>
+                                                {transporteMunicipalSel?.permite_por_cobrar && <option value="POR_COBRAR">Por cobrar</option>}
+                                            </select>
+                                        </div>
+                                        {pideDireccionMunicipal && (
+                                            <div className="sm:col-span-2">
+                                                <label className={SECCION}>Dirección / referencia *</label>
+                                                <input className={`${THEME_INPUT} w-full py-3`} value={entregaMunicipal.direccion_referencia}
+                                                    onChange={(e) => setEntregaMunicipal((s) => ({ ...s, direccion_referencia: e.target.value }))} />
+                                            </div>
+                                        )}
+                                    </div>
+                                    {requisitosMunicipioUi.length > 0 && (
+                                        <div className="rounded-xl bg-sky-500/10 border border-sky-500/30 p-3">
+                                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0 mb-1">Requisitos para este envío</p>
+                                            <ul className="m-0 pl-4 text-xs font-bold theme-text-main list-disc">
+                                                {requisitosMunicipioUi.map((r) => <li key={r}>{r}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             <div className="md:col-span-2">
                                 <label className="flex items-center gap-3 theme-text-main p-3 rounded-xl border theme-border w-full cursor-pointer">
                                     <input
@@ -2380,21 +2634,108 @@ export default function ModalFormPedidoLegado({
                                 Estado envío: {LABELS_ESTATUS_ENVIO[pedido.estatus_envio]}
                             </p>
                         )}
+                        {progresoTraslado.length > 0 && (
+                            <div className="mb-4 p-3 rounded-xl border theme-border space-y-2">
+                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Avance traslado Tienda → CEDIS</p>
+                                <ol className="m-0 pl-0 list-none space-y-1.5">
+                                    {progresoTraslado.map((paso) => (
+                                        <li key={paso.clave} className="flex items-start gap-2 text-xs">
+                                            <span className={`mt-0.5 inline-block w-2 h-2 rounded-full shrink-0 ${paso.hecho ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                                            <span className={paso.hecho ? 'font-bold theme-text-main' : 'theme-text-muted'}>
+                                                {paso.label}
+                                                {paso.en && (
+                                                    <span className="block font-normal theme-text-muted">
+                                                        {new Date(paso.en).toLocaleString('es-MX')}
+                                                        {paso.por ? ` · ${paso.por}` : ''}
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ol>
+                                {trasladoCedisPendiente && (
+                                    <p className="text-[10px] font-bold text-amber-600 m-0">
+                                        El pedido espera recepción en CEDIS antes de cerrar la consulta / continuar salida.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                        {progresoCaratula.length > 0 && (
+                            <div className="mb-4 p-3 rounded-xl border theme-border space-y-2">
+                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">Avance envío municipal</p>
+                                <ol className="m-0 pl-0 list-none space-y-1.5">
+                                    {progresoCaratula.map((paso) => (
+                                        <li key={paso.clave} className="flex items-start gap-2 text-xs">
+                                            <span className={`mt-0.5 inline-block w-2 h-2 rounded-full shrink-0 ${paso.hecho ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
+                                            <span className={paso.hecho ? 'font-bold theme-text-main' : 'theme-text-muted'}>
+                                                {paso.label}
+                                                {paso.en && (
+                                                    <span className="block font-normal theme-text-muted">
+                                                        {new Date(paso.en).toLocaleString('es-MX')}
+                                                        {paso.por ? ` · ${paso.por}` : ''}
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ol>
+                                {caratulaMunicipalPendiente && (
+                                    <p className="text-[10px] font-bold text-amber-600 m-0">
+                                        Espere a que Tienda coloque la carátula antes de cerrar la consulta.
+                                    </p>
+                                )}
+                                {tareaPreparacion?.caratula && can('control_pedidos.tienda.imprimir_caratula') && (
+                                    <a
+                                        href={route('control_pedidos.tienda.caratula.pdf', [tareaPreparacion.id, tareaPreparacion.caratula.id])}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className={`${BTN_SECONDARY} inline-flex text-xs`}
+                                    >
+                                        Previsualizar carátula v{tareaPreparacion.caratula.version}
+                                    </a>
+                                )}
+                            </div>
+                        )}
                         {pendientePesaje && (
-                            <AvisoOperativoPedido label="Esperando CEDIS" tono="warning" icon={Scale} className="mb-4">
-                                {labelConsulta} enviada. Cuando CEDIS responda verá aquí el detalle
-                                {esConsultaMercancia ? ' de piezas y estado físico.' : ' de peso, medidas y estado físico.'}
+                            <AvisoOperativoPedido
+                                label={enFlujoTienda ? 'Esperando Tienda' : 'Esperando CEDIS'}
+                                tono="warning"
+                                icon={Scale}
+                                className="mb-4"
+                            >
+                                {labelConsulta} enviada. Cuando {enFlujoTienda ? 'Tienda responda' : 'CEDIS responda'} verá aquí el detalle
+                                {esConsultaMercancia || enFlujoTienda ? ' de piezas y estado físico.' : ' de peso, medidas y estado físico.'}
+                                {tareaPreparacion?.estado_label && (
+                                    <span className="block mt-1">Estado: {tareaPreparacion.estado_label}</span>
+                                )}
                             </AvisoOperativoPedido>
                         )}
-                        {tienePesajeRespondido && !pendientePesaje && puedeContinuarPedido && (
+                        {tareaConIncidencia && (
+                            <AvisoOperativoPedido label="Incidencia en Tienda" tono="warning" icon={AlertTriangle} className="mb-4">
+                                Tienda reportó un problema con la solicitud.
+                                {tareaPreparacion?.incidencia?.motivo && (
+                                    <span className="block mt-1">{tareaPreparacion.incidencia.motivo}</span>
+                                )}
+                                {puedeCorregirPreparacion && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setModalCorregirPreparacion(true)}
+                                        className={`${BTN_SECONDARY} mt-3 flex items-center gap-2 outline-none`}
+                                    >
+                                        Corregir y reenviar solicitud
+                                    </button>
+                                )}
+                            </AvisoOperativoPedido>
+                        )}
+                        {tienePesajeRespondido && !pendientePesaje && puedeContinuarPedido && !enFlujoTienda && (
                             <AvisoOperativoPedido label="Respuesta lista" tono="success" icon={Scale} className="mb-4">
                                 CEDIS ya respondió. Pulse «Continuar pedido» al final de esta sección.
                             </AvisoOperativoPedido>
                         )}
                         {tienePesajeRespondido && !pendientePesaje && !puedeContinuarPedido && !consultaCerrada && (
                             <AvisoOperativoPedido label="Confirme con el cliente" tono="info" icon={CheckCircle2} className="mb-4">
-                                Revise evidencias y cajas con el cliente. Al final cierre la consulta para desbloquear monto, dirección y pago.
-                                Si hay cambios, use «Actualizar consulta» (anexo/retiro).
+                                Revise evidencias{enFlujoTienda ? '' : ' y cajas'} con el cliente. Al final cierre la consulta para desbloquear monto{requiereLogistica ? ', dirección y pago' : ' y pago'}.
+                                {!enFlujoTienda && ' Si hay cambios, use «Actualizar consulta» (anexo/retiro).'}
                             </AvisoOperativoPedido>
                         )}
                         {consultaCerrada && (
@@ -2405,19 +2746,30 @@ export default function ModalFormPedidoLegado({
                         )}
                         {!tienePesajeRespondido && !pendientePesaje && (
                             <AvisoOperativoPedido label="Paso requerido" tono="info" icon={Scale} className="mb-4">
-                                Adjunta el PDF o foto del pedido y solicite la {labelConsulta.toLowerCase()}. El monto se captura después de cerrarla.
+                                Adjunta el PDF o foto del pedido y solicite {enFlujoTienda ? 'la preparación en Tienda' : `la ${labelConsulta.toLowerCase()}`}. El monto se captura después de cerrarla.
                             </AvisoOperativoPedido>
                         )}
                         <div className="space-y-4">
-                            {!tienePesajeRespondido && !pendientePesaje && (
-                                <button
-                                    type="button"
-                                    onClick={solicitarPesaje}
-                                    disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido}
-                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
-                                >
-                                    <Scale className="w-4 h-4" /> Solicitar {labelConsulta.toLowerCase()} a CEDIS
-                                </button>
+                            {!tienePesajeRespondido && !pendientePesaje && !tareaConIncidencia && (
+                                enFlujoTienda ? (
+                                    <button
+                                        type="button"
+                                        onClick={solicitarPreparacionTienda}
+                                        disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido || !codigoModalidadPreparacion || !data.almacen_id}
+                                        className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
+                                    >
+                                        <Scale className="w-4 h-4" /> Solicitar preparación en Tienda
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={solicitarPesaje}
+                                        disabled={procesandoPesaje || processing || !data.cliente_id || !tienePdfPedido}
+                                        className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
+                                    >
+                                        <Scale className="w-4 h-4" /> Solicitar {labelConsulta.toLowerCase()} a CEDIS
+                                    </button>
+                                )
                             )}
                             {!data.cliente_id && !tienePesajeRespondido && !pendientePesaje && (
                                 <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione el cliente para poder solicitar la consulta.</p>
@@ -2425,7 +2777,13 @@ export default function ModalFormPedidoLegado({
                             {data.cliente_id && !tienePdfPedido && !tienePesajeRespondido && !pendientePesaje && (
                                 <p className="text-[10px] font-bold text-amber-600 m-0">Adjunte el PDF o foto del pedido para solicitar la consulta.</p>
                             )}
-                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && (
+                            {enFlujoTienda && !usaPreparacionTienda && !codigoModalidadPreparacion && !tienePesajeRespondido && !pendientePesaje && (
+                                <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione la modalidad de recolección en tienda.</p>
+                            )}
+                            {enFlujoTienda && !usaPreparacionTienda && !data.almacen_id && !tienePesajeRespondido && !pendientePesaje && (
+                                <p className="text-[10px] font-bold text-amber-600 m-0">Seleccione el almacén de preparación.</p>
+                            )}
+                            {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && !enFlujoTienda && (
                                 <div className="space-y-3 p-3 rounded-xl border theme-border">
                                     <div>
                                         <label className={SECCION}>Piezas adicionales (PDF o fotos)</label>
@@ -3352,6 +3710,13 @@ export default function ModalFormPedidoLegado({
                     setConfirmarActualizarDir(false);
                 }}
                 onConfirm={confirmarGuardarDireccion}
+            />
+            <ModalCorregirPreparacionTienda
+                abierto={Boolean(abierto) && modalCorregirPreparacion}
+                onClose={() => setModalCorregirPreparacion(false)}
+                tarea={tareaPreparacion}
+                almacenes={flujoPreparacionTienda ? almacenesPreparacion : (catalogos.almacenes || [])}
+                onAviso={setAvisoPesaje}
             />
         </>
     );

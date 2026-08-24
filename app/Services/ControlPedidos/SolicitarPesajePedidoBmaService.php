@@ -4,6 +4,7 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
@@ -13,6 +14,7 @@ class SolicitarPesajePedidoBmaService
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private PreparacionTiendaConfig $preparacionConfig,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
@@ -34,6 +36,16 @@ class SolicitarPesajePedidoBmaService
                 $pedido->esConsultaMercancia()
                     ? 'Este pedido no puede solicitar consulta de mercancía en su estado actual.'
                     : 'Este pedido no puede solicitar pesaje en su estado actual.'
+            );
+        }
+
+        $usuario = User::find($usuarioId);
+        if ($pedido->esConsultaMercancia()
+            && $usuario
+            && $this->preparacionConfig->activo()
+            && $this->preparacionConfig->usuarioHabilitado($usuario)) {
+            throw new \RuntimeException(
+                'Este pedido debe solicitar preparación en Tienda. Use la opción de recolección en tienda.'
             );
         }
 

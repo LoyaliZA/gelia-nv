@@ -61,6 +61,20 @@ final class AccionesHistorialPedidoBma
     public const RETIRO_CAJA = 'retiro_caja';
     public const COSTOS_ENVIO = 'costos_envio';
     public const REAPERTURA_PAGO_COSTOS = 'reapertura_pago_costos';
+    public const SOLICITUD_PREPARACION_TIENDA = 'solicitud_preparacion_tienda';
+    public const RESPUESTA_PREPARACION_TIENDA = 'respuesta_preparacion_tienda';
+    public const INCIDENCIA_PREPARACION_TIENDA = 'incidencia_preparacion_tienda';
+    public const CORRECCION_PREPARACION_TIENDA = 'correccion_preparacion_tienda';
+    public const LIBERACION_PREPARACION_TIENDA = 'liberacion_preparacion_tienda';
+    public const TRASLADO_PREPARACION_CREADO = 'traslado_preparacion_creado';
+    public const TRASLADO_PREPARACION_EN_CAMINO = 'traslado_preparacion_en_camino';
+    public const TRASLADO_PREPARACION_RECIBIDO = 'traslado_preparacion_recibido';
+    public const TRASLADO_PREPARACION_RECHAZADO = 'traslado_preparacion_rechazado';
+    public const CARATULA_GENERADA = 'caratula_generada';
+    public const CARATULA_REGENERADA = 'caratula_regenerada';
+    public const CARATULA_COLOCADA = 'caratula_colocada';
+    public const DESCARGA_IDENTIFICACION = 'descarga_identificacion_municipal';
+    public const DESCARGA_CARATULA = 'descarga_caratula';
 
     /** @var array<string, string> */
     public const ETIQUETAS = [
@@ -118,6 +132,20 @@ final class AccionesHistorialPedidoBma
         self::RETIRO_CAJA => 'Retiro de envío',
         self::COSTOS_ENVIO => 'Actualización de costos de envío',
         self::REAPERTURA_PAGO_COSTOS => 'Reapertura de validación de pago por costos',
+        self::SOLICITUD_PREPARACION_TIENDA => 'Solicitud de preparación en Tienda',
+        self::RESPUESTA_PREPARACION_TIENDA => 'Respuesta de preparación en Tienda',
+        self::INCIDENCIA_PREPARACION_TIENDA => 'Incidencia de preparación en Tienda',
+        self::CORRECCION_PREPARACION_TIENDA => 'Corrección de preparación en Tienda',
+        self::LIBERACION_PREPARACION_TIENDA => 'Liberación de mercancía en Tienda',
+        self::TRASLADO_PREPARACION_CREADO => 'Traspaso generado desde preparación',
+        self::TRASLADO_PREPARACION_EN_CAMINO => 'Mercancía en traslado a CEDIS',
+        self::TRASLADO_PREPARACION_RECIBIDO => 'CEDIS recibió traslado de Tienda',
+        self::TRASLADO_PREPARACION_RECHAZADO => 'CEDIS rechazó traslado de Tienda',
+        self::CARATULA_GENERADA => 'Carátula municipal generada',
+        self::CARATULA_REGENERADA => 'Carátula municipal regenerada',
+        self::CARATULA_COLOCADA => 'Carátula colocada en el paquete',
+        self::DESCARGA_IDENTIFICACION => 'Descarga de identificación municipal',
+        self::DESCARGA_CARATULA => 'Descarga de carátula PDF',
     ];
 
     public static function etiqueta(?string $accion): ?string
