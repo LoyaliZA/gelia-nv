@@ -446,14 +446,14 @@ class PedidoBma extends Model
     {
         $cajas = $this->relationLoaded('cajas') ? $this->cajas : $this->cajas()->get();
 
-        return $cajas->filter(fn (PedidoBmaCaja $c) => $c->estaRecolectada())->count();
+        return $cajas->filter(fn (PedidoBmaCaja $c) => $c->estaActiva() && $c->estaRecolectada())->count();
     }
 
     public function getCajasPendientesAttribute(): int
     {
         $cajas = $this->relationLoaded('cajas') ? $this->cajas : $this->cajas()->get();
 
-        return $cajas->filter(fn (PedidoBmaCaja $c) => $c->estaPendiente())->count();
+        return $cajas->filter(fn (PedidoBmaCaja $c) => $c->estaActiva() && $c->estaPendiente())->count();
     }
 
     public function revisionesProducto(): HasMany

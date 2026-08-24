@@ -16,6 +16,7 @@ class CoberturaPagoPedidoBmaService
 {
     public function __construct(
         private PagosPedidoBmaConfig $config,
+        private \App\Services\ControlPedidos\CalcularTotalesEnvioPedidoService $totalesEnvio,
     ) {}
 
     /**
@@ -51,24 +52,30 @@ class CoberturaPagoPedidoBmaService
             fn (PedidoBmaPago $p) => PagosPedidoBmaConfig::aCentavos((string) $p->monto)
         );
 
-        $envio = $pedido->costo_envio === null || $pedido->costo_envio === ''
-            ? '0.00'
-            : number_format((float) $pedido->costo_envio, 2, '.', '');
+        $totales = $this->totalesEnvio->calcular($pedido->loadMissing(['cajas']));
+        $envio = $totales['costo_para_cobertura'];
+        $seguro = $totales['costo_seguro'];
+        $aplicaSeguro = (bool) $pedido->aplica_seguro || (float) $seguro > 0;
 
         $base = $this->calcularDesdeMontos(
             number_format((float) ($pedido->total_mercancia ?? 0), 2, '.', ''),
             $envio,
-            (bool) $pedido->aplica_seguro,
-            number_format((float) ($pedido->costo_seguro ?? 0), 2, '.', ''),
+            $aplicaSeguro,
+            $seguro,
             number_format((float) ($pedido->saldo_a_favor ?? 0), 2, '.', ''),
             PagosPedidoBmaConfig::centavosADecimal((int) $pagadoCentavos),
         );
 
         $bloqueos = $this->bloqueos($pedido, $pagosActivos, $base);
+        if ($totales['incompleto']) {
+            $bloqueos[] = 'El desglose de costos por envío está incompleto.';
+        }
+        $bloqueos = array_values(array_unique($bloqueos));
 
         return array_merge($base, [
             'bloqueos' => $bloqueos,
             'cubierto' => $bloqueos === [] && $base['cubierto'],
+            'totales_envio' => $totales,
         ]);
     }
 

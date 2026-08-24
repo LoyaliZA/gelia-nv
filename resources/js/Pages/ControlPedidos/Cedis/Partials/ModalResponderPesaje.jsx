@@ -308,6 +308,9 @@ export default function ModalResponderPesaje({
     const soloRevisiones = Boolean(pedido?.es_consulta_mercancia)
         || pedido?.origen?.requiere_logistica === false;
     const [envios, setEnvios] = useState([envioVacio()]);
+    const [uuidsGuardados, setUuidsGuardados] = useState([]);
+    const [motivoRetiro, setMotivoRetiro] = useState('');
+    const [pedirMotivoRetiro, setPedirMotivoRetiro] = useState(false);
     const [procesando, setProcesando] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'error', titulo: '', mensaje: '' });
     const [evidenciasPorEnvio, setEvidenciasPorEnvio] = useState([slotEnvioVacio()]);
@@ -348,6 +351,9 @@ export default function ModalResponderPesaje({
 
     const resetFormularioVacio = () => {
         setEnvios([envioVacio()]);
+        setUuidsGuardados([]);
+        setMotivoRetiro('');
+        setPedirMotivoRetiro(false);
         setProcesando(false);
         setAlerta({ abierto: false, tipo: 'error', titulo: '', mensaje: '' });
         setBaselineConsulta(null);
@@ -469,6 +475,7 @@ export default function ModalResponderPesaje({
                         if (!soloRevisiones && cajasPrevias.length) {
                             setEnvios(cajasPrevias.map((c) => ({
                                 ...envioVacio(),
+                                client_uuid: c.uuid_operativo || c.client_uuid || nuevoUuid(),
                                 catalogo_tipo_caja_id: String(c.catalogo_tipo_caja_id || c.tipo_caja?.id || ''),
                                 largo: c.largo ?? '',
                                 ancho: c.ancho ?? '',
@@ -476,6 +483,9 @@ export default function ModalResponderPesaje({
                                 peso_real_kg: c.peso_real_kg ?? '',
                                 peso_volumetrico_kg: c.peso_volumetrico_kg ?? '',
                             })));
+                            setUuidsGuardados(cajasPrevias
+                                .map((c) => c.uuid_operativo || c.client_uuid)
+                                .filter(Boolean));
                             setEvidenciasPorEnvio(cajasPrevias.map(() => slotEnvioVacio()));
                         } else {
                             setEnvios([envioVacio()]);
@@ -1009,6 +1019,19 @@ export default function ModalResponderPesaje({
     };
 
     const enviarPesaje = () => {
+        const uuidsActuales = new Set(envios.map((e) => e.client_uuid).filter(Boolean));
+        const retirados = uuidsGuardados.filter((u) => !uuidsActuales.has(u));
+        if (retirados.length > 0 && !String(motivoRetiro || '').trim()) {
+            setPedirMotivoRetiro(true);
+            setAlerta({
+                abierto: true,
+                tipo: 'error',
+                titulo: 'Motivo de retiro',
+                mensaje: 'Indique el motivo para retirar envíos que ya estaban guardados.',
+            });
+            return;
+        }
+
         const cajas = soloRevisiones
             ? []
             : envios.map((e) => ({
@@ -1022,8 +1045,14 @@ export default function ModalResponderPesaje({
         const form = new FormData();
         cajas.forEach((c, i) => {
             Object.entries(c).forEach(([k, v]) => form.append(`cajas[${i}][${k}]`, String(v)));
-            if (envios[i]?.client_uuid) form.append(`cajas[${i}][client_uuid]`, envios[i].client_uuid);
+            if (envios[i]?.client_uuid) {
+                form.append(`cajas[${i}][client_uuid]`, envios[i].client_uuid);
+                form.append(`cajas[${i}][uuid_operativo]`, envios[i].client_uuid);
+            }
         });
+        if (retirados.length > 0 && motivoRetiro) {
+            form.append('motivo_retiro', String(motivoRetiro).trim());
+        }
         form.append('estado_fisico_general', estadoGeneralDerivado);
         form.append('comentario_fisico_general', '');
         if (soloRevisiones) {
@@ -1574,6 +1603,18 @@ export default function ModalResponderPesaje({
                                 <p className="text-xs theme-text-muted font-bold m-0 mt-3">
                                     Total peso cobrado: {Math.round(totalCobrado * 10000) / 10000} kg · {envios.length} envíos
                                 </p>
+                            )}
+                            {(pedirMotivoRetiro || uuidsGuardados.some((u) => !envios.some((e) => e.client_uuid === u))) && (
+                                <div className="mt-3">
+                                    <label className={SECCION}>Motivo de retiro de envíos *</label>
+                                    <textarea
+                                        value={motivoRetiro}
+                                        onChange={(e) => setMotivoRetiro(e.target.value)}
+                                        rows={2}
+                                        className={`${THEME_TEXTAREA} w-full`}
+                                        placeholder="Explique por qué se retira un envío ya guardado…"
+                                    />
+                                </div>
                             )}
                         </div>
                         )}

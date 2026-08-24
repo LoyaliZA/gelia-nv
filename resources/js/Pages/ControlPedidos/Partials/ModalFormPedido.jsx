@@ -41,6 +41,7 @@ import { archivosImagenDesdeClipboard } from './archivosDesdeClipboard';
 import { elegirDireccionParaPedido, manualDireccionCompleta, faltantesManualDireccion } from './elegirDireccionParaPedido';
 import ModalGenerarLinkDireccion from './ModalGenerarLinkDireccion';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
+import TarjetaEnvioPedido from './TarjetaEnvioPedido';
 import SeccionRevisionFisicaPedido from './SeccionRevisionFisicaPedido';
 import CamposDireccionPedido, {
     CAMPOS_DIRECCION_VACIOS,
@@ -172,6 +173,17 @@ function formDefaults(pedido = null, tiposOperacion = []) {
         total_mercancia: pedido?.total_mercancia ?? '',
         catalogo_paqueteria_id: pedido?.catalogo_paqueteria_id || '',
         costo_envio: pedido?.costo_envio ?? '',
+        cajas_costos: (pedido?.cajas || [])
+            .filter((c) => c.estado_operativo !== 'retirada' && c.uuid_operativo)
+            .map((c) => ({
+                uuid_operativo: c.uuid_operativo,
+                costo_envio: c.costo_envio ?? '',
+                costo_seguro: c.costo_seguro ?? '',
+                costo_adicional: c.costo_adicional ?? '',
+                concepto_adicional: c.concepto_adicional ?? '',
+            })),
+        reabrir_pago_costos: false,
+        motivo_reapertura_pago: '',
         aplica_saldo_favor: Number(pedido?.saldo_a_favor || 0) > 0,
         saldo_a_favor: pedido?.saldo_a_favor ?? '',
         saf_aplicaciones: (pedido?.saf_aplicaciones || [])
@@ -500,7 +512,10 @@ export default function ModalFormPedido({
             setVistaPrevia({ documentos: [docOrDocs], indice: 0 });
         }
     };
-    const cajasPesaje = pedido?.cajas || [];
+    const cajasPesaje = (pedido?.cajas || []).filter((c) => c.estado_operativo !== 'retirada');
+    const detalleCajasUi = Boolean(catalogos?.envios_config?.detalle_cajas);
+    const pagoValidado = Boolean(pedido?.pago_validado_at);
+    const puedeEditarCostosCaja = detalleCajasUi && !pagoValidado && Boolean(pedido?.puede_mutar);
     const tieneCoberturaSeguro = paqueteriaTieneCobertura(paqueteriaSeleccionada?.nombre);
     const paqueteriasComerciales = (catalogos.paqueterias || []).filter((p) => p.categoria === 'comercial');
     const paqueteriasLocales = (catalogos.paqueterias || []).filter((p) => p.categoria !== 'comercial');
@@ -1411,11 +1426,15 @@ export default function ModalFormPedido({
         const idDestino = modoEdicion ? pedido.id : pedidoBdIdRef.current;
         const payloadEnvio = (d) => {
             const omitEnvio = Boolean(d.cliente_proporciona_guia) || Boolean(d.envio_por_cobrar);
+            const cajasCostos = detalleCajasUi
+                ? (d.cajas_costos || []).filter((row) => row?.uuid_operativo)
+                : undefined;
             return conDireccionManual({
                 ...d,
                 costo_envio: omitEnvio
                     ? (d.costo_envio === '' || d.costo_envio == null ? '' : 0)
                     : costoEnvioParaPersistir(d.costo_envio, costoReexpedicion),
+                cajas_costos: cajasCostos,
                 enviar: undefined,
                 saldo_a_favor: d.aplica_saldo_favor
                     ? (Number(d.saldo_a_favor) || (d.saf_aplicaciones || []).reduce((a, i) => a + (Number(i.monto) || 0), 0) || 0)
@@ -2379,20 +2398,73 @@ export default function ModalFormPedido({
                                 {cajasPesaje.length > 0 ? (
                                     <div className="space-y-3" data-campo="tipo_caja">
                                         <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
-                                        {[...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
-                                            <div key={c.id || idx} className="p-4 rounded-xl border theme-border theme-element space-y-2">
-                                                <p className="text-sm font-black theme-text-main m-0">{etiquetaEnvio(idx, c)}</p>
-                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                                                    <p className="m-0 theme-text-muted font-bold">Tipo: <span className="theme-text-main">{c.tipo_caja?.nombre || '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Largo: <span className="theme-text-main">{c.largo != null ? `${c.largo} cm` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Ancho: <span className="theme-text-main">{c.ancho != null ? `${c.ancho} cm` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Alto: <span className="theme-text-main">{c.alto != null ? `${c.alto} cm` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Real: <span className="theme-text-main">{c.peso_real_kg != null ? `${c.peso_real_kg} kg` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Vol.: <span className="theme-text-main">{c.peso_volumetrico_kg != null ? `${c.peso_volumetrico_kg} kg` : '—'}</span></p>
-                                                    <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{c.peso_cobrado_kg != null ? `${c.peso_cobrado_kg} kg` : '—'}</span></p>
+                                        {detalleCajasUi ? (
+                                            [...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => {
+                                                const costos = (data.cajas_costos || []).find((x) => x.uuid_operativo === c.uuid_operativo) || {
+                                                    uuid_operativo: c.uuid_operativo,
+                                                    costo_envio: c.costo_envio ?? '',
+                                                    costo_seguro: c.costo_seguro ?? '',
+                                                    costo_adicional: c.costo_adicional ?? '',
+                                                    concepto_adicional: c.concepto_adicional ?? '',
+                                                };
+                                                const incompleto = costos.costo_envio === '' || costos.costo_envio == null;
+                                                return (
+                                                    <TarjetaEnvioPedido
+                                                        key={c.uuid_operativo || c.id || idx}
+                                                        caja={c}
+                                                        indice={idx}
+                                                        abiertoInicial={cajasPesaje.length === 1}
+                                                        modo={puedeEditarCostosCaja ? 'costos' : 'lectura'}
+                                                        costos={costos}
+                                                        incompleto={incompleto}
+                                                        bloqueado={!puedeEditarCostosCaja}
+                                                        onCostosChange={(next) => {
+                                                            const prev = data.cajas_costos || [];
+                                                            const sin = prev.filter((x) => x.uuid_operativo !== next.uuid_operativo);
+                                                            const actualizados = [...sin, next];
+                                                            const completo = actualizados.length > 0
+                                                                && cajasPesaje.every((caja) => {
+                                                                    const row = actualizados.find((x) => x.uuid_operativo === caja.uuid_operativo);
+                                                                    return row && row.costo_envio !== '' && row.costo_envio != null;
+                                                                });
+                                                            const suma = actualizados.reduce((acc, row) => (
+                                                                acc + (Number(row.costo_envio) || 0) + (Number(row.costo_adicional) || 0)
+                                                            ), 0);
+                                                            const sumaSeg = actualizados.reduce((acc, row) => acc + (Number(row.costo_seguro) || 0), 0);
+                                                            setData({
+                                                                ...data,
+                                                                cajas_costos: actualizados,
+                                                                ...(completo ? {
+                                                                    costo_envio: String(Math.round(suma * 100) / 100),
+                                                                    costo_seguro: String(Math.round(sumaSeg * 100) / 100),
+                                                                    aplica_seguro: sumaSeg > 0 || data.aplica_seguro,
+                                                                } : {}),
+                                                            });
+                                                        }}
+                                                        documentos={(pedido?.documentos || []).filter((d) => (
+                                                            d.pedido_bma_caja_id === c.id
+                                                            || (d.relacion_tipo === 'envio_caja' && Number(d.relacion_id) === Number(c.id))
+                                                        ))}
+                                                        onVerDoc={abrirVistaPrevia}
+                                                    />
+                                                );
+                                            })
+                                        ) : (
+                                            [...cajasPesaje].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                                <div key={c.id || idx} className="p-4 rounded-xl border theme-border theme-element space-y-2">
+                                                    <p className="text-sm font-black theme-text-main m-0">{etiquetaEnvio(idx, c)}</p>
+                                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                                                        <p className="m-0 theme-text-muted font-bold">Tipo: <span className="theme-text-main">{c.tipo_caja?.nombre || '—'}</span></p>
+                                                        <p className="m-0 theme-text-muted font-bold">Largo: <span className="theme-text-main">{c.largo != null ? `${c.largo} cm` : '—'}</span></p>
+                                                        <p className="m-0 theme-text-muted font-bold">Ancho: <span className="theme-text-main">{c.ancho != null ? `${c.ancho} cm` : '—'}</span></p>
+                                                        <p className="m-0 theme-text-muted font-bold">Alto: <span className="theme-text-main">{c.alto != null ? `${c.alto} cm` : '—'}</span></p>
+                                                        <p className="m-0 theme-text-muted font-bold">Real: <span className="theme-text-main">{c.peso_real_kg != null ? `${c.peso_real_kg} kg` : '—'}</span></p>
+                                                        <p className="m-0 theme-text-muted font-bold">Vol.: <span className="theme-text-main">{c.peso_volumetrico_kg != null ? `${c.peso_volumetrico_kg} kg` : '—'}</span></p>
+                                                        <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{c.peso_cobrado_kg != null ? `${c.peso_cobrado_kg} kg` : '—'}</span></p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            ))
+                                        )}
                                     </div>
                                 ) : null}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

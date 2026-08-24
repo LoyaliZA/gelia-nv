@@ -58,6 +58,9 @@ final class AccionesHistorialPedidoBma
     public const SESION_EVIDENCIA = 'sesion_evidencia';
     public const RETRASO_EMPAQUE = 'retraso_empaque';
     public const RETRASO_RECOLECCION = 'retraso_recoleccion';
+    public const RETIRO_CAJA = 'retiro_caja';
+    public const COSTOS_ENVIO = 'costos_envio';
+    public const REAPERTURA_PAGO_COSTOS = 'reapertura_pago_costos';
 
     /** @var array<string, string> */
     public const ETIQUETAS = [
@@ -112,6 +115,9 @@ final class AccionesHistorialPedidoBma
         self::SESION_EVIDENCIA => 'Sesión de evidencias con celular',
         self::RETRASO_EMPAQUE => 'Retraso de empaque',
         self::RETRASO_RECOLECCION => 'Retraso de recolección',
+        self::RETIRO_CAJA => 'Retiro de envío',
+        self::COSTOS_ENVIO => 'Actualización de costos de envío',
+        self::REAPERTURA_PAGO_COSTOS => 'Reapertura de validación de pago por costos',
     ];
 
     public static function etiqueta(?string $accion): ?string

@@ -34,6 +34,7 @@ import {
     tieneErrorRemision,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import TarjetaEnvioPedido from '../../Partials/TarjetaEnvioPedido';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/ModalVistaPreviaDocumento';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import ModalMotivoRechazo from '../../Partials/ModalMotivoRechazo';
@@ -66,7 +67,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
     const uiSimplificada = Boolean(catalogos?.pagos_config?.ui_simplificada);
+    const detalleCajasUi = Boolean(catalogos?.envios_config?.detalle_cajas);
     const [pedido, setPedido] = useState(pedidoInicial);
+    const cajasActivas = (pedido?.cajas || []).filter((c) => c.estado_operativo !== 'retirada');
+    const fuenteEnvioDetalle = detalleCajasUi
+        && cajasActivas.length > 0
+        && cajasActivas.every((c) => c.costo_envio !== null && c.costo_envio !== '' && c.costo_envio !== undefined);
     const [procesando, setProcesando] = useState(false);
     const [docPreview, setDocPreview] = useState(null);
     const [confirmacion, setConfirmacion] = useState(null);
@@ -626,16 +632,41 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                                 <Campo label="Pesaje CEDIS" value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
                             </div>
-                            {(pedido.cajas || []).length > 0 && (
+                            {(cajasActivas.length > 0) && (
                                 <div className="mt-3 space-y-2">
-                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de envíos</p>
-                                    {[...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
-                                        <p key={c.id || idx} className="text-xs font-bold theme-text-main m-0">
-                                            {etiquetaEnvio(idx, c)}
-                                            {c.peso_real_kg != null ? ` · real ${c.peso_real_kg} kg` : ''}
-                                            {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
-                                        </p>
-                                    ))}
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de envíos</p>
+                                        {detalleCajasUi && (
+                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${fuenteEnvioDetalle ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-slate-500/15 theme-text-muted'}`}>
+                                                {fuenteEnvioDetalle ? 'Detalle por caja' : 'Legado'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {detalleCajasUi ? (
+                                        [...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                            <TarjetaEnvioPedido
+                                                key={c.uuid_operativo || c.id || idx}
+                                                caja={c}
+                                                indice={idx}
+                                                abiertoInicial={cajasActivas.length === 1}
+                                                modo="lectura"
+                                                incompleto={c.costo_envio === null || c.costo_envio === '' || c.costo_envio === undefined}
+                                                documentos={(pedido.documentos || []).filter((d) => (
+                                                    d.pedido_bma_caja_id === c.id
+                                                    || (d.relacion_tipo === 'envio_caja' && Number(d.relacion_id) === Number(c.id))
+                                                ))}
+                                                onVerDoc={setDocPreview}
+                                            />
+                                        ))
+                                    ) : (
+                                        [...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                            <p key={c.id || idx} className="text-xs font-bold theme-text-main m-0">
+                                                {etiquetaEnvio(idx, c)}
+                                                {c.peso_real_kg != null ? ` · real ${c.peso_real_kg} kg` : ''}
+                                                {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
+                                            </p>
+                                        ))
+                                    )}
                                 </div>
                             )}
                             {(pedido.documentos || []).some((d) => d.tipo === 'pdf_pedido') && (

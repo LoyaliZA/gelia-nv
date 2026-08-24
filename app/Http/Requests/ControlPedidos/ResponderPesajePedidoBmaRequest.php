@@ -52,6 +52,8 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             $rules['cajas.*.peso_real_kg'] = ['required', 'numeric', 'min:0'];
             $rules['cajas.*.peso_volumetrico_kg'] = ['required', 'numeric', 'min:0'];
             $rules['cajas.*.client_uuid'] = ['nullable', 'string', 'max:64'];
+            $rules['cajas.*.uuid_operativo'] = ['nullable', 'uuid'];
+            $rules['motivo_retiro'] = ['nullable', 'string', 'min:5', 'max:2000'];
         }
 
         return $rules;

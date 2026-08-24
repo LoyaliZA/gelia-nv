@@ -20,6 +20,7 @@ class ObtenerCatalogosPedidoBmaService
 {
     public function __construct(
         private PagosPedidoBmaConfig $pagosConfig,
+        private EnviosPedidoBmaConfig $enviosConfig,
     ) {}
 
     /**
@@ -54,6 +55,13 @@ class ObtenerCatalogosPedidoBmaService
                 ->orderBy('codigo_postal')
                 ->get(['id', 'codigo_postal', 'paqueteria_id', 'costo_adicional']),
             'pagos_config' => $this->pagosConfig->todas(),
+            'envios_config' => array_merge($this->enviosConfig->todas(), [
+                'matriz' => [
+                    'ventas' => $this->enviosConfig->matrizActor('ventas'),
+                    'cedis' => $this->enviosConfig->matrizActor('cedis'),
+                    'auxiliar' => $this->enviosConfig->matrizActor('auxiliar'),
+                ],
+            ]),
         ];
     }
 

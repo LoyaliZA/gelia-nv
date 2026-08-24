@@ -204,6 +204,7 @@ class PedidoBmaCedisController extends Controller
                     'comentario_fisico_general' => $request->validated('comentario_fisico_general'),
                     'evidencias_generales' => $request->file('evidencias_generales', []),
                     'evidencias_envios' => $request->file('evidencias_envios', []),
+                    'motivo_retiro' => $request->validated('motivo_retiro'),
                     'revisiones' => collect($request->validated('revisiones') ?? [])->map(function (array $rev, int $i) use ($request) {
                         $files = $request->file("revisiones.{$i}.evidencias") ?? [];
 
