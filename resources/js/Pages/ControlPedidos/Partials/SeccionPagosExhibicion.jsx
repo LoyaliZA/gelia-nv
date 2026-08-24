@@ -65,11 +65,13 @@ export default function SeccionPagosExhibicion({
     puedeRegistrar = false,
     puedeRevisar = false,
     puedeGenerarSaldo = false,
+    modoAuxiliarSimplificado = false,
     rutaResumen = 'control_pedidos.pagos.resumen',
     rutaStore = 'control_pedidos.pagos.store',
     rutaUpdate = 'control_pedidos.pagos.update',
     rutaDestroy = 'control_pedidos.pagos.destroy',
     rutaRevisar = 'control_pedidos.pagos.revisar',
+    rutaSustituir = 'control_pedidos.pagos.sustituir',
     rutaExcedente = 'control_pedidos.generar_saldo_excedente',
     onResumenChange = null,
     mensajeBloqueo = null,
@@ -87,6 +89,7 @@ export default function SeccionPagosExhibicion({
     const [editandoId, setEditandoId] = useState(null);
     const [docPreview, setDocPreview] = useState(null);
     const [revisionModal, setRevisionModal] = useState(null); // { pago, estado }
+    const [sustituyendoId, setSustituyendoId] = useState(null);
     const [comprobantePreviewUrl, setComprobantePreviewUrl] = useState(null);
 
     const form = useForm({
@@ -122,7 +125,9 @@ export default function SeccionPagosExhibicion({
     const mezclarResumenVivo = (base, listaPagos) => {
         const tieneTotalesVivos = totalMercancia != null || saldoAFavorAplicado != null;
         if (!tieneTotalesVivos) return base;
-        const pagado = (listaPagos || []).reduce((a, p) => a + Number(p.monto || 0), 0);
+        const pagado = (listaPagos || [])
+            .filter((p) => p.activo_para_cobertura !== false)
+            .reduce((a, p) => a + Number(p.monto || 0), 0);
         const vivo = calcularResumenCoberturaPago({
             totalMercancia: totalMercancia ?? base?.total_a_cubrir ?? base?.total_final ?? 0,
             costoEnvio: costoEnvio ?? 0,
@@ -273,6 +278,22 @@ export default function SeccionPagosExhibicion({
         });
     };
 
+    const sustituirPago = (p) => {
+        if (!form.data.comprobante) {
+            form.setError('comprobante', 'Adjunte el nuevo comprobante.');
+            return;
+        }
+        form.post(route(rutaSustituir, p.id), {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setSustituyendoId(null);
+                resetForm();
+                cargar();
+            },
+        });
+    };
+
     const revisarPago = (p, estado_revision, observaciones = null) => {
         const payload = { estado_revision };
         if (observaciones != null) payload.observaciones = observaciones;
@@ -404,10 +425,11 @@ export default function SeccionPagosExhibicion({
                     {pagos.map((p) => {
                         const badgeRevRow = badgeEstadoRevisionPago(p.estado_revision);
                         const forma = etiquetaCodigo(p.forma_pago, LABELS_FORMA_PAGO);
+                        const inactivo = p.activo_para_cobertura === false;
                         return (
                             <div
                                 key={p.id}
-                                className="flex flex-wrap items-center justify-between gap-2 text-sm border theme-border theme-element rounded-xl px-3 py-2.5"
+                                className={`flex flex-wrap items-center justify-between gap-2 text-sm border theme-border theme-element rounded-xl px-3 py-2.5 ${inactivo ? 'opacity-70' : ''}`}
                             >
                                 <div className="flex flex-wrap items-center gap-2 min-w-0">
                                     {p.url && (
@@ -427,6 +449,9 @@ export default function SeccionPagosExhibicion({
                                         #{p.numero_exhibicion} · {p.banco?.nombre || forma || '—'}
                                     </span>
                                     <span className={badgeRevRow.className} style={badgeRevRow.style}>{badgeRevRow.label}</span>
+                                    {inactivo && (
+                                        <span className="text-[9px] font-black uppercase text-rose-600">No suma a cobertura</span>
+                                    )}
                                     {p.url && (
                                         <button
                                             type="button"
@@ -443,7 +468,7 @@ export default function SeccionPagosExhibicion({
                                         <span className="font-black" style={{ color: 'var(--color-primario)' }}>
                                             {formatearMoneda(p.monto)}
                                         </span>
-                                        {puedeRevisar && (
+                                        {puedeRevisar && !modoAuxiliarSimplificado && !inactivo && (
                                             <div className="flex flex-wrap justify-end gap-1.5">
                                                 {accionesVisiblesPara(p.estado_revision).map((accion) => (
                                                     <button
@@ -457,7 +482,28 @@ export default function SeccionPagosExhibicion({
                                                 ))}
                                             </div>
                                         )}
-                                        {puedeRegistrar && (
+                                        {puedeRegistrar && p.estado_revision === 'rechazado' && !p.sustituto && (
+                                            <button
+                                                type="button"
+                                                className="text-[10px] font-black uppercase outline-none"
+                                                style={{ color: 'var(--color-primario)' }}
+                                                onClick={() => {
+                                                    setSustituyendoId(p.id);
+                                                    resetForm();
+                                                    form.setData({
+                                                        monto: String(p.monto ?? ''),
+                                                        catalogo_banco_id: p.catalogo_banco_id || '',
+                                                        forma_pago: p.forma_pago || 'transferencia',
+                                                        referencia: p.referencia || '',
+                                                        fecha_pago: '',
+                                                        comprobante: null,
+                                                    });
+                                                }}
+                                            >
+                                                Sustituir
+                                            </button>
+                                        )}
+                                        {puedeRegistrar && !inactivo && p.estado_revision === 'pendiente' && (
                                             <>
                                                 <button
                                                     type="button"
@@ -466,7 +512,7 @@ export default function SeccionPagosExhibicion({
                                                 >
                                                     Editar
                                                 </button>
-                                                {(dividido || pagos.length > 1) && (
+                                                {(dividido || pagos.filter((x) => x.activo_para_cobertura !== false).length > 1) && (
                                                     <button
                                                         type="button"
                                                         className="text-rose-500"
@@ -479,12 +525,30 @@ export default function SeccionPagosExhibicion({
                                             </>
                                         )}
                                     </div>
-                                    {p.observaciones && (
+                                    {(p.motivo_rechazo || p.observaciones) && (
                                         <p className="text-[10px] theme-text-muted font-bold m-0 max-w-xs text-right">
-                                            {p.observaciones}
+                                            {p.motivo_rechazo || p.observaciones}
                                         </p>
                                     )}
                                 </div>
+                                {sustituyendoId === p.id && (
+                                    <div className="w-full mt-2 space-y-2 border-t theme-border pt-2">
+                                        <p className="text-[10px] font-black uppercase theme-text-muted m-0">Nuevo comprobante</p>
+                                        <input
+                                            type="file"
+                                            accept="image/*,application/pdf"
+                                            onChange={(e) => asignarComprobante(e.target.files?.[0] || null)}
+                                        />
+                                        <div className="flex gap-2">
+                                            <button type="button" className={BTN_PRIMARY} onClick={() => sustituirPago(p)}>
+                                                Guardar sustituto
+                                            </button>
+                                            <button type="button" className={BTN_SECONDARY} onClick={() => setSustituyendoId(null)}>
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}

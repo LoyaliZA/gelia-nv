@@ -6,7 +6,6 @@ use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 class EliminarPagoPedidoBmaService
@@ -28,16 +27,17 @@ class EliminarPagoPedidoBmaService
             throw new RuntimeException('No se puede eliminar exhibiciones en el estado actual del pedido.');
         }
 
+        if (! $pago->esEditableBorrador()) {
+            throw new RuntimeException(
+                'No se puede eliminar una exhibición revisada, rechazada o sustituida. Use rechazo/sustitución.'
+            );
+        }
+
         DB::transaction(function () use ($pago, $pedido, $usuarioId) {
             $numero = $pago->numero_exhibicion;
             $monto = (float) $pago->monto;
-            $ruta = $pago->ruta_archivo;
-
+            // Conservar archivo en disco; solo se elimina el registro borrador pendiente.
             $pago->delete();
-
-            if ($ruta) {
-                Storage::disk('public')->delete($ruta);
-            }
 
             if ($usuarioId) {
                 $this->historial->ejecutar(
@@ -46,7 +46,7 @@ class EliminarPagoPedidoBmaService
                     $pedido->catalogo_estatus_pedido_id,
                     $pedido->catalogo_estatus_pedido_id,
                     sprintf(
-                        'Exhibición #%d eliminada ($%s).',
+                        'Exhibición #%d eliminada ($%s). El archivo se conserva en almacenamiento.',
                         $numero,
                         number_format($monto, 2, '.', ',')
                     ),

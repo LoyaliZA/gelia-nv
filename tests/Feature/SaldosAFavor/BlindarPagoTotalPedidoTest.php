@@ -86,6 +86,7 @@ class BlindarPagoTotalPedidoTest extends TestCase
             'forma_pago' => 'efectivo',
             'ruta_archivo' => 'pedidos_bma/pagos/bl.jpg',
             'estado_revision' => $revision,
+            'activo_para_cobertura' => true,
             'capturado_por_id' => $this->user->id,
         ]);
     }
@@ -110,14 +111,15 @@ class BlindarPagoTotalPedidoTest extends TestCase
         app(RegistrarPagoPedidoBmaService::class)->assertCubiertoParaEnviar($pedido);
     }
 
-    public function test_validar_pago_exige_exhibiciones_verificadas(): void
+    public function test_validar_pago_marca_exhibiciones_activas_como_verificadas(): void
     {
         $pedido = $this->pedidoStub([], CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR);
-        $this->exhibicion($pedido, 1000, PedidoBmaPago::REVISION_PENDIENTE);
+        $pago = $this->exhibicion($pedido, 1000, PedidoBmaPago::REVISION_PENDIENTE);
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('verificadas');
-        app(ValidarPagoPedidoBmaService::class)->ejecutar($pedido, $this->user->id);
+        $res = app(ValidarPagoPedidoBmaService::class)->ejecutar($pedido, $this->user->id);
+
+        $this->assertNotNull($res['pedido']->pago_validado_at);
+        $this->assertSame(PedidoBmaPago::REVISION_VERIFICADO, $pago->fresh()->estado_revision);
     }
 
     public function test_validar_pago_cubierto_verificado_con_excedente_ok(): void

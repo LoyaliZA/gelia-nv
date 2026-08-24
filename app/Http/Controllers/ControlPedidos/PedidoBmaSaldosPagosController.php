@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\ControlPedidos;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ControlPedidos\RechazarPagosPedidoBmaRequest;
+use App\Http\Requests\ControlPedidos\SustituirPagoPedidoBmaRequest;
 use App\Models\Cliente;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\PedidoBmaPago;
@@ -10,14 +12,17 @@ use App\Models\SaldosAFavor\SafCredito;
 use App\Services\SaldosAFavor\ActualizarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\ConsultarCuentaClienteSafService;
 use App\Services\SaldosAFavor\EliminarPagoPedidoBmaService;
+use App\Services\SaldosAFavor\RechazarPagosPedidoBmaService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Services\SaldosAFavor\RevisarPagoPedidoBmaService;
+use App\Services\SaldosAFavor\SustituirPagoPedidoBmaService;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\SaldosAFavor\AlcanceSaf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use InvalidArgumentException;
 use RuntimeException;
@@ -138,7 +143,12 @@ class PedidoBmaSaldosPagosController extends Controller
     public function resumenPago(PedidoBma $pedidoBma, RegistrarPagoPedidoBmaService $service): JsonResponse
     {
         VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
-        $pedidoBma->load(['pagosExhibicion.banco', 'banco']);
+        $pedidoBma->load([
+            'pagosExhibicion.banco',
+            'pagosExhibicion.reemplaza',
+            'pagosExhibicion.sustituto',
+            'banco',
+        ]);
 
         return response()->json([
             'pagos' => $pedidoBma->pagosExhibicion,
@@ -204,6 +214,49 @@ class PedidoBmaSaldosPagosController extends Controller
         }
 
         return back()->with('success', 'Exhibición actualizada.');
+    }
+
+    public function rechazarPagos(
+        RechazarPagosPedidoBmaRequest $request,
+        PedidoBma $pedidoBma,
+        RechazarPagosPedidoBmaService $service,
+    ): RedirectResponse {
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+        Gate::authorize('control_pedidos.auditar');
+
+        try {
+            $service->ejecutar(
+                $pedidoBma,
+                $request->validated('pago_ids'),
+                $request->validated('motivo'),
+                (int) Auth::id()
+            );
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Exhibiciones rechazadas. La vendedora debe sustituir los comprobantes.');
+    }
+
+    public function sustituirPago(
+        SustituirPagoPedidoBmaRequest $request,
+        PedidoBmaPago $pago,
+        SustituirPagoPedidoBmaService $service,
+    ): RedirectResponse {
+        $this->assertPuedeMutarPago($pago);
+
+        try {
+            $service->ejecutar(
+                $pago,
+                $request->validated(),
+                $request->file('comprobante'),
+                (int) Auth::id()
+            );
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Comprobante sustituido. El archivo anterior se conserva.');
     }
 
     private function assertPuedeMutarPago(PedidoBmaPago $pago): void

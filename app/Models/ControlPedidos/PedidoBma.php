@@ -216,6 +216,9 @@ class PedidoBma extends Model
         $labels = [];
         $seen = [];
         foreach ($this->pagosExhibicion as $pago) {
+            if (! $pago->activo_para_cobertura) {
+                continue;
+            }
             $label = $pago->banco?->nombre
                 ?? PedidoBmaPago::labelForma($pago->forma_pago);
             if ($label === null || $label === '') {

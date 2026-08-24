@@ -65,6 +65,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
+    const uiSimplificada = Boolean(catalogos?.pagos_config?.ui_simplificada);
     const [pedido, setPedido] = useState(pedidoInicial);
     const [procesando, setProcesando] = useState(false);
     const [docPreview, setDocPreview] = useState(null);
@@ -75,6 +76,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [cambiarDir, setCambiarDir] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [folioRemision, setFolioRemision] = useState('');
+    const [rechazoPagos, setRechazoPagos] = useState({ abierto: false, ids: [], motivo: '' });
+    const [bloqueosPago, setBloqueosPago] = useState([]);
 
     useEffect(() => {
         if (abierto && pedidoInicial) {
@@ -160,11 +163,51 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     };
 
     const validarPago = () => {
+        if (bloqueosPago.length > 0) {
+            setAlerta({
+                abierto: true,
+                tipo: 'error',
+                titulo: 'No se puede validar',
+                mensaje: bloqueosPago[0],
+            });
+            return;
+        }
         setProcesando(true);
         router.post(route('control_pedidos.auditar.validar_pago', pedido.id), {}, {
             preserveScroll: true,
             onSuccess: () => recargarPedido('Pago validado correctamente.'),
             onError: (errors) => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: errors?.message || 'No se pudo validar el pago.' }),
+            onFinish: () => setProcesando(false),
+        });
+    };
+
+    const confirmarRechazoPagos = () => {
+        if (!rechazoPagos.ids.length || (rechazoPagos.motivo || '').trim().length < 5) {
+            setAlerta({
+                abierto: true,
+                tipo: 'error',
+                titulo: 'Rechazo',
+                mensaje: 'Seleccione exhibiciones e indique un motivo (mínimo 5 caracteres).',
+            });
+            return;
+        }
+        setProcesando(true);
+        router.post(route('control_pedidos.pagos.rechazar', pedido.id), {
+            pago_ids: rechazoPagos.ids,
+            motivo: rechazoPagos.motivo.trim(),
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setRechazoPagos({ abierto: false, ids: [], motivo: '' });
+                setAlerta({ abierto: true, tipo: 'success', titulo: 'Pagos rechazados', mensaje: 'La vendedora debe sustituir los comprobantes.' });
+                onClose();
+            },
+            onError: (errors) => setAlerta({
+                abierto: true,
+                tipo: 'error',
+                titulo: 'Error',
+                mensaje: errors?.motivo || errors?.pago_ids || 'No se pudieron rechazar las exhibiciones.',
+            }),
             onFinish: () => setProcesando(false),
         });
     };
@@ -516,36 +559,54 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     pedidoId={pedido.id}
                                     bancos={bancos}
                                     puedeRegistrar={false}
-                                    puedeRevisar={esPendiente}
+                                    puedeRevisar={esPendiente && !uiSimplificada}
                                     puedeGenerarSaldo={false}
+                                    modoAuxiliarSimplificado={uiSimplificada}
                                     rutaResumen="control_pedidos.pagos.resumen_auditoria"
                                     totalMercancia={pedido.total_mercancia}
                                     costoEnvio={pedido.costo_envio}
                                     aplicaSeguro={Boolean(pedido.aplica_seguro)}
                                     costoSeguro={pedido.costo_seguro}
                                     saldoAFavorAplicado={pedido.saldo_a_favor}
+                                    onResumenChange={(r) => setBloqueosPago(r?.bloqueos || [])}
                                     mensajeBloqueo={esPendiente
-                                        ? 'Revise cada exhibición. Todas deben quedar verificadas antes de validar el pago.'
+                                        ? (uiSimplificada
+                                            ? 'Revise la cobertura. Use Rechazar pago o Validar pago.'
+                                            : 'Revise cada exhibición. Todas deben quedar verificadas antes de validar el pago.')
                                         : null}
                                 />
                             </div>
                             {esPendiente && (
-                                <div className="mt-4">
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    {uiSimplificada && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setRechazoPagos({ abierto: true, ids: [], motivo: '' })}
+                                            disabled={procesando || pagoValidado}
+                                            className={`${BTN_SECONDARY} border border-red-500/40 text-red-500 outline-none disabled:opacity-50`}
+                                        >
+                                            Rechazar pago
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={validarPago}
-                                        disabled={procesando || pagoValidado}
+                                        disabled={procesando || pagoValidado || (uiSimplificada && bloqueosPago.length > 0)}
+                                        title={bloqueosPago[0] || undefined}
                                         className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
                                     >
                                         <CheckCircle2 className="w-4 h-4" />
                                         {pagoValidado ? 'Pago validado' : 'Validar pago'}
                                     </button>
+                                    {uiSimplificada && bloqueosPago.length > 0 && !pagoValidado && (
+                                        <p className="w-full text-xs font-bold text-amber-600 m-0">{bloqueosPago[0]}</p>
+                                    )}
                                 </div>
                             )}
                         </section>
 
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>4. Envío, costos y dirección</p>
+                            <p className={SECCION}>{uiSimplificada ? '4. Envío y costos' : '4. Envío, costos y dirección'}</p>
                             <div className="grid grid-cols-2 gap-4 mb-3">
                                 <Campo label="Tipo operación" value={pedido.tipo_operacion_envio?.nombre} />
                                 <Campo label="Estatus envío" value={LABELS_ESTATUS_ENVIO[pedido.estatus_envio] || pedido.estatus_envio} />
@@ -615,6 +676,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 </div>
                             </div>
                             <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} compact />
+                            {!uiSimplificada && (
                             <div className="mt-4 space-y-3">
                                 <div className="flex items-center justify-between gap-2">
                                     <p className="text-[9px] font-black uppercase theme-text-muted m-0">Domicilio de envío</p>
@@ -648,6 +710,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 {pedido.envia_a_otra_persona && <Campo label="Destinatario alterno" value={pedido.envia_otra_persona} />}
                                 <Campo label="Comentarios" value={pedido.comentarios_drive} />
                             </div>
+                            )}
                         </section>
 
                         {(anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && (
@@ -826,6 +889,67 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 onConfirm={enviarRechazoAnexo}
                 titulo="Rechazar anexo de envío"
             />
+            {rechazoPagos.abierto && createPortal(
+                <div className={THEME_MODAL_OVERLAY} role="dialog" aria-modal="true">
+                    <div className={`${THEME_MODAL_SHELL} max-w-lg w-full p-5 space-y-4`}>
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <p className="text-sm font-black uppercase theme-text-main m-0">Rechazar pago</p>
+                                <p className="text-xs theme-text-muted font-bold m-0 mt-1">
+                                    El comprobante se conservará; dejará de contar para la cobertura.
+                                </p>
+                            </div>
+                            <button type="button" className="outline-none" onClick={() => setRechazoPagos({ abierto: false, ids: [], motivo: '' })}>
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                            {(pedido.pagos_exhibicion || pedido.pagosExhibicion || [])
+                                .filter((p) => p.activo_para_cobertura !== false)
+                                .map((p) => (
+                                    <label key={p.id} className="flex items-center gap-2 text-sm font-bold theme-text-main border theme-border rounded-xl px-3 py-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={rechazoPagos.ids.includes(p.id)}
+                                            onChange={(e) => {
+                                                setRechazoPagos((prev) => ({
+                                                    ...prev,
+                                                    ids: e.target.checked
+                                                        ? [...prev.ids, p.id]
+                                                        : prev.ids.filter((id) => id !== p.id),
+                                                }));
+                                            }}
+                                        />
+                                        <span>#{p.numero_exhibicion} · {formatearMoneda(p.monto)} · {p.nombre_original || p.banco?.nombre || '—'}</span>
+                                    </label>
+                                ))}
+                        </div>
+                        <div>
+                            <label className={THEME_LABEL}>Motivo</label>
+                            <textarea
+                                className={`${THEME_INPUT} w-full mt-1.5 min-h-[5rem] text-sm font-bold`}
+                                value={rechazoPagos.motivo}
+                                onChange={(e) => setRechazoPagos((prev) => ({ ...prev, motivo: e.target.value }))}
+                                placeholder="Explique por qué se rechazan las exhibiciones seleccionadas"
+                            />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button type="button" className={BTN_SECONDARY} onClick={() => setRechazoPagos({ abierto: false, ids: [], motivo: '' })}>
+                                Cerrar
+                            </button>
+                            <button
+                                type="button"
+                                className={`${BTN_PRIMARY} bg-red-600`}
+                                disabled={procesando}
+                                onClick={confirmarRechazoPagos}
+                            >
+                                Rechazar exhibiciones seleccionadas
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
             <ModalAlertaPedido
                 abierto={alerta.abierto}
                 tipo={alerta.tipo}
@@ -833,7 +957,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 mensaje={alerta.mensaje}
                 onClose={() => setAlerta({ ...alerta, abierto: false })}
             />
-            <ModalCambiarDireccion abierto={cambiarDir} onClose={() => setCambiarDir(false)} pedido={pedido} />
+            {!uiSimplificada && (
+                <ModalCambiarDireccion abierto={cambiarDir} onClose={() => setCambiarDir(false)} pedido={pedido} />
+            )}
             <ModalLiberarResguardoAbierto
                 abierto={liberarCapturaAbierto}
                 pedido={pedido}

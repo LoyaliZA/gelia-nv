@@ -46,6 +46,8 @@ final class AccionesHistorialPedidoBma
     public const EDICION_EXHIBICION_PAGO = 'edicion_exhibicion_pago';
     public const BAJA_EXHIBICION_PAGO = 'baja_exhibicion_pago';
     public const REVISION_EXHIBICION_PAGO = 'revision_exhibicion_pago';
+    public const RECHAZO_EXHIBICION_PAGO = 'rechazo_exhibicion_pago';
+    public const SUSTITUCION_EXHIBICION_PAGO = 'sustitucion_exhibicion_pago';
     public const CANCELACION = 'cancelacion';
     public const DECISION_SIN_EXISTENCIA = 'decision_sin_existencia';
     public const STOCK_SIN_EXISTENCIA = 'stock_sin_existencia';
@@ -101,6 +103,8 @@ final class AccionesHistorialPedidoBma
         self::EDICION_EXHIBICION_PAGO => 'Edición de exhibición de pago',
         self::BAJA_EXHIBICION_PAGO => 'Baja de exhibición de pago',
         self::REVISION_EXHIBICION_PAGO => 'Revisión de exhibición de pago',
+        self::RECHAZO_EXHIBICION_PAGO => 'Rechazo de exhibición de pago',
+        self::SUSTITUCION_EXHIBICION_PAGO => 'Sustitución de comprobante de pago',
         self::CANCELACION => 'Cancelación del pedido',
         self::DECISION_SIN_EXISTENCIA => 'Decisión por sin existencias',
         self::STOCK_SIN_EXISTENCIA => 'Existencias confirmadas (CEDIS)',

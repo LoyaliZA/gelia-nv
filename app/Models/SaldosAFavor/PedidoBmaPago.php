@@ -5,8 +5,10 @@ namespace App\Models\SaldosAFavor;
 use App\Models\CatalogoBanco;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
 class PedidoBmaPago extends Model
@@ -70,6 +72,7 @@ class PedidoBmaPago extends Model
 
     protected $fillable = [
         'pedido_bma_id',
+        'reemplaza_pago_id',
         'numero_exhibicion',
         'monto',
         'catalogo_banco_id',
@@ -85,6 +88,11 @@ class PedidoBmaPago extends Model
         'revisado_por_id',
         'revisado_at',
         'observaciones',
+        'activo_para_cobertura',
+        'rechazado_at',
+        'rechazado_por_id',
+        'motivo_rechazo',
+        'sustituido_at',
     ];
 
     protected $casts = [
@@ -93,6 +101,9 @@ class PedidoBmaPago extends Model
         'tamano_bytes' => 'integer',
         'fecha_pago' => 'datetime',
         'revisado_at' => 'datetime',
+        'activo_para_cobertura' => 'boolean',
+        'rechazado_at' => 'datetime',
+        'sustituido_at' => 'datetime',
     ];
 
     protected $appends = ['url'];
@@ -146,6 +157,36 @@ class PedidoBmaPago extends Model
     public function revisadoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'revisado_por_id');
+    }
+
+    public function rechazadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rechazado_por_id');
+    }
+
+    /** Pago anterior que este registro sustituye. */
+    public function reemplaza(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reemplaza_pago_id');
+    }
+
+    /** Sustituto vigente (si existe). */
+    public function sustituto(): HasOne
+    {
+        return $this->hasOne(self::class, 'reemplaza_pago_id');
+    }
+
+    public function scopeActivosParaCobertura(Builder $query): Builder
+    {
+        return $query->where('activo_para_cobertura', true);
+    }
+
+    public function esEditableBorrador(): bool
+    {
+        return $this->activo_para_cobertura
+            && $this->estado_revision === self::REVISION_PENDIENTE
+            && $this->rechazado_at === null
+            && $this->sustituido_at === null;
     }
 
     public function getUrlAttribute(): ?string

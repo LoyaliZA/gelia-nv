@@ -11,6 +11,7 @@ class RevisarPagoPedidoBmaService
 {
     public function __construct(
         private RegistrarHistorialPedidoService $historial,
+        private RechazarPagosPedidoBmaService $rechazarPagos,
     ) {}
 
     public function handle(PedidoBmaPago $pago, string $estadoRevision, ?int $usuarioId = null, ?string $observaciones = null): PedidoBmaPago
@@ -19,11 +20,25 @@ class RevisarPagoPedidoBmaService
             throw new InvalidArgumentException('Estado de revisión no válido.');
         }
 
-        if (in_array($estadoRevision, [
-            PedidoBmaPago::REVISION_CON_OBSERVACIONES,
-            PedidoBmaPago::REVISION_RECHAZADO,
-        ], true) && ! filled($observaciones)) {
+        if ($estadoRevision === PedidoBmaPago::REVISION_RECHAZADO) {
+            if (! filled($observaciones)) {
+                throw new InvalidArgumentException('Debe indicar observaciones para este estado.');
+            }
+            $pedido = $pago->pedido;
+            if (! $pedido || ! $usuarioId) {
+                throw new InvalidArgumentException('No se puede rechazar sin pedido o usuario.');
+            }
+            $this->rechazarPagos->ejecutar($pedido, [$pago->id], (string) $observaciones, $usuarioId);
+
+            return $pago->fresh(['banco']);
+        }
+
+        if ($estadoRevision === PedidoBmaPago::REVISION_CON_OBSERVACIONES && ! filled($observaciones)) {
             throw new InvalidArgumentException('Debe indicar observaciones para este estado.');
+        }
+
+        if (! $pago->activo_para_cobertura) {
+            throw new InvalidArgumentException('No se puede revisar una exhibición inactiva para cobertura.');
         }
 
         $anterior = $pago->estado_revision;
