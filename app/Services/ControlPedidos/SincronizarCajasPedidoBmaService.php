@@ -42,7 +42,7 @@ class SincronizarCajasPedidoBmaService
 
         foreach ($lineas as $linea) {
             $uuid = trim((string) ($linea['uuid_operativo'] ?? $linea['client_uuid'] ?? ''));
-            if ($uuid === '') {
+            if ($uuid === '' || ! Str::isUuid($uuid)) {
                 $uuid = (string) Str::uuid();
             }
             if (isset($uuidsVistos[$uuid])) {

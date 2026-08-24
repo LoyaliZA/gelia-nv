@@ -566,6 +566,10 @@ export const badgeEmpaqueSemantico = (fase, esResguardo = false, resguardoAparta
 export const esPedidoEmpacadoCedis = (fase) =>
     ['PENDIENTE_DE_GUIA', 'PENDIENTE_GUIA_CLIENTE', 'PENDIENTE_DE_ENVIO', 'ENTREGADO', 'ENVIADO'].includes(fase);
 
+/** Nota de compra solo en empaque/envío CEDIS; no en consulta de pesaje. */
+export const mostrarNotaCompraCedis = (fase) =>
+    fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS' || esPedidoEmpacadoCedis(fase);
+
 export const guiaPdfDe = (pedido) => {
     const doc = (pedido?.documentos || []).find((d) => d.tipo === 'guia');
     if (!doc) return null;

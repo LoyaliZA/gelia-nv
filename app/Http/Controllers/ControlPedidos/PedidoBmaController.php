@@ -39,6 +39,7 @@ use App\Services\ControlPedidos\SolicitarPesajePedidoBmaService;
 use App\Services\ControlPedidos\SolicitarRepesajePedidoBmaService;
 use App\Services\ControlPedidos\CerrarConsultaPedidoBmaService;
 use App\Services\ControlPedidos\ReabrirConsultaPedidoBmaService;
+use App\Services\ControlPedidos\CalcularProgresoPedidoBmaService;
 use App\Services\ControlPedidos\VolverBorradorPedidoBmaService;
 use App\Support\Clientes\FormatearDireccionEstructurada;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
@@ -106,18 +107,45 @@ class PedidoBmaController extends Controller
         StorePedidoBmaRequest $request,
         CrearPedidoBmaService $crearService,
         ActualizarPedidoBmaService $actualizarService,
-        ListarPedidosBmaService $listarService
+        ListarPedidosBmaService $listarService,
+        CalcularProgresoPedidoBmaService $progresoService
     ) {
         $datos = $request->validated();
         $pedidoId = $datos['pedido_id'] ?? null;
-        unset($datos['comprobantes'], $datos['enviar'], $datos['pedido_id']);
+        $updatedEsperado = $datos['updated_at_esperado'] ?? null;
+        unset(
+            $datos['comprobantes'],
+            $datos['enviar'],
+            $datos['pedido_id'],
+            $datos['updated_at_esperado'],
+            $datos['documentos_eliminar'],
+        );
+
+        // Solo claves presentes en el request (no nullificar campos ocultos no enviados).
+        $datos = array_intersect_key($datos, $request->all());
 
         try {
             if ($pedidoId) {
                 $pedido = PedidoBma::findOrFail($pedidoId);
                 $listarService->asegurarAcceso($pedido, Auth::user());
-                if (!$pedido->esEditablePorVendedora()) {
+                if (! $pedido->esEditablePorVendedora()) {
                     return response()->json(['message' => 'Este pedido ya no admite autoguardado.'], 422);
+                }
+                if ($updatedEsperado) {
+                    $esperado = \Illuminate\Support\Carbon::parse($updatedEsperado)->timestamp;
+                    $actual = optional($pedido->updated_at)->timestamp;
+                    if ($actual && abs($actual - $esperado) > 1) {
+                        \Illuminate\Support\Facades\Log::info('control_pedidos.autosave_conflicto', [
+                            'pedido_bma_id' => $pedido->id,
+                            'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
+                        ]);
+
+                        return response()->json([
+                            'message' => 'El pedido cambió en otro lugar. Recargue antes de seguir editando.',
+                            'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
+                            'progreso' => $progresoService->calcular($pedido),
+                        ], 409);
+                    }
                 }
                 $pedido = $actualizarService->ejecutar($pedido, $datos, Auth::id());
             } else {
@@ -127,10 +155,14 @@ class PedidoBmaController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $pedido = $pedido->fresh(['origen', 'estatus', 'documentos', 'paqueteria', 'zona', 'tipoGuia']);
+
         return response()->json([
             'id' => $pedido->id,
             'folio' => $pedido->folio,
             'saved_at' => now()->toIso8601String(),
+            'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
+            'progreso' => $progresoService->calcular($pedido),
         ]);
     }
 

@@ -54,6 +54,7 @@ class ConfiguracionSistemaController extends Controller
         Cache::forget('configuraciones_sistema_globales');
         Cache::forget(\App\Services\ControlPedidos\PagosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::CACHE_KEY);
+        Cache::forget(\App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig::CACHE_KEY);
 
         return redirect()->back()->with('success', 'Configuración creada correctamente.');
     }
@@ -89,6 +90,7 @@ class ConfiguracionSistemaController extends Controller
         Cache::forget('configuraciones_sistema_globales');
         Cache::forget(\App\Services\ControlPedidos\PagosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::CACHE_KEY);
+        Cache::forget(\App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig::CACHE_KEY);
 
         return redirect()->back()->with('success', 'Configuración actualizada correctamente.');
     }
@@ -103,6 +105,7 @@ class ConfiguracionSistemaController extends Controller
         Cache::forget('configuraciones_sistema_globales');
         Cache::forget(\App\Services\ControlPedidos\PagosPedidoBmaConfig::CACHE_KEY);
         Cache::forget(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::CACHE_KEY);
+        Cache::forget(\App\Services\ControlPedidos\FormularioProgresivoPedidoBmaConfig::CACHE_KEY);
 
         return redirect()->back()->with('success', 'Configuración eliminada correctamente.');
     }

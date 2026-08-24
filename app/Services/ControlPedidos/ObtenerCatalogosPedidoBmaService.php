@@ -21,6 +21,7 @@ class ObtenerCatalogosPedidoBmaService
     public function __construct(
         private PagosPedidoBmaConfig $pagosConfig,
         private EnviosPedidoBmaConfig $enviosConfig,
+        private FormularioProgresivoPedidoBmaConfig $formularioConfig,
     ) {}
 
     /**
@@ -62,6 +63,7 @@ class ObtenerCatalogosPedidoBmaService
                     'auxiliar' => $this->enviosConfig->matrizActor('auxiliar'),
                 ],
             ]),
+            'formulario_config' => $this->formularioConfig->todas(),
         ];
     }
 

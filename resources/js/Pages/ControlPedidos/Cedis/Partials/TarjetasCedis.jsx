@@ -21,6 +21,7 @@ import {
     tieneGuiaPdfDisponible,
     etiquetaOrigenGuia,
     LABELS_MOTIVO_REPESAJE,
+    mostrarNotaCompraCedis,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
@@ -132,15 +133,17 @@ function TarjetaPedido({
                 </div>
             )}
 
-            <AvisoOperativoPedido
-                label="Nota de compra en el envío"
-                tono={pedido.anexar_remision ? 'success' : 'warning'}
-                icon={FileText}
-            >
-                {pedido.anexar_remision
-                    ? 'Incluir nota de compra en el paquete'
-                    : 'No incluir nota de compra (dropshipping)'}
-            </AvisoOperativoPedido>
+            {mostrarNotaCompraCedis(fase) && (
+                <AvisoOperativoPedido
+                    label="Nota de compra en el envío"
+                    tono={pedido.anexar_remision ? 'success' : 'warning'}
+                    icon={FileText}
+                >
+                    {pedido.anexar_remision
+                        ? 'Incluir nota de compra en el paquete'
+                        : 'No incluir nota de compra (dropshipping)'}
+                </AvisoOperativoPedido>
+            )}
 
             <div className="grid grid-cols-2 gap-2 text-[10px] font-bold theme-text-muted uppercase">
                 <div>

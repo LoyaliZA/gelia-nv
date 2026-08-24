@@ -39,9 +39,21 @@ const DRAFT_DB = 'cedis_pesaje_drafts_v1';
 const DRAFT_STORE = 'drafts';
 const MAX_PRODUCTOS_ABIERTOS = 3;
 
-const nuevoUuid = () => (typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+const esUuidValido = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ''));
+
+const nuevoUuid = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    // Fallback RFC4122 v4 (navegadores sin crypto.randomUUID).
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const n = c === 'x' ? r : ((r & 0x3) | 0x8);
+        return n.toString(16);
+    });
+};
+
+const uuidOperativo = (v) => (esUuidValido(v) ? String(v) : nuevoUuid());
 
 const envioVacio = () => ({
     client_uuid: nuevoUuid(),
@@ -409,7 +421,11 @@ export default function ModalResponderPesaje({
                 if (draft?.envios?.length || (soloRevisiones && draft?.revisiones?.length) || draft?.evidenciasLote) {
                     setEnvios(
                         draft.envios?.length
-                            ? draft.envios.map((e) => ({ ...envioVacio(), ...e, client_uuid: e.client_uuid || nuevoUuid() }))
+                            ? draft.envios.map((e) => ({
+                                ...envioVacio(),
+                                ...e,
+                                client_uuid: uuidOperativo(e.client_uuid || e.uuid_operativo),
+                            }))
                             : [envioVacio()]
                     );
                     setRevisiones((prev) => {
@@ -419,7 +435,7 @@ export default function ModalResponderPesaje({
                             return {
                                 ...revisionDesdeProducto({ id: r.producto_id, sku: r.sku, descripcion: '' }),
                                 ...r,
-                                client_uuid: r.client_uuid || nuevoUuid(),
+                                client_uuid: uuidOperativo(r.client_uuid),
                                 evidencias,
                                 previews: previewsDesdeArchivos(evidencias),
                                 expandido: false,
@@ -473,18 +489,20 @@ export default function ModalResponderPesaje({
                     const revsPrevias = pedido.revisiones_producto || pedido.revisionesProducto || [];
                     if (cajasPrevias.length || revsPrevias.length) {
                         if (!soloRevisiones && cajasPrevias.length) {
-                            setEnvios(cajasPrevias.map((c) => ({
+                            const nextEnvios = cajasPrevias.map((c) => ({
                                 ...envioVacio(),
-                                client_uuid: c.uuid_operativo || c.client_uuid || nuevoUuid(),
+                                client_uuid: uuidOperativo(c.uuid_operativo || c.client_uuid),
                                 catalogo_tipo_caja_id: String(c.catalogo_tipo_caja_id || c.tipo_caja?.id || ''),
                                 largo: c.largo ?? '',
                                 ancho: c.ancho ?? '',
                                 alto: c.alto ?? '',
                                 peso_real_kg: c.peso_real_kg ?? '',
                                 peso_volumetrico_kg: c.peso_volumetrico_kg ?? '',
-                            })));
+                            }));
+                            setEnvios(nextEnvios);
+                            // Solo marcar como "ya guardados" los que traen uuid de BD válido (retiro con motivo).
                             setUuidsGuardados(cajasPrevias
-                                .map((c) => c.uuid_operativo || c.client_uuid)
+                                .map((c) => (esUuidValido(c.uuid_operativo) ? c.uuid_operativo : null))
                                 .filter(Boolean));
                             setEvidenciasPorEnvio(cajasPrevias.map(() => slotEnvioVacio()));
                         } else {
@@ -1046,8 +1064,9 @@ export default function ModalResponderPesaje({
         cajas.forEach((c, i) => {
             Object.entries(c).forEach(([k, v]) => form.append(`cajas[${i}][${k}]`, String(v)));
             if (envios[i]?.client_uuid) {
-                form.append(`cajas[${i}][client_uuid]`, envios[i].client_uuid);
-                form.append(`cajas[${i}][uuid_operativo]`, envios[i].client_uuid);
+                const uuid = uuidOperativo(envios[i].client_uuid);
+                form.append(`cajas[${i}][client_uuid]`, uuid);
+                form.append(`cajas[${i}][uuid_operativo]`, uuid);
             }
         });
         if (retirados.length > 0 && motivoRetiro) {

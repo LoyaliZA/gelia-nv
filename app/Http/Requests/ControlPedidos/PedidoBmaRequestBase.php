@@ -80,6 +80,7 @@ abstract class PedidoBmaRequestBase extends FormRequest
             'cajas_costos.*.concepto_adicional' => ['nullable', 'string', 'max:128'],
             'reabrir_pago_costos' => ['nullable', 'boolean'],
             'motivo_reapertura_pago' => ['nullable', 'string', 'min:5', 'max:2000'],
+            'updated_at_esperado' => ['nullable', 'date'],
             'comentarios_drive' => ['nullable', 'string'],
             'comprobantes' => ['nullable', 'array'],
             'comprobantes.*' => ['file', 'image', 'max:10240'],

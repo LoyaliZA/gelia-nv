@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListarPedidosBmaService
 {
+    public function __construct(
+        private CalcularProgresoPedidoBmaService $progreso,
+    ) {}
+
     public function ejecutar(?User $usuario, array $filtros = [], bool $paginar = true)
     {
         $query = PedidoBma::with([
@@ -103,6 +107,7 @@ class ListarPedidosBmaService
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());
         $pedido->setAttribute('pendiente_re_revision', MaquinaEstadosPedidoBma::esPendienteReRevision($pedido));
         $pedido->setAttribute('en_revision_ahora', RevisionEnCursoPedidoBma::activa($pedido->id));
+        $pedido->setAttribute('progreso', $this->progreso->calcular($pedido));
 
         return $pedido;
     }
