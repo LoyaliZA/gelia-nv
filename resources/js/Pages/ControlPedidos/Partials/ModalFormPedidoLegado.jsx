@@ -171,7 +171,7 @@ function formDefaults(pedido = null, tiposOperacion = []) {
         folio_remision: pedido?.folio_remision || '',
         fecha: pedido?.fecha?.slice?.(0, 10) || new Date().toISOString().slice(0, 10),
         catalogo_banco_id: pedido?.catalogo_banco_id || '',
-        almacen_id: pedido?.almacen_id || '',
+        almacen_id: pedido?.almacen_id ?? pedido?.almacen?.id ?? '',
         catalogo_tipo_caja_id: pedido?.catalogo_tipo_caja_id || '',
         numero_cajas: pedido?.numero_cajas ?? '',
         peso_real_kg: pedido?.peso_real_kg ?? '',
@@ -183,7 +183,7 @@ function formDefaults(pedido = null, tiposOperacion = []) {
         direccion_manual_excepcion: false,
         motivo_direccion_manual: '',
         total_mercancia: pedido?.total_mercancia ?? '',
-        catalogo_paqueteria_id: pedido?.catalogo_paqueteria_id || '',
+        catalogo_paqueteria_id: pedido?.catalogo_paqueteria_id ?? pedido?.paqueteria?.id ?? '',
         costo_envio: pedido?.costo_envio ?? '',
         cajas_costos: (pedido?.cajas || [])
             .filter((c) => c.estado_operativo !== 'retirada' && c.uuid_operativo)
@@ -429,22 +429,21 @@ export default function ModalFormPedidoLegado({
     direccionSuciaRef.current = direccionSucia;
     capturaManualRef.current = Boolean(mostrarExcepcion || data.direccion_manual_excepcion);
 
-    // Sin tipo: cliente + tipo. Con Envío/Tienda: consulta CEDIS primero; monto/pago tras cierre.
+    // Sin tipo: cliente + tipo. Resto del form solo tras cerrar consulta (foco en pesaje/evidencias).
     const tieneTipo = Boolean(data.origen_id || pedido?.origen_id || pedido?.origen?.id);
     const enfocadoEnPesaje = fasePedido === 'PESAJE_PENDIENTE' && !tienePesajeRespondido;
     const mostrarPesaje = tieneTipo || tienePesajeRespondido || pendientePesaje;
     const mostrarPdfPedido = mostrarPesaje || (tieneTipo && !requiereLogistica);
-    const mostrarRestoPedido = Boolean(data.origen_id) && (!requiereLogistica || (cotizacionHabilitada && !enfocadoEnPesaje));
+    const restoTrasConsulta = esResguardoComplementario || (consultaCerrada && !pendientePesaje);
+    const mostrarRestoPedido = Boolean(data.origen_id)
+        && restoTrasConsulta
+        && (!requiereLogistica || (cotizacionHabilitada && !enfocadoEnPesaje));
 
     const mostrarLogisticaPostPesaje = requiereLogistica && mostrarPesaje && mostrarRestoPedido;
     const mostrarEnviarPedido = mostrarRestoPedido;
-    // Envío: sección pago visible tras respuesta CEDIS; registro solo con consulta cerrada + cotización.
-    // Tienda: sección pago tras cerrar consulta.
-    const mostrarSeccionPago = mostrarRestoPedido && (
-        requiereLogistica
-            ? (tienePesajeRespondido && !pendientePesaje)
-            : consultaCerrada
-    );
+    // Monto/dirección/pago/remisión: solo con consulta cerrada (complemento de resguardo exento).
+    const mostrarSeccionPago = mostrarRestoPedido
+        && (requiereLogistica ? (tienePesajeRespondido && !pendientePesaje) : true);
     const puedeRegistrarPago = Boolean(idPedidoAcciones)
         && consultaCerrada
         && (requiereLogistica ? cotizacionLista : Number(data.total_mercancia || 0) > 0);
@@ -725,9 +724,11 @@ export default function ModalFormPedidoLegado({
         ultimoSyncCedis.current = fp;
 
         // Inertia setData(object) REEMPLAZA todo el form; hay que mergear con updater.
+        // Almacén/paquetería: preferir form local si el listado/servidor viene null (no pisar captura).
         const origenId = pedido.origen_id ?? pedido.origen?.id ?? null;
         setData((prev) => {
-            const paqId = pedido.catalogo_paqueteria_id || prev.catalogo_paqueteria_id || '';
+            const almId = pedido.almacen_id ?? pedido.almacen?.id ?? prev.almacen_id ?? '';
+            const paqId = pedido.catalogo_paqueteria_id ?? pedido.paqueteria?.id ?? prev.catalogo_paqueteria_id ?? '';
             const zonaId = pedido.catalogo_zona_id || prev.catalogo_zona_id || '';
             const cp = prev.codigo_postal || pedido.codigo_postal || '';
             const rex = resolverReexpedicionForm({
@@ -747,12 +748,13 @@ export default function ModalFormPedidoLegado({
             return {
                 ...prev,
                 ...(origenId ? { origen_id: origenId } : {}),
+                ...(almId !== '' && almId != null ? { almacen_id: almId } : {}),
                 peso_real_kg: pedido.peso_real_kg ?? '',
                 numero_cajas: pedido.numero_cajas ?? '',
                 peso_cobrado_guia_kg: pedido.peso_cobrado_guia_kg ?? '',
-                catalogo_tipo_caja_id: pedido.catalogo_tipo_caja_id || '',
+                catalogo_tipo_caja_id: pedido.catalogo_tipo_caja_id || prev.catalogo_tipo_caja_id || '',
                 costo_envio: base,
-                catalogo_paqueteria_id: paqId || prev.catalogo_paqueteria_id || '',
+                catalogo_paqueteria_id: paqId !== '' && paqId != null ? paqId : (prev.catalogo_paqueteria_id || ''),
                 catalogo_tipo_guia_id: pedido.catalogo_tipo_guia_id || prev.catalogo_tipo_guia_id || '',
                 ...(zonaId ? { catalogo_zona_id: zonaId } : {}),
             };
@@ -794,6 +796,29 @@ export default function ModalFormPedidoLegado({
         if (!origenId) return;
         setData('origen_id', origenId);
     }, [abierto, pedido?.id, pedido?.origen_id, pedido?.origen?.id, data.origen_id, setData]);
+
+    // Hidratar almacén/paquetería si el form quedó vacío tras sync/reload (mismo patrón que origen).
+    useEffect(() => {
+        if (!abierto || !pedido?.id) return;
+        if (!data.almacen_id) {
+            const almId = pedido.almacen_id ?? pedido.almacen?.id;
+            if (almId) setData('almacen_id', almId);
+        }
+        if (!data.catalogo_paqueteria_id) {
+            const paqId = pedido.catalogo_paqueteria_id ?? pedido.paqueteria?.id;
+            if (paqId) setData('catalogo_paqueteria_id', paqId);
+        }
+    }, [
+        abierto,
+        pedido?.id,
+        pedido?.almacen_id,
+        pedido?.almacen?.id,
+        pedido?.catalogo_paqueteria_id,
+        pedido?.paqueteria?.id,
+        data.almacen_id,
+        data.catalogo_paqueteria_id,
+        setData,
+    ]);
 
     const conDireccionManual = (d) => {
         const capturaActiva = Boolean(d.direccion_manual_excepcion)
@@ -2016,10 +2041,15 @@ export default function ModalFormPedidoLegado({
                             <>
                             <div className={wrapCampo('almacen')} data-campo="almacen">
                                 <label className={SECCION}>Almacén de salida</label>
-                                <select value={data.almacen_id} disabled={logisticaBloqueada} onChange={(e) => setData('almacen_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}>
+                                <select
+                                    value={data.almacen_id === '' || data.almacen_id == null ? '' : String(data.almacen_id)}
+                                    disabled={logisticaBloqueada}
+                                    onChange={(e) => setData('almacen_id', e.target.value)}
+                                    className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
+                                >
                                     <option value="">Seleccionar...</option>
                                     {(catalogos.almacenes || []).map((a) => (
-                                        <option key={a.id} value={a.id}>{etiquetaAlmacen(a)}</option>
+                                        <option key={a.id} value={String(a.id)}>{etiquetaAlmacen(a)}</option>
                                     ))}
                                 </select>
                             </div>
@@ -2259,7 +2289,7 @@ export default function ModalFormPedidoLegado({
                                 <div className={wrapCampo('paqueteria')} data-campo="paqueteria">
                                     <label className={SECCION}>Paquetería{guiaCliente ? ' (opcional)' : ' *'}</label>
                                     <select
-                                        value={data.catalogo_paqueteria_id}
+                                        value={data.catalogo_paqueteria_id === '' || data.catalogo_paqueteria_id == null ? '' : String(data.catalogo_paqueteria_id)}
                                         disabled={logisticaBloqueada}
                                         onChange={(e) => manejarPaqueteria(e.target.value)}
                                         className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
@@ -2268,14 +2298,14 @@ export default function ModalFormPedidoLegado({
                                         {paqueteriasComerciales.length > 0 && (
                                             <optgroup label="Comercial (FedEx, DHL…)">
                                                 {paqueteriasComerciales.map((p) => (
-                                                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                                                    <option key={p.id} value={String(p.id)}>{p.nombre}</option>
                                                 ))}
                                             </optgroup>
                                         )}
                                         {paqueteriasLocales.length > 0 && (
                                             <optgroup label="Local / Regional (municipio)">
                                                 {paqueteriasLocales.map((p) => (
-                                                    <option key={p.id} value={p.id}>
+                                                    <option key={p.id} value={String(p.id)}>
                                                         {p.nombre}{p.permite_costo_diferido ? ' · costo diferido' : ''}
                                                     </option>
                                                 ))}
@@ -2358,12 +2388,12 @@ export default function ModalFormPedidoLegado({
                         )}
                         {tienePesajeRespondido && !pendientePesaje && puedeContinuarPedido && (
                             <AvisoOperativoPedido label="Respuesta lista" tono="success" icon={Scale} className="mb-4">
-                                CEDIS ya respondió. Pulse «Continuar pedido» para desbloquear el resto del formulario.
+                                CEDIS ya respondió. Pulse «Continuar pedido» al final de esta sección.
                             </AvisoOperativoPedido>
                         )}
                         {tienePesajeRespondido && !pendientePesaje && !puedeContinuarPedido && !consultaCerrada && (
                             <AvisoOperativoPedido label="Confirme con el cliente" tono="info" icon={CheckCircle2} className="mb-4">
-                                Revise las piezas con el cliente y cierre la consulta para capturar el monto y el pago.
+                                Revise evidencias y cajas con el cliente. Al final cierre la consulta para desbloquear monto, dirección y pago.
                                 Si hay cambios, use «Actualizar consulta» (anexo/retiro).
                             </AvisoOperativoPedido>
                         )}
@@ -2394,26 +2424,6 @@ export default function ModalFormPedidoLegado({
                             )}
                             {data.cliente_id && !tienePdfPedido && !tienePesajeRespondido && !pendientePesaje && (
                                 <p className="text-[10px] font-bold text-amber-600 m-0">Adjunte el PDF o foto del pedido para solicitar la consulta.</p>
-                            )}
-                            {puedeCerrarConsulta && (
-                                <button
-                                    type="button"
-                                    onClick={cerrarConsulta}
-                                    disabled={procesandoPesaje}
-                                    className={`${BTN_PRIMARY} flex items-center gap-2 outline-none`}
-                                >
-                                    <CheckCircle2 className="w-4 h-4" /> Cerrar consulta / Confirmar mercancía con cliente
-                                </button>
-                            )}
-                            {consultaCerrada && !pendientePesaje && !pedido?.empacado_at && (
-                                <button
-                                    type="button"
-                                    onClick={reabrirConsulta}
-                                    disabled={procesandoPesaje}
-                                    className={`${BTN_SECONDARY} flex items-center gap-2 outline-none`}
-                                >
-                                    Reabrir consulta
-                                </button>
                             )}
                             {tienePesajeRespondido && !pendientePesaje && !pedido?.empacado_at && !puedeContinuarPedido && (
                                 <div className="space-y-3 p-3 rounded-xl border theme-border">
@@ -2586,7 +2596,7 @@ export default function ModalFormPedidoLegado({
                                             Siguiente paso
                                         </p>
                                         <p className="text-sm font-bold theme-text-main m-0 leading-snug pb-1">
-                                            Continúe el pedido para capturar dirección, cotización y pago.
+                                            Continúe el pedido para habilitar el cierre de consulta.
                                         </p>
                                         <button
                                             type="button"
@@ -2598,6 +2608,35 @@ export default function ModalFormPedidoLegado({
                                             <ArrowRight className="w-5 h-5" /> Continuar pedido
                                         </button>
                                     </div>
+                                )}
+                                {puedeCerrarConsulta && (
+                                    <div className="mt-2 p-4 rounded-xl border-2 border-orange-500/50 bg-orange-500/10 space-y-4">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 m-0">
+                                            Siguiente paso
+                                        </p>
+                                        <p className="text-sm font-bold theme-text-main m-0 leading-snug pb-1">
+                                            Confirme la mercancía con el cliente. Al cerrar se desbloquean dirección, cotización y pago.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={cerrarConsulta}
+                                            disabled={procesandoPesaje}
+                                            className={`${BTN_PRIMARY} w-full sm:w-auto flex items-center justify-center gap-2 outline-none min-h-[48px] px-6 mt-1 text-sm font-black uppercase tracking-widest ring-2 ring-orange-400/60`}
+                                            style={{ backgroundColor: '#EA580C' }}
+                                        >
+                                            <CheckCircle2 className="w-5 h-5" /> Cerrar consulta / Confirmar mercancía con cliente
+                                        </button>
+                                    </div>
+                                )}
+                                {consultaCerrada && !pendientePesaje && !pedido?.empacado_at && (
+                                    <button
+                                        type="button"
+                                        onClick={reabrirConsulta}
+                                        disabled={procesandoPesaje}
+                                        className={`${BTN_SECONDARY} flex items-center gap-2 outline-none mt-3`}
+                                    >
+                                        Reabrir consulta
+                                    </button>
                                 )}
                     </section>
                     )}

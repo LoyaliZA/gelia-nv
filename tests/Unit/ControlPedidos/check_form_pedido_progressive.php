@@ -28,6 +28,8 @@ $checks = [
         && str_contains($form, 'tienePesajeRespondido')],
     ['gate resto exige origen y cotización', str_contains($form, 'mostrarRestoPedido = Boolean(data.origen_id)')
         && str_contains($form, 'cotizacionHabilitada')],
+    ['gate resto exige consulta cerrada', str_contains($form, 'restoTrasConsulta')
+        && str_contains($form, 'consultaCerrada && !pendientePesaje')],
     ['flag enfocadoEnPesaje', str_contains($form, 'enfocadoEnPesaje')],
     ['flag mostrarRestoPedido', str_contains($form, 'mostrarRestoPedido')],
     ['hint elegir tipo', str_contains($form, 'Seleccione Tipo de pedido')],
@@ -45,6 +47,14 @@ $checks = [
     ['quién respondió el pesaje', str_contains($form, 'Respondió:')],
     ['monto gated por mostrarMontoMercancia', str_contains($form, 'mostrarMontoMercancia')],
     ['cerrar consulta en UI', str_contains($form, 'Cerrar consulta')],
+    ['cerrar consulta al final tras respuesta', (static function () use ($form) {
+        $iResp = strpos($form, '{nSec.resp}.');
+        $iCerrar = strpos($form, 'Cerrar consulta / Confirmar mercancía con cliente');
+        $iMonto = strpos($form, '{nSec.monto}. Total de mercancía');
+
+        return $iResp !== false && $iCerrar !== false && $iMonto !== false
+            && $iResp < $iCerrar && $iCerrar < $iMonto;
+    })()],
     ['gate consultaCerrada', str_contains($form, 'consultaCerrada')],
     ['copy continuar dirección cotización pago', str_contains($form, 'dirección, cotización y pago')],
     ['actualizar consulta (no solo re-pesaje)', str_contains($form, 'Actualizar consulta')],
@@ -64,6 +74,7 @@ $titulos = [
     'Folio generado por Wizerp',
     '{nSec.solPesaje}. {labelConsulta}',
     'Continuar pedido',
+    'Cerrar consulta / Confirmar mercancía con cliente',
     '{nSec.monto}. Total de mercancía',
     'Dirección de envío',
     'Guía y seguro',

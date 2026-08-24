@@ -47,8 +47,8 @@ $routes = file_get_contents($root.'/routes/web.php');
 $checks[] = ['ruta cerrar-consulta', str_contains($routes, 'cerrar-consulta')];
 $checks[] = ['ruta reabrir-consulta', str_contains($routes, 'reabrir-consulta')];
 
-$form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx');
-$checks[] = ['UI cerrar consulta', str_contains($form, 'cerrar_consulta')];
+$form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedidoLegado.jsx');
+$checks[] = ['UI cerrar consulta', str_contains($form, 'cerrar_consulta') || str_contains($form, 'cerrarConsulta')];
 $checks[] = ['UI puedeRegistrarPago', str_contains($form, 'puedeRegistrarPago')];
 $checks[] = ['UI Actualizar consulta', str_contains($form, 'Actualizar consulta')];
 
