@@ -41,12 +41,21 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'PENDIENTES');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
+    const [paqueteriaId, setPaqueteriaId] = useState(filtros.catalogo_paqueteria_id || '');
     const [modalRevisar, setModalRevisar] = useState({ abierto: false, pedido: null });
     const [modalAnexo, setModalAnexo] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
+
+    const paramsListado = (extra = {}) => ({
+        tab: tabActiva,
+        q: busqueda || undefined,
+        catalogo_paqueteria_id: paqueteriaId || undefined,
+        page: pedidosVista?.current_page || 1,
+        ...extra,
+    });
 
     useEffect(() => {
         if (flash?.success) {
@@ -63,33 +72,42 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     useEffect(() => {
         const interval = setInterval(() => {
             if (modalAbiertoRef.current || cargando) return;
-            cargar(
-                { tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 },
-                { silencioso: true }
-            );
+            cargar(paramsListado(), { silencioso: true });
         }, 15000);
         return () => clearInterval(interval);
-    }, [cargando, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
+    }, [cargando, tabActiva, busqueda, paqueteriaId, pedidosVista?.current_page, cargar]);
 
     const onTabChange = (tab) => {
         setTabActiva(tab);
-        cargar({ tab, q: busqueda || undefined, page: 1 });
+        cargar(paramsListado({ tab, page: 1 }));
     };
 
     const onBuscar = (valor) => {
         setBusqueda(valor);
         if (debounceBusqueda.current) clearTimeout(debounceBusqueda.current);
         debounceBusqueda.current = setTimeout(() => {
-            cargar({ tab: tabActiva, q: valor || undefined, page: 1 });
+            cargar(paramsListado({ q: valor || undefined, page: 1 }));
         }, 400);
     };
 
+    const onPaqueteriaChange = (valor) => {
+        setPaqueteriaId(valor);
+        cargar(paramsListado({ catalogo_paqueteria_id: valor || undefined, page: 1 }));
+    };
+
+    const onLimpiarFiltros = () => {
+        setTabActiva('PENDIENTES');
+        setBusqueda('');
+        setPaqueteriaId('');
+        cargar({ tab: 'PENDIENTES', page: 1 });
+    };
+
     const onIrAPagina = (page) => {
-        cargar({ tab: tabActiva, q: busqueda || undefined, page });
+        cargar(paramsListado({ page }));
     };
 
     const onActualizar = () => {
-        cargar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 });
+        cargar(paramsListado());
     };
 
     const abrirRevisar = (pedido) => setModalRevisar({ abierto: true, pedido });
@@ -148,8 +166,12 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         filtros={filtros}
                         tabActiva={tabActiva}
                         busqueda={busqueda}
+                        paqueteriaId={paqueteriaId}
+                        paqueterias={catalogos.paqueterias || []}
                         onTabChange={onTabChange}
                         onBuscar={onBuscar}
+                        onPaqueteriaChange={onPaqueteriaChange}
+                        onLimpiarFiltros={onLimpiarFiltros}
                         onActualizar={onActualizar}
                         metricas={metricasVista}
                         pedidos={pedidosVista}

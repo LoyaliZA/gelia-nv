@@ -2,15 +2,16 @@
 
 namespace App\Services\SaldosAFavor;
 
-use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
 
 class ActualizarPagoPedidoBmaService
 {
@@ -33,6 +34,18 @@ class ActualizarPagoPedidoBmaService
 
         if (! $pedido->puedeEditarExhibicionesPago()) {
             throw new RuntimeException('No se puede editar exhibiciones en el estado actual del pedido.');
+        }
+
+        if (! $pago->esEditableBorrador()) {
+            throw new RuntimeException(
+                'No se puede editar una exhibición revisada o rechazada. Use sustitución de comprobante.'
+            );
+        }
+
+        if ($comprobante && $comprobante->isValid() && filled($pago->ruta_archivo)) {
+            throw new InvalidArgumentException(
+                'No se puede sobrescribir el comprobante. Use la sustitución de exhibición o elimine y registre de nuevo en borrador.'
+            );
         }
 
         $monto = array_key_exists('monto', $datos)
@@ -60,6 +73,8 @@ class ActualizarPagoPedidoBmaService
             $bancoId = null;
         }
 
+        CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
+
         $referencia = array_key_exists('referencia', $datos)
             ? ($datos['referencia'] ?: null)
             : $pago->referencia;
@@ -70,81 +85,97 @@ class ActualizarPagoPedidoBmaService
             || (string) ($referencia ?? '') !== (string) ($pago->referencia ?? '')
             || ($comprobante && $comprobante->isValid());
 
-        return DB::transaction(function () use (
-            $pago,
-            $pedido,
-            $datos,
-            $comprobante,
-            $usuarioId,
-            $monto,
-            $forma,
-            $bancoId,
-            $referencia,
-            $cambioMaterial
-        ) {
-            $antesRevision = $pago->estado_revision;
-            $attrs = [
-                'monto' => $monto,
-                'forma_pago' => $forma,
-                'catalogo_banco_id' => $bancoId,
-                'referencia' => $referencia,
-            ];
-
-            if (array_key_exists('fecha_pago', $datos) && $datos['fecha_pago']) {
-                $attrs['fecha_pago'] = $datos['fecha_pago'];
-            }
-            if (array_key_exists('observaciones', $datos)) {
-                $attrs['observaciones'] = $datos['observaciones'];
+        $rutaNueva = null;
+        try {
+            if ($comprobante && $comprobante->isValid() && empty($pago->ruta_archivo)) {
+                $rutaNueva = $comprobante->store("pedidos_bma/pagos/{$pedido->id}", 'public');
             }
 
-            if ($comprobante && $comprobante->isValid()) {
-                if ($pago->ruta_archivo) {
-                    Storage::disk('public')->delete($pago->ruta_archivo);
+            return DB::transaction(function () use (
+                $pago,
+                $pedido,
+                $datos,
+                $comprobante,
+                $usuarioId,
+                $monto,
+                $forma,
+                $bancoId,
+                $referencia,
+                $cambioMaterial,
+                $rutaNueva
+            ) {
+                $antesRevision = $pago->estado_revision;
+                $attrs = [
+                    'monto' => $monto,
+                    'forma_pago' => $forma,
+                    'catalogo_banco_id' => $bancoId,
+                    'referencia' => $referencia,
+                ];
+
+                if (array_key_exists('fecha_pago', $datos) && $datos['fecha_pago']) {
+                    $attrs['fecha_pago'] = $datos['fecha_pago'];
                 }
-                $ruta = $comprobante->store("pedidos_bma/pagos/{$pedido->id}", 'public');
-                $attrs['ruta_archivo'] = $ruta;
-                $attrs['nombre_original'] = $comprobante->getClientOriginalName();
-                $attrs['mime_type'] = $comprobante->getMimeType();
-                $attrs['tamano_bytes'] = $comprobante->getSize();
-            }
+                if (array_key_exists('observaciones', $datos)) {
+                    $attrs['observaciones'] = $datos['observaciones'];
+                }
 
-            $invalidaRevision = $cambioMaterial
-                && $antesRevision !== PedidoBmaPago::REVISION_PENDIENTE;
+                if ($rutaNueva) {
+                    $attrs['ruta_archivo'] = $rutaNueva;
+                    $attrs['nombre_original'] = $comprobante->getClientOriginalName();
+                    $attrs['mime_type'] = $comprobante->getMimeType();
+                    $attrs['tamano_bytes'] = $comprobante->getSize();
+                }
 
-            if ($invalidaRevision) {
-                $attrs['estado_revision'] = PedidoBmaPago::REVISION_PENDIENTE;
-                $attrs['revisado_por_id'] = null;
-                $attrs['revisado_at'] = null;
-            }
+                $invalidaRevision = $cambioMaterial
+                    && $antesRevision !== PedidoBmaPago::REVISION_PENDIENTE;
 
-            $pago->update($attrs);
-
-            if ($usuarioId) {
-                $comentario = sprintf(
-                    'Exhibición #%d actualizada ($%s, %s).',
-                    $pago->numero_exhibicion,
-                    number_format($monto, 2, '.', ','),
-                    PedidoBmaPago::labelForma($forma) ?? 'sin método'
-                );
                 if ($invalidaRevision) {
-                    $comentario .= sprintf(' Revisión %s → pendiente.', $antesRevision);
+                    $attrs['estado_revision'] = PedidoBmaPago::REVISION_PENDIENTE;
+                    $attrs['revisado_por_id'] = null;
+                    $attrs['revisado_at'] = null;
                 }
-                $this->historial->ejecutar(
-                    $pedido->id,
-                    $usuarioId,
-                    $pedido->catalogo_estatus_pedido_id,
-                    $pedido->catalogo_estatus_pedido_id,
-                    $comentario,
-                    AccionesHistorialPedidoBma::EDICION_EXHIBICION_PAGO,
-                    isset($attrs['ruta_archivo'])
-                        ? ['ruta' => $attrs['ruta_archivo'], 'nombre' => $attrs['nombre_original'] ?? null]
-                        : null
-                );
+
+                $pago->update($attrs);
+
+                if ($usuarioId) {
+                    $comentario = sprintf(
+                        'Exhibición #%d actualizada ($%s, %s).',
+                        $pago->numero_exhibicion,
+                        number_format($monto, 2, '.', ','),
+                        PedidoBmaPago::labelForma($forma) ?? 'sin método'
+                    );
+                    if ($invalidaRevision) {
+                        $comentario .= sprintf(' Revisión %s → pendiente.', $antesRevision);
+                    }
+                    $this->historial->ejecutar(
+                        $pedido->id,
+                        $usuarioId,
+                        $pedido->catalogo_estatus_pedido_id,
+                        $pedido->catalogo_estatus_pedido_id,
+                        $comentario,
+                        AccionesHistorialPedidoBma::EDICION_EXHIBICION_PAGO,
+                        isset($attrs['ruta_archivo'])
+                            ? ['ruta' => $attrs['ruta_archivo'], 'nombre' => $attrs['nombre_original'] ?? null]
+                            : null
+                    );
+                }
+
+                $this->registrarPago->reconciliarExcedenteTrasExhibicion($pedido->fresh(), $usuarioId);
+
+                return $pago->fresh(['banco']);
+            });
+        } catch (Throwable $e) {
+            if ($rutaNueva) {
+                try {
+                    Storage::disk('public')->delete($rutaNueva);
+                } catch (Throwable $cleanup) {
+                    Log::warning('Archivo huérfano al actualizar pago', [
+                        'ruta' => $rutaNueva,
+                        'error' => $cleanup->getMessage(),
+                    ]);
+                }
             }
-
-            $this->registrarPago->reconciliarExcedenteTrasExhibicion($pedido->fresh(), $usuarioId);
-
-            return $pago->fresh(['banco']);
-        });
+            throw $e;
+        }
     }
 }

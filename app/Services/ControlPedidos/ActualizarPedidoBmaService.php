@@ -18,6 +18,8 @@ class ActualizarPedidoBmaService
     public function __construct(
         private SincronizarAplicacionesPedidoSafService $safPedido,
         private CrearSnapshotDireccionPedido $crearSnapshot,
+        private ActualizarCostosCajasPedidoBmaService $actualizarCostosCajas,
+        private CalcularTotalesEnvioPedidoService $totalesEnvio,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, array $datos, int $usuarioId): PedidoBma
@@ -55,6 +57,12 @@ class ActualizarPedidoBmaService
                 $attrs['numero_cajas'] = $pedido->numero_cajas;
             }
 
+            // Si hay desglose por caja, el total canónico lo escribe ActualizarCostos / CalcularTotales.
+            $tieneDesgloseCajas = ! empty($datos['cajas_costos']) && is_array($datos['cajas_costos']);
+            if ($tieneDesgloseCajas) {
+                unset($attrs['costo_envio'], $attrs['costo_seguro'], $attrs['total_a_cobrar']);
+            }
+
             // La cola de errores se avanza al reenviar (EnviarPedidoBmaService), no al editar.
             $pedido->update(array_merge(
                 $attrs,
@@ -63,6 +71,18 @@ class ActualizarPedidoBmaService
                     'motivo_rechazo' => $eraRechazado ? null : $pedido->motivo_rechazo,
                 ]
             ));
+
+            if ($tieneDesgloseCajas) {
+                $this->actualizarCostosCajas->ejecutar(
+                    $pedido->fresh(['cajas', 'zona', 'estatus']),
+                    $datos['cajas_costos'],
+                    $usuarioId,
+                    filter_var($datos['reabrir_pago_costos'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                    isset($datos['motivo_reapertura_pago']) ? (string) $datos['motivo_reapertura_pago'] : null
+                );
+            } elseif ($pedido->fresh()->cajas()->activas()->get()->contains(fn ($c) => $c->tieneDesgloseCosto())) {
+                $this->totalesEnvio->aplicarAlPedido($pedido->fresh(['cajas', 'zona']));
+            }
 
             if (!empty($datos['documentos_eliminar']) && is_array($datos['documentos_eliminar'])) {
                 $this->eliminarDocumentos($pedido, $datos['documentos_eliminar']);

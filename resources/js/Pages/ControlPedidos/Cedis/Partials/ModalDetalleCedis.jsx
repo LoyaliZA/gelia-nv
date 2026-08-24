@@ -29,6 +29,7 @@ import {
     etiquetaOrigenGuia,
     etiquetaEnvio,
     LABEL_NOTA_COMPRA_CAMPO,
+    mostrarNotaCompraCedis,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
@@ -157,6 +158,7 @@ export default function ModalDetalleCedis({
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const mostrarGuia = tieneGuiaPdfDisponible(pedido) || Boolean(pedido.numero_rastreo)
         || fase === 'PENDIENTE_DE_ENVIO' || fase === 'ENVIADO';
+    const mostrarNotaCompra = mostrarNotaCompraCedis(fase);
 
     const payloadCajasEnviar = () => {
         if (cajasOrdenadas.length === 0) return undefined;
@@ -412,10 +414,12 @@ export default function ModalDetalleCedis({
                             </div>
                         </section>
 
-                        {/* 2. Nota de compra + guía */}
+                        {/* 2. Nota de compra + guía (nota solo en empaque/envío) */}
+                        {(mostrarNotaCompra || mostrarGuia) && (
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>Empaque y guía</p>
                             <div className="space-y-3">
+                                {mostrarNotaCompra && (
                                 <AvisoOperativoPedido
                                     label={LABEL_NOTA_COMPRA_CAMPO}
                                     tono={pedido.anexar_remision ? 'success' : 'warning'}
@@ -425,11 +429,13 @@ export default function ModalDetalleCedis({
                                         ? 'Incluir nota de compra en el paquete'
                                         : 'No incluir nota de compra (dropshipping)'}
                                 </AvisoOperativoPedido>
+                                )}
                                 {mostrarGuia && (
                                     <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} />
                                 )}
                             </div>
                         </section>
+                        )}
 
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>Dirección de entrega</p>

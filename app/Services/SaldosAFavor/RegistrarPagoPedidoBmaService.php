@@ -6,7 +6,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafMotivo;
-use App\Services\ControlPedidos\CalcularSeguroPedidoService;
+use App\Services\ControlPedidos\PagosPedidoBmaConfig;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
@@ -26,6 +26,8 @@ class RegistrarPagoPedidoBmaService
         private RegistrarHistorialPedidoService $historial,
         private SincronizarAplicacionesPedidoSafService $safPedido,
         private CancelarCreditoSafService $cancelarCredito,
+        private CoberturaPagoPedidoBmaService $cobertura,
+        private PagosPedidoBmaConfig $pagosConfig,
     ) {}
 
     public function handle(PedidoBma $pedido, array $datos, ?UploadedFile $comprobante = null, ?int $usuarioId = null): PedidoBmaPago
@@ -52,6 +54,8 @@ class RegistrarPagoPedidoBmaService
             $bancoId = null;
         }
 
+        CoberturaPagoPedidoBmaService::assertBancoPermitido($pedido, $bancoId);
+
         if (! $comprobante || ! $comprobante->isValid()) {
             throw new InvalidArgumentException('Cada exhibición de pago debe incluir su comprobante.');
         }
@@ -71,6 +75,7 @@ class RegistrarPagoPedidoBmaService
                 'referencia' => $datos['referencia'] ?? null,
                 'capturado_por_id' => $usuarioId,
                 'estado_revision' => PedidoBmaPago::REVISION_PENDIENTE,
+                'activo_para_cobertura' => true,
                 'observaciones' => $datos['observaciones'] ?? null,
                 'ruta_archivo' => $ruta,
                 'nombre_original' => $comprobante->getClientOriginalName(),
@@ -101,10 +106,6 @@ class RegistrarPagoPedidoBmaService
         });
     }
 
-    /**
-     * El total debe estar cubierto (exhibiciones + SAF) antes de enviar a auditar.
-     * Cada exhibición registrada debe traer comprobante.
-     */
     public function assertCubiertoParaEnviar(PedidoBma $pedido): void
     {
         $this->assertPagoListoParaAvanzar($pedido, self::FASE_ENVIAR);
@@ -117,18 +118,23 @@ class RegistrarPagoPedidoBmaService
     {
         $this->assertSafCorresponde($pedido);
 
-        $pagos = PedidoBmaPago::where('pedido_bma_id', $pedido->id)->get();
-        $resumen = $this->resumenPago($pedido);
-        $neto = (float) $resumen['total_a_cobrar'];
-        $pendiente = (float) $resumen['pendiente'];
+        $pagosActivos = PedidoBmaPago::query()
+            ->where('pedido_bma_id', $pedido->id)
+            ->activosParaCobertura()
+            ->get();
 
-        if ($neto > 0.01 && $pagos->isEmpty()) {
+        $resumen = $this->resumenPago($pedido);
+        $netoCentavos = PagosPedidoBmaConfig::aCentavos((string) $resumen['total_a_cobrar']);
+        $pendienteCentavos = PagosPedidoBmaConfig::aCentavos((string) $resumen['pendiente']);
+        $toleranciaCentavos = PagosPedidoBmaConfig::aCentavos((string) $resumen['tolerancia_aplicada']);
+
+        if ($netoCentavos > $toleranciaCentavos && $pagosActivos->isEmpty()) {
             throw new InvalidArgumentException(
-                'Falta registrar exhibiciones de pago. '.self::mensajeMontoFaltante($pendiente)
+                'Falta registrar exhibiciones de pago. '.self::mensajeMontoFaltante((float) $resumen['pendiente'])
             );
         }
 
-        foreach ($pagos as $pago) {
+        foreach ($pagosActivos as $pago) {
             if (empty($pago->ruta_archivo)) {
                 throw new InvalidArgumentException(
                     'Cada exhibición de pago debe incluir su comprobante.'
@@ -136,17 +142,29 @@ class RegistrarPagoPedidoBmaService
             }
         }
 
-        if ($pendiente > 0.01) {
-            throw new InvalidArgumentException(self::mensajeMontoFaltante($pendiente));
+        if ($pendienteCentavos > $toleranciaCentavos) {
+            throw new InvalidArgumentException(self::mensajeMontoFaltante((float) $resumen['pendiente']));
         }
 
-        if (in_array($fase, [self::FASE_VALIDAR, self::FASE_APROBAR], true) && $pagos->isNotEmpty()) {
-            $todasVerificadas = $pagos->every(
+        $pendienteSustitucion = PedidoBmaPago::query()
+            ->where('pedido_bma_id', $pedido->id)
+            ->where('estado_revision', PedidoBmaPago::REVISION_RECHAZADO)
+            ->whereDoesntHave('sustituto')
+            ->exists();
+
+        if ($pendienteSustitucion && in_array($fase, [self::FASE_VALIDAR, self::FASE_APROBAR, self::FASE_ENVIAR], true)) {
+            throw new InvalidArgumentException(
+                'Hay comprobantes rechazados pendientes de sustitución.'
+            );
+        }
+
+        if ($fase === self::FASE_APROBAR && $pagosActivos->isNotEmpty()) {
+            $todasVerificadas = $pagosActivos->every(
                 fn (PedidoBmaPago $p) => $p->estado_revision === PedidoBmaPago::REVISION_VERIFICADO
             );
             if (! $todasVerificadas) {
                 throw new InvalidArgumentException(
-                    'Todas las exhibiciones deben estar verificadas antes de validar el pago. Corrija comprobantes rechazados u observados.'
+                    'Todas las exhibiciones activas deben estar verificadas antes de aprobar. Corrija comprobantes rechazados.'
                 );
             }
         }
@@ -161,22 +179,9 @@ class RegistrarPagoPedidoBmaService
     }
 
     /**
-     * Fórmula canónica de cobertura. Sin I/O.
+     * Fórmula canónica sin I/O ni contenedor (tests unitarios).
      *
-     * @return array{
-     *   total_a_cubrir:float,
-     *   saldo_a_favor_aplicado:float,
-     *   total_a_cobrar:float,
-     *   total_pagado:float,
-     *   pendiente:float,
-     *   excedente_generado:float,
-     *   cobertura:string,
-     *   total_final:float,
-     *   saldos_aplicados:float,
-     *   total_recibido:float,
-     *   excedente:float,
-     *   nuevo_saldo_sugerido:float
-     * }
+     * @return array<string, mixed>
      */
     public static function calcularResumenCobertura(
         float $mercancia,
@@ -186,40 +191,15 @@ class RegistrarPagoPedidoBmaService
         float $saldoAFavor,
         float $totalPagado,
     ): array {
-        $round2 = static fn (float $n): float => round($n, 2);
-
-        $totalACubrir = $round2($mercancia + $envio + ($aplicaSeguro ? $costoSeguro : 0));
-        $saf = $round2(max(0.0, $saldoAFavor));
-        $totalACobrar = max(0.0, $round2($totalACubrir - $saf));
-        $pagado = $round2(max(0.0, $totalPagado));
-        $delta = $round2($totalACobrar - $pagado);
-        $pendiente = max(0.0, $delta);
-        $excedente = max(0.0, $round2(-$delta));
-
-        if ($pagado <= 0 && $saf <= 0) {
-            $cobertura = 'sin_pago';
-        } elseif ($pendiente > 0.01) {
-            $cobertura = 'parcial';
-        } elseif ($excedente > 0.01) {
-            $cobertura = 'con_excedente';
-        } else {
-            $cobertura = 'cubierto';
-        }
-
-        return [
-            'total_a_cubrir' => $totalACubrir,
-            'saldo_a_favor_aplicado' => $saf,
-            'total_a_cobrar' => $totalACobrar,
-            'total_pagado' => $pagado,
-            'pendiente' => $pendiente,
-            'excedente_generado' => $excedente,
-            'cobertura' => $cobertura,
-            'total_final' => $totalACubrir,
-            'saldos_aplicados' => $saf,
-            'total_recibido' => $pagado,
-            'excedente' => $excedente,
-            'nuevo_saldo_sugerido' => $excedente,
-        ];
+        return CoberturaPagoPedidoBmaService::calcularDesdeMontosEstatico(
+            number_format($mercancia, 2, '.', ''),
+            number_format($envio, 2, '.', ''),
+            $aplicaSeguro,
+            number_format($costoSeguro, 2, '.', ''),
+            number_format($saldoAFavor, 2, '.', ''),
+            number_format($totalPagado, 2, '.', ''),
+            PagosPedidoBmaConfig::DEFAULT_TOLERANCIA,
+        );
     }
 
     public function generarExcedenteSiAplica(PedidoBma $pedido, ?int $usuarioId = null): ?SafCredito
@@ -230,7 +210,8 @@ class RegistrarPagoPedidoBmaService
 
         $resumen = $this->resumenPago($pedido);
         $excedente = (float) ($resumen['excedente_generado'] ?? $resumen['excedente'] ?? 0);
-        if ($excedente <= 0.01) {
+        $tol = (float) ($resumen['tolerancia_aplicada'] ?? $this->pagosConfig->toleranciaMxn());
+        if ($excedente <= $tol) {
             return null;
         }
 
@@ -253,42 +234,20 @@ class RegistrarPagoPedidoBmaService
                 'origen_manual' => false,
             ]);
         } catch (InvalidArgumentException) {
-            // Ya existe crédito con el mismo monto para el pedido (idempotente).
             return null;
         }
     }
 
     public function resumenPago(PedidoBma $pedido): array
     {
-        $pagos = PedidoBmaPago::where('pedido_bma_id', $pedido->id)->get();
-        $pagado = round((float) $pagos->sum('monto'), 2);
-        $envio = $pedido->costo_envio === null || $pedido->costo_envio === ''
-            ? 0.0
-            : (float) $pedido->costo_envio;
+        $base = $this->cobertura->calcular($pedido);
 
-        // costo_envio mezcla flete+reexpedición; cobertura de seguro solo sobre flete base.
-        $costoSeguro = (float) ($pedido->costo_seguro ?? 0);
-        if ($pedido->aplica_seguro) {
-            $pedido->loadMissing(['zona', 'paqueteria']);
-            $rex = $pedido->zona?->costoReexpedicion() ?? 0.0;
-            $envioBase = max(0.0, round($envio - $rex, 2));
-            $costoSeguro = app(CalcularSeguroPedidoService::class)->calcularCosto(
-                $pedido->paqueteria?->nombre,
-                $envioBase,
-                (float) ($pedido->total_mercancia ?? 0),
-            );
-        }
+        $pagosActivos = PedidoBmaPago::query()
+            ->where('pedido_bma_id', $pedido->id)
+            ->activosParaCobertura()
+            ->get();
 
-        $base = self::calcularResumenCobertura(
-            (float) ($pedido->total_mercancia ?? 0),
-            $envio,
-            (bool) $pedido->aplica_seguro,
-            $costoSeguro,
-            (float) ($pedido->saldo_a_favor ?? 0),
-            $pagado,
-        );
-
-        $revision = $this->agregarRevision($pagos);
+        $revision = $this->agregarRevision($pagosActivos);
         $cobertura = $base['cobertura'];
 
         $estadoPago = match (true) {
@@ -306,15 +265,12 @@ class RegistrarPagoPedidoBmaService
         ]);
     }
 
-    /**
-     * Recalcula excedente SAF tras agregar/editar/eliminar exhibiciones.
-     * Cancela créditos pago_de_mas huérfanos si ya no hay excedente.
-     */
     public function reconciliarExcedenteTrasExhibicion(PedidoBma $pedido, ?int $usuarioId = null): void
     {
         $pedido = $pedido->fresh() ?? $pedido;
         $resumen = $this->resumenPago($pedido);
         $excedente = (float) ($resumen['excedente_generado'] ?? 0);
+        $tol = (float) ($resumen['tolerancia_aplicada'] ?? $this->pagosConfig->toleranciaMxn());
 
         $huerfanos = SafCredito::query()
             ->where('pedido_bma_id', $pedido->id)
@@ -323,7 +279,7 @@ class RegistrarPagoPedidoBmaService
             ->get()
             ->filter(fn (SafCredito $c) => (float) $c->monto_reservado < 0.01 && (float) $c->monto_aplicado < 0.01);
 
-        if ($excedente <= 0.01) {
+        if ($excedente <= $tol) {
             foreach ($huerfanos as $credito) {
                 $this->cancelarCredito->handle(
                     $credito->id,
@@ -336,7 +292,7 @@ class RegistrarPagoPedidoBmaService
         }
 
         $match = $huerfanos->first(
-            fn (SafCredito $c) => abs((float) $c->monto_original - $excedente) <= 0.01
+            fn (SafCredito $c) => abs((float) $c->monto_original - $excedente) <= $tol
         );
         foreach ($huerfanos as $credito) {
             if ($match && (int) $credito->id === (int) $match->id) {
@@ -365,18 +321,20 @@ class RegistrarPagoPedidoBmaService
             2
         );
 
-        if ($safPedido > $totalACubrir + 0.01) {
+        $tol = (float) $this->pagosConfig->toleranciaMxn();
+
+        if ($safPedido > $totalACubrir + $tol) {
             throw new InvalidArgumentException(
                 'El saldo a favor aplicado no puede ser mayor que el total a cubrir (mercancía + envío + seguro).'
             );
         }
 
         $libro = round($this->safPedido->totalAplicadoOReservado($pedido), 2);
-        if ($safPedido <= 0.01 && $libro <= 0.01) {
+        if ($safPedido <= $tol && $libro <= $tol) {
             return;
         }
 
-        if (abs($safPedido - $libro) > 0.01) {
+        if (abs($safPedido - $libro) > $tol) {
             throw new InvalidArgumentException(
                 'El saldo a favor aplicado no corresponde con los créditos reservados del pedido.'
             );

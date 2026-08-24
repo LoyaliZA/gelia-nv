@@ -567,12 +567,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{pedidoBma}/pagos', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->name('pagos.resumen');
         Route::post('/pagos/{pago}', [PedidoBmaSaldosPagosController::class, 'actualizarPago'])->name('pagos.update');
         Route::delete('/pagos/{pago}', [PedidoBmaSaldosPagosController::class, 'eliminarPago'])->name('pagos.destroy');
+        Route::post('/pagos/{pago}/sustituir', [PedidoBmaSaldosPagosController::class, 'sustituirPago'])->name('pagos.sustituir');
         Route::post('/{pedidoBma}/generar-saldo-excedente', [PedidoBmaSaldosPagosController::class, 'generarSaldoExcedente'])
             ->name('generar_saldo_excedente');
     });
 
     Route::middleware(['can:control_pedidos.auditar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/pagos/{pago}/revisar', [PedidoBmaSaldosPagosController::class, 'revisarPago'])->name('pagos.revisar');
+        Route::post('/{pedidoBma}/pagos/rechazar', [PedidoBmaSaldosPagosController::class, 'rechazarPagos'])->name('pagos.rechazar');
         Route::get('/{pedidoBma}/pagos-auditoria', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->name('pagos.resumen_auditoria');
     });
 

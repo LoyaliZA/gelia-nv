@@ -27,6 +27,7 @@ class PedidoBmaDocumento extends Model
 
     protected $fillable = [
         'pedido_bma_id',
+        'pedido_bma_caja_id',
         'tipo',
         'ruta_archivo',
         'nombre_original',
@@ -48,6 +49,11 @@ class PedidoBmaDocumento extends Model
     public function pedido(): BelongsTo
     {
         return $this->belongsTo(PedidoBma::class, 'pedido_bma_id');
+    }
+
+    public function caja(): BelongsTo
+    {
+        return $this->belongsTo(PedidoBmaCaja::class, 'pedido_bma_caja_id');
     }
 
     /** URL autenticada (gate VisibilidadPedidoBma); fallback público solo si falta id. */

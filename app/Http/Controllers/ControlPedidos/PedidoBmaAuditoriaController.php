@@ -43,11 +43,18 @@ class PedidoBmaAuditoriaController extends Controller
     ): Response {
         Gate::authorize('control_pedidos.auditar');
 
+        $filtros = $request->validate([
+            'tab' => ['nullable', 'string', 'max:64'],
+            'q' => ['nullable', 'string', 'max:255'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'catalogo_paqueteria_id' => ['nullable', 'integer', 'exists:catalogo_paqueterias_pedido,id'],
+        ]);
+
         return Inertia::render('ControlPedidos/Auditar/Index', [
             // Closures: en reload parcial solo se evalúan las props pedidas (only).
-            'pedidos' => fn () => $listarService->ejecutar($request->all(), true, Auth::user()),
+            'pedidos' => fn () => $listarService->ejecutar($filtros, true, Auth::user()),
             'metricas' => fn () => $listarService->metricas(Auth::user()),
-            'filtros' => $request->only(['tab', 'q', 'page']),
+            'filtros' => collect($filtros)->only(['tab', 'q', 'page', 'catalogo_paqueteria_id'])->all(),
             'catalogos' => fn () => $catalogosService->ejecutar(),
         ]);
     }
@@ -56,10 +63,17 @@ class PedidoBmaAuditoriaController extends Controller
     {
         Gate::authorize('control_pedidos.auditar');
 
+        $filtros = $request->validate([
+            'tab' => ['nullable', 'string', 'max:64'],
+            'q' => ['nullable', 'string', 'max:255'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'catalogo_paqueteria_id' => ['nullable', 'integer', 'exists:catalogo_paqueterias_pedido,id'],
+        ]);
+
         return response()->json([
-            'pedidos' => $listarService->ejecutar($request->all(), true, Auth::user()),
+            'pedidos' => $listarService->ejecutar($filtros, true, Auth::user()),
             'metricas' => $listarService->metricas(Auth::user()),
-            'filtros' => $request->only(['tab', 'q', 'page']),
+            'filtros' => collect($filtros)->only(['tab', 'q', 'page', 'catalogo_paqueteria_id'])->all(),
         ]);
     }
 

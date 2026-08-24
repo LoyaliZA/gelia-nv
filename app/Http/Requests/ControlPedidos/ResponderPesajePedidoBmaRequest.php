@@ -52,6 +52,8 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             $rules['cajas.*.peso_real_kg'] = ['required', 'numeric', 'min:0'];
             $rules['cajas.*.peso_volumetrico_kg'] = ['required', 'numeric', 'min:0'];
             $rules['cajas.*.client_uuid'] = ['nullable', 'string', 'max:64'];
+            $rules['cajas.*.uuid_operativo'] = ['nullable', 'uuid'];
+            $rules['motivo_retiro'] = ['nullable', 'string', 'min:5', 'max:2000'];
         }
 
         return $rules;
@@ -65,6 +67,7 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'cajas.*.catalogo_tipo_caja_id.required' => 'Cada envío requiere tipo de caja.',
             'cajas.*.peso_real_kg.required' => 'Cada envío requiere peso real.',
             'cajas.*.peso_volumetrico_kg.required' => 'Cada envío requiere peso volumétrico.',
+            'cajas.*.uuid_operativo.uuid' => 'Recargue el pesaje e intente de nuevo (identidad de envío inválida).',
             'revisiones.required' => 'Revise al menos un producto.',
             'revisiones.min' => 'Revise al menos un producto.',
             'evidencias_generales.*.mimes' => 'La evidencia final debe ser imagen o PDF.',
@@ -91,6 +94,35 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
                 ];
             }
             $merge['revisiones'] = $normalizadas;
+        }
+
+        $cajas = $this->input('cajas');
+        if (is_array($cajas)) {
+            $merge['cajas'] = array_map(function ($caja) {
+                if (! is_array($caja)) {
+                    return $caja;
+                }
+                foreach (['uuid_operativo', 'client_uuid'] as $clave) {
+                    if (! array_key_exists($clave, $caja)) {
+                        continue;
+                    }
+                    $v = trim((string) $caja[$clave]);
+                    if ($v === '' || ! \Illuminate\Support\Str::isUuid($v)) {
+                        $caja[$clave] = $clave === 'uuid_operativo' ? null : $v;
+                        if ($clave === 'uuid_operativo') {
+                            $caja['uuid_operativo'] = null;
+                        }
+                    } else {
+                        $caja[$clave] = $v;
+                    }
+                }
+                // Preferir client_uuid válido como uuid_operativo si este llegó inválido/vacío.
+                if (empty($caja['uuid_operativo']) && ! empty($caja['client_uuid']) && \Illuminate\Support\Str::isUuid($caja['client_uuid'])) {
+                    $caja['uuid_operativo'] = $caja['client_uuid'];
+                }
+
+                return $caja;
+            }, $cajas);
         }
 
         $this->merge($merge);

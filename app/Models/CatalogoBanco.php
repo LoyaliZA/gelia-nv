@@ -22,4 +22,9 @@ class CatalogoBanco extends Model
     {
         return $this->hasMany(SolicitudTag::class, 'catalogo_banco_id');
     }
+
+    public function departamentos(): HasMany
+    {
+        return $this->hasMany(CatalogoBancoDepartamento::class, 'catalogo_banco_id');
+    }
 }

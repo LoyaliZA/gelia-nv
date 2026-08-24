@@ -3,10 +3,13 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\SaldosAFavor\PedidoBmaPago;
+use App\Services\SaldosAFavor\CoberturaPagoPedidoBmaService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class ValidarPagoPedidoBmaService
 {
@@ -14,6 +17,8 @@ class ValidarPagoPedidoBmaService
         private RegistrarHistorialPedidoService $historialService,
         private RegistrarPagoPedidoBmaService $pagos,
         private AvanzarColaErroresPedidoBmaService $colaErroresService,
+        private CoberturaPagoPedidoBmaService $cobertura,
+        private PagosPedidoBmaConfig $pagosConfig,
     ) {}
 
     /**
@@ -21,13 +26,45 @@ class ValidarPagoPedidoBmaService
      */
     public function ejecutar(PedidoBma $pedido, int $usuarioId): array
     {
-        if (!$pedido->esAuditablePorAuxiliar()) {
-            throw new \RuntimeException('Solo se puede validar el pago de pedidos pendientes de revisión.');
+        if (! $pedido->esAuditablePorAuxiliar()) {
+            throw new RuntimeException('Solo se puede validar el pago de pedidos pendientes de revisión.');
         }
 
-        $this->pagos->assertPagoListoParaAvanzar($pedido, RegistrarPagoPedidoBmaService::FASE_VALIDAR);
-
         return DB::transaction(function () use ($pedido, $usuarioId) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+
+            if ($pedido->pago_validado_at) {
+                $resumen = $this->pagos->resumenPago($pedido);
+
+                return [
+                    'pedido' => $pedido->fresh([
+                        'cliente', 'estatus', 'documentos', 'banco', 'almacen',
+                        'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'envioTienda', 'pagoValidadoPor',
+                        'pagosExhibicion.banco',
+                        'errores',
+                    ]),
+                    'resumen' => $resumen,
+                    'incidencia_id' => null,
+                ];
+            }
+
+            $this->pagos->assertPagoListoParaAvanzar($pedido, RegistrarPagoPedidoBmaService::FASE_VALIDAR);
+
+            $resumen = $this->cobertura->calcular($pedido);
+            if (! empty($resumen['bloqueos'])) {
+                throw new RuntimeException($resumen['bloqueos'][0]);
+            }
+
+            PedidoBmaPago::query()
+                ->where('pedido_bma_id', $pedido->id)
+                ->activosParaCobertura()
+                ->where('estado_revision', '!=', PedidoBmaPago::REVISION_VERIFICADO)
+                ->update([
+                    'estado_revision' => PedidoBmaPago::REVISION_VERIFICADO,
+                    'revisado_por_id' => $usuarioId,
+                    'revisado_at' => now(),
+                ]);
+
             $pedido->update([
                 'pago_validado_at' => now(),
                 'pago_validado_por_id' => $usuarioId,
@@ -49,13 +86,21 @@ class ValidarPagoPedidoBmaService
             }
 
             $resumen = $this->pagos->resumenPago($pedido->fresh());
+            $diferencia = (string) ($resumen['diferencia'] ?? '0.00');
+            $tolerancia = (string) ($resumen['tolerancia_aplicada'] ?? $this->pagosConfig->toleranciaMxn());
+
+            $comentario = sprintf(
+                'Pago validado por auxiliar. Diferencia %s MXN (tolerancia aplicada %s MXN).',
+                $diferencia,
+                $tolerancia
+            );
 
             $this->historialService->registrarTransicion(
                 $pedido->id,
                 $usuarioId,
                 $pedido->estatus,
                 $pedido->estatus,
-                'Pago validado por auxiliar.',
+                $comentario,
                 AccionesHistorialPedidoBma::VALIDACION_PAGO
             );
 

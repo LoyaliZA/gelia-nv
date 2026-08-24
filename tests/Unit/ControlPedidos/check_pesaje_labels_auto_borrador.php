@@ -11,7 +11,8 @@ $servicio = file_get_contents($root.'/app/Services/ControlPedidos/ResponderPesaj
 $styles = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js');
 $tabla = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx');
 $cedis = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/TarjetasCedis.jsx');
-$form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx');
+$form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedidoLegado.jsx');
+$detalle = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/ModalDetalleCedis.jsx');
 
 /** Espejo de esFasePreVenta + filtro pesaje en badgeEstatusEnvio. */
 $mostrarBadgePesaje = static function (string $estatusEnvio, ?string $fase, bool $forzarPesaje = false): bool {
@@ -49,8 +50,19 @@ $checks = [
     ['TablaPedidos pasa faseCiclo', str_contains($tabla, 'faseCiclo:')],
     ['TablaPedidos obs solo pre-venta', str_contains($tabla, 'esFasePreVenta')],
     ['CEDIS forzarPesaje', str_contains($cedis, 'forzarPesaje: true')],
-    ['form aviso sin Continuar obligatorio', str_contains($form, 'Ya puede cotizar')],
+    ['form aviso sin Continuar obligatorio', str_contains($form, 'Ya puede capturar el total de mercancía')],
+    ['JS mostrarNotaCompraCedis', str_contains($styles, 'mostrarNotaCompraCedis')],
+    ['CEDIS nota compra condicionada', str_contains($cedis, 'mostrarNotaCompraCedis(fase)')],
+    ['Detalle CEDIS nota condicionada', str_contains($detalle, 'mostrarNotaCompraCedis')],
 ];
+
+/** Espejo de mostrarNotaCompraCedis. */
+$mostrarNota = static function (?string $fase): bool {
+    return in_array($fase, [
+        'EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_GUIA_CLIENTE',
+        'PENDIENTE_DE_ENVIO', 'ENTREGADO', 'ENVIADO',
+    ], true);
+};
 
 foreach ($checks as [$label, $ok]) {
     if ($ok) {
@@ -71,6 +83,11 @@ $logicChecks = [
     ['pendiente_pesaje + EN_CEDIS oculto', $mostrarBadgePesaje('pendiente_pesaje', 'EN_CEDIS') === false],
     ['pendiente_pesaje + EN_CEDIS forzado CEDIS', $mostrarBadgePesaje('pendiente_pesaje', 'EN_CEDIS', true) === true],
     ['pendiente_liberacion + EN_CEDIS visible', $mostrarBadgePesaje('pendiente_liberacion', 'EN_CEDIS') === true],
+    ['nota oculta en PESAJE_PENDIENTE', $mostrarNota('PESAJE_PENDIENTE') === false],
+    ['nota oculta en PESAJE_RESPONDIDO', $mostrarNota('PESAJE_RESPONDIDO') === false],
+    ['nota oculta en PENDIENTE_AUXILIAR', $mostrarNota('PENDIENTE_AUXILIAR') === false],
+    ['nota visible en EN_CEDIS', $mostrarNota('EN_CEDIS') === true],
+    ['nota visible en PENDIENTE_DE_ENVIO', $mostrarNota('PENDIENTE_DE_ENVIO') === true],
 ];
 
 foreach ($logicChecks as [$label, $ok]) {

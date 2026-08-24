@@ -19,6 +19,8 @@ class ResponderPesajePedidoBmaService
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
         private SesionEvidenciaCedisService $sesionEvidencia,
+        private SincronizarCajasPedidoBmaService $sincronizarCajas,
+        private CalcularTotalesEnvioPedidoService $totalesEnvio,
     ) {}
 
     /**
@@ -28,7 +30,8 @@ class ResponderPesajePedidoBmaService
      *   comentario_fisico_general?: string|null,
      *   evidencias_generales?: list<UploadedFile>,
      *   evidencias_envios?: array<int, list<UploadedFile>>,
-     *   revisiones?: list<array<string, mixed>>
+     *   revisiones?: list<array<string, mixed>>,
+     *   motivo_retiro?: string|null
      * }  $revisionFisica
      */
     public function ejecutar(PedidoBma $pedido, int $usuarioId, array $lineasCaja, array $revisionFisica = []): PedidoBma
@@ -119,57 +122,53 @@ class ResponderPesajePedidoBmaService
         return DB::transaction(function () use (
             $pedido, $usuarioId, $lineas, $tipos,
             $estadoGeneral, $comentarioGeneral, $evidenciasGenerales, $evidenciasEnvios, $revisiones,
-            $soloRevisiones, $pesoAntes, $cajasAntes, $costoEnvioAntes, $esActualizacion
+            $soloRevisiones, $pesoAntes, $cajasAntes, $costoEnvioAntes, $esActualizacion, $revisionFisica
         ) {
-            PedidoBmaCaja::where('pedido_bma_id', $pedido->id)->delete();
-            PedidoBmaRevisionProducto::where('pedido_bma_id', $pedido->id)->delete();
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
 
             $pesoRealTotal = 0.0;
             $pesoVolumetricoTotal = 0.0;
             $pesoCobradoTotal = 0.0;
             $cajaPrincipalId = null;
             $maxVol = -1.0;
-            $orden = 0;
             /** @var list<PedidoBmaCaja> $cajasCreadas */
             $cajasCreadas = [];
             $productoUuidARevisionId = [];
             $cajaUuidACajaId = [];
 
-            foreach ($lineas as $linea) {
-                $tipo = $tipos->get($linea['catalogo_tipo_caja_id']);
-                $pesoReal = $linea['peso_real_kg'];
-                $pesoVol = $linea['peso_volumetrico_kg'];
-                $pesoCobrado = PedidoBma::calcularPesoCobradoGuia($pesoReal, $pesoVol);
-
-                $cajasCreadas[] = $cajaNueva = PedidoBmaCaja::create([
-                    'pedido_bma_id' => $pedido->id,
-                    'catalogo_tipo_caja_id' => $tipo->id,
-                    'cantidad' => 1,
-                    'orden' => $orden,
-                    'largo' => $linea['largo'],
-                    'ancho' => $linea['ancho'],
-                    'alto' => $linea['alto'],
-                    'peso_real_kg' => $pesoReal,
-                    'peso_volumetrico_kg' => $pesoVol,
-                    'peso_cobrado_kg' => $pesoCobrado,
-                    'catalogo_tipo_guia_id' => null,
-                ]);
-                $cajaUuidACajaId['idx:'.$orden] = $cajaNueva->id;
-                if (($linea['client_uuid'] ?? '') !== '') {
-                    $cajaUuidACajaId[$linea['client_uuid']] = $cajaNueva->id;
+            if (! $soloRevisiones) {
+                $lineasSync = [];
+                foreach ($lineas as $i => $linea) {
+                    $tipo = $tipos->get($linea['catalogo_tipo_caja_id']);
+                    $pesoCobrado = PedidoBma::calcularPesoCobradoGuia($linea['peso_real_kg'], $linea['peso_volumetrico_kg']);
+                    $linea['peso_cobrado_kg'] = $pesoCobrado;
+                    $lineasSync[] = $linea;
+                    $pesoRealTotal += $linea['peso_real_kg'];
+                    $pesoVolumetricoTotal += $linea['peso_volumetrico_kg'];
+                    $pesoCobradoTotal += (float) $pesoCobrado;
+                    if ($linea['peso_volumetrico_kg'] > $maxVol) {
+                        $maxVol = $linea['peso_volumetrico_kg'];
+                        $cajaPrincipalId = $tipo->id;
+                    }
                 }
 
-                $pesoRealTotal += $pesoReal;
-                $pesoVolumetricoTotal += $pesoVol;
-                $pesoCobradoTotal += (float) $pesoCobrado;
-
-                if ($pesoVol > $maxVol) {
-                    $maxVol = $pesoVol;
-                    $cajaPrincipalId = $tipo->id;
+                $sync = $this->sincronizarCajas->ejecutar(
+                    $pedido,
+                    $lineasSync,
+                    $usuarioId,
+                    isset($revisionFisica['motivo_retiro']) ? (string) $revisionFisica['motivo_retiro'] : null
+                );
+                $cajasCreadas = $sync['cajas'];
+                foreach ($cajasCreadas as $idx => $cajaNueva) {
+                    $cajaUuidACajaId['idx:'.$idx] = $cajaNueva->id;
+                    $uuid = (string) ($cajaNueva->uuid_operativo ?: ($lineasSync[$idx]['client_uuid'] ?? ''));
+                    if ($uuid !== '') {
+                        $cajaUuidACajaId[$uuid] = $cajaNueva->id;
+                    }
                 }
-
-                $orden++;
             }
+
+            $this->sincronizarRevisiones($pedido, $revisiones, $productoUuidARevisionId);
 
             if (! $soloRevisiones && $cajaPrincipalId === null) {
                 $cajaPrincipalId = $lineas[0]['catalogo_tipo_caja_id'];
@@ -244,6 +243,9 @@ class ResponderPesajePedidoBmaService
             }
 
             $pedido->update($datosPedido);
+            if (! $soloRevisiones) {
+                $this->totalesEnvio->aplicarAlPedido($pedido->fresh(['cajas', 'zona']));
+            }
 
             $ordenDoc = (int) $pedido->documentos()->max('orden') + 1;
             foreach ($evidenciasGenerales as $file) {
@@ -275,21 +277,12 @@ class ResponderPesajePedidoBmaService
             }
 
             foreach ($revisiones as $i => $rev) {
-                $row = PedidoBmaRevisionProducto::create([
-                    'pedido_bma_id' => $pedido->id,
-                    'orden' => $i,
-                    'descripcion_producto' => $rev['descripcion_producto'],
-                    'producto_id' => $rev['producto_id'],
-                    'sku' => $rev['sku'],
-                    'estado_fisico' => $rev['estado_fisico'],
-                    'comentario' => $rev['comentario'],
-                    'unica_pieza' => $rev['unica_pieza'],
-                    'mejor_ejemplar' => $rev['mejor_ejemplar'],
-                ]);
-                if ($rev['client_uuid'] !== '') {
-                    $productoUuidARevisionId[$rev['client_uuid']] = $row->id;
+                $rowId = $productoUuidARevisionId[$rev['client_uuid'] ?? '']
+                    ?? $productoUuidARevisionId['idx:'.$i]
+                    ?? null;
+                if (! $rowId) {
+                    continue;
                 }
-
                 foreach ($rev['evidencias'] as $file) {
                     $this->guardarEvidencia(
                         $pedido,
@@ -297,7 +290,7 @@ class ResponderPesajePedidoBmaService
                         PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
                         $ordenDoc++,
                         PedidoBmaDocumento::RELACION_REVISION_PRODUCTO,
-                        $row->id,
+                        $rowId,
                         $rev['comentario'] ?: $rev['descripcion_producto']
                     );
                 }
@@ -396,6 +389,7 @@ class ResponderPesajePedidoBmaService
         ?int $relacionId,
         ?string $comentario
     ): void {
+        $cajaId = $relacionTipo === PedidoBmaDocumento::RELACION_ENVIO_CAJA ? $relacionId : null;
         $ruta = $file->store('pedidos_bma/'.$pedido->id, 'public');
         $pedido->documentos()->create([
             'tipo' => $tipo,
@@ -407,7 +401,74 @@ class ResponderPesajePedidoBmaService
             'comentario' => $comentario,
             'relacion_tipo' => $relacionTipo,
             'relacion_id' => $relacionId,
+            'pedido_bma_caja_id' => $cajaId,
         ]);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $revisiones
+     * @param  array<string, int>  $productoUuidARevisionId
+     */
+    private function sincronizarRevisiones(PedidoBma $pedido, array $revisiones, array &$productoUuidARevisionId): void
+    {
+        $existentes = PedidoBmaRevisionProducto::query()
+            ->where('pedido_bma_id', $pedido->id)
+            ->orderBy('orden')
+            ->get();
+        $usados = [];
+
+        foreach ($revisiones as $i => $rev) {
+            $match = $existentes->first(function (PedidoBmaRevisionProducto $row) use ($rev, $usados) {
+                if (isset($usados[$row->id])) {
+                    return false;
+                }
+                if ($rev['producto_id'] && (int) $row->producto_id === (int) $rev['producto_id']) {
+                    return true;
+                }
+
+                return $row->descripcion_producto === $rev['descripcion_producto']
+                    && (string) $row->sku === (string) ($rev['sku'] ?? '');
+            });
+
+            $attrs = [
+                'pedido_bma_id' => $pedido->id,
+                'orden' => $i,
+                'descripcion_producto' => $rev['descripcion_producto'],
+                'producto_id' => $rev['producto_id'],
+                'sku' => $rev['sku'],
+                'estado_fisico' => $rev['estado_fisico'],
+                'comentario' => $rev['comentario'],
+                'unica_pieza' => $rev['unica_pieza'],
+                'mejor_ejemplar' => $rev['mejor_ejemplar'],
+            ];
+
+            if ($match) {
+                $match->update($attrs);
+                $row = $match;
+            } else {
+                $row = PedidoBmaRevisionProducto::query()->create($attrs);
+            }
+            $usados[$row->id] = true;
+            $productoUuidARevisionId['idx:'.$i] = $row->id;
+            if (($rev['client_uuid'] ?? '') !== '') {
+                $productoUuidARevisionId[$rev['client_uuid']] = $row->id;
+            }
+        }
+
+        foreach ($existentes as $row) {
+            if (isset($usados[$row->id])) {
+                continue;
+            }
+            $tieneDocs = PedidoBmaDocumento::query()
+                ->where('pedido_bma_id', $pedido->id)
+                ->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_PRODUCTO)
+                ->where('relacion_id', $row->id)
+                ->exists();
+            if ($tieneDocs) {
+                continue;
+            }
+            $row->delete();
+        }
     }
 
     /**
@@ -418,7 +479,8 @@ class ResponderPesajePedidoBmaService
      *   ancho:float,
      *   alto:float,
      *   peso_real_kg:float,
-     *   peso_volumetrico_kg:float
+     *   peso_volumetrico_kg:float,
+     *   client_uuid:string
      * }>
      */
     private function normalizarLineas(array $lineasCaja): array
@@ -447,7 +509,8 @@ class ResponderPesajePedidoBmaService
                 'alto' => round($alto, 2),
                 'peso_real_kg' => round($pesoReal, 4),
                 'peso_volumetrico_kg' => round($pesoVol, 4),
-                'client_uuid' => trim((string) ($linea['client_uuid'] ?? '')),
+                'client_uuid' => trim((string) ($linea['client_uuid'] ?? $linea['uuid_operativo'] ?? '')),
+                'uuid_operativo' => trim((string) ($linea['uuid_operativo'] ?? $linea['client_uuid'] ?? '')),
             ];
         }
 

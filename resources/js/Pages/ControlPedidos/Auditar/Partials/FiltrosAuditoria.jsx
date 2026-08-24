@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Search, RefreshCw, ChevronDown, Loader2 } from 'lucide-react';
-import { THEME_INPUT, THEME_LABEL } from '../../../../utils/geliaTheme';
+import React, { useEffect, useState } from 'react';
+import { Search, RefreshCw, ChevronDown, Loader2, X } from 'lucide-react';
+import { THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../../utils/geliaTheme';
 import {
     BTN_SECONDARY,
     GELIA_SEGMENT_TABS_SCROLL,
@@ -10,6 +10,8 @@ import {
     TABS_AUDITORIA_SUBFILTROS,
 } from '../../Partials/pedidosBmaStyles';
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
+
+const STORAGE_KEY = 'control_pedidos.auditar.filtros_abiertos';
 
 function SegmentoTabs({ tabs, tabActiva, onTabChange, conteoTab, ariaLabel }) {
     return (
@@ -78,15 +80,33 @@ export default function FiltrosAuditoria({
     filtros = {},
     tabActiva,
     busqueda = '',
+    paqueteriaId = '',
+    paqueterias = [],
     onTabChange,
     onBuscar,
+    onPaqueteriaChange,
+    onLimpiarFiltros,
     onActualizar,
     metricas = {},
     pedidos = null,
     onIrAPagina,
     buscando = false,
 }) {
-    const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+    const [filtrosAbiertos, setFiltrosAbiertos] = useState(() => {
+        try {
+            return sessionStorage.getItem(STORAGE_KEY) === '1';
+        } catch {
+            return false;
+        }
+    });
+
+    useEffect(() => {
+        try {
+            sessionStorage.setItem(STORAGE_KEY, filtrosAbiertos ? '1' : '0');
+        } catch {
+            /* ignore */
+        }
+    }, [filtrosAbiertos]);
 
     const conteoTab = (tabId) => {
         const map = {
@@ -110,11 +130,19 @@ export default function FiltrosAuditoria({
     const tabActual = TABS_AUDITORIA.find((t) => t.id === tabActiva) || TABS_AUDITORIA[0];
     const conteoActual = conteoTab(tabActual.id);
     const esSubfiltro = TABS_AUDITORIA_SUBFILTROS.some((t) => t.id === tabActiva);
+    const paqNombre = paqueterias.find((p) => String(p.id) === String(paqueteriaId))?.nombre;
+    const hayFiltrosExtra = Boolean(busqueda) || Boolean(paqueteriaId) || (tabActiva && tabActiva !== 'PENDIENTES' && tabActiva !== 'TODAS');
 
     const elegirTab = (id) => {
         onTabChange(id);
         setFiltrosAbiertos(false);
     };
+
+    const resumenContraido = [
+        tabActual.label,
+        paqNombre ? `Paquetería: ${paqNombre}` : null,
+        busqueda ? `Buscar: ${busqueda}` : null,
+    ].filter(Boolean).join(' · ');
 
     return (
         <div className="space-y-4">
@@ -141,6 +169,20 @@ export default function FiltrosAuditoria({
                         )}
                     </div>
                 </div>
+                <div className="sm:w-56 shrink-0">
+                    <label htmlFor="auditoria-paqueteria" className={`${THEME_LABEL} ml-1`}>Paquetería</label>
+                    <select
+                        id="auditoria-paqueteria"
+                        className={`${THEME_SELECT} w-full mt-1.5 py-3 text-sm font-bold`}
+                        value={paqueteriaId || ''}
+                        onChange={(e) => onPaqueteriaChange?.(e.target.value)}
+                    >
+                        <option value="">Todas</option>
+                        {paqueterias.map((p) => (
+                            <option key={p.id} value={p.id}>{p.nombre}</option>
+                        ))}
+                    </select>
+                </div>
                 <button
                     type="button"
                     onClick={onActualizar}
@@ -149,9 +191,17 @@ export default function FiltrosAuditoria({
                 >
                     <RefreshCw className={`w-4 h-4 ${buscando ? 'animate-spin' : ''}`} /> Actualizar
                 </button>
+                {hayFiltrosExtra && onLimpiarFiltros && (
+                    <button
+                        type="button"
+                        onClick={onLimpiarFiltros}
+                        className={`${BTN_SECONDARY} flex items-center justify-center gap-2 outline-none shrink-0 w-full sm:w-auto`}
+                    >
+                        <X className="w-4 h-4" /> Limpiar filtros
+                    </button>
+                )}
             </div>
 
-            {/* Móvil: un panel colapsable con principales + subfiltros */}
             <div className="md:hidden space-y-2">
                 <button
                     type="button"
@@ -164,8 +214,9 @@ export default function FiltrosAuditoria({
                             {esSubfiltro ? 'Subfiltro' : 'Filtro'}
                         </span>
                         <span className="block text-xs font-black uppercase theme-text-main truncate mt-0.5">
-                            {tabActual.label}
-                            {conteoActual !== undefined ? ` · ${conteoActual}` : ''}
+                            {filtrosAbiertos
+                                ? `${tabActual.label}${conteoActual !== undefined ? ` · ${conteoActual}` : ''}`
+                                : resumenContraido}
                         </span>
                     </span>
                     <ChevronDown
@@ -202,7 +253,6 @@ export default function FiltrosAuditoria({
                 )}
             </div>
 
-            {/* Escritorio: principales + subfiltros en filas separadas */}
             <div className="hidden md:block space-y-3">
                 <div>
                     <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1.5 ml-0.5">

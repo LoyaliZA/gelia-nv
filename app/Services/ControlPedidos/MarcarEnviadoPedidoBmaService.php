@@ -35,7 +35,10 @@ class MarcarEnviadoPedidoBmaService
             throw new \RuntimeException('El pedido requiere número de guía antes de marcarlo como enviado.');
         }
 
-        $cajas = $pedido->cajas->sortBy('orden')->values();
+        $cajas = $pedido->cajas
+            ->filter(fn (PedidoBmaCaja $c) => $c->estaActiva())
+            ->sortBy('orden')
+            ->values();
         $pendientes = $cajas->filter(fn (PedidoBmaCaja $c) => $c->estaPendiente())->values();
         $seleccion = is_array($cajasSeleccion) ? array_values($cajasSeleccion) : [];
 
@@ -88,7 +91,7 @@ class MarcarEnviadoPedidoBmaService
                 $caja->update($attrs);
             }
 
-            $quedanPendientes = $pedido->cajas()->get()->contains(fn (PedidoBmaCaja $c) => $c->estaPendiente());
+            $quedanPendientes = $pedido->cajas()->activas()->get()->contains(fn (PedidoBmaCaja $c) => $c->estaPendiente());
 
             if ($quedanPendientes) {
                 return $pedido->fresh([

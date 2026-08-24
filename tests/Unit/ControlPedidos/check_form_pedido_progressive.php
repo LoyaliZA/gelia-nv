@@ -7,9 +7,21 @@
 
 $fallos = 0;
 $root = dirname(__DIR__, 3);
-$form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx');
+$orquestador = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx');
+$form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedidoLegado.jsx');
+$progDir = $root.'/resources/js/Pages/ControlPedidos/Partials/FormularioProgresivo';
 
 $checks = [
+    ['orquestador usa flag formulario_progresivo', str_contains($orquestador, 'formulario_config?.formulario_progresivo')],
+    ['orquestador delega a Legado', str_contains($orquestador, 'ModalFormPedidoLegado')],
+    ['existe EncabezadoPedido', is_file($progDir.'/EncabezadoPedido.jsx')],
+    ['existe ProgresoPedido', is_file($progDir.'/ProgresoPedido.jsx')],
+    ['existe useFormularioPedidoBma', is_file($progDir.'/useFormularioPedidoBma.js')],
+    ['existe HistorialPedidoAcordeon', is_file($progDir.'/HistorialPedidoAcordeon.jsx')],
+    ['existe SeccionResumenEnvioPedido', is_file($progDir.'/SeccionResumenEnvioPedido.jsx')],
+    ['legado soporta modoProgresivo', str_contains($form, 'modoProgresivo')],
+    ['legado usa verEtapa', str_contains($form, 'verEtapa')],
+    ['legado envía updated_at_esperado', str_contains($form, 'updated_at_esperado')],
     ['sin cascada mostrarTrasTipo', ! str_contains($form, 'mostrarTrasTipo')],
     ['flag tieneTipo', str_contains($form, 'const tieneTipo')],
     ['gate pesaje exige tipo o pesaje en curso', str_contains($form, 'mostrarPesaje = tieneTipo')
@@ -26,7 +38,7 @@ $checks = [
     ['label Tipo de pedido', str_contains($form, 'Tipo de pedido')],
     ['pesaje gated', str_contains($form, '{mostrarPesaje && (')],
     ['resto gated', str_contains($form, '{mostrarRestoPedido && (')],
-    ['logistica gated', str_contains($form, '{mostrarLogisticaPostPesaje && (')],
+    ['logistica gated', str_contains($form, '{mostrarLogisticaPostPesaje &&')],
     ['mapa nSec', str_contains($form, 'const nSec = requiereLogistica') && str_contains($form, 'saf: 9')],
     ['pesaje listo cuenta como respondido', str_contains($form, "estatus_envio === 'pesaje_listo'")],
     ['bind pedido creado sin remount', str_contains($form, 'onPedidoCreado')],

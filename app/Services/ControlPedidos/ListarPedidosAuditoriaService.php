@@ -167,6 +167,13 @@ class ListarPedidosAuditoriaService
             });
         }
 
+        if (! empty($filtros['catalogo_paqueteria_id'])) {
+            $paqId = (int) $filtros['catalogo_paqueteria_id'];
+            if ($paqId > 0) {
+                $query->where('catalogo_paqueteria_id', $paqId);
+            }
+        }
+
         $tab = strtoupper($filtros['tab'] ?? 'TODAS');
         $idsPorFase = $this->idsPorFase();
 
