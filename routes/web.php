@@ -28,6 +28,7 @@ use App\Http\Controllers\ControlPedidos\PedidoBmaCedisController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaDelegadoController;
 use App\Http\Controllers\ControlPedidos\DireccionesAuxiliarController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaSaldosPagosController;
+use App\Http\Controllers\ControlPedidos\PedidoBmaTiendaController;
 use App\Http\Controllers\ControlPedidos\PlazosRetrasoPedidoBmaController;
 use App\Http\Controllers\SaldosAFavor\SaldosAFavorController;
 use App\Http\Controllers\SaldosAFavor\CajaSaldosAFavorController;
@@ -86,6 +87,21 @@ Route::middleware(['throttle:30,1', \App\Http\Middleware\HardenSolicitudDireccio
     Route::get('/cedis-evidencia/{codigo}/fotos/{foto}', [\App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaPublicaController::class, 'foto'])
         ->where('codigo', '[A-Za-z0-9]{6,64}')
         ->name('cedis_evidencia.publicas.foto');
+
+    Route::get('/tienda-evidencia/{codigo}', [\App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaTiendaPublicaController::class, 'show'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->name('tienda_evidencia.publicas.show');
+    Route::get('/tienda-evidencia/{codigo}/estado', [\App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaTiendaPublicaController::class, 'estado'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->middleware('throttle:60,1')
+        ->name('tienda_evidencia.publicas.estado');
+    Route::post('/tienda-evidencia/{codigo}/fotos', [\App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaTiendaPublicaController::class, 'subir'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->middleware('throttle:30,1')
+        ->name('tienda_evidencia.publicas.fotos');
+    Route::get('/tienda-evidencia/{codigo}/fotos/{foto}', [\App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaTiendaPublicaController::class, 'foto'])
+        ->where('codigo', '[A-Za-z0-9]{6,64}')
+        ->name('tienda_evidencia.publicas.foto');
 });
 
 Route::post('/webhooks/tiendanube', \App\Http\Controllers\TiendanubeWebhookController::class)
@@ -548,6 +564,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{pedidoBma}/pdf-pedido', [PedidoBmaController::class, 'subirPdfPedido'])->name('pdf_pedido.store');
         Route::post('/{pedidoBma}/anexo-piezas', [PedidoBmaController::class, 'subirAnexoPiezas'])->name('anexo_piezas.store');
         Route::post('/{pedidoBma}/solicitar-pesaje', [PedidoBmaController::class, 'solicitarPesaje'])->name('solicitar_pesaje');
+        Route::post('/{pedidoBma}/solicitar-preparacion-tienda', [PedidoBmaController::class, 'solicitarPreparacionTienda'])->name('solicitar_preparacion_tienda');
         Route::post('/{pedidoBma}/solicitar-repesaje', [PedidoBmaController::class, 'solicitarRepesaje'])->name('solicitar_repesaje');
         Route::post('/{pedidoBma}/cerrar-consulta', [PedidoBmaController::class, 'cerrarConsulta'])->name('cerrar_consulta');
         Route::post('/{pedidoBma}/reabrir-consulta', [PedidoBmaController::class, 'reabrirConsulta'])->name('reabrir_consulta');
@@ -598,6 +615,18 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:control_pedidos.cancelar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::get('/{pedidoBma}/cancelar/preview', [PedidoBmaController::class, 'previewCancelacion'])->name('cancelar.preview');
         Route::post('/{pedidoBma}/cancelar', [PedidoBmaController::class, 'cancelar'])->name('cancelar');
+        Route::post('/{pedidoBma}/espera-pago', [PedidoBmaController::class, 'marcarEsperaPago'])
+            ->middleware('can:control_pedidos.espera_pago')
+            ->name('espera_pago');
+        Route::post('/{pedidoBma}/cancelacion-operativa/{cancelacion}/reactivar', [PedidoBmaController::class, 'reactivarCancelacionOperativa'])
+            ->middleware('can:control_pedidos.cancelacion_operativa.reactivar')
+            ->name('cancelacion_operativa.reactivar');
+        Route::post('/{pedidoBma}/cancelacion-operativa/{cancelacion}/resolver-financiera', [PedidoBmaController::class, 'resolverFinancieroCancelacion'])
+            ->middleware('can:control_pedidos.cancelacion_operativa.resolver_financiera')
+            ->name('cancelacion_operativa.resolver_financiera');
+        Route::post('/{pedidoBma}/cancelacion-operativa/{cancelacion}/concluir-admin', [PedidoBmaController::class, 'concluirCancelacionAdmin'])
+            ->middleware('can:control_pedidos.cancelacion_operativa.concluir_admin')
+            ->name('cancelacion_operativa.concluir_admin');
     });
 
     Route::middleware(['can:control_pedidos.direccion.cambiar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
@@ -676,6 +705,37 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{pedidoBma}/sesion-evidencia/snapshot', [PedidoBmaCedisController::class, 'snapshotSesionEvidencia'])->name('sesion_evidencia.snapshot');
         Route::post('/{pedidoBma}/sesion-evidencia/cancelar', [PedidoBmaCedisController::class, 'cancelarSesionEvidencia'])->name('sesion_evidencia.cancelar');
         Route::get('/{pedidoBma}/sesion-evidencia/fotos/{foto}', [PedidoBmaCedisController::class, 'verFotoSesionEvidencia'])->name('sesion_evidencia.foto');
+        Route::post('/tareas/{tarea}/liberar', [PedidoBmaCedisController::class, 'liberarTarea'])
+            ->middleware('can:control_pedidos.cedis.liberar')
+            ->name('liberar');
+    });
+
+    Route::middleware(['can:control_pedidos.tienda.ver'])->prefix('control-pedidos/tienda')->name('control_pedidos.tienda.')->group(function () {
+        Route::get('/', [PedidoBmaTiendaController::class, 'index'])->name('index');
+        Route::get('/listado', [PedidoBmaTiendaController::class, 'listado'])->name('listado');
+        Route::get('/tareas/{tarea}', [PedidoBmaTiendaController::class, 'show'])->name('show');
+        Route::post('/tareas/{tarea}/tomar', [PedidoBmaTiendaController::class, 'tomar'])->middleware('can:control_pedidos.tienda.tomar')->name('tomar');
+        Route::post('/tareas/{tarea}/responder', [PedidoBmaTiendaController::class, 'responder'])->middleware('can:control_pedidos.tienda.responder')->name('responder');
+        Route::post('/tareas/{tarea}/confirmar-salida', [PedidoBmaTiendaController::class, 'confirmarSalida'])->middleware('can:control_pedidos.tienda.trasladar')->name('confirmar_salida');
+        Route::post('/tareas/{tarea}/regenerar-traspaso', [PedidoBmaTiendaController::class, 'regenerarTraspaso'])->middleware('can:control_pedidos.tienda.trasladar')->name('regenerar_traspaso');
+        Route::post('/tareas/{tarea}/caratula/generar', [PedidoBmaTiendaController::class, 'generarCaratula'])->middleware('can:control_pedidos.tienda.generar_caratula')->name('caratula.generar');
+        Route::post('/tareas/{tarea}/caratula/regenerar', [PedidoBmaTiendaController::class, 'regenerarCaratula'])->middleware('can:control_pedidos.tienda.regenerar_caratula')->name('caratula.regenerar');
+        Route::post('/tareas/{tarea}/caratula/confirmar-colocacion', [PedidoBmaTiendaController::class, 'confirmarCaratula'])->middleware('can:control_pedidos.tienda.confirmar_caratula')->name('caratula.confirmar');
+        Route::get('/tareas/{tarea}/caratula/{caratula}/pdf', [PedidoBmaTiendaController::class, 'descargarCaratula'])->middleware('can:control_pedidos.tienda.imprimir_caratula')->name('caratula.pdf');
+        Route::post('/tareas/{tarea}/documento-municipal', [PedidoBmaTiendaController::class, 'subirDocumentoMunicipal'])->middleware('can:control_pedidos.tienda.cargar_identificacion')->name('documento_municipal.store');
+        Route::get('/tareas/{tarea}/evidencia/{tareaDocumento}/descargar', [PedidoBmaTiendaController::class, 'descargarDocumentoTarea'])->name('evidencia.descargar');
+        Route::post('/tareas/{tarea}/reportar-incidencia', [PedidoBmaTiendaController::class, 'reportarIncidencia'])->middleware('can:control_pedidos.tienda.reportar_error')->name('reportar_incidencia');
+        Route::post('/tareas/{tarea}/liberar', [PedidoBmaTiendaController::class, 'liberar'])->middleware('can:control_pedidos.tienda.liberar')->name('liberar');
+        Route::post('/tareas/{tarea}/evidencia', [PedidoBmaTiendaController::class, 'subirEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('evidencia.store');
+        Route::delete('/tareas/{tarea}/evidencia/{tareaDocumento}', [PedidoBmaTiendaController::class, 'eliminarEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('evidencia.destroy');
+        Route::post('/tareas/{tarea}/sesion-evidencia', [PedidoBmaTiendaController::class, 'crearSesionEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('sesion_evidencia.store');
+        Route::get('/tareas/{tarea}/sesion-evidencia', [PedidoBmaTiendaController::class, 'mostrarSesionEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('sesion_evidencia.show');
+        Route::post('/tareas/{tarea}/sesion-evidencia/cancelar', [PedidoBmaTiendaController::class, 'cancelarSesionEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('sesion_evidencia.cancelar');
+        Route::post('/tareas/{tarea}/sesion-evidencia/promover', [PedidoBmaTiendaController::class, 'promoverSesionEvidencia'])->middleware('can:control_pedidos.tienda.evidencias')->name('sesion_evidencia.promover');
+    });
+
+    Route::middleware(['can:control_pedidos.preparacion.corregir'])->prefix('control-pedidos/tareas-preparacion')->name('control_pedidos.preparacion.')->group(function () {
+        Route::post('/{tarea}/corregir', [PedidoBmaTiendaController::class, 'corregir'])->name('corregir');
     });
 
     Route::middleware(['can:control_pedidos.delegado'])->prefix('control-pedidos/delegado')->name('control_pedidos.delegado.')->group(function () {

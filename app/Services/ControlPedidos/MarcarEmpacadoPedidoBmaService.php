@@ -31,6 +31,7 @@ class MarcarEmpacadoPedidoBmaService
             if (!$miembro->esGestionablePorCedis()) {
                 continue;
             }
+            AssertPedidoNoBloqueadoFase7::assert($miembro);
             $this->assertPuedeEmpacar($miembro);
         }
 
@@ -79,6 +80,10 @@ class MarcarEmpacadoPedidoBmaService
 
         if ($pedido->es_resguardo && !$pedido->esResguardoComplementario()) {
             throw new \RuntimeException("El pedido {$pedido->folio} está en resguardo; libérelo primero.");
+        }
+
+        if ($pedido->tieneTrasladoCedisPendiente()) {
+            throw new \RuntimeException("El pedido {$pedido->folio} tiene mercancía de Tienda pendiente de recepción en CEDIS.");
         }
     }
 

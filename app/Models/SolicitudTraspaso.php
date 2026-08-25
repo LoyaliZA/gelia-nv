@@ -15,6 +15,8 @@ class SolicitudTraspaso extends Model
 
     protected $fillable = [
         'folio',
+        'tarea_preparacion_id',
+        'origen_codigo',
         'vendedor_id',
         'departamento_id',
         'cliente_id',
@@ -83,6 +85,16 @@ class SolicitudTraspaso extends Model
     public function productos(): HasMany
     {
         return $this->hasMany(SolicitudTraspasoProducto::class, 'solicitud_traspaso_id');
+    }
+
+    public function tareaPreparacion(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\ControlPedidos\PedidoBmaTareaPreparacion::class, 'tarea_preparacion_id');
+    }
+
+    public function esOrigenGestionPedido(): bool
+    {
+        return $this->origen_codigo === 'GESTION_PEDIDO' || $this->tarea_preparacion_id !== null;
     }
 
     public function detallesDano(): HasMany

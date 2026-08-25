@@ -30,6 +30,11 @@ class FormPublicUrl
         return self::base().'/cedis-evidencia/'.ltrim($codigo, '/');
     }
 
+    public static function tiendaEvidenciaShow(string $codigo): string
+    {
+        return self::base().'/tienda-evidencia/'.ltrim($codigo, '/');
+    }
+
     public static function host(): ?string
     {
         $host = parse_url(self::base(), PHP_URL_HOST);

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck, Truck, Ban, Download, RotateCcw, FileSearch } from 'lucide-react';
+import { Eye, Edit2, Trash2, AlertTriangle, History, Receipt, PackageCheck, Truck, Ban, Download, RotateCcw, FileSearch, Clock } from 'lucide-react';
+import { router } from '@inertiajs/react';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import {
     badgeEstatusPedido,
@@ -27,6 +28,18 @@ import {
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import BotonAccionCubico from './BotonAccionCubico';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+
+function textoTiempoRestante(iso) {
+    if (!iso) return null;
+    const ms = new Date(iso).getTime() - Date.now();
+    if (Number.isNaN(ms)) return null;
+    if (ms <= 0) return 'Vencido — pendiente liberación';
+    const h = Math.floor(ms / 3600000);
+    const d = Math.floor(h / 24);
+    if (d > 0) return `Quedan ${d} día(s) y ${h % 24} h`;
+    if (h > 0) return `Quedan ${h} hora(s)`;
+    return `Quedan ${Math.max(1, Math.floor(ms / 60000))} min`;
+}
 
 function AccionesPedido({
     pedido, can, onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
@@ -107,9 +120,28 @@ function AccionesPedido({
             <BotonAccionCubico key="editar" icon={Edit2} label="Editar" onClick={() => onEditar(pedido)} conLabel={compact} />
         );
     }
-    if (puedeCancelar?.(pedido) && onCancelar) {
+    if (pedido.puede_espera_pago && can('control_pedidos.espera_pago')) {
         items.push(
-            <BotonAccionCubico key="cancelar" icon={Ban} label="Cancelar" onClick={() => onCancelar(pedido)} tone="warn" conLabel={compact} />
+            <BotonAccionCubico
+                key="espera"
+                icon={Clock}
+                label="Esperando pago"
+                tone="teal"
+                conLabel={compact}
+                onClick={() => router.post(route('control_pedidos.espera_pago', pedido.id), {}, { preserveScroll: true })}
+            />
+        );
+    }
+    if ((puedeCancelar?.(pedido) || pedido.cancelacion_operativa) && onCancelar) {
+        items.push(
+            <BotonAccionCubico
+                key="cancelar"
+                icon={Ban}
+                label={pedido.cancelacion_operativa ? 'Seguir cancelación' : 'Cancelar'}
+                onClick={() => onCancelar(pedido)}
+                tone="warn"
+                conLabel={compact}
+            />
         );
     }
     if (puedeEliminarBorrador?.(pedido)) {
@@ -157,6 +189,17 @@ function CardPedido({ pedido, badge, badgeEnvio, esRechazado, can, onVer, onEdit
                     </p>
                     {pedido.vendedor?.name && (
                         <p className="text-[9px] theme-text-muted font-bold mt-1 m-0">{pedido.vendedor.name}</p>
+                    )}
+                    {pedido.esta_esperando_pago && (
+                        <p className="text-[10px] font-black text-amber-700 m-0 mt-1">
+                            Esperando pago · {textoTiempoRestante(pedido.fecha_limite_espera) || 'Mercancía resguardada'}
+                        </p>
+                    )}
+                    {pedido.cancelacion_operativa && (
+                        <p className="text-[10px] font-black text-red-700 m-0 mt-1">
+                            Cancelación {pedido.cancelacion_operativa.estado}
+                            {pedido.cancelacion_operativa.requiere_resolucion_financiera ? ' · Requiere resolución financiera' : ''}
+                        </p>
                     )}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -277,7 +320,7 @@ export default function TablaPedidos({
     const puedeEliminarRegistro = (pedido) => !esPapelera && can('control_pedidos.eliminar_registro');
 
     const puedeCancelar = (pedido) => !esPapelera
-        && Boolean(pedido.puede_cancelar)
+        && (Boolean(pedido.puede_cancelar) || Boolean(pedido.cancelacion_operativa))
         && puedeMutarPedido(pedido)
         && can('control_pedidos.cancelar')
         && pedido.estatus?.fase_ciclo !== 'CANCELADO';
@@ -356,6 +399,16 @@ export default function TablaPedidos({
                                 <tr key={pedido.id} className={`border-b theme-border last:border-0 hover:ring-2 hover:ring-inset hover:ring-[var(--color-primario)]/20 transition-all ${esRechazado ? 'bg-red-500/5' : ''}`}>
                                     <td className="px-5 py-4">
                                         <EncabezadoFolioPedido pedido={pedido} size="sm" />
+                                        {pedido.esta_esperando_pago && (
+                                            <p className="text-[9px] font-black text-amber-700 mt-1 m-0">
+                                                Esperando pago · {textoTiempoRestante(pedido.fecha_limite_espera) || 'Resguardo'}
+                                            </p>
+                                        )}
+                                        {pedido.cancelacion_operativa && (
+                                            <p className="text-[9px] font-black text-red-700 mt-1 m-0">
+                                                Cancelación {pedido.cancelacion_operativa.estado}
+                                            </p>
+                                        )}
                                         {esRechazado && pedido.motivo_rechazo && (
                                             <p className="text-[9px] text-red-500 font-bold mt-1 flex items-center gap-1">
                                                 <AlertTriangle className="w-3 h-3" /> {pedido.motivo_rechazo}

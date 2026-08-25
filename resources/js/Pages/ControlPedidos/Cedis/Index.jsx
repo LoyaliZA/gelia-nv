@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Warehouse, Clock, CheckCircle2, Package, Scale, Loader2 } from 'lucide-react';
+import { Warehouse, Clock, CheckCircle2, Package, Scale, Loader2, PackageOpen } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
@@ -12,6 +12,7 @@ import ModalReportarErrorDatos from '../Partials/ModalReportarErrorDatos';
 import ModalMarcarApartadoResguardo from './Partials/ModalMarcarApartadoResguardo';
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 import ModalBitacoraPedido from '../Partials/ModalBitacoraPedido';
+import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 const KPI_CONFIG = [
@@ -21,9 +22,19 @@ const KPI_CONFIG = [
     { key: 'pendientes_envio', label: 'Pendiente de recolección', tab: 'PENDIENTES_ENVIO', icon: Package, color: '#0EA5E9' },
     { key: 'enviados', label: 'Enviados', tab: 'ENVIADOS', icon: CheckCircle2, color: '#22C55E' },
     { key: 'incorrectas', label: 'Errores CEDIS', tab: 'INCORRECTAS', icon: CheckCircle2, color: '#F97316' },
+    { key: 'liberaciones_pendientes', label: 'Liberaciones pendientes', tab: 'LIBERACIONES', icon: PackageOpen, color: '#D97706' },
 ];
 
-export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipos_caja = [], almacenes_busqueda = [] }) {
+export default function Index({
+    auth,
+    pedidos,
+    liberaciones = null,
+    metricas = {},
+    filtros = {},
+    tipos_caja = [],
+    almacenes_busqueda = [],
+    can: canProps = {},
+}) {
     const { flash } = usePage().props;
     const {
         pedidos: pedidosVista,
@@ -45,8 +56,18 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
     const [modalApartado, setModalApartado] = useState({ abierto: false, pedido: null });
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
+    const [modalLiberar, setModalLiberar] = useState({ abierto: false, tarea: null });
     const debounceBusqueda = useRef(null);
     const modalAbiertoRef = useRef(false);
+
+    const onTabChange = (tab) => {
+        setTabActiva(tab);
+        if (tab === 'LIBERACIONES') {
+            router.get(route('control_pedidos.cedis.index'), { tab, q: busqueda || undefined }, { preserveState: true, preserveScroll: true });
+            return;
+        }
+        cargar({ tab, q: busqueda || undefined, page: 1 });
+    };
 
     useEffect(() => {
         if (flash?.success) {
@@ -70,11 +91,6 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
         }, 15000);
         return () => clearInterval(interval);
     }, [cargando, tabActiva, busqueda, pedidosVista?.current_page, cargar]);
-
-    const onTabChange = (tab) => {
-        setTabActiva(tab);
-        cargar({ tab, q: busqueda || undefined, page: 1 });
-    };
 
     const onBuscar = (valor) => {
         setBusqueda(valor);
@@ -139,7 +155,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
                         );
                     })}
                 </div>
-                <div className="hidden md:grid grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="hidden md:grid grid-cols-3 lg:grid-cols-7 gap-4">
                     {KPI_CONFIG.map(({ key, label, tab, icon: Icon, color }) => {
                         const activo = tabActiva === tab;
                         return (
@@ -182,22 +198,64 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, tipo
                 </div>
 
                 <div className="relative min-h-[12rem]">
-                    {cargando && (
+                    {cargando && tabActiva !== 'LIBERACIONES' && (
                         <div className="absolute inset-0 z-10 flex items-start justify-center pt-16 pointer-events-none">
                             <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--color-primario)' }} aria-label="Cargando pedidos" />
                         </div>
                     )}
-                    <TarjetasCedis
-                        pedidos={pedidosVista}
-                        onVerDetalle={abrirDetalle}
-                        onResponderPesaje={abrirPesaje}
-                        onReportarErrorDatos={abrirErrorDatos}
-                        onMarcarApartado={abrirApartado}
-                        onBitacora={abrirBitacora}
-                    />
+                    {tabActiva === 'LIBERACIONES' ? (
+                        <div className="space-y-3">
+                            {(liberaciones?.data || []).length === 0 && (
+                                <div className={`${geliaCardClass()} p-8 text-center text-sm font-bold theme-text-muted`}>
+                                    Sin liberaciones pendientes_
+                                </div>
+                            )}
+                            {(liberaciones?.data || []).map((tarea) => {
+                                const folio = tarea.pedido?.folio_remision || tarea.pedido?.folio || `#${tarea.id}`;
+                                return (
+                                    <div key={tarea.id} className={`${geliaCardClass()} p-4 flex flex-wrap items-center justify-between gap-3`}>
+                                        <div>
+                                            <p className="text-sm font-black theme-text-main m-0">{folio}</p>
+                                            <p className="text-xs font-bold theme-text-muted m-0">
+                                                {tarea.almacen?.nombre || '—'} · {tarea.modalidad?.nombre || tarea.estado}
+                                            </p>
+                                            <p className="text-xs font-bold theme-text-muted m-0 mt-1">
+                                                {(tarea.productos || []).slice(0, 3).map((p) => p.descripcion_snapshot || p.sku).join(', ') || 'Sin productos'}
+                                            </p>
+                                        </div>
+                                        {(canProps.liberar || (auth?.user?.permissions || []).includes('control_pedidos.cedis.liberar')) && (
+                                            <button
+                                                type="button"
+                                                className="px-4 py-2 min-h-[44px] rounded-xl text-xs font-black uppercase tracking-wide text-white"
+                                                style={{ background: 'var(--color-primario)' }}
+                                                onClick={() => setModalLiberar({ abierto: true, tarea })}
+                                            >
+                                                Liberar mercancía
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <TarjetasCedis
+                            pedidos={pedidosVista}
+                            onVerDetalle={abrirDetalle}
+                            onResponderPesaje={abrirPesaje}
+                            onReportarErrorDatos={abrirErrorDatos}
+                            onMarcarApartado={abrirApartado}
+                            onBitacora={abrirBitacora}
+                        />
+                    )}
                 </div>
             </GeliaPageShell>
 
+            <ModalLiberarMercancia
+                abierto={modalLiberar.abierto}
+                onClose={() => setModalLiberar({ abierto: false, tarea: null })}
+                tarea={modalLiberar.tarea}
+                routeName="control_pedidos.cedis.liberar"
+            />
             <ModalDetalleCedis
                 abierto={modalDetalle.abierto}
                 pedido={modalDetalle.pedido}

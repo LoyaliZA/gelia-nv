@@ -22,6 +22,7 @@ class ObtenerCatalogosPedidoBmaService
         private PagosPedidoBmaConfig $pagosConfig,
         private EnviosPedidoBmaConfig $enviosConfig,
         private FormularioProgresivoPedidoBmaConfig $formularioConfig,
+        private PreparacionTiendaConfig $preparacionConfig,
     ) {}
 
     /**
@@ -48,7 +49,23 @@ class ObtenerCatalogosPedidoBmaService
             'bancos' => $this->bancosParaDepartamentos($departamentoIds),
             'formas_pago' => PedidoBmaPago::formasPagoCatalogo(),
             'tipos_caja' => CatalogoTipoCajaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'peso_volumetrico', 'medidas', 'largo', 'ancho', 'alto']),
-            'paqueterias' => CatalogoPaqueteriaPedido::where('activo', true)->orderBy('categoria')->orderBy('nombre')->get(['id', 'nombre', 'categoria', 'permite_costo_diferido']),
+            'paqueterias' => CatalogoPaqueteriaPedido::where('activo', true)->orderBy('categoria')->orderBy('nombre')->get([
+                'id', 'nombre', 'categoria', 'permite_costo_diferido',
+                'requiere_caratula', 'requiere_identificacion', 'requiere_remision', 'permite_por_cobrar',
+                'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
+                'plantilla_caratula', 'habilitado_envio_municipio', 'reglas_municipio_pendientes',
+            ]),
+            'paqueterias_municipio' => CatalogoPaqueteriaPedido::query()
+                ->where('activo', true)
+                ->where('habilitado_envio_municipio', true)
+                ->where('reglas_municipio_pendientes', false)
+                ->orderBy('nombre')
+                ->get([
+                    'id', 'nombre', 'categoria',
+                    'requiere_caratula', 'requiere_identificacion', 'requiere_remision', 'permite_por_cobrar',
+                    'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
+                    'plantilla_caratula', 'habilitado_envio_municipio',
+                ]),
             'tipos_guia' => CatalogoTipoGuiaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
             'zonas' => CatalogoZonaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'costo_adicional']),
             'envios_tienda' => CatalogoEnvioTienda::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'es_otro']),
@@ -64,6 +81,7 @@ class ObtenerCatalogosPedidoBmaService
                 ],
             ]),
             'formulario_config' => $this->formularioConfig->todas(),
+            'preparacion_config' => $this->preparacionConfig->todas(),
         ];
     }
 

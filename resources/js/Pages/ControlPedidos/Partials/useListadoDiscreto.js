@@ -14,10 +14,12 @@ export default function useListadoDiscreto({
     listadoRoute,
     indexRoute,
     pedidos: pedidosProp,
+    tareas: tareasProp,
     metricas: metricasProp,
     clientes: clientesProp,
 }) {
     const [pedidos, setPedidos] = useState(pedidosProp);
+    const [tareas, setTareas] = useState(tareasProp);
     const [metricas, setMetricas] = useState(metricasProp ?? {});
     const [clientes, setClientes] = useState(clientesProp);
     const [cargando, setCargando] = useState(false);
@@ -26,6 +28,10 @@ export default function useListadoDiscreto({
     useEffect(() => {
         if (pedidosProp !== undefined) setPedidos(pedidosProp);
     }, [pedidosProp]);
+
+    useEffect(() => {
+        if (tareasProp !== undefined) setTareas(tareasProp);
+    }, [tareasProp]);
 
     useEffect(() => {
         if (metricasProp !== undefined) setMetricas(metricasProp);
@@ -53,6 +59,7 @@ export default function useListadoDiscreto({
                 headers: { Accept: 'application/json' },
             });
             if (data.pedidos !== undefined) setPedidos(data.pedidos);
+            if (data.tareas !== undefined) setTareas(data.tareas);
             if (data.metricas !== undefined) setMetricas(data.metricas);
             if (data.clientes !== undefined) setClientes(data.clientes);
             sincronizarUrl(params);
@@ -65,5 +72,5 @@ export default function useListadoDiscreto({
         }
     }, [listadoRoute, sincronizarUrl]);
 
-    return { pedidos, metricas, clientes, cargando, cargar };
+    return { pedidos, tareas, metricas, clientes, cargando, cargar };
 }

@@ -103,12 +103,14 @@ class ListarPedidosCedisService
     {
         $idsVisibles = $this->idsEstatusVisibles();
 
-        return PedidoBma::with($this->withRelations())
-            ->whereNull('pedido_principal_id')
-            ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
-            ->whereNotNull('pago_validado_at')
-            ->whereHas('remision')
-            ->orderByDesc('created_at');
+        return $this->excluirPreparacionTienda(
+            PedidoBma::with($this->withRelations())
+                ->whereNull('pedido_principal_id')
+                ->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
+                ->whereNotNull('pago_validado_at')
+                ->whereHas('remision')
+                ->orderByDesc('created_at')
+        );
     }
 
     /** TODOS = bandeja CEDIS + pendientes de pesaje. */
@@ -117,31 +119,35 @@ class ListarPedidosCedisService
         $idsVisibles = $this->idsEstatusVisibles();
         $estatusPesaje = PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE;
 
-        return PedidoBma::with($this->withRelations())
-            ->whereNull('pedido_principal_id')
-            ->where(function (Builder $q) use ($idsVisibles, $estatusPesaje) {
-                $q->where(function (Builder $bandeja) use ($idsVisibles) {
-                    $bandeja->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
-                        ->whereNotNull('pago_validado_at')
-                        ->whereHas('remision');
-                })->orWhere(function (Builder $pesaje) use ($estatusPesaje) {
-                    $pesaje->where('estatus_envio', $estatusPesaje)
-                        ->whereNull('empacado_at');
-                });
-            })
-            ->orderByRaw('CASE WHEN estatus_envio = ? THEN 0 ELSE 1 END', [$estatusPesaje])
-            ->orderByDesc('pesaje_solicitado_at')
-            ->orderByDesc('created_at');
+        return $this->excluirPreparacionTienda(
+            PedidoBma::with($this->withRelations())
+                ->whereNull('pedido_principal_id')
+                ->where(function (Builder $q) use ($idsVisibles, $estatusPesaje) {
+                    $q->where(function (Builder $bandeja) use ($idsVisibles) {
+                        $bandeja->whereIn('catalogo_estatus_pedido_id', $idsVisibles ?: [0])
+                            ->whereNotNull('pago_validado_at')
+                            ->whereHas('remision');
+                    })->orWhere(function (Builder $pesaje) use ($estatusPesaje) {
+                        $pesaje->where('estatus_envio', $estatusPesaje)
+                            ->whereNull('empacado_at');
+                    });
+                })
+                ->orderByRaw('CASE WHEN estatus_envio = ? THEN 0 ELSE 1 END', [$estatusPesaje])
+                ->orderByDesc('pesaje_solicitado_at')
+                ->orderByDesc('created_at')
+        );
     }
 
     private function queryPendientesPesaje(): Builder
     {
-        return PedidoBma::with($this->withRelations())
-            ->whereNull('pedido_principal_id')
-            ->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE)
-            ->whereNull('empacado_at')
-            ->orderByDesc('pesaje_solicitado_at')
-            ->orderByDesc('created_at');
+        return $this->excluirPreparacionTienda(
+            PedidoBma::with($this->withRelations())
+                ->whereNull('pedido_principal_id')
+                ->where('estatus_envio', PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE)
+                ->whereNull('empacado_at')
+                ->orderByDesc('pesaje_solicitado_at')
+                ->orderByDesc('created_at')
+        );
     }
 
     private function aplicarFiltros(Builder $query, array $filtros): void
@@ -200,5 +206,10 @@ class ListarPedidosCedisService
             ->whereIn('fase_ciclo', array_merge(self::FASES_PENDIENTES, self::FASES_EMPACADOS))
             ->pluck('id', 'fase_ciclo')
             ->all();
+    }
+
+    private function excluirPreparacionTienda(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('tareaPreparacionVigente');
     }
 }

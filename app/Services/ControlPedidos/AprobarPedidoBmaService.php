@@ -39,6 +39,8 @@ class AprobarPedidoBmaService
 
         $this->pagos->assertPagoListoParaAvanzar($pedido, RegistrarPagoPedidoBmaService::FASE_APROBAR);
 
+        AssertPedidoNoBloqueadoFase7::assert($pedido);
+
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $this->safPedido->aplicarReservasPedido($pedido, $usuarioId);
 

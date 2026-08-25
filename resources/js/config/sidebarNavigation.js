@@ -137,6 +137,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('control_pedidos.cedis.index', '/control-pedidos/cedis'),
             active: (url) => url.startsWith('/control-pedidos/cedis'),
         },
+        can('control_pedidos.tienda.ver') && {
+            type: 'link',
+            id: 'control_pedidos_tienda',
+            label: 'Preparación Tienda',
+            icon: Store,
+            href: () => routeHref('control_pedidos.tienda.index', '/control-pedidos/tienda'),
+            active: (url) => url.startsWith('/control-pedidos/tienda'),
+        },
         can('control_pedidos.delegado') && {
             type: 'link',
             id: 'control_pedidos_delegado',

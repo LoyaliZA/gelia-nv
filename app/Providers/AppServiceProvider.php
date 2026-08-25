@@ -24,6 +24,7 @@ use App\Models\CatalogoReglaIncidencia;
 use App\Models\Producto;
 use App\Models\Contabilidad\Pedido as ContabilidadPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
 use App\Models\RhHorasExtra;
 use App\Models\RhDeduccion;
 use App\Models\RhPrestamoPagoFijo;
@@ -183,6 +184,9 @@ class AppServiceProvider extends ServiceProvider
         Route::bind('costo', fn (string $value) => \App\Models\ProductoCosto::findOrFail($value));
         Route::bind('pedido', fn (string $value) => ContabilidadPedido::findOrFail($value));
         Route::bind('pedidoBma', fn (string $value) => PedidoBma::findOrFail($value));
+        Route::bind('tarea', fn (string $value) => PedidoBmaTareaPreparacion::findOrFail($value));
+        Route::bind('tareaDocumento', fn (string $value) => \App\Models\ControlPedidos\PedidoBmaTareaDocumento::findOrFail($value));
+        Route::bind('caratula', fn (string $value) => \App\Models\ControlPedidos\PedidoBmaCaratula::findOrFail($value));
 
         RateLimiter::for('api-externa', function (Request $request) {
             $aplicacion = $request->user();

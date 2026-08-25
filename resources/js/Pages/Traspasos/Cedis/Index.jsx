@@ -44,6 +44,11 @@ function TarjetaCedis({ traspaso, onRevisar, onConfirmar, confirmandoId }) {
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
                             Respondida
                         </span>
+                        {(traspaso.origen_codigo === 'GESTION_PEDIDO' || traspaso.tarea_preparacion_id) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30">
+                                Gestión de pedido
+                            </span>
+                        )}
                         {conDetalle > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30">
                                 {conDetalle} con detalle
@@ -53,6 +58,14 @@ function TarjetaCedis({ traspaso, onRevisar, onConfirmar, confirmandoId }) {
                     <h3 className="text-base font-bold theme-text-main leading-snug m-0 break-words">
                         {traspaso.cliente?.numero_cliente} — {traspaso.cliente?.nombre}
                     </h3>
+                    {traspaso.tarea_preparacion?.pedido && (
+                        <p className="text-xs theme-text-muted mt-1 font-bold m-0">
+                            Pedido {traspaso.tarea_preparacion.pedido.folio_remision || traspaso.tarea_preparacion.pedido.folio}
+                            {traspaso.tarea_preparacion.almacen?.nombre
+                                ? ` · Tienda: ${traspaso.tarea_preparacion.almacen.nombre}`
+                                : ''}
+                        </p>
+                    )}
                     <p className="text-xs theme-text-muted mt-2 font-bold m-0 inline-flex items-center gap-1.5">
                         <User className="w-3.5 h-3.5 shrink-0" />
                         <span className="truncate">{traspaso.vendedor?.name}</span>
