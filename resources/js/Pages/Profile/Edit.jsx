@@ -61,6 +61,13 @@ import {
     validateImageSource,
     MAX_SOURCE_IMAGE_BYTES,
 } from '../../utils/compressImage';
+import SidebarLayoutPicker from './Partials/SidebarLayoutPicker';
+import {
+    isProfessionalSidebarLayout,
+    DEFAULT_SIDEBAR_MOBILE_LAYOUT,
+    ensureProfessionalSidebarDefaultOnce,
+    resolveSidebarLayout,
+} from '../../config/sidebarLayouts';
 
 const MAX_PROFILE_PHOTO_BYTES = 2048 * 1024;
 const MAX_BG_PHOTO_BYTES = 5120 * 1024;
@@ -84,8 +91,8 @@ function readStoredTheme(temaVisual = {}) {
             font: temaVisual?.fuente_principal || 'inter',
             scale: clampFontScale(temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT),
             glass: temaVisual?.efecto_cristal !== false,
-            layout: temaVisual?.layout_sidebar || 'floating_left',
-            mobileLayout: temaVisual?.layout_sidebar_mobile || 'mobile_bottom',
+            layout: resolveSidebarLayout(null, temaVisual?.layout_sidebar),
+            mobileLayout: temaVisual?.layout_sidebar_mobile || DEFAULT_SIDEBAR_MOBILE_LAYOUT,
             sidebarMode: temaVisual?.sidebar_modo || 'collapsed',
             fixedPosition: temaVisual?.sidebar_posicion_fija || 'left',
             contentDensity: normalizeDensityMode(temaVisual?.densidad_contenido ?? CONTENT_DENSITY_DEFAULT),
@@ -93,6 +100,7 @@ function readStoredTheme(temaVisual = {}) {
             contentPaddingRem: clampContentPaddingRem(temaVisual?.contenido_padding_rem ?? CONTENT_PADDING_REM_DEFAULT),
         };
     }
+    ensureProfessionalSidebarDefaultOnce();
     const savedGlass = localStorage.getItem('theme_glass');
     return {
         color: localStorage.getItem('theme_color') || temaVisual?.color_nombre?.toLowerCase() || 'rosa',
@@ -105,8 +113,13 @@ function readStoredTheme(temaVisual = {}) {
             localStorage.getItem(FONT_SCALE_STORAGE_KEY) ?? temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT
         ),
         glass: savedGlass !== null ? savedGlass === 'true' : temaVisual?.efecto_cristal !== false,
-        layout: localStorage.getItem('theme_layout') || temaVisual?.layout_sidebar || 'floating_left',
-        mobileLayout: localStorage.getItem('theme_layout_mobile') || temaVisual?.layout_sidebar_mobile || 'mobile_bottom',
+        layout: resolveSidebarLayout(
+            localStorage.getItem('theme_layout'),
+            temaVisual?.layout_sidebar
+        ),
+        mobileLayout: localStorage.getItem('theme_layout_mobile')
+            || temaVisual?.layout_sidebar_mobile
+            || DEFAULT_SIDEBAR_MOBILE_LAYOUT,
         sidebarMode: localStorage.getItem('theme_sidebar_mode') || temaVisual?.sidebar_modo || 'collapsed',
         fixedPosition: localStorage.getItem('theme_fixed_position') || temaVisual?.sidebar_posicion_fija || 'left',
         contentDensity: normalizeDensityMode(
@@ -393,9 +406,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         { name: 'Gris Oscuro', hex: '#1e293b' },
     ];
     const FALLBACK_PRESETS = [
-        { name: 'Gelia Signature', modo: 'dark',  colorHex: '#ec4899', colorNombre: 'rosa',  bg: 'blob',    font: 'montserrat', escala: 1, glass: true,  layout: 'floating_left',  sound: true },
-        { name: 'GELIA Oasis',     modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins',     escala: 1, glass: false, layout: 'floating_right', sound: true },
-        { name: 'CyberTech',       modo: 'dark',  colorHex: '#3b82f6', colorNombre: 'azul',  bg: 'polygon', font: 'mono',        escala: 1, glass: false, layout: 'fixed',          sound: true },
+        { name: 'Gelia Signature', modo: 'dark',  colorHex: '#ec4899', colorNombre: 'rosa',  bg: 'blob',    font: 'montserrat', escala: 1, glass: true,  layout: 'professional_left',  sound: true },
+        { name: 'GELIA Oasis',     modo: 'light', colorHex: '#10b981', colorNombre: 'verde', bg: 'stacked', font: 'poppins',     escala: 1, glass: false, layout: 'professional_left', sound: true },
+        { name: 'CyberTech',       modo: 'dark',  colorHex: '#3b82f6', colorNombre: 'azul',  bg: 'polygon', font: 'mono',        escala: 1, glass: false, layout: 'professional_left', sound: true },
     ];
     const presets = catalogo_temas.length > 0 ? catalogo_temas : FALLBACK_PRESETS;
     const fondosDisponibles = catalogo_fondos.length > 0
@@ -650,7 +663,9 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
             fuente_principal: typography,
             escala_fuente:    fontScale,
             layout_sidebar:   sidebarLayout,
-            layout_sidebar_mobile: mobileSidebarLayout,
+            layout_sidebar_mobile: isProfessionalSidebarLayout(sidebarLayout)
+                ? 'mobile_topbar'
+                : mobileSidebarLayout,
             sidebar_modo:    sidebarMode,
             sidebar_posicion_fija: fixedPosition,
             efecto_cristal:   glassEffect,
@@ -825,6 +840,11 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
         setSidebarLayout(layout);
         localStorage.setItem('theme_layout', layout);
         window.dispatchEvent(new CustomEvent('theme-layout-preview', { detail: { layout } }));
+        if (isProfessionalSidebarLayout(layout)) {
+            setMobileSidebarLayout('mobile_topbar');
+            localStorage.setItem('theme_layout_mobile', 'mobile_topbar');
+            window.dispatchEvent(new CustomEvent('theme-mobile-layout-preview', { detail: { layout: 'mobile_topbar' } }));
+        }
         window.dispatchEvent(new Event('theme-changed'));
     };
 
@@ -1452,63 +1472,19 @@ export default function Edit({ tema_visual, perfilUsuario = {} }) {
                             <PreferenciasSubheading
                                 icon={PanelLeft}
                                 title="Navegación_"
-                                subtitle="Sidebar fijo, flotante y comportamiento al pasar el mouse"
+                                subtitle="Elige el estilo de sidebar y su comportamiento"
                             />
                             <div className={settingsPanelClass}>
-                        <SettingsRow icon={PanelLeft} title="Disposición del Sidebar" subtitle="Formato lateral en pantallas grandes" stackOnMobile={true}>
-                            <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
-                                <button type="button" onClick={() => handleLayoutChange('fixed')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'fixed'}>
-                                    Fijo
-                                </button>
-                                <button type="button" onClick={() => handleLayoutChange('floating_left')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'floating_left'}>
-                                    Flot. Izq
-                                </button>
-                                <button type="button" onClick={() => handleLayoutChange('floating_right')} className="gelia-segment-btn px-6" data-active={sidebarLayout === 'floating_right'}>
-                                    Flot. Der
-                                </button>
-                            </div>
-                        </SettingsRow>
-
-                        <SettingsRow icon={PanelLeft} title="Sidebar en móvil" subtitle="Barra inferior flotante o barra superior con menú lateral" stackOnMobile={true}>
-                            <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
-                                <button type="button" onClick={() => handleMobileLayoutChange('mobile_bottom')} className="gelia-segment-btn px-4 sm:px-5" data-active={mobileSidebarLayout === 'mobile_bottom'}>
-                                    Barra inferior
-                                </button>
-                                <button type="button" onClick={() => handleMobileLayoutChange('mobile_topbar')} className="gelia-segment-btn px-4 sm:px-5" data-active={mobileSidebarLayout === 'mobile_topbar'}>
-                                    Barra superior
-                                </button>
-                            </div>
-                        </SettingsRow>
-
-                        {sidebarLayout === 'fixed' && (
-                            <SettingsRow icon={PanelLeft} title="Posición barra fija" subtitle="Como la barra de tareas: borde de pantalla" stackOnMobile={true}>
-                                <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm flex-wrap sm:flex-nowrap">
-                                    <button type="button" onClick={() => handleFixedPositionChange('left')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'left'}>
-                                        Izquierda
-                                    </button>
-                                    <button type="button" onClick={() => handleFixedPositionChange('right')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'right'}>
-                                        Derecha
-                                    </button>
-                                    <button type="button" onClick={() => handleFixedPositionChange('top')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'top'}>
-                                        Arriba
-                                    </button>
-                                    <button type="button" onClick={() => handleFixedPositionChange('bottom')} className="gelia-segment-btn px-4 sm:px-5" data-active={fixedPosition === 'bottom'}>
-                                        Abajo
-                                    </button>
-                                </div>
-                            </SettingsRow>
-                        )}
-
-                        <SettingsRow icon={PanelLeft} title="Estado del Sidebar" subtitle="Contraído al pasar el mouse o siempre desplegado" stackOnMobile={true}>
-                            <div className="gelia-segment w-full sm:w-auto p-1 h-12 shadow-sm">
-                                <button type="button" onClick={() => handleSidebarModeChange('collapsed')} className="gelia-segment-btn px-5 sm:px-6" data-active={sidebarMode === 'collapsed'}>
-                                    Contraída
-                                </button>
-                                <button type="button" onClick={() => handleSidebarModeChange('expanded')} className="gelia-segment-btn px-5 sm:px-6" data-active={sidebarMode === 'expanded'}>
-                                    Desplegada
-                                </button>
-                            </div>
-                        </SettingsRow>
+                                <SidebarLayoutPicker
+                                    value={sidebarLayout}
+                                    onChange={handleLayoutChange}
+                                    mobileLayout={mobileSidebarLayout}
+                                    onMobileChange={handleMobileLayoutChange}
+                                    sidebarMode={sidebarMode}
+                                    onSidebarModeChange={handleSidebarModeChange}
+                                    fixedPosition={fixedPosition}
+                                    onFixedPositionChange={handleFixedPositionChange}
+                                />
                             </div>
                         </div>
                     )}

@@ -48,13 +48,20 @@ class PedidoBmaAuditoriaController extends Controller
             'q' => ['nullable', 'string', 'max:255'],
             'page' => ['nullable', 'integer', 'min:1'],
             'catalogo_paqueteria_id' => ['nullable', 'integer', 'exists:catalogo_paqueterias_pedido,id'],
+            'departamento_id' => ['nullable', 'integer', 'exists:departamentos,id'],
+            'cliente' => ['nullable', 'string', 'max:255'],
+            'ordenar' => ['nullable', 'string', 'max:32'],
         ]);
+
+        $filtrosEcho = collect($filtros)->only([
+            'tab', 'q', 'page', 'catalogo_paqueteria_id', 'departamento_id', 'cliente', 'ordenar',
+        ])->all();
 
         return Inertia::render('ControlPedidos/Auditar/Index', [
             // Closures: en reload parcial solo se evalúan las props pedidas (only).
             'pedidos' => fn () => $listarService->ejecutar($filtros, true, Auth::user()),
             'metricas' => fn () => $listarService->metricas(Auth::user()),
-            'filtros' => collect($filtros)->only(['tab', 'q', 'page', 'catalogo_paqueteria_id'])->all(),
+            'filtros' => $filtrosEcho,
             'catalogos' => fn () => $catalogosService->ejecutar(),
         ]);
     }
@@ -68,12 +75,17 @@ class PedidoBmaAuditoriaController extends Controller
             'q' => ['nullable', 'string', 'max:255'],
             'page' => ['nullable', 'integer', 'min:1'],
             'catalogo_paqueteria_id' => ['nullable', 'integer', 'exists:catalogo_paqueterias_pedido,id'],
+            'departamento_id' => ['nullable', 'integer', 'exists:departamentos,id'],
+            'cliente' => ['nullable', 'string', 'max:255'],
+            'ordenar' => ['nullable', 'string', 'max:32'],
         ]);
 
         return response()->json([
             'pedidos' => $listarService->ejecutar($filtros, true, Auth::user()),
             'metricas' => $listarService->metricas(Auth::user()),
-            'filtros' => collect($filtros)->only(['tab', 'q', 'page', 'catalogo_paqueteria_id'])->all(),
+            'filtros' => collect($filtros)->only([
+                'tab', 'q', 'page', 'catalogo_paqueteria_id', 'departamento_id', 'cliente', 'ordenar',
+            ])->all(),
         ]);
     }
 

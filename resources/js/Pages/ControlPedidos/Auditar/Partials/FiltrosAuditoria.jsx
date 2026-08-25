@@ -1,17 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { Search, RefreshCw, ChevronDown, Loader2, X } from 'lucide-react';
+import { Search, RefreshCw, ChevronDown, Loader2, X, SlidersHorizontal } from 'lucide-react';
 import { THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../../utils/geliaTheme';
 import {
     BTN_SECONDARY,
     GELIA_SEGMENT_TABS_SCROLL,
     GELIA_SEGMENT_TABS_TRACK,
-    TABS_AUDITORIA,
     TABS_AUDITORIA_PRINCIPALES,
     TABS_AUDITORIA_SUBFILTROS,
 } from '../../Partials/pedidosBmaStyles';
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 
-const STORAGE_KEY = 'control_pedidos.auditar.filtros_abiertos';
+const STORAGE_KEY = 'control_pedidos.auditar.filtros_adicionales';
+
+export const OPCIONES_ORDEN_AUDITORIA = [
+    { id: 'fecha_desc', label: 'Fecha (más reciente)' },
+    { id: 'fecha_asc', label: 'Fecha (más antigua)' },
+    { id: 'folio_asc', label: 'Folio A–Z' },
+    { id: 'folio_desc', label: 'Folio Z–A' },
+    { id: 'cliente_asc', label: 'Cliente A–Z' },
+    { id: 'cliente_desc', label: 'Cliente Z–A' },
+    { id: 'vendedor_asc', label: 'Vendedor A–Z' },
+    { id: 'total_desc', label: 'Total (mayor)' },
+    { id: 'total_asc', label: 'Total (menor)' },
+];
 
 function SegmentoTabs({ tabs, tabActiva, onTabChange, conteoTab, ariaLabel }) {
     return (
@@ -77,14 +88,20 @@ function GridTabsMovil({ tabs, tabActiva, onElegir, conteoTab }) {
 }
 
 export default function FiltrosAuditoria({
-    filtros = {},
     tabActiva,
     busqueda = '',
     paqueteriaId = '',
+    departamentoId = '',
+    clienteFiltro = '',
+    ordenar = 'fecha_desc',
     paqueterias = [],
+    departamentos = [],
     onTabChange,
     onBuscar,
     onPaqueteriaChange,
+    onDepartamentoChange,
+    onClienteFiltroChange,
+    onOrdenarChange,
     onLimpiarFiltros,
     onActualizar,
     metricas = {},
@@ -92,7 +109,7 @@ export default function FiltrosAuditoria({
     onIrAPagina,
     buscando = false,
 }) {
-    const [filtrosAbiertos, setFiltrosAbiertos] = useState(() => {
+    const [adicionalesAbiertos, setAdicionalesAbiertos] = useState(() => {
         try {
             return sessionStorage.getItem(STORAGE_KEY) === '1';
         } catch {
@@ -102,15 +119,16 @@ export default function FiltrosAuditoria({
 
     useEffect(() => {
         try {
-            sessionStorage.setItem(STORAGE_KEY, filtrosAbiertos ? '1' : '0');
+            sessionStorage.setItem(STORAGE_KEY, adicionalesAbiertos ? '1' : '0');
         } catch {
             /* ignore */
         }
-    }, [filtrosAbiertos]);
+    }, [adicionalesAbiertos]);
 
     const conteoTab = (tabId) => {
         const map = {
             PENDIENTES: metricas.pendientes,
+            CORREGIDOS: metricas.corregidos,
             PAGO_EN_REVISION: metricas.pago_en_revision,
             PENDIENTE_REMISION: metricas.pendiente_remision,
             PAGO_VALIDADO: metricas.pago_validado,
@@ -127,22 +145,34 @@ export default function FiltrosAuditoria({
         return map[tabId];
     };
 
-    const tabActual = TABS_AUDITORIA.find((t) => t.id === tabActiva) || TABS_AUDITORIA[0];
-    const conteoActual = conteoTab(tabActual.id);
     const esSubfiltro = TABS_AUDITORIA_SUBFILTROS.some((t) => t.id === tabActiva);
+    const subfiltroActivo = TABS_AUDITORIA_SUBFILTROS.find((t) => t.id === tabActiva);
     const paqNombre = paqueterias.find((p) => String(p.id) === String(paqueteriaId))?.nombre;
-    const hayFiltrosExtra = Boolean(busqueda) || Boolean(paqueteriaId) || (tabActiva && tabActiva !== 'PENDIENTES' && tabActiva !== 'TODAS');
+    const deptoNombre = departamentos.find((d) => String(d.id) === String(departamentoId))?.nombre;
+    const ordenLabel = OPCIONES_ORDEN_AUDITORIA.find((o) => o.id === ordenar)?.label;
+    const hayAdicionalesActivos = esSubfiltro
+        || Boolean(paqueteriaId)
+        || Boolean(departamentoId)
+        || Boolean(clienteFiltro)
+        || (ordenar && ordenar !== 'fecha_desc');
+    const hayFiltrosExtra = Boolean(busqueda) || hayAdicionalesActivos || (tabActiva && tabActiva !== 'PENDIENTES' && tabActiva !== 'TODAS');
 
-    const elegirTab = (id) => {
-        onTabChange(id);
-        setFiltrosAbiertos(false);
-    };
+    useEffect(() => {
+        if (hayAdicionalesActivos) {
+            setAdicionalesAbiertos(true);
+        }
+    }, [esSubfiltro, paqueteriaId, departamentoId, clienteFiltro, ordenar]);
 
-    const resumenContraido = [
-        tabActual.label,
-        paqNombre ? `Paquetería: ${paqNombre}` : null,
-        busqueda ? `Buscar: ${busqueda}` : null,
-    ].filter(Boolean).join(' · ');
+    const etiquetaBotonAdicionales = (() => {
+        const partes = [];
+        if (subfiltroActivo) partes.push(subfiltroActivo.label);
+        if (deptoNombre) partes.push(deptoNombre);
+        if (clienteFiltro) partes.push(`Cliente: ${clienteFiltro}`);
+        if (paqNombre) partes.push(paqNombre);
+        if (ordenar && ordenar !== 'fecha_desc' && ordenLabel) partes.push(ordenLabel);
+        if (partes.length === 0) return 'Filtros adicionales';
+        return partes.join(' · ');
+    })();
 
     return (
         <div className="space-y-4">
@@ -156,7 +186,7 @@ export default function FiltrosAuditoria({
                             type="text"
                             value={busqueda}
                             onChange={(e) => onBuscar(e.target.value)}
-                            placeholder="Folio, cliente o número..."
+                            placeholder="Folio, cliente, vendedor o número..."
                             className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10`}
                             aria-busy={buscando}
                             autoComplete="off"
@@ -169,20 +199,18 @@ export default function FiltrosAuditoria({
                         )}
                     </div>
                 </div>
-                <div className="sm:w-56 shrink-0">
-                    <label htmlFor="auditoria-paqueteria" className={`${THEME_LABEL} ml-1`}>Paquetería</label>
-                    <select
-                        id="auditoria-paqueteria"
-                        className={`${THEME_SELECT} w-full mt-1.5 py-3 text-sm font-bold`}
-                        value={paqueteriaId || ''}
-                        onChange={(e) => onPaqueteriaChange?.(e.target.value)}
-                    >
-                        <option value="">Todas</option>
-                        {paqueterias.map((p) => (
-                            <option key={p.id} value={p.id}>{p.nombre}</option>
-                        ))}
-                    </select>
-                </div>
+                <button
+                    type="button"
+                    onClick={() => setAdicionalesAbiertos((v) => !v)}
+                    aria-expanded={adicionalesAbiertos}
+                    className={`${BTN_SECONDARY} flex items-center justify-center gap-2 outline-none shrink-0 w-full sm:w-auto ${
+                        hayAdicionalesActivos ? 'ring-2 ring-[var(--color-primario)]/40' : ''
+                    }`}
+                >
+                    <SlidersHorizontal className="w-4 h-4" />
+                    <span className="truncate max-w-[14rem]">{etiquetaBotonAdicionales}</span>
+                    <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${adicionalesAbiertos ? 'rotate-180' : ''}`} aria-hidden />
+                </button>
                 <button
                     type="button"
                     onClick={onActualizar}
@@ -197,67 +225,24 @@ export default function FiltrosAuditoria({
                         onClick={onLimpiarFiltros}
                         className={`${BTN_SECONDARY} flex items-center justify-center gap-2 outline-none shrink-0 w-full sm:w-auto`}
                     >
-                        <X className="w-4 h-4" /> Limpiar filtros
+                        <X className="w-4 h-4" /> Limpiar
                     </button>
                 )}
             </div>
 
-            <div className="md:hidden space-y-2">
-                <button
-                    type="button"
-                    onClick={() => setFiltrosAbiertos((v) => !v)}
-                    aria-expanded={filtrosAbiertos}
-                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border theme-border theme-element outline-none"
-                >
-                    <span className="min-w-0 text-left">
-                        <span className="block text-[9px] font-black uppercase tracking-widest theme-text-muted">
-                            {esSubfiltro ? 'Subfiltro' : 'Filtro'}
-                        </span>
-                        <span className="block text-xs font-black uppercase theme-text-main truncate mt-0.5">
-                            {filtrosAbiertos
-                                ? `${tabActual.label}${conteoActual !== undefined ? ` · ${conteoActual}` : ''}`
-                                : resumenContraido}
-                        </span>
-                    </span>
-                    <ChevronDown
-                        className={`w-4 h-4 theme-text-muted shrink-0 transition-transform ${filtrosAbiertos ? 'rotate-180' : ''}`}
-                        aria-hidden
+            <div>
+                <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1.5 ml-0.5">
+                    Estado
+                </p>
+                <div className="md:hidden">
+                    <GridTabsMovil
+                        tabs={TABS_AUDITORIA_PRINCIPALES}
+                        tabActiva={tabActiva}
+                        onElegir={onTabChange}
+                        conteoTab={conteoTab}
                     />
-                </button>
-
-                {filtrosAbiertos && (
-                    <div className="space-y-3" role="tablist" aria-label="Filtros de auditoría">
-                        <div>
-                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-2 ml-0.5">
-                                Estado
-                            </p>
-                            <GridTabsMovil
-                                tabs={TABS_AUDITORIA_PRINCIPALES}
-                                tabActiva={tabActiva}
-                                onElegir={elegirTab}
-                                conteoTab={conteoTab}
-                            />
-                        </div>
-                        <div>
-                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-2 ml-0.5">
-                                Envío y colas
-                            </p>
-                            <GridTabsMovil
-                                tabs={TABS_AUDITORIA_SUBFILTROS}
-                                tabActiva={tabActiva}
-                                onElegir={elegirTab}
-                                conteoTab={conteoTab}
-                            />
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            <div className="hidden md:block space-y-3">
-                <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1.5 ml-0.5">
-                        Estado
-                    </p>
+                </div>
+                <div className="hidden md:block">
                     <SegmentoTabs
                         tabs={TABS_AUDITORIA_PRINCIPALES}
                         tabActiva={tabActiva}
@@ -266,19 +251,100 @@ export default function FiltrosAuditoria({
                         ariaLabel="Estado del pedido"
                     />
                 </div>
-                <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1.5 ml-0.5">
-                        Envío y colas
-                    </p>
-                    <SegmentoTabs
-                        tabs={TABS_AUDITORIA_SUBFILTROS}
-                        tabActiva={tabActiva}
-                        onTabChange={onTabChange}
-                        conteoTab={conteoTab}
-                        ariaLabel="Subfiltros de envío y colas"
-                    />
-                </div>
             </div>
+
+            {adicionalesAbiertos && (
+                <div className="space-y-3 p-3 rounded-xl border theme-border theme-element">
+                    <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                        Filtros adicionales
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div>
+                            <label htmlFor="auditoria-ordenar" className={`${THEME_LABEL} ml-0.5`}>
+                                Ordenar por
+                            </label>
+                            <select
+                                id="auditoria-ordenar"
+                                className={`${THEME_SELECT} w-full mt-1.5 py-3 text-sm font-bold`}
+                                value={ordenar || 'fecha_desc'}
+                                onChange={(e) => onOrdenarChange?.(e.target.value)}
+                            >
+                                {OPCIONES_ORDEN_AUDITORIA.map((o) => (
+                                    <option key={o.id} value={o.id}>{o.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="auditoria-departamento" className={`${THEME_LABEL} ml-0.5`}>
+                                Departamento
+                            </label>
+                            <select
+                                id="auditoria-departamento"
+                                className={`${THEME_SELECT} w-full mt-1.5 py-3 text-sm font-bold`}
+                                value={departamentoId || ''}
+                                onChange={(e) => onDepartamentoChange?.(e.target.value)}
+                            >
+                                <option value="">Todos</option>
+                                {departamentos.map((d) => (
+                                    <option key={d.id} value={d.id}>{d.nombre}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="auditoria-cliente" className={`${THEME_LABEL} ml-0.5`}>
+                                Cliente
+                            </label>
+                            <input
+                                id="auditoria-cliente"
+                                type="text"
+                                value={clienteFiltro}
+                                onChange={(e) => onClienteFiltroChange?.(e.target.value)}
+                                placeholder="Nombre o n° cliente..."
+                                className={`${THEME_INPUT} w-full mt-1.5 py-3 text-sm font-bold`}
+                                autoComplete="off"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="auditoria-paqueteria" className={`${THEME_LABEL} ml-0.5`}>
+                                Paquetería / transporte
+                            </label>
+                            <select
+                                id="auditoria-paqueteria"
+                                className={`${THEME_SELECT} w-full mt-1.5 py-3 text-sm font-bold`}
+                                value={paqueteriaId || ''}
+                                onChange={(e) => onPaqueteriaChange?.(e.target.value)}
+                            >
+                                <option value="">Todas</option>
+                                {paqueterias.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted mb-1.5 ml-0.5">
+                            Colas operativas
+                        </p>
+                        <div className="md:hidden">
+                            <GridTabsMovil
+                                tabs={TABS_AUDITORIA_SUBFILTROS}
+                                tabActiva={tabActiva}
+                                onElegir={onTabChange}
+                                conteoTab={conteoTab}
+                            />
+                        </div>
+                        <div className="hidden md:block">
+                            <SegmentoTabs
+                                tabs={TABS_AUDITORIA_SUBFILTROS}
+                                tabActiva={tabActiva}
+                                onTabChange={onTabChange}
+                                conteoTab={conteoTab}
+                                ariaLabel="Filtros adicionales de colas"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {pedidos && onIrAPagina && (
                 <div className="pt-1 border-t theme-border">

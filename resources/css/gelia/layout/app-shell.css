@@ -29,7 +29,8 @@ body {
     padding-inline-end: var(--gelia-main-inset-inline-end);
     padding-top: var(--gelia-main-inset-block-start);
     padding-bottom: var(--gelia-main-inset-block-end);
-    transition: padding 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    /* Solo inline-start: evita reflow de padding-top/bottom; duración corta = menos sensación de “carga”. */
+    transition: padding-inline-start var(--gelia-pro-duration, 0.22s) var(--gelia-pro-ease, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 .gelia-app-main {
@@ -244,6 +245,20 @@ body {
     .gelia-app-shell[data-sidebar-layout='float-left'],
     .gelia-app-shell[data-sidebar-layout='float-right'] {
         --gelia-main-inset-block-start: 5.5rem;
+    }
+
+    .gelia-app-shell[data-sidebar-layout='professional-left'] {
+        --gelia-main-inset-inline-start: var(--gelia-sidebar-expanded-width);
+        --gelia-main-inset-block-start: 0px;
+    }
+
+    .gelia-app-shell[data-sidebar-layout='professional-left'][data-sidebar-mode='collapsed'] {
+        --gelia-main-inset-inline-start: var(--gelia-sidebar-collapsed-width);
+    }
+
+    /* Misma curva/duración que el rail: evita desync contenido vs sidebar. */
+    .gelia-app-shell[data-sidebar-layout='professional-left'] .gelia-app-body {
+        transition: padding-inline-start var(--gelia-pro-duration, 0.38s) var(--gelia-pro-ease, cubic-bezier(0.22, 1, 0.36, 1));
     }
 
     /* Chat inmersivo (GELIA / mensajería): sin franjas arriba/abajo del body */

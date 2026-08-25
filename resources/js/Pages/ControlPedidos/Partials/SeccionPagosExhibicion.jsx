@@ -66,6 +66,7 @@ export default function SeccionPagosExhibicion({
     puedeRevisar = false,
     puedeGenerarSaldo = false,
     modoAuxiliarSimplificado = false,
+    ocultarResumen = false,
     rutaResumen = 'control_pedidos.pagos.resumen',
     rutaStore = 'control_pedidos.pagos.store',
     rutaUpdate = 'control_pedidos.pagos.update',
@@ -564,7 +565,7 @@ export default function SeccionPagosExhibicion({
                     Para agregar otra fuente, active «Dividir el pago…». Use Editar para corregir la existente.
                 </p>
             )}
-            {resumen && (
+            {resumen && !ocultarResumen && (
                 <div className="grid grid-cols-2 gap-2 p-3 rounded-xl border theme-border theme-element text-xs font-bold">
                     <div className="theme-text-muted col-span-2">
                         Total a cubrir:{' '}

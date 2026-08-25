@@ -9,6 +9,7 @@ import {
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+import ListaErroresPedido from './ListaErroresPedido';
 
 function labelEstatus(estatus) {
     if (!estatus) return '—';
@@ -28,6 +29,7 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
     const [docPreview, setDocPreview] = useState(null);
 
     const historial = pedido?.historial || [];
+    const errores = pedido?.errores || [];
 
     const evidencias = useMemo(() => historial
         .filter((h) => h.evidencia_ruta || h.evidenciaRuta)
@@ -70,11 +72,19 @@ export default function ModalBitacoraPedido({ abierto, onClose, pedido }) {
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="gelia-modal-body p-5 md:p-6">
+                <div className="gelia-modal-body p-5 md:p-6 space-y-6">
+                    {errores.length > 0 && (
+                        <ListaErroresPedido errores={errores} />
+                    )}
                     {historial.length === 0 ? (
-                        <p className="text-sm theme-text-muted font-bold uppercase m-0">Sin movimientos registrados_</p>
+                        <p className="text-sm theme-text-muted font-bold uppercase m-0">
+                            {errores.length > 0 ? 'Sin otros movimientos de estado_' : 'Sin movimientos registrados_'}
+                        </p>
                     ) : (
                         <div className="space-y-4">
+                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                Movimientos de estado
+                            </p>
                             {historial.map((h) => {
                                 const estatusNuevo = h.estatus_nuevo || h.estatusNuevo;
                                 const estatusAnterior = h.estatus_anterior || h.estatusAnterior;

@@ -92,6 +92,12 @@
     --gelia-sidebar-panel-exterior-gap: 0.5rem;
     --gelia-sidebar-menu-width: 24rem;
     --gelia-sidebar-menu-max-height: min(85vh, calc(100dvh - 3rem));
+    /* Sidebar profesional (layout_sidebar = professional_left) */
+    --gelia-sidebar-expanded-width: 17.5rem;
+    --gelia-sidebar-collapsed-width: 4.5rem;
+    --gelia-sidebar-row-height: 2.75rem;
+    --gelia-sidebar-mobile-width: 20rem;
+    --gelia-sidebar-border-color: var(--theme-border);
     --gelia-mobile-topbar-height: calc(3.25rem + env(safe-area-inset-top, 0px));
     --gelia-content-max: 87.5rem;
     --gelia-content-max-wide: 112.5rem;

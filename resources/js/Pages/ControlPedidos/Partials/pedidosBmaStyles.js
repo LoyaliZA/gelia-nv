@@ -130,6 +130,7 @@ export const TABS_PEDIDOS_ADMIN = [
 /** Estado del ciclo: filtros principales de la bandeja auxiliar. */
 export const TABS_AUDITORIA_PRINCIPALES = [
     { id: 'PENDIENTES', label: 'Pendientes' },
+    { id: 'CORREGIDOS', label: 'Corregidos' },
     { id: 'APROBADOS', label: 'Aprobados' },
     { id: 'RECHAZADOS', label: 'Rechazados' },
     { id: 'TODAS', label: 'Todas' },
@@ -149,9 +150,9 @@ export const TABS_AUDITORIA_SUBFILTROS = [
 ];
 
 export const TABS_AUDITORIA = [
-    ...TABS_AUDITORIA_PRINCIPALES.slice(0, 3),
+    ...TABS_AUDITORIA_PRINCIPALES.slice(0, 4),
     ...TABS_AUDITORIA_SUBFILTROS,
-    TABS_AUDITORIA_PRINCIPALES[3],
+    TABS_AUDITORIA_PRINCIPALES[4],
 ];
 
 export const LABELS_ESTATUS_ENVIO = {

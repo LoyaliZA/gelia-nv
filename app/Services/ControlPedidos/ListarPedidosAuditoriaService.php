@@ -28,6 +28,7 @@ class ListarPedidosAuditoriaService
     {
         $query = $this->queryBase($usuario);
         $this->aplicarFiltros($query, $filtros);
+        $this->aplicarOrden($query, $filtros);
 
         if (! $paginar) {
             return $query->get()->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p));
@@ -51,6 +52,21 @@ class ListarPedidosAuditoriaService
             : collect();
         $pedido->setAttribute('saf_incidencias_abiertas', $incidenciasSaf->values());
         $pedido->setAttribute('tiene_alerta_saf', $incidenciasSaf->isNotEmpty());
+
+        // Cobertura compacta para bandeja: suma exhibiciones ya cargadas (sin CoberturaPago N veces).
+        $pagos = $pedido->relationLoaded('pagosExhibicion')
+            ? $pedido->pagosExhibicion
+            : collect();
+        $pagadoCentavos = 0;
+        foreach ($pagos as $pago) {
+            if (! $pago->activo_para_cobertura) {
+                continue;
+            }
+            $pagadoCentavos += (int) round(((float) $pago->monto) * 100);
+        }
+        $totalCobrarCentavos = (int) round(((float) ($pedido->total_a_cobrar ?? 0)) * 100);
+        $pedido->setAttribute('pagado_valido', number_format($pagadoCentavos / 100, 2, '.', ''));
+        $pedido->setAttribute('diferencia_cobertura', number_format(($totalCobrarCentavos - $pagadoCentavos) / 100, 2, '.', ''));
 
         return $pedido;
     }
@@ -83,9 +99,13 @@ class ListarPedidosAuditoriaService
             ->whereNotNull('pago_validado_at')->whereDoesntHave('remision')->count();
         $pagoValidado = (clone $base)->where('catalogo_estatus_pedido_id', $pendienteId)
             ->whereNotNull('pago_validado_at')->whereHas('remision')->count();
+        $corregidos = (clone $base)->where('catalogo_estatus_pedido_id', $pendienteId);
+        $this->aplicarFiltroCorregidos($corregidos);
+        $corregidosCount = $corregidos->count();
 
         return [
             'pendientes' => $pendientes,
+            'corregidos' => $corregidosCount,
             'pago_en_revision' => $pagoEnRevision,
             'pendiente_remision' => $pendienteRemision,
             'pago_validado' => $pagoValidado,
@@ -130,6 +150,7 @@ class ListarPedidosAuditoriaService
             'documentos',
             'revisionesProducto',
             'pagoValidadoPor',
+            'pesajeRespondidoPor:id,name',
             'incidenciaEmpaquePor',
             'direccionVigente',
             'historial.usuario',
@@ -163,6 +184,9 @@ class ListarPedidosAuditoriaService
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
+                    })
+                    ->orWhereHas('vendedor', function (Builder $v) use ($termino) {
+                        $v->where('name', 'like', "%{$termino}%");
                     });
             });
         }
@@ -174,11 +198,35 @@ class ListarPedidosAuditoriaService
             }
         }
 
+        if (! empty($filtros['departamento_id'])) {
+            $deptoId = (int) $filtros['departamento_id'];
+            if ($deptoId > 0) {
+                $query->whereHas('vendedor', function (Builder $v) use ($deptoId) {
+                    $v->where('departamento_id', $deptoId)
+                        ->orWhereHas('departamentos', fn (Builder $d) => $d->where('departamentos.id', $deptoId));
+                });
+            }
+        }
+
+        if (! empty($filtros['cliente'])) {
+            $cliente = trim((string) $filtros['cliente']);
+            if ($cliente !== '') {
+                $query->whereHas('cliente', function (Builder $c) use ($cliente) {
+                    $c->where('nombre', 'like', "%{$cliente}%")
+                        ->orWhere('numero_cliente', 'like', "%{$cliente}%");
+                });
+            }
+        }
+
         $tab = strtoupper($filtros['tab'] ?? 'TODAS');
         $idsPorFase = $this->idsPorFase();
 
         match ($tab) {
             'PENDIENTES' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0),
+            'CORREGIDOS' => tap($query, function (Builder $q) use ($idsPorFase): void {
+                $q->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0);
+                $this->aplicarFiltroCorregidos($q);
+            }),
             'PAGO_EN_REVISION' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
                 ->whereNull('pago_validado_at'),
             'PENDIENTE_REMISION' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['PENDIENTE_AUXILIAR'] ?? 0)
@@ -205,6 +253,53 @@ class ListarPedidosAuditoriaService
             'CONSOLIDADOS' => $query->whereNull('pedido_principal_id')->whereHas('complementos'),
             default => null,
         };
+    }
+
+    private function aplicarOrden(Builder $query, array $filtros): void
+    {
+        $orden = strtolower(trim((string) ($filtros['ordenar'] ?? 'fecha_desc')));
+
+        match ($orden) {
+            'fecha_asc' => $query->reorder()->orderBy('fecha')->orderBy('id'),
+            'folio_asc' => $query->reorder()->orderBy('folio')->orderBy('id'),
+            'folio_desc' => $query->reorder()->orderByDesc('folio')->orderByDesc('id'),
+            'cliente_asc' => $query->reorder()
+                ->leftJoin('clientes', 'clientes.id', '=', 'pedidos_bma.cliente_id')
+                ->orderBy('clientes.nombre')
+                ->orderBy('pedidos_bma.id')
+                ->select('pedidos_bma.*'),
+            'cliente_desc' => $query->reorder()
+                ->leftJoin('clientes', 'clientes.id', '=', 'pedidos_bma.cliente_id')
+                ->orderByDesc('clientes.nombre')
+                ->orderByDesc('pedidos_bma.id')
+                ->select('pedidos_bma.*'),
+            'total_asc' => $query->reorder()->orderBy('total_a_cobrar')->orderBy('id'),
+            'total_desc' => $query->reorder()->orderByDesc('total_a_cobrar')->orderByDesc('id'),
+            'vendedor_asc' => $query->reorder()
+                ->leftJoin('users', 'users.id', '=', 'pedidos_bma.vendedor_id')
+                ->orderBy('users.name')
+                ->orderBy('pedidos_bma.id')
+                ->select('pedidos_bma.*'),
+            default => $query->reorder()->orderByDesc('created_at')->orderByDesc('id'),
+        };
+    }
+
+    /**
+     * Misma regla que MaquinaEstadosPedidoBma::esPendienteReRevision (>1 retorno a PENDIENTE_AUXILIAR).
+     */
+    private function aplicarFiltroCorregidos(Builder $query): void
+    {
+        $fase = CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR;
+        $query->whereRaw(
+            '(SELECT COUNT(*) FROM pedido_bma_historial_estados h
+                INNER JOIN catalogo_estatus_pedidos en ON en.id = h.estatus_nuevo_id
+                LEFT JOIN catalogo_estatus_pedidos ea ON ea.id = h.estatus_anterior_id
+                WHERE h.pedido_bma_id = pedidos_bma.id
+                  AND en.fase_ciclo = ?
+                  AND ea.fase_ciclo IS NOT NULL
+                  AND ea.fase_ciclo <> ?) > 1',
+            [$fase, $fase]
+        );
     }
 
     private function idsPorFase(): array

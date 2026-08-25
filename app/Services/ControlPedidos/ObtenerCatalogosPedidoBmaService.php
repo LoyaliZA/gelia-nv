@@ -15,6 +15,7 @@ use App\Models\ControlPedidos\CatalogoTipoGuiaPedido;
 use App\Models\ControlPedidos\CatalogoReexpedicionPedido;
 use App\Models\ControlPedidos\CatalogoTipoOperacionEnvio;
 use App\Models\ControlPedidos\CatalogoZonaPedido;
+use App\Models\Departamento;
 
 class ObtenerCatalogosPedidoBmaService
 {
@@ -55,6 +56,10 @@ class ObtenerCatalogosPedidoBmaService
                 'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
                 'plantilla_caratula', 'habilitado_envio_municipio', 'reglas_municipio_pendientes',
             ]),
+            'departamentos' => Departamento::query()
+                ->where('activo', true)
+                ->orderBy('nombre')
+                ->get(['id', 'nombre', 'codigo']),
             'paqueterias_municipio' => CatalogoPaqueteriaPedido::query()
                 ->where('activo', true)
                 ->where('habilitado_envio_municipio', true)

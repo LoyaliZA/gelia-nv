@@ -5,6 +5,7 @@
 @import './gelia/utilities.css';
 @import './gelia/layout/app-shell.css';
 @import './gelia/features/sidebar.css';
+@import './gelia/features/sidebar-professional.css';
 @import './gelia/features/mensajeria.css';
 @import './gelia/features/login.css';
 @import './gelia/features/activos-dock.css';

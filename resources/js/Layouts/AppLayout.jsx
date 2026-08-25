@@ -2,10 +2,12 @@ import React, { useEffect, useState, createContext, useContext, useCallback, use
 import { createPortal } from 'react-dom';
 import { Link, usePage, router } from '@inertiajs/react';
 import Sidebar from '../Components/Sidebar';
+import ProfessionalSidebar from '../Components/Sidebar/ProfessionalSidebar';
 import GeliaLogo from '../Components/GeliaLogo';
 import NotificationBell from '../Components/NotificationBell';
 import MensajeriaWidget from '../Components/Mensajeria/MensajeriaWidget';
 import { Bell, X, Menu } from 'lucide-react';
+import { isProfessionalSidebarLayout, DEFAULT_SIDEBAR_LAYOUT, DEFAULT_SIDEBAR_MOBILE_LAYOUT, ensureProfessionalSidebarDefaultOnce, resolveSidebarLayout } from '../config/sidebarLayouts';
 
 import NotificationService from '../Services/NotificationBrowserService';
 import GeliaLoader from '../Components/GeliaLoader';
@@ -375,8 +377,14 @@ export default function AppLayout({ children, fullScreen = false }) {
     });
 
     const [sidebarLayout, setSidebarLayout] = useState(() => {
-        if (typeof window !== 'undefined') return localStorage.getItem('theme_layout') || auth?.tema_visual?.layout_sidebar || 'floating_left';
-        return 'floating_left';
+        if (typeof window !== 'undefined') {
+            ensureProfessionalSidebarDefaultOnce();
+            return resolveSidebarLayout(
+                localStorage.getItem('theme_layout'),
+                auth?.tema_visual?.layout_sidebar
+            );
+        }
+        return DEFAULT_SIDEBAR_LAYOUT;
     });
 
     const [sidebarMode, setSidebarMode] = useState(() => {
@@ -391,11 +399,12 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     const [mobileSidebarLayout, setMobileSidebarLayout] = useState(() => {
         if (typeof window !== 'undefined') {
+            ensureProfessionalSidebarDefaultOnce();
             return localStorage.getItem('theme_layout_mobile')
                 || auth?.tema_visual?.layout_sidebar_mobile
-                || MOBILE_SIDEBAR_LAYOUT_BOTTOM;
+                || DEFAULT_SIDEBAR_MOBILE_LAYOUT;
         }
-        return MOBILE_SIDEBAR_LAYOUT_BOTTOM;
+        return DEFAULT_SIDEBAR_MOBILE_LAYOUT;
     });
 
     const isMensajeriaFull = fullScreen || url.startsWith('/mensajeria');
@@ -414,10 +423,15 @@ export default function AppLayout({ children, fullScreen = false }) {
     }, []);
 
     const mensajeriaImmersivaMovil = isMensajeriaFull && isMobileViewport;
-    const useMobileTopBar = isMobileViewport && mobileSidebarLayout === MOBILE_SIDEBAR_LAYOUT_TOPBAR;
+    const isProfessionalLayout = isProfessionalSidebarLayout(sidebarLayout);
+    /* Profesional siempre usa topbar + drawer en móvil. */
+    const useMobileTopBar = isMobileViewport && (
+        isProfessionalLayout || mobileSidebarLayout === MOBILE_SIDEBAR_LAYOUT_TOPBAR
+    );
 
-    /* En GELIA el sidebar a la izquierda tapa historial; a la derecha tapaba Acceso (ya en Admin). */
-    const geliaForceSidebarRight = isGeliaAiFull && !isMobileViewport;
+    /* En GELIA el sidebar a la izquierda tapa historial; a la derecha tapaba Acceso (ya en Admin).
+       El estilo profesional permanece a la izquierda (no se fuerza a la derecha). */
+    const geliaForceSidebarRight = isGeliaAiFull && !isMobileViewport && !isProfessionalLayout;
     const effectiveSidebarLayout = geliaForceSidebarRight
         ? (sidebarLayout === 'fixed' ? 'fixed' : 'floating_right')
         : sidebarLayout;
@@ -425,15 +439,28 @@ export default function AppLayout({ children, fullScreen = false }) {
 
     const shellSidebarLayout = isMobileViewport
         ? (useMobileTopBar ? 'mobile-topbar' : 'mobile-bottom')
-        : effectiveSidebarLayout === 'fixed'
-            ? 'fixed'
-            : effectiveSidebarLayout === 'floating_right'
-                ? 'float-right'
-                : 'float-left';
+        : isProfessionalSidebarLayout(effectiveSidebarLayout)
+            ? 'professional-left'
+            : effectiveSidebarLayout === 'fixed'
+                ? 'fixed'
+                : effectiveSidebarLayout === 'floating_right'
+                    ? 'float-right'
+                    : 'float-left';
 
-    const shellSidebarEdge = ['left', 'right', 'top', 'bottom'].includes(effectiveFixedPosition)
-        ? effectiveFixedPosition
-        : 'left';
+    const shellSidebarEdge = isProfessionalSidebarLayout(effectiveSidebarLayout)
+        ? 'left'
+        : (['left', 'right', 'top', 'bottom'].includes(effectiveFixedPosition)
+            ? effectiveFixedPosition
+            : 'left');
+
+    const storedSidebarMode = typeof window !== 'undefined'
+        ? localStorage.getItem('theme_sidebar_mode')
+        : null;
+    const shellSidebarMode = isProfessionalSidebarLayout(effectiveSidebarLayout)
+        ? ((storedSidebarMode === 'collapsed' || storedSidebarMode === 'expanded')
+            ? storedSidebarMode
+            : (sidebarMode === 'collapsed' ? 'collapsed' : 'expanded'))
+        : undefined;
 
     const openMobileSidebar = useCallback(() => {
         window.dispatchEvent(new CustomEvent('gelia-sidebar-open-menu'));
@@ -460,10 +487,11 @@ export default function AppLayout({ children, fullScreen = false }) {
             const savedTheme = localStorage.getItem('theme');
             if (savedTheme) setIsDarkMode(savedTheme === 'dark');
 
-            const savedLayout = localStorage.getItem('theme_layout')
-                || auth?.tema_visual?.layout_sidebar
-                || 'floating_left';
-            setSidebarLayout(savedLayout);
+            ensureProfessionalSidebarDefaultOnce();
+            setSidebarLayout(resolveSidebarLayout(
+                localStorage.getItem('theme_layout'),
+                auth?.tema_visual?.layout_sidebar
+            ));
 
             const savedSidebarMode = localStorage.getItem('theme_sidebar_mode')
                 || auth?.tema_visual?.sidebar_modo
@@ -477,7 +505,7 @@ export default function AppLayout({ children, fullScreen = false }) {
 
             const savedMobileLayout = localStorage.getItem('theme_layout_mobile')
                 || auth?.tema_visual?.layout_sidebar_mobile
-                || MOBILE_SIDEBAR_LAYOUT_BOTTOM;
+                || DEFAULT_SIDEBAR_MOBILE_LAYOUT;
             setMobileSidebarLayout(savedMobileLayout);
         };
 
@@ -490,7 +518,12 @@ export default function AppLayout({ children, fullScreen = false }) {
         };
 
         const onSidebarModePreview = (event) => {
-            if (event.detail?.mode) setSidebarMode(event.detail.mode);
+            if (!event.detail?.mode) return;
+            const mode = event.detail.mode === 'collapsed' ? 'collapsed' : 'expanded';
+            const shell = document.querySelector('.gelia-app-shell');
+            if (shell) shell.setAttribute('data-sidebar-mode', mode);
+            // No setSidebarMode aquí: re-render de AppLayout mata frames del toggle.
+            // shellSidebarMode lee localStorage; el hook ya lo escribió.
         };
 
         const onFixedPositionPreview = (event) => {
@@ -606,6 +639,7 @@ export default function AppLayout({ children, fullScreen = false }) {
                 className="gelia-app-shell min-h-dvh text-gray-950 dark:text-gray-100 transition-colors duration-500"
                 data-sidebar-layout={shellSidebarLayout}
                 data-sidebar-edge={shellSidebarEdge}
+                data-sidebar-mode={shellSidebarMode}
                 data-page-fullscreen={isPageFullscreen ? 'true' : 'false'}
                 data-content-density={contentDensityMode}
                 data-immersive-mobile={mensajeriaImmersivaMovil ? 'true' : 'false'}
@@ -665,17 +699,28 @@ export default function AppLayout({ children, fullScreen = false }) {
                     </header>
                 )}
 
-                <Sidebar
-                    isDarkMode={isDarkMode}
-                    toggleTheme={toggleTheme}
-                    user={auth?.user}
-                    permissions={auth?.user?.permissions || []}
-                    layout={effectiveSidebarLayout}
-                    sidebarMode={sidebarMode}
-                    fixedPosition={effectiveFixedPosition}
-                    useMobileTopBar={useMobileTopBar}
-                    isMobileViewport={isMobileViewport}
-                />
+                {isProfessionalSidebarLayout(effectiveSidebarLayout) ? (
+                    <ProfessionalSidebar
+                        isDarkMode={isDarkMode}
+                        toggleTheme={toggleTheme}
+                        user={auth?.user}
+                        permissions={auth?.user?.permissions || []}
+                        sidebarMode={sidebarMode}
+                        isMobileViewport={isMobileViewport}
+                    />
+                ) : (
+                    <Sidebar
+                        isDarkMode={isDarkMode}
+                        toggleTheme={toggleTheme}
+                        user={auth?.user}
+                        permissions={auth?.user?.permissions || []}
+                        layout={effectiveSidebarLayout}
+                        sidebarMode={sidebarMode}
+                        fixedPosition={effectiveFixedPosition}
+                        useMobileTopBar={useMobileTopBar}
+                        isMobileViewport={isMobileViewport}
+                    />
+                )}
 
                 <div className={`gelia-app-body gelia-ui-scale ${GELIA_PREVENT_OVERFLOW_X} ${isPageFullscreen ? (isGeliaAiFull ? 'h-dvh overflow-x-hidden overflow-y-visible' : 'h-dvh overflow-hidden') : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
                     {needsPrompt && !promptDismissed && (

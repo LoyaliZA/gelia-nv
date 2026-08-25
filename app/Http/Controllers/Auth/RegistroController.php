@@ -223,6 +223,8 @@ class RegistroController extends Controller
                 'tema_visual' => json_encode([
                     'modo' => 'light',
                     'color_nombre' => 'azul',
+                    'layout_sidebar' => 'professional_left',
+                    'layout_sidebar_mobile' => 'mobile_topbar',
                     'alertas_prefs' => config('alertas.defaults'),
                 ]),
                 'dashboard_prefs' => json_encode(['ocultos' => []]),

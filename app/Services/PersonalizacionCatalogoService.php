@@ -286,7 +286,7 @@ class PersonalizacionCatalogoService
             'font'       => $config['fuente_principal'] ?? 'inter',
             'escala'     => $config['escala_fuente'] ?? 1,
             'glass'      => (bool) ($config['efecto_cristal'] ?? true),
-            'layout'     => $config['layout_sidebar'] ?? 'floating_left',
+            'layout'     => $config['layout_sidebar'] ?? 'professional_left',
             'sound'      => (bool) ($config['sonido'] ?? true),
             'activo'     => $tema->activo,
             'orden'      => $tema->orden,
@@ -329,9 +329,9 @@ class PersonalizacionCatalogoService
     private static function temasFallback(): array
     {
         return [
-            ['id' => 'gelia-signature', 'slug' => 'gelia-signature', 'name' => 'Gelia Signature', 'modo' => 'dark', 'colorNombre' => 'rosa', 'colorHex' => '#ec4899', 'bg' => 'blob', 'font' => 'montserrat', 'escala' => 1, 'glass' => true, 'layout' => 'floating_left', 'sound' => true],
-            ['id' => 'gelia-oasis', 'slug' => 'gelia-oasis', 'name' => 'GELIA Oasis', 'modo' => 'light', 'colorNombre' => 'verde', 'colorHex' => '#10b981', 'bg' => 'stacked', 'font' => 'poppins', 'escala' => 1, 'glass' => false, 'layout' => 'floating_right', 'sound' => true],
-            ['id' => 'cybertech', 'slug' => 'cybertech', 'name' => 'CyberTech', 'modo' => 'dark', 'colorNombre' => 'azul', 'colorHex' => '#3b82f6', 'bg' => 'polygon', 'font' => 'mono', 'escala' => 1, 'glass' => false, 'layout' => 'fixed', 'sound' => true],
+            ['id' => 'gelia-signature', 'slug' => 'gelia-signature', 'name' => 'Gelia Signature', 'modo' => 'dark', 'colorNombre' => 'rosa', 'colorHex' => '#ec4899', 'bg' => 'blob', 'font' => 'montserrat', 'escala' => 1, 'glass' => true, 'layout' => 'professional_left', 'sound' => true],
+            ['id' => 'gelia-oasis', 'slug' => 'gelia-oasis', 'name' => 'GELIA Oasis', 'modo' => 'light', 'colorNombre' => 'verde', 'colorHex' => '#10b981', 'bg' => 'stacked', 'font' => 'poppins', 'escala' => 1, 'glass' => false, 'layout' => 'professional_left', 'sound' => true],
+            ['id' => 'cybertech', 'slug' => 'cybertech', 'name' => 'CyberTech', 'modo' => 'dark', 'colorNombre' => 'azul', 'colorHex' => '#3b82f6', 'bg' => 'polygon', 'font' => 'mono', 'escala' => 1, 'glass' => false, 'layout' => 'professional_left', 'sound' => true],
         ];
     }
 }

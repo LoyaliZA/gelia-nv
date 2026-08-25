@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useForm } from '@inertiajs/react';
 import { Layers, Trash2, Palette, Edit2 } from 'lucide-react';
 import GeliaLoader from '../../../../Components/GeliaLoader';
+import { SIDEBAR_LAYOUT_OPTIONS } from '../../../../config/sidebarLayouts';
 import {
     INPUT_CLASS,
     THEME_BTN_PRIMARY,
@@ -15,11 +16,7 @@ import {
 
 const FUENTES = ['inter', 'montserrat', 'poppins', 'nunito', 'roboto', 'mono'];
 const ACCENT_COLORS = { rosa: '#ec4899', azul: '#3b82f6', verde: '#10b981', amarillo: '#f59e0b' };
-const LAYOUTS = [
-    { id: 'floating_left', label: 'Flotante izquierda' },
-    { id: 'floating_right', label: 'Flotante derecha' },
-    { id: 'fixed', label: 'Barra fija' },
-];
+const LAYOUTS = SIDEBAR_LAYOUT_OPTIONS.map(({ id, label }) => ({ id, label }));
 
 export default function TablaTemas({ catalogo = {}, fondos_opciones = [], registrarAbrir }) {
     const datos = catalogo?.data ?? [];
@@ -40,7 +37,7 @@ export default function TablaTemas({ catalogo = {}, fondos_opciones = [], regist
         fondo_base: fondoOpciones[0]?.value || 'blob',
         fuente_principal: 'inter',
         escala_fuente: 1,
-        layout_sidebar: 'floating_left',
+        layout_sidebar: 'professional_left',
         efecto_cristal: true,
         sonido: true,
         activo: true,
@@ -78,7 +75,7 @@ export default function TablaTemas({ catalogo = {}, fondos_opciones = [], regist
             fondo_base: cfg.fondo_base || item.bg || 'blob',
             fuente_principal: cfg.fuente_principal || item.font || 'inter',
             escala_fuente: cfg.escala_fuente ?? item.escala ?? 1,
-            layout_sidebar: cfg.layout_sidebar || item.layout || 'floating_left',
+            layout_sidebar: cfg.layout_sidebar || item.layout || 'professional_left',
             efecto_cristal: cfg.efecto_cristal ?? item.glass ?? true,
             sonido: cfg.sonido ?? item.sound ?? true,
             activo: item.activo ?? true,

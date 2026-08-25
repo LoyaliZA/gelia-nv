@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, CheckCircle2, AlertTriangle, FileText, Upload, Trash2, MapPin,
+    X, CheckCircle2, FileText, Upload, Trash2, Loader2,
 } from 'lucide-react';
 import {
     badgeAuditoriaSemantico,
@@ -14,11 +14,8 @@ import {
     badgeHitoAuditoria,
     esPendienteReRevision,
     formatearMoneda,
-    etiquetaAlmacen,
     etiquetaCostoEnvio,
     etiquetaOrigenGuia,
-    etiquetaEnvio,
-    LABEL_NOTA_COMPRA_CAMPO,
     formatearFechaNegocio,
     formatearFechaHoraAuditoria,
     THEME_MODAL_OVERLAY,
@@ -33,7 +30,6 @@ import {
     etiquetaCodigo,
     tieneErrorRemision,
 } from '../../Partials/pedidosBmaStyles';
-import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import TarjetaEnvioPedido from '../../Partials/TarjetaEnvioPedido';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/ModalVistaPreviaDocumento';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
@@ -41,12 +37,12 @@ import ModalMotivoRechazo from '../../Partials/ModalMotivoRechazo';
 import ModalReportarErrorDatos from '../../Partials/ModalReportarErrorDatos';
 import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
-import DireccionPedidoResumen from '../../Partials/DireccionPedidoResumen';
-import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
-import ModalCambiarDireccion from '../../Partials/ModalCambiarDireccion';
 import ModalLiberarResguardoAbierto from './ModalLiberarResguardoAbierto';
 import SeccionPagosExhibicion from '../../Partials/SeccionPagosExhibicion';
-import ListaErroresPedido from '../../Partials/ListaErroresPedido';
+import EncabezadoRevisionPedido from './EncabezadoRevisionPedido';
+import ResumenCoberturaPedido from './ResumenCoberturaPedido';
+import DatosGeneralesAuditoria from './DatosGeneralesAuditoria';
+import BarraAccionesRevision from './BarraAccionesRevision';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
@@ -59,31 +55,32 @@ const Campo = ({ label, value }) => (
     </div>
 );
 
-const comprobantesDe = (pedido) => (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' || !d.tipo);
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 
 export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoInicial, bancos = [], catalogos = {} }) {
     const { auth } = usePage().props;
     const permisos = auth?.user?.permissions || [];
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
-    const uiSimplificada = Boolean(catalogos?.pagos_config?.ui_simplificada);
     const detalleCajasUi = Boolean(catalogos?.envios_config?.detalle_cajas);
     const [pedido, setPedido] = useState(pedidoInicial);
     const cajasActivas = (pedido?.cajas || []).filter((c) => c.estado_operativo !== 'retirada');
     const fuenteEnvioDetalle = detalleCajasUi
         && cajasActivas.length > 0
         && cajasActivas.every((c) => c.costo_envio !== null && c.costo_envio !== '' && c.costo_envio !== undefined);
+    const tienePesajeRespondido = Boolean(pedido?.pesaje_respondido_at)
+        || pedido?.estatus_envio === 'pesaje_listo'
+        || cajasActivas.length > 0;
     const [procesando, setProcesando] = useState(false);
     const [docPreview, setDocPreview] = useState(null);
     const [confirmacion, setConfirmacion] = useState(null);
     const [motivoAnexoAbierto, setMotivoAnexoAbierto] = useState(false);
     const [errorDatosAbierto, setErrorDatosAbierto] = useState(false);
     const [liberarCapturaAbierto, setLiberarCapturaAbierto] = useState(false);
-    const [cambiarDir, setCambiarDir] = useState(false);
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
     const [folioRemision, setFolioRemision] = useState('');
     const [rechazoPagos, setRechazoPagos] = useState({ abierto: false, ids: [], motivo: '' });
     const [bloqueosPago, setBloqueosPago] = useState([]);
+    const [resumenCobertura, setResumenCobertura] = useState(null);
 
     useEffect(() => {
         if (abierto && pedidoInicial) {
@@ -95,6 +92,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             setErrorDatosAbierto(false);
             setLiberarCapturaAbierto(false);
             setDocPreview(null);
+            setResumenCobertura(null);
+            setBloqueosPago([]);
         }
     }, [abierto, pedidoInicial?.id]);
 
@@ -143,7 +142,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         && (pedido.tipo_operacion_envio?.codigo === 'RESGUARDO_ABIERTO'
             || pedido.estatus_envio === 'pendiente_liberacion');
     const esRechazado = fase === 'RECHAZADO_VENDEDORA';
-    const comprobantes = comprobantesDe(pedido);
     const remision = remisionDe(pedido);
     const pagoValidado = Boolean(pedido.pago_validado_at);
     const puedeAprobar = esPendiente && pagoValidado && Boolean(remision)
@@ -152,7 +150,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const anexoPendiente = anexoEnvioPendienteDe(pedido);
     const puedeRevisarAnexo = Boolean(anexoPendiente) && pedido.estatus_envio === 'pendiente_revision_anexo';
     const puedeAnexar = puedeAnexarPagoEnvio(pedido);
-
 
     const recargarPedido = (mensajeExito = null) => {
         router.reload({
@@ -251,6 +248,29 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 mensaje: errors?.folio_remision || 'No se pudo actualizar el folio.',
             }),
         });
+    };
+
+    const resolverSaf = (inc) => {
+        setProcesando(true);
+        router.post(
+            route('control_pedidos.auditar.incidencias_saf.resolver', {
+                pedidoBma: pedido.id,
+                incidencia: inc.id,
+            }),
+            { nota: 'Revisado en auditoría; se continúa con la incidencia.' },
+            {
+                preserveScroll: true,
+                onFinish: () => setProcesando(false),
+                onSuccess: () => {
+                    setPedido((prev) => ({
+                        ...prev,
+                        saf_incidencias_abiertas: (prev.saf_incidencias_abiertas || [])
+                            .filter((x) => x.id !== inc.id),
+                        tiene_alerta_saf: false,
+                    }));
+                },
+            }
+        );
     };
 
     const ejecutarConfirmacion = () => {
@@ -354,200 +374,31 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                     }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="p-5 md:p-6 border-b theme-border flex justify-between items-start gap-3 shrink-0">
-                        <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-1">Revisar pedido</p>
-                            <EncabezadoFolioPedido pedido={pedido} size="lg" />
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                <span className={`${badge.className} inline-flex`} style={badge.style}>{badge.label}</span>
-                                {badgeHito && (
-                                    <span className={`${badgeHito.className} inline-flex`} style={badgeHito.style}>{badgeHito.label}</span>
-                                )}
-                                {badgeRemision && (
-                                    <span className={`${badgeRemision.className} inline-flex`} style={badgeRemision.style}>{badgeRemision.label}</span>
-                                )}
-                            </div>
-                        </div>
-                        <button type="button" onClick={onClose} className="p-2 rounded-full theme-text-muted hover:theme-text-main outline-none shrink-0" aria-label="Cerrar">
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <EncabezadoRevisionPedido
+                        pedido={pedido}
+                        badge={badge}
+                        badgeHito={badgeHito}
+                        badgeRemision={badgeRemision}
+                        reRevision={reRevision}
+                        esRechazado={esRechazado}
+                        pagoValidado={pagoValidado}
+                        procesando={procesando}
+                        can={can}
+                        onClose={onClose}
+                        onResolverSaf={resolverSaf}
+                    />
 
                     <div className="gelia-modal-body p-5 md:p-6 space-y-6">
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>1. Estado y alertas</p>
-                            <div className={`p-4 rounded-xl border theme-border ${esRechazado ? 'bg-red-500/10 border-red-500/30' : pedido.es_resguardo ? 'bg-blue-500/10 border-blue-500/30' : 'theme-element'}`}>
-                                <p className="text-sm font-bold theme-text-main m-0">
-                                    Estado actual: <span style={{ color: badge.style?.color }}>{badge.label}</span>
-                                    {badgeHito ? ` · ${badgeHito.label}` : ''}
-                                </p>
-                                {pedido.origen?.nombre && (
-                                    <p className="text-xs font-black uppercase text-blue-600 mt-2 m-0">Tipo: {pedido.origen.nombre}</p>
-                                )}
-                                {pedido.es_resguardo && (
-                                    <p className="text-xs font-black uppercase text-blue-600 mt-1 m-0">En resguardo — mercancía bloqueada en almacén</p>
-                                )}
-                                {reRevision && (
-                                    <p className="text-[10px] text-emerald-600 font-bold mt-2 m-0">
-                                        Corregido y reenviado — dar luz verde si todo está en orden
-                                    </p>
-                                )}
-                                {badgeRemision && (
-                                    <div className="mt-3 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 space-y-1">
-                                        <p className="text-sm font-bold text-orange-600 m-0 flex items-center gap-2">
-                                            <AlertTriangle className="w-4 h-4" /> Corregir remisión
-                                        </p>
-                                        <p className="text-sm font-bold theme-text-main m-0">
-                                            {pedido.detalle_error_datos || pedido.motivo_rechazo || 'CEDIS/Delegado reportó error en la remisión. Suba la remisión correcta y apruebe.'}
-                                        </p>
-                                    </div>
-                                )}
-                                {esRechazado && pedido.motivo_rechazo && (
-                                    <p className="text-sm text-red-500 font-bold mt-2 m-0 flex items-start gap-2">
-                                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                                        Motivo del reporte: {pedido.motivo_rechazo}
-                                    </p>
-                                )}
-                                {(fase === 'INCIDENCIA_CEDIS' || pedido.detalle_incidencia_empaque) && (
-                                    <div className="mt-3 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 space-y-1">
-                                        <p className="text-sm font-bold text-orange-600 m-0 flex items-center gap-2">
-                                            <AlertTriangle className="w-4 h-4" /> Error reportado en CEDIS
-                                        </p>
-                                        <p className="text-sm font-bold theme-text-main m-0">{pedido.detalle_incidencia_empaque}</p>
-                                        {pedido.incidencia_empaque_at && (
-                                            <p className="text-xs theme-text-muted font-bold m-0 font-mono">
-                                                Reportado por {(pedido.incidencia_empaque_por?.name || pedido.incidenciaEmpaquePor?.name) || '—'} el {formatearFechaHoraAuditoria(pedido.incidencia_empaque_at)}
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
-                                <div className="mt-3">
-                                    <ListaErroresPedido errores={pedido.errores} />
-                                </div>
-                                {can('control_pedidos.auditar') && (pedido.saf_incidencias_abiertas || []).length > 0 && (
-                                    <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2">
-                                        <p className="text-sm font-bold text-amber-700 m-0 flex items-center gap-2">
-                                            <AlertTriangle className="w-4 h-4" /> Alerta de saldos a favor (no detiene el pedido)
-                                        </p>
-                                        {(pedido.saf_incidencias_abiertas || []).map((inc) => (
-                                            <div key={inc.id} className="space-y-2">
-                                                <p className="text-sm font-bold theme-text-main m-0">{inc.descripcion}</p>
-                                                <p className="text-[10px] theme-text-muted font-bold m-0 uppercase tracking-wide">
-                                                    Tipo: {inc.tipo || '—'} · Corrige el monto si aplica, deja nota y continúa
-                                                </p>
-                                                <button
-                                                    type="button"
-                                                    className={`${BTN_SECONDARY} text-xs`}
-                                                    disabled={procesando}
-                                                    onClick={() => {
-                                                        setProcesando(true);
-                                                        router.post(
-                                                            route('control_pedidos.auditar.incidencias_saf.resolver', {
-                                                                pedidoBma: pedido.id,
-                                                                incidencia: inc.id,
-                                                            }),
-                                                            { nota: 'Revisado en auditoría; se continúa con la incidencia.' },
-                                                            {
-                                                                preserveScroll: true,
-                                                                onFinish: () => setProcesando(false),
-                                                                onSuccess: () => {
-                                                                    setPedido((prev) => ({
-                                                                        ...prev,
-                                                                        saf_incidencias_abiertas: (prev.saf_incidencias_abiertas || [])
-                                                                            .filter((x) => x.id !== inc.id),
-                                                                        tiene_alerta_saf: false,
-                                                                    }));
-                                                                },
-                                                            }
-                                                        );
-                                                    }}
-                                                >
-                                                    Marcar revisado y continuar
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                {pagoValidado && (
-                                    <p className="text-xs text-emerald-600 font-bold mt-2 m-0 flex items-center gap-1">
-                                        <CheckCircle2 className="w-4 h-4" />
-                                        Pago validado el {formatearFechaHoraAuditoria(pedido.pago_validado_at)}
-                                        {(pedido.pago_validado_por?.name || pedido.pagoValidadoPor?.name) && ` por ${pedido.pago_validado_por?.name || pedido.pagoValidadoPor?.name}`}
-                                    </p>
-                                )}
-                            </div>
+                            <p className={SECCION}>1. Cobertura</p>
+                            <ResumenCoberturaPedido resumen={resumenCobertura} bloqueos={bloqueosPago} />
                         </section>
 
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>2. Datos generales</p>
-                            <div className="grid grid-cols-2 gap-4">
-                                <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
-                                <Campo label="Nombre" value={pedido.cliente?.nombre} />
-                                {esPendiente ? (
-                                    <div className="col-span-2 sm:col-span-1">
-                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Folio de Pedido</p>
-                                        <div className="flex gap-2 mt-0.5">
-                                            <input
-                                                type="text"
-                                                value={folioRemision}
-                                                onChange={(e) => setFolioRemision(e.target.value)}
-                                                className={`${THEME_INPUT} w-full py-2 text-sm`}
-                                                placeholder="Folio Wizerp..."
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={guardarFolioRemision}
-                                                disabled={procesando || folioRemision.trim() === String(pedido.folio_remision || '')}
-                                                className={`${BTN_SECONDARY} shrink-0 text-[10px] font-black uppercase px-3 outline-none disabled:opacity-40`}
-                                            >
-                                                Guardar
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <Campo label="Folio de Pedido" value={pedido.folio_remision} />
-                                )}
-                                <Campo label="Folio interno" value={pedido.folio} />
-                                <Campo label="Fecha pedido" value={formatearFechaNegocio(pedido.fecha)} />
-                                <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
-                                <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
-                                <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
-                                <Campo
-                                    label="Pagos / bancos"
-                                    value={(pedido.fuentes_pago?.length
-                                        ? pedido.fuentes_pago
-                                        : (pedido.banco?.nombre ? [pedido.banco.nombre] : [])
-                                    ).join(', ') || '—'}
-                                />
-                                <Campo label={LABEL_NOTA_COMPRA_CAMPO} value={pedido.anexar_remision ? 'Sí' : 'No'} />
-                                <Campo label="Saldo a favor aplicado" value={Number(pedido.saldo_a_favor) > 0 ? formatearMoneda(pedido.saldo_a_favor) : '—'} />
-                                <Campo label="N° de envíos" value={pedido.numero_cajas} />
-                                <Campo label="Capturado por" value={pedido.vendedor?.name} />
-                            </div>
-                        </section>
-
-                        <section className={SECCION_WRAP}>
-                            <p className={SECCION}>3. Pago del cliente</p>
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                                <Campo label="Monto a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} />
-                                <Campo
-                                    label="Fuentes de pago"
-                                    value={(pedido.fuentes_pago?.length
-                                        ? pedido.fuentes_pago
-                                        : (pedido.banco?.nombre ? [pedido.banco.nombre] : [])
-                                    ).join(', ') || '—'}
-                                />
-                            </div>
-                            {comprobantes.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    {comprobantes.map((doc) => (
-                                        <MiniaturaDocumento key={doc.id} documento={doc} onVer={setDocPreview} />
-                                    ))}
-                                </div>
-                            )}
+                            <p className={SECCION}>2. Exhibiciones y decisión</p>
                             {(pedido.saf_aplicaciones || []).filter((a) => a.estado !== 'liberado').length > 0 && (
-                                <div className="mt-4 space-y-2">
-                                    <p className="text-xs font-bold theme-text-muted uppercase">Saldos a favor aplicados/reservados</p>
+                                <div className="mb-4 space-y-2">
+                                    <p className="text-xs font-bold theme-text-muted uppercase m-0">Saldos a favor aplicados/reservados</p>
                                     {(pedido.saf_aplicaciones || []).filter((a) => a.estado !== 'liberado').map((a) => (
                                         <div key={a.id} className="flex justify-between text-sm border theme-border theme-element rounded-xl px-3 py-2">
                                             <span className="font-bold theme-text-main">
@@ -560,51 +411,49 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     ))}
                                 </div>
                             )}
-                            <div className="mt-4">
-                                <SeccionPagosExhibicion
-                                    pedidoId={pedido.id}
-                                    bancos={bancos}
-                                    puedeRegistrar={false}
-                                    puedeRevisar={esPendiente && !uiSimplificada}
-                                    puedeGenerarSaldo={false}
-                                    modoAuxiliarSimplificado={uiSimplificada}
-                                    rutaResumen="control_pedidos.pagos.resumen_auditoria"
-                                    totalMercancia={pedido.total_mercancia}
-                                    costoEnvio={pedido.costo_envio}
-                                    aplicaSeguro={Boolean(pedido.aplica_seguro)}
-                                    costoSeguro={pedido.costo_seguro}
-                                    saldoAFavorAplicado={pedido.saldo_a_favor}
-                                    onResumenChange={(r) => setBloqueosPago(r?.bloqueos || [])}
-                                    mensajeBloqueo={esPendiente
-                                        ? (uiSimplificada
-                                            ? 'Revise la cobertura. Use Rechazar pago o Validar pago.'
-                                            : 'Revise cada exhibición. Todas deben quedar verificadas antes de validar el pago.')
-                                        : null}
-                                />
-                            </div>
+                            <SeccionPagosExhibicion
+                                pedidoId={pedido.id}
+                                bancos={bancos}
+                                puedeRegistrar={false}
+                                puedeRevisar={false}
+                                puedeGenerarSaldo={false}
+                                modoAuxiliarSimplificado
+                                ocultarResumen
+                                rutaResumen="control_pedidos.pagos.resumen_auditoria"
+                                totalMercancia={pedido.total_mercancia}
+                                costoEnvio={pedido.costo_envio}
+                                aplicaSeguro={Boolean(pedido.aplica_seguro)}
+                                costoSeguro={pedido.costo_seguro}
+                                saldoAFavorAplicado={pedido.saldo_a_favor}
+                                onResumenChange={(r) => {
+                                    setResumenCobertura(r);
+                                    setBloqueosPago(r?.bloqueos || []);
+                                }}
+                                mensajeBloqueo={esPendiente
+                                    ? 'Revise la cobertura. Use Rechazar pago o Validar pago.'
+                                    : null}
+                            />
                             {esPendiente && (
                                 <div className="mt-4 flex flex-wrap gap-2">
-                                    {uiSimplificada && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setRechazoPagos({ abierto: true, ids: [], motivo: '' })}
-                                            disabled={procesando || pagoValidado}
-                                            className={`${BTN_SECONDARY} border border-red-500/40 text-red-500 outline-none disabled:opacity-50`}
-                                        >
-                                            Rechazar pago
-                                        </button>
-                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setRechazoPagos({ abierto: true, ids: [], motivo: '' })}
+                                        disabled={procesando || pagoValidado}
+                                        className={`${BTN_SECONDARY} border border-red-500/40 text-red-500 outline-none disabled:opacity-50`}
+                                    >
+                                        Rechazar pago
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={validarPago}
-                                        disabled={procesando || pagoValidado || (uiSimplificada && bloqueosPago.length > 0)}
+                                        disabled={procesando || pagoValidado || bloqueosPago.length > 0}
                                         title={bloqueosPago[0] || undefined}
                                         className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50`}
                                     >
-                                        <CheckCircle2 className="w-4 h-4" />
-                                        {pagoValidado ? 'Pago validado' : 'Validar pago'}
+                                        {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                        {pagoValidado ? 'Pago validado' : procesando ? 'Validando pago…' : 'Validar pago'}
                                     </button>
-                                    {uiSimplificada && bloqueosPago.length > 0 && !pagoValidado && (
+                                    {bloqueosPago.length > 0 && !pagoValidado && (
                                         <p className="w-full text-xs font-bold text-amber-600 m-0">{bloqueosPago[0]}</p>
                                     )}
                                 </div>
@@ -612,7 +461,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         </section>
 
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>{uiSimplificada ? '4. Envío y costos' : '4. Envío, costos y dirección'}</p>
+                            <p className={SECCION}>3. Envío y costos</p>
                             <div className="grid grid-cols-2 gap-4 mb-3">
                                 <Campo label="Tipo operación" value={pedido.tipo_operacion_envio?.nombre} />
                                 <Campo label="Estatus envío" value={LABELS_ESTATUS_ENVIO[pedido.estatus_envio] || pedido.estatus_envio} />
@@ -626,46 +475,53 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             <div className="grid grid-cols-2 gap-4">
                                 <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
                                 <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
-                                <Campo label="Tipo caja" value={pedido.tipo_caja?.nombre} />
-                                <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
-                                <Campo label="N° envíos" value={pedido.numero_cajas} />
                                 <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                                 <Campo label="Pesaje CEDIS" value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
+                                <Campo label={etiquetaCostoEnvio(pedido.paqueteria)} value={formatearMoneda(pedido.costo_envio)} />
+                                <Campo label="Costo del seguro" value={pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : formatearMoneda(0)} />
+                                <Campo label="Total mercancía" value={formatearMoneda(pedido.total_mercancia)} />
                             </div>
-                            {(cajasActivas.length > 0) && (
-                                <div className="mt-3 space-y-2">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Detalle de envíos</p>
-                                        {detalleCajasUi && (
-                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${fuenteEnvioDetalle ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-slate-500/15 theme-text-muted'}`}>
-                                                {fuenteEnvioDetalle ? 'Detalle por caja' : 'Legado'}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {detalleCajasUi ? (
-                                        [...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
-                                            <TarjetaEnvioPedido
-                                                key={c.uuid_operativo || c.id || idx}
-                                                caja={c}
-                                                indice={idx}
-                                                abiertoInicial={cajasActivas.length === 1}
-                                                modo="lectura"
-                                                incompleto={c.costo_envio === null || c.costo_envio === '' || c.costo_envio === undefined}
-                                                documentos={(pedido.documentos || []).filter((d) => (
-                                                    d.pedido_bma_caja_id === c.id
-                                                    || (d.relacion_tipo === 'envio_caja' && Number(d.relacion_id) === Number(c.id))
-                                                ))}
-                                                onVerDoc={setDocPreview}
-                                            />
-                                        ))
-                                    ) : (
-                                        [...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
-                                            <p key={c.id || idx} className="text-xs font-bold theme-text-main m-0">
-                                                {etiquetaEnvio(idx, c)}
-                                                {c.peso_real_kg != null ? ` · real ${c.peso_real_kg} kg` : ''}
-                                                {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
-                                            </p>
-                                        ))
+                            {tienePesajeRespondido && (
+                                <div className="mt-4 space-y-3">
+                                    <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                        Respuesta de cajas y pesos
+                                    </p>
+                                    {(pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name) && (
+                                        <p className="text-xs font-bold theme-text-main m-0">
+                                            Respondió: {pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name}
+                                            {pedido.pesaje_respondido_at
+                                                ? ` · ${formatearFechaNegocio(pedido.pesaje_respondido_at)}`
+                                                : ''}
+                                        </p>
+                                    )}
+                                    {cajasActivas.length > 0 && (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
+                                                {detalleCajasUi && (
+                                                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${fuenteEnvioDetalle ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-slate-500/15 theme-text-muted'}`}>
+                                                        {fuenteEnvioDetalle ? 'Detalle por caja' : 'Legado'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {[...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                                <TarjetaEnvioPedido
+                                                    key={c.uuid_operativo || c.id || idx}
+                                                    caja={c}
+                                                    indice={idx}
+                                                    abiertoInicial={cajasActivas.length === 1}
+                                                    modo="lectura"
+                                                    incompleto={c.costo_envio === null || c.costo_envio === '' || c.costo_envio === undefined}
+                                                    documentos={[]}
+                                                />
+                                            ))}
+                                            <div className="grid grid-cols-2 gap-4 pt-1">
+                                                <Campo label="Núm. envíos" value={pedido.numero_cajas ?? cajasActivas.length} />
+                                                <Campo label="Peso real total (kg)" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg}` : null} />
+                                                <Campo label="Peso volumétrico total (kg)" value={pedido.peso_volumetrico_kg != null ? `${pedido.peso_volumetrico_kg}` : null} />
+                                                <Campo label="Peso cobrado guía total (kg)" value={pedido.peso_cobrado_guia_kg != null ? `${pedido.peso_cobrado_guia_kg}` : null} />
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -680,73 +536,17 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     </button>
                                 </div>
                             )}
-                            <div className="mt-4 p-4 rounded-xl border theme-border theme-element space-y-2 text-sm">
-                                <div className="flex justify-between theme-text-muted font-bold"><span>Total de mercancía</span><span>{formatearMoneda(pedido.total_mercancia)}</span></div>
-                                <div className="flex justify-between theme-text-muted font-bold">
-                                    <span>{etiquetaCostoEnvio(pedido.paqueteria)}</span>
-                                    <span>{formatearMoneda(pedido.costo_envio)}</span>
-                                </div>
-                                <div className="flex justify-between theme-text-muted font-bold">
-                                    <span>Costo del seguro</span>
-                                    <span>{pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : formatearMoneda(0)}</span>
-                                </div>
-                                <div className="flex justify-between theme-text-muted font-bold">
-                                    <span>Total a cubrir</span>
-                                    <span>{formatearMoneda(
-                                        Number(pedido.total_mercancia || 0)
-                                        + Number(pedido.costo_envio || 0)
-                                        + (pedido.aplica_seguro ? Number(pedido.costo_seguro || 0) : 0)
-                                    )}</span>
-                                </div>
-                                <div className="flex justify-between font-bold" style={{ color: 'var(--color-exito)' }}>
-                                    <span>Saldo a favor aplicado</span>
-                                    <span>- {formatearMoneda(pedido.saldo_a_favor)}</span>
-                                </div>
-                                <div className="flex justify-between font-black pt-2 border-t theme-border" style={{ color: 'var(--color-primario)' }}>
-                                    <span>Total a cobrar ahora</span><span>{formatearMoneda(pedido.total_a_cobrar)}</span>
-                                </div>
-                            </div>
                             <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} compact />
-                            {!uiSimplificada && (
-                            <div className="mt-4 space-y-3">
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Domicilio de envío</p>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {can('clientes.direcciones.ver') && pedido.cliente?.id && (
-                                            <a
-                                                href={route('control_pedidos.direcciones.cliente', pedido.cliente.id)}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className={`${BTN_SECONDARY} text-xs py-1.5 px-2 inline-flex items-center gap-1`}
-                                            >
-                                                <MapPin className="w-3.5 h-3.5" /> Gestionar direcciones
-                                            </a>
-                                        )}
-                                        {can('control_pedidos.direccion.cambiar') && (
-                                            <button type="button" className={`${BTN_SECONDARY} text-xs py-1.5 px-2 inline-flex items-center gap-1`} onClick={() => setCambiarDir(true)}>
-                                                <MapPin className="w-3.5 h-3.5" /> Cambiar
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                                <DireccionPedidoResumen
-                                    direccion={pedido.direccion_vigente || pedido.direccionVigente}
-                                    domicilioLegacy={pedido.domicilio_entrega}
-                                    codigoPostal={pedido.codigo_postal}
-                                codigoDireccion={codigoDireccionCliente(
-                                    pedido.cliente?.numero_cliente,
-                                    (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
-                                )}
-                                />
-                                {pedido.envia_a_otra_persona && <Campo label="Destinatario alterno" value={pedido.envia_otra_persona} />}
-                                <Campo label="Comentarios" value={pedido.comentarios_drive} />
-                            </div>
-                            )}
+                        </section>
+
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>4. Datos generales</p>
+                            <DatosGeneralesAuditoria pedido={pedido} />
                         </section>
 
                         {(anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && (
                             <section className={SECCION_WRAP}>
-                                <p className={SECCION}>Anexo de pago de envío</p>
+                                <p className={SECCION}>5. Anexo de pago de envío</p>
                                 {anexoPendiente ? (
                                     <div className="space-y-3">
                                         <div className="grid grid-cols-2 gap-4">
@@ -809,7 +609,29 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         )}
 
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>5. Remisión</p>
+                            <p className={SECCION}>6. Remisión</p>
+                            {esPendiente && (
+                                <div className="mb-4">
+                                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Folio de pedido (WizeRP)</p>
+                                    <div className="flex gap-2 mt-0.5">
+                                        <input
+                                            type="text"
+                                            value={folioRemision}
+                                            onChange={(e) => setFolioRemision(e.target.value)}
+                                            className={`${THEME_INPUT} w-full py-2 text-sm`}
+                                            placeholder="Folio Wizerp..."
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={guardarFolioRemision}
+                                            disabled={procesando || folioRemision.trim() === String(pedido.folio_remision || '')}
+                                            className={`${BTN_SECONDARY} shrink-0 text-[10px] font-black uppercase px-3 outline-none disabled:opacity-40`}
+                                        >
+                                            Guardar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             {remision ? (
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-3 p-4 rounded-xl border theme-border theme-element">
@@ -855,43 +677,25 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         </section>
                     </div>
 
-                    <div className="gelia-modal-footer flex flex-wrap gap-3 p-5 md:p-6 border-t theme-border shrink-0">
-                        <button type="button" onClick={onClose} className={`${BTN_SECONDARY} theme-element border theme-border outline-none`}>
-                            Cerrar
-                        </button>
-                        {puedeLiberarResguardo && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (requiereCapturaLiberacion) {
-                                        setLiberarCapturaAbierto(true);
-                                    } else {
-                                        setConfirmacion({ accion: 'liberar' });
-                                    }
-                                }}
-                                disabled={procesando}
-                                className={`${BTN_SECONDARY} theme-element border border-blue-500/40 text-blue-600 outline-none`}
-                            >
-                                Liberar resguardo
-                            </button>
-                        )}
-                        {esPendiente && (
-                            <button type="button" onClick={() => setErrorDatosAbierto(true)} disabled={procesando} className={`${BTN_SECONDARY} theme-element border border-red-500/40 text-red-500 outline-none`}>
-                                Reportar error
-                            </button>
-                        )}
-                        {muestraAprobar && (
-                            <button
-                                type="button"
-                                onClick={() => setConfirmacion({ accion: 'aprobar' })}
-                                disabled={!puedeAprobar || procesando}
-                                className={`${BTN_PRIMARY} flex items-center gap-2 outline-none disabled:opacity-50 ml-auto`}
-                                title={!pagoValidado ? 'Valide el pago antes de aprobar' : !remision ? 'Adjunte la remisión PDF antes de aprobar' : ''}
-                            >
-                                <CheckCircle2 className="w-4 h-4" /> Aprobar y enviar a Registro General
-                            </button>
-                        )}
-                    </div>
+                    <BarraAccionesRevision
+                        procesando={procesando}
+                        puedeLiberarResguardo={puedeLiberarResguardo}
+                        esPendiente={esPendiente}
+                        muestraAprobar={muestraAprobar}
+                        puedeAprobar={puedeAprobar}
+                        pagoValidado={pagoValidado}
+                        tieneRemision={Boolean(remision)}
+                        onClose={onClose}
+                        onLiberar={() => {
+                            if (requiereCapturaLiberacion) {
+                                setLiberarCapturaAbierto(true);
+                            } else {
+                                setConfirmacion({ accion: 'liberar' });
+                            }
+                        }}
+                        onReportarError={() => setErrorDatosAbierto(true)}
+                        onAprobar={() => setConfirmacion({ accion: 'aprobar' })}
+                    />
                 </div>
             </div>
 
@@ -956,7 +760,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 ))}
                         </div>
                         <div>
-                            <label className={THEME_LABEL}>Motivo</label>
+                            <label className={THEME_LABEL}>Motivo / observación</label>
                             <textarea
                                 className={`${THEME_INPUT} w-full mt-1.5 min-h-[5rem] text-sm font-bold`}
                                 value={rechazoPagos.motivo}
@@ -970,10 +774,11 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                             </button>
                             <button
                                 type="button"
-                                className={`${BTN_PRIMARY} bg-red-600`}
+                                className={`${BTN_PRIMARY} bg-red-600 flex items-center gap-2`}
                                 disabled={procesando}
                                 onClick={confirmarRechazoPagos}
                             >
+                                {procesando && <Loader2 className="w-4 h-4 animate-spin" />}
                                 Rechazar exhibiciones seleccionadas
                             </button>
                         </div>
@@ -988,9 +793,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 mensaje={alerta.mensaje}
                 onClose={() => setAlerta({ ...alerta, abierto: false })}
             />
-            {!uiSimplificada && (
-                <ModalCambiarDireccion abierto={cambiarDir} onClose={() => setCambiarDir(false)} pedido={pedido} />
-            )}
             <ModalLiberarResguardoAbierto
                 abierto={liberarCapturaAbierto}
                 pedido={pedido}
