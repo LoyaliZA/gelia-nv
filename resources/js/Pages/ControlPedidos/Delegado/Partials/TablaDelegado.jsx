@@ -175,6 +175,7 @@ export default function TablaDelegado({ pedidos, tabActiva = 'PENDIENTES_GUIA', 
                 abierto={Boolean(pedidoDetalle)}
                 pedido={pedidoDetalle}
                 onClose={cerrarDetalle}
+                onPedidoActualizado={setPedidoDetalle}
                 onReportarError={(p) => setPedidoError(p)}
             />
             <ModalBitacoraPedido

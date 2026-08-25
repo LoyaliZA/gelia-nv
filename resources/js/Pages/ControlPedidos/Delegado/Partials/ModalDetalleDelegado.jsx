@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
+import axios from 'axios';
 import {
     X, Check, Upload, Eye, Trash2, AlertTriangle, User, Clock, FileText, Loader2,
 } from 'lucide-react';
@@ -319,7 +320,7 @@ function CampoSubirGuiaPdf({ pedido, onVerPdf, soloLectura = false, onDone }) {
 }
 
 export default function ModalDetalleDelegado({
-    abierto, onClose, pedido: pedidoInicial, onReportarError,
+    abierto, onClose, pedido: pedidoInicial, onReportarError, onPedidoActualizado,
 }) {
     const [pedido, setPedido] = useState(pedidoInicial);
     const [docPreview, setDocPreview] = useState(null);
@@ -347,16 +348,23 @@ export default function ModalDetalleDelegado({
     const direccionTexto = textoDireccionParaGuia(dir, pedido.domicilio_entrega);
     const domicilioCompleto = textoDomicilioCompleto(dir, pedido.domicilio_entrega, pedido.codigo_postal);
 
-    const recargarPedido = () => {
-        router.reload({
-            only: PROPS_LISTADO,
-            preserveScroll: true,
-            onSuccess: (page) => {
-                const actualizado = page.props.pedidos?.data?.find((p) => p.id === pedido.id);
-                if (actualizado) setPedido(actualizado);
-                else onClose();
-            },
-        });
+    /** Refresca el pedido sin cerrar el modal (puede haber salido del tab filtrado). */
+    const recargarPedido = async () => {
+        const q = pedido.folio_remision || pedido.folio || String(pedido.id);
+        try {
+            const { data } = await axios.get(route('control_pedidos.delegado.listado'), {
+                params: { tab: 'TODOS', q, page: 1 },
+                headers: { Accept: 'application/json' },
+            });
+            const items = data.pedidos?.data || [];
+            const actualizado = items.find((p) => p.id === pedido.id);
+            if (actualizado) {
+                setPedido(actualizado);
+                onPedidoActualizado?.(actualizado);
+            }
+        } catch {
+            // Mantener estado actual; no cerrar.
+        }
     };
 
     return createPortal(

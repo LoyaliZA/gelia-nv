@@ -155,6 +155,10 @@ class ListarPedidosDelegadoService
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
                     });
+
+                if (ctype_digit($termino)) {
+                    $q->orWhere('id', (int) $termino);
+                }
             });
         }
 
