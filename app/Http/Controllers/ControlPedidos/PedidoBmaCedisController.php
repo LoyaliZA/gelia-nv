@@ -40,10 +40,34 @@ class PedidoBmaCedisController extends Controller
         Gate::authorize('control_pedidos.cedis');
 
         $catalogos = $catalogosService->ejecutar();
+        $tab = strtoupper((string) $request->input('tab', 'TODOS'));
+
+        $liberaciones = null;
+        if ($tab === 'LIBERACIONES') {
+            $liberaciones = \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::query()
+                ->with(['pedido.cliente', 'pedido.vendedor', 'almacen', 'modalidad', 'productos'])
+                ->where('estado', \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA)
+                ->where(function ($q) {
+                    $q->where('area_responsable_codigo', 'CEDIS')
+                        ->orWhereHas('modalidad', fn ($m) => $m->where('area_responsable_codigo', 'CEDIS'));
+                })
+                ->orderBy('updated_at')
+                ->paginate(15)
+                ->withQueryString();
+        }
 
         return Inertia::render('ControlPedidos/Cedis/Index', [
-            'pedidos' => fn () => $listarService->ejecutar($request->all()),
-            'metricas' => fn () => $listarService->metricas(),
+            'pedidos' => fn () => $tab === 'LIBERACIONES' ? ['data' => []] : $listarService->ejecutar($request->all()),
+            'liberaciones' => $liberaciones,
+            'metricas' => fn () => array_merge($listarService->metricas(), [
+                'liberaciones_pendientes' => \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::query()
+                    ->where('estado', \App\Models\ControlPedidos\PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA)
+                    ->where(function ($q) {
+                        $q->where('area_responsable_codigo', 'CEDIS')
+                            ->orWhereHas('modalidad', fn ($m) => $m->where('area_responsable_codigo', 'CEDIS'));
+                    })
+                    ->count(),
+            ]),
             'filtros' => $request->only(['tab', 'q', 'page']),
             'tipos_caja' => $catalogos['tipos_caja'] ?? [],
             'almacenes_busqueda' => Almacen::query()
@@ -51,6 +75,9 @@ class PedidoBmaCedisController extends Controller
                 ->where('permite_busqueda_productos', true)
                 ->orderBy('nombre')
                 ->get(['id', 'codigo', 'nombre']),
+            'can' => [
+                'liberar' => Auth::user()?->can('control_pedidos.cedis.liberar') ?? false,
+            ],
         ]);
     }
 
@@ -356,5 +383,37 @@ class PedidoBmaCedisController extends Controller
             'Content-Type' => $foto->mime_type ?: 'image/jpeg',
             'Cache-Control' => 'private, max-age=300',
         ]);
+    }
+
+    public function liberarTarea(
+        \App\Models\ControlPedidos\PedidoBmaTareaPreparacion $tarea,
+        Request $request,
+        \App\Services\ControlPedidos\LiberarTareaPreparacionService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.cedis.liberar');
+
+        $datos = $request->validate([
+            'motivo' => ['nullable', 'string', 'max:2000'],
+            'version' => ['nullable', 'integer', 'min:1'],
+            'cantidad_liberada' => ['nullable', 'integer', 'min:0'],
+            'incidencia' => ['nullable', 'string', 'max:2000'],
+            'confirmacion' => ['required', 'accepted'],
+        ]);
+
+        try {
+            $service->ejecutar(
+                $tarea,
+                Auth::user(),
+                $datos['motivo'] ?? null,
+                isset($datos['version']) ? (int) $datos['version'] : null,
+                array_merge($datos, ['area' => 'CEDIS'])
+            );
+        } catch (\Symfony\Component\HttpKernel\Exception\ConflictHttpException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Mercancía liberada. Confirmó devolución a disponibilidad.');
     }
 }

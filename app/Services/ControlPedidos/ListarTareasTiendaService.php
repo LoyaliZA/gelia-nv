@@ -39,10 +39,17 @@ class ListarTareasTiendaService
                 PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
                 PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS,
             ])->whereDate('atendida_at', today()),
-            'PENDIENTES_LIBERACION' => $query->whereIn('estado', [
-                PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
-                PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
-            ])->whereHas('modalidad', fn ($q) => $q->where('codigo', 'RECOGE_TIENDA_TRANSFERENCIA')),
+            'PENDIENTES_LIBERACION' => $query->where(function ($q) {
+                $q->where('estado', PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA)
+                    ->orWhere(function ($q2) {
+                        $q2->where('estado', PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA)
+                            ->whereNotNull('espera_pago_at');
+                    })
+                    ->orWhere(function ($q2) {
+                        $q2->where('estado', PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA)
+                            ->whereHas('modalidad', fn ($m) => $m->where('codigo', 'RECOGE_TIENDA_TRANSFERENCIA'));
+                    });
+            }),
             'LISTAS_TRASLADO' => $query->where('estado', PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_TRASLADO),
             'LISTAS_CARATULA' => $query->where('estado', PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA),
             'EN_TRASLADO' => $query->where('estado', PedidoBmaTareaPreparacion::ESTADO_EN_TRASLADO),
@@ -69,10 +76,16 @@ class ListarTareasTiendaService
             'con_incidencia' => (clone $base)->where('estado', PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA)->count(),
             'respondidas_hoy' => (clone $base)->where('estado', PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA)
                 ->whereDate('atendida_at', today())->count(),
-            'pendientes_liberacion' => (clone $base)->whereIn('estado', [
-                PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
-                PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
-            ])->whereHas('modalidad', fn ($q) => $q->where('codigo', 'RECOGE_TIENDA_TRANSFERENCIA'))->count(),
+            'pendientes_liberacion' => (clone $base)->where(function ($q) {
+                $q->where('estado', PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA)
+                    ->orWhere(function ($q2) {
+                        $q2->where('estado', PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA)
+                            ->where(function ($q3) {
+                                $q3->whereNotNull('espera_pago_at')
+                                    ->orWhereHas('modalidad', fn ($m) => $m->where('codigo', 'RECOGE_TIENDA_TRANSFERENCIA'));
+                            });
+                    });
+            })->count(),
             'listas_traslado' => (clone $base)->where('estado', PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_TRASLADO)->count(),
             'listas_caratula' => (clone $base)->where('estado', PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA)->count(),
             'en_traslado' => (clone $base)->where('estado', PedidoBmaTareaPreparacion::ESTADO_EN_TRASLADO)->count(),

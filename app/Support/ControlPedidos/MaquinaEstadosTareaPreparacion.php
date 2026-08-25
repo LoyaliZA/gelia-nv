@@ -36,15 +36,18 @@ final class MaquinaEstadosTareaPreparacion
             PedidoBmaTareaPreparacion::ESTADO_RECHAZADA_CEDIS,
             PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA,
             PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+            PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
         ],
         PedidoBmaTareaPreparacion::ESTADO_LISTA_PARA_CARATULA => [
             PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
             PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA,
             PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
+            PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
         ],
         PedidoBmaTareaPreparacion::ESTADO_EN_TRASLADO => [
             PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS,
             PedidoBmaTareaPreparacion::ESTADO_RECHAZADA_CEDIS,
+            PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
         ],
         PedidoBmaTareaPreparacion::ESTADO_RECHAZADA_CEDIS => [
             PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA,
@@ -52,9 +55,13 @@ final class MaquinaEstadosTareaPreparacion
         ],
         PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA => [
             PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
+            PedidoBmaTareaPreparacion::ESTADO_RESPONDIDA,
             PedidoBmaTareaPreparacion::ESTADO_CANCELADA,
         ],
-        PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS => [],
+        PedidoBmaTareaPreparacion::ESTADO_RECIBIDA_CEDIS => [
+            PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA,
+            PedidoBmaTareaPreparacion::ESTADO_LIBERADA,
+        ],
         PedidoBmaTareaPreparacion::ESTADO_LIBERADA => [],
         PedidoBmaTareaPreparacion::ESTADO_CANCELADA => [],
     ];
@@ -68,7 +75,9 @@ final class MaquinaEstadosTareaPreparacion
         PedidoBmaTareaPreparacion::ESTADO_EN_TRASLADO => 'control_pedidos.tienda.trasladar',
         PedidoBmaTareaPreparacion::ESTADO_CON_INCIDENCIA => 'control_pedidos.tienda.reportar_error',
         PedidoBmaTareaPreparacion::ESTADO_LIBERADA => 'control_pedidos.tienda.liberar',
+        PedidoBmaTareaPreparacion::ESTADO_LIBERACION_SOLICITADA => 'control_pedidos.cancelacion_operativa.solicitar',
         PedidoBmaTareaPreparacion::ESTADO_CANCELADA => 'control_pedidos.preparacion.corregir',
+        // Reactivación restaura a RESPONDIDA; permiso validado en ReactivarCancelacionOperativaService.
         // Recepción CEDIS usa permisos del módulo Traspasos; sync interno no exige permiso Tienda.
         // Colocación de carátula: permiso control_pedidos.tienda.confirmar_caratula en ruta/servicio.
     ];

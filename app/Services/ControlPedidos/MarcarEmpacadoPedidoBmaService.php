@@ -31,6 +31,7 @@ class MarcarEmpacadoPedidoBmaService
             if (!$miembro->esGestionablePorCedis()) {
                 continue;
             }
+            AssertPedidoNoBloqueadoFase7::assert($miembro);
             $this->assertPuedeEmpacar($miembro);
         }
 

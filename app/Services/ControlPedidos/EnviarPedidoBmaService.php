@@ -39,6 +39,7 @@ class EnviarPedidoBmaService
         }
 
         $pedido->assertSinExistenciaAtendida();
+        AssertPedidoNoBloqueadoFase7::assert($pedido);
         $this->validarCamposRequeridos($pedido);
         $this->pagosService->assertCubiertoParaEnviar($pedido);
         $this->pagosService->generarExcedenteSiAplica($pedido, $usuarioId);

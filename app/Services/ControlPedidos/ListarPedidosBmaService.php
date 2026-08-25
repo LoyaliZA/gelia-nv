@@ -48,6 +48,8 @@ class ListarPedidosBmaService
             'tareaPreparacionVigente.modalidad',
             'tareaPreparacionVigente.almacen',
             'tareaPreparacionVigente.productos',
+            'cancelacionOperativaActiva.tareas.tarea.almacen',
+            'cancelacionOperativaActiva.tareas.tarea.modalidad',
             'tareaPreparacionVigente.historial',
             'tareaPreparacionVigente.paqueteria',
             'tareaPreparacionVigente.caratulas',
@@ -126,6 +128,40 @@ class ListarPedidosBmaService
         $pedido->setAttribute('tarea_preparacion', $this->serializarTareaPreparacion(
             $this->resolverTareaPreparacionVista($pedido)
         ));
+
+        $canc = $pedido->relationLoaded('cancelacionOperativaActiva')
+            ? $pedido->cancelacionOperativaActiva
+            : null;
+        $pedido->setAttribute('esperando_pago_at', $pedido->esperando_pago_at?->toIso8601String());
+        $pedido->setAttribute('esta_esperando_pago', $pedido->estaEsperandoPago());
+        $fechaLimiteEspera = null;
+        if ($pedido->estaEsperandoPago()) {
+            $t = $this->resolverTareaPreparacionVista($pedido);
+            $fechaLimiteEspera = $t?->fecha_limite?->toIso8601String();
+        }
+        $pedido->setAttribute('fecha_limite_espera', $fechaLimiteEspera);
+        $pedido->setAttribute('puede_espera_pago', $puedeEditar
+            && ! $pedido->estaEsperandoPago()
+            && ! $canc
+            && $pedido->usaPreparacionTienda()
+            && in_array($pedido->tarea_preparacion['estado'] ?? '', ['RESPONDIDA', 'RECIBIDA_CEDIS'], true));
+        $pedido->setAttribute('cancelacion_operativa', $canc ? [
+            'id' => $canc->id,
+            'estado' => $canc->estado,
+            'motivo' => $canc->motivo,
+            'comentario' => $canc->comentario,
+            'puede_reactivar' => $canc->puedeReactivar(),
+            'requiere_resolucion_financiera' => (bool) $canc->requiere_resolucion_financiera,
+            'version' => $canc->version,
+            'folio_anterior' => $canc->folio_anterior,
+            'tareas' => $canc->tareas->map(fn ($fila) => [
+                'id' => $fila->id,
+                'estado_liberacion' => $fila->estado_liberacion,
+                'almacen' => $fila->tarea?->almacen?->nombre,
+                'area' => $fila->tarea?->area_responsable_codigo,
+                'modalidad' => $fila->tarea?->modalidad?->nombre,
+            ])->values()->all(),
+        ] : null);
 
         return $pedido;
     }

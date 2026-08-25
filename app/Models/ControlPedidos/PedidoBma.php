@@ -119,6 +119,7 @@ class PedidoBma extends Model
         'resolucion_financiera_cancelacion',
         'cancelado_por_id',
         'cancelado_at',
+        'esperando_pago_at',
         'eliminacion_registro_at',
         'eliminacion_registro_por_id',
     ];
@@ -146,6 +147,7 @@ class PedidoBma extends Model
         'envia_a_otra_persona' => 'boolean',
         'tiene_observaciones_fisicas' => 'boolean',
         'cancelado_at' => 'datetime',
+        'esperando_pago_at' => 'datetime',
         'eliminacion_registro_at' => 'datetime',
         'saldo_a_favor' => 'decimal:2',
         'peso_real_kg' => 'decimal:4',
@@ -464,6 +466,39 @@ class PedidoBma extends Model
     public function tareasPreparacion(): HasMany
     {
         return $this->hasMany(PedidoBmaTareaPreparacion::class, 'pedido_bma_id')->latest('id');
+    }
+
+    public function cancelacionesOperativas(): HasMany
+    {
+        return $this->hasMany(PedidoBmaCancelacionOperativa::class, 'pedido_bma_id')->latest('id');
+    }
+
+    public function cancelacionOperativaActiva(): HasOne
+    {
+        return $this->hasOne(PedidoBmaCancelacionOperativa::class, 'pedido_bma_id')
+            ->whereIn('estado', PedidoBmaCancelacionOperativa::ESTADOS_ACTIVOS)
+            ->latest('id');
+    }
+
+    public function estaEsperandoPago(): bool
+    {
+        return $this->esperando_pago_at !== null && ! $this->cancelado_at;
+    }
+
+    public function tieneCancelacionOperativaActiva(): bool
+    {
+        if ($this->relationLoaded('cancelacionOperativaActiva')) {
+            return $this->cancelacionOperativaActiva !== null;
+        }
+
+        return $this->cancelacionesOperativas()
+            ->whereIn('estado', PedidoBmaCancelacionOperativa::ESTADOS_ACTIVOS)
+            ->exists();
+    }
+
+    public function estaBloqueadoPorCancelacionOEspera(): bool
+    {
+        return $this->estaEsperandoPago() || $this->tieneCancelacionOperativaActiva();
     }
 
     public function tareaPreparacionVigente(): HasOne

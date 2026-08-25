@@ -177,9 +177,7 @@ class CalcularRequisitosPreparacionService
             return null;
         }
 
-        return now($this->config->zonaHoraria())
-            ->addDays($this->config->diasResguardo())
-            ->endOfDay();
+        return app(CalcularFechaLimiteResguardoService::class)->calcular()['fecha_limite'];
     }
 
     /**

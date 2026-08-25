@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
-import { X, Ban } from 'lucide-react';
+import { X, Ban, RotateCcw } from 'lucide-react';
 import {
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
@@ -10,7 +10,7 @@ import {
     BTN_SECONDARY,
     formatearMoneda,
 } from './pedidosBmaStyles';
-import { THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
+import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../utils/geliaTheme';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 
 const SECCION = `${THEME_LABEL} mb-2 block`;
@@ -23,6 +23,11 @@ export default function ModalCancelarPedido({ abierto, onClose, pedido }) {
     const [cargando, setCargando] = useState(false);
     const [procesando, setProcesando] = useState(false);
     const [error, setError] = useState('');
+    const [motivoReactivar, setMotivoReactivar] = useState('');
+    const [folioNuevo, setFolioNuevo] = useState('');
+
+    const cancelacion = pedido?.cancelacion_operativa || preview?.cancelacion_operativa;
+    const seguimiento = cancelacion && ['SOLICITADA', 'LIBERACION_PENDIENTE', 'LIBERADA'].includes(cancelacion.estado);
 
     useEffect(() => {
         if (!abierto || !pedido?.id) return undefined;
@@ -30,6 +35,8 @@ export default function ModalCancelarPedido({ abierto, onClose, pedido }) {
         setComentario('');
         setError('');
         setPreview(null);
+        setMotivoReactivar('');
+        setFolioNuevo('');
         setCargando(true);
         let cancelled = false;
         fetch(route('control_pedidos.cancelar.preview', pedido.id), { headers: { Accept: 'application/json' } })
@@ -49,6 +56,8 @@ export default function ModalCancelarPedido({ abierto, onClose, pedido }) {
     }, [abierto, pedido?.id]);
 
     if (!abierto || !pedido) return null;
+
+    const operativo = preview?.flujo === 'operativo';
 
     const confirmar = () => {
         if (!motivo) {
@@ -82,6 +91,35 @@ export default function ModalCancelarPedido({ abierto, onClose, pedido }) {
         });
     };
 
+    const reactivar = () => {
+        if (!cancelacion?.id) return;
+        if (!motivoReactivar.trim()) {
+            setError('Indique el motivo de reactivación.');
+            return;
+        }
+        setProcesando(true);
+        setError('');
+        router.post(route('control_pedidos.cancelacion_operativa.reactivar', [pedido.id, cancelacion.id]), {
+            motivo: motivoReactivar,
+            folio_nuevo: folioNuevo || null,
+            version: cancelacion.version,
+        }, {
+            preserveScroll: true,
+            onFinish: () => setProcesando(false),
+            onSuccess: (page) => {
+                if (page?.props?.flash?.error) {
+                    setError(page.props.flash.error);
+                    return;
+                }
+                onClose();
+            },
+            onError: (errs) => {
+                const msg = Object.values(errs || {})[0];
+                setError(typeof msg === 'string' ? msg : 'No se pudo reactivar.');
+            },
+        });
+    };
+
     return createPortal(
         <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} style={{ zIndex: 'calc(var(--gelia-z-modal) + 10)' }} onClick={onClose}>
             <div
@@ -91,7 +129,9 @@ export default function ModalCancelarPedido({ abierto, onClose, pedido }) {
             >
                 <div className="p-5 border-b theme-border flex justify-between items-start gap-3 shrink-0">
                     <div className="min-w-0">
-                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mb-1">Cancelar pedido</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0 mb-1">
+                            {seguimiento ? 'Seguimiento de cancelación' : 'Cancelar pedido'}
+                        </p>
                         <EncabezadoFolioPedido pedido={pedido} />
                     </div>
                     <button type="button" onClick={onClose} className="p-2 rounded-full outline-none" aria-label="Cerrar">
@@ -100,25 +140,64 @@ export default function ModalCancelarPedido({ abierto, onClose, pedido }) {
                 </div>
                 <div className="gelia-modal-body p-5 space-y-4">
                     {cargando && <p className="text-xs font-bold theme-text-muted m-0">Cargando…</p>}
-                    {preview && !preview.puede && (
+
+                    {seguimiento && (
+                        <div className="p-3 rounded-xl border theme-border space-y-2 text-xs font-bold theme-text-muted">
+                            <p className="m-0 theme-text-main uppercase text-[10px] font-black">Estado: {cancelacion.estado}</p>
+                            {(cancelacion.tareas || []).map((t) => (
+                                <p key={t.id} className="m-0">
+                                    · {t.almacen || t.area || 'Área'} — {t.estado_liberacion}
+                                    {t.modalidad ? ` (${t.modalidad})` : ''}
+                                </p>
+                            ))}
+                            {cancelacion.requiere_resolucion_financiera && (
+                                <p className="m-0 text-amber-700">Requiere resolución financiera antes de concluir.</p>
+                            )}
+                            {cancelacion.puede_reactivar && (
+                                <div className="space-y-2 pt-2 border-t theme-border">
+                                    <p className="m-0 theme-text-main">Puede reactivar mientras ninguna tarea haya liberado piezas.</p>
+                                    <textarea
+                                        className={`${THEME_TEXTAREA} w-full py-2 min-h-[64px]`}
+                                        value={motivoReactivar}
+                                        onChange={(e) => setMotivoReactivar(e.target.value)}
+                                        placeholder="Motivo de reactivación *"
+                                    />
+                                    <input
+                                        className={`${THEME_INPUT} w-full py-2`}
+                                        value={folioNuevo}
+                                        onChange={(e) => setFolioNuevo(e.target.value)}
+                                        placeholder="Folio nuevo (si WizeRP cambió)"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {!seguimiento && preview && !preview.puede && (
                         <p className="text-sm font-bold text-red-600 m-0">{preview.motivo_bloqueo}</p>
                     )}
-                    {preview?.puede && (
+                    {!seguimiento && preview?.puede && (
                         <>
                             <div className="p-3 rounded-xl border theme-border space-y-1 text-xs font-bold theme-text-muted">
-                                <p className="m-0 theme-text-main uppercase text-[10px] font-black">Efectos</p>
+                                <p className="m-0 theme-text-main uppercase text-[10px] font-black">
+                                    {operativo ? 'Cancelación operativa' : 'Efectos'}
+                                </p>
                                 <p className="m-0">Fase actual: {preview.fase || '—'}</p>
                                 <p className="m-0">Pagos registrados: {formatearMoneda(preview.total_pagos)}</p>
                                 <p className="m-0">SAF aplicado/reservado: {formatearMoneda(preview.saf_aplicado)}</p>
-                                {preview.es_resguardo && <p className="m-0 text-blue-600">Pedido en resguardo{preview.tiene_apartado ? ' (apartado CEDIS)' : ''}.</p>}
+                                {operativo && (
+                                    <p className="m-0 text-amber-800">
+                                        La cancelación será definitiva después de la liberación física. SAF/pagos no se liberan al solicitar.
+                                    </p>
+                                )}
+                                {(preview.ubicaciones || []).map((u) => (
+                                    <p key={u.tarea_id} className="m-0">
+                                        · {u.almacen || u.area || 'Ubicación'} — {u.estado}
+                                    </p>
+                                ))}
                                 {(preview.productos || []).map((t) => (
                                     <p key={t} className="m-0">· {t}</p>
                                 ))}
-                                {preview.total_pagos > 0.01 && (
-                                    <p className="m-0 text-amber-700">
-                                        Resolución financiera: pendiente (devolución/SAF se gestiona aparte).
-                                    </p>
-                                )}
                             </div>
                             <div>
                                 <label className={SECCION}>Motivo *</label>
@@ -139,9 +218,14 @@ export default function ModalCancelarPedido({ abierto, onClose, pedido }) {
                 </div>
                 <div className="gelia-modal-footer p-5 border-t theme-border flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                     <button type="button" onClick={onClose} className={`${BTN_SECONDARY} min-h-[44px]`} disabled={procesando}>Cerrar</button>
-                    {preview?.puede && (
+                    {seguimiento && cancelacion?.puede_reactivar && (
+                        <button type="button" onClick={reactivar} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px] inline-flex items-center justify-center gap-2`}>
+                            <RotateCcw className="w-4 h-4" /> {procesando ? 'Reactivando…' : 'Reactivar pedido'}
+                        </button>
+                    )}
+                    {!seguimiento && preview?.puede && (
                         <button type="button" onClick={confirmar} disabled={procesando || cargando} className={`${BTN_PRIMARY} min-h-[44px] inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700`}>
-                            <Ban className="w-4 h-4" /> {procesando ? 'Cancelando…' : 'Confirmar cancelación'}
+                            <Ban className="w-4 h-4" /> {procesando ? 'Solicitando…' : (operativo ? 'Solicitar cancelación' : 'Confirmar cancelación')}
                         </button>
                     )}
                 </div>

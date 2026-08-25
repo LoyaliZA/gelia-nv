@@ -29,6 +29,11 @@ use App\Services\ControlPedidos\Direcciones\ActualizarCamposDireccionPedidoServi
 use App\Services\ControlPedidos\Direcciones\RegistrarDireccionDesdePedidoService;
 use App\Services\ControlPedidos\Direcciones\CambiarDireccionPedido;
 use App\Services\ControlPedidos\CancelarPedidoBmaService;
+use App\Services\ControlPedidos\RouterCancelacionPedidoBmaService;
+use App\Services\ControlPedidos\MarcarEsperaPagoPedidoService;
+use App\Services\ControlPedidos\ReactivarCancelacionOperativaService;
+use App\Services\ControlPedidos\ResolverFinancieroCancelacionService;
+use App\Services\ControlPedidos\FinalizarCancelacionOperativaService;
 use App\Services\ControlPedidos\EliminarPedidoBmaService;
 use App\Services\ControlPedidos\EliminarRegistroPedidoBmaService;
 use App\Services\ControlPedidos\EnviarPedidoBmaService;
@@ -819,32 +824,135 @@ class PedidoBmaController extends Controller
         CancelarPedidoBmaRequest $request,
         PedidoBma $pedidoBma,
         ListarPedidosBmaService $listarService,
-        CancelarPedidoBmaService $cancelarService
+        RouterCancelacionPedidoBmaService $router
     ): RedirectResponse {
         Gate::authorize('control_pedidos.cancelar');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         try {
-            $cancelarService->ejecutar($pedidoBma, Auth::id(), $request->validated());
+            $resultado = $router->ejecutar($pedidoBma, Auth::user(), $request->validated());
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()->with('error', collect($e->errors())->flatten()->first());
         }
 
-        return redirect()->back()->with('success', 'Pedido cancelado. Se liberaron reservas pendientes.');
+        $msg = $resultado instanceof \App\Models\ControlPedidos\PedidoBmaCancelacionOperativa
+            ? 'Cancelación operativa solicitada. La liberación física queda pendiente.'
+            : 'Pedido cancelado. Se liberaron reservas pendientes.';
+
+        return redirect()->back()->with('success', $msg);
     }
 
     public function previewCancelacion(
         PedidoBma $pedidoBma,
         ListarPedidosBmaService $listarService,
-        CancelarPedidoBmaService $cancelarService
+        RouterCancelacionPedidoBmaService $router
     ): \Illuminate\Http\JsonResponse {
         Gate::authorize('control_pedidos.cancelar');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
 
         return response()->json([
-            'preview' => $cancelarService->preview($pedidoBma),
+            'preview' => $router->preview($pedidoBma, Auth::user()),
             'motivos' => CancelarPedidoBmaService::MOTIVOS,
         ]);
+    }
+
+    public function marcarEsperaPago(
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        MarcarEsperaPagoPedidoService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.espera_pago');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        try {
+            $service->ejecutar($pedidoBma, Auth::user());
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Pedido marcado en espera de pago.');
+    }
+
+    public function reactivarCancelacionOperativa(
+        Request $request,
+        PedidoBma $pedidoBma,
+        \App\Models\ControlPedidos\PedidoBmaCancelacionOperativa $cancelacion,
+        ListarPedidosBmaService $listarService,
+        ReactivarCancelacionOperativaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.cancelacion_operativa.reactivar');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        if ((int) $cancelacion->pedido_bma_id !== (int) $pedidoBma->id) {
+            abort(404);
+        }
+
+        $datos = $request->validate([
+            'motivo' => ['required', 'string', 'max:2000'],
+            'folio_nuevo' => ['nullable', 'string', 'max:64'],
+            'version' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        try {
+            $service->ejecutar($cancelacion, Auth::user(), $datos);
+        } catch (\Symfony\Component\HttpKernel\Exception\ConflictHttpException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Pedido reactivado. Se notificó a las áreas físicas.');
+    }
+
+    public function resolverFinancieroCancelacion(
+        Request $request,
+        PedidoBma $pedidoBma,
+        \App\Models\ControlPedidos\PedidoBmaCancelacionOperativa $cancelacion,
+        ListarPedidosBmaService $listarService,
+        ResolverFinancieroCancelacionService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.cancelacion_operativa.resolver_financiera');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        if ((int) $cancelacion->pedido_bma_id !== (int) $pedidoBma->id) {
+            abort(404);
+        }
+
+        $datos = $request->validate([
+            'resolucion_financiera' => ['required', 'string', 'max:64'],
+        ]);
+
+        try {
+            $service->ejecutar($cancelacion, Auth::user(), $datos);
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Resolución financiera aplicada y cancelación finalizada.');
+    }
+
+    public function concluirCancelacionAdmin(
+        PedidoBma $pedidoBma,
+        \App\Models\ControlPedidos\PedidoBmaCancelacionOperativa $cancelacion,
+        ListarPedidosBmaService $listarService,
+        FinalizarCancelacionOperativaService $service
+    ): RedirectResponse {
+        Gate::authorize('control_pedidos.cancelacion_operativa.concluir_admin');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+
+        if ((int) $cancelacion->pedido_bma_id !== (int) $pedidoBma->id) {
+            abort(404);
+        }
+
+        try {
+            $service->intentar($cancelacion, Auth::user(), true);
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', 'Cancelación operativa concluida administrativamente.');
     }
 
     public function exportar(Request $request, ListarPedidosBmaService $listarService): StreamedResponse

@@ -615,6 +615,18 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware(['can:control_pedidos.cancelar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::get('/{pedidoBma}/cancelar/preview', [PedidoBmaController::class, 'previewCancelacion'])->name('cancelar.preview');
         Route::post('/{pedidoBma}/cancelar', [PedidoBmaController::class, 'cancelar'])->name('cancelar');
+        Route::post('/{pedidoBma}/espera-pago', [PedidoBmaController::class, 'marcarEsperaPago'])
+            ->middleware('can:control_pedidos.espera_pago')
+            ->name('espera_pago');
+        Route::post('/{pedidoBma}/cancelacion-operativa/{cancelacion}/reactivar', [PedidoBmaController::class, 'reactivarCancelacionOperativa'])
+            ->middleware('can:control_pedidos.cancelacion_operativa.reactivar')
+            ->name('cancelacion_operativa.reactivar');
+        Route::post('/{pedidoBma}/cancelacion-operativa/{cancelacion}/resolver-financiera', [PedidoBmaController::class, 'resolverFinancieroCancelacion'])
+            ->middleware('can:control_pedidos.cancelacion_operativa.resolver_financiera')
+            ->name('cancelacion_operativa.resolver_financiera');
+        Route::post('/{pedidoBma}/cancelacion-operativa/{cancelacion}/concluir-admin', [PedidoBmaController::class, 'concluirCancelacionAdmin'])
+            ->middleware('can:control_pedidos.cancelacion_operativa.concluir_admin')
+            ->name('cancelacion_operativa.concluir_admin');
     });
 
     Route::middleware(['can:control_pedidos.direccion.cambiar'])->prefix('control-pedidos')->name('control_pedidos.')->group(function () {
@@ -693,6 +705,9 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{pedidoBma}/sesion-evidencia/snapshot', [PedidoBmaCedisController::class, 'snapshotSesionEvidencia'])->name('sesion_evidencia.snapshot');
         Route::post('/{pedidoBma}/sesion-evidencia/cancelar', [PedidoBmaCedisController::class, 'cancelarSesionEvidencia'])->name('sesion_evidencia.cancelar');
         Route::get('/{pedidoBma}/sesion-evidencia/fotos/{foto}', [PedidoBmaCedisController::class, 'verFotoSesionEvidencia'])->name('sesion_evidencia.foto');
+        Route::post('/tareas/{tarea}/liberar', [PedidoBmaCedisController::class, 'liberarTarea'])
+            ->middleware('can:control_pedidos.cedis.liberar')
+            ->name('liberar');
     });
 
     Route::middleware(['can:control_pedidos.tienda.ver'])->prefix('control-pedidos/tienda')->name('control_pedidos.tienda.')->group(function () {

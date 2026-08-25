@@ -111,6 +111,19 @@ class ValidarPagoPedidoBmaService
                 'errores',
             ]);
 
+            if ($pedidoFresh->esperando_pago_at) {
+                app(MarcarEsperaPagoPedidoService::class)->salirPorPago(
+                    $pedidoFresh,
+                    \App\Models\User::findOrFail($usuarioId)
+                );
+                $pedidoFresh = $pedidoFresh->fresh([
+                    'cliente', 'estatus', 'documentos', 'banco', 'almacen',
+                    'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'envioTienda', 'pagoValidadoPor',
+                    'pagosExhibicion.banco',
+                    'errores',
+                ]);
+            }
+
             return [
                 'pedido' => $pedidoFresh,
                 'resumen' => $resumen,

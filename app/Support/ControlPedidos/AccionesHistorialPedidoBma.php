@@ -75,6 +75,15 @@ final class AccionesHistorialPedidoBma
     public const CARATULA_COLOCADA = 'caratula_colocada';
     public const DESCARGA_IDENTIFICACION = 'descarga_identificacion_municipal';
     public const DESCARGA_CARATULA = 'descarga_caratula';
+    public const ESPERA_PAGO = 'espera_pago';
+    public const SALIDA_ESPERA_PAGO = 'salida_espera_pago';
+    public const VENCIMIENTO_ESPERA_PAGO = 'vencimiento_espera_pago';
+    public const CANCELACION_OPERATIVA_SOLICITADA = 'cancelacion_operativa_solicitada';
+    public const LIBERACION_CANCELACION_TAREA = 'liberacion_cancelacion_tarea';
+    public const INCIDENCIA_LIBERACION_CANCELACION = 'incidencia_liberacion_cancelacion';
+    public const REACTIVACION_CANCELACION = 'reactivacion_cancelacion';
+    public const FINALIZACION_CANCELACION_OPERATIVA = 'finalizacion_cancelacion_operativa';
+    public const BLOQUEO_FINANCIERO_CANCELACION = 'bloqueo_financiero_cancelacion';
 
     /** @var array<string, string> */
     public const ETIQUETAS = [
@@ -146,6 +155,15 @@ final class AccionesHistorialPedidoBma
         self::CARATULA_COLOCADA => 'Carátula colocada en el paquete',
         self::DESCARGA_IDENTIFICACION => 'Descarga de identificación municipal',
         self::DESCARGA_CARATULA => 'Descarga de carátula PDF',
+        self::ESPERA_PAGO => 'Entrada en espera de pago',
+        self::SALIDA_ESPERA_PAGO => 'Salida de espera de pago',
+        self::VENCIMIENTO_ESPERA_PAGO => 'Vencimiento de espera de pago',
+        self::CANCELACION_OPERATIVA_SOLICITADA => 'Cancelación operativa solicitada',
+        self::LIBERACION_CANCELACION_TAREA => 'Liberación física por cancelación',
+        self::INCIDENCIA_LIBERACION_CANCELACION => 'Incidencia en liberación por cancelación',
+        self::REACTIVACION_CANCELACION => 'Reactivación de pedido (cancelación revertida)',
+        self::FINALIZACION_CANCELACION_OPERATIVA => 'Finalización de cancelación operativa',
+        self::BLOQUEO_FINANCIERO_CANCELACION => 'Bloqueo por resolución financiera',
     ];
 
     public static function etiqueta(?string $accion): ?string

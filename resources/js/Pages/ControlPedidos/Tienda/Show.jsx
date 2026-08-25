@@ -10,6 +10,7 @@ import { BTN_PRIMARY, BTN_SECONDARY, formatearFechaNegocio } from '../Partials/p
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
 import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
 import ModalSesionEvidenciaTienda from './Partials/ModalSesionEvidenciaTienda';
+import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
 
 const TIPOS_INCIDENCIA = [
     { value: 'almacen_incorrecto', label: 'Almacén incorrecto' },
@@ -75,6 +76,7 @@ export default function Show({
         observacion: '',
     });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
+    const [modalLiberar, setModalLiberar] = useState(false);
 
     useEffect(() => {
         if (flash?.success) {
@@ -174,10 +176,7 @@ export default function Show({
         router.post(route('control_pedidos.tienda.reportar_incidencia', tarea.id), form, { forceFormData: true });
     };
 
-    const liberar = () => {
-        if (!window.confirm('¿Confirma liberar la mercancía resguardada?')) return;
-        router.post(route('control_pedidos.tienda.liberar', tarea.id), { version: tarea.version });
-    };
+    const liberar = () => setModalLiberar(true);
 
     const editable = tarea.estado === 'EN_ATENCION' && puedeResponder;
     const enPendiente = tarea.estado === 'PENDIENTE' && puedeTomar;
@@ -681,7 +680,7 @@ export default function Show({
                                     <Truck className="w-4 h-4 inline mr-1" /> Confirmar salida a CEDIS
                                 </button>
                             )}
-                            {puedeLiberar && ['RESPONDIDA', 'LIBERACION_SOLICITADA'].includes(tarea.estado) && tarea.modalidad?.es_transferencia && (
+                            {puedeLiberar && ['RESPONDIDA', 'LIBERACION_SOLICITADA', 'RECIBIDA_CEDIS'].includes(tarea.estado) && (
                                 <button type="button" className={`${BTN_SECONDARY} min-h-[44px]`} onClick={liberar}>
                                     Liberar mercancía
                                 </button>
@@ -692,6 +691,12 @@ export default function Show({
             </GeliaPageShell>
 
             <ModalSesionEvidenciaTienda abierto={modalQr} onCerrar={() => setModalQr(false)} tareaId={tarea.id} />
+            <ModalLiberarMercancia
+                abierto={modalLiberar}
+                onClose={() => setModalLiberar(false)}
+                tarea={tarea}
+                routeName="control_pedidos.tienda.liberar"
+            />
             <ModalAlertaPedido {...alerta} onCerrar={() => setAlerta((a) => ({ ...a, abierto: false }))} />
         </AppLayout>
     );
