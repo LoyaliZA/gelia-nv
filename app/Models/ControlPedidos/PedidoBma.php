@@ -883,10 +883,11 @@ class PedidoBma extends Model
 
     public function puedeGestionarGuiaPdf(): bool
     {
-        if ($this->es_resguardo || $this->guiaSoloLecturaHastaEmpaque()) {
+        if ($this->es_resguardo) {
             return false;
         }
 
+        // Número puede ser solo lectura pre-empaque; el PDF sí se puede adjuntar/reemplazar.
         return in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_EN_CEDIS,
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,

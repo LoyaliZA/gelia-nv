@@ -411,9 +411,10 @@ export const TABS_CEDIS = [
 
 export const TABS_DELEGADO = [
     { id: 'TODOS', label: 'Todos' },
-    { id: 'PENDIENTES_GUIA', label: 'Pendientes de Guía' },
-    { id: 'PENDIENTES_ENVIO', label: 'Pendiente de recolección' },
-    { id: 'ENVIADOS', label: 'Enviados' },
+    { id: 'PENDIENTES_GUIA', label: LABELS_ESTATUS_POR_FASE.PENDIENTE_DE_GUIA },
+    { id: 'EN_CEDIS', label: LABELS_ESTATUS_POR_FASE.EN_CEDIS },
+    { id: 'PENDIENTES_ENVIO', label: LABELS_ESTATUS_POR_FASE.PENDIENTE_DE_ENVIO },
+    { id: 'ENVIADOS', label: LABELS_ESTATUS_POR_FASE.ENVIADO },
 ];
 
 export const badgeResguardoSemantico = () => ({

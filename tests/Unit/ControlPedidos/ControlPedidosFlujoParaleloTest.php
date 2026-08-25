@@ -8,10 +8,13 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\User;
 use App\Services\ControlPedidos\AsignarGuiaPedidoBmaService;
+use App\Services\ControlPedidos\GestionarGuiaPdfPedidoBmaService;
 use App\Services\ControlPedidos\ListarPedidosDelegadoService;
 use App\Services\ControlPedidos\MarcarEmpacadoPedidoBmaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ControlPedidosFlujoParaleloTest extends TestCase
@@ -78,7 +81,48 @@ class ControlPedidosFlujoParaleloTest extends TestCase
             $actualizado->fresh('estatus')->estatus->fase_ciclo
         );
         $this->assertNull($actualizado->empacado_at);
-        $this->assertTrue($actualizado->fresh('estatus')->guiaSoloLecturaHastaEmpaque());
+        $this->assertTrue($actualizado->fresh(['estatus'])->guiaSoloLecturaHastaEmpaque());
+        $this->assertTrue($actualizado->fresh(['estatus'])->puedeGestionarGuiaPdf());
+
+        $listar = app(ListarPedidosDelegadoService::class);
+        $this->assertFalse(
+            $listar->ejecutar(['tab' => 'PENDIENTES_GUIA'], false)->contains('id', $actualizado->id)
+        );
+        $this->assertTrue(
+            $listar->ejecutar(['tab' => CatalogoEstatusPedido::FASE_EN_CEDIS], false)->contains('id', $actualizado->id)
+        );
+        $this->assertTrue(
+            $listar->ejecutar(['tab' => 'TODOS', 'q' => 'GUIA-PARALELO-001'], false)->contains('id', $actualizado->id)
+        );
+        $this->assertGreaterThanOrEqual(1, $listar->metricas()['pendiente_empaque']);
+    }
+
+    public function test_pdf_guia_permitido_en_cedis_con_guia_pre_empaque(): void
+    {
+        Storage::fake('public');
+
+        $pedido = $this->crearPedidoAprobadoCedis([
+            'catalogo_paqueteria_id' => $this->paqueteriaComercialId(),
+        ]);
+
+        app(AsignarGuiaPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['estatus', 'paqueteria', 'origen']),
+            'GUIA-PDF-PRE',
+            $this->usuario->id
+        );
+
+        $archivo = UploadedFile::fake()->create('guia-pre.pdf', 100, 'application/pdf');
+        $actualizado = app(GestionarGuiaPdfPedidoBmaService::class)->subir(
+            $pedido->fresh(['estatus']),
+            $archivo,
+            $this->usuario->id
+        );
+
+        $this->assertTrue($actualizado->tieneGuiaPdf());
+        $this->assertSame(
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            $actualizado->fresh('estatus')->estatus->fase_ciclo
+        );
     }
 
     public function test_empacar_con_guia_previa_va_a_pendiente_de_envio(): void

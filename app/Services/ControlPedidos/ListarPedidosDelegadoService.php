@@ -23,6 +23,9 @@ class ListarPedidosDelegadoService
         $pendientesGuia = (clone $this->queryBase())
             ->where(fn (Builder $q) => $this->scopePendientesGuia($q))
             ->count();
+        $pendienteEmpaque = (clone $this->queryBase())
+            ->where(fn (Builder $q) => $this->scopePendienteEmpaqueConGuia($q))
+            ->count();
         $pendientesEnvio = (clone $this->queryBase())
             ->where(fn (Builder $q) => $this->scopePendientesEnvio($q))
             ->count();
@@ -32,9 +35,10 @@ class ListarPedidosDelegadoService
 
         return [
             'pendientes_guia' => $pendientesGuia,
+            'pendiente_empaque' => $pendienteEmpaque,
             'pendientes_envio' => $pendientesEnvio,
             'enviados' => $enviados,
-            'total' => $pendientesGuia + $pendientesEnvio + $enviados,
+            'total' => $pendientesGuia + $pendienteEmpaque + $pendientesEnvio + $enviados,
             'pendientes_correccion' => $pendientesEnvio,
         ];
     }
@@ -85,12 +89,14 @@ class ListarPedidosDelegadoService
             })
             ->where(function (Builder $q) {
                 $q->where(fn (Builder $q2) => $this->scopePendientesGuia($q2))
+                    ->orWhere(fn (Builder $q2) => $this->scopePendienteEmpaqueConGuia($q2))
                     ->orWhere(fn (Builder $q2) => $this->scopePendientesEnvio($q2))
                     ->orWhere(fn (Builder $q2) => $this->scopeEnviados($q2));
             })
             ->orderBy('folio_remision');
     }
 
+    /** Sin número de guía: EN_CEDIS o ya empacado esperando rastreo. */
     private function scopePendientesGuia(Builder $query): void
     {
         $ids = $this->idsPorFase([
@@ -100,6 +106,16 @@ class ListarPedidosDelegadoService
 
         $query->whereIn('catalogo_estatus_pedido_id', $ids ?: [0])
             ->whereNull('numero_rastreo');
+    }
+
+    /** Guía capturada en paralelo; sigue en pendiente de empaque (CEDIS). */
+    private function scopePendienteEmpaqueConGuia(Builder $query): void
+    {
+        $id = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_EN_CEDIS)?->id;
+
+        $query->where('catalogo_estatus_pedido_id', $id ?? 0)
+            ->whereNotNull('numero_rastreo')
+            ->whereNull('empacado_at');
     }
 
     private function scopePendientesEnvio(Builder $query): void
@@ -134,6 +150,7 @@ class ListarPedidosDelegadoService
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
                     ->orWhere('folio_remision', 'like', "%{$termino}%")
+                    ->orWhere('numero_rastreo', 'like', "%{$termino}%")
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
@@ -145,6 +162,9 @@ class ListarPedidosDelegadoService
 
         match ($tab) {
             'TODOS' => null,
+            CatalogoEstatusPedido::FASE_EN_CEDIS, 'PENDIENTE_EMPAQUE' => $query->where(
+                fn (Builder $q) => $this->scopePendienteEmpaqueConGuia($q)
+            ),
             'PENDIENTES_ENVIO', 'CORRECCION' => $query->where(fn (Builder $q) => $this->scopePendientesEnvio($q)),
             'ENVIADOS' => $query->where(fn (Builder $q) => $this->scopeEnviados($q)),
             default => $query->where(fn (Builder $q) => $this->scopePendientesGuia($q)),

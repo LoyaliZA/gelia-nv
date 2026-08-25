@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Head, usePage } from '@inertiajs/react';
-import { FileSpreadsheet, Package, Search, Truck, Send, Loader2, ChevronDown } from 'lucide-react';
+import { FileSpreadsheet, Package, Search, Truck, Send, Clock, Loader2, ChevronDown } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } from '../../../utils/geliaTheme';
@@ -8,7 +8,7 @@ import { THEME_INPUT, THEME_LABEL } from '../../../utils/geliaTheme';
 import TablaDelegado from './Partials/TablaDelegado';
 import PanelImportExport from './Partials/PanelImportExport';
 import ModalAlertaPedido from '../Partials/ModalAlertaPedido';
-import { TABS_DELEGADO } from '../Partials/pedidosBmaStyles';
+import { LABELS_ESTATUS_POR_FASE, TABS_DELEGADO } from '../Partials/pedidosBmaStyles';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
@@ -99,6 +99,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
         const map = {
             TODOS: metricasVista.total,
             PENDIENTES_GUIA: metricasVista.pendientes_guia,
+            EN_CEDIS: metricasVista.pendiente_empaque,
             PENDIENTES_ENVIO: metricasVista.pendientes_envio,
             ENVIADOS: metricasVista.enviados,
         };
@@ -125,20 +126,35 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
                     </p>
                 </header>
 
-                <div className={`${geliaCardClass()} p-4 md:p-5 grid grid-cols-3 gap-2 md:gap-4`}>
+                <div className={`${geliaCardClass()} p-4 md:p-5 grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4`}>
                     <div className="flex flex-col md:flex-row items-center md:items-center gap-1 md:gap-3 text-center md:text-left">
                         <Package className="w-4 h-4 md:w-5 md:h-5" style={{ color: 'var(--color-primario)' }} />
                         <div className="min-w-0">
-                            <p className="text-[8px] md:text-[9px] font-black uppercase theme-text-muted m-0 truncate">Pend. guía</p>
+                            <p className="text-[8px] md:text-[9px] font-black uppercase theme-text-muted m-0 truncate">
+                                {LABELS_ESTATUS_POR_FASE.PENDIENTE_DE_GUIA}
+                            </p>
                             <p className="text-xl md:text-2xl font-black m-0 tabular-nums" style={{ color: 'var(--color-primario)' }}>
                                 {metricasVista.pendientes_guia ?? 0}
                             </p>
                         </div>
                     </div>
                     <div className="flex flex-col md:flex-row items-center gap-1 md:gap-3 text-center md:text-left">
+                        <Clock className="w-4 h-4 md:w-5 md:h-5 text-amber-500" />
+                        <div className="min-w-0">
+                            <p className="text-[8px] md:text-[9px] font-black uppercase theme-text-muted m-0 truncate">
+                                {LABELS_ESTATUS_POR_FASE.EN_CEDIS}
+                            </p>
+                            <p className="text-xl md:text-2xl font-black m-0 text-amber-500 tabular-nums">
+                                {metricasVista.pendiente_empaque ?? 0}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex flex-col md:flex-row items-center gap-1 md:gap-3 text-center md:text-left">
                         <Truck className="w-4 h-4 md:w-5 md:h-5 text-sky-500" />
                         <div className="min-w-0">
-                            <p className="text-[8px] md:text-[9px] font-black uppercase theme-text-muted m-0 truncate">Pend. envío</p>
+                            <p className="text-[8px] md:text-[9px] font-black uppercase theme-text-muted m-0 truncate">
+                                {LABELS_ESTATUS_POR_FASE.PENDIENTE_DE_ENVIO}
+                            </p>
                             <p className="text-xl md:text-2xl font-black m-0 text-sky-500 tabular-nums">
                                 {metricasVista.pendientes_envio ?? 0}
                             </p>
@@ -147,7 +163,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
                     <div className="flex flex-col md:flex-row items-center gap-1 md:gap-3 text-center md:text-left">
                         <Send className="w-4 h-4 md:w-5 md:h-5 text-emerald-500" />
                         <div className="min-w-0">
-                            <p className="text-[8px] md:text-[9px] font-black uppercase theme-text-muted m-0 truncate">Enviados</p>
+                            <p className="text-[8px] md:text-[9px] font-black uppercase theme-text-muted m-0 truncate">
+                                {LABELS_ESTATUS_POR_FASE.ENVIADO}
+                            </p>
                             <p className="text-xl md:text-2xl font-black m-0 text-emerald-500 tabular-nums">
                                 {metricasVista.enviados ?? 0}
                             </p>
@@ -166,7 +184,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {} }) {
                                     type="text"
                                     value={busqueda}
                                     onChange={(e) => onBuscar(e.target.value)}
-                                    placeholder="Buscar folio o cliente..."
+                                    placeholder="Folio, cliente o guía..."
                                     className={`${THEME_INPUT} w-full py-3 text-sm font-bold pr-10`}
                                     aria-busy={cargando}
                                     autoComplete="off"

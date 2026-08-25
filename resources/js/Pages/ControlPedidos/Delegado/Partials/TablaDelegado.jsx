@@ -11,6 +11,7 @@ import {
     badgeResguardoSemantico,
     badgeCorregirGuia,
     tieneErrorGuiaReportado,
+    LABELS_ESTATUS_POR_FASE,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
@@ -91,9 +92,10 @@ export default function TablaDelegado({ pedidos, tabActiva = 'PENDIENTES_GUIA', 
 
     const vacio = {
         TODOS: 'No hay pedidos en la bandeja de guías_',
-        PENDIENTES_GUIA: 'No hay pedidos pendientes de guía_',
-        PENDIENTES_ENVIO: 'No hay pedidos pendientes de envío_',
-        ENVIADOS: 'No hay pedidos enviados_',
+        PENDIENTES_GUIA: `No hay pedidos en ${LABELS_ESTATUS_POR_FASE.PENDIENTE_DE_GUIA}_`,
+        EN_CEDIS: `No hay pedidos con guía en ${LABELS_ESTATUS_POR_FASE.EN_CEDIS}_`,
+        PENDIENTES_ENVIO: `No hay pedidos en ${LABELS_ESTATUS_POR_FASE.PENDIENTE_DE_ENVIO}_`,
+        ENVIADOS: `No hay pedidos en ${LABELS_ESTATUS_POR_FASE.ENVIADO}_`,
     }[tabActiva] || 'No hay pedidos_';
 
     const cerrarDetalle = () => setPedidoDetalle(null);

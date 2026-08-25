@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
 import {
-    X, Check, Upload, Eye, Trash2, AlertTriangle, User, Clock,
+    X, Check, Upload, Eye, Trash2, AlertTriangle, User, Clock, FileText, Loader2,
 } from 'lucide-react';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
 import {
@@ -22,6 +22,7 @@ import {
     guiaPdfDe,
     tieneErrorGuiaReportado,
     etiquetaOrigenGuia,
+    LABELS_ESTATUS_POR_FASE,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
@@ -158,14 +159,27 @@ function CampoActualizarGuia({ pedido, onDone }) {
     );
 }
 
+const esPdfGuia = (archivo) => {
+    if (!archivo) return false;
+    const mime = String(archivo.type || '').toLowerCase();
+    const nombre = String(archivo.name || '').toLowerCase();
+    return mime === 'application/pdf' || nombre.endsWith('.pdf');
+};
+
 function CampoSubirGuiaPdf({ pedido, onVerPdf, soloLectura = false, onDone }) {
     const inputRef = useRef(null);
     const [procesando, setProcesando] = useState(false);
+    const [dragActivo, setDragActivo] = useState(false);
+    const [errorLocal, setErrorLocal] = useState('');
     const guiaPdf = guiaPdfDe(pedido);
 
-    const subir = (e) => {
-        const archivo = e.target.files?.[0];
-        if (!archivo) return;
+    const enviarArchivo = (archivo) => {
+        if (!archivo || procesando || soloLectura) return;
+        if (!esPdfGuia(archivo)) {
+            setErrorLocal('Solo se aceptan archivos PDF.');
+            return;
+        }
+        setErrorLocal('');
         setProcesando(true);
         router.post(route('control_pedidos.delegado.guia_pdf.store', pedido.id), { guia_pdf: archivo }, {
             forceFormData: true,
@@ -174,13 +188,13 @@ function CampoSubirGuiaPdf({ pedido, onVerPdf, soloLectura = false, onDone }) {
             onSuccess: () => onDone?.(),
             onFinish: () => {
                 setProcesando(false);
-                e.target.value = '';
+                if (inputRef.current) inputRef.current.value = '';
             },
         });
     };
 
     const eliminar = () => {
-        if (!guiaPdf || procesando) return;
+        if (!guiaPdf || procesando || soloLectura) return;
         setProcesando(true);
         router.delete(route('control_pedidos.delegado.guia_pdf.destroy', pedido.id), {
             preserveScroll: true,
@@ -190,30 +204,116 @@ function CampoSubirGuiaPdf({ pedido, onVerPdf, soloLectura = false, onDone }) {
         });
     };
 
-    return (
-        <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-                {!soloLectura && (
-                    <button type="button" onClick={() => inputRef.current?.click()} disabled={procesando} className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] outline-none`}>
-                        <Upload className="w-3.5 h-3.5" />
-                        {guiaPdf ? 'Reemplazar PDF' : 'Subir guía PDF'}
-                    </button>
-                )}
-                {guiaPdf && (
-                    <>
-                        <button type="button" onClick={() => onVerPdf(guiaPdf)} className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] outline-none`}>
-                            <Eye className="w-3.5 h-3.5" /> Ver PDF
-                        </button>
-                        {!soloLectura && (
-                            <button type="button" onClick={eliminar} disabled={procesando} className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] outline-none text-red-500`}>
-                                <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                        )}
-                    </>
-                )}
+    if (soloLectura) {
+        if (!guiaPdf) {
+            return <p className="text-sm theme-text-muted font-bold m-0">Sin PDF de guía.</p>;
+        }
+        return (
+            <div className="flex items-center gap-3 p-4 rounded-xl border theme-border theme-element">
+                <FileText className="w-8 h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                <div className="min-w-0 flex-1">
+                    <p className="text-[9px] font-black uppercase theme-text-muted m-0">Guía PDF</p>
+                    <p className="text-sm font-bold theme-text-main m-0 truncate">{guiaPdf.nombre_original}</p>
+                </div>
+                <button type="button" onClick={() => onVerPdf(guiaPdf)} className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] outline-none shrink-0`}>
+                    <Eye className="w-3.5 h-3.5" /> Ver
+                </button>
             </div>
-            {guiaPdf && <p className="text-[9px] font-bold theme-text-muted m-0 truncate">{guiaPdf.nombre_original}</p>}
-            {!soloLectura && <input ref={inputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={subir} />}
+        );
+    }
+
+    return (
+        <div className="space-y-3">
+            <div
+                role="button"
+                tabIndex={0}
+                aria-label={guiaPdf ? 'Reemplazar PDF de guía' : 'Subir PDF de guía'}
+                onClick={() => !procesando && inputRef.current?.click()}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        if (!procesando) inputRef.current?.click();
+                    }
+                }}
+                onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragActivo(true);
+                }}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragActivo(true);
+                }}
+                onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!e.currentTarget.contains(e.relatedTarget)) setDragActivo(false);
+                }}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragActivo(false);
+                    enviarArchivo(e.dataTransfer.files?.[0]);
+                }}
+                className={`flex flex-col items-center justify-center gap-2 px-4 py-8 rounded-2xl border-2 border-dashed text-center outline-none transition-colors cursor-pointer theme-element ${
+                    dragActivo
+                        ? 'border-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_8%,transparent)]'
+                        : 'theme-border hover:border-[var(--color-primario)]'
+                } ${procesando ? 'opacity-60 pointer-events-none' : ''}`}
+            >
+                {procesando ? (
+                    <Loader2 className="w-8 h-8 animate-spin theme-text-muted" aria-hidden />
+                ) : (
+                    <Upload className="w-8 h-8 theme-text-muted" aria-hidden />
+                )}
+                <p className="text-xs font-black uppercase theme-text-main m-0">
+                    {procesando
+                        ? 'Subiendo…'
+                        : dragActivo
+                            ? 'Suelta el PDF aquí'
+                            : guiaPdf
+                                ? 'Arrastra un PDF para reemplazar'
+                                : 'Arrastra el PDF de la guía aquí'}
+                </p>
+                <p className="text-[10px] theme-text-muted m-0">
+                    o haz clic para seleccionar · solo .pdf
+                </p>
+            </div>
+
+            <input
+                ref={inputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(e) => enviarArchivo(e.target.files?.[0])}
+            />
+
+            {errorLocal && (
+                <p className="text-xs font-bold text-red-600 m-0">{errorLocal}</p>
+            )}
+
+            {guiaPdf && (
+                <div className="flex items-center gap-3 p-3 rounded-xl border theme-border theme-element">
+                    <FileText className="w-6 h-6 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                    <div className="min-w-0 flex-1">
+                        <p className="text-[9px] font-black uppercase theme-text-muted m-0">Archivo cargado</p>
+                        <p className="text-sm font-bold theme-text-main m-0 truncate">{guiaPdf.nombre_original}</p>
+                    </div>
+                    <button type="button" onClick={() => onVerPdf(guiaPdf)} className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] outline-none shrink-0`}>
+                        <Eye className="w-3.5 h-3.5" /> Ver
+                    </button>
+                    <button
+                        type="button"
+                        onClick={eliminar}
+                        disabled={procesando}
+                        className={`${BTN_SECONDARY} flex items-center gap-1.5 text-[10px] outline-none text-red-500 shrink-0 disabled:opacity-50`}
+                        aria-label="Eliminar PDF de guía"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
@@ -327,43 +427,6 @@ export default function ModalDetalleDelegado({
                         </section>
 
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>Guía de rastreo</p>
-                            {pedido.numero_rastreo && (
-                                <div className="mb-4 flex items-center gap-2 flex-wrap">
-                                    <p className="text-lg font-black font-mono theme-text-main m-0 break-all">{pedido.numero_rastreo}</p>
-                                    <BotonCopiar texto={pedido.numero_rastreo} />
-                                </div>
-                            )}
-                            {pedido.guia_corregida_at && (
-                                <p className="text-[10px] font-bold theme-text-muted m-0 mb-3 font-mono">
-                                    Corregida: {formatearFechaHoraAuditoria(pedido.guia_corregida_at)}
-                                    {(pedido.guia_corregida_por?.name || pedido.guiaCorregidaPor?.name)
-                                        ? ` · ${pedido.guia_corregida_por?.name || pedido.guiaCorregidaPor?.name}`
-                                        : ''}
-                                </p>
-                            )}
-
-                            {modo === 'resguardo' && (
-                                <p className="text-sm font-bold text-blue-600 m-0">En resguardo — la guía se habilita al liberar.</p>
-                            )}
-                            {modo === 'solo_lectura' && !pedido.numero_rastreo && (
-                                <p className="text-sm theme-text-muted font-bold m-0">Sin guía capturada.</p>
-                            )}
-                            {modo === 'asignar' && <CampoAsignarGuia pedido={pedido} onDone={recargarPedido} />}
-                            {modo === 'correccion' && <CampoActualizarGuia pedido={pedido} onDone={recargarPedido} />}
-                            {(modo === 'asignar' || modo === 'correccion' || pedido.numero_rastreo) && (
-                                <div className="mt-4">
-                                    <CampoSubirGuiaPdf
-                                        pedido={pedido}
-                                        onVerPdf={setDocPreview}
-                                        soloLectura={modo === 'solo_lectura' || modo === 'resguardo'}
-                                        onDone={recargarPedido}
-                                    />
-                                </div>
-                            )}
-                        </section>
-
-                        <section className={SECCION_WRAP}>
                             <p className={SECCION}>Identificación</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <CampoConCopia label="ID pedido" value={pedido.id} />
@@ -400,6 +463,49 @@ export default function ModalDetalleDelegado({
                                             </p>
                                         </div>
                                     ))}
+                                </div>
+                            )}
+                        </section>
+
+                        <section className={SECCION_WRAP}>
+                            <p className={SECCION}>Guía de rastreo</p>
+                            {pedido.numero_rastreo && (
+                                <div className="mb-4 flex items-center gap-2 flex-wrap">
+                                    <p className="text-lg font-black font-mono theme-text-main m-0 break-all">{pedido.numero_rastreo}</p>
+                                    <BotonCopiar texto={pedido.numero_rastreo} />
+                                </div>
+                            )}
+                            {pedido.guia_corregida_at && (
+                                <p className="text-[10px] font-bold theme-text-muted m-0 mb-3 font-mono">
+                                    Corregida: {formatearFechaHoraAuditoria(pedido.guia_corregida_at)}
+                                    {(pedido.guia_corregida_por?.name || pedido.guiaCorregidaPor?.name)
+                                        ? ` · ${pedido.guia_corregida_por?.name || pedido.guiaCorregidaPor?.name}`
+                                        : ''}
+                                </p>
+                            )}
+
+                            {modo === 'resguardo' && (
+                                <p className="text-sm font-bold text-blue-600 m-0">En resguardo — la guía se habilita al liberar.</p>
+                            )}
+                            {modo === 'solo_lectura' && !pedido.numero_rastreo && (
+                                <p className="text-sm theme-text-muted font-bold m-0">Sin guía capturada.</p>
+                            )}
+                            {modo === 'solo_lectura' && pedido.numero_rastreo && fase === 'EN_CEDIS' && !pedido.empacado_at && (
+                                <p className="text-sm font-bold text-amber-700 m-0 mb-3">
+                                    Guía asignada. El número queda fijo mientras el pedido sigue en {LABELS_ESTATUS_POR_FASE.EN_CEDIS}; puedes adjuntar o reemplazar el PDF.
+                                </p>
+                            )}
+                            {modo === 'asignar' && <CampoAsignarGuia pedido={pedido} onDone={recargarPedido} />}
+                            {modo === 'correccion' && <CampoActualizarGuia pedido={pedido} onDone={recargarPedido} />}
+                            {(modo === 'asignar' || modo === 'correccion' || pedido.numero_rastreo) && (
+                                <div className="mt-4 space-y-2">
+                                    <p className={`${THEME_LABEL} m-0`}>PDF de la guía</p>
+                                    <CampoSubirGuiaPdf
+                                        pedido={pedido}
+                                        onVerPdf={setDocPreview}
+                                        soloLectura={modo === 'resguardo' || fase === 'ENVIADO'}
+                                        onDone={recargarPedido}
+                                    />
                                 </div>
                             )}
                         </section>

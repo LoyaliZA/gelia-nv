@@ -52,7 +52,10 @@ class ControlPedidosActualizarGuiasTest extends TestCase
         $this->assertGreaterThanOrEqual(1, $metricas['pendientes_guia']);
         $this->assertGreaterThanOrEqual(1, $metricas['pendientes_envio']);
         $this->assertSame(
-            $metricas['pendientes_guia'] + $metricas['pendientes_envio'] + $metricas['enviados'],
+            $metricas['pendientes_guia']
+                + ($metricas['pendiente_empaque'] ?? 0)
+                + $metricas['pendientes_envio']
+                + $metricas['enviados'],
             $metricas['total']
         );
     }
