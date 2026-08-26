@@ -1139,14 +1139,26 @@ export default function ModalFormPedidoLegado({
         }
 
         const paq = (catalogos.paqueterias || []).find((p) => String(p.id) === String(data.catalogo_paqueteria_id));
-        // Seguro sobre flete base + mercancía (sin reexpedición).
-        const costo = calcCostoSeguro(paq?.nombre, data.costo_envio, data.total_mercancia);
-        setData('costo_seguro', costo);
-
         if (!paqueteriaTieneCobertura(paq?.nombre)) {
             setData('aplica_seguro', false);
+            setData('costo_seguro', 0);
+            return;
         }
-    }, [data.catalogo_paqueteria_id, data.costo_envio, data.total_mercancia, data.cliente_proporciona_guia, catalogos.paqueterias]);
+
+        // Sin seguro: monto 0. Con seguro: recalcular sobre flete base + mercancía.
+        if (!data.aplica_seguro) {
+            if (Number(data.costo_seguro || 0) !== 0) {
+                setData('costo_seguro', 0);
+            }
+            return;
+        }
+
+        const envioBase = Math.max(0, Number(data.costo_envio || 0) - Number(costoReexpedicion || 0));
+        const costo = calcCostoSeguro(paq?.nombre, envioBase, data.total_mercancia);
+        if (Number(data.costo_seguro || 0) !== Number(costo)) {
+            setData('costo_seguro', costo);
+        }
+    }, [data.catalogo_paqueteria_id, data.costo_envio, data.total_mercancia, data.cliente_proporciona_guia, data.aplica_seguro, data.costo_seguro, costoReexpedicion, catalogos.paqueterias]);
 
     const marcarGuiaCliente = (checked) => {
         setData('cliente_proporciona_guia', checked);
@@ -2905,13 +2917,16 @@ export default function ModalFormPedidoLegado({
                                                                 acc + (Number(row.costo_envio) || 0) + (Number(row.costo_adicional) || 0)
                                                             ), 0);
                                                             const sumaSeg = actualizados.reduce((acc, row) => acc + (Number(row.costo_seguro) || 0), 0);
+                                                            const aplicaSeg = Boolean(data.aplica_seguro) || sumaSeg > 0;
                                                             setData({
                                                                 ...data,
                                                                 cajas_costos: actualizados,
                                                                 ...(completo ? {
                                                                     costo_envio: String(Math.round(suma * 100) / 100),
-                                                                    costo_seguro: String(Math.round(sumaSeg * 100) / 100),
-                                                                    aplica_seguro: sumaSeg > 0 || data.aplica_seguro,
+                                                                    costo_seguro: aplicaSeg
+                                                                        ? String(Math.round(sumaSeg * 100) / 100)
+                                                                        : '0',
+                                                                    aplica_seguro: aplicaSeg,
                                                                 } : {}),
                                                             });
                                                         }}
@@ -3379,7 +3394,19 @@ export default function ModalFormPedidoLegado({
                                         <input
                                             type="checkbox"
                                             checked={data.aplica_seguro}
-                                            onChange={(e) => setData('aplica_seguro', e.target.checked)}
+                                            onChange={(e) => {
+                                                const on = e.target.checked;
+                                                setData('aplica_seguro', on);
+                                                if (!on) {
+                                                    setData('costo_seguro', 0);
+                                                    return;
+                                                }
+                                                const paq = (catalogos.paqueterias || []).find(
+                                                    (p) => String(p.id) === String(data.catalogo_paqueteria_id)
+                                                );
+                                                const envioBase = Math.max(0, Number(data.costo_envio || 0) - Number(costoReexpedicion || 0));
+                                                setData('costo_seguro', calcCostoSeguro(paq?.nombre, envioBase, data.total_mercancia));
+                                            }}
                                         />
                                         <span className="text-sm font-bold">
                                             {data.aplica_seguro ? 'Con seguro' : 'Sin seguro'}
@@ -3392,9 +3419,9 @@ export default function ModalFormPedidoLegado({
                                 </label>
                             </div>
 
-                            {((!guiaCliente && data.aplica_seguro) || data.envia_a_otra_persona || (!guiaCliente && tieneCoberturaSeguro)) && (
+                            {((!guiaCliente && data.aplica_seguro) || data.envia_a_otra_persona) && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {!guiaCliente && tieneCoberturaSeguro && (
+                                    {!guiaCliente && data.aplica_seguro && (
                                         <div>
                                             <label className={SECCION}>Costo de seguro (calculado)</label>
                                             <InputMoneda value={data.costo_seguro} onChange={() => {}} readOnly className="w-full py-3 opacity-80" />

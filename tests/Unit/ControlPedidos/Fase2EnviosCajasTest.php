@@ -253,7 +253,7 @@ class Fase2EnviosCajasTest extends TestCase
         $pedido = $this->pedidoBase([
             'total_mercancia' => 100,
             'costo_envio' => 0,
-            'aplica_seguro' => false,
+            'aplica_seguro' => true,
             'saldo_a_favor' => 0,
         ]);
         $uuid = (string) Str::uuid();

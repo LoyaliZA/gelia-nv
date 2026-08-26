@@ -88,9 +88,11 @@ trait ResuelveDatosPedidoBma
         $calc = app(CalcularSeguroPedidoService::class);
         // costo_envio persiste flete+reexpedición; el seguro solo sobre flete base (como el form).
         $envioParaSeguro = $this->envioBaseSinReexpedicion($datos, $envio);
-        $costo = $calc->calcularCosto($paqueteria?->nombre, $envioParaSeguro, $mercancia);
         $aplicaSeguro = $calc->tieneCobertura($paqueteria?->nombre)
             && filter_var($datos['aplica_seguro'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $costo = $aplicaSeguro
+            ? $calc->calcularCosto($paqueteria?->nombre, $envioParaSeguro, $mercancia)
+            : 0.0;
 
         return [
             'aplica_seguro' => $aplicaSeguro,

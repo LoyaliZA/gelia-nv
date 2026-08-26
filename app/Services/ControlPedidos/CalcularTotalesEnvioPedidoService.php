@@ -99,13 +99,17 @@ class CalcularTotalesEnvioPedidoService
 
         $mercancia = (float) ($pedido->total_mercancia ?? 0);
         $envio = (float) $totales['costo_para_cobertura'];
-        $seguro = (float) $totales['costo_seguro'];
-        $aplicaSeguro = (bool) $pedido->aplica_seguro || $seguro > 0;
+        // aplica_seguro es la fuente de verdad: no reactivar por monto residual.
+        $aplicaSeguro = (bool) $pedido->aplica_seguro;
+        $seguro = $aplicaSeguro ? (float) $totales['costo_seguro'] : 0.0;
         $saldo = (float) ($pedido->saldo_a_favor ?? 0);
+        $precision = $this->config->precision();
 
         $pedido->update([
             'costo_envio' => $totales['costo_para_cobertura'],
-            'costo_seguro' => $totales['costo_seguro'],
+            'costo_seguro' => $aplicaSeguro
+                ? $totales['costo_seguro']
+                : number_format(0, $precision, '.', ''),
             'aplica_seguro' => $aplicaSeguro,
             'total_a_cobrar' => PedidoBma::calcularTotal($mercancia, $envio, $aplicaSeguro, $seguro, $saldo),
         ]);

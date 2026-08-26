@@ -54,8 +54,9 @@ class CoberturaPagoPedidoBmaService
 
         $totales = $this->totalesEnvio->calcular($pedido->loadMissing(['cajas']));
         $envio = $totales['costo_para_cobertura'];
-        $seguro = $totales['costo_seguro'];
-        $aplicaSeguro = (bool) $pedido->aplica_seguro || (float) $seguro > 0;
+        // aplica_seguro manda: un costo residual no debe exigir seguro.
+        $aplicaSeguro = (bool) $pedido->aplica_seguro;
+        $seguro = $aplicaSeguro ? $totales['costo_seguro'] : number_format(0, 2, '.', '');
 
         $base = $this->calcularDesdeMontos(
             number_format((float) ($pedido->total_mercancia ?? 0), 2, '.', ''),
