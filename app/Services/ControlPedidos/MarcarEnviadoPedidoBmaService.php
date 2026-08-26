@@ -31,6 +31,12 @@ class MarcarEnviadoPedidoBmaService
 
         $pedido->loadMissing(['paqueteria', 'origen', 'cajas']);
 
+        if ($pedido->tienePaqueteriaPendiente()) {
+            throw new \RuntimeException(
+                'Actualice la paquetería (ya no use PAQ. PENDIENTE) antes de marcar el pedido como enviado.'
+            );
+        }
+
         if ($pedido->ofreceRastreo() && empty($pedido->numero_rastreo)) {
             throw new \RuntimeException('El pedido requiere número de guía antes de marcarlo como enviado.');
         }

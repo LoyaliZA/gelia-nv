@@ -38,6 +38,7 @@ services:
         environment:
             WWWUSER: '${WWWUSER}'
             LARAVEL_SAIL: 1
+            VITE_PORT: '${VITE_PORT:-5173}'
         volumes:
             - '.:/var/www/html'
         networks:

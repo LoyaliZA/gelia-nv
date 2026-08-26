@@ -27,9 +27,13 @@ export default defineConfig({
     },
     server: {
         host: '0.0.0.0', // Permite conexiones desde fuera del contenedor
+        port: Number(process.env.VITE_PORT) || 5173,
+        strictPort: true,
         cors: true,      // Habilita las políticas de CORS
         hmr: {
             host: '100.75.11.59', // Fuerza a Vite a usar tu IP real en lugar de localhost
+            port: Number(process.env.VITE_PORT) || 5173,
+            clientPort: Number(process.env.VITE_PORT) || 5173,
         },
         watch: {
             ignored: ['**/storage/framework/views/**'],

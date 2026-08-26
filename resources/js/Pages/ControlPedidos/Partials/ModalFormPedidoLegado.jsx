@@ -611,8 +611,15 @@ export default function ModalFormPedidoLegado({
             ? 'error'
             : (estadoAuto.bd && !estadoAuto.bd.includes('guardando') ? 'guardado' : null);
     const tieneCoberturaSeguro = paqueteriaTieneCobertura(paqueteriaSeleccionada?.nombre);
-    const paqueteriasComerciales = (catalogos.paqueterias || []).filter((p) => p.categoria === 'comercial');
-    const paqueteriasLocales = (catalogos.paqueterias || []).filter((p) => p.categoria !== 'comercial');
+    const esPaqPendienteNombre = (nombre) => String(nombre || '').trim().toUpperCase() === 'PAQ. PENDIENTE';
+    const paqueteriasPendientes = (catalogos.paqueterias || []).filter((p) => esPaqPendienteNombre(p.nombre));
+    const paqueteriasComerciales = (catalogos.paqueterias || []).filter(
+        (p) => p.categoria === 'comercial' && !esPaqPendienteNombre(p.nombre)
+    );
+    const paqueteriasLocales = (catalogos.paqueterias || []).filter(
+        (p) => p.categoria !== 'comercial' && !esPaqPendienteNombre(p.nombre)
+    );
+    const paqPendienteSeleccionada = esPaqPendienteNombre(paqueteriaSeleccionada?.nombre);
 
     const modalAnidadoAbierto = confirmarActualizarDir || Boolean(vistaPrevia?.documentos?.length) || modalLinkDireccion;
 
@@ -2549,6 +2556,13 @@ export default function ModalFormPedidoLegado({
                                         className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
                                     >
                                         <option value="">Seleccionar...</option>
+                                        {paqueteriasPendientes.length > 0 && (
+                                            <optgroup label="Por confirmar">
+                                                {paqueteriasPendientes.map((p) => (
+                                                    <option key={p.id} value={String(p.id)}>{p.nombre}</option>
+                                                ))}
+                                            </optgroup>
+                                        )}
                                         {paqueteriasComerciales.length > 0 && (
                                             <optgroup label="Comercial (FedEx, DHL…)">
                                                 {paqueteriasComerciales.map((p) => (
@@ -2566,6 +2580,11 @@ export default function ModalFormPedidoLegado({
                                             </optgroup>
                                         )}
                                     </select>
+                                    {paqPendienteSeleccionada && (
+                                        <p className="text-[10px] font-bold theme-text-muted m-0 mt-1.5">
+                                            Actualice a DHL, FedEx, Estafeta u otra cuando el cliente confirme. El costo de envío puede diferirse.
+                                        </p>
+                                    )}
                                 </div>
                             )}
                         </div>

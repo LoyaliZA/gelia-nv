@@ -52,6 +52,22 @@ class ControlPedidosCatalogosSeeder extends Seeder
 
         $paqueteriasComerciales = ['FEDEX', 'ESTAFETA', 'DHL'];
 
+        // Placeholder: cotización pendiente de confirmación del cliente (costo diferido, sin rastreo).
+        $existePendiente = DB::table('catalogo_paqueterias_pedido')->where('nombre', 'PAQ. PENDIENTE')->exists();
+        $rowPendiente = [
+            'categoria' => 'local_regional',
+            'permite_costo_diferido' => true,
+            'activo' => true,
+            'updated_at' => $now,
+        ];
+        if (! $existePendiente) {
+            $rowPendiente['created_at'] = $now;
+        }
+        DB::table('catalogo_paqueterias_pedido')->updateOrInsert(
+            ['nombre' => 'PAQ. PENDIENTE'],
+            $rowPendiente
+        );
+
         $paqueteriasLocales = [
             'TAXI FRONTERA',
             'TAXI MACUSPANA',

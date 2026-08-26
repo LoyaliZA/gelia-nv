@@ -11,6 +11,7 @@ class CatalogoPaqueteriaPedido extends Model
 
     public const CATEGORIA_COMERCIAL = 'comercial';
     public const CATEGORIA_LOCAL_REGIONAL = 'local_regional';
+    public const NOMBRE_PENDIENTE = 'PAQ. PENDIENTE';
     public const MODALIDAD_FIJA = 'fija';
     public const MODALIDAD_POR_PESO = 'por_peso';
     public const UNIDAD_KG = 'kg';
@@ -60,6 +61,11 @@ class CatalogoPaqueteriaPedido extends Model
     public function esLocalRegional(): bool
     {
         return $this->categoria === self::CATEGORIA_LOCAL_REGIONAL;
+    }
+
+    public function esPendienteConfirmacion(): bool
+    {
+        return mb_strtoupper(trim((string) $this->nombre)) === self::NOMBRE_PENDIENTE;
     }
 
     public function habilitadaParaEnvioMunicipio(): bool

@@ -30,6 +30,12 @@ class AsignarGuiaPedidoBmaService
             throw new \RuntimeException('Un pedido en resguardo no puede recibir guía. Libere el resguardo primero.');
         }
 
+        if ($pedido->tienePaqueteriaPendiente()) {
+            throw new \RuntimeException(
+                'Actualice la paquetería (ya no use PAQ. PENDIENTE) antes de asignar guía.'
+            );
+        }
+
         if (!$pedido->puedeAsignarGuia()) {
             throw new \RuntimeException('El pedido no está pendiente de guía.');
         }

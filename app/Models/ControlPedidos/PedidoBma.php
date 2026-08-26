@@ -334,6 +334,11 @@ class PedidoBma extends Model
         return (bool) $this->tipoOperacionEnvio?->esMunicipioDiferido();
     }
 
+    public function tienePaqueteriaPendiente(): bool
+    {
+        return (bool) $this->paqueteria?->esPendienteConfirmacion();
+    }
+
     public function esResguardoAbierto(): bool
     {
         $this->loadMissing('tipoOperacionEnvio');
