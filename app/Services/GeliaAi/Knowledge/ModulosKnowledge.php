@@ -33,7 +33,7 @@ TXT;
 Solicitudes TAG (módulo Solicitudes): procesos financieros de cambio de lista/descuento, no facturas ni traspasos.
 Crear: cliente, proceso, tipo cliente, lista, monto cotizado, observaciones, evidencia. Estado inicial Pendiente.
 Ciclo: Pendiente → reportar (Respondida/Incorrecta) → confirmar pago / verificar → Verificada. También consultas y cancelación.
-Compra en tienda: lista Bronce, monto 0. Solo TAG (ASIGNAR TAG): sin lista/cotización.
+Compra en tienda: lista Bronce, monto 0; al aprobar queda concluida sin confirmar pago. Compra Realizada: Solicitar tag (ASIGNAR TAG): sin lista/cotización; mismo flujo de pago auto.
 Operativos van a Cancelaciones/Cotizaciones, no aquí.
 Permisos: solicitudes.ver_listado, crear, reportar, verificar, confirmar_pago, etc.
 TXT;

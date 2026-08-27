@@ -5,7 +5,7 @@ import { X, Edit2, Info, AlertOctagon, Upload, Send } from 'lucide-react';
 
 export default function ModalRespuestaSolicitud({ onClose, solicitud, estadoId, esReporteError = false }) {
     const [previewEvidenciaRespuesta, setPreviewEvidenciaRespuesta] = useState(null);
-    const esSoloTag = !!solicitud?.compra_en_tienda_solo_tag && !esReporteError;
+    const esFlujoTienda = (!!solicitud?.compra_en_tienda || !!solicitud?.compra_en_tienda_solo_tag) && !esReporteError;
 
     const { data, setData, post, processing, reset } = useForm({
         solicitud_id: solicitud?.id || '',
@@ -73,9 +73,12 @@ export default function ModalRespuestaSolicitud({ onClose, solicitud, estadoId, 
                                 <p className="text-sm font-black uppercase tracking-widest" style={{ color: esReporteError ? '#ef4444' : '#10b981' }}>
                                     {esReporteError ? 'Reporte de Error' : 'Aprobación'}
                                 </p>
-                                {esSoloTag && (
+                                {esFlujoTienda && (
                                     <p className="text-[11px] font-bold theme-text-muted mt-2 m-0 leading-snug">
-                                        Compra en tienda: Solo Tag. Al aprobar queda concluida para la vendedora (sin confirmar pago) y pendiente de verificar.
+                                        {solicitud?.compra_en_tienda_solo_tag
+                                            ? 'Compra Realizada: Solicitar tag'
+                                            : 'Compra en tienda'}
+                                        . Al aprobar queda concluida para la vendedora (sin confirmar pago) y pendiente de verificar.
                                     </p>
                                 )}
                             </div>

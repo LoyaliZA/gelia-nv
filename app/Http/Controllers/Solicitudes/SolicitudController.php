@@ -415,7 +415,7 @@ class SolicitudController extends Controller
             }
 
             $motivoReparacion = $compraSoloTag
-                ? 'El colaborador corrigió la solicitud. Compra en tienda reportada (solo TAG): sin lista ni cotización.'
+                ? 'El colaborador corrigió la solicitud. Compra Realizada: Solicitar tag — sin lista ni cotización.'
                 : ($compraEnTienda
                     ? 'El colaborador corrigió la solicitud. Compra en tienda: lista Bronce, sin cotización.'
                     : 'El colaborador corrigió la solicitud.');
@@ -488,8 +488,12 @@ class SolicitudController extends Controller
             }
         }
 
-        // Solo Tag: al aprobar se marca pago_confirmado (vendedora no hace más), pero sigue pendiente de verificar.
-        $aprobarSoloTag = $estadoNuevoId === $idRespondida && $solicitud->compra_en_tienda_solo_tag;
+        // Flujos tienda (compra_en_tienda / Compra Realizada): al aprobar se marca pago_confirmado.
+        $aprobarFlujoTienda = $estadoNuevoId === $idRespondida
+            && (
+                (bool) $solicitud->compra_en_tienda
+                || (bool) $solicitud->compra_en_tienda_solo_tag
+            );
 
         if ($estadoNuevoId === $idVerificada) {
             if (!$usuario->can('solicitudes.verificar')) {
@@ -527,7 +531,7 @@ class SolicitudController extends Controller
             $idRespondida,
             $idVerificada,
             $idIncorrecta,
-            $aprobarSoloTag
+            $aprobarFlujoTienda
         ) {
 
             $rutaEvidencia = $solicitud->evidencia_respuesta_path;
@@ -545,7 +549,7 @@ class SolicitudController extends Controller
                 'evidencia_respuesta_path' => $rutaEvidencia,
                 'motivo_incorrecta' => $estadoNuevoId === $idIncorrecta ? 'error_reportado' : null,
             ];
-            if ($aprobarSoloTag) {
+            if ($aprobarFlujoTienda) {
                 $datosUpdate['pago_confirmado'] = true;
             }
 
@@ -562,10 +566,13 @@ class SolicitudController extends Controller
             }
 
             $motivoReporte = $request->motivo ?: 'CAMBIO DE ESTADO OPERATIVO';
-            if ($aprobarSoloTag) {
+            if ($aprobarFlujoTienda) {
+                $etiquetaTienda = $solicitud->compra_en_tienda_solo_tag
+                    ? 'Compra Realizada: Solicitar tag'
+                    : 'Compra en tienda';
                 $motivoReporte = trim(
                     ($request->motivo ? $request->motivo.' · ' : '')
-                    .'Aprobado (Compra en tienda: Solo Tag). Concluida para la vendedora — pendiente de verificar. Compra ya cargada en masivo.'
+                    ."Aprobado ({$etiquetaTienda}). Concluida para la vendedora — pendiente de verificar. Compra ya cargada en masivo."
                 );
             }
 
@@ -578,8 +585,9 @@ class SolicitudController extends Controller
                 'datos_snapshot' => array_merge(
                     [
                         'evidencia_respuesta_path' => $rutaEvidencia,
+                        'compra_en_tienda' => (bool) $solicitud->compra_en_tienda,
                         'compra_en_tienda_solo_tag' => (bool) $solicitud->compra_en_tienda_solo_tag,
-                        'pago_confirmado_auto_solo_tag' => $aprobarSoloTag,
+                        'pago_confirmado_auto_tienda' => $aprobarFlujoTienda,
                     ],
                     !empty($snapshotDiff) ? $snapshotDiff : []
                 ),
@@ -596,8 +604,12 @@ class SolicitudController extends Controller
                     ? ($reportadoPorVendedora
                         ? 'La vendedora ha reportado un error en la respuesta de su solicitud.'
                         : 'Se ha reportado un error en tu solicitud. Revisa las observaciones.')
-                    : ($aprobarSoloTag
-                        ? 'Tu solicitud Solo Tag fue aprobada y quedó concluida de tu lado. Queda pendiente de verificar.'
+                    : ($aprobarFlujoTienda
+                        ? (
+                            $solicitud->compra_en_tienda_solo_tag
+                                ? 'Tu solicitud Compra Realizada: Solicitar tag fue aprobada y quedó concluida de tu lado. Queda pendiente de verificar.'
+                                : 'Tu solicitud de Compra en tienda fue aprobada y quedó concluida de tu lado. Queda pendiente de verificar.'
+                        )
                         : 'El área administrativa ha emitido una resolución para tu solicitud.');
 
                 Notification::send($destinatarios, new AlertaSolicitud(

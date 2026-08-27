@@ -36,7 +36,12 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
                 ->firstOrFail();
 
             $idBorrador = CatalogoEstadoSolicitud::idDe('Borrador');
-            if ($idBorrador === null || (int) $solicitud->catalogo_estado_solicitud_id !== $idBorrador) {
+            $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+            $estadoId = (int) $solicitud->catalogo_estado_solicitud_id;
+            $esBorrador = $idBorrador !== null && $estadoId === (int) $idBorrador;
+            $esRespondida = $idRespondida !== null && $estadoId === (int) $idRespondida;
+
+            if (! $esBorrador && ! $esRespondida) {
                 throw new \InvalidArgumentException('La solicitud ya no acepta respuesta del formulario.');
             }
 
@@ -58,7 +63,7 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
 
             $estadoAnterior = $solicitud->catalogo_estado_solicitud_id;
 
-            // Se queda en Borrador: el colaborador adjunta voucher y envía a encargada.
+            // Borrador: pendiente de voucher. Respondida: corrige datos sin cambiar estado ni PDF/XML.
             $solicitud->update([
                 'datos_fiscales' => $snapshot,
                 'razon_social' => $razonSocial,
@@ -90,13 +95,18 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
                 $solicitud->update(['receptor_fiscal_id' => $receptor->id]);
             }
 
+            $motivoAuditoria = $esRespondida
+                ? 'Formulario fiscal corregido sobre solicitud respondida. Datos fiscales actualizados.'
+                : 'Formulario público de datos fiscales respondido. Pendiente de voucher y envío a encargada.';
+
             AuditoriaSolicitudFactura::create([
                 'solicitud_factura_id' => $solicitud->id,
                 'usuario_id' => $enlace->creado_por,
                 'estado_anterior_id' => $estadoAnterior,
                 'estado_nuevo_id' => $estadoAnterior,
-                'motivo_reporte' => 'Formulario público de datos fiscales respondido. Pendiente de voucher y envío a encargada.',
+                'motivo_reporte' => $motivoAuditoria,
                 'datos_snapshot' => [
+                    'accion' => $esRespondida ? 'formulario_corregido' : 'formulario_respondido',
                     'campos' => array_keys($datos),
                     'destinatario_tipo' => $enlace->destinatario_tipo,
                     'enlace_id' => $enlace->id,
@@ -105,7 +115,9 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
 
             $solicitud = $solicitud->fresh(['vendedor', 'estado', 'cliente', 'vouchers']);
 
-            if ($solicitud->vendedor) {
+            if ($esRespondida) {
+                app(NotificarEncargadosFacturaService::class)->formularioCorregido($solicitud);
+            } elseif ($solicitud->vendedor) {
                 $solicitud->vendedor->notify(new AlertaFactura(
                     $solicitud,
                     'formulario_respondido',
@@ -115,7 +127,7 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
 
             event(new SolicitudFacturaActualizada(
                 solicitudId: $solicitud->id,
-                accion: 'formulario_respondido',
+                accion: $esRespondida ? 'formulario_corregido' : 'formulario_respondido',
                 porUsuarioId: null,
                 vendedorId: $solicitud->vendedor_id,
                 departamentoId: $solicitud->departamento_id,

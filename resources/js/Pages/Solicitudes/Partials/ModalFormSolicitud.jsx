@@ -118,7 +118,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setData('monto_final_tentativo', '');
         setData('total_proyectado_neto', '');
         setAnalisisFinanciero(null);
-        setAlertaLista({ mensaje: 'Compra en tienda: Solo Tag — sin lista ni cotización' });
+        setAlertaLista({ mensaje: 'Compra Realizada: Solicitar tag — sin lista ni cotización' });
     }, [data.compra_en_tienda_solo_tag]);
 
     useEffect(() => {
@@ -372,7 +372,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                             Compra en Tienda
                                         </span>
                                         <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
-                                            Cotización no obligatoria. La lista se asigna automáticamente (Bronce) y el ascenso se indica al confirmar el pago.
+                                            Cotización no obligatoria. La lista se asigna automáticamente (Bronce). No requiere confirmar pago al aprobar.
                                         </p>
                                     </div>
                                 </label>
@@ -392,10 +392,10 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     <div>
                                         <span className="text-sm font-black theme-text-main flex items-center gap-2">
                                             <Tag className="w-4 h-4 text-sky-500" />
-                                            Compra en tienda: Solo Tag
+                                            Compra Realizada: Solicitar tag
                                         </span>
                                         <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
-                                            Para asegurar el TAG de la vendedora cuando la compra ya ocurrió (p. ej. al día siguiente). Sin lista ni cotización.
+                                            Para asegurar el TAG de la vendedora cuando la compra ya ocurrió (p. ej. al día siguiente). Sin lista ni cotización. No requiere confirmar pago.
                                         </p>
                                     </div>
                                 </label>
@@ -416,7 +416,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     disabled={cotizacionOpcional}
                                     value={data.monto_cotizado}
                                     onChange={e => setData('monto_cotizado', e.target.value)}
-                                    placeholder={cotizacionOpcional ? (data.compra_en_tienda_solo_tag ? 'No requerida — Solo Tag' : 'No requerida — compra en tienda') : ''}
+                                    placeholder={cotizacionOpcional ? (data.compra_en_tienda_solo_tag ? 'No requerida — Compra Realizada' : 'No requerida — compra en tienda') : ''}
                                     className={`${THEME_INPUT} w-full py-4 text-sm disabled:opacity-60`}
                                 />
                             </div>

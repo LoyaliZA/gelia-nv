@@ -108,7 +108,7 @@ class CrearSolicitudService
                 'estado_anterior_id' => null, // Es nuevo, no hay estado anterior
                 'estado_nuevo_id' => $estadoPendiente->id,
                 'motivo_reporte' => $compraSoloTag
-                    ? 'Creación de solicitud. Compra en tienda reportada (solo TAG): sin lista ni cotización.'
+                    ? 'Creación de solicitud. Compra Realizada: Solicitar tag — sin lista ni cotización.'
                     : ($compraEnTienda
                         ? 'Creación de solicitud. Compra en tienda: lista Bronce asignada automáticamente. Cotización no requerida.'
                         : 'Creación original de la solicitud.'),
@@ -150,7 +150,7 @@ class CrearSolicitudService
             if ($encargados->isNotEmpty()) {
                 if ($compraSoloTag) {
                     $tipoAlerta = 'compra_en_tienda_solo_tag';
-                    $mensajeAlerta = "Compra en tienda: Solo Tag de: {$nombreColaborador}";
+                    $mensajeAlerta = "Compra Realizada: Solicitar tag de: {$nombreColaborador}";
                 } elseif ($compraEnTienda) {
                     $tipoAlerta = 'compra_en_tienda';
                     $mensajeAlerta = "Compra en Tienda de: {$nombreColaborador}";

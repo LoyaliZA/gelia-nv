@@ -91,7 +91,7 @@ const EtiquetasOperacion = ({ solicitud, listas }) => {
             )}
             {solicitud.compra_en_tienda_solo_tag && (
                 <span className="text-[9px] font-black uppercase px-2 py-1 rounded-md bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 flex items-center gap-1">
-                    <Tag className="w-3 h-3" /> Compra en tienda: Solo Tag
+                    <Tag className="w-3 h-3" /> Compra Realizada: Solicitar tag
                 </span>
             )}
             {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
@@ -624,14 +624,15 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Confirmar Pago / Validar tienda — no aplica a Solo Tag (se concluye al aprobar) */}
+                {/* Confirmar Pago / Validar tienda — no aplica a flujos tienda (se concluye al aprobar) */}
                 {(can('solicitudes.confirmar_pago') || solicitud.vendedor_id === auth.user.id)
                     && !solicitud.pago_confirmado
+                    && !solicitud.compra_en_tienda
                     && !solicitud.compra_en_tienda_solo_tag
                     && solicitud.estado?.nombre === 'Respondida'
                     && !esAlertaPago && (
                     <button onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3">
-                        <CreditCard className="w-4 h-4" /> {solicitud.compra_en_tienda ? 'Validar Solicitud' : 'Confirmar Pago'}
+                        <CreditCard className="w-4 h-4" /> Confirmar Pago
                     </button>
                 )}
 
@@ -661,7 +662,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Verificado (Paso final) — Solo Tag también queda pendiente de verificar */}
+                {/* Verificado (Paso final) — flujos tienda también quedan pendientes de verificar */}
                 {can('solicitudes.verificar')
                     && solicitud.estado?.nombre === 'Respondida'
                     && solicitud.pago_confirmado
@@ -672,7 +673,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     </button>
                 )}
 
-                {/* Aprobar (Encargada) — Solo Tag: marca concluida para vendedora, sigue pendiente de verificar */}
+                {/* Aprobar (Encargada) — flujos tienda: marca concluida para vendedora, sigue pendiente de verificar */}
                 {can('solicitudes.reportar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre === 'Pendiente' && idRespondida && (
                     <button onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className="flex items-center gap-3 px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border-b theme-border mb-1 pb-3" style={{ color: 'var(--color-primario)' }}>
                         <CheckCircle2 className="w-4 h-4" /> Aprobar Proceso
@@ -1095,7 +1096,7 @@ export default function Index({
                                             <div className="font-black italic theme-text-main text-sm">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
                                             <div className={`mt-1 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest ${solicitud.pago_confirmado ? 'text-emerald-500' : 'text-amber-500'}`}>
                                                 {solicitud.pago_confirmado ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                                                {solicitud.compra_en_tienda_solo_tag && solicitud.pago_confirmado
+                                                {(solicitud.compra_en_tienda || solicitud.compra_en_tienda_solo_tag) && solicitud.pago_confirmado
                                                     ? 'Concluida'
                                                     : (solicitud.pago_confirmado ? 'Pago Confirmado' : 'Pago Pendiente')}
                                             </div>
@@ -1193,7 +1194,7 @@ export default function Index({
                                                 <div className="font-black italic theme-text-main text-sm bg-black/5 dark:bg-white/5 px-3 py-1.5 rounded-lg inline-block border theme-border">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado)}</div>
                                                 <div className={`mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md w-fit border ${solicitud.pago_confirmado ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-500 bg-amber-500/10 border-amber-500/20'}`}>
                                                     {solicitud.pago_confirmado ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                                                    {solicitud.compra_en_tienda_solo_tag && solicitud.pago_confirmado
+                                                    {(solicitud.compra_en_tienda || solicitud.compra_en_tienda_solo_tag) && solicitud.pago_confirmado
                                                         ? 'Concluida'
                                                         : (solicitud.pago_confirmado ? 'Confirmado' : 'Pendiente')}
                                                 </div>

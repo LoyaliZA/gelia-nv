@@ -461,4 +461,186 @@ class DatosFiscalesPublicosFacturaTest extends TestCase
             fn ($e) => $e->accion === 'formulario_respondido' && $e->porUsuarioId === null
         );
     }
+
+    public function test_regenerar_enlace_en_respondida_owner(): void
+    {
+        $vendedor = $this->vendedor();
+        $cliente = $this->cliente();
+
+        $creado = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'pedir_formulario' => true,
+            'accion_formulario' => EnlaceDatosFiscales::ACCION_PRIMERA,
+            'campos_fiscales' => EnlaceDatosFiscales::CAMPOS,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'razon_social' => 'EMPRESA',
+            'numero_cliente' => $cliente->numero_cliente,
+        ], $vendedor->id);
+
+        $solicitud = $creado['solicitud'];
+        $solicitud->update([
+            'catalogo_estado_solicitud_id' => CatalogoEstadoSolicitud::idDe('Respondida'),
+            'formulario_respondido_at' => now(),
+            'datos_fiscales' => $this->datosFiscalesCompletos(),
+            'departamento_id' => $this->departamento()->id,
+        ]);
+
+        $this->actingAs($vendedor)
+            ->postJson(route('facturas.enlace_fiscal', $solicitud->id), [
+                'campos_fiscales' => ['rfc', 'correo_electronico'],
+            ])
+            ->assertOk()
+            ->assertJsonStructure(['url']);
+
+        $solicitud->refresh();
+        $this->assertNull($solicitud->formulario_respondido_at);
+        $this->assertNotNull($solicitud->formulario_enviado_at);
+
+        $enlace = EnlaceDatosFiscales::query()
+            ->where('solicitud_factura_id', $solicitud->id)
+            ->whereNull('revocado_en')
+            ->whereNull('usado_en')
+            ->latest('id')
+            ->first();
+        $this->assertNotNull($enlace);
+        $this->assertSame(EnlaceDatosFiscales::ACCION_ACTUALIZAR, $enlace->accion_permitida);
+    }
+
+    public function test_formulario_publico_corrige_respondida_sin_cambiar_estado(): void
+    {
+        Notification::fake();
+        $vendedor = $this->vendedor();
+        $encargada = $this->encargada();
+        $cliente = $this->cliente();
+
+        $creado = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'pedir_formulario' => true,
+            'accion_formulario' => EnlaceDatosFiscales::ACCION_PRIMERA,
+            'campos_fiscales' => EnlaceDatosFiscales::CAMPOS,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'razon_social' => 'EMPRESA ORIGINAL',
+            'numero_cliente' => $cliente->numero_cliente,
+        ], $vendedor->id);
+
+        $solicitud = $creado['solicitud'];
+        $solicitud->update([
+            'catalogo_estado_solicitud_id' => CatalogoEstadoSolicitud::idDe('Respondida'),
+            'formulario_respondido_at' => now(),
+            'datos_fiscales' => $this->datosFiscalesCompletos(),
+            'departamento_id' => $this->departamento()->id,
+        ]);
+
+        EnlaceDatosFiscales::query()->where('solicitud_factura_id', $solicitud->id)->update(['revocado_en' => now()]);
+
+        $nuevo = app(GenerarEnlaceDatosFiscalesService::class)->ejecutar($solicitud, [
+            'accion' => EnlaceDatosFiscales::ACCION_ACTUALIZAR,
+            'campos' => EnlaceDatosFiscales::CAMPOS,
+            'usuario_id' => $vendedor->id,
+        ]);
+
+        $datosNuevos = $this->datosFiscalesCompletos();
+        $datosNuevos['correo_electronico'] = 'corregido@example.com';
+        $datosNuevos['nombre_razon_social'] = 'EMPRESA CORREGIDA SA DE CV';
+
+        $resultado = app(AplicarDatosFiscalesPublicosDesdeEnlaceService::class)->ejecutar(
+            $nuevo['token'],
+            $datosNuevos
+        );
+
+        $this->assertSame('Respondida', $resultado->estado->nombre);
+        $this->assertSame('corregido@example.com', $resultado->datos_fiscales['correo_electronico']);
+        $this->assertSame('EMPRESA CORREGIDA SA DE CV', $resultado->razon_social);
+        $this->assertNotNull($resultado->formulario_respondido_at);
+
+        Notification::assertSentTo(
+            $encargada,
+            AlertaFactura::class,
+            fn ($n) => $n->tipoAlerta === 'formulario_corregido'
+        );
+    }
+
+    public function test_regenerar_enlace_respondida_bloquea_no_owner(): void
+    {
+        $vendedor = $this->vendedor();
+        $otro = $this->vendedor();
+        $cliente = $this->cliente(['numero_cliente' => '04951']);
+
+        $creado = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'pedir_formulario' => true,
+            'accion_formulario' => EnlaceDatosFiscales::ACCION_PRIMERA,
+            'campos_fiscales' => EnlaceDatosFiscales::CAMPOS,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'razon_social' => 'EMPRESA',
+            'numero_cliente' => $cliente->numero_cliente,
+        ], $vendedor->id);
+
+        $solicitud = $creado['solicitud'];
+        $solicitud->update([
+            'catalogo_estado_solicitud_id' => CatalogoEstadoSolicitud::idDe('Respondida'),
+            'departamento_id' => $this->departamento()->id,
+        ]);
+
+        $this->actingAs($otro)
+            ->postJson(route('facturas.enlace_fiscal', $solicitud->id), [
+                'campos_fiscales' => ['rfc'],
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_vendedora_puede_eliminar_su_borrador(): void
+    {
+        $vendedor = $this->vendedor();
+        $cliente = $this->cliente(['numero_cliente' => '04952']);
+
+        $creado = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'razon_social' => 'BORRADOR TEST',
+            'numero_cliente' => $cliente->numero_cliente,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+        ], $vendedor->id);
+
+        $solicitud = $creado['solicitud'];
+        $this->assertSame('Borrador', $solicitud->fresh(['estado'])->estado->nombre);
+
+        $this->actingAs($vendedor)
+            ->delete(route('facturas.destroy', $solicitud->id), ['motivo' => 'Ya no se necesita'])
+            ->assertRedirect();
+
+        $this->assertSoftDeleted('solicitudes_facturas', ['id' => $solicitud->id]);
+    }
+
+    public function test_vendedora_no_puede_eliminar_borrador_ajeno_ni_pendiente(): void
+    {
+        $vendedor = $this->vendedor();
+        $otro = $this->vendedor();
+        $cliente = $this->cliente(['numero_cliente' => '04953']);
+
+        $borrador = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'razon_social' => 'AJENO',
+            'numero_cliente' => $cliente->numero_cliente,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+        ], $vendedor->id)['solicitud'];
+
+        $this->actingAs($otro)
+            ->delete(route('facturas.destroy', $borrador->id), ['motivo' => 'Intento borrar ajeno'])
+            ->assertForbidden();
+
+        $pendiente = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'razon_social' => 'PENDIENTE',
+            'numero_cliente' => $cliente->numero_cliente,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+        ], $vendedor->id)['solicitud'];
+
+        $pendiente->update([
+            'catalogo_estado_solicitud_id' => CatalogoEstadoSolicitud::idDe('Pendiente'),
+        ]);
+
+        $this->actingAs($vendedor)
+            ->delete(route('facturas.destroy', $pendiente->id), ['motivo' => 'Intento borrar pendiente'])
+            ->assertForbidden();
+    }
 }

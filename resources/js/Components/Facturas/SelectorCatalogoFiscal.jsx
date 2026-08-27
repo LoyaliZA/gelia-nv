@@ -107,8 +107,14 @@ export default function SelectorCatalogoFiscal({
         ? createPortal(
             <div
                 ref={panelRef}
-                className="fixed z-[80] overflow-hidden rounded-xl border theme-border theme-surface shadow-xl"
-                style={{ top: coords.top, left: coords.left, width: coords.width }}
+                className="fixed overflow-hidden rounded-xl border theme-border theme-surface shadow-xl"
+                style={{
+                    top: coords.top,
+                    left: coords.left,
+                    width: coords.width,
+                    // Above gelia-modal (9500), below toast (10000)
+                    zIndex: 'calc(var(--gelia-z-modal) + 10)',
+                }}
                 role="listbox"
             >
                 <div className="flex items-center gap-2 border-b theme-border px-3 py-2 theme-element">

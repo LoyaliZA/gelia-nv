@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Calendar, Hash, FileText, Landmark, Ban, MoreVertical, CheckCircle2, XCircle } from 'lucide-react';
+import { User, Calendar, Hash, FileText, Landmark, Ban, MoreVertical, CheckCircle2, XCircle, Building2 } from 'lucide-react';
 import { ESTADO_BADGE, tipoOperativoDeProceso } from './operativasStyles';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import FeedbackResolucion from './FeedbackResolucion';
@@ -17,6 +17,7 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
     const estadoId = solicitud.catalogo_estado_solicitud_id ?? solicitud.estado?.id;
     const estadoNombre = solicitud.estado?.nombre || '—';
     const subtipo = tipoOperativoDeProceso(solicitud.proceso);
+    const deptoLabel = solicitud.departamento?.codigo || solicitud.departamento?.nombre || null;
 
     return (
         <article
@@ -52,6 +53,11 @@ export default function TarjetaOperativa({ solicitud, auth, onMenu, onAprobar, o
             </div>
 
             <div className="flex flex-wrap gap-2 mb-4">
+                {deptoLabel && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase theme-element border theme-border">
+                        <Building2 className="w-3 h-3 shrink-0" style={{ color: 'var(--color-primario)' }} /> {deptoLabel}
+                    </span>
+                )}
                 {solicitud.numero_remision && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase theme-element border theme-border">
                         <Hash className="w-3 h-3 shrink-0" style={{ color: 'var(--color-primario)' }} /> Rem. {solicitud.numero_remision}

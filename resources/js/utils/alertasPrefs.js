@@ -3,7 +3,7 @@ export const ALERTAS_PREFS_STORAGE_KEY = 'alertas_prefs';
 export const ALERTAS_TIPOS = {
     nueva: 'Nueva solicitud',
     compra_en_tienda: 'Compra en Tienda',
-    compra_en_tienda_solo_tag: 'Compra en tienda: Solo Tag',
+    compra_en_tienda_solo_tag: 'Compra Realizada: Solicitar tag',
     reparada: 'Solicitud reparada',
     rechazada: 'Error reportado',
     pago_rechazado: 'Pago vencido',

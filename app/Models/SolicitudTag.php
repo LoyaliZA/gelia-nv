@@ -114,8 +114,8 @@ class SolicitudTag extends Model
 
     /**
      * Solicitudes sujetas al plazo de 24 h por falta de pago.
-     * Excluye procesos operativos (cancelación remisión/pedido, cotización sobre pedido, etc.):
-     * no requieren monto de cotización ni confirmación de pago.
+     * Excluye procesos operativos y flujos de compra en tienda / Compra Realizada:
+     * no requieren confirmación de pago manual.
      */
     public function scopeSujetasAPlazoDePago(Builder $query): Builder
     {
@@ -126,6 +126,8 @@ class SolicitudTag extends Model
 
         return $query
             ->where('pago_confirmado', false)
+            ->where('compra_en_tienda', false)
+            ->where('compra_en_tienda_solo_tag', false)
             ->whereIn('catalogo_estado_solicitud_id', $estados ?: [0])
             ->whereHas('proceso', function (Builder $proceso) {
                 $proceso->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);

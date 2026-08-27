@@ -1,12 +1,12 @@
 import React from 'react';
-import { Receipt, FileText, Paperclip, User, Calendar, Eye, CheckCircle2, XCircle, FileSpreadsheet, Trash2, Download, Edit2 } from 'lucide-react';
+import { Receipt, FileText, Paperclip, User, Calendar, Eye, CheckCircle2, XCircle, FileSpreadsheet, Trash2, Download, Edit2, Link2 } from 'lucide-react';
 import { ESTADO_BADGE, urlArchivoFactura, nombreArchivoFacturaPdf, receptorFiscalDeFactura } from './facturasStyles';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import { puedePermiso } from '../../../utils/permisos';
 import { nombreEstadoFactura } from './facturasFiltros';
 import FeedbackResolucionFactura from './FeedbackResolucionFactura';
 
-export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprobar, onReportar, onVerificar, onEliminar, onReparar, onEditarBorrador }) {
+export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprobar, onReportar, onVerificar, onEliminar, onReparar, onEditarBorrador, onCorregirFiscales }) {
     const puedeCrear = puedePermiso(auth, 'facturas.crear');
     const puedeResponder = puedePermiso(auth, 'facturas.responder');
     const puedeReportar = puedePermiso(auth, 'facturas.reportar_error');
@@ -18,8 +18,12 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
     const esIncorrecta = estadoNombre === 'Incorrecta';
     const esRespondida = estadoNombre === 'Respondida';
     const esVerificada = estadoNombre === 'Verificada';
-    const puedeReparar = esIncorrecta && puedeCrear && factura.vendedor_id === auth?.user?.id;
-    const puedeEditarBorrador = esBorrador && puedeCrear && (factura.vendedor_id === auth?.user?.id || puedePermiso(auth, 'facturas.eliminar'));
+    const esDuenio = factura.vendedor_id === auth?.user?.id;
+    const puedeReparar = esIncorrecta && puedeCrear && esDuenio;
+    const puedeEditarBorrador = esBorrador && puedeCrear && (esDuenio || puedeEliminar);
+    const puedeCorregirFiscales = esRespondida && puedeCrear && esDuenio;
+    const puedeBorrarBorrador = esBorrador && puedeCrear && esDuenio;
+    const mostrarEliminar = puedeEliminar || puedeBorrarBorrador;
     const puedeDescargarEmitidos = (esRespondida || esVerificada) && (factura.tiene_pdf_emitido || factura.tiene_xml);
     const estadoId = factura.catalogo_estado_solicitud_id ?? factura.estado?.id;
     const rfc = factura.datos_fiscales?.rfc || factura.cliente?.rfc || '—';
@@ -176,6 +180,15 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                         <Edit2 className="w-3.5 h-3.5 shrink-0" /> Reparar
                     </button>
                 )}
+                {puedeCorregirFiscales && (
+                    <button
+                        type="button"
+                        onClick={() => onCorregirFiscales?.(factura)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/30 outline-none hover:bg-sky-500/20 transition-colors"
+                    >
+                        <Link2 className="w-3.5 h-3.5 shrink-0" /> Corregir datos fiscales
+                    </button>
+                )}
                 {puedeDescargarEmitidos && factura.tiene_pdf_emitido && (
                     <a
                         href={urlArchivoFactura(factura.id, 'pdf', 0, { descargar: true })}
@@ -198,7 +211,7 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                         <Download className="w-3.5 h-3.5 shrink-0" /> XML
                     </a>
                 )}
-                {puedeEliminar && (
+                {mostrarEliminar && (
                     <button
                         type="button"
                         onClick={() => onEliminar(factura)}

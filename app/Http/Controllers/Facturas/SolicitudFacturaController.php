@@ -158,13 +158,28 @@ class SolicitudFacturaController extends Controller
     ): JsonResponse {
         Gate::authorize('facturas.crear');
 
-        if (! $listarService->usuarioPuedeVer(Auth::user(), $factura)) {
+        $usuario = Auth::user();
+        if (! $listarService->usuarioPuedeVer($usuario, $factura)) {
             abort(403);
         }
 
         $idBorrador = CatalogoEstadoSolicitud::idDe('Borrador');
-        if ($idBorrador === null || (int) $factura->catalogo_estado_solicitud_id !== $idBorrador) {
-            throw ValidationException::withMessages(['enlace' => 'Solo se puede regenerar el enlace en borradores.']);
+        $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+        $estadoId = (int) $factura->catalogo_estado_solicitud_id;
+        $esBorrador = $idBorrador !== null && $estadoId === (int) $idBorrador;
+        $esRespondida = $idRespondida !== null && $estadoId === (int) $idRespondida;
+
+        if (! $esBorrador && ! $esRespondida) {
+            throw ValidationException::withMessages([
+                'enlace' => 'Solo se puede regenerar el enlace en borradores o solicitudes respondidas.',
+            ]);
+        }
+
+        $esDuenio = (int) $factura->vendedor_id === (int) $usuario->id;
+        $esAdmin = $usuario->hasAnyRole(['Super Admin', 'Administrador'])
+            || $usuario->can('facturas.eliminar');
+        if (! $esDuenio && ! $esAdmin) {
+            abort(403, 'Solo el dueño de la solicitud puede regenerar el enlace fiscal.');
         }
 
         $campos = $request->input('campos_fiscales', $factura->campos_fiscales_solicitados);
@@ -172,7 +187,9 @@ class SolicitudFacturaController extends Controller
             $campos = \App\Models\EnlaceDatosFiscales::CAMPOS;
         }
 
-        $accion = $request->input('accion_formulario', \App\Models\EnlaceDatosFiscales::ACCION_PRIMERA);
+        $accion = $esRespondida
+            ? \App\Models\EnlaceDatosFiscales::ACCION_ACTUALIZAR
+            : $request->input('accion_formulario', \App\Models\EnlaceDatosFiscales::ACCION_PRIMERA);
 
         $resultado = $generarEnlace->ejecutar($factura, [
             'accion' => $accion,
@@ -314,7 +331,16 @@ class SolicitudFacturaController extends Controller
 
     public function destroy(SolicitudFactura $factura, Request $request, EliminarSolicitudFacturaService $eliminarService): RedirectResponse
     {
-        Gate::authorize('facturas.eliminar');
+        $usuario = Auth::user();
+        $idBorrador = CatalogoEstadoSolicitud::idDe('Borrador');
+        $esBorradorPropio = $idBorrador !== null
+            && (int) $factura->catalogo_estado_solicitud_id === (int) $idBorrador
+            && (int) $factura->vendedor_id === (int) $usuario->id
+            && $usuario->can('facturas.crear');
+
+        if (! $esBorradorPropio && ! $usuario->can('facturas.eliminar')) {
+            abort(403, 'No tiene permiso para eliminar esta solicitud.');
+        }
 
         $request->validate(['motivo' => 'required|string|min:5|max:500']);
 

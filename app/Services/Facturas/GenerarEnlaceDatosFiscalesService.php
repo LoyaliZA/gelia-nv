@@ -57,6 +57,7 @@ class GenerarEnlaceDatosFiscalesService
         $solicitud->update([
             'campos_fiscales_solicitados' => $campos,
             'formulario_enviado_at' => now(),
+            'formulario_respondido_at' => null,
         ]);
 
         return [

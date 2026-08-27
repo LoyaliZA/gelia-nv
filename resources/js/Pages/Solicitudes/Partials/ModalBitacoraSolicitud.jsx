@@ -276,7 +276,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             )}
                             {solicitud?.compra_en_tienda_solo_tag && (
                                 <p className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest flex items-center gap-1">
-                                    Compra en tienda: Solo Tag
+                                    Compra Realizada: Solicitar tag
                                 </p>
                             )}
                             {solicitud?.confirmo_informacion_escalonamiento && (
@@ -382,7 +382,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                                                         )}
                                                         {snapshot?.compra_en_tienda_solo_tag && (
                                                             <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-sky-500/15 text-sky-600 border border-sky-500/30">
-                                                                Compra en tienda: Solo Tag
+                                                                Compra Realizada: Solicitar tag
                                                             </span>
                                                         )}
                                                         {nombreListaHistorial && <span className="text-[9px] font-black uppercase px-2 py-1 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20">Lista solicitada: {nombreListaHistorial}</span>}
