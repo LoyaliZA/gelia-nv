@@ -13,7 +13,7 @@ const Campo = ({ label, value }) => (
     </div>
 );
 
-/** Datos mínimos del pedido (sin pagos, SAF ni n° envíos duplicados). */
+/** Cliente + datos operativos del pedido (sección 1 del modal). */
 export default function DatosGeneralesAuditoria({ pedido }) {
     return (
         <div className="grid grid-cols-2 gap-4">

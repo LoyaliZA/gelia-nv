@@ -14,7 +14,6 @@ import {
     badgeHitoAuditoria,
     esPendienteReRevision,
     formatearMoneda,
-    etiquetaCostoEnvio,
     etiquetaOrigenGuia,
     formatearFechaNegocio,
     formatearFechaHoraAuditoria,
@@ -42,6 +41,7 @@ import SeccionPagosExhibicion from '../../Partials/SeccionPagosExhibicion';
 import EncabezadoRevisionPedido from './EncabezadoRevisionPedido';
 import ResumenCoberturaPedido from './ResumenCoberturaPedido';
 import DatosGeneralesAuditoria from './DatosGeneralesAuditoria';
+import TotalesEnviosAuditoria from './TotalesEnviosAuditoria';
 import BarraAccionesRevision from './BarraAccionesRevision';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
 
@@ -400,12 +400,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
 
                     <div className="gelia-modal-body p-5 md:p-6 space-y-6">
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>1. Cobertura</p>
-                            <ResumenCoberturaPedido resumen={resumenCobertura} bloqueos={bloqueosPago} />
+                            <p className={SECCION}>1. Datos generales</p>
+                            <DatosGeneralesAuditoria pedido={pedido} />
                         </section>
 
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>2. Exhibiciones y decisión</p>
+                            <p className={SECCION}>2. Exhibiciones de pago</p>
                             {(pedido.saf_aplicaciones || []).filter((a) => a.estado !== 'liberado').length > 0 && (
                                 <div className="mb-4 space-y-2">
                                     <p className="text-xs font-bold theme-text-muted uppercase m-0">Saldos a favor aplicados/reservados</p>
@@ -439,9 +439,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     setResumenCobertura(r);
                                     setBloqueosPago(r?.bloqueos || []);
                                 }}
-                                mensajeBloqueo={esPendiente
-                                    ? 'Revise la cobertura. Use Rechazar pago o Validar pago.'
-                                    : null}
                             />
                             {esPendiente && (
                                 <div className="mt-4 flex flex-wrap gap-2">
@@ -487,9 +484,6 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                 <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
                                 <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                                 <Campo label="Pesaje CEDIS" value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
-                                <Campo label={etiquetaCostoEnvio(pedido.paqueteria)} value={formatearMoneda(pedido.costo_envio)} />
-                                <Campo label="Costo del seguro" value={pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : formatearMoneda(0)} />
-                                <Campo label="Total mercancía" value={formatearMoneda(pedido.total_mercancia)} />
                             </div>
                             {tienePesajeRespondido && (
                                 <div className="mt-4 space-y-3">
@@ -541,16 +535,11 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                                 />
                                                 );
                                             })}
-                                            <div className="grid grid-cols-2 gap-4 pt-1">
-                                                <Campo label="Núm. envíos" value={pedido.numero_cajas ?? cajasActivas.length} />
-                                                <Campo label="Peso real total (kg)" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg}` : null} />
-                                                <Campo label="Peso volumétrico total (kg)" value={pedido.peso_volumetrico_kg != null ? `${pedido.peso_volumetrico_kg}` : null} />
-                                                <Campo label="Peso cobrado guía total (kg)" value={pedido.peso_cobrado_guia_kg != null ? `${pedido.peso_cobrado_guia_kg}` : null} />
-                                            </div>
                                         </div>
                                     )}
                                 </div>
                             )}
+                            <TotalesEnviosAuditoria pedido={pedido} cajasActivas={cajasActivas} />
                             {(pedido.documentos || []).some((d) => d.tipo === 'pdf_pedido') && (
                                 <div className="mt-3">
                                     <button
@@ -566,8 +555,13 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         </section>
 
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>4. Datos generales</p>
-                            <DatosGeneralesAuditoria pedido={pedido} />
+                            <p className={SECCION}>4. Cobertura</p>
+                            <ResumenCoberturaPedido
+                                resumen={resumenCobertura}
+                                bloqueos={bloqueosPago}
+                                pedido={pedido}
+                                zonas={catalogos?.zonas || []}
+                            />
                         </section>
 
                         {(anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && (
@@ -635,7 +629,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         )}
 
                         <section className={SECCION_WRAP}>
-                            <p className={SECCION}>6. Remisión</p>
+                            <p className={SECCION}>{(anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) ? '6' : '5'}. Remisión</p>
                             {esPendiente && (
                                 <div className="mb-4">
                                     <p className="text-[9px] font-black uppercase theme-text-muted m-0">Folio de pedido (WizeRP)</p>
