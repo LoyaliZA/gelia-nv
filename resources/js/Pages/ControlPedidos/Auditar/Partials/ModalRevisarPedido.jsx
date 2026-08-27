@@ -64,9 +64,19 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const detalleCajasUi = Boolean(catalogos?.envios_config?.detalle_cajas);
     const [pedido, setPedido] = useState(pedidoInicial);
     const cajasActivas = (pedido?.cajas || []).filter((c) => c.estado_operativo !== 'retirada');
-    const fuenteEnvioDetalle = detalleCajasUi
-        && cajasActivas.length > 0
-        && cajasActivas.every((c) => c.costo_envio !== null && c.costo_envio !== '' && c.costo_envio !== undefined);
+    const totalesEnvio = pedido?.totales_envio || {};
+    const desgloseRequerido = Boolean(totalesEnvio.requiere_desglose);
+    const fuenteEnvioDetalle = totalesEnvio.fuente === 'detalle_cajas'
+        || (detalleCajasUi
+            && cajasActivas.length > 0
+            && cajasActivas.every((c) => c.costo_envio !== null && c.costo_envio !== '' && c.costo_envio !== undefined));
+    const desgloseIncompleto = Boolean(totalesEnvio.incompleto)
+        || (desgloseRequerido && !fuenteEnvioDetalle);
+    const chipFuenteEnvio = fuenteEnvioDetalle
+        ? { label: 'Detalle por caja', ok: true }
+        : desgloseRequerido
+            ? { label: 'Desglose pendiente', ok: false }
+            : { label: 'Legado', ok: false };
     const tienePesajeRespondido = Boolean(pedido?.pesaje_respondido_at)
         || pedido?.estatus_envio === 'pesaje_listo'
         || cajasActivas.length > 0;
@@ -499,11 +509,16 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                             <div className="flex items-center justify-between gap-2">
                                                 <p className="text-[9px] font-black uppercase theme-text-muted m-0">Envíos (pesaje)</p>
                                                 {detalleCajasUi && (
-                                                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${fuenteEnvioDetalle ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-slate-500/15 theme-text-muted'}`}>
-                                                        {fuenteEnvioDetalle ? 'Detalle por caja' : 'Legado'}
+                                                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${chipFuenteEnvio.ok ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : desgloseRequerido ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : 'bg-slate-500/15 theme-text-muted'}`}>
+                                                        {chipFuenteEnvio.label}
                                                     </span>
                                                 )}
                                             </div>
+                                            {desgloseIncompleto && desgloseRequerido && (
+                                                <p className="text-xs font-bold text-amber-700 dark:text-amber-300 m-0">
+                                                    Ventas debe capturar el costo de envío por caja.
+                                                </p>
+                                            )}
                                             {[...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
                                                 <TarjetaEnvioPedido
                                                     key={c.uuid_operativo || c.id || idx}
@@ -511,7 +526,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                                     indice={idx}
                                                     abiertoInicial={cajasActivas.length === 1}
                                                     modo="lectura"
-                                                    incompleto={c.costo_envio === null || c.costo_envio === '' || c.costo_envio === undefined}
+                                                    incompleto={desgloseRequerido && (c.costo_envio === null || c.costo_envio === '' || c.costo_envio === undefined)}
                                                     documentos={[]}
                                                 />
                                             ))}

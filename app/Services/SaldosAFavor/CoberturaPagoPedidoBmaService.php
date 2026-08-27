@@ -69,7 +69,9 @@ class CoberturaPagoPedidoBmaService
 
         $bloqueos = $this->bloqueos($pedido, $pagosActivos, $base);
         if ($totales['incompleto']) {
-            $bloqueos[] = 'El desglose de costos por envío está incompleto.';
+            $bloqueos[] = ($totales['requiere_desglose'] ?? false)
+                ? 'Falta capturar el costo de envío por caja. Ventas debe completar el desglose antes de validar el pago.'
+                : 'El desglose de costos por envío está incompleto.';
         }
         $bloqueos = array_values(array_unique($bloqueos));
 

@@ -63,8 +63,14 @@ class ActualizarPedidoBmaService
                 $attrs['numero_cajas'] = $pedido->numero_cajas;
             }
 
-            // Si hay desglose por caja, el total canónico lo escribe ActualizarCostos / CalcularTotales.
-            $tieneDesgloseCajas = ! empty($datos['cajas_costos']) && is_array($datos['cajas_costos']);
+            // Solo tratar como desglose si hay montos reales; filas vacías no anulan costo legado.
+            $lineasCosto = is_array($datos['cajas_costos'] ?? null)
+                ? array_values(array_filter(
+                    $datos['cajas_costos'],
+                    fn ($l) => is_array($l) && $this->lineaCajaTieneMonto($l)
+                ))
+                : [];
+            $tieneDesgloseCajas = $lineasCosto !== [];
             if ($tieneDesgloseCajas) {
                 unset($attrs['costo_envio'], $attrs['costo_seguro'], $attrs['total_a_cobrar']);
             }
@@ -81,7 +87,7 @@ class ActualizarPedidoBmaService
             if ($tieneDesgloseCajas) {
                 $this->actualizarCostosCajas->ejecutar(
                     $pedido->fresh(['cajas', 'zona', 'estatus']),
-                    $datos['cajas_costos'],
+                    $lineasCosto,
                     $usuarioId,
                     filter_var($datos['reabrir_pago_costos'] ?? false, FILTER_VALIDATE_BOOLEAN),
                     isset($datos['motivo_reapertura_pago']) ? (string) $datos['motivo_reapertura_pago'] : null
@@ -114,6 +120,20 @@ class ActualizarPedidoBmaService
 
             return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja', 'cajas.tipoGuia', 'direccionVigente']);
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $linea
+     */
+    private function lineaCajaTieneMonto(array $linea): bool
+    {
+        foreach (['costo_envio', 'costo_seguro', 'costo_adicional'] as $campo) {
+            if (($linea[$campo] ?? null) !== null && ($linea[$campo] ?? '') !== '') {
+                return true;
+            }
+        }
+
+        return isset($linea['concepto_adicional']) && trim((string) $linea['concepto_adicional']) !== '';
     }
 
     private function eliminarDocumentos(PedidoBma $pedido, array $ids): void

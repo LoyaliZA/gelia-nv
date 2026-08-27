@@ -902,6 +902,8 @@ export const validarCamposEnvioPedido = (data, {
     consultaCerrada = false,
     requiereConsultaCerrada = false,
     manualDireccionCompleta = null,
+    detalleCajas = false,
+    cajasPesaje = [],
 } = {}) => {
     const faltantes = [];
     const omiteCosto = esMunicipioDiferido || esResguardoAbierto || esResguardoComplementario
@@ -992,6 +994,20 @@ export const validarCamposEnvioPedido = (data, {
             }
             if (!omiteCosto && (data.costo_envio === '' || data.costo_envio == null)) {
                 marcar('costo_envio', 'costo de envío');
+            }
+            if (!omiteCosto && detalleCajas && tienePesajeRespondido) {
+                const costosPorUuid = Object.fromEntries(
+                    (data.cajas_costos || [])
+                        .filter((r) => r?.uuid_operativo)
+                        .map((r) => [r.uuid_operativo, r])
+                );
+                const cajas = (cajasPesaje || []).filter((c) => c.estado_operativo !== 'retirada');
+                cajas.forEach((c, idx) => {
+                    const row = costosPorUuid[c.uuid_operativo] || c;
+                    if (row.costo_envio === '' || row.costo_envio == null) {
+                        marcar(`caja_costo_${c.uuid_operativo || idx}`, `costo de envío (Envío ${idx + 1})`);
+                    }
+                });
             }
         }
     }

@@ -4,6 +4,7 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCaja;
+use Illuminate\Support\Collection;
 
 /**
  * Única fuente de totales de envío. No reparte un costo histórico entre cajas.
@@ -22,6 +23,7 @@ class CalcularTotalesEnvioPedidoService
      * @return array{
      *   fuente: string,
      *   incompleto: bool,
+     *   requiere_desglose: bool,
      *   cajas_activas: int,
      *   cajas_con_costo: int,
      *   costo_envios: string,
@@ -33,13 +35,14 @@ class CalcularTotalesEnvioPedidoService
      */
     public function calcular(PedidoBma $pedido): array
     {
-        $pedido->loadMissing(['cajas']);
+        $pedido->loadMissing(['cajas', 'tipoOperacionEnvio']);
         $activas = $pedido->cajas->filter(fn (PedidoBmaCaja $c) => $c->estaActiva())->values();
         $conCosto = $activas->filter(fn (PedidoBmaCaja $c) => $c->tieneDesgloseCosto());
         $precision = $this->config->precision();
 
         $completo = $activas->isNotEmpty() && $conCosto->count() === $activas->count();
         $parcial = $conCosto->isNotEmpty() && ! $completo;
+        $requiereDesglose = $this->requiereDesgloseCajas($pedido, $activas);
 
         if ($completo) {
             $enviosCent = 0;
@@ -55,6 +58,7 @@ class CalcularTotalesEnvioPedidoService
             return [
                 'fuente' => self::FUENTE_DETALLE,
                 'incompleto' => false,
+                'requiere_desglose' => $requiereDesglose,
                 'cajas_activas' => $activas->count(),
                 'cajas_con_costo' => $conCosto->count(),
                 'costo_envios' => PagosPedidoBmaConfig::centavosADecimal($enviosCent),
@@ -70,9 +74,13 @@ class CalcularTotalesEnvioPedidoService
             : number_format((float) $pedido->costo_envio, $precision, '.', '');
         $legadoSeguro = number_format((float) ($pedido->costo_seguro ?? 0), $precision, '.', '');
 
+        // Con detalle_cajas activo y pesaje: 0/N o parcial bloquean finanzas (no legado silencioso).
+        $incompleto = $parcial || ($requiereDesglose && $activas->isNotEmpty() && ! $completo);
+
         return [
             'fuente' => self::FUENTE_LEGADO,
-            'incompleto' => $parcial,
+            'incompleto' => $incompleto,
+            'requiere_desglose' => $requiereDesglose,
             'cajas_activas' => $activas->count(),
             'cajas_con_costo' => $conCosto->count(),
             'costo_envios' => $legadoEnvio,
@@ -81,6 +89,39 @@ class CalcularTotalesEnvioPedidoService
             'costo_para_cobertura' => $legadoEnvio,
             'moneda' => $this->config->moneda(),
         ];
+    }
+
+    /**
+     * Desglose por caja obligatorio tras pesaje cuando la UI de detalle está activa,
+     * salvo caminos que aplazan o anulan el costo (anexo, por cobrar, guía cliente, etc.).
+     *
+     * @param  Collection<int, PedidoBmaCaja>|null  $activas
+     */
+    public function requiereDesgloseCajas(PedidoBma $pedido, ?Collection $activas = null): bool
+    {
+        if (! $this->config->detalleCajas()) {
+            return false;
+        }
+
+        if ($pedido->cliente_proporciona_guia || $pedido->envio_por_cobrar) {
+            return false;
+        }
+
+        $pedido->loadMissing('tipoOperacionEnvio');
+        if ($pedido->esMunicipioDiferido() || $pedido->esResguardoAbierto() || $pedido->esResguardoComplementario()) {
+            return false;
+        }
+
+        if (! $pedido->tienePesajeRespondido()) {
+            return false;
+        }
+
+        if ($activas === null) {
+            $pedido->loadMissing('cajas');
+            $activas = $pedido->cajas->filter(fn (PedidoBmaCaja $c) => $c->estaActiva())->values();
+        }
+
+        return $activas->isNotEmpty();
     }
 
     /**

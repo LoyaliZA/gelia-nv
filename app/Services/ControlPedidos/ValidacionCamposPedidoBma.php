@@ -128,6 +128,23 @@ trait ValidacionCamposPedidoBma
                 if (! $omiteCosto && $pedido->costo_envio === null) {
                     $faltantes[] = 'costo de envío';
                 }
+
+                if (! $omiteCosto && $tienePesaje) {
+                    $totalesEnvio = app(CalcularTotalesEnvioPedidoService::class);
+                    if ($totalesEnvio->requiereDesgloseCajas($pedido)) {
+                        $pedido->loadMissing('cajas');
+                        $idx = 0;
+                        foreach ($pedido->cajas as $caja) {
+                            if (! $caja->estaActiva()) {
+                                continue;
+                            }
+                            $idx++;
+                            if (! $caja->tieneDesgloseCosto()) {
+                                $faltantes[] = "costo de envío (Envío {$idx})";
+                            }
+                        }
+                    }
+                }
             }
         }
 

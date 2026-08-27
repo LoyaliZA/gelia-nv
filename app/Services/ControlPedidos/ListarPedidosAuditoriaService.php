@@ -67,6 +67,10 @@ class ListarPedidosAuditoriaService
         $totalCobrarCentavos = (int) round(((float) ($pedido->total_a_cobrar ?? 0)) * 100);
         $pedido->setAttribute('pagado_valido', number_format($pagadoCentavos / 100, 2, '.', ''));
         $pedido->setAttribute('diferencia_cobertura', number_format(($totalCobrarCentavos - $pagadoCentavos) / 100, 2, '.', ''));
+        $pedido->setAttribute(
+            'totales_envio',
+            app(CalcularTotalesEnvioPedidoService::class)->calcular($pedido)
+        );
 
         return $pedido;
     }

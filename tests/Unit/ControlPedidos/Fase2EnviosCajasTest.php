@@ -207,8 +207,83 @@ class Fase2EnviosCajasTest extends TestCase
 
         $totales = app(CalcularTotalesEnvioPedidoService::class)->calcular($pedido->fresh(['cajas']));
         $this->assertSame(CalcularTotalesEnvioPedidoService::FUENTE_LEGADO, $totales['fuente']);
+        $this->assertFalse($totales['incompleto']);
+        $this->assertFalse($totales['requiere_desglose']);
         $this->assertSame('250.00', $totales['costo_para_cobertura']);
         $this->assertNull($pedido->fresh('cajas')->cajas->first()->costo_envio);
+    }
+
+    public function test_detalle_activo_sin_costos_caja_marca_incompleto(): void
+    {
+        $this->activarDetalleCajas();
+        $pedido = $this->pedidoBase([
+            'costo_envio' => 241,
+            'pesaje_respondido_at' => now(),
+            'pesaje_respondido_por_id' => $this->usuario->id,
+        ]);
+        $uuid = (string) Str::uuid();
+        app(SincronizarCajasPedidoBmaService::class)->ejecutar(
+            $pedido,
+            [$this->linea($uuid, 1)],
+            $this->usuario->id
+        );
+
+        $totales = app(CalcularTotalesEnvioPedidoService::class)->calcular($pedido->fresh(['cajas']));
+        $this->assertSame(CalcularTotalesEnvioPedidoService::FUENTE_LEGADO, $totales['fuente']);
+        $this->assertTrue($totales['requiere_desglose']);
+        $this->assertTrue($totales['incompleto']);
+
+        $cov = app(CoberturaPagoPedidoBmaService::class)->calcular($pedido->fresh(['cajas']));
+        $this->assertNotEmpty($cov['bloqueos']);
+        $this->assertTrue(
+            collect($cov['bloqueos'])->contains(fn ($b) => str_contains($b, 'por caja'))
+        );
+    }
+
+    public function test_payload_vacio_cajas_costos_no_estampa_ni_historial(): void
+    {
+        $pedido = $this->pedidoBase(['costo_envio' => 241]);
+        $uuid = (string) Str::uuid();
+        app(SincronizarCajasPedidoBmaService::class)->ejecutar(
+            $pedido,
+            [$this->linea($uuid, 1)],
+            $this->usuario->id
+        );
+
+        app(ActualizarCostosCajasPedidoBmaService::class)->ejecutar(
+            $pedido->fresh(['cajas', 'zona', 'estatus']),
+            [['uuid_operativo' => $uuid, 'costo_envio' => '', 'costo_seguro' => '']],
+            $this->usuario->id
+        );
+
+        $caja = $pedido->fresh('cajas')->cajas->first();
+        $this->assertNull($caja->costo_envio);
+        $this->assertNull($caja->costos_actualizados_at);
+        $this->assertSame(0, DB::table('pedido_bma_historial_estados')
+            ->where('pedido_bma_id', $pedido->id)
+            ->where('accion', \App\Support\ControlPedidos\AccionesHistorialPedidoBma::COSTOS_ENVIO)
+            ->count());
+    }
+
+    public function test_envio_por_cobrar_no_exige_desglose(): void
+    {
+        $this->activarDetalleCajas();
+        $pedido = $this->pedidoBase([
+            'costo_envio' => 0,
+            'envio_por_cobrar' => true,
+            'pesaje_respondido_at' => now(),
+            'pesaje_respondido_por_id' => $this->usuario->id,
+        ]);
+        $uuid = (string) Str::uuid();
+        app(SincronizarCajasPedidoBmaService::class)->ejecutar(
+            $pedido,
+            [$this->linea($uuid, 1)],
+            $this->usuario->id
+        );
+
+        $totales = app(CalcularTotalesEnvioPedidoService::class)->calcular($pedido->fresh(['cajas']));
+        $this->assertFalse($totales['requiere_desglose']);
+        $this->assertFalse($totales['incompleto']);
     }
 
     public function test_costo_post_validacion_bloquea_y_reabre(): void
@@ -316,6 +391,20 @@ class Fase2EnviosCajasTest extends TestCase
         $this->assertTrue($caja->fresh()->estaRecolectada());
         $migration->up();
         $this->assertTrue($caja->fresh()->estaRecolectada());
+    }
+
+    private function activarDetalleCajas(): void
+    {
+        \App\Models\ConfiguracionSistema::query()->updateOrCreate(
+            ['clave' => \App\Services\ControlPedidos\EnviosPedidoBmaConfig::CLAVE_DETALLE],
+            [
+                'valor' => '1',
+                'tipo' => 'boolean',
+                'descripcion' => 'test detalle cajas',
+                'grupo' => 'control_pedidos',
+            ]
+        );
+        app(\App\Services\ControlPedidos\EnviosPedidoBmaConfig::class)->olvidarCache();
     }
 
     /**

@@ -51,6 +51,8 @@ class ActualizarCostosCajasPedidoBmaService
             ->get()
             ->keyBy(fn (PedidoBmaCaja $c) => (string) $c->uuid_operativo);
 
+        $actualizadas = 0;
+
         foreach ($lineas as $linea) {
             $uuid = trim((string) ($linea['uuid_operativo'] ?? ''));
             $caja = $cajas->get($uuid);
@@ -64,18 +66,32 @@ class ActualizarCostosCajasPedidoBmaService
             $envio = $this->montoNoNegativo($linea['costo_envio'] ?? null);
             $seguro = $this->montoNoNegativo($linea['costo_seguro'] ?? null);
             $adicional = $this->montoNoNegativo($linea['costo_adicional'] ?? null);
+            $conceptoIn = array_key_exists('concepto_adicional', $linea)
+                ? trim((string) $linea['concepto_adicional'])
+                : null;
+
+            // No fingir actualización con payload vacío (deja null + costos_actualizados_*).
+            if ($envio === null && $seguro === null && $adicional === null
+                && ($conceptoIn === null || $conceptoIn === '')) {
+                continue;
+            }
 
             $caja->update([
                 'costo_envio' => $envio,
                 'costo_seguro' => $seguro,
                 'costo_adicional' => $adicional,
-                'concepto_adicional' => isset($linea['concepto_adicional'])
-                    ? (string) $linea['concepto_adicional']
+                'concepto_adicional' => $conceptoIn !== null
+                    ? ($conceptoIn === '' ? null : $conceptoIn)
                     : $caja->concepto_adicional,
                 'moneda' => $this->config->moneda(),
                 'costos_actualizados_at' => now(),
                 'costos_actualizados_por_id' => $usuarioId,
             ]);
+            $actualizadas++;
+        }
+
+        if ($actualizadas === 0) {
+            return $pedido;
         }
 
         $pedido = $pedido->fresh(['cajas', 'zona', 'estatus']);

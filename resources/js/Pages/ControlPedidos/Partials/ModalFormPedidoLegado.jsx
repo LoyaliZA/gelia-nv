@@ -546,6 +546,8 @@ export default function ModalFormPedidoLegado({
     })();
     const tienePdfPedido = Boolean(pdfPedidoDoc) || pdfLocalOk;
     const tieneAnexoPiezas = anexosPiezasDocs.length > 0 || anexoLocalOk;
+    const detalleCajasUi = Boolean(catalogos?.envios_config?.detalle_cajas);
+    const cajasPesaje = (pedido?.cajas || []).filter((c) => c.estado_operativo !== 'retirada');
     const validacionEnvio = validarCamposEnvioPedido(data, {
         requiereLogistica,
         direccionesNormalizadas,
@@ -560,6 +562,8 @@ export default function ModalFormPedidoLegado({
         requiereConsultaCerrada: requiereConsultaCerradaUi,
         manualDireccionCompleta: Boolean(data.direccion_manual_excepcion)
             && manualDireccionCompleta(camposDireccion),
+        detalleCajas: detalleCajasUi,
+        cajasPesaje,
     });
     const enviarPedidoListo = validacionEnvio.valido
         && !(esResguardoComplementario && !data.pedido_principal_id)
@@ -588,8 +592,6 @@ export default function ModalFormPedidoLegado({
             setVistaPrevia({ documentos: [docOrDocs], indice: 0 });
         }
     };
-    const cajasPesaje = (pedido?.cajas || []).filter((c) => c.estado_operativo !== 'retirada');
-    const detalleCajasUi = Boolean(catalogos?.envios_config?.detalle_cajas);
     const pagoValidado = Boolean(pedido?.pago_validado_at);
     const puedeEditarCostosCaja = detalleCajasUi && !pagoValidado && Boolean(pedido?.puede_mutar);
     const formularioConfig = catalogos?.formulario_config || {};
@@ -2893,7 +2895,7 @@ export default function ModalFormPedidoLegado({
                                                     costo_adicional: c.costo_adicional ?? '',
                                                     concepto_adicional: c.concepto_adicional ?? '',
                                                 };
-                                                const incompleto = costos.costo_envio === '' || costos.costo_envio == null;
+                                                const incompleto = !omiteCosto && (costos.costo_envio === '' || costos.costo_envio == null);
                                                 return (
                                                     <TarjetaEnvioPedido
                                                         key={c.uuid_operativo || c.id || idx}
