@@ -20,6 +20,8 @@ export default function TarjetaEnvioPedido({
     bloqueado = false,
     chip = null,
     incompleto = false,
+    /** false = modo legado: no mostrar costos por caja (evita "—" leído como incompleto). */
+    mostrarCostos = true,
 }) {
     const [abierto, setAbierto] = useState(Boolean(abiertoInicial));
     const uuid = caja?.uuid_operativo || caja?.client_uuid || '';
@@ -30,6 +32,7 @@ export default function TarjetaEnvioPedido({
     const costoSeguro = costos?.costo_seguro ?? caja?.costo_seguro ?? '';
     const costoAdicional = costos?.costo_adicional ?? caja?.costo_adicional ?? '';
     const conceptoAdicional = costos?.concepto_adicional ?? caja?.concepto_adicional ?? '';
+    const verCostos = modo === 'costos' || (modo === 'lectura' && mostrarCostos);
 
     const setCampo = (campo, valor) => {
         if (!onCostosChange || bloqueado) return;
@@ -86,7 +89,7 @@ export default function TarjetaEnvioPedido({
                         <p className="m-0 theme-text-muted font-bold">Cobrado: <span className="theme-text-main">{caja?.peso_cobrado_kg != null ? `${caja.peso_cobrado_kg} kg` : '—'}</span></p>
                     </div>
 
-                    {(modo === 'costos' || modo === 'lectura') && (
+                    {verCostos && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className={`${THEME_LABEL} mb-1 block`}>Costo envío</label>

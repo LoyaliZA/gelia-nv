@@ -519,17 +519,28 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                                     Ventas debe capturar el costo de envío por caja.
                                                 </p>
                                             )}
-                                            {[...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => (
+                                            {!desgloseRequerido && !fuenteEnvioDetalle && (
+                                                <p className="text-[10px] font-bold theme-text-muted m-0">
+                                                    Costos de envío en cotización (legado); no se capturan por caja.
+                                                </p>
+                                            )}
+                                            {[...cajasActivas].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)).map((c, idx) => {
+                                                const cajaSinCosto = c.costo_envio === null || c.costo_envio === '' || c.costo_envio === undefined;
+                                                const incompletoCaja = desgloseRequerido && cajaSinCosto;
+                                                const mostrarCostosCaja = desgloseRequerido || fuenteEnvioDetalle || !cajaSinCosto;
+                                                return (
                                                 <TarjetaEnvioPedido
                                                     key={c.uuid_operativo || c.id || idx}
                                                     caja={c}
                                                     indice={idx}
                                                     abiertoInicial={cajasActivas.length === 1}
                                                     modo="lectura"
-                                                    incompleto={desgloseRequerido && (c.costo_envio === null || c.costo_envio === '' || c.costo_envio === undefined)}
+                                                    incompleto={incompletoCaja}
+                                                    mostrarCostos={mostrarCostosCaja}
                                                     documentos={[]}
                                                 />
-                                            ))}
+                                                );
+                                            })}
                                             <div className="grid grid-cols-2 gap-4 pt-1">
                                                 <Campo label="Núm. envíos" value={pedido.numero_cajas ?? cajasActivas.length} />
                                                 <Campo label="Peso real total (kg)" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg}` : null} />
