@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Facturas;
 
 use App\Events\SolicitudFacturaActualizada;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Facturas\CorregirSolicitudFacturaEncargadaRequest;
 use App\Http\Requests\Facturas\ActualizarBorradorFacturaRequest;
 use App\Http\Requests\Facturas\RepararSolicitudFacturaRequest;
 use App\Http\Requests\Facturas\ResponderSolicitudFacturaRequest;
@@ -13,10 +14,12 @@ use App\Models\SolicitudFactura;
 use App\Models\User;
 use App\Services\Facturas\ActualizarBorradorFacturaService;
 use App\Services\Facturas\CrearSolicitudFacturaService;
+use App\Services\Facturas\CorregirSolicitudFacturaEncargadaService;
 use App\Services\Facturas\EliminarSolicitudFacturaService;
 use App\Services\Facturas\GenerarEnlaceDatosFiscalesService;
 use App\Services\Facturas\GestionarDatosFiscalesClienteService;
 use App\Services\Facturas\ImportarDatosFiscalesService;
+use App\Services\Facturas\ListarCatalogosFiscalesService;
 use App\Services\Facturas\ListarSolicitudesFacturaService;
 use App\Services\Facturas\RepararSolicitudFacturaService;
 use App\Services\Facturas\ResponderSolicitudFacturaService;
@@ -35,7 +38,7 @@ use Rap2hpoutre\FastExcel\FastExcel;
 
 class SolicitudFacturaController extends Controller
 {
-    public function index(Request $request, ListarSolicitudesFacturaService $listarService): Response
+    public function index(Request $request, ListarSolicitudesFacturaService $listarService, ListarCatalogosFiscalesService $catalogosService): Response
     {
         Gate::authorize('facturas.ver_listado');
 
@@ -52,6 +55,7 @@ class SolicitudFacturaController extends Controller
             'filtros' => $request->all(),
             'vendedores' => $vendedores,
             'estados' => CatalogoEstadoSolicitud::orderBy('id')->get(['id', 'nombre']),
+            'catalogos' => $catalogosService->activosParaUi(),
         ]);
     }
 
@@ -165,21 +169,24 @@ class SolicitudFacturaController extends Controller
 
         $idBorrador = CatalogoEstadoSolicitud::idDe('Borrador');
         $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+        $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
         $estadoId = (int) $factura->catalogo_estado_solicitud_id;
         $esBorrador = $idBorrador !== null && $estadoId === (int) $idBorrador;
         $esRespondida = $idRespondida !== null && $estadoId === (int) $idRespondida;
+        $esIncorrecta = $idIncorrecta !== null && $estadoId === (int) $idIncorrecta;
 
-        if (! $esBorrador && ! $esRespondida) {
+        if (! $esBorrador && ! $esRespondida && ! $esIncorrecta) {
             throw ValidationException::withMessages([
-                'enlace' => 'Solo se puede regenerar el enlace en borradores o solicitudes respondidas.',
+                'enlace' => 'Solo se puede regenerar el enlace en borradores, solicitudes respondidas o incorrectas.',
             ]);
         }
 
         $esDuenio = (int) $factura->vendedor_id === (int) $usuario->id;
         $esAdmin = $usuario->hasAnyRole(['Super Admin', 'Administrador'])
             || $usuario->can('facturas.eliminar');
-        if (! $esDuenio && ! $esAdmin) {
-            abort(403, 'Solo el dueño de la solicitud puede regenerar el enlace fiscal.');
+        $esEncargada = $usuario->can('facturas.responder') || $usuario->can('facturas.reportar_error');
+        if (! $esDuenio && ! $esAdmin && ! $esEncargada) {
+            abort(403, 'No tiene permiso para regenerar el enlace fiscal.');
         }
 
         $campos = $request->input('campos_fiscales', $factura->campos_fiscales_solicitados);
@@ -187,7 +194,7 @@ class SolicitudFacturaController extends Controller
             $campos = \App\Models\EnlaceDatosFiscales::CAMPOS;
         }
 
-        $accion = $esRespondida
+        $accion = ($esRespondida || $esIncorrecta)
             ? \App\Models\EnlaceDatosFiscales::ACCION_ACTUALIZAR
             : $request->input('accion_formulario', \App\Models\EnlaceDatosFiscales::ACCION_PRIMERA);
 
@@ -203,6 +210,29 @@ class SolicitudFacturaController extends Controller
         ]);
     }
 
+    public function corregir(
+        CorregirSolicitudFacturaEncargadaRequest $request,
+        SolicitudFactura $factura,
+        CorregirSolicitudFacturaEncargadaService $service
+    ): RedirectResponse {
+        $datos = $request->validated();
+        if ($request->hasFile('archivo_fiscal')) {
+            $datos['archivo_fiscal'] = $request->file('archivo_fiscal');
+        }
+
+        $service->ejecutar($factura, $datos, Auth::user());
+
+        event(new SolicitudFacturaActualizada(
+            solicitudId: $factura->id,
+            accion: 'actualizada',
+            porUsuarioId: Auth::id(),
+            vendedorId: $factura->vendedor_id,
+            departamentoId: $factura->departamento_id,
+        ));
+
+        return redirect()->back()->with('success', 'Corrección aplicada. La solicitud sigue pendiente.');
+    }
+
     public function reparar(
         RepararSolicitudFacturaRequest $request,
         SolicitudFactura $factura,
@@ -211,6 +241,8 @@ class SolicitudFacturaController extends Controller
         $datos = $request->validated();
         $datos['vouchers_conservar'] = $request->input('vouchers_conservar', []);
         $datos['eliminar_archivo_fiscal'] = $request->boolean('eliminar_archivo_fiscal');
+        $datos['generar_enlace_fiscal'] = $request->boolean('generar_enlace_fiscal');
+        $datos['campos_fiscales'] = $request->input('campos_fiscales', []);
         if ($request->hasFile('archivo_fiscal')) {
             $datos['archivo_fiscal'] = $request->file('archivo_fiscal');
         }
@@ -245,6 +277,7 @@ class SolicitudFacturaController extends Controller
             'cliente:id,numero_cliente,nombre,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social,telefono',
             'receptorFiscal:id,codigo_interno,rfc,codigo_postal,regimen_fiscal,correo_electronico,uso_factura,nombre_razon_social,telefono',
             'vouchers:id,solicitud_factura_id,path,nombre_original,orden,mime',
+            'pdfsEmitidos:id,solicitud_factura_id,path,nombre_original,orden,mime',
             'enlacesFiscales',
             'respondidaPor:id,name',
             'auditorias.usuario:id,name',
@@ -269,8 +302,8 @@ class SolicitudFacturaController extends Controller
         }
 
         $datos = $request->validated();
-        if ($request->hasFile('factura_pdf')) {
-            $datos['factura_pdf'] = $request->file('factura_pdf');
+        if ($request->hasFile('factura_pdfs')) {
+            $datos['factura_pdfs'] = $request->file('factura_pdfs');
         }
         if ($request->hasFile('factura_xml')) {
             $datos['factura_xml'] = $request->file('factura_xml');

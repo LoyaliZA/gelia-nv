@@ -5,6 +5,7 @@ namespace App\Http\Requests\Facturas;
 use App\Models\EnlaceDatosFiscales;
 use App\Models\SolicitudFactura;
 use App\Services\Facturas\ImportarDatosFiscalesService;
+use App\Support\Facturas\LimitesAdjuntosFactura;
 use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -37,7 +38,7 @@ class ActualizarBorradorFacturaRequest extends FormRequest
             ],
             'vincular_receptor_cliente' => ['nullable', 'boolean'],
             'observaciones_vendedor' => ['nullable', 'string', 'max:2000'],
-            'archivo_fiscal' => ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'archivo_fiscal' => ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:'.LimitesAdjuntosFactura::MAX_KB_POR_ARCHIVO],
             'eliminar_archivo_fiscal' => ['nullable', 'boolean'],
             'pedir_formulario' => ['nullable', 'boolean'],
             'enviar_ahora' => ['nullable', 'boolean'],
@@ -45,7 +46,7 @@ class ActualizarBorradorFacturaRequest extends FormRequest
             'campos_fiscales' => ['nullable', 'array'],
             'campos_fiscales.*' => ['string', Rule::in(EnlaceDatosFiscales::CAMPOS)],
             'vouchers' => ['nullable', 'array', 'max:5'],
-            'vouchers.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'vouchers.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:'.LimitesAdjuntosFactura::MAX_KB_POR_ARCHIVO],
             'vouchers_conservar' => ['nullable', 'array'],
             'vouchers_conservar.*' => ['integer'],
         ];

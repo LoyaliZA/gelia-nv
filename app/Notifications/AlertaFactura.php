@@ -28,6 +28,7 @@ class AlertaFactura extends Notification implements ShouldQueue, ShouldBroadcast
         'verificada' => 'Factura verificada',
         'formulario_respondido' => 'Formulario fiscal respondido',
         'formulario_corregido' => 'Datos fiscales corregidos',
+        'corregida_encargada' => 'Corrección por encargada',
     ];
 
     public function __construct(SolicitudFactura $solicitud, string $tipoAlerta, string $mensaje)

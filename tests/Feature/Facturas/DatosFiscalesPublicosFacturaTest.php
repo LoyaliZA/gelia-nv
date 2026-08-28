@@ -506,6 +506,56 @@ class DatosFiscalesPublicosFacturaTest extends TestCase
         $this->assertSame(EnlaceDatosFiscales::ACCION_ACTUALIZAR, $enlace->accion_permitida);
     }
 
+    public function test_formulario_publico_acepta_incorrecta_sin_cambiar_estado(): void
+    {
+        Notification::fake();
+        $vendedor = $this->vendedor();
+        $cliente = $this->cliente();
+
+        $creado = app(CrearSolicitudFacturaService::class)->ejecutar([
+            'modo' => 'borrador',
+            'pedir_formulario' => true,
+            'accion_formulario' => EnlaceDatosFiscales::ACCION_PRIMERA,
+            'campos_fiscales' => EnlaceDatosFiscales::CAMPOS,
+            'destinatario_tipo' => SolicitudFactura::DESTINATARIO_CLIENTE,
+            'razon_social' => 'EMPRESA INCORRECTA',
+            'numero_cliente' => $cliente->numero_cliente,
+        ], $vendedor->id);
+
+        $solicitud = $creado['solicitud'];
+        $solicitud->update([
+            'catalogo_estado_solicitud_id' => CatalogoEstadoSolicitud::idDe('Incorrecta'),
+            'campos_incorrectos' => ['rfc'],
+            'departamento_id' => $this->departamento()->id,
+        ]);
+
+        EnlaceDatosFiscales::query()->where('solicitud_factura_id', $solicitud->id)->update(['revocado_en' => now()]);
+
+        $nuevo = app(GenerarEnlaceDatosFiscalesService::class)->ejecutar($solicitud, [
+            'accion' => EnlaceDatosFiscales::ACCION_ACTUALIZAR,
+            'campos' => ['rfc'],
+            'usuario_id' => $vendedor->id,
+        ]);
+
+        $datosNuevos = $this->datosFiscalesCompletos();
+        $datosNuevos['rfc'] = 'XAXX010101000';
+
+        $resultado = app(AplicarDatosFiscalesPublicosDesdeEnlaceService::class)->ejecutar(
+            $nuevo['token'],
+            $datosNuevos
+        );
+
+        $this->assertSame('Incorrecta', $resultado->estado->nombre);
+        $this->assertSame('XAXX010101000', $resultado->datos_fiscales['rfc']);
+        $this->assertNotNull($resultado->formulario_respondido_at);
+
+        Notification::assertSentTo(
+            $vendedor,
+            AlertaFactura::class,
+            fn ($n) => $n->tipoAlerta === 'formulario_respondido'
+        );
+    }
+
     public function test_formulario_publico_corrige_respondida_sin_cambiar_estado(): void
     {
         Notification::fake();

@@ -69,6 +69,11 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                     <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border ${ESTADO_BADGE[estadoId] || 'theme-element theme-border theme-text-muted'}`}>
                         {estadoNombre}
                     </span>
+                    {factura.campos_incorrectos?.length > 0 && (
+                        <span className="px-2 py-0.5 rounded-lg text-[8px] font-black uppercase bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/30">
+                            {factura.campos_incorrectos.length} campo{factura.campos_incorrectos.length > 1 ? 's' : ''} por corregir
+                        </span>
+                    )}
                     {esTercero && (
                         <span className="px-2 py-0.5 rounded-lg text-[8px] font-black uppercase theme-element border theme-border theme-text-muted">
                             Tercero
@@ -189,16 +194,36 @@ export default function TarjetaFactura({ factura, auth, onVerExpediente, onAprob
                         <Link2 className="w-3.5 h-3.5 shrink-0" /> Corregir datos fiscales
                     </button>
                 )}
-                {puedeDescargarEmitidos && factura.tiene_pdf_emitido && (
-                    <a
-                        href={urlArchivoFactura(factura.id, 'pdf', 0, { descargar: true })}
-                        download={nombreArchivoFacturaPdf(factura)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase theme-element border theme-border outline-none hover:border-[var(--color-primario)] transition-colors"
-                    >
-                        <Download className="w-3.5 h-3.5 shrink-0" /> PDF
-                    </a>
+                {puedeDescargarEmitidos && (factura.pdfs_emitidos?.length || factura.pdfsEmitidos?.length || factura.tiene_pdf_emitido) && (
+                    (() => {
+                        const pdfs = factura.pdfs_emitidos || factura.pdfsEmitidos || [];
+                        const total = pdfs.length || (factura.tiene_pdf_emitido ? 1 : 0);
+                        if (total <= 1) {
+                            return (
+                                <a
+                                    href={urlArchivoFactura(factura.id, 'pdf', 0, { descargar: true })}
+                                    download={nombreArchivoFacturaPdf(factura)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase theme-element border theme-border outline-none hover:border-[var(--color-primario)] transition-colors"
+                                >
+                                    <Download className="w-3.5 h-3.5 shrink-0" /> PDF
+                                </a>
+                            );
+                        }
+                        return Array.from({ length: total }).map((_, i) => (
+                            <a
+                                key={`pdf-${i}`}
+                                href={urlArchivoFactura(factura.id, 'pdf', i, { descargar: true })}
+                                download
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase theme-element border theme-border outline-none hover:border-[var(--color-primario)] transition-colors"
+                            >
+                                <Download className="w-3.5 h-3.5 shrink-0" /> PDF {i + 1}
+                            </a>
+                        ));
+                    })()
                 )}
                 {puedeDescargarEmitidos && factura.tiene_xml && (
                     <a

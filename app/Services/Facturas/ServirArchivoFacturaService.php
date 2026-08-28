@@ -23,7 +23,7 @@ class ServirArchivoFacturaService
                 $solicitud->archivo_fiscal_path,
                 $this->nombreFiscal($solicitud->archivo_fiscal_path)
             ),
-            'pdf' => $this->archivoPdf($solicitud),
+            'pdf' => $this->archivoPdf($solicitud, $indice ?? 0),
             'xml' => $this->archivoSimple($solicitud->factura_xml_path, $solicitud->factura_xml_nombre ?? 'factura.xml'),
             'evidencia_error' => $this->archivoSimple($solicitud->evidencia_error_path, 'evidencia-error'),
             'voucher' => $this->resolverVoucher($solicitud, $indice ?? 0),
@@ -33,30 +33,37 @@ class ServirArchivoFacturaService
 
     private function nombreFiscal(?string $path): string
     {
-        if (!$path) {
+        if (! $path) {
             return 'datos-fiscales.xlsx';
         }
 
         $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
 
-        return 'datos-fiscales.' . ($ext ?: 'xlsx');
+        return 'datos-fiscales.'.($ext ?: 'xlsx');
     }
 
-    private function archivoPdf(SolicitudFactura $solicitud): ?array
+    private function archivoPdf(SolicitudFactura $solicitud, int $indice): ?array
     {
-        if (!$solicitud->factura_pdf_path) {
+        $pdf = $solicitud->pdfsEmitidos()->orderBy('orden')->skip($indice)->first();
+        if (! $pdf) {
             return null;
         }
 
         return [
-            'path' => $solicitud->factura_pdf_path,
-            'nombre' => $this->nombrePdfDescarga($solicitud),
+            'path' => $pdf->path,
+            'nombre' => $this->nombrePdfDescarga($solicitud, $indice),
+            'mime' => $pdf->mime ?: 'application/pdf',
         ];
     }
 
-    private function nombrePdfDescarga(SolicitudFactura $solicitud): string
+    private function nombrePdfDescarga(SolicitudFactura $solicitud, int $indice = 0): string
     {
-        $solicitud->loadMissing('cliente:id,numero_cliente');
+        $solicitud->loadMissing(['cliente:id,numero_cliente', 'pdfsEmitidos']);
+
+        $pdf = $solicitud->pdfsEmitidos->sortBy('orden')->values()->get($indice);
+        if ($pdf?->nombre_original) {
+            return $pdf->nombre_original;
+        }
 
         $numeroCliente = $solicitud->cliente?->numero_cliente
             ?? data_get($solicitud->datos_fiscales, 'numero_cliente')
@@ -67,12 +74,14 @@ class ServirArchivoFacturaService
         $fecha = ($solicitud->respondida_at ?? $solicitud->created_at)?->format('Y-m-d')
             ?? now()->format('Y-m-d');
 
-        return "Factura_{$numeroCliente}_{$fecha}.pdf";
+        $sufijo = $indice > 0 ? "_{$indice}" : '';
+
+        return "Factura_{$numeroCliente}_{$fecha}{$sufijo}.pdf";
     }
 
     private function archivoSimple(?string $path, string $nombreDefault): ?array
     {
-        if (!$path) {
+        if (! $path) {
             return null;
         }
 
@@ -85,12 +94,12 @@ class ServirArchivoFacturaService
     private function resolverVoucher(SolicitudFactura $solicitud, int $indice): ?array
     {
         $voucher = $solicitud->vouchers()->orderBy('orden')->skip($indice)->first();
-        if (!$voucher) {
+        if (! $voucher) {
             return null;
         }
 
         $mime = $voucher->mime;
-        if (!$mime && $voucher->path) {
+        if (! $mime && $voucher->path) {
             $mime = str_ends_with(strtolower($voucher->path), '.pdf')
                 ? 'application/pdf'
                 : 'image/webp';

@@ -28,7 +28,7 @@ const OPCIONES_LISTADO = {
     only: PROPS_LISTADO,
 };
 
-export default function Index({ auth, facturas, metricas, filtros, vendedores, estados = [] }) {
+export default function Index({ auth, facturas, metricas, filtros, vendedores, estados = [], catalogos = { regimen_fiscal: [], uso_cfdi: [] } }) {
     const puedeCrear = puedePermiso(auth, 'facturas.crear');
     const puedeExportar = puedePermiso(auth, 'facturas.exportar');
     const puedeDatosFiscales = puedePermiso(auth, 'facturas.gestionar_datos_fiscales');
@@ -68,7 +68,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
 
     useSolicitudRealtime('solicitudes.facturas', '.solicitud-factura.actualizada', PROPS_LISTADO, auth, {
         onEvent: (payload) => {
-            if (payload.accion !== 'formulario_respondido') return;
+            if (!['formulario_respondido', 'formulario_corregido'].includes(payload.accion)) return;
             if (payload.solicitud_id == null) return;
             refrescarFacturaModalAbierta(payload.solicitud_id);
         },
@@ -300,6 +300,7 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                     factura={modalRespuesta.factura}
                     estadoId={modalRespuesta.estadoId}
                     modo={modalRespuesta.modo}
+                    catalogos={catalogos}
                     onExito={recargarTrasAccion}
                 />
             )}
@@ -324,15 +325,16 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                     onExito={recargarTrasAccion}
                     onBorradorCreado={(factura) => {
                         if (!factura?.id) return;
-                        setModalForm(prev => ({
-                            ...prev,
-                            abierto: true,
-                            modoEdicion: false,
-                            factura,
-                        }));
+                        setModalForm((prev) => {
+                            const merged = prev.factura?.id === factura.id
+                                ? { ...prev.factura, ...factura }
+                                : factura;
+                            return { ...prev, factura: merged };
+                        });
                     }}
                     modoEdicion={modalForm.modoEdicion}
                     facturaAEditar={modalForm.factura}
+                    catalogos={catalogos}
                 />
             )}
         </AppLayout>

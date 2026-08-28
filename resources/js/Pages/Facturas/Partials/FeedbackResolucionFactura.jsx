@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CheckCircle2, AlertOctagon, MessageSquare, FileText } from 'lucide-react';
 import { THEME_MODAL_OVERLAY } from '../../../utils/geliaTheme';
 import { urlArchivoFactura } from './facturasStyles';
+import { etiquetaCampoError } from './camposFacturaErrores';
 import { nombreEstadoFactura } from './facturasFiltros';
 
 const chipEvidencia = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border theme-element theme-border hover:border-[var(--color-primario)] transition-colors';
@@ -51,7 +52,11 @@ export default function FeedbackResolucionFactura({ factura }) {
     const urlEvidenciaError = tieneEvidenciaError ? urlArchivoFactura(factura.id, 'evidencia_error') : null;
     const esPdfEvidencia = factura.evidencia_error_path?.toLowerCase().endsWith('.pdf');
 
-    if (!tieneObservacion && !motivo && !tieneEvidenciaError && !(esAprobada && factura.tiene_pdf_emitido)) {
+    const camposIncorrectos = Array.isArray(factura.campos_incorrectos) ? factura.campos_incorrectos : [];
+    const pdfsEmitidos = factura.pdfs_emitidos || factura.pdfsEmitidos || [];
+    const cantidadPdfs = pdfsEmitidos.length || (factura.tiene_pdf_emitido ? 1 : 0);
+
+    if (!tieneObservacion && !motivo && !tieneEvidenciaError && camposIncorrectos.length === 0 && !(esAprobada && cantidadPdfs > 0)) {
         return null;
     }
 
@@ -82,7 +87,7 @@ export default function FeedbackResolucionFactura({ factura }) {
                 </div>
             )}
 
-            {(esError || esAprobada) && (motivo || tieneEvidenciaError || (esAprobada && factura.tiene_pdf_emitido)) && (
+            {(esError || esAprobada) && (motivo || tieneEvidenciaError || camposIncorrectos.length > 0 || (esAprobada && cantidadPdfs > 0)) && (
                 <div className={`p-3 rounded-2xl border flex flex-col gap-2 ${colorContenedor}`}>
                     <div className="flex items-start gap-2 min-w-0">
                         <Icono className={`w-4 h-4 shrink-0 mt-0.5 ${colorIcono}`} />
@@ -95,6 +100,15 @@ export default function FeedbackResolucionFactura({ factura }) {
                                     {motivo}
                                 </p>
                             )}
+                            {camposIncorrectos.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                    {camposIncorrectos.map((c) => (
+                                        <span key={c} className="px-2 py-0.5 rounded-lg text-[8px] font-black uppercase bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/25">
+                                            {etiquetaCampoError(c)}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                             {factura.respondida_por?.name && esAprobada && (
                                 <p className="text-[9px] font-bold theme-text-muted mt-1 m-0">
                                     Por: {factura.respondida_por.name}
@@ -106,16 +120,21 @@ export default function FeedbackResolucionFactura({ factura }) {
                         {tieneEvidenciaError && urlEvidenciaError && (
                             <VisorEvidenciaUrl url={urlEvidenciaError} esPdf={esPdfEvidencia} />
                         )}
-                        {esAprobada && factura.tiene_pdf_emitido && (
-                            <a
-                                href={urlArchivoFactura(factura.id, 'pdf')}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={chipEvidencia}
-                            >
-                                <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--color-primario)' }}>Ver PDF emitido</span>
-                            </a>
+                        {esAprobada && cantidadPdfs > 0 && (
+                            Array.from({ length: cantidadPdfs }).map((_, i) => (
+                                <a
+                                    key={`pdf-${i}`}
+                                    href={urlArchivoFactura(factura.id, 'pdf', i)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={chipEvidencia}
+                                >
+                                    <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                                    <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: 'var(--color-primario)' }}>
+                                        PDF {cantidadPdfs > 1 ? i + 1 : 'emitido'}
+                                    </span>
+                                </a>
+                            ))
                         )}
                     </div>
                 </div>

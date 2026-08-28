@@ -5,6 +5,7 @@ namespace App\Http\Requests\Facturas;
 use App\Models\EnlaceDatosFiscales;
 use App\Models\SolicitudFactura;
 use App\Services\Facturas\ImportarDatosFiscalesService;
+use App\Support\Facturas\LimitesAdjuntosFactura;
 use App\Support\Facturas\ReglasCatalogosFiscales;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -41,13 +42,13 @@ class StoreSolicitudFacturaRequest extends FormRequest
             ],
             'vincular_receptor_cliente' => ['nullable', 'boolean'],
             'observaciones_vendedor' => ['nullable', 'string', 'max:2000'],
-            'archivo_fiscal' => ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'archivo_fiscal' => ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:'.LimitesAdjuntosFactura::MAX_KB_POR_ARCHIVO],
             'pedir_formulario' => ['nullable', 'boolean'],
             'accion_formulario' => ['nullable', Rule::in([EnlaceDatosFiscales::ACCION_PRIMERA, EnlaceDatosFiscales::ACCION_ACTUALIZAR])],
             'campos_fiscales' => ['nullable', 'array'],
             'campos_fiscales.*' => ['string', Rule::in(EnlaceDatosFiscales::CAMPOS)],
             'vouchers' => [$esBorrador ? 'nullable' : 'required', 'array', $esBorrador ? 'max:5' : 'min:1', 'max:5'],
-            'vouchers.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'vouchers.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:'.LimitesAdjuntosFactura::MAX_KB_POR_ARCHIVO],
         ];
     }
 

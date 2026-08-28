@@ -3,16 +3,20 @@
 namespace App\Http\Requests\Facturas;
 
 use App\Models\CatalogoEstadoSolicitud;
+use App\Models\EnlaceDatosFiscales;
 use App\Models\SolicitudFactura;
 use App\Services\Facturas\ImportarDatosFiscalesService;
+use App\Support\Facturas\CamposIncorrectosFactura;
+use App\Support\Facturas\LimitesAdjuntosFactura;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class RepararSolicitudFacturaRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        if (!$this->user()->can('facturas.crear')) {
+        if (! $this->user()->can('facturas.crear')) {
             return false;
         }
 
@@ -27,16 +31,23 @@ class RepararSolicitudFacturaRequest extends FormRequest
 
     public function rules(): array
     {
+        $maxKb = LimitesAdjuntosFactura::MAX_KB_POR_ARCHIVO;
+
         return [
             'razon_social' => ['required', 'string', 'min:3', 'max:255'],
             'numero_cliente' => ['nullable', 'string', 'max:255'],
             'observaciones_vendedor' => ['nullable', 'string', 'max:2000'],
-            'archivo_fiscal' => ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'datos_fiscales' => ['nullable', 'array'],
+            'datos_fiscales.*' => ['nullable', 'string', 'max:255'],
+            'generar_enlace_fiscal' => ['nullable', 'boolean'],
+            'campos_fiscales' => ['nullable', 'array'],
+            'campos_fiscales.*' => ['string', Rule::in(EnlaceDatosFiscales::CAMPOS)],
+            'archivo_fiscal' => ['nullable', 'file', 'mimes:xlsx,xls,csv', 'max:'.$maxKb],
             'eliminar_archivo_fiscal' => ['nullable', 'boolean'],
-            'vouchers_conservar' => ['nullable', 'array', 'max:5'],
+            'vouchers_conservar' => ['nullable', 'array', 'max:'.LimitesAdjuntosFactura::MAX_VOUCHERS],
             'vouchers_conservar.*' => ['integer'],
-            'vouchers' => ['nullable', 'array', 'max:5'],
-            'vouchers.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'vouchers' => ['nullable', 'array', 'max:'.LimitesAdjuntosFactura::MAX_VOUCHERS],
+            'vouchers.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:'.$maxKb],
         ];
     }
 
@@ -72,8 +83,8 @@ class RepararSolicitudFacturaRequest extends FormRequest
                 $v->errors()->add('vouchers', 'Debe conservar o adjuntar al menos un comprobante de pago (voucher).');
             }
 
-            if ($totalVouchers > 5) {
-                $v->errors()->add('vouchers', 'Máximo 5 comprobantes de pago por solicitud.');
+            if ($totalVouchers > LimitesAdjuntosFactura::MAX_VOUCHERS) {
+                $v->errors()->add('vouchers', 'Máximo '.LimitesAdjuntosFactura::MAX_VOUCHERS.' comprobantes de pago por solicitud.');
             }
 
             if ($this->hasFile('archivo_fiscal')) {

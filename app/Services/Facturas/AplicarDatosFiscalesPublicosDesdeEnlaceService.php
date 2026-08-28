@@ -37,11 +37,15 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
 
             $idBorrador = CatalogoEstadoSolicitud::idDe('Borrador');
             $idRespondida = CatalogoEstadoSolicitud::idDe('Respondida');
+            $idIncorrecta = CatalogoEstadoSolicitud::idDe('Incorrecta');
+            $idPendiente = CatalogoEstadoSolicitud::idDe('Pendiente');
             $estadoId = (int) $solicitud->catalogo_estado_solicitud_id;
             $esBorrador = $idBorrador !== null && $estadoId === (int) $idBorrador;
             $esRespondida = $idRespondida !== null && $estadoId === (int) $idRespondida;
+            $esIncorrecta = $idIncorrecta !== null && $estadoId === (int) $idIncorrecta;
+            $esPendiente = $idPendiente !== null && $estadoId === (int) $idPendiente;
 
-            if (! $esBorrador && ! $esRespondida) {
+            if (! $esBorrador && ! $esRespondida && ! $esIncorrecta && ! $esPendiente) {
                 throw new \InvalidArgumentException('La solicitud ya no acepta respuesta del formulario.');
             }
 
@@ -95,9 +99,12 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
                 $solicitud->update(['receptor_fiscal_id' => $receptor->id]);
             }
 
-            $motivoAuditoria = $esRespondida
-                ? 'Formulario fiscal corregido sobre solicitud respondida. Datos fiscales actualizados.'
-                : 'Formulario público de datos fiscales respondido. Pendiente de voucher y envío a encargada.';
+            $motivoAuditoria = match (true) {
+                $esRespondida => 'Formulario fiscal corregido sobre solicitud respondida. Datos fiscales actualizados.',
+                $esIncorrecta => 'Formulario fiscal respondido en solicitud incorrecta. Vendedora puede completar la reparación.',
+                $esPendiente => 'Formulario fiscal respondido en solicitud pendiente.',
+                default => 'Formulario público de datos fiscales respondido. Pendiente de voucher y envío a encargada.',
+            };
 
             AuditoriaSolicitudFactura::create([
                 'solicitud_factura_id' => $solicitud->id,
@@ -118,10 +125,13 @@ class AplicarDatosFiscalesPublicosDesdeEnlaceService
             if ($esRespondida) {
                 app(NotificarEncargadosFacturaService::class)->formularioCorregido($solicitud);
             } elseif ($solicitud->vendedor) {
+                $mensaje = $esIncorrecta
+                    ? 'El cliente corrigió datos fiscales. Complete la reparación de la solicitud.'
+                    : 'El cliente respondió el formulario. Adjunte el voucher y envíe a encargada.';
                 $solicitud->vendedor->notify(new AlertaFactura(
                     $solicitud,
                     'formulario_respondido',
-                    'El cliente respondió el formulario. Adjunte el voucher y envíe a encargada.'
+                    $mensaje
                 ));
             }
 

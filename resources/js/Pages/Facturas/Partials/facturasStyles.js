@@ -1,7 +1,22 @@
-import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } from '../../../utils/geliaTheme';
+import {
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    GELIA_SEGMENT_TABS_SCROLL,
+    GELIA_SEGMENT_TABS_TRACK,
+} from '../../../utils/geliaTheme';
 
 /** Acento del módulo: hereda el tema global de AppLayout (--color-primario). */
 export const ACCENT = 'var(--color-primario)';
+
+/** Peligro / error — tokens GELIA (--color-peligro). */
+export const COLOR_PELIGRO = 'var(--color-peligro)';
+export const BTN_DANGER = 'theme-btn-danger theme-btn-primary--compact';
+export const TAB_ACTIVO_PELIGRO = '!border-[var(--color-peligro)] bg-[color-mix(in_srgb,var(--color-peligro)_8%,transparent)]';
+export const TAB_ACTIVO_PRIMARIO = '!border-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_8%,transparent)]';
+export const CAMPO_SELECCIONADO_PELIGRO = 'border-[color-mix(in_srgb,var(--color-peligro)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-peligro)_10%,transparent)] theme-text-main';
+export const CAMPO_CHECKBOX_LABEL = 'flex items-center gap-2 p-2.5 rounded-xl border theme-border theme-element theme-text-main cursor-pointer text-xs font-bold';
+export const INPUT_ERROR = '!border-[var(--color-peligro)] focus:!border-[var(--color-peligro)] focus:!ring-[color-mix(in_srgb,var(--color-peligro)_30%,transparent)]';
+export const TEXTO_ERROR = 'text-[var(--color-peligro)]';
 
 export const ESTADO_BADGE = {
     1: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',

@@ -33,6 +33,8 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
     const vouchers = factura?.vouchers || [];
     const [voucherIndex, setVoucherIndex] = useState(0);
     const voucherActual = vouchers[voucherIndex];
+    const pdfsEmitidos = factura?.pdfs_emitidos || factura?.pdfsEmitidos || [];
+    const [pdfIndex, setPdfIndex] = useState(0);
 
     const [datosFiscales, setDatosFiscales] = useState(facturaInicial?.datos_fiscales || null);
     const [etiquetas, setEtiquetas] = useState(ETIQUETAS_DEFAULT);
@@ -339,14 +341,22 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                     )}
                                 </section>
 
-                                {(factura.tiene_pdf_emitido || factura.tiene_xml) && (
+                                {(pdfsEmitidos.length > 0 || factura.tiene_xml) && (
                                     <section>
-                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">Factura emitida</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {factura.tiene_pdf_emitido && (
+                                        <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted mb-3">
+                                            Factura emitida {pdfsEmitidos.length > 1 ? `(${pdfIndex + 1}/${pdfsEmitidos.length})` : ''}
+                                        </p>
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                            {pdfsEmitidos.length > 1 && (
+                                                <>
+                                                    <button type="button" disabled={pdfIndex <= 0} onClick={() => setPdfIndex(i => i - 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronLeft className="w-4 h-4" /></button>
+                                                    <button type="button" disabled={pdfIndex >= pdfsEmitidos.length - 1} onClick={() => setPdfIndex(i => i + 1)} className={`${BTN_SECONDARY} !p-2 disabled:opacity-30`}><ChevronRight className="w-4 h-4" /></button>
+                                                </>
+                                            )}
+                                            {pdfsEmitidos.length > 0 && (
                                                 <a
-                                                    href={urlArchivoFactura(factura.id, 'pdf', 0, { descargar: true })}
-                                                    download={nombreArchivoFacturaPdf(factura)}
+                                                    href={urlArchivoFactura(factura.id, 'pdf', pdfIndex, { descargar: true })}
+                                                    download
                                                     className={`${BTN_SECONDARY} inline-flex items-center gap-2`}
                                                 >
                                                     <Download className="w-4 h-4 shrink-0" /> Descargar PDF
@@ -358,8 +368,8 @@ export default function ModalExpedienteFactura({ onClose, factura: facturaInicia
                                                 </a>
                                             )}
                                         </div>
-                                        {factura.tiene_pdf_emitido && (
-                                            <iframe title="Factura PDF" src={urlArchivoFactura(factura.id, 'pdf')} className="w-full h-[420px] mt-4 rounded-2xl border theme-border bg-white" />
+                                        {pdfsEmitidos.length > 0 && (
+                                            <iframe title="Factura PDF" src={urlArchivoFactura(factura.id, 'pdf', pdfIndex)} className="w-full h-[420px] mt-4 rounded-2xl border theme-border bg-white" />
                                         )}
                                     </section>
                                 )}

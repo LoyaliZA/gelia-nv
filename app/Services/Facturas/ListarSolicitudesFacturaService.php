@@ -19,6 +19,7 @@ class ListarSolicitudesFacturaService
             'receptorFiscal:id,codigo_interno,rfc,nombre_razon_social',
             'respondidaPor:id,name',
             'vouchers:id,solicitud_factura_id,path,nombre_original,mime,orden',
+            'pdfsEmitidos:id,solicitud_factura_id,path,nombre_original,mime,orden',
             'enlacesFiscales',
             'auditorias' => fn ($q) => $q->latest('id')->limit(3),
             'auditorias.usuario:id,name',

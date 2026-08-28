@@ -34,8 +34,7 @@ class SolicitudFactura extends Model
         'observaciones_vendedor',
         'motivo_respuesta',
         'motivo_incorrecta',
-        'factura_pdf_path',
-        'factura_pdf_nombre',
+        'campos_incorrectos',
         'factura_xml_path',
         'factura_xml_nombre',
         'evidencia_error_path',
@@ -47,6 +46,7 @@ class SolicitudFactura extends Model
     protected $casts = [
         'datos_fiscales' => 'array',
         'campos_fiscales_solicitados' => 'array',
+        'campos_incorrectos' => 'array',
         'formulario_enviado_at' => 'datetime',
         'formulario_respondido_at' => 'datetime',
         'respondida_at' => 'datetime',
@@ -94,6 +94,11 @@ class SolicitudFactura extends Model
         return $this->hasMany(SolicitudFacturaVoucher::class, 'solicitud_factura_id')->orderBy('orden');
     }
 
+    public function pdfsEmitidos(): HasMany
+    {
+        return $this->hasMany(SolicitudFacturaPdf::class, 'solicitud_factura_id')->orderBy('orden');
+    }
+
     public function enlacesFiscales(): HasMany
     {
         return $this->hasMany(EnlaceDatosFiscales::class, 'solicitud_factura_id')->orderByDesc('id');
@@ -115,7 +120,11 @@ class SolicitudFactura extends Model
 
     public function getTienePdfEmitidoAttribute(): bool
     {
-        return !empty($this->factura_pdf_path);
+        if ($this->relationLoaded('pdfsEmitidos')) {
+            return $this->pdfsEmitidos->isNotEmpty();
+        }
+
+        return $this->pdfsEmitidos()->exists();
     }
 
     public function getTieneXmlAttribute(): bool

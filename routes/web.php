@@ -454,6 +454,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::prefix('facturas')->name('facturas.')->group(function () {
         Route::put('/{factura}/estado', [SolicitudFacturaController::class, 'actualizarEstado'])->name('actualizar_estado');
+        Route::put('/{factura}/corregir', [SolicitudFacturaController::class, 'corregir'])->name('corregir');
     });
 
     Route::middleware(['can:facturas.verificar'])->prefix('facturas')->name('facturas.')->group(function () {

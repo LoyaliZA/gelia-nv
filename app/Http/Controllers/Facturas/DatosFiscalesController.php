@@ -13,6 +13,7 @@ use App\Services\Facturas\ImportarDatosFiscalesMasivoService;
 use App\Services\Facturas\ImportarReceptoresFiscalesService;
 use App\Services\Facturas\ListarCatalogosFiscalesService;
 use App\Services\Facturas\PlantillaImportacionDatosFiscalesService;
+use App\Support\Facturas\LimitesAdjuntosFactura;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -184,7 +185,7 @@ class DatosFiscalesController extends Controller
         Gate::authorize('facturas.gestionar_datos_fiscales');
 
         $request->validate([
-            'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:'.LimitesAdjuntosFactura::MAX_KB_POR_ARCHIVO],
         ]);
 
         $stats = $service->ejecutar($request->file('archivo'));
@@ -197,7 +198,7 @@ class DatosFiscalesController extends Controller
         Gate::authorize('facturas.gestionar_datos_fiscales');
 
         $request->validate([
-            'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:10240'],
+            'archivo' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:'.LimitesAdjuntosFactura::MAX_KB_POR_ARCHIVO],
         ]);
 
         $stats = $service->ejecutar($request->file('archivo'));

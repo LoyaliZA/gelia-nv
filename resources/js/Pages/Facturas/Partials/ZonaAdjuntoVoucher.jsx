@@ -2,7 +2,9 @@ import React, { useCallback, useState } from 'react';
 import { Upload, Trash2, Image as ImageIcon, FileText, ExternalLink } from 'lucide-react';
 import { compressImageToWebp, validateImageSource } from '../../../utils/compressImage';
 
-const MAX_VOUCHERS = 5;
+import { MAX_VOUCHERS, archivoExcedeLimite, mensajeLimiteArchivo } from './limitesAdjuntosFactura';
+
+const MAX_ARCHIVOS = MAX_VOUCHERS;
 
 export default function ZonaAdjuntoVoucher({
     vouchers,
@@ -10,9 +12,10 @@ export default function ZonaAdjuntoVoucher({
     error,
     existentes = [],
     onQuitarExistente,
-    maxTotal = MAX_VOUCHERS,
+    maxTotal = MAX_ARCHIVOS,
 }) {
     const [previews, setPreviews] = useState({});
+    const [errorLocal, setErrorLocal] = useState('');
     const total = existentes.length + vouchers.length;
 
     const agregarArchivos = useCallback(async (files) => {
@@ -23,8 +26,15 @@ export default function ZonaAdjuntoVoucher({
         const nuevosPreviews = { ...previews };
         const cupo = maxTotal - existentes.length;
 
+        let rechazadoTam = false;
+
         for (const file of lista) {
             if (actuales.length >= cupo) break;
+
+            if (archivoExcedeLimite(file)) {
+                rechazadoTam = true;
+                continue;
+            }
 
             if (file.type.startsWith('image/')) {
                 const err = validateImageSource(file, 'Voucher');
@@ -41,6 +51,9 @@ export default function ZonaAdjuntoVoucher({
                 actuales.push(file);
             }
         }
+
+        if (rechazadoTam) setErrorLocal(mensajeLimiteArchivo());
+        else setErrorLocal('');
 
         setPreviews(nuevosPreviews);
         onChange(actuales);
@@ -154,7 +167,7 @@ export default function ZonaAdjuntoVoucher({
                         <p className="text-[10px] font-bold theme-text-muted text-center italic m-0">
                             {existentes.length > 0
                                 ? 'Agregue vouchers adicionales o pegue con Ctrl+V'
-                                : 'Pegue captura con Ctrl+V o seleccione imagen/PDF'}
+                                : 'Pegue captura con Ctrl+V o seleccione imagen/PDF · máx. 5 archivos, 5 MB c/u'}
                         </p>
                         <label className="flex flex-col items-center justify-center py-4 cursor-pointer rounded-xl border border-dashed theme-border hover:border-[var(--color-primario)] transition-colors">
                             <Upload className="w-6 h-6 mb-2 theme-text-muted" />
@@ -172,6 +185,7 @@ export default function ZonaAdjuntoVoucher({
             </div>
 
             {error && <p className="text-xs text-red-500">{error}</p>}
+            {!error && errorLocal && <p className="text-xs text-red-500">{errorLocal}</p>}
         </div>
     );
 }

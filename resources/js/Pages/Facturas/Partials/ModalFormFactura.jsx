@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { X, Receipt, Search, Download, FileSpreadsheet, AlertOctagon, ExternalLink, RotateCcw, Link2, Copy, Check } from 'lucide-react';
+import { X, Receipt, Search, Download, FileSpreadsheet, AlertOctagon, ExternalLink, RotateCcw, Link2, Copy, Check, Loader2 } from 'lucide-react';
 import ZonaAdjuntoVoucher from './ZonaAdjuntoVoucher';
+import FormularioDatosFiscalesInline from './FormularioDatosFiscalesInline';
+import { wrapCampoFactura } from './wrapCampoFactura';
+import { esCampoFiscalError } from './camposFacturaErrores';
 import { FACTURA_ACCENT, BTN_PRIMARY, BTN_SECONDARY, urlArchivoFactura, esImagenVoucher, esPdfVoucher, receptorFiscalDeFactura } from './facturasStyles';
 import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 import { normalizarRazonSocial, normalizarRazonSocialAlEscribir } from '../../../utils/reglasCatalogosFiscales';
@@ -111,7 +114,7 @@ async function copiarAlPortapapeles(texto) {
     }
 }
 
-export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, modoEdicion = false, facturaAEditar = null }) {
+export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, modoEdicion = false, facturaAEditar = null, catalogos = { regimen_fiscal: [], uso_cfdi: [] } }) {
     const flash = usePage().props?.flash || {};
     const trabajandoBorrador = Boolean(facturaAEditar?.estado?.nombre === 'Borrador');
 
@@ -152,8 +155,17 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
     const abortBusquedaCliente = useRef(null);
     const debounceReceptorRef = useRef(null);
     const abortBusquedaReceptor = useRef(null);
+    const [fiscalesReparacion, setFiscalesReparacion] = useState(() => ({ ...(facturaAEditar?.datos_fiscales || {}) }));
+    const [generarEnlaceReparacion, setGenerarEnlaceReparacion] = useState(
+        () => Boolean(facturaAEditar?.formulario_enviado_at && !facturaAEditar?.formulario_respondido_at)
+    );
+    const [generandoEnlace, setGenerandoEnlace] = useState(false);
+    const [errorEnlace, setErrorEnlace] = useState(null);
     const snapshotFiscalRef = useRef(snapshotDatosFiscales(facturaAEditar));
     const factura = facturaLive || facturaAEditar;
+    const camposIncorrectos = facturaAEditar?.campos_incorrectos || [];
+    const esReparacion = modoEdicion && !trabajandoBorrador;
+    const fiscalesMarcados = camposIncorrectos.filter(esCampoFiscalError);
 
     const { data, setData, post, processing, errors, transform } = useForm({
         razon_social: facturaAEditar ? razonSocialDesdeFactura(facturaAEditar) : '',
@@ -204,6 +216,12 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
         setVouchers([]);
         setVouchersConservarIds((facturaAEditar.vouchers || []).map(v => v.id));
         setQuitarExcel(false);
+        setFiscalesReparacion({ ...(facturaAEditar.datos_fiscales || {}) });
+        setGenerarEnlaceReparacion(Boolean(
+            facturaAEditar.formulario_enviado_at && !facturaAEditar.formulario_respondido_at
+        ));
+        setGenerandoEnlace(false);
+        setErrorEnlace(null);
         setExcelExpandido(Boolean(facturaAEditar.tiene_archivo_fiscal));
         if (facturaAEditar.campos_fiscales_solicitados?.length) {
             setCamposSeleccionados([...facturaAEditar.campos_fiscales_solicitados]);
@@ -231,6 +249,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
         ));
         snapshotFiscalRef.current = snapshotDatosFiscales(facturaAEditar);
         setFacturaLive(facturaAEditar);
+        setFiscalesReparacion({ ...(facturaAEditar.datos_fiscales || {}) });
         setClienteSeleccionado(facturaAEditar.cliente || null);
         setReceptorSeleccionado(receptorFiscalDeFactura(facturaAEditar));
         setData(prev => ({
@@ -262,7 +281,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
         const channel = window.Echo.private('solicitudes.facturas');
         const handler = async (payload) => {
             if (Number(payload.solicitud_id) !== Number(solicitudId)) return;
-            if (payload.accion !== 'formulario_respondido' && payload.accion !== 'actualizada') return;
+            if (!['formulario_respondido', 'formulario_corregido', 'actualizada'].includes(payload.accion)) return;
 
             try {
                 const res = await axios.get(route('facturas.show', solicitudId));
@@ -277,7 +296,22 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                     f.campos_fiscales_solicitados,
                 ));
                 snapshotFiscalRef.current = snapshotDatosFiscales(f);
-                setFacturaLive(f);
+                if (payload.accion === 'formulario_respondido' || payload.accion === 'formulario_corregido') {
+                    setGenerarEnlaceReparacion(false);
+                }
+                setFacturaLive((prev) => {
+                    if (!prev || Number(prev.id) !== Number(f.id)) return f;
+                    const merged = { ...prev, ...f };
+                    if (
+                        prev.formulario_respondido_at
+                        && !f.formulario_respondido_at
+                        && payload.accion === 'actualizada'
+                    ) {
+                        merged.formulario_respondido_at = prev.formulario_respondido_at;
+                    }
+                    return merged;
+                });
+                setFiscalesReparacion({ ...(f.datos_fiscales || {}) });
                 setClienteSeleccionado(f.cliente || null);
                 setReceptorSeleccionado(receptorFiscalDeFactura(f));
                 setData(prev => ({
@@ -586,7 +620,14 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
         if (modoEdicion && !trabajandoBorrador) {
             transform(d => {
-                const payload = { ...d, _method: 'put', vouchers_conservar: vouchersConservarIds };
+                const payload = {
+                    ...d,
+                    _method: 'put',
+                    vouchers_conservar: vouchersConservarIds,
+                    datos_fiscales: fiscalesReparacion,
+                    generar_enlace_fiscal: (formPendiente && generarEnlaceReparacion) ? '1' : '0',
+                    campos_fiscales: fiscalesMarcados.length > 0 ? fiscalesMarcados : camposSeleccionados,
+                };
                 if (vouchers.length > 0) payload.vouchers = vouchers;
                 if (quitarExcel) payload.eliminar_archivo_fiscal = '1';
                 return payload;
@@ -621,27 +662,55 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
 
     const regenerarEnlace = async () => {
         if (!facturaAEditar?.id) return;
+
+        const campos = esReparacion && fiscalesMarcados.length > 0
+            ? fiscalesMarcados
+            : camposSeleccionados;
+
+        if (campos.length === 0) {
+            setErrorEnlace('Seleccione al menos un campo fiscal.');
+            return;
+        }
+
+        setGenerandoEnlace(true);
+        setErrorEnlace(null);
+
         try {
             const { data: res } = await axios.post(route('facturas.enlace_fiscal', facturaAEditar.id), {
-                campos_fiscales: camposSeleccionados,
-                accion_formulario: data.accion_formulario,
+                campos_fiscales: campos,
+                accion_formulario: 'update_fields',
             });
+
             if (res?.url) {
                 setEnlaceUrl(res.url);
-                setFacturaLive(prev => ({
-                    ...(prev || facturaAEditar || {}),
-                    formulario_enviado_at: new Date().toISOString(),
+                const actualizada = res.solicitud || {};
+                const nuevoLive = {
+                    ...(facturaLive || facturaAEditar || {}),
+                    ...actualizada,
+                    formulario_enviado_at: actualizada.formulario_enviado_at || new Date().toISOString(),
                     formulario_respondido_at: null,
-                }));
-                snapshotFiscalRef.current = snapshotDatosFiscales(facturaLive || facturaAEditar);
+                    campos_fiscales_solicitados: campos,
+                };
+                setFacturaLive(nuevoLive);
+                setGenerarEnlaceReparacion(true);
+                snapshotFiscalRef.current = snapshotDatosFiscales(nuevoLive);
+                if (!esReparacion) {
+                    onBorradorCreado?.(nuevoLive);
+                }
+
                 const ok = await copiarAlPortapapeles(res.url);
                 if (ok) {
                     setCopiado(true);
                     setTimeout(() => setCopiado(false), 2000);
                 }
             }
-        } catch {
-            /* ignore */
+        } catch (err) {
+            const msg = err?.response?.data?.errors?.enlace?.[0]
+                || err?.response?.data?.message
+                || 'No se pudo generar el enlace.';
+            setErrorEnlace(msg);
+        } finally {
+            setGenerandoEnlace(false);
         }
     };
 
@@ -690,7 +759,135 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                             <div>
                                 <p className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 m-0 mb-1">Motivo del error</p>
                                 <p className="text-xs font-bold theme-text-main m-0 leading-snug">{facturaAEditar.motivo_respuesta}</p>
+                                {camposIncorrectos.length > 0 && (
+                                    <p className="text-[10px] font-bold theme-text-muted mt-2 m-0">
+                                        Campos: {camposIncorrectos.map(c => CAMPOS_FISCALES.find(f => f.clave === c)?.etiqueta || c).join(', ')}
+                                    </p>
+                                )}
                             </div>
+                        </div>
+                    )}
+
+                    {esReparacion && fiscalesMarcados.length > 0 && (
+                        <div className="space-y-3 p-4 rounded-2xl border theme-border">
+                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">Corregir datos fiscales</p>
+                            <FormularioDatosFiscalesInline
+                                valores={fiscalesReparacion}
+                                onChange={setFiscalesReparacion}
+                                catalogos={catalogos}
+                                camposVisibles={fiscalesMarcados}
+                                camposIncorrectos={camposIncorrectos}
+                                factura={factura}
+                            />
+                            {!formPendiente && (
+                                <label className="flex items-center gap-2 text-xs font-bold theme-text-main cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={generarEnlaceReparacion}
+                                        onChange={(e) => setGenerarEnlaceReparacion(e.target.checked)}
+                                        style={{ accentColor: 'var(--color-primario)' }}
+                                    />
+                                    Generar enlace para que el cliente corrija
+                                </label>
+                            )}
+                            {formPendiente ? (
+                                <div className="space-y-3 pt-1 border-t theme-border">
+                                    <p
+                                        className="text-[10px] font-bold m-0 px-3 py-2 rounded-xl border"
+                                        style={{
+                                            color: 'var(--color-info)',
+                                            borderColor: 'color-mix(in srgb, var(--color-info) 35%, transparent)',
+                                            background: 'color-mix(in srgb, var(--color-info) 8%, transparent)',
+                                        }}
+                                    >
+                                        Esperando respuesta del cliente en el formulario…
+                                    </p>
+                                    {enlaceUrl && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0 flex items-center gap-1">
+                                                <Link2 className="w-3 h-3" /> Enlace para el cliente
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <input
+                                                    readOnly
+                                                    value={enlaceUrl}
+                                                    className="flex-1 min-w-0 px-3 py-2 rounded-xl theme-surface border theme-border text-[11px] font-mono theme-text-main"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className={`${BTN_SECONDARY} !py-2 !px-3 text-[9px]`}
+                                                    onClick={async () => {
+                                                        const ok = await copiarAlPortapapeles(enlaceUrl);
+                                                        if (ok) {
+                                                            setCopiado(true);
+                                                            setTimeout(() => setCopiado(false), 2000);
+                                                        }
+                                                    }}
+                                                >
+                                                    {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                                    {copiado ? 'Copiado' : 'Copiar'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className={`${BTN_SECONDARY} w-full sm:w-auto`}
+                                        disabled={generandoEnlace || fiscalesMarcados.length === 0}
+                                        onClick={regenerarEnlace}
+                                    >
+                                        {generandoEnlace
+                                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                                            : <Link2 className="w-4 h-4" />}
+                                        Regenerar enlace
+                                    </button>
+                                </div>
+                            ) : generarEnlaceReparacion && (
+                                <div className="space-y-3 pt-1 border-t theme-border">
+                                    {errorEnlace && (
+                                        <p className="text-xs font-bold m-0 text-[var(--color-peligro)]">{errorEnlace}</p>
+                                    )}
+                                    {enlaceUrl && (
+                                        <div className="space-y-2">
+                                            <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0 flex items-center gap-1">
+                                                <Link2 className="w-3 h-3" /> Enlace para el cliente
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <input
+                                                    readOnly
+                                                    value={enlaceUrl}
+                                                    className="flex-1 min-w-0 px-3 py-2 rounded-xl theme-surface border theme-border text-[11px] font-mono theme-text-main"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className={`${BTN_SECONDARY} !py-2 !px-3 text-[9px]`}
+                                                    onClick={async () => {
+                                                        const ok = await copiarAlPortapapeles(enlaceUrl);
+                                                        if (ok) {
+                                                            setCopiado(true);
+                                                            setTimeout(() => setCopiado(false), 2000);
+                                                        }
+                                                    }}
+                                                >
+                                                    {copiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                                    {copiado ? 'Copiado' : 'Copiar'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className={`${BTN_PRIMARY} w-full sm:w-auto`}
+                                        disabled={generandoEnlace || fiscalesMarcados.length === 0}
+                                        onClick={regenerarEnlace}
+                                    >
+                                        {generandoEnlace
+                                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                                            : <Link2 className="w-4 h-4" />}
+                                        {enlaceUrl ? 'Regenerar enlace' : 'Generar enlace'}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -789,7 +986,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                     )}
 
                     {!(data.destinatario_tipo === 'tercero' && pedirFormulario && !factura?.formulario_respondido_at) && (
-                        <div className="space-y-2 relative">
+                        <div className={`space-y-2 relative ${wrapCampoFactura('razon_social', camposIncorrectos, factura)}`}>
                             <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">
                                 {data.destinatario_tipo === 'tercero' ? 'Quién factura (tercero)_' : 'Razón Social_'}
                             </label>
@@ -978,7 +1175,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                         </div>
                     )}
 
-                    <div className="space-y-2">
+                    <div className={`space-y-2 ${wrapCampoFactura('archivo_fiscal', camposIncorrectos, factura)}`}>
                         <button
                             type="button"
                             onClick={() => setExcelExpandido(v => !v)}
@@ -1080,6 +1277,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                         )}
                     </div>
 
+                    <div className={`space-y-2 ${wrapCampoFactura('vouchers', camposIncorrectos, factura)}`}>
                     <ZonaAdjuntoVoucher
                         vouchers={vouchers}
                         onChange={setVouchers}
@@ -1087,8 +1285,9 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                         existentes={vouchersExistentesUi}
                         onQuitarExistente={(id) => setVouchersConservarIds(prev => prev.filter(x => x !== id))}
                     />
+                    </div>
 
-                    <div className="space-y-2">
+                    <div className={`space-y-2 ${wrapCampoFactura('observaciones_vendedor', camposIncorrectos, factura)}`}>
                         <label className="text-[10px] font-black uppercase theme-text-muted tracking-widest ml-1">Observaciones_</label>
                         <textarea
                             rows={3}
