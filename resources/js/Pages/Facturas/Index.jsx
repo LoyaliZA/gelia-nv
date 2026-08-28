@@ -9,7 +9,6 @@ import TarjetaFactura from './Partials/TarjetaFactura';
 import ModalFormFactura from './Partials/ModalFormFactura';
 import ModalResponderFactura from './Partials/ModalResponderFactura';
 import ModalExpedienteFactura from './Partials/ModalExpedienteFactura';
-import ModalCorregirDatosFiscales from './Partials/ModalCorregirDatosFiscales';
 import { BTN_PRIMARY, BTN_SECONDARY } from './Partials/facturasStyles';
 import { filtrarFacturasPorTab, idEstadoPorNombre } from './Partials/facturasFiltros';
 import GeliaPageShell from '../../Components/GeliaPageShell';
@@ -40,7 +39,6 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
     const [modalForm, setModalForm] = useState({ abierto: false, modoEdicion: false, factura: null });
     const [modalRespuesta, setModalRespuesta] = useState({ abierto: false, factura: null, estadoId: null, modo: 'emitir' });
     const [modalExpediente, setModalExpediente] = useState({ abierto: false, factura: null });
-    const [modalCorregirFiscales, setModalCorregirFiscales] = useState({ abierto: false, factura: null });
     const modalFormRef = useRef(modalForm);
     useEffect(() => { modalFormRef.current = modalForm; });
 
@@ -282,7 +280,6 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                                             onEliminar={eliminar}
                                             onReparar={(factura) => setModalForm({ abierto: true, modoEdicion: true, factura, instanceKey: Date.now() })}
                                             onEditarBorrador={(factura) => setModalForm({ abierto: true, modoEdicion: false, factura, instanceKey: Date.now() })}
-                                            onCorregirFiscales={(factura) => setModalCorregirFiscales({ abierto: true, factura })}
                                         />
                                     ))}
                                 </div>
@@ -309,13 +306,6 @@ export default function Index({ auth, facturas, metricas, filtros, vendedores, e
                     onClose={() => setModalExpediente({ abierto: false, factura: null })}
                     factura={modalExpediente.factura}
                     puedeActualizarCliente={puedeDatosFiscales}
-                />
-            )}
-            {modalCorregirFiscales.abierto && (
-                <ModalCorregirDatosFiscales
-                    onClose={() => setModalCorregirFiscales({ abierto: false, factura: null })}
-                    factura={modalCorregirFiscales.factura}
-                    onExito={recargarTrasAccion}
                 />
             )}
             {modalForm.abierto && (

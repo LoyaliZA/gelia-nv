@@ -56,7 +56,5 @@ foreach ([
 $tarjeta = file_get_contents(__DIR__.'/../../../resources/js/Pages/CancelacionesCotizaciones/Partials/TarjetaOperativa.jsx');
 $ok('chip departamento en TarjetaOperativa', str_contains($tarjeta, 'deptoLabel'));
 
-$ok('modal corregir fiscales existe', is_file(__DIR__.'/../../../resources/js/Pages/Facturas/Partials/ModalCorregirDatosFiscales.jsx'));
-
 echo PHP_EOL.($fails === 0 ? 'ALL CHECKS PASSED' : "{$fails} CHECK(S) FAILED").PHP_EOL;
 exit($fails === 0 ? 0 : 1);
