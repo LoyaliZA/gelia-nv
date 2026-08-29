@@ -860,7 +860,16 @@ class PedidoBma extends Model
     {
         return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
             ->where('tipo', PedidoBmaDocumento::TIPO_REMISION)
+            ->vigente()
             ->orderBy('orden');
+    }
+
+    public function remisionesHistoricas(): HasMany
+    {
+        return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_id')
+            ->where('tipo', PedidoBmaDocumento::TIPO_REMISION)
+            ->historico()
+            ->orderByDesc('sustituido_at');
     }
 
     public function guiaPdf(): HasMany

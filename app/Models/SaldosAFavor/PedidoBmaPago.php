@@ -4,10 +4,12 @@ namespace App\Models\SaldosAFavor;
 
 use App\Models\CatalogoBanco;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\Reportes\PedidoBmaCierrePagoItem;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
@@ -174,6 +176,20 @@ class PedidoBmaPago extends Model
     public function sustituto(): HasOne
     {
         return $this->hasOne(self::class, 'reemplaza_pago_id');
+    }
+
+    public function cierreItems(): HasMany
+    {
+        return $this->hasMany(PedidoBmaCierrePagoItem::class, 'pedido_bma_pago_id');
+    }
+
+    public function urlEvidenciaReporte(): ?string
+    {
+        if (! $this->id || ! $this->ruta_archivo) {
+            return null;
+        }
+
+        return route('reportes.pagos_pedidos.evidencia_pago', ['pago' => $this->id]);
     }
 
     public function scopeActivosParaCobertura(Builder $query): Builder

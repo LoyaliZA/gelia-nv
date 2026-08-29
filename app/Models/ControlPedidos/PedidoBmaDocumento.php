@@ -2,6 +2,7 @@
 
 namespace App\Models\ControlPedidos;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
@@ -37,11 +38,17 @@ class PedidoBmaDocumento extends Model
         'comentario',
         'relacion_tipo',
         'relacion_id',
+        'reemplaza_documento_id',
+        'activo',
+        'sustituido_at',
+        'sustituido_por_id',
     ];
 
     protected $casts = [
         'tamano_bytes' => 'integer',
         'orden' => 'integer',
+        'activo' => 'boolean',
+        'sustituido_at' => 'datetime',
     ];
 
     protected $appends = ['url'];
@@ -54,6 +61,26 @@ class PedidoBmaDocumento extends Model
     public function caja(): BelongsTo
     {
         return $this->belongsTo(PedidoBmaCaja::class, 'pedido_bma_caja_id');
+    }
+
+    public function reemplazaDocumento(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reemplaza_documento_id');
+    }
+
+    public function sustituidoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sustituido_por_id');
+    }
+
+    public function scopeVigente(Builder $query): Builder
+    {
+        return $query->where('activo', true);
+    }
+
+    public function scopeHistorico(Builder $query): Builder
+    {
+        return $query->where('activo', false);
     }
 
     /** URL autenticada (gate VisibilidadPedidoBma); fallback público solo si falta id. */

@@ -4,6 +4,7 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\PedidoBmaPago;
+use App\Services\Reportes\PagosPedidos\RegistrarCierrePagoPedidoService;
 use App\Services\SaldosAFavor\CoberturaPagoPedidoBmaService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
@@ -19,6 +20,7 @@ class ValidarPagoPedidoBmaService
         private AvanzarColaErroresPedidoBmaService $colaErroresService,
         private CoberturaPagoPedidoBmaService $cobertura,
         private PagosPedidoBmaConfig $pagosConfig,
+        private RegistrarCierrePagoPedidoService $registrarCierre,
     ) {}
 
     /**
@@ -69,6 +71,8 @@ class ValidarPagoPedidoBmaService
                 'pago_validado_at' => now(),
                 'pago_validado_por_id' => $usuarioId,
             ]);
+
+            $this->registrarCierre->ejecutar($pedido->fresh(), $usuarioId);
 
             $antes = CamposIncorrectosPedidoBma::filtrar($pedido->campos_incorrectos ?? []);
             $restantes = $this->colaErroresService->quitarCampos(

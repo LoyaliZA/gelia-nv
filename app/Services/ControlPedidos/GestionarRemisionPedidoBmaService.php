@@ -7,7 +7,6 @@ use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class GestionarRemisionPedidoBmaService
 {
@@ -18,16 +17,16 @@ class GestionarRemisionPedidoBmaService
 
     public function subir(PedidoBma $pedido, UploadedFile $archivo, int $usuarioId): PedidoBma
     {
-        if (!$pedido->esAuditablePorAuxiliar()) {
+        if (! $pedido->esAuditablePorAuxiliar()) {
             throw new \RuntimeException('Solo se puede adjuntar remisión en pedidos pendientes de revisión.');
         }
 
-        if ($archivo->getMimeType() !== 'application/pdf' && !str_ends_with(strtolower($archivo->getClientOriginalName()), '.pdf')) {
+        if ($archivo->getMimeType() !== 'application/pdf' && ! str_ends_with(strtolower($archivo->getClientOriginalName()), '.pdf')) {
             throw new \InvalidArgumentException('La remisión debe ser un archivo PDF.');
         }
 
         return DB::transaction(function () use ($pedido, $archivo, $usuarioId) {
-            $this->eliminarRemisiones($pedido);
+            $anterior = $this->marcarRemisionesInactivas($pedido, $usuarioId);
 
             $ruta = $archivo->store("pedidos_bma/remisiones/{$pedido->id}", 'public');
             $nombre = $archivo->getClientOriginalName();
@@ -39,6 +38,8 @@ class GestionarRemisionPedidoBmaService
                 'mime_type' => $archivo->getMimeType(),
                 'tamano_bytes' => $archivo->getSize(),
                 'orden' => 0,
+                'activo' => true,
+                'reemplaza_documento_id' => $anterior?->id,
             ]);
 
             $estatusId = $pedido->catalogo_estatus_pedido_id;
@@ -47,7 +48,9 @@ class GestionarRemisionPedidoBmaService
                 $usuarioId,
                 $estatusId,
                 $estatusId,
-                "Remisión adjuntada: {$nombre}",
+                $anterior
+                    ? "Remisión sustituida: {$nombre} (anterior conservada en historial)"
+                    : "Remisión adjuntada: {$nombre}",
                 AccionesHistorialPedidoBma::CARGA_REMISION,
                 ['ruta' => $ruta, 'nombre' => $nombre]
             );
@@ -114,15 +117,18 @@ class GestionarRemisionPedidoBmaService
 
     public function eliminar(PedidoBma $pedido, int $usuarioId): PedidoBma
     {
-        if (!$pedido->esAuditablePorAuxiliar()) {
+        if (! $pedido->esAuditablePorAuxiliar()) {
             throw new \RuntimeException('Solo se puede eliminar la remisión en pedidos pendientes de revisión.');
         }
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
-            $remision = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_REMISION)->first();
+            $remision = $pedido->documentos()
+                ->where('tipo', PedidoBmaDocumento::TIPO_REMISION)
+                ->vigente()
+                ->first();
             $nombre = $remision?->nombre_original;
 
-            $this->eliminarRemisiones($pedido);
+            $this->marcarRemisionesInactivas($pedido, $usuarioId);
 
             $estatusId = $pedido->catalogo_estatus_pedido_id;
             $this->historialService->ejecutar(
@@ -130,7 +136,7 @@ class GestionarRemisionPedidoBmaService
                 $usuarioId,
                 $estatusId,
                 $estatusId,
-                $nombre ? "Remisión eliminada: {$nombre}" : 'Remisión eliminada.',
+                $nombre ? "Remisión desactivada: {$nombre}" : 'Remisión desactivada.',
                 AccionesHistorialPedidoBma::ELIMINA_REMISION
             );
 
@@ -141,13 +147,21 @@ class GestionarRemisionPedidoBmaService
         });
     }
 
-    private function eliminarRemisiones(PedidoBma $pedido): void
+    private function marcarRemisionesInactivas(PedidoBma $pedido, int $usuarioId): ?PedidoBmaDocumento
     {
-        $remisiones = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_REMISION)->get();
+        $vigente = $pedido->documentos()
+            ->where('tipo', PedidoBmaDocumento::TIPO_REMISION)
+            ->vigente()
+            ->first();
 
-        foreach ($remisiones as $doc) {
-            Storage::disk('public')->delete($doc->ruta_archivo);
-            $doc->delete();
+        if ($vigente) {
+            $vigente->update([
+                'activo' => false,
+                'sustituido_at' => now(),
+                'sustituido_por_id' => $usuarioId,
+            ]);
         }
+
+        return $vigente;
     }
 }

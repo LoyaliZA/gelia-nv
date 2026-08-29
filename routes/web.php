@@ -6,6 +6,7 @@ use App\Http\Controllers\{DashboardController,AdminController,CatalogoController
 use App\Http\Controllers\Solicitudes\SolicitudController;
 use App\Http\Controllers\Reportes\ReporteSolicitudesController;
 use App\Http\Controllers\Reportes\ReporteTraspasosDiaController;
+use App\Http\Controllers\Reportes\ReportePagosPedidosController;
 use App\Http\Controllers\Api\{CotizacionEntregaController,ClienteApiController};
 use App\Http\Controllers\EntregasController;
 use App\Http\Controllers\MapaLogisticoController;
@@ -506,6 +507,48 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [ReporteTraspasosDiaController::class, 'index'])->name('index');
         Route::get('/exportar', [ReporteTraspasosDiaController::class, 'exportar'])->name('exportar');
     });
+
+    Route::middleware(['can:reportes.pagos_pedidos.ver'])
+        ->prefix('reportes/pagos-pedidos')
+        ->name('reportes.pagos_pedidos.')
+        ->group(function () {
+            Route::get('/', [ReportePagosPedidosController::class, 'index'])->name('index');
+            Route::get('/detalle/{cierre}', [ReportePagosPedidosController::class, 'detalle'])->name('detalle');
+            Route::get('/evidencias/pagos/{pago}', [ReportePagosPedidosController::class, 'evidenciaPago'])
+                ->middleware('can:reportes.pagos_pedidos.ver_evidencias')
+                ->name('evidencia_pago');
+            Route::get('/documentos/{documento}', [ReportePagosPedidosController::class, 'documento'])
+                ->middleware('can:reportes.pagos_pedidos.ver_evidencias')
+                ->name('documento');
+            Route::post('/exportar/solicitar', [ReportePagosPedidosController::class, 'solicitarExportacion'])
+                ->name('exportar.solicitar');
+            Route::get('/exportaciones', [ReportePagosPedidosController::class, 'listarExportaciones'])
+                ->name('exportaciones.index');
+            Route::post('/exportaciones/{exportacion}/reintentar', [ReportePagosPedidosController::class, 'reintentarExportacion'])
+                ->name('exportaciones.reintentar');
+            Route::post('/exportar/estimacion', [ReportePagosPedidosController::class, 'estimarExportacion'])
+                ->name('exportar.estimacion');
+            Route::get('/exportar/csv-resumen', [ReportePagosPedidosController::class, 'csvResumen'])
+                ->middleware('can:reportes.pagos_pedidos.exportar_csv')
+                ->name('csv_resumen');
+            Route::get('/exportar/csv-detalle', [ReportePagosPedidosController::class, 'csvDetalle'])
+                ->middleware('can:reportes.pagos_pedidos.exportar_csv')
+                ->name('csv_detalle');
+            Route::post('/exportar/pdf', [ReportePagosPedidosController::class, 'solicitarPdf'])
+                ->middleware('can:reportes.pagos_pedidos.exportar_pdf')
+                ->name('pdf.solicitar');
+            Route::get('/exportar/pdf/{exportacion}/estado', [ReportePagosPedidosController::class, 'estadoPdf'])
+                ->middleware('can:reportes.pagos_pedidos.exportar_pdf')
+                ->name('pdf.estado');
+            Route::post('/exportar/pdf/{exportacion}/cancelar', [ReportePagosPedidosController::class, 'cancelarPdf'])
+                ->middleware('can:reportes.pagos_pedidos.exportar_pdf')
+                ->name('pdf.cancelar');
+            Route::get('/exportar/{exportacion}/descargar', [ReportePagosPedidosController::class, 'descargarPdf'])
+                ->name('exportar.descargar');
+            Route::get('/exportar/pdf/{exportacion}', [ReportePagosPedidosController::class, 'descargarPdf'])
+                ->middleware('can:reportes.pagos_pedidos.exportar_pdf')
+                ->name('pdf.descargar');
+        });
 
     // ══════════════════════════════════════════════════════════════════════
     // MÓDULO: CANCELACIONES Y COTIZACIONES

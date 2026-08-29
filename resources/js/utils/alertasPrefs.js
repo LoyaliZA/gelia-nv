@@ -218,6 +218,18 @@ export function resolveNotificationDestination(notification = {}) {
         return '/funciones/listados';
     }
 
+    if (payload.tipo === 'pagos_pedidos_exportacion_listo' && payload.exportacion_id) {
+        return route('reportes.pagos_pedidos.exportar.descargar', { exportacion: payload.exportacion_id });
+    }
+
+    if (payload.tipo === 'pagos_pedidos_exportacion_fallo') {
+        return '/reportes/pagos-pedidos';
+    }
+
+    if (payload.modulo === 'reportes') {
+        return '/reportes/pagos-pedidos';
+    }
+
     if (payload.modulo === 'funciones' || payload.tipo === 'plantilla_bellaroma') {
         return '/plantilla-bellaroma';
     }

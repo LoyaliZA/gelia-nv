@@ -10,7 +10,8 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // Configuración para ejecución diaria fija a las 09:00 AM
-Schedule::command('pagos:rechazar-vencidos')->dailyAt('09:00');
+Schedule::command('reportes:limpiar-exportaciones-pagos-pedidos')->dailyAt('03:30');
+
 
 Schedule::command('activos:alertas-programadas')->dailyAt('08:00');
 

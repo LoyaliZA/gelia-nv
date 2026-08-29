@@ -57,6 +57,7 @@ function routeHref(name, fallback) {
 export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible = false, geliaAiVisible = false, saldosFavorPendientes = 0 }) {
     const showReportes = can('solicitudes.exportar');
     const showReporteTraspasos = can('traspasos.reporte_dia');
+    const showPagosPedidos = can('reportes.pagos_pedidos.ver');
     const showVentas = can('reportes.ventas.ver');
     const showListados = can('listados.ver');
     const showLimpieza = can('funciones.limpieza_clientes');
@@ -68,7 +69,7 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
     const showLimpiezaArchivos = can('funciones.limpieza_archivos');
     const showTransacciones = can('funciones.transacciones');
 
-    const showGrupoReportes = showReportes || showReporteTraspasos || showVentas;
+    const showGrupoReportes = showReportes || showReporteTraspasos || showVentas || showPagosPedidos;
     const showHerramientas = showListados || showLimpieza || showEjercicioEscalonamiento || showAsistencia || showAvisos || showGastos || showLimpiezaArchivos || showTransacciones;
 
     const solicitudesChildren = [
@@ -589,6 +590,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
                     icon: Package,
                     href: () => routeHref('reportes.traspasos_dia.index', '/reportes/traspasos-dia'),
                     active: (url) => url.startsWith('/reportes/traspasos-dia'),
+                },
+                showPagosPedidos && {
+                    type: 'link',
+                    id: 'reportes_pagos_pedidos',
+                    label: 'Pagos de pedidos',
+                    icon: DollarSign,
+                    href: () => routeHref('reportes.pagos_pedidos.index', '/reportes/pagos-pedidos'),
+                    active: (url) => url.startsWith('/reportes/pagos-pedidos'),
                 },
             ].filter(Boolean),
         },

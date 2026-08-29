@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Services\ControlPedidos\NotificarPedidoBmaService;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
+use App\Services\Reportes\PagosPedidos\RevocarCierrePagoPedidoService;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
@@ -21,6 +22,7 @@ class RechazarPagosPedidoBmaService
         private NotificarPedidoBmaService $notificar,
         private CoberturaPagoPedidoBmaService $cobertura,
         private SincronizarAplicacionesPedidoSafService $safPedido,
+        private RevocarCierrePagoPedidoService $revocarCierre,
     ) {}
 
     /**
@@ -116,6 +118,12 @@ class RechazarPagosPedidoBmaService
                 'pago_validado_at' => null,
                 'pago_validado_por_id' => null,
             ]);
+
+            $this->revocarCierre->ejecutar(
+                $pedido,
+                $usuarioId,
+                'Rechazo de exhibiciones: '.implode(', ', $numeros)
+            );
 
             $this->historial->registrarTransicion(
                 $pedido->id,
