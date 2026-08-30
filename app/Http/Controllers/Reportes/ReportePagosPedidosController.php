@@ -8,6 +8,7 @@ use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\Departamento;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\Reportes\ReportePagosPedidosExportacion;
 use App\Models\SaldosAFavor\PedidoBmaPago;
