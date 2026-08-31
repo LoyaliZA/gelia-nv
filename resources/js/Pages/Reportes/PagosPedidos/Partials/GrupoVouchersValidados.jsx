@@ -4,7 +4,7 @@ import TablaExhibicionesVouchers from './TablaExhibicionesVouchers';
 import { cardReportePagos, fmtMxn, RADIUS_CONTENEDOR_DIA } from './pagosPedidosStyles';
 import { CeldaFinanciera, CeldaIncidencias, GRID_FILA_PAGOS, GRID_FINANCIERO_MOVIL } from './GridFilasPagosPedidos';
 
-export default function GrupoVouchersValidados({ grupo, abiertoDefault }) {
+export default function GrupoVouchersValidados({ grupo, abiertoDefault, auth, onRecargarLista }) {
     const [abierto, setAbierto] = React.useState(abiertoDefault);
     const resumen = grupo.resumen ?? {};
 
@@ -38,7 +38,11 @@ export default function GrupoVouchersValidados({ grupo, abiertoDefault }) {
             </button>
             {abierto && (
                 <div className="p-3 md:p-4 pt-2 bg-black/[0.02]">
-                    <TablaExhibicionesVouchers exhibiciones={grupo.exhibiciones} />
+                    <TablaExhibicionesVouchers
+                        exhibiciones={grupo.exhibiciones}
+                        auth={auth}
+                        onRecargarLista={onRecargarLista}
+                    />
                 </div>
             )}
         </div>

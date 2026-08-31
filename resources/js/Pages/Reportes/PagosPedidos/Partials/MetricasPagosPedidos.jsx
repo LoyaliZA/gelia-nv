@@ -20,6 +20,7 @@ const DESGLOSE = [
     { key: 'pedidos_parciales', label: 'Parcialmente cubiertos', unit: 'pedidos' },
     { key: 'pedidos_con_excedente', label: 'Con excedente', unit: 'pedidos' },
     { key: 'pedidos_observaciones', label: 'Con observaciones', unit: 'pedidos' },
+    { key: 'pendientes_admin', label: 'Pendientes revisión admin', unit: 'pedidos' },
     { key: 'cantidad_vouchers', label: 'Vouchers', unit: 'vouchers' },
 ];
 

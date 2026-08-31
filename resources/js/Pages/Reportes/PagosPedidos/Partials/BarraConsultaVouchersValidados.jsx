@@ -204,6 +204,21 @@ export default function BarraConsultaVouchersValidados({
 
     return (
         <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                <label className="flex flex-col gap-1 min-w-[12rem]">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide theme-text-muted">Revisión administrativa</span>
+                    <select
+                        className="rounded-xl border theme-border theme-element theme-text-main text-sm px-3 py-2.5"
+                        value={filtros.estado_admin || 'pendiente'}
+                        onChange={(e) => onAplicar({ estado_admin: e.target.value })}
+                    >
+                        <option value="pendiente">Pendientes de revisión</option>
+                        <option value="confirmado">Confirmados</option>
+                        <option value="con_error">Con error reportado</option>
+                        <option value="todos">Todos</option>
+                    </select>
+                </label>
+            </div>
             <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] font-semibold uppercase tracking-wide theme-text-muted flex items-center gap-1.5 m-0">
                     <Calendar className="w-3.5 h-3.5" style={{ color: 'var(--color-primario)' }} />

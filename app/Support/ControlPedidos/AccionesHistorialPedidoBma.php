@@ -84,6 +84,9 @@ final class AccionesHistorialPedidoBma
     public const REACTIVACION_CANCELACION = 'reactivacion_cancelacion';
     public const FINALIZACION_CANCELACION_OPERATIVA = 'finalizacion_cancelacion_operativa';
     public const BLOQUEO_FINANCIERO_CANCELACION = 'bloqueo_financiero_cancelacion';
+    public const CONFIRMACION_ADMIN_EXHIBICION = 'confirmacion_admin_exhibicion';
+    public const CONFIRMACION_ADMIN_PEDIDO = 'confirmacion_admin_pedido';
+    public const ERROR_ADMIN_REPORTE_PAGO = 'error_admin_reporte_pago';
 
     /** @var array<string, string> */
     public const ETIQUETAS = [
@@ -164,6 +167,9 @@ final class AccionesHistorialPedidoBma
         self::REACTIVACION_CANCELACION => 'Reactivación de pedido (cancelación revertida)',
         self::FINALIZACION_CANCELACION_OPERATIVA => 'Finalización de cancelación operativa',
         self::BLOQUEO_FINANCIERO_CANCELACION => 'Bloqueo por resolución financiera',
+        self::CONFIRMACION_ADMIN_EXHIBICION => 'Confirmación administrativa de exhibición',
+        self::CONFIRMACION_ADMIN_PEDIDO => 'Confirmación administrativa del pedido',
+        self::ERROR_ADMIN_REPORTE_PAGO => 'Error reportado por Administración (pagos)',
     ];
 
     public static function etiqueta(?string $accion): ?string

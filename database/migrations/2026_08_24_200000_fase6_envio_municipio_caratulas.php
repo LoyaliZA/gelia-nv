@@ -82,7 +82,7 @@ return new class extends Migration
         });
 
         if (Schema::hasColumn('pedido_bma_tareas_preparacion', 'catalogo_paqueteria_id')) {
-            $tieneFk = collect(DB::select(
+            $tieneFk = DB::getDriverName() !== 'sqlite' && collect(DB::select(
                 "SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
                  WHERE TABLE_SCHEMA = DATABASE()
                    AND TABLE_NAME = 'pedido_bma_tareas_preparacion'

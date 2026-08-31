@@ -34,6 +34,7 @@ export const ALERTAS_TIPOS = {
     pedido_error_guia: 'Error de guía (pedido)',
     pedido_error_cedis: 'Error CEDIS (pedido)',
     pedido_error_estado: 'Estado de error (pedido)',
+    reporte_pagos_error_admin: 'Error en reporte de pagos (Administración)',
     pedido_guia_retraso: 'Retraso por corrección de guía',
     pedido_retraso_empaque: 'Retraso de empaque',
     pedido_retraso_recoleccion: 'Retraso de recolección',

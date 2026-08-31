@@ -75,6 +75,7 @@ export const FILTROS_LIMPIOS_VOUCHERS = {
     folio_pedido: null,
     folio_remision: null,
     agrupar_por: 'movimiento',
+    estado_admin: 'pendiente',
 };
 
 /**

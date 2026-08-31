@@ -5,6 +5,7 @@ namespace App\Services\Reportes\PagosPedidos;
 use App\Models\Reportes\PedidoBmaCierrePagoItem;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\User;
+use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 use App\Support\Reportes\ClasificacionIngresoBancario;
 use App\Support\Reportes\FechasPagoReporte;
 
@@ -112,6 +113,19 @@ class CalcularMetricasReporteVouchersValidadosService
             'pendientes_visibles' => number_format($pendienteCentavos / 100, 2, '.', ''),
             'rechazados_visibles' => number_format($rechazadoCentavos / 100, 2, '.', ''),
             'exhibiciones_visibles' => count($visibles),
+            'pendientes_admin' => $this->contarExhibicionesPendientesAdmin($usuario, $params),
         ];
+    }
+
+    /** @param  array<string, mixed>  $params */
+    private function contarExhibicionesPendientesAdmin(User $usuario, array $params): int
+    {
+        $sinAdmin = $params;
+        unset($sinAdmin['estado_admin']);
+
+        return $this->filtros->queryVisible($usuario, $sinAdmin)
+            ->where('admin_estado', AdminEstadoReportePagosPedidos::PENDIENTE)
+            ->whereHas('cierre', fn ($q) => $q->whereNull('admin_pedido_error_reportado_at'))
+            ->count();
     }
 }

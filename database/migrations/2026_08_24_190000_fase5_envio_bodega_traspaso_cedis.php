@@ -72,7 +72,7 @@ return new class extends Migration
         }
 
         if (Schema::hasColumn('pedido_bma_tareas_preparacion', 'solicitud_traspaso_id')) {
-            $tieneFk = collect(DB::select(
+            $tieneFk = DB::getDriverName() !== 'sqlite' && collect(DB::select(
                 "SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
                  WHERE TABLE_SCHEMA = DATABASE()
                    AND TABLE_NAME = 'pedido_bma_tareas_preparacion'
@@ -87,7 +87,7 @@ return new class extends Migration
         }
 
         // Snapshot sin catálogo cuando el origen es Gestión de pedido.
-        if (Schema::hasTable('solicitud_traspaso_productos')) {
+        if (Schema::hasTable('solicitud_traspaso_productos') && DB::getDriverName() !== 'sqlite') {
             $fk = collect(DB::select(
                 "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
                  WHERE TABLE_SCHEMA = DATABASE()

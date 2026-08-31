@@ -1,4 +1,5 @@
 import { geliaCardClass } from '../../../../utils/geliaTheme';
+import { puedePermiso } from '../../../../utils/permisos';
 
 /** Radios por jerarquía (sobreescribe theme-card 2.5rem). */
 export const RADIUS_METRICA = '!rounded-[22px]';
@@ -234,5 +235,37 @@ export const tonoRevisionEstado = (estado) => {
 
 export const labelRevisionEstado = (estado) =>
     LABEL_ESTADO_REVISION[estado] || estado || '—';
+
+export const LABEL_ADMIN_ESTADO = {
+    pendiente: 'Pendiente admin',
+    confirmado: 'Confirmado admin',
+    con_error: 'Error reportado',
+    parcial: 'Confirmación parcial',
+};
+
+export const labelAdminEstado = (estado) =>
+    LABEL_ADMIN_ESTADO[estado] || estado || '—';
+
+export const badgeAdminEstado = (estado) => {
+    switch (estado) {
+        case 'confirmado':
+            return SEM_BADGE.exito;
+        case 'con_error':
+            return SEM_BADGE.critico;
+        case 'parcial':
+            return SEM_BADGE.advertencia;
+        case 'pendiente':
+            return SEM_BADGE.info;
+        default:
+            return SEM_BADGE.neutro;
+    }
+};
+
+export function puedeAccionesAdmin(auth) {
+    return {
+        puedeConfirmar: puedePermiso(auth, 'reportes.pagos_pedidos.confirmar_admin'),
+        puedeReportar: puedePermiso(auth, 'reportes.pagos_pedidos.reportar_error_admin'),
+    };
+}
 
 export const cardMetricaClass = 'p-5 md:p-6 flex items-center gap-5 min-w-0';

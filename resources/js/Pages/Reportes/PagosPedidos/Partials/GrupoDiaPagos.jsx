@@ -4,7 +4,7 @@ import PedidoPagoAcordeon from './PedidoPagoAcordeon';
 import { cardReportePagos, fmtMxn, fmtPedidosValidados, RADIUS_CONTENEDOR_DIA } from './pagosPedidosStyles';
 import { CeldaFinanciera, CeldaIncidencias, GRID_FILA_PAGOS, GRID_FINANCIERO_MOVIL } from './GridFilasPagosPedidos';
 
-export default function GrupoDiaPagos({ grupo, abiertoDefault, cacheDetalle, onCacheDetalle }) {
+export default function GrupoDiaPagos({ grupo, abiertoDefault, auth, cacheDetalle, onCacheDetalle, onRecargarLista }) {
     const [abierto, setAbierto] = React.useState(abiertoDefault);
     const incidencias = Number(grupo.resumen.observaciones ?? 0);
 
@@ -39,8 +39,10 @@ export default function GrupoDiaPagos({ grupo, abiertoDefault, cacheDetalle, onC
                         <PedidoPagoAcordeon
                             key={pedido.cierre_id}
                             pedido={pedido}
+                            auth={auth}
                             cacheDetalle={cacheDetalle}
                             onCacheDetalle={onCacheDetalle}
+                            onRecargarLista={onRecargarLista}
                         />
                     ))}
                 </div>

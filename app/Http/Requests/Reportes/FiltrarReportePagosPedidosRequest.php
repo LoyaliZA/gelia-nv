@@ -70,6 +70,7 @@ class FiltrarReportePagosPedidosRequest extends FormRequest
             'monto_hasta' => 'nullable|numeric|min:0',
             'folio_pedido' => 'nullable|string|max:80',
             'folio_remision' => 'nullable|string|max:80',
+            'estado_admin' => 'nullable|in:pendiente,confirmado,con_error,todos',
         ];
     }
 
@@ -115,6 +116,7 @@ class FiltrarReportePagosPedidosRequest extends FormRequest
             'monto_hasta' => isset($data['monto_hasta']) ? (string) $data['monto_hasta'] : null,
             'folio_pedido' => isset($data['folio_pedido']) ? trim($data['folio_pedido']) : null,
             'folio_remision' => isset($data['folio_remision']) ? trim($data['folio_remision']) : null,
+            'estado_admin' => $data['estado_admin'] ?? 'pendiente',
             'banco_id' => $data['banco_id'] ?? null,
         ];
 

@@ -5,11 +5,11 @@ import { exhibicionesConEvidencia, payloadVisorEnIndice } from '@/utils/visorEvi
 import {
     fmtMxn,
     SEM_BADGE,
-    SECCION_TITULO,
     META_DETALLE,
     IMPORTE_FIN,
     tonoRevisionEstado,
 } from './pagosPedidosStyles';
+import { AccionesAdminExhibicion } from './AccionesAdminPagos';
 
 const TH = 'text-xs font-semibold uppercase tracking-wide theme-text-main/75 py-3 pr-2 text-left';
 const TD = 'text-xs md:text-[13px] theme-text-main py-3 pr-2 align-middle';
@@ -35,7 +35,7 @@ function Indicadores({ ex }) {
     );
 }
 
-export default function TablaExhibicionesVouchers({ exhibiciones = [] }) {
+export default function TablaExhibicionesVouchers({ exhibiciones = [], auth, onRecargarLista }) {
     const [visorIdx, setVisorIdx] = useState(null);
     const conEvidencia = exhibicionesConEvidencia(exhibiciones);
     const visor = payloadVisorEnIndice(exhibiciones, visorIdx);
@@ -47,7 +47,7 @@ export default function TablaExhibicionesVouchers({ exhibiciones = [] }) {
     return (
         <div className="min-w-0">
             <div className="overflow-x-auto -mx-1 px-1">
-                <table className="w-full min-w-[72rem] text-left border-collapse">
+                <table className="w-full min-w-[76rem] text-left border-collapse">
                     <thead>
                         <tr className="border-b theme-border">
                             <th className={TH}>Exhibición</th>
@@ -63,6 +63,7 @@ export default function TablaExhibicionesVouchers({ exhibiciones = [] }) {
                             <th className={TH}>Validación</th>
                             <th className={TH}>Estado</th>
                             <th className={TH}>Indicadores</th>
+                            <th className={TH}>Admin</th>
                             <th className={`${TH} pr-0`}>Voucher</th>
                         </tr>
                     </thead>
@@ -95,6 +96,15 @@ export default function TablaExhibicionesVouchers({ exhibiciones = [] }) {
                                     {ex.observaciones && <span className={META}>{ex.observaciones}</span>}
                                 </td>
                                 <td className={TD}><Indicadores ex={ex} /></td>
+                                <td className={TD}>
+                                    <AccionesAdminExhibicion
+                                        auth={auth}
+                                        cierreId={ex.cierre_id}
+                                        exhibicion={ex}
+                                        pedidoTieneError={Boolean(ex.admin_pedido_error)}
+                                        onRecargarLista={onRecargarLista}
+                                    />
+                                </td>
                                 <td className={`${TD} pr-0`}>
                                     <button
                                         type="button"

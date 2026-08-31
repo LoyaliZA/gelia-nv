@@ -26,7 +26,7 @@ return new class extends Migration
     public function up(): void
     {
         // Recuperación: fallo previo por nombre FK > 64 chars dejó tabla sin constraints.
-        if (Schema::hasTable('pedido_bma_tareas_preparacion')) {
+        if (Schema::hasTable('pedido_bma_tareas_preparacion') && DB::getDriverName() !== 'sqlite') {
             $tieneFkModalidad = collect(DB::select(
                 'SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
                  WHERE TABLE_SCHEMA = DATABASE()

@@ -53,6 +53,11 @@ class PedidoBmaCierrePago extends Model
         'departamento_id',
         'almacen_id',
         'metadata_snapshot',
+        'admin_pedido_error_comentario',
+        'admin_pedido_error_evidencia_ruta',
+        'admin_pedido_error_evidencia_nombre',
+        'admin_pedido_error_reportado_por_id',
+        'admin_pedido_error_reportado_at',
     ];
 
     protected $casts = [
@@ -71,6 +76,7 @@ class PedidoBmaCierrePago extends Model
         'excedente' => 'decimal:2',
         'tolerancia_aplicada' => 'decimal:2',
         'metadata_snapshot' => 'array',
+        'admin_pedido_error_reportado_at' => 'datetime',
     ];
 
     public function pedido(): BelongsTo
@@ -122,5 +128,15 @@ class PedidoBmaCierrePago extends Model
     public function scopeRevocado(Builder $query): Builder
     {
         return $query->where('estado', self::ESTADO_REVOCADO);
+    }
+
+    public function adminPedidoErrorReportadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'admin_pedido_error_reportado_por_id');
+    }
+
+    public function tieneErrorAdminPedido(): bool
+    {
+        return $this->admin_pedido_error_reportado_at !== null;
     }
 }

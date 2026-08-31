@@ -12,6 +12,7 @@ import {
     IMPORTE_FIN,
     SEM_BADGE,
 } from './pagosPedidosStyles';
+import { AccionesAdminExhibicion } from './AccionesAdminPagos';
 
 const TH = 'text-xs font-semibold uppercase tracking-wide theme-text-main/75 py-3 pr-3 text-left';
 const TD = 'text-xs md:text-[13px] theme-text-main py-3 pr-3 align-middle';
@@ -81,7 +82,7 @@ function AccionVoucher({ ex, conEvidencia, onAbrirIndice }) {
     );
 }
 
-function TarjetaExhibicionMovil({ ex, exhibiciones, conEvidencia, onAbrirIndice }) {
+function TarjetaExhibicionMovil({ ex, exhibiciones, conEvidencia, onAbrirIndice, auth, cierreId, pedidoTieneError, onAdminActualizado, onRecargarLista }) {
     const cobertura = badgeCoberturaExhibicion(ex, exhibiciones);
 
     return (
@@ -103,12 +104,27 @@ function TarjetaExhibicionMovil({ ex, exhibiciones, conEvidencia, onAbrirIndice 
             <CeldaReferencia ex={ex} />
             <CeldaFechas ex={ex} />
             <CeldaRevision ex={ex} />
+            <AccionesAdminExhibicion
+                auth={auth}
+                cierreId={cierreId}
+                exhibicion={ex}
+                pedidoTieneError={pedidoTieneError}
+                onActualizado={onAdminActualizado}
+                onRecargarLista={onRecargarLista}
+            />
             <AccionVoucher ex={ex} conEvidencia={conEvidencia} onAbrirIndice={onAbrirIndice} />
         </div>
     );
 }
 
-export default function ListaExhibicionesPago({ exhibiciones = [] }) {
+export default function ListaExhibicionesPago({
+    exhibiciones = [],
+    auth,
+    cierreId,
+    pedidoTieneError = false,
+    onAdminActualizado,
+    onRecargarLista,
+}) {
     const [visorIdx, setVisorIdx] = useState(null);
     const conEvidencia = exhibicionesConEvidencia(exhibiciones);
     const visor = payloadVisorEnIndice(exhibiciones, visorIdx);
@@ -129,6 +145,11 @@ export default function ListaExhibicionesPago({ exhibiciones = [] }) {
                         exhibiciones={exhibiciones}
                         conEvidencia={conEvidencia}
                         onAbrirIndice={setVisorIdx}
+                        auth={auth}
+                        cierreId={cierreId}
+                        pedidoTieneError={pedidoTieneError}
+                        onAdminActualizado={onAdminActualizado}
+                        onRecargarLista={onRecargarLista}
                     />
                 ))}
             </div>
@@ -145,6 +166,7 @@ export default function ListaExhibicionesPago({ exhibiciones = [] }) {
                             <th className={TH}>Fechas</th>
                             <th className={TH}>Revisión</th>
                             <th className={TH}>Cobertura</th>
+                            <th className={TH}>Admin</th>
                             <th className={`${TH} pr-0`}>Voucher</th>
                         </tr>
                     </thead>
@@ -168,6 +190,16 @@ export default function ListaExhibicionesPago({ exhibiciones = [] }) {
                                     </td>
                                     <td className={TD}>
                                         <span className={cobertura.badge}>{cobertura.label}</span>
+                                    </td>
+                                    <td className={TD}>
+                                        <AccionesAdminExhibicion
+                                            auth={auth}
+                                            cierreId={cierreId}
+                                            exhibicion={ex}
+                                            pedidoTieneError={pedidoTieneError}
+                                            onActualizado={onAdminActualizado}
+                                            onRecargarLista={onRecargarLista}
+                                        />
                                     </td>
                                     <td className={`${TD} pr-0`}>
                                         <AccionVoucher ex={ex} conEvidencia={conEvidencia} onAbrirIndice={setVisorIdx} />

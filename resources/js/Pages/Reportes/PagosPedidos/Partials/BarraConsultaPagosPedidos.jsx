@@ -59,6 +59,13 @@ function rangoPreset(preset) {
     return null;
 }
 
+const ESTADOS_ADMIN = [
+    { value: 'pendiente', label: 'Pendientes de revisión' },
+    { value: 'confirmado', label: 'Confirmados' },
+    { value: 'con_error', label: 'Con error reportado' },
+    { value: 'todos', label: 'Todos' },
+];
+
 const CAMPOS_FILTRO = [
     'estado_cierre', 'estado_cobertura', 'forma_pago', 'con_remision', 'con_evidencia',
     'fecha_incompleta', 'fecha_validacion_desde', 'fecha_validacion_hasta',
@@ -172,6 +179,20 @@ export default function BarraConsultaPagosPedidos({ filtros, formasPago, onAplic
 
     return (
         <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                <label className="flex flex-col gap-1 min-w-[12rem]">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide theme-text-muted">Revisión administrativa</span>
+                    <select
+                        className="rounded-xl border theme-border theme-element theme-text-main text-sm px-3 py-2.5"
+                        value={filtros.estado_admin || 'pendiente'}
+                        onChange={(e) => onAplicar({ estado_admin: e.target.value })}
+                    >
+                        {ESTADOS_ADMIN.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                    </select>
+                </label>
+            </div>
             <div className="flex flex-col gap-1.5">
                 <label htmlFor="pagos-pedidos-periodo" className="text-[11px] font-semibold uppercase tracking-wide theme-text-muted flex items-center gap-1.5 m-0">
                     <Calendar className="w-3.5 h-3.5" style={{ color: 'var(--color-primario)' }} />

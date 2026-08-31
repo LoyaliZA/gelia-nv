@@ -41,6 +41,7 @@ class AlertaPedidoBma extends Notification implements ShouldQueue, ShouldBroadca
         'pedido_error_guia' => 'Error de guía en pedido',
         'pedido_error_cedis' => 'Error CEDIS en pedido',
         'pedido_error_estado' => 'Estado de error en pedido',
+        'reporte_pagos_error_admin' => 'Error detectado en reporte de pagos',
         'pedido_guia_retraso' => 'Retraso por corrección de guía',
         'pedido_resguardo_apartado' => 'Resguardo apartado',
         'pedido_consulta_pesaje' => 'Consulta de pesaje',

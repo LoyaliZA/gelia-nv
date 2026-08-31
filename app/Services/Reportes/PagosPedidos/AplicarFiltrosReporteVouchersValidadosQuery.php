@@ -7,6 +7,7 @@ use App\Models\Reportes\PedidoBmaCierrePagoItem;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\User;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 use App\Support\Reportes\AlcanceExhibicionesReportePagosPedidos;
 use App\Support\Reportes\ClasificacionIngresoBancario;
 use App\Support\Reportes\DetectarPosiblesDuplicadosVouchersService;
@@ -127,6 +128,7 @@ class AplicarFiltrosReporteVouchersValidadosQuery
 
         $this->aplicarFechas($query, $params);
         AlcanceExhibicionesReportePagosPedidos::aplicarEnQuery($query, $params);
+        AdminEstadoReportePagosPedidos::aplicarFiltroItem($query, $params['estado_admin'] ?? null);
         $this->aplicarFiltrosVouchers($query, $params);
 
         return $query;

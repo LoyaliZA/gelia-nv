@@ -17,6 +17,7 @@ const CONTEXTUAL = [
     { key: 'total_saf_relacionado', label: 'Total SAF relacionado', money: true },
     { key: 'pendientes_visibles', label: 'Pendientes visibles', money: true },
     { key: 'rechazados_visibles', label: 'Rechazados visibles', money: true },
+    { key: 'pendientes_admin', label: 'Pendientes revisión admin', unit: 'vouchers' },
 ];
 
 function Tarjeta({ label, value, icon: Icon, money, cargando }) {

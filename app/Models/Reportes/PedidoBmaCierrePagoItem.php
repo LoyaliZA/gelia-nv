@@ -34,6 +34,14 @@ class PedidoBmaCierrePagoItem extends Model
         'revisado_por_id',
         'revisado_at_snapshot',
         'motivo_rechazo_snapshot',
+        'admin_estado',
+        'admin_confirmado_por_id',
+        'admin_confirmado_at',
+        'admin_error_comentario',
+        'admin_error_evidencia_ruta',
+        'admin_error_evidencia_nombre',
+        'admin_error_reportado_por_id',
+        'admin_error_reportado_at',
     ];
 
     protected $casts = [
@@ -44,6 +52,8 @@ class PedidoBmaCierrePagoItem extends Model
         'tamano_bytes_snapshot' => 'integer',
         'capturado_at_snapshot' => 'datetime',
         'revisado_at_snapshot' => 'datetime',
+        'admin_confirmado_at' => 'datetime',
+        'admin_error_reportado_at' => 'datetime',
     ];
 
     public function cierre(): BelongsTo
@@ -74,5 +84,15 @@ class PedidoBmaCierrePagoItem extends Model
     public function reemplazaPago(): BelongsTo
     {
         return $this->belongsTo(PedidoBmaPago::class, 'reemplaza_pago_id');
+    }
+
+    public function adminConfirmadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'admin_confirmado_por_id');
+    }
+
+    public function adminErrorReportadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'admin_error_reportado_por_id');
     }
 }

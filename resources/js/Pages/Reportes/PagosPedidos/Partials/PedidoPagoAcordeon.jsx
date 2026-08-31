@@ -16,12 +16,13 @@ import {
     PEDIDO_FIN_GRID,
     PEDIDO_IDENTIDAD,
 } from './GridFilasPagosPedidos';
+import { AccionesAdminPedido, BadgeAdminEstado, useAdminDetalleUpdater } from './AccionesAdminPagos';
 
 function detenerPropagacion(e) {
     e.stopPropagation();
 }
 
-export default function PedidoPagoAcordeon({ pedido, cacheDetalle, onCacheDetalle }) {
+export default function PedidoPagoAcordeon({ pedido, auth, cacheDetalle, onCacheDetalle, onRecargarLista }) {
     const [abierto, setAbierto] = useState(false);
     const [cargando, setCargando] = useState(false);
     const [error, setError] = useState(null);
@@ -30,6 +31,10 @@ export default function PedidoPagoAcordeon({ pedido, cacheDetalle, onCacheDetall
     const [pendienteRemision, setPendienteRemision] = useState(false);
     const documentosRef = useRef(null);
     const detalle = cacheDetalle[pedido.cierre_id];
+    const onAdminActualizado = useAdminDetalleUpdater(cacheDetalle, onCacheDetalle, pedido.cierre_id);
+    const adminResumen = detalle?.cierre?.admin_resumen ?? pedido.admin_resumen;
+    const adminResumenLabel = detalle?.cierre?.admin_resumen_label ?? pedido.admin_resumen_label;
+    const pedidoTieneError = Boolean(detalle?.cierre?.admin_pedido_error_reportado_at ?? pedido.admin_pedido_error_reportado_at);
 
     const cargarDetalle = useCallback(async () => {
         if (detalle || cargando) return;
@@ -220,6 +225,16 @@ export default function PedidoPagoAcordeon({ pedido, cacheDetalle, onCacheDetall
                 <span className={`${badgeCobertura(pedido.estado_cobertura)} ${PEDIDO_BADGE}`}>
                     {labelEstadoCobertura(pedido)}
                 </span>
+                <BadgeAdminEstado resumen={adminResumen} resumenLabel={adminResumenLabel} />
+                <AccionesAdminPedido
+                    auth={auth}
+                    cierreId={pedido.cierre_id}
+                    adminResumen={adminResumen}
+                    pedidoTieneError={pedidoTieneError}
+                    onActualizado={onAdminActualizado}
+                    onRecargarLista={onRecargarLista}
+                    compacto
+                />
             </div>
 
             {abierto && (
@@ -236,7 +251,14 @@ export default function PedidoPagoAcordeon({ pedido, cacheDetalle, onCacheDetall
                     {detalle && (
                         <>
                             <ResumenFinancieroPedido cierre={detalle.cierre} financiero={detalle.financiero} />
-                            <ListaExhibicionesPago exhibiciones={detalle.exhibiciones} />
+                            <ListaExhibicionesPago
+                                exhibiciones={detalle.exhibiciones}
+                                auth={auth}
+                                cierreId={pedido.cierre_id}
+                                pedidoTieneError={pedidoTieneError}
+                                onAdminActualizado={onAdminActualizado}
+                                onRecargarLista={onRecargarLista}
+                            />
                             <div ref={documentosRef}>
                                 <DocumentosEvidencias
                                     exhibiciones={detalle.exhibiciones}

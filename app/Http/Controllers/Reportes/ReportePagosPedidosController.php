@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Reportes;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Reportes\FiltrarReportePagosPedidosRequest;
+use App\Http\Requests\Reportes\ReportarErrorAdminReportePagosRequest;
 use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\Departamento;
@@ -20,7 +20,9 @@ use App\Services\Reportes\PagosPedidos\ExportarReportePagosPedidosCsvService;
 use App\Services\Reportes\PagosPedidos\ListarReportePagosPedidosService;
 use App\Services\Reportes\PagosPedidos\ListarReporteVouchersValidadosService;
 use App\Services\Reportes\PagosPedidos\ObtenerDetalleReportePagoPedidoService;
-use App\Services\Reportes\PagosPedidos\SolicitarExportacionReportePagosPedidosService;
+use App\Services\Reportes\PagosPedidos\ConfirmarExhibicionAdminReportePagosService;
+use App\Services\Reportes\PagosPedidos\ConfirmarPedidoAdminReportePagosService;
+use App\Services\Reportes\PagosPedidos\ReportarErrorAdminReportePagosService;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\Reportes\ReportePagosPedidosProgreso;
 use Illuminate\Http\JsonResponse;
@@ -170,6 +172,55 @@ class ReportePagosPedidosController extends Controller
         return response()->json(
             $detalle->ejecutar(Auth::user(), $cierre, true)
         );
+    }
+
+    public function confirmarPedidoAdmin(
+        PedidoBmaCierrePago $cierre,
+        ConfirmarPedidoAdminReportePagosService $confirmar,
+    ): JsonResponse {
+        Gate::authorize('reportes.pagos_pedidos.confirmar_admin');
+
+        return response()->json($confirmar->ejecutar(Auth::user(), $cierre->id));
+    }
+
+    public function confirmarExhibicionAdmin(
+        PedidoBmaCierrePago $cierre,
+        int $item,
+        ConfirmarExhibicionAdminReportePagosService $confirmar,
+    ): JsonResponse {
+        Gate::authorize('reportes.pagos_pedidos.confirmar_admin');
+
+        return response()->json($confirmar->ejecutar(Auth::user(), $cierre->id, $item));
+    }
+
+    public function reportarErrorPedidoAdmin(
+        PedidoBmaCierrePago $cierre,
+        ReportarErrorAdminReportePagosRequest $request,
+        ReportarErrorAdminReportePagosService $reportar,
+    ): JsonResponse {
+        return response()->json($reportar->ejecutar(
+            Auth::user(),
+            $cierre->id,
+            ReportarErrorAdminReportePagosService::ALCANCE_PEDIDO,
+            (string) $request->validated('comentario'),
+            $request->file('evidencia'),
+        ));
+    }
+
+    public function reportarErrorExhibicionAdmin(
+        PedidoBmaCierrePago $cierre,
+        int $item,
+        ReportarErrorAdminReportePagosRequest $request,
+        ReportarErrorAdminReportePagosService $reportar,
+    ): JsonResponse {
+        return response()->json($reportar->ejecutar(
+            Auth::user(),
+            $cierre->id,
+            ReportarErrorAdminReportePagosService::ALCANCE_EXHIBICION,
+            (string) $request->validated('comentario'),
+            $request->file('evidencia'),
+            $item,
+        ));
     }
 
     public function evidenciaPago(PedidoBmaPago $pago): StreamedResponse

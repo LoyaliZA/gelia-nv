@@ -6,6 +6,7 @@ use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\Reportes\PedidoBmaCierrePagoItem;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\User;
+use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 
 final class ExhibicionVouchersValidadosMapper
 {
@@ -64,6 +65,8 @@ final class ExhibicionVouchersValidadosMapper
             'activo_para_cobertura' => $item->activo_para_cobertura_snapshot,
             'cierre_id' => $cierre->id,
             'pedido_bma_id' => $cierre->pedido_bma_id,
+            'admin_pedido_error' => $cierre->tieneErrorAdminPedido(),
+            ...AdminEstadoReportePagosPedidos::payloadItem($item),
             'evidencia' => ($puedeEvidencia && $tieneVoucher) ? [
                 'nombre' => $item->nombre_archivo_snapshot,
                 'mime_type' => $item->mime_type_snapshot,

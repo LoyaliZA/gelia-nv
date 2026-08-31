@@ -5,6 +5,7 @@ namespace App\Services\Reportes\PagosPedidos;
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\User;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 use App\Support\Reportes\FechasPagoReporte;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -99,6 +100,8 @@ class AplicarFiltrosReportePagosPedidosQuery
         if (! empty($filtros['fecha_incompleta'])) {
             FechasPagoReporte::aplicarFiltroIncompleta($query, (string) $filtros['fecha_incompleta']);
         }
+
+        AdminEstadoReportePagosPedidos::aplicarFiltroCierre($query, $filtros['estado_admin'] ?? null);
 
         return $query;
     }

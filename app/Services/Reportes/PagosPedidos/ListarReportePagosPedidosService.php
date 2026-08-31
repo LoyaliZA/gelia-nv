@@ -4,6 +4,7 @@ namespace App\Services\Reportes\PagosPedidos;
 
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\User;
+use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 use App\Support\Reportes\FechasPagoReporte;
 use Illuminate\Support\Collection;
 
@@ -45,6 +46,8 @@ class ListarReportePagosPedidosService
                     'vendedor:id,name',
                     'departamento:id,nombre',
                     'validadoPor:id,name',
+                    'items:id,pedido_bma_cierre_pago_id,admin_estado',
+                    'adminPedidoErrorReportadoPor:id,name',
                 ])
                 ->withCount([
                     'items',
@@ -133,6 +136,7 @@ class ListarReportePagosPedidosService
             'tiene_remision' => ! empty($c->metadata_snapshot['remision_documento_id']),
             'tiene_vouchers' => ($c->vouchers_count ?? 0) > 0,
             'vouchers_count' => (int) ($c->vouchers_count ?? 0),
+            ...AdminEstadoReportePagosPedidos::payloadCierre($c->loadMissing('items')),
         ];
     }
 

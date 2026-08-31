@@ -5,6 +5,7 @@ namespace App\Services\Reportes\PagosPedidos;
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\Reportes\PedidoBmaCierrePagoItem;
 use App\Models\User;
+use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 use App\Support\Reportes\AlcanceExhibicionesReportePagosPedidos;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -114,7 +115,20 @@ class CalcularMetricasReportePagosPedidosService
             'pedidos_con_excedente' => (int) ($agg->pedidos_con_excedente ?? 0),
             'cantidad_vouchers' => $comprobantesArchivos,
             'pedidos_historicos_sin_evidencia' => $pedidosHistoricosSinEvidencia,
+            'pendientes_admin' => $this->contarPedidosPendientesAdmin($usuario, $params),
         ];
+    }
+
+    /** @param  array<string, mixed>  $params */
+    private function contarPedidosPendientesAdmin(User $usuario, array $params): int
+    {
+        $sinAdmin = $params;
+        unset($sinAdmin['estado_admin']);
+        $query = PedidoBmaCierrePago::query();
+        $this->filtros->aplicar($query, $usuario, $sinAdmin);
+        AdminEstadoReportePagosPedidos::aplicarFiltroCierre($query, AdminEstadoReportePagosPedidos::PENDIENTE);
+
+        return (int) $query->count();
     }
 
     /** @param  array<string, mixed>  $params */

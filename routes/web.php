@@ -514,6 +514,18 @@ Route::middleware(['auth'])->group(function () {
         ->group(function () {
             Route::get('/', [ReportePagosPedidosController::class, 'index'])->name('index');
             Route::get('/detalle/{cierre}', [ReportePagosPedidosController::class, 'detalle'])->name('detalle');
+            Route::post('/cierres/{cierre}/confirmar-admin', [ReportePagosPedidosController::class, 'confirmarPedidoAdmin'])
+                ->middleware('can:reportes.pagos_pedidos.confirmar_admin')
+                ->name('confirmar_admin.pedido');
+            Route::post('/cierres/{cierre}/items/{item}/confirmar-admin', [ReportePagosPedidosController::class, 'confirmarExhibicionAdmin'])
+                ->middleware('can:reportes.pagos_pedidos.confirmar_admin')
+                ->name('confirmar_admin.exhibicion');
+            Route::post('/cierres/{cierre}/reportar-error-admin', [ReportePagosPedidosController::class, 'reportarErrorPedidoAdmin'])
+                ->middleware('can:reportes.pagos_pedidos.reportar_error_admin')
+                ->name('reportar_error_admin.pedido');
+            Route::post('/cierres/{cierre}/items/{item}/reportar-error-admin', [ReportePagosPedidosController::class, 'reportarErrorExhibicionAdmin'])
+                ->middleware('can:reportes.pagos_pedidos.reportar_error_admin')
+                ->name('reportar_error_admin.exhibicion');
             Route::get('/evidencias/pagos/{pago}', [ReportePagosPedidosController::class, 'evidenciaPago'])
                 ->middleware('can:reportes.pagos_pedidos.ver_evidencias')
                 ->name('evidencia_pago');

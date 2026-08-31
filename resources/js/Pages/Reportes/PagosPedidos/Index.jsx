@@ -40,6 +40,7 @@ const FILTROS_LIMPIOS_PEDIDO = {
     con_remision: null,
     con_evidencia: null,
     fecha_incompleta: null,
+    estado_admin: 'pendiente',
 };
 
 export default function Index({
@@ -101,6 +102,18 @@ export default function Index({
 
     const limpiarPedido = () => navegar(FILTROS_LIMPIOS_PEDIDO);
     const limpiarVouchers = () => navegar(FILTROS_LIMPIOS_VOUCHERS);
+
+    const recargarListaAdmin = useCallback(() => {
+        if ((filtros.estado_admin || 'pendiente') !== 'pendiente') return;
+        setCargando(true);
+        router.reload({
+            only: esPedido
+                ? ['grupos', 'metricas', 'paginacion', 'filtros']
+                : ['grupos_vouchers', 'metricas_vouchers', 'paginacion', 'filtros'],
+            preserveScroll: true,
+            onFinish: () => setCargando(false),
+        });
+    }, [filtros.estado_admin, esPedido]);
 
     const puedeCsv = puedePermiso(auth, 'reportes.pagos_pedidos.exportar_csv');
     const puedePdf = puedePermiso(auth, 'reportes.pagos_pedidos.exportar_pdf');
@@ -269,8 +282,10 @@ export default function Index({
                                 key={grupo.fecha}
                                 grupo={grupo}
                                 abiertoDefault={i === 0}
+                                auth={auth}
                                 cacheDetalle={cacheDetalle}
                                 onCacheDetalle={(id, data) => setCacheDetalle((c) => ({ ...c, [id]: data }))}
+                                onRecargarLista={recargarListaAdmin}
                             />
                         ))}
                     </div>
@@ -283,6 +298,8 @@ export default function Index({
                                 key={grupo.clave}
                                 grupo={grupo}
                                 abiertoDefault={i === 0}
+                                auth={auth}
+                                onRecargarLista={recargarListaAdmin}
                             />
                         ))}
                     </div>

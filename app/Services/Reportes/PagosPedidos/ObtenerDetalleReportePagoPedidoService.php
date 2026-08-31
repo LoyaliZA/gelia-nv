@@ -5,6 +5,7 @@ namespace App\Services\Reportes\PagosPedidos;
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\User;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 use App\Support\Reportes\ClasificacionIngresoBancario;
 use App\Support\Reportes\FechasPagoReporte;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -25,6 +26,9 @@ class ObtenerDetalleReportePagoPedidoService
             'items.reemplazaPago',
             'items.capturadoPor',
             'items.revisadoPor',
+            'items.adminConfirmadoPor',
+            'items.adminErrorReportadoPor',
+            'adminPedidoErrorReportadoPor',
         ]);
 
         if ($cierre->pedido && ! VisibilidadPedidoBma::puedeConsultar($usuario, $cierre->pedido)) {
@@ -57,6 +61,7 @@ class ObtenerDetalleReportePagoPedidoService
                 'almacen' => $cierre->almacen?->only(['id', 'nombre']),
                 'origen_pedido' => $cierre->metadata_snapshot['origen'] ?? $cierre->pedido?->origen?->nombre,
                 'estatus_pedido' => $cierre->metadata_snapshot['estatus'] ?? $cierre->pedido?->estatus?->nombre_visual,
+                ...AdminEstadoReportePagosPedidos::payloadCierre($cierre),
             ],
             'financiero' => [
                 'monto_venta' => $cierre->monto_venta,
@@ -111,6 +116,7 @@ class ObtenerDetalleReportePagoPedidoService
                         'tamano_bytes' => $item->tamano_bytes_snapshot,
                         'url' => route('reportes.pagos_pedidos.evidencia_pago', ['pago' => $item->pedido_bma_pago_id]),
                     ] : null,
+                    ...AdminEstadoReportePagosPedidos::payloadItem($item),
                 ];
             })->values()->all(),
             'documentos' => [
