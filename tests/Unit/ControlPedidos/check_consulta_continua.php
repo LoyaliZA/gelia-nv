@@ -7,6 +7,7 @@
 
 $fallos = 0;
 $root = dirname(__DIR__, 3);
+require_once __DIR__.'/_routes_helper.php';
 
 $checks = [];
 
@@ -43,7 +44,7 @@ $checks[] = ['responder no wipe costo si pesos iguales', str_contains($responder
 $val = file_get_contents($root.'/app/Services/ControlPedidos/ValidacionCamposPedidoBma.php');
 $checks[] = ['validación exige consulta cerrada', str_contains($val, 'requiereConsultaCerradaParaProceder')];
 
-$routes = file_get_contents($root.'/routes/web.php');
+$routes = control_pedidos_routes_content($root);
 $checks[] = ['ruta cerrar-consulta', str_contains($routes, 'cerrar-consulta')];
 $checks[] = ['ruta reabrir-consulta', str_contains($routes, 'reabrir-consulta')];
 

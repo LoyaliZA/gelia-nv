@@ -7,6 +7,7 @@
 
 $fallos = 0;
 $root = dirname(__DIR__, 3);
+require_once __DIR__.'/_routes_helper.php';
 
 $registrar = file_get_contents($root.'/app/Services/SaldosAFavor/RegistrarPagoPedidoBmaService.php');
 $actualizar = file_get_contents($root.'/app/Services/SaldosAFavor/ActualizarPagoPedidoBmaService.php');
@@ -23,7 +24,7 @@ $seccion = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/
 $styles = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js');
 $tabla = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx');
 $detalle = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalDetallePedido.jsx');
-$routes = file_get_contents($root.'/routes/web.php');
+$routes = control_pedidos_routes_content($root);
 $controller = file_get_contents($root.'/app/Http/Controllers/ControlPedidos/PedidoBmaSaldosPagosController.php');
 $acciones = file_get_contents($root.'/app/Support/ControlPedidos/AccionesHistorialPedidoBma.php');
 $migracion = file_get_contents($root.'/database/migrations/2026_08_09_150000_migrate_pedido_bma_pagos_estado_revision.php');

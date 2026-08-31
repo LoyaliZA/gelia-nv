@@ -7,9 +7,10 @@
 
 $fallos = 0;
 $root = dirname(__DIR__, 3);
+require_once __DIR__.'/_routes_helper.php';
 $modal = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/ModalResponderPesaje.jsx');
 $visor = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalVistaPreviaDocumento.jsx');
-$routes = file_get_contents($root.'/routes/web.php');
+$routes = control_pedidos_routes_with_gestion_interna($root);
 
 $checks = [
     ['usa InputConEscanner', str_contains($modal, 'InputConEscanner')],

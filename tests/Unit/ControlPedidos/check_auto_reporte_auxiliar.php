@@ -7,10 +7,11 @@
 
 $fallos = 0;
 $root = dirname(__DIR__, 3);
+require_once __DIR__.'/_routes_helper.php';
 $svc = file_get_contents($root.'/app/Services/ControlPedidos/ReportarErrorDatosPedidoBmaService.php');
 $modal = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalReportarErrorDatos.jsx');
 $auditar = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Auditar/Partials/ModalRevisarPedido.jsx');
-$routes = file_get_contents($root.'/routes/web.php');
+$routes = control_pedidos_routes_content($root);
 
 $checks = [
     ['servicio auto-reporte', str_contains($svc, 'ejecutarAutoReporteAuxiliar')],

@@ -6,6 +6,7 @@
  */
 
 $root = dirname(__DIR__, 3);
+require_once __DIR__.'/_routes_helper.php';
 $fallos = 0;
 
 $assert = function (bool $ok, string $label) use (&$fallos): void {
@@ -47,13 +48,17 @@ $needles = [
     'app/Services/ControlPedidos/ReactivarCancelacionOperativaService.php' => ['ESTADO_REVERTIDA', 'ConflictHttpException'],
     'app/Support/ControlPedidos/MaquinaEstadosTareaPreparacion.php' => ['LIBERACION_SOLICITADA', 'ESTADO_RESPONDIDA'],
     'app/Support/ControlPedidos/AccionesHistorialPedidoBma.php' => ['ESPERA_PAGO', 'REACTIVACION_CANCELACION', 'BLOQUEO_FINANCIERO_CANCELACION'],
-    'routes/web.php' => ['espera_pago', 'cancelacion_operativa.reactivar', 'cedis.liberar'],
     'routes/console.php' => ['evaluar-vencimiento-espera-preparacion'],
     'resources/js/Pages/ControlPedidos/Partials/ModalLiberarMercancia.jsx' => ['Ya devolví estas piezas a disponibilidad', 'Liberar mercancía'],
     'resources/js/Pages/ControlPedidos/Partials/ModalCancelarPedido.jsx' => ['puede_reactivar', 'Solicitar cancelación', 'flujo'],
     'resources/js/Pages/ControlPedidos/Cedis/Index.jsx' => ['LIBERACIONES', 'liberaciones_pendientes'],
     'app/Services/ControlPedidos/CancelarPedidoBmaService.php' => ['liberarReservasPendientes'],
 ];
+
+$routesContent = control_pedidos_routes_content($root);
+foreach (['espera_pago', 'cancelacion_operativa.reactivar', 'cedis.liberar'] as $needle) {
+    $assert(str_contains($routesContent, $needle), "routes control-pedidos contiene «{$needle}»");
+}
 
 foreach ($needles as $rel => $lista) {
     $path = $root.'/'.$rel;

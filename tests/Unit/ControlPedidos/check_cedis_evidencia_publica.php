@@ -7,13 +7,14 @@
 
 $fallos = 0;
 $root = dirname(__DIR__, 3);
+require_once __DIR__.'/_routes_helper.php';
 
 $restrict = file_get_contents($root.'/app/Http/Middleware/RestrictFormHostname.php');
 $harden = file_get_contents($root.'/app/Http/Middleware/HardenSolicitudDireccionPublica.php');
 $nginx = file_get_contents($root.'/default.conf');
 $formUrl = file_get_contents($root.'/app/Support/FormPublicUrl.php');
 $bootstrap = file_get_contents($root.'/resources/js/bootstrap.js');
-$routes = file_get_contents($root.'/routes/web.php');
+$routes = control_pedidos_routes_with_public($root);
 
 $checks = [
     ['RestrictFormHostname allowlist evidencias', str_contains($restrict, "str_starts_with(\$routeName, 'cedis_evidencia.publicas.')")],

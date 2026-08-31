@@ -7,12 +7,13 @@
 
 $fallos = 0;
 $root = dirname(__DIR__, 3);
+require_once __DIR__.'/_routes_helper.php';
 
 $servicio = file_get_contents($root.'/app/Services/ControlPedidos/CancelarPedidoBmaService.php');
 $pedido = file_get_contents($root.'/app/Models/ControlPedidos/PedidoBma.php');
 $estatus = file_get_contents($root.'/app/Models/ControlPedidos/CatalogoEstatusPedido.php');
 $migracion = file_get_contents($root.'/database/migrations/2026_08_09_190000_add_cancelacion_pedido_bma.php');
-$routes = file_get_contents($root.'/routes/web.php');
+$routes = control_pedidos_routes_content($root);
 $acciones = file_get_contents($root.'/app/Support/ControlPedidos/AccionesHistorialPedidoBma.php');
 $modal = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalCancelarPedido.jsx');
 $tabla = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx');

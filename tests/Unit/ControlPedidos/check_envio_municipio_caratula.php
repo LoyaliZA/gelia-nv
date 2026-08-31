@@ -7,6 +7,8 @@
 
 $fallos = 0;
 $root = dirname(__DIR__, 3);
+require_once __DIR__.'/_routes_helper.php';
+$cpRoutes = control_pedidos_routes_content($root);
 
 $checks = [
     ['migración fase 6', is_file($root.'/database/migrations/2026_08_24_200000_fase6_envio_municipio_caratulas.php')],
@@ -17,8 +19,8 @@ $checks = [
     ['blade carátula', is_file($root.'/resources/views/control_pedidos/caratula.blade.php')],
     ['CODIGO_ENVIO_MUNICIPIO', str_contains(file_get_contents($root.'/app/Models/ControlPedidos/CatalogoModalidadPreparacionPedido.php'), 'ENVIO_MUNICIPIO')],
     ['LISTA_PARA_CARATULA', str_contains(file_get_contents($root.'/app/Models/ControlPedidos/PedidoBmaTareaPreparacion.php'), 'LISTA_PARA_CARATULA')],
-    ['ruta generar carátula', str_contains(file_get_contents($root.'/routes/web.php'), 'caratula/generar')],
-    ['ruta confirmar colocación', str_contains(file_get_contents($root.'/routes/web.php'), 'caratula/confirmar-colocacion')],
+    ['ruta generar carátula', str_contains($cpRoutes, 'caratula/generar')],
+    ['ruta confirmar colocación', str_contains($cpRoutes, 'caratula/confirmar-colocacion')],
     ['tab LISTAS_CARATULA', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Tienda/Partials/FiltrosTienda.jsx'), 'LISTAS_CARATULA')],
     ['UI datos municipales Ventas', str_contains(file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedidoLegado.jsx'), 'Datos de entrega municipal')],
     ['permiso generar_caratula', str_contains(file_get_contents($root.'/resources/js/utils/permisos.js'), 'control_pedidos.tienda.generar_caratula')],

@@ -7,6 +7,7 @@
 
 $fallos = 0;
 $root = dirname(__DIR__, 3);
+require_once __DIR__.'/_routes_helper.php';
 
 $checks = [
     ['migración fase 4', is_file($root.'/database/migrations/2026_08_24_180000_fase4_preparacion_tienda.php')],
@@ -14,8 +15,8 @@ $checks = [
     ['máquina estados tarea', is_file($root.'/app/Support/ControlPedidos/MaquinaEstadosTareaPreparacion.php')],
     ['servicio crear tarea', is_file($root.'/app/Services/ControlPedidos/CrearTareaPreparacionService.php')],
     ['controller tienda', is_file($root.'/app/Http/Controllers/ControlPedidos/PedidoBmaTiendaController.php')],
-    ['ruta solicitar preparacion', str_contains(file_get_contents($root.'/routes/web.php'), 'solicitar-preparacion-tienda')],
-    ['ruta corregir preparacion', str_contains(file_get_contents($root.'/routes/web.php'), 'tareas-preparacion')],
+    ['ruta solicitar preparacion', str_contains(control_pedidos_routes_content($root), 'solicitar-preparacion-tienda')],
+    ['ruta corregir preparacion', str_contains(control_pedidos_routes_content($root), 'tareas-preparacion')],
     ['UI Index Tienda', is_file($root.'/resources/js/Pages/ControlPedidos/Tienda/Index.jsx')],
     ['UI Show Tienda', is_file($root.'/resources/js/Pages/ControlPedidos/Tienda/Show.jsx')],
     ['sidebar tienda', str_contains(file_get_contents($root.'/resources/js/config/sidebarNavigation.js'), 'control_pedidos_tienda')],

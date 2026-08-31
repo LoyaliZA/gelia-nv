@@ -22,7 +22,8 @@ $ctrl = file_get_contents(__DIR__.'/../../../app/Http/Controllers/ControlPedidos
 $enviar = file_get_contents(__DIR__.'/../../../app/Services/ControlPedidos/EnviarPedidoBmaService.php');
 $cola = file_get_contents(__DIR__.'/../../../app/Services/ControlPedidos/AvanzarColaErroresPedidoBmaService.php');
 $doc = file_get_contents(__DIR__.'/../../../app/Models/ControlPedidos/PedidoBmaDocumento.php');
-$routes = file_get_contents(__DIR__.'/../../../routes/web.php');
+require_once __DIR__.'/_routes_helper.php';
+$routes = control_pedidos_routes_content(dirname(__DIR__, 3));
 $tabla = file_get_contents(__DIR__.'/../../../resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx');
 $auditar = file_get_contents(__DIR__.'/../../../resources/js/Pages/ControlPedidos/Auditar/Index.jsx');
 $cedis = file_get_contents(__DIR__.'/../../../resources/js/Pages/ControlPedidos/Cedis/Index.jsx');

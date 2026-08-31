@@ -22,7 +22,8 @@ $migracion = file_get_contents($root.'/database/migrations/2026_08_13_150000_add
 $modalPesaje = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/ModalResponderPesaje.jsx');
 $seccion = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/SeccionRevisionFisicaPedido.jsx');
 $styles = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js');
-$routes = file_get_contents($root.'/routes/web.php');
+require_once __DIR__.'/_routes_helper.php';
+$routes = control_pedidos_routes_content($root);
 $listar = file_get_contents($root.'/app/Services/ControlPedidos/ListarPedidosBmaService.php');
 $auditoria = file_get_contents($root.'/app/Services/ControlPedidos/ListarPedidosAuditoriaService.php');
 $manual = file_get_contents($root.'/app/Support/Manuales/Content/ControlPedidosManualContent.php');
