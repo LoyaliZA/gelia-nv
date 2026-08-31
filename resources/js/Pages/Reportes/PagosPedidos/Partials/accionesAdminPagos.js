@@ -63,6 +63,46 @@ export async function reportarErrorAdmin({ cierreId, itemId, comentario, evidenc
     return data;
 }
 
+const CAMPOS_ADMIN_CIERRE = [
+    'admin_resumen',
+    'admin_resumen_label',
+    'admin_exhibiciones_revisadas',
+    'admin_exhibiciones_total',
+    'admin_exhibiciones_pendientes',
+    'admin_revisado_por',
+    'admin_revisado_at',
+    'admin_pedido_error_comentario',
+    'admin_pedido_error_reportado_at',
+    'admin_pedido_error_reportado_por',
+    'admin_pedido_error_evidencia_url',
+    'admin_pedido_error_evidencia_nombre',
+];
+
+/** Campos admin del listado de pedidos para sincronizar cierre cacheado. */
+export function camposAdminDesdePedido(pedido) {
+    if (!pedido) return {};
+    return CAMPOS_ADMIN_CIERRE.reduce((acc, key) => {
+        if (pedido[key] !== undefined) {
+            acc[key] = pedido[key];
+        }
+        return acc;
+    }, {});
+}
+
+/** Fusiona respuesta admin en lista de exhibiciones (vouchers / tabla plana). */
+export function mergeAdminEnExhibiciones(exhibiciones, respuesta) {
+    if (!exhibiciones?.length || !respuesta) return exhibiciones ?? [];
+    if (respuesta.item) {
+        const itemId = respuesta.item.id;
+        return exhibiciones.map((ex) => (ex.id === itemId ? { ...ex, ...respuesta.item } : ex));
+    }
+    if (respuesta.items?.length) {
+        const byId = Object.fromEntries(respuesta.items.map((it) => [it.id, it]));
+        return exhibiciones.map((ex) => ({ ...ex, ...(byId[ex.id] || {}) }));
+    }
+    return exhibiciones;
+}
+
 /** Fusiona respuesta admin en detalle cacheado. */
 export function mergeAdminEnDetalle(detalle, respuesta) {
     if (!detalle) return detalle;
@@ -71,8 +111,9 @@ export function mergeAdminEnDetalle(detalle, respuesta) {
         cierre: { ...detalle.cierre, ...(respuesta.cierre || {}) },
     };
     if (respuesta.item && next.exhibiciones) {
+        const itemId = respuesta.item.id;
         next.exhibiciones = next.exhibiciones.map((ex) => (
-            ex.id === respuesta.item.id ? { ...ex, ...respuesta.item } : ex
+            ex.id === itemId ? { ...ex, ...respuesta.item } : ex
         ));
     }
     if (respuesta.items?.length && next.exhibiciones) {

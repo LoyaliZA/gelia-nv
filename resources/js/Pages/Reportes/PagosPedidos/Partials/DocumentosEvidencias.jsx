@@ -7,18 +7,19 @@ import {
     SECCION_TITULO,
     META_DETALLE,
     RADIUS_PEDIDO_CARD,
-    badgeCoberturaExhibicion,
     cardReportePagos,
     fmtFechaSolo,
     fmtMxn,
     fmtTamanoArchivo,
     fmtTipoArchivo,
-    labelRevisionEstado,
-    tonoRevisionEstado,
+    BTN_NEUTRAL,
+    BTN_ICON,
+    GRUPO_ACCIONES,
 } from './pagosPedidosStyles';
-
-const BTN_DOC =
-    'inline-flex items-center justify-center gap-1.5 min-h-9 px-3 rounded-lg border theme-border theme-element text-xs font-semibold theme-text-main hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+import {
+    EtiquetaCoberturaExhibicion,
+    EtiquetaValidacionPago,
+} from './EtiquetaEstadoCategorizado';
 
 function TarjetaRemision({ remision, folioPedido, folioRemision, onVer }) {
     if (!remision) {
@@ -60,18 +61,18 @@ function TarjetaRemision({ remision, folioPedido, folioRemision, onVer }) {
             </p>
             {meta && <p className={`${META_DETALLE} m-0 mt-1`}>{meta}</p>}
 
-            <div className="flex flex-wrap gap-2 mt-auto pt-4">
+            <div className={`${GRUPO_ACCIONES} mt-auto pt-4`}>
                 <button
                     type="button"
-                    className={BTN_DOC}
+                    className={BTN_NEUTRAL}
                     disabled={!puedeAbrir}
                     onClick={() => puedeAbrir && onVer(payloadArchivoRemision(remision, { folio_pedido: folioPedido, folio_remision: folioRemision }))}
                 >
                     Ver
                 </button>
                 {puedeAbrir ? (
-                    <a href={remision.url} download={remision.nombre || undefined} className={BTN_DOC}>
-                        <Download className="w-4 h-4 shrink-0" />
+                    <a href={remision.url} download={remision.nombre || undefined} className={BTN_NEUTRAL}>
+                        <Download className={BTN_ICON} aria-hidden="true" />
                         Descargar
                     </a>
                 ) : (
@@ -83,7 +84,6 @@ function TarjetaRemision({ remision, folioPedido, folioRemision, onVer }) {
 }
 
 function MiniaturaVoucher({ ex, exhibiciones, conEvidencia, onAbrirIndice }) {
-    const cobertura = badgeCoberturaExhibicion(ex, exhibiciones);
     const esImagen = ex.evidencia?.mime_type?.startsWith('image/');
 
     return (
@@ -120,11 +120,10 @@ function MiniaturaVoucher({ ex, exhibiciones, conEvidencia, onAbrirIndice }) {
                 <p className={`${META_DETALLE} m-0`}>
                     {ex.forma_pago_label}{ex.banco ? ` · ${ex.banco}` : ''}
                 </p>
-                <p className={`text-xs m-0 ${tonoRevisionEstado(ex.estado_revision)}`}>
-                    {labelRevisionEstado(ex.estado_revision)}
-                    <span className="theme-text-main/50"> · </span>
-                    <span className="theme-text-main/75">{cobertura.texto}</span>
-                </p>
+                <div className="flex flex-wrap gap-3 pt-1">
+                    <EtiquetaValidacionPago estado={ex.estado_revision} />
+                    <EtiquetaCoberturaExhibicion ex={ex} exhibiciones={exhibiciones} />
+                </div>
             </div>
         </button>
     );

@@ -1,10 +1,9 @@
 import React, { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
-import { BTN_SECONDARY } from './pagosPedidosStyles';
+import { THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
+import { BTN_NEUTRAL, BTN_ERR, GRUPO_ACCIONES } from './pagosPedidosStyles';
 import { reportarErrorAdmin } from './accionesAdminPagos';
-
-const OVERLAY = 'fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-4 bg-black/50';
-const SHELL = 'theme-element border theme-border rounded-2xl w-full max-w-lg shadow-xl flex flex-col max-h-[min(90dvh,640px)]';
 
 export default function ModalReportarErrorAdminPagos({
     abierto,
@@ -21,7 +20,7 @@ export default function ModalReportarErrorAdminPagos({
     const [error, setError] = useState(null);
     const inputRef = useRef(null);
 
-    if (!abierto) return null;
+    if (!abierto || typeof document === 'undefined') return null;
 
     const cerrar = () => {
         if (enviando) return;
@@ -61,12 +60,20 @@ export default function ModalReportarErrorAdminPagos({
         }
     };
 
-    return (
-        <div className={OVERLAY} onClick={cerrar}>
-            <div className={SHELL} onClick={(ev) => ev.stopPropagation()}>
+    return createPortal(
+        <div
+            className={THEME_MODAL_OVERLAY}
+            role="dialog"
+            aria-modal="true"
+            onClick={cerrar}
+        >
+            <div
+                className={`${THEME_MODAL_SHELL} w-full max-w-lg flex flex-col max-h-[min(90dvh,640px)]`}
+                onClick={(ev) => ev.stopPropagation()}
+            >
                 <div className="flex items-start justify-between gap-3 p-5 border-b theme-border shrink-0">
                     <div className="flex items-start gap-2 min-w-0">
-                        <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600" aria-hidden="true" />
+                        <AlertTriangle className="w-5 h-5 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
                         <div className="min-w-0">
                             <h2 className="text-base font-bold theme-text-main m-0">{titulo}</h2>
                             {subtitulo && (
@@ -86,7 +93,7 @@ export default function ModalReportarErrorAdminPagos({
                                 value={comentario}
                                 onChange={(ev) => setComentario(ev.target.value)}
                                 rows={4}
-                                className="w-full rounded-xl border theme-border theme-element theme-text-main text-sm p-3 resize-y min-h-[100px]"
+                                className="w-full rounded-xl border theme-border theme-element theme-text-main text-[13px] p-3 resize-y min-h-[100px]"
                                 placeholder="Describa qué encontró en la revisión administrativa…"
                                 disabled={enviando}
                             />
@@ -105,13 +112,13 @@ export default function ModalReportarErrorAdminPagos({
                         </label>
                         {error && <p className="text-sm text-red-600 m-0">{error}</p>}
                     </div>
-                    <div className="p-5 border-t theme-border flex flex-wrap justify-end gap-2 shrink-0">
-                        <button type="button" className={BTN_SECONDARY} onClick={cerrar} disabled={enviando}>
+                    <div className={`p-5 border-t theme-border ${GRUPO_ACCIONES} justify-end shrink-0`}>
+                        <button type="button" className={BTN_NEUTRAL} onClick={cerrar} disabled={enviando}>
                             Cancelar
                         </button>
                         <button
                             type="submit"
-                            className="theme-btn-primary theme-btn-primary--compact text-xs font-semibold disabled:opacity-50"
+                            className={BTN_ERR}
                             disabled={enviando}
                         >
                             {enviando ? 'Enviando…' : 'Reportar error'}
@@ -119,6 +126,7 @@ export default function ModalReportarErrorAdminPagos({
                     </div>
                 </form>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

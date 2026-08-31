@@ -135,3 +135,44 @@ export function subtituloAgrupacionVouchers(agruparPor) {
             return 'Agrupado por fecha del movimiento';
     }
 }
+
+const FLAGS_FILTRO_01 = [
+    'incluir_vouchers',
+    'incluir_evidencias_rechazadas_sustituidas',
+    'incluir_referencias_remision',
+    'incluir_observaciones_historial',
+    'reportado_posteriormente',
+    'posible_duplicado',
+    'con_saf_relacionado',
+    'con_observaciones',
+    'con_remision',
+    'con_evidencia',
+];
+
+/** Serializa filtros del reporte para query string compatible con validación backend. */
+export function queryFiltrosPagosPedidos(filtros, patch = {}) {
+    const merged = { ...filtros, ...patch };
+    const out = {};
+
+    for (const [key, value] of Object.entries(merged)) {
+        if (value === null || value === undefined || value === '') continue;
+        if (Array.isArray(value) && value.length === 0) continue;
+
+        if (FLAGS_FILTRO_01.includes(key)) {
+            if (typeof value === 'boolean') {
+                out[key] = value ? '1' : '0';
+                continue;
+            }
+            if (value === 'true' || value === 'false') {
+                out[key] = value === 'true' ? '1' : '0';
+                continue;
+            }
+        }
+
+        out[key] = value;
+    }
+
+    out.page = patch.page ?? out.page ?? 1;
+
+    return out;
+}

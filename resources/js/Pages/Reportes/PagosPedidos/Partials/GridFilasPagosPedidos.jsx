@@ -1,5 +1,5 @@
 import React from 'react';
-import { SEM_BADGE, fmtIncidencias, ETIQUETA_FIN, META_DETALLE, IMPORTE_FIN } from './pagosPedidosStyles';
+import { SEM_BADGE, SEM_TEXTO, fmtIncidencias, ETIQUETA_FIN, META_DETALLE, IMPORTE_FIN, BTN_NEUTRAL } from './pagosPedidosStyles';
 
 /** Cuadrícula compartida: info principal + 4 columnas financieras alineadas (encabezado diario). */
 export const GRID_FILA_PAGOS =
@@ -10,10 +10,11 @@ export const GRID_FINANCIERO_MOVIL =
     'col-span-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(6.75rem,1.5fr)] gap-x-4 md:contents';
 
 const tonoValorClass = (tono, { confirmado = false, destacado = false } = {}) => {
-    if (confirmado || tono === 'exito') return 'text-emerald-600 dark:text-emerald-400';
-    if (tono === 'advertencia' || destacado) return 'text-amber-700 dark:text-amber-400';
-    if (tono === 'critico') return 'text-red-600 dark:text-red-400';
-    if (tono === 'info') return 'text-sky-700 dark:text-sky-400';
+    if (confirmado || tono === 'exito') return SEM_TEXTO.exito;
+    if (tono === 'exitoSuave') return SEM_TEXTO.exitoSuave;
+    if (tono === 'advertencia' || destacado) return SEM_TEXTO.advertencia;
+    if (tono === 'critico') return SEM_TEXTO.critico;
+    if (tono === 'info') return SEM_TEXTO.info;
     return 'theme-text-main';
 };
 
@@ -26,7 +27,7 @@ export function CeldaFinanciera({
     confirmado = false,
 }) {
     return (
-        <div className="flex flex-col items-end justify-center text-right tabular-nums min-w-0 w-full h-full gap-1 pr-0.5">
+        <div className="flex flex-col items-end justify-center text-right tabular-nums min-w-0 w-full h-full gap-1.5 pr-0.5">
             <span className={`${ETIQUETA_FIN} leading-snug whitespace-nowrap`}>{label}</span>
             <span
                 className={[
@@ -65,41 +66,64 @@ export function pedidoTieneIncidencia(pedido) {
     return ['parcial', 'con_excedente', 'sin_pago'].includes(pedido?.estado_cobertura);
 }
 
-/** Fila desplegable de pedido — móvil / md / lg. */
-export const GRID_FILA_PEDIDO = [
-    'w-full grid gap-x-3 gap-y-3 text-left items-center',
+/** Resumen superior del pedido — identificación, financiero, documentos y cobertura. */
+export const GRID_RESUMEN_PEDIDO = [
+    'w-full grid gap-x-4 gap-y-3 text-left',
     'grid-cols-[32px_minmax(0,1fr)]',
-    'min-h-[100px] px-4 py-3',
-    'md:px-6 md:grid-cols-[32px_minmax(0,1fr)_auto_auto] md:grid-rows-[auto_auto] md:items-start md:py-4',
-    'lg:grid-cols-[32px_minmax(0,1.1fr)_minmax(16rem,1.25fr)_auto_auto]',
-    'lg:grid-rows-1 lg:items-center lg:min-h-[100px] lg:max-h-[115px] lg:py-3',
+    'md:grid-cols-[32px_minmax(0,1fr)_minmax(0,1.2fr)]',
+    'lg:grid-cols-[32px_minmax(0,1fr)_minmax(0,1.35fr)_auto]',
+    'lg:items-center',
+    'min-h-0 px-4 py-4 md:px-5',
 ].join(' ');
 
-export const PEDIDO_CHEVRON =
-    'col-start-1 row-start-1 w-8 h-8 shrink-0 flex items-center justify-center rounded-lg self-center pointer-events-none';
+/** @deprecated Usar GRID_RESUMEN_PEDIDO */
+export const GRID_FILA_PEDIDO = GRID_RESUMEN_PEDIDO;
 
-export const PEDIDO_IDENTIDAD =
-    'col-start-2 row-start-1 min-w-0 self-center space-y-0.5 md:row-start-1 lg:col-start-2 lg:row-start-1';
+export const PEDIDO_CHEVRON = [
+    'col-start-1 row-start-1 w-8 h-8 shrink-0 flex items-center justify-center rounded-lg',
+    'self-start mt-0.5 pointer-events-none',
+    'lg:self-center lg:mt-0',
+].join(' ');
+
+export const PEDIDO_IDENTIDAD = [
+    'col-start-2 row-start-1 min-w-0 space-y-1',
+    'md:col-start-2 md:row-start-1',
+    'lg:self-center',
+].join(' ');
 
 export const PEDIDO_FIN_GRID = [
     'col-span-2 row-start-2',
-    'grid grid-cols-2 gap-x-3 gap-y-2 w-full min-w-0',
-    'md:col-span-4 md:row-start-2 md:grid-cols-4 md:gap-x-4',
-    'lg:col-start-3 lg:row-start-1 lg:col-span-1 lg:grid lg:grid-cols-4 lg:gap-x-3 lg:gap-y-0 lg:self-center lg:min-w-0',
+    'grid grid-cols-2 gap-x-4 gap-y-3 w-full min-w-0',
+    'md:col-span-1 md:col-start-3 md:row-start-1 md:grid-cols-4 md:gap-x-3 md:self-center',
+    'lg:col-start-3 lg:row-start-1',
 ].join(' ');
 
-export const PEDIDO_DOCS = [
+/** Documentos + cobertura: un solo bloque al extremo derecho para evitar solapamiento. */
+export const PEDIDO_TRAIL = [
     'col-span-2 row-start-3',
-    'flex flex-col gap-2 w-full min-w-0',
-    'md:col-start-3 md:row-start-1 md:col-span-1 md:w-auto md:flex-row md:items-center md:gap-2 md:self-center',
-    'lg:col-start-4 lg:row-start-1 lg:col-span-1 lg:flex-row lg:shrink-0 lg:self-center',
+    'flex flex-col gap-3 w-full min-w-0',
+    'sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4',
+    'md:col-span-2 md:col-start-2 md:row-start-2',
+    'lg:col-start-4 lg:row-start-1 lg:justify-end lg:gap-5 lg:w-auto lg:shrink-0',
 ].join(' ');
 
-export const PEDIDO_BADGE =
-    'col-span-2 row-start-4 w-fit shrink-0 md:col-start-4 md:row-start-1 md:justify-self-end md:self-center lg:col-start-5 lg:row-start-1 lg:justify-self-end lg:self-center';
+export const PEDIDO_DOCS =
+    'flex flex-row flex-nowrap items-center gap-2 shrink-0';
 
-export const PEDIDO_BTN_DOC =
-    'inline-flex items-center justify-center gap-1.5 min-w-9 min-h-9 h-9 px-2 lg:px-3 rounded-lg border theme-border theme-element theme-text-main text-xs font-semibold shadow-sm hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] hover:bg-[color-mix(in_srgb,var(--color-primario)_8%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-surface)] transition-all disabled:opacity-40 disabled:cursor-not-allowed w-full md:w-auto shrink-0';
+export const PEDIDO_COBERTURA =
+    'flex items-end shrink-0 sm:ml-auto lg:ml-0';
+
+/** @deprecated Usar PEDIDO_COBERTURA */
+export const PEDIDO_BADGE = PEDIDO_COBERTURA;
+
+export const PEDIDO_FOOTER_ADMIN = [
+    'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3',
+    'px-4 py-3.5 md:px-5',
+    'border-t theme-border',
+    'bg-[color-mix(in_srgb,var(--theme-border)_18%,var(--theme-element-bg))]',
+].join(' ');
+
+export const PEDIDO_BTN_DOC = `${BTN_NEUTRAL} min-w-9 w-auto !min-h-8 !h-8 !px-2.5 !text-xs`;
 
 export const PEDIDO_CABECERA =
     'cursor-pointer hover:bg-black/[0.03] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primario)]';

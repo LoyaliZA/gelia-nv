@@ -13,6 +13,44 @@ class FiltrarReportePagosPedidosRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $flags01 = [
+            'incluir_vouchers',
+            'incluir_evidencias_rechazadas_sustituidas',
+            'incluir_referencias_remision',
+            'incluir_observaciones_historial',
+            'reportado_posteriormente',
+            'posible_duplicado',
+            'con_saf_relacionado',
+            'con_observaciones',
+            'con_remision',
+            'con_evidencia',
+        ];
+
+        $normalized = [];
+        foreach ($flags01 as $key) {
+            if (! $this->exists($key)) {
+                continue;
+            }
+
+            $value = $this->input($key);
+            if (is_bool($value)) {
+                $normalized[$key] = $value ? '1' : '0';
+
+                continue;
+            }
+
+            if ($value === 'true' || $value === 'false') {
+                $normalized[$key] = $value === 'true' ? '1' : '0';
+            }
+        }
+
+        if ($normalized !== []) {
+            $this->merge($normalized);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -135,6 +173,7 @@ class FiltrarReportePagosPedidosRequest extends FormRequest
 
         $filtrado = array_filter($out, fn ($v) => $v !== null && $v !== '' && $v !== [] && $v !== false);
         $filtrado['tipo_reporte'] = $tipoReporte;
+        $filtrado['estado_admin'] = $out['estado_admin'] ?? 'pendiente';
 
         return $filtrado;
     }

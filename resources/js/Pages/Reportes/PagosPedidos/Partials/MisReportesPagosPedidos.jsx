@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Download, Eye, RefreshCw } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { reintentarPagosPedidosExportacion } from '../../../../utils/pagosPedidosReporteTracker';
+import { BTN_LINK, BTN_ICON } from './pagosPedidosStyles';
 
 function etiquetaEstado(item) {
     if (item.estado_label) return item.estado_label;
@@ -109,7 +110,7 @@ export default function MisReportesPagosPedidos({
             <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide theme-text-muted m-0">Mis reportes</p>
                 {items.length > 3 && (
-                    <button type="button" onClick={() => setAbierto((v) => !v)} className="text-xs font-semibold theme-text-muted hover:text-[var(--color-primario)]">
+                    <button type="button" onClick={() => setAbierto((v) => !v)} className={BTN_LINK}>
                         {abierto ? 'Ver menos' : `Ver todos (${items.length})`}
                     </button>
                 )}
@@ -158,9 +159,9 @@ export default function MisReportesPagosPedidos({
                                         <button
                                             type="button"
                                             onClick={() => accionArchivo(item)}
-                                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--color-primario)] hover:underline"
+                                            className={BTN_LINK}
                                         >
-                                            {item.puede_descargar ? <Download className="w-3.5 h-3.5" /> : (item.estado === 'processing' || item.estado === 'pending') ? <Eye className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                            {item.puede_descargar ? <Download className={BTN_ICON} aria-hidden="true" /> : (item.estado === 'processing' || item.estado === 'pending') ? <Eye className={BTN_ICON} aria-hidden="true" /> : <RefreshCw className={BTN_ICON} aria-hidden="true" />}
                                             {labelAccion(item)}
                                         </button>
                                     ) : (

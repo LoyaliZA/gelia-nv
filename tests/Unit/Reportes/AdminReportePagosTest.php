@@ -309,6 +309,109 @@ class AdminReportePagosTest extends TestCase
         Notification::assertNotSentTo($admin, AlertaPedidoBma::class);
     }
 
+    public function test_resumen_pedido_segun_exhibiciones(): void
+    {
+        $admin = $this->adminUsuario();
+        $vendedor = User::factory()->create();
+        $pedido = $this->crearPedido($vendedor);
+        $cierre = $this->crearCierre($pedido, $admin);
+
+        $this->assertSame(
+            AdminEstadoReportePagosPedidos::PENDIENTE,
+            AdminEstadoReportePagosPedidos::resumenPedido($cierre, collect()),
+        );
+
+        $pendiente = $this->crearItem($cierre, 1);
+        $this->crearItem($cierre, 2);
+        $items = $cierre->fresh('items')->items;
+        $this->assertSame(
+            AdminEstadoReportePagosPedidos::PENDIENTE,
+            AdminEstadoReportePagosPedidos::resumenPedido($cierre, $items),
+        );
+
+        $pendiente->update(['admin_estado' => AdminEstadoReportePagosPedidos::CONFIRMADO]);
+        $items = $cierre->fresh('items')->items;
+        $this->assertSame('parcial', AdminEstadoReportePagosPedidos::resumenPedido($cierre, $items));
+
+        $items->each(fn (PedidoBmaCierrePagoItem $item) => $item->update([
+            'admin_estado' => AdminEstadoReportePagosPedidos::CONFIRMADO,
+        ]));
+        $items = $cierre->fresh('items')->items;
+        $this->assertSame(
+            AdminEstadoReportePagosPedidos::CONFIRMADO,
+            AdminEstadoReportePagosPedidos::resumenPedido($cierre, $items),
+        );
+
+        $items->first()->update(['admin_estado' => AdminEstadoReportePagosPedidos::CON_ERROR]);
+        $items = $cierre->fresh('items')->items;
+        $this->assertSame(
+            AdminEstadoReportePagosPedidos::CON_ERROR,
+            AdminEstadoReportePagosPedidos::resumenPedido($cierre, $items),
+        );
+    }
+
+    public function test_conteo_exhibiciones_admin_en_payload_cierre(): void
+    {
+        $admin = $this->adminUsuario();
+        $vendedor = User::factory()->create();
+        $pedido = $this->crearPedido($vendedor);
+        $cierre = $this->crearCierre($pedido, $admin);
+        $this->crearItem($cierre, 1, AdminEstadoReportePagosPedidos::CONFIRMADO);
+        $this->crearItem($cierre, 2);
+        $this->crearItem($cierre, 3, AdminEstadoReportePagosPedidos::CON_ERROR);
+
+        $payload = AdminEstadoReportePagosPedidos::payloadCierre($cierre->fresh('items'));
+
+        $this->assertSame(3, $payload['admin_exhibiciones_total']);
+        $this->assertSame(2, $payload['admin_exhibiciones_revisadas']);
+        $this->assertSame(1, $payload['admin_exhibiciones_pendientes']);
+        $this->assertSame(AdminEstadoReportePagosPedidos::CON_ERROR, $payload['admin_resumen']);
+        $this->assertSame('Pedido con error', $payload['admin_resumen_label']);
+    }
+
+    public function test_metadata_revision_cierre_confirmado(): void
+    {
+        $admin = $this->adminUsuario();
+        $vendedor = User::factory()->create();
+        $pedido = $this->crearPedido($vendedor);
+        $cierre = $this->crearCierre($pedido, $admin);
+        $item = $this->crearItem($cierre, 1, AdminEstadoReportePagosPedidos::CONFIRMADO);
+        $item->update([
+            'admin_confirmado_por_id' => $admin->id,
+            'admin_confirmado_at' => now(),
+        ]);
+
+        $payload = AdminEstadoReportePagosPedidos::payloadCierre($cierre->fresh([
+            'items.adminConfirmadoPor',
+        ]));
+
+        $this->assertSame(AdminEstadoReportePagosPedidos::CONFIRMADO, $payload['admin_resumen']);
+        $this->assertSame($admin->id, $payload['admin_revisado_por']['id']);
+        $this->assertNotNull($payload['admin_revisado_at']);
+    }
+
+    public function test_metadata_revision_cierre_error_pedido(): void
+    {
+        $admin = $this->adminUsuario();
+        $vendedor = User::factory()->create();
+        $pedido = $this->crearPedido($vendedor);
+        $cierre = $this->crearCierre($pedido, $admin);
+        $cierre->update([
+            'admin_pedido_error_reportado_por_id' => $admin->id,
+            'admin_pedido_error_reportado_at' => now(),
+            'admin_pedido_error_comentario' => 'Error de prueba',
+        ]);
+
+        $payload = AdminEstadoReportePagosPedidos::payloadCierre($cierre->fresh([
+            'adminPedidoErrorReportadoPor',
+            'items',
+        ]));
+
+        $this->assertSame(AdminEstadoReportePagosPedidos::CON_ERROR, $payload['admin_resumen']);
+        $this->assertSame($admin->id, $payload['admin_revisado_por']['id']);
+        $this->assertNotNull($payload['admin_revisado_at']);
+    }
+
     public function test_filtro_pendiente_excluye_confirmados_y_errores(): void
     {
         Permission::findOrCreate('reportes.pagos_pedidos.ver');

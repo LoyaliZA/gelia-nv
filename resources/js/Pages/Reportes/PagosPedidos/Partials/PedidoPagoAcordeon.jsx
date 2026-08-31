@@ -4,40 +4,69 @@ import ModalVisorArchivo, { payloadArchivoRemision } from '@/Components/ModalVis
 import ResumenFinancieroPedido from './ResumenFinancieroPedido';
 import ListaExhibicionesPago from './ListaExhibicionesPago';
 import DocumentosEvidencias from './DocumentosEvidencias';
-import { badgeCobertura, fmtMxn, fmtVouchersLabel, labelEstadoCobertura, RADIUS_PEDIDO } from './pagosPedidosStyles';
+import {
+    fmtMxn,
+    fmtVouchersLabel,
+    RADIUS_PEDIDO,
+    BTN_ICON,
+    BTN_NEUTRAL,
+    NOMBRE_CLIENTE,
+    FOLIO_META,
+    BLOQUE_GAP,
+    DETALLE_PAD,
+    ACORDEON_CONTENIDO_INNER,
+    acordeonContenidoGridClass,
+    scrollAlExpandirAcordeon,
+} from './pagosPedidosStyles';
+import { EtiquetaCoberturaPedido } from './EtiquetaEstadoCategorizado';
 import {
     CeldaFinanciera,
-    GRID_FILA_PEDIDO,
-    PEDIDO_BADGE,
+    GRID_RESUMEN_PEDIDO,
     PEDIDO_BTN_DOC,
     PEDIDO_CABECERA,
     PEDIDO_CHEVRON,
+    PEDIDO_COBERTURA,
     PEDIDO_DOCS,
     PEDIDO_FIN_GRID,
+    PEDIDO_TRAIL,
     PEDIDO_IDENTIDAD,
 } from './GridFilasPagosPedidos';
-import { AccionesAdminPedido, BadgeAdminEstado, useAdminDetalleUpdater } from './AccionesAdminPagos';
+import { PieRevisionAdminPedido, useAdminDetalleUpdater } from './AccionesAdminPagos';
 
 function detenerPropagacion(e) {
     e.stopPropagation();
 }
 
-export default function PedidoPagoAcordeon({ pedido, auth, cacheDetalle, onCacheDetalle, onRecargarLista }) {
-    const [abierto, setAbierto] = useState(false);
+export default function PedidoPagoAcordeon({
+    pedido,
+    auth,
+    cacheDetalle,
+    onCacheDetalle,
+    onRecargarLista,
+    abierto = false,
+    onAbiertoChange,
+}) {
     const [cargando, setCargando] = useState(false);
     const [error, setError] = useState(null);
     const [irAVouchers, setIrAVouchers] = useState(false);
     const [visorRemision, setVisorRemision] = useState(null);
     const [pendienteRemision, setPendienteRemision] = useState(false);
+    const pedidoRef = useRef(null);
     const documentosRef = useRef(null);
+    const abiertoPrevioRef = useRef(abierto);
     const detalle = cacheDetalle[pedido.cierre_id];
-    const onAdminActualizado = useAdminDetalleUpdater(cacheDetalle, onCacheDetalle, pedido.cierre_id);
-    const adminResumen = detalle?.cierre?.admin_resumen ?? pedido.admin_resumen;
-    const adminResumenLabel = detalle?.cierre?.admin_resumen_label ?? pedido.admin_resumen_label;
-    const pedidoTieneError = Boolean(detalle?.cierre?.admin_pedido_error_reportado_at ?? pedido.admin_pedido_error_reportado_at);
+    const aplicarMergeAdmin = useAdminDetalleUpdater(onCacheDetalle, pedido.cierre_id);
+    const adminResumen = pedido.admin_resumen;
+    const adminResumenLabel = pedido.admin_resumen_label;
+    const exhibicionesRevisadas = pedido.admin_exhibiciones_revisadas;
+    const exhibicionesTotal = pedido.admin_exhibiciones_total;
+    const exhibicionesPendientes = pedido.admin_exhibiciones_pendientes;
+    const adminRevisadoPor = pedido.admin_revisado_por;
+    const adminRevisadoAt = pedido.admin_revisado_at;
+    const pedidoTieneError = Boolean(pedido.admin_pedido_error_reportado_at);
 
-    const cargarDetalle = useCallback(async () => {
-        if (detalle || cargando) return;
+    const cargarDetalle = useCallback(async ({ force = false } = {}) => {
+        if (!force && (detalle || cargando)) return;
         setCargando(true);
         setError(null);
         try {
@@ -55,18 +84,33 @@ export default function PedidoPagoAcordeon({ pedido, auth, cacheDetalle, onCache
         }
     }, [cargando, detalle, onCacheDetalle, pedido.cierre_id]);
 
+    const onAdminActualizado = useCallback((resp) => {
+        aplicarMergeAdmin(resp);
+        onRecargarLista?.();
+        if (abierto) {
+            cargarDetalle({ force: true });
+        }
+    }, [aplicarMergeAdmin, onRecargarLista, abierto, cargarDetalle]);
+
     const expandir = useCallback(() => {
-        setAbierto(true);
+        onAbiertoChange?.(true);
         cargarDetalle();
-    }, [cargarDetalle]);
+    }, [cargarDetalle, onAbiertoChange]);
 
     const toggle = useCallback(() => {
         if (abierto) {
-            setAbierto(false);
+            onAbiertoChange?.(false);
             return;
         }
         expandir();
-    }, [abierto, expandir]);
+    }, [abierto, expandir, onAbiertoChange]);
+
+    useEffect(() => {
+        if (abierto && !abiertoPrevioRef.current) {
+            scrollAlExpandirAcordeon(pedidoRef.current);
+        }
+        abiertoPrevioRef.current = abierto;
+    }, [abierto]);
 
     useEffect(() => {
         if (!irAVouchers || !detalle || !abierto) return;
@@ -106,11 +150,23 @@ export default function PedidoPagoAcordeon({ pedido, auth, cacheDetalle, onCache
     };
 
     const numExhibiciones = Number(pedido.num_exhibiciones ?? 0);
+    const metaAtencion = [
+        pedido.pedido_fecha_label || null,
+        pedido.vendedor ? `Atendido por: ${pedido.vendedor}` : null,
+        pedido.departamento || null,
+    ].filter(Boolean);
+    if (numExhibiciones > 0) {
+        metaAtencion.push(
+            `${numExhibiciones.toLocaleString('es-MX')} exhibición${numExhibiciones === 1 ? '' : 'es'}`,
+        );
+    }
+    const metaAtencionTexto = metaAtencion.join(' · ');
 
     return (
         <div
+            ref={pedidoRef}
             className={[
-                'overflow-hidden border theme-border transition-colors',
+                'overflow-hidden border theme-border transition-colors scroll-mt-24',
                 RADIUS_PEDIDO,
                 abierto
                     ? 'border-l-[3px] border-l-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_5%,var(--theme-element-bg))]'
@@ -129,45 +185,46 @@ export default function PedidoPagoAcordeon({ pedido, auth, cacheDetalle, onCache
                         toggle();
                     }
                 }}
-                className={`${GRID_FILA_PEDIDO} ${PEDIDO_CABECERA}`}
+                className={`${GRID_RESUMEN_PEDIDO} ${PEDIDO_CABECERA}`}
             >
                 <div className={PEDIDO_CHEVRON} aria-hidden="true">
                     <ChevronDown
-                        className={`w-[18px] h-[18px] transition-transform ${abierto ? '' : '-rotate-90'}`}
+                        className={`w-[18px] h-[18px] transition-transform duration-300 ease-out ${abierto ? '' : '-rotate-90'}`}
                         style={{ color: 'var(--color-primario)' }}
                     />
                 </div>
 
                 <div className={PEDIDO_IDENTIDAD}>
-                    <p className="text-sm font-semibold theme-text-main m-0 leading-snug truncate">
+                    <p className={`${NOMBRE_CLIENTE} m-0 truncate leading-snug`}>
+                        {pedido.cliente?.nombre || '—'}
+                    </p>
+                    <p className={`${FOLIO_META} m-0 leading-snug truncate`}>
                         {pedido.folio_remision ? (
                             <>
-                                <span className="text-[11px] font-medium theme-text-muted">Remisión </span>
+                                <span className="font-medium">Remisión </span>
                                 <span className="font-mono tabular-nums">{pedido.folio_remision}</span>
                             </>
                         ) : (
-                            <span className="text-xs font-medium theme-text-muted">Sin remisión</span>
+                            <span className="font-medium">Sin remisión</span>
                         )}
-                    </p>
-                    <p className="text-xs theme-text-muted m-0 leading-snug truncate">
-                        <span className="font-medium">Folio:</span>{' '}
+                        <span className="mx-1.5" aria-hidden="true">·</span>
+                        <span className="font-medium">Folio</span>{' '}
                         <span className="font-mono">{pedido.folio || '—'}</span>
                     </p>
-                    <p className="text-sm font-semibold theme-text-main m-0 mt-1 truncate leading-snug">
-                        {pedido.cliente?.nombre || '—'}
-                    </p>
-                    <p className="text-xs theme-text-muted m-0 truncate leading-snug">
-                        <span className="font-medium">Pedido:</span>{' '}
-                        {pedido.pedido_fecha_label || '—'}
-                        {' · '}
-                        <span className="font-medium">Atendido por:</span> {pedido.vendedor || '—'}
-                        {pedido.departamento ? ` · ${pedido.departamento}` : ''}
-                    </p>
+                    {metaAtencionTexto && (
+                        <p className={`${FOLIO_META} m-0 truncate leading-snug`}>
+                            {metaAtencionTexto}
+                        </p>
+                    )}
                 </div>
 
-                <div className={PEDIDO_FIN_GRID}>
+                <div
+                    className={PEDIDO_FIN_GRID}
+                    onClick={detenerPropagacion}
+                    onKeyDown={detenerPropagacion}
+                >
                     <CeldaFinanciera label="Total remisión" valor={fmtMxn(pedido.total_pedido)} />
-                    <CeldaFinanciera label="SAF" valor={fmtMxn(pedido.saf_aplicado)} />
+                    <CeldaFinanciera label="SAF aplicado" valor={fmtMxn(pedido.saf_aplicado)} />
                     <CeldaFinanciera label="Pagos válidos" valor={fmtMxn(pedido.pagos_validos)} />
                     <CeldaFinanciera
                         label="Exhibiciones"
@@ -176,101 +233,113 @@ export default function PedidoPagoAcordeon({ pedido, auth, cacheDetalle, onCache
                 </div>
 
                 <div
-                    className={PEDIDO_DOCS}
+                    className={PEDIDO_TRAIL}
                     onClick={detenerPropagacion}
                     onKeyDown={detenerPropagacion}
                 >
-                    <button
-                        type="button"
-                        className={PEDIDO_BTN_DOC}
-                        disabled={!pedido.tiene_vouchers}
-                        title={
-                            pedido.tiene_vouchers
-                                ? `Ver ${vouchersLabel.toLowerCase()} adjuntos`
-                                : 'Sin comprobantes'
-                        }
-                        aria-label={
-                            pedido.tiene_vouchers
-                                ? `Ver ${vouchersLabel.toLowerCase()} adjuntos`
-                                : 'Sin comprobantes'
-                        }
-                        onClick={onVouchers}
-                    >
-                        <ImageIcon className="w-[18px] h-[18px] shrink-0" aria-hidden="true" />
-                        <span className="hidden lg:inline">{vouchersLabel}</span>
-                    </button>
-                    <button
-                        type="button"
-                        className={PEDIDO_BTN_DOC}
-                        disabled={!pedido.tiene_remision}
-                        title={
-                            !pedido.tiene_remision
-                                ? 'Sin remisión'
-                                : remisionUrl
-                                    ? 'Abrir remisión'
-                                    : 'Cargando documento de remisión…'
-                        }
-                        aria-label={
-                            !pedido.tiene_remision
-                                ? 'Sin remisión'
-                                : 'Abrir remisión'
-                        }
-                        onClick={onRemision}
-                    >
-                        <FileText className="w-[18px] h-[18px] shrink-0" aria-hidden="true" />
-                        <span className="hidden lg:inline">Remisión</span>
-                    </button>
-                </div>
+                    <div className={PEDIDO_DOCS}>
+                        <button
+                            type="button"
+                            className={PEDIDO_BTN_DOC}
+                            disabled={!pedido.tiene_vouchers}
+                            title={
+                                pedido.tiene_vouchers
+                                    ? `Ver ${vouchersLabel.toLowerCase()} adjuntos`
+                                    : 'Sin comprobantes'
+                            }
+                            aria-label={
+                                pedido.tiene_vouchers
+                                    ? `Ver ${vouchersLabel.toLowerCase()} adjuntos`
+                                    : 'Sin comprobantes'
+                            }
+                            onClick={onVouchers}
+                        >
+                            <ImageIcon className={BTN_ICON} aria-hidden="true" />
+                            <span>{vouchersLabel}</span>
+                        </button>
+                        <button
+                            type="button"
+                            className={PEDIDO_BTN_DOC}
+                            disabled={!pedido.tiene_remision}
+                            title={
+                                !pedido.tiene_remision
+                                    ? 'Sin remisión'
+                                    : remisionUrl
+                                        ? 'Abrir remisión'
+                                        : 'Cargando documento de remisión…'
+                            }
+                            aria-label={
+                                !pedido.tiene_remision
+                                    ? 'Sin remisión'
+                                    : 'Abrir remisión'
+                            }
+                            onClick={onRemision}
+                        >
+                            <FileText className={BTN_ICON} aria-hidden="true" />
+                            <span>Remisión</span>
+                        </button>
+                    </div>
 
-                <span className={`${badgeCobertura(pedido.estado_cobertura)} ${PEDIDO_BADGE}`}>
-                    {labelEstadoCobertura(pedido)}
-                </span>
-                <BadgeAdminEstado resumen={adminResumen} resumenLabel={adminResumenLabel} />
-                <AccionesAdminPedido
-                    auth={auth}
-                    cierreId={pedido.cierre_id}
-                    adminResumen={adminResumen}
-                    pedidoTieneError={pedidoTieneError}
-                    onActualizado={onAdminActualizado}
-                    onRecargarLista={onRecargarLista}
-                    compacto
-                />
+                    <div className={PEDIDO_COBERTURA}>
+                        <EtiquetaCoberturaPedido pedido={pedido} className="items-end" />
+                    </div>
+                </div>
             </div>
 
-            {abierto && (
-                <div className="px-4 md:px-5 pb-5 space-y-4 border-t theme-border pt-4 md:pt-5">
-                    {cargando && (
-                        <p className="text-xs font-medium theme-text-muted animate-pulse m-0">Cargando detalle…</p>
-                    )}
-                    {error && (
-                        <div className="flex flex-wrap items-center gap-3">
-                            <p className="text-sm text-red-600 m-0">{error}</p>
-                            <button type="button" onClick={cargarDetalle} className="theme-btn-secondary theme-btn-secondary--compact text-xs">Reintentar</button>
-                        </div>
-                    )}
-                    {detalle && (
-                        <>
-                            <ResumenFinancieroPedido cierre={detalle.cierre} financiero={detalle.financiero} />
-                            <ListaExhibicionesPago
-                                exhibiciones={detalle.exhibiciones}
-                                auth={auth}
-                                cierreId={pedido.cierre_id}
-                                pedidoTieneError={pedidoTieneError}
-                                onAdminActualizado={onAdminActualizado}
-                                onRecargarLista={onRecargarLista}
-                            />
-                            <div ref={documentosRef}>
-                                <DocumentosEvidencias
-                                    exhibiciones={detalle.exhibiciones}
-                                    documentos={detalle.documentos}
-                                    folioPedido={detalle.cierre?.folio}
-                                    folioRemision={detalle.cierre?.folio_remision}
-                                />
+            <PieRevisionAdminPedido
+                auth={auth}
+                cierreId={pedido.cierre_id}
+                adminResumen={adminResumen}
+                adminResumenLabel={adminResumenLabel}
+                adminRevisadoPor={adminRevisadoPor}
+                adminRevisadoAt={adminRevisadoAt}
+                pedidoTieneError={pedidoTieneError}
+                exhibicionesRevisadas={exhibicionesRevisadas}
+                exhibicionesTotal={exhibicionesTotal}
+                exhibicionesPendientes={exhibicionesPendientes}
+                onActualizado={onAdminActualizado}
+                onRecargarLista={onRecargarLista}
+            />
+
+            <div
+                className={acordeonContenidoGridClass(abierto)}
+                aria-hidden={!abierto}
+            >
+                <div className={ACORDEON_CONTENIDO_INNER}>
+                    <div className={`${DETALLE_PAD} pb-5 ${BLOQUE_GAP} border-t theme-border pt-4 md:pt-5`}>
+                        {cargando && (
+                            <p className="text-xs font-medium theme-text-muted animate-pulse m-0">Cargando detalle…</p>
+                        )}
+                        {error && (
+                            <div className="flex flex-wrap items-center gap-3">
+                                <p className="text-sm text-red-600 m-0">{error}</p>
+                                <button type="button" onClick={cargarDetalle} className={BTN_NEUTRAL}>Reintentar</button>
                             </div>
-                        </>
-                    )}
+                        )}
+                        {detalle && (
+                            <>
+                                <ResumenFinancieroPedido cierre={detalle.cierre} financiero={detalle.financiero} />
+                                <ListaExhibicionesPago
+                                    exhibiciones={detalle.exhibiciones}
+                                    auth={auth}
+                                    cierreId={pedido.cierre_id}
+                                    pedidoTieneError={Boolean(detalle?.cierre?.admin_pedido_error_reportado_at ?? pedido.admin_pedido_error_reportado_at)}
+                                    onAdminActualizado={onAdminActualizado}
+                                    onRecargarLista={onRecargarLista}
+                                />
+                                <div ref={documentosRef}>
+                                    <DocumentosEvidencias
+                                        exhibiciones={detalle.exhibiciones}
+                                        documentos={detalle.documentos}
+                                        folioPedido={detalle.cierre?.folio}
+                                        folioRemision={detalle.cierre?.folio_remision}
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </div>
-            )}
+            </div>
             <ModalVisorArchivo
                 abierto={Boolean(visorRemision)}
                 onCerrar={() => setVisorRemision(null)}

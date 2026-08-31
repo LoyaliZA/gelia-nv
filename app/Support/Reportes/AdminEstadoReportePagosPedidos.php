@@ -33,6 +33,27 @@ final class AdminEstadoReportePagosPedidos
     }
 
     /** @param  Collection<int, PedidoBmaCierrePagoItem>  $items */
+    public static function conteoExhibicionesAdmin(Collection $items): array
+    {
+        $total = $items->count();
+        $revisadas = $items->filter(
+            fn (PedidoBmaCierrePagoItem $item) => in_array(
+                $item->admin_estado,
+                [self::CONFIRMADO, self::CON_ERROR],
+                true,
+            ),
+        )->count();
+
+        return [
+            'admin_exhibiciones_total' => $total,
+            'admin_exhibiciones_revisadas' => $revisadas,
+            'admin_exhibiciones_pendientes' => $items
+                ->where('admin_estado', self::PENDIENTE)
+                ->count(),
+        ];
+    }
+
+    /** @param  Collection<int, PedidoBmaCierrePagoItem>  $items */
     public static function resumenPedido(PedidoBmaCierrePago $cierre, Collection $items): string
     {
         if ($cierre->admin_pedido_error_reportado_at !== null) {
@@ -84,9 +105,15 @@ final class AdminEstadoReportePagosPedidos
     {
         $items = $cierre->relationLoaded('items') ? $cierre->items : $cierre->items()->get();
 
+        $resumen = self::resumenPedido($cierre, $items);
+        $revision = self::metadataRevisionCierre($cierre, $items, $resumen);
+
         return [
-            'admin_resumen' => self::resumenPedido($cierre, $items),
-            'admin_resumen_label' => self::labelResumen(self::resumenPedido($cierre, $items)),
+            'admin_resumen' => $resumen,
+            'admin_resumen_label' => self::labelResumen($resumen),
+            ...self::conteoExhibicionesAdmin($items),
+            'admin_revisado_por' => $revision['admin_revisado_por'],
+            'admin_revisado_at' => $revision['admin_revisado_at'],
             'admin_pedido_error_comentario' => $cierre->admin_pedido_error_comentario,
             'admin_pedido_error_reportado_at' => $cierre->admin_pedido_error_reportado_at?->toIso8601String(),
             'admin_pedido_error_reportado_por' => $cierre->adminPedidoErrorReportadoPor?->only(['id', 'name']),
@@ -97,13 +124,66 @@ final class AdminEstadoReportePagosPedidos
         ];
     }
 
+    /**
+     * @param  Collection<int, PedidoBmaCierrePagoItem>  $items
+     * @return array{admin_revisado_por: ?array{id: int, name: string}, admin_revisado_at: ?string}
+     */
+    public static function metadataRevisionCierre(PedidoBmaCierrePago $cierre, Collection $items, string $resumen): array
+    {
+        if ($cierre->admin_pedido_error_reportado_at !== null) {
+            return [
+                'admin_revisado_por' => $cierre->adminPedidoErrorReportadoPor?->only(['id', 'name']),
+                'admin_revisado_at' => $cierre->admin_pedido_error_reportado_at?->toIso8601String(),
+            ];
+        }
+
+        if ($resumen === self::CON_ERROR) {
+            $item = $items
+                ->filter(
+                    fn (PedidoBmaCierrePagoItem $item) => $item->admin_estado === self::CON_ERROR
+                        && $item->admin_error_reportado_at !== null,
+                )
+                ->sortByDesc('admin_error_reportado_at')
+                ->first();
+
+            if ($item !== null) {
+                return [
+                    'admin_revisado_por' => $item->adminErrorReportadoPor?->only(['id', 'name']),
+                    'admin_revisado_at' => $item->admin_error_reportado_at?->toIso8601String(),
+                ];
+            }
+        }
+
+        if ($resumen === self::CONFIRMADO) {
+            $item = $items
+                ->filter(
+                    fn (PedidoBmaCierrePagoItem $item) => $item->admin_estado === self::CONFIRMADO
+                        && $item->admin_confirmado_at !== null,
+                )
+                ->sortByDesc('admin_confirmado_at')
+                ->first();
+
+            if ($item !== null) {
+                return [
+                    'admin_revisado_por' => $item->adminConfirmadoPor?->only(['id', 'name']),
+                    'admin_revisado_at' => $item->admin_confirmado_at?->toIso8601String(),
+                ];
+            }
+        }
+
+        return [
+            'admin_revisado_por' => null,
+            'admin_revisado_at' => null,
+        ];
+    }
+
     public static function labelResumen(string $resumen): string
     {
         return match ($resumen) {
-            self::CONFIRMADO => 'Confirmado por Administración',
-            self::CON_ERROR => 'Con error reportado',
-            'parcial' => 'Confirmación parcial',
-            self::PENDIENTE => 'Pendiente de revisión admin',
+            self::CONFIRMADO => 'Aprobado',
+            self::CON_ERROR => 'Con error',
+            'parcial' => 'Revisión parcial',
+            self::PENDIENTE => 'Pendiente',
             default => '—',
         };
     }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Download, FileText, X, ZoomIn, ZoomOut } from 'lucide-react';
 import {
@@ -11,6 +11,13 @@ import {
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.25;
+const ALTURA_MAX_IMAGEN_VH = 0.7;
+
+function calcularTamanoAjustado(naturalW, naturalH, maxW, maxH) {
+    if (!naturalW || !naturalH || !maxW || !maxH) return null;
+    const ratio = Math.min(maxW / naturalW, maxH / naturalH, 1);
+    return { w: naturalW * ratio, h: naturalH * ratio };
+}
 
 /** @returns {'imagen'|'pdf'} */
 export function inferirTipoArchivoVisor({ mimeType, nombre, url } = {}) {
@@ -86,6 +93,9 @@ export default function ModalVisorArchivo({
     onSiguiente,
 }) {
     const [zoom, setZoom] = useState(1);
+    const [tamanoBase, setTamanoBase] = useState(null);
+    const contenedorRef = useRef(null);
+    const imagenRef = useRef(null);
     const cerrar = useCallback(() => onCerrar?.(), [onCerrar]);
     const tipo = inferirTipoArchivoVisor({ mimeType, nombre: subtitulo, url });
     const hrefDescarga = descargarUrl || url;
@@ -121,17 +131,62 @@ export default function ModalVisorArchivo({
     }, [abierto, cerrar, puedeNavegar, onAnterior, onSiguiente]);
 
     useEffect(() => {
-        if (abierto) setZoom(1);
+        if (abierto) {
+            setZoom(1);
+            setTamanoBase(null);
+        }
     }, [abierto, url]);
 
-    const onWheelImagen = useCallback((e) => {
-        if (!esImagen) return;
-        e.preventDefault();
-        const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
-        setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z + delta)));
-    }, [esImagen]);
+    const medirTamanoBase = useCallback(() => {
+        const img = imagenRef.current;
+        const el = contenedorRef.current;
+        if (!img?.naturalWidth || !el) return;
+        const maxH = Math.min(el.clientHeight, window.innerHeight * ALTURA_MAX_IMAGEN_VH);
+        const tamano = calcularTamanoAjustado(img.naturalWidth, img.naturalHeight, el.clientWidth, maxH);
+        if (tamano) setTamanoBase(tamano);
+    }, []);
+
+    const onImagenCargada = useCallback(() => {
+        medirTamanoBase();
+    }, [medirTamanoBase]);
+
+    useEffect(() => {
+        if (!abierto || !esImagen) return undefined;
+        if (imagenRef.current?.complete) medirTamanoBase();
+    }, [abierto, esImagen, url, medirTamanoBase]);
+
+    useEffect(() => {
+        if (!abierto || !esImagen) return undefined;
+        const el = contenedorRef.current;
+        if (!el) return undefined;
+
+        const observer = new ResizeObserver(() => {
+            if (zoom === 1) medirTamanoBase();
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [abierto, esImagen, zoom, medirTamanoBase]);
+
+    useEffect(() => {
+        if (!abierto || !esImagen) return undefined;
+        const el = contenedorRef.current;
+        if (!el) return undefined;
+
+        const onWheel = (e) => {
+            if (!e.ctrlKey && !e.metaKey) return;
+            e.preventDefault();
+            const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+            setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z + delta)));
+        };
+
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => el.removeEventListener('wheel', onWheel);
+    }, [abierto, esImagen]);
 
     if (!abierto || !url || typeof document === 'undefined') return null;
+
+    const anchoImagen = tamanoBase ? tamanoBase.w * zoom : undefined;
+    const altoImagen = tamanoBase ? tamanoBase.h * zoom : undefined;
 
     return createPortal(
         <div
@@ -236,17 +291,32 @@ export default function ModalVisorArchivo({
                     </div>
                 )}
                 <div
+                    ref={contenedorRef}
                     className="flex-1 min-h-0 overflow-auto custom-scrollbar p-4 md:p-5 bg-[color-mix(in_srgb,var(--theme-element-bg)_40%,transparent)]"
-                    onWheel={esImagen ? onWheelImagen : undefined}
                 >
                     {esImagen ? (
-                        <img
-                            src={url}
-                            alt={subtitulo || titulo}
-                            className="max-w-full max-h-[70vh] mx-auto rounded-lg object-contain border theme-border theme-surface-solid shadow-sm transition-transform origin-center"
-                            style={{ transform: `scale(${zoom})` }}
-                            draggable={false}
-                        />
+                        <div
+                            className="flex items-center justify-center min-w-full min-h-full"
+                            style={{
+                                width: anchoImagen ? `max(100%, ${anchoImagen}px)` : '100%',
+                                height: altoImagen ? `max(100%, ${altoImagen}px)` : '100%',
+                            }}
+                        >
+                            <img
+                                ref={imagenRef}
+                                src={url}
+                                alt={subtitulo || titulo}
+                                onLoad={onImagenCargada}
+                                className="rounded-lg object-contain border theme-border theme-surface-solid shadow-sm block shrink-0"
+                                style={{
+                                    width: anchoImagen ?? 'auto',
+                                    height: altoImagen ?? 'auto',
+                                    maxWidth: tamanoBase ? 'none' : '100%',
+                                    maxHeight: tamanoBase ? 'none' : '70vh',
+                                }}
+                                draggable={false}
+                            />
+                        </div>
                     ) : (
                         <iframe
                             src={url}

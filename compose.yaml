@@ -1,11 +1,11 @@
 services:
     laravel.test:
         build:
-            context: './vendor/laravel/sail/runtimes/8.5'
+            context: './vendor/laravel/sail/runtimes/8.4'
             dockerfile: Dockerfile
             args:
                 WWWGROUP: '${WWWGROUP}'
-        image: 'sail-8.5/app'
+        image: 'sail-8.4/app'
         restart: unless-stopped
         extra_hosts:
             - 'host.docker.internal:host-gateway'
@@ -19,7 +19,7 @@ services:
             IGNITION_LOCAL_SITES_PATH: '${PWD}'
         volumes:
             - '.:/var/www/html'
-            - './docker/sail/zz-gelia-uploads.ini:/etc/php/8.5/cli/conf.d/zz-gelia-uploads.ini'
+            - './docker/sail/zz-gelia-uploads.ini:/etc/php/8.4/cli/conf.d/zz-gelia-uploads.ini'
         networks:
             - sail
         depends_on:
@@ -29,7 +29,7 @@ services:
             - mailpit
             - selenium
     vite:
-        image: 'sail-8.5/app'
+        image: 'sail-8.4/app'
         restart: unless-stopped
         extra_hosts:
             - 'host.docker.internal:host-gateway'
@@ -47,7 +47,7 @@ services:
             - laravel.test
         command: npm run dev
     reverb:
-        image: 'sail-8.5/app'
+        image: 'sail-8.4/app'
         restart: unless-stopped
         extra_hosts:
             - 'host.docker.internal:host-gateway'
@@ -65,7 +65,7 @@ services:
             - redis
         command: php artisan reverb:start --host=0.0.0.0 --port=8080
     queue:
-        image: 'sail-8.5/app'
+        image: 'sail-8.4/app'
         restart: unless-stopped
         extra_hosts:
             - 'host.docker.internal:host-gateway'

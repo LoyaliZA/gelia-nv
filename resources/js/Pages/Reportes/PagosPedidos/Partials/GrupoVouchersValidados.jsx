@@ -1,18 +1,33 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import TablaExhibicionesVouchers from './TablaExhibicionesVouchers';
-import { cardReportePagos, fmtMxn, RADIUS_CONTENEDOR_DIA } from './pagosPedidosStyles';
+import { cardReportePagos, fmtMxn, RADIUS_CONTENEDOR_DIA, CARD_PAD, FOLIO_META } from './pagosPedidosStyles';
 import { CeldaFinanciera, CeldaIncidencias, GRID_FILA_PAGOS, GRID_FINANCIERO_MOVIL } from './GridFilasPagosPedidos';
+import { mergeAdminEnExhibiciones } from './accionesAdminPagos';
 
 export default function GrupoVouchersValidados({ grupo, abiertoDefault, auth, onRecargarLista }) {
-    const [abierto, setAbierto] = React.useState(abiertoDefault);
+    const [abierto, setAbierto] = useState(abiertoDefault);
+    const [exhibiciones, setExhibiciones] = useState(grupo.exhibiciones ?? []);
     const resumen = grupo.resumen ?? {};
+
+    useEffect(() => {
+        setExhibiciones(grupo.exhibiciones ?? []);
+    }, [grupo.exhibiciones]);
+
+    const onAdminActualizado = useCallback((resp) => {
+        setExhibiciones((prev) => mergeAdminEnExhibiciones(prev, resp));
+    }, []);
+
+    const onAdminExito = useCallback((resp) => {
+        onAdminActualizado(resp);
+        onRecargarLista?.();
+    }, [onAdminActualizado, onRecargarLista]);
 
     return (
         <div className={cardReportePagos('overflow-hidden', RADIUS_CONTENEDOR_DIA)}>
             <button
                 type="button"
-                className={`${GRID_FILA_PAGOS} p-5 md:p-6 border-b theme-border hover:border-[var(--color-primario)]/30 transition-colors`}
+                className={`${GRID_FILA_PAGOS} ${CARD_PAD} border-b theme-border hover:border-[var(--color-primario)]/30 transition-colors`}
                 onClick={() => setAbierto((v) => !v)}
                 aria-expanded={abierto}
             >
@@ -22,7 +37,7 @@ export default function GrupoVouchersValidados({ grupo, abiertoDefault, auth, on
                 />
                 <div className="min-w-0">
                     <p className="text-base font-semibold theme-text-main m-0 leading-snug">{grupo.label}</p>
-                    <p className="text-xs md:text-[13px] font-medium theme-text-muted m-0 mt-1">
+                    <p className={`${FOLIO_META} font-medium m-0 mt-1`}>
                         {resumen.vouchers ?? 0} vouchers · {resumen.pedidos ?? 0} pedidos
                         {resumen.periodo && (
                             <> · {resumen.periodo.desde} — {resumen.periodo.hasta}</>
@@ -37,11 +52,11 @@ export default function GrupoVouchersValidados({ grupo, abiertoDefault, auth, on
                 </div>
             </button>
             {abierto && (
-                <div className="p-3 md:p-4 pt-2 bg-black/[0.02]">
+                <div className={`${CARD_PAD} pt-3 bg-black/[0.02]`}>
                     <TablaExhibicionesVouchers
-                        exhibiciones={grupo.exhibiciones}
+                        exhibiciones={exhibiciones}
                         auth={auth}
-                        onRecargarLista={onRecargarLista}
+                        onActualizado={onAdminExito}
                     />
                 </div>
             )}

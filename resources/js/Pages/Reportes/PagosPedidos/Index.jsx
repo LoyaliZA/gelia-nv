@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { CalendarDays } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
@@ -8,6 +8,7 @@ import { geliaCardClass } from '../../../utils/geliaTheme';
 import {
     filtrosAlCambiarTipoReporte,
     FILTROS_LIMPIOS_VOUCHERS,
+    queryFiltrosPagosPedidos,
     subtituloAgrupacionVouchers,
     TIPO_REPORTE_PEDIDO,
     TIPO_REPORTE_VOUCHERS,
@@ -24,6 +25,7 @@ import MisReportesPagosPedidos from './Partials/MisReportesPagosPedidos';
 import PagosPedidosReporteFloatingTracker from './Partials/PagosPedidosReporteFloatingTracker';
 import SelectorTipoReportePagos from './Partials/SelectorTipoReportePagos';
 import { puedePermiso } from '../../../utils/permisos';
+import { camposAdminDesdePedido } from './Partials/accionesAdminPagos';
 
 const cardHeader = geliaCardClass('p-6 md:p-10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6');
 
@@ -70,13 +72,49 @@ export default function Index({
     const [avisoSegundoPlano, setAvisoSegundoPlano] = useState(false);
     const [jobSeguimiento, setJobSeguimiento] = useState(null);
 
+    const aplicarCacheDetalle = useCallback((id, dataOrFn) => {
+        setCacheDetalle((c) => {
+            const prev = c[id];
+            const data = typeof dataOrFn === 'function' ? dataOrFn(prev) : dataOrFn;
+            if (!data) return c;
+            return { ...c, [id]: data };
+        });
+    }, []);
+
     const esPedido = tipo_reporte === TIPO_REPORTE_PEDIDO;
     const esVouchers = tipo_reporte === TIPO_REPORTE_VOUCHERS && vouchers_disponible;
 
+    useEffect(() => {
+        if (!esPedido || !grupos.length) return;
+        setCacheDetalle((cache) => {
+            let changed = false;
+            const next = { ...cache };
+            for (const grupo of grupos) {
+                for (const pedido of grupo.pedidos ?? []) {
+                    const id = pedido.cierre_id;
+                    if (!next[id]?.cierre) continue;
+                    const patch = camposAdminDesdePedido(pedido);
+                    next[id] = {
+                        ...next[id],
+                        cierre: { ...next[id].cierre, ...patch },
+                    };
+                    changed = true;
+                }
+            }
+            return changed ? next : cache;
+        });
+    }, [grupos, esPedido]);
+
     const navegar = useCallback((params) => {
+        const next = queryFiltrosPagosPedidos(filtros, { ...params, page: 1 });
+        const cambiaEstadoAdmin = Object.prototype.hasOwnProperty.call(params, 'estado_admin')
+            && params.estado_admin !== (filtros.estado_admin || 'pendiente');
+        if (cambiaEstadoAdmin) {
+            setCacheDetalle({});
+        }
         setCargando(true);
-        router.get(route('reportes.pagos_pedidos.index'), { ...filtros, ...params, page: 1 }, {
-            preserveState: true,
+        router.get(route('reportes.pagos_pedidos.index'), next, {
+            preserveState: !cambiaEstadoAdmin,
             replace: true,
             onFinish: () => setCargando(false),
         });
@@ -94,7 +132,7 @@ export default function Index({
 
     const cambiarPagina = (page) => {
         setCargando(true);
-        router.get(route('reportes.pagos_pedidos.index'), { ...filtros, page }, {
+        router.get(route('reportes.pagos_pedidos.index'), queryFiltrosPagosPedidos(filtros, { page }), {
             preserveState: true,
             onFinish: () => setCargando(false),
         });
@@ -104,12 +142,13 @@ export default function Index({
     const limpiarVouchers = () => navegar(FILTROS_LIMPIOS_VOUCHERS);
 
     const recargarListaAdmin = useCallback(() => {
-        if ((filtros.estado_admin || 'pendiente') !== 'pendiente') return;
+        const estadoAdmin = filtros.estado_admin || 'pendiente';
+        if (estadoAdmin !== 'pendiente') return;
         setCargando(true);
         router.reload({
             only: esPedido
-                ? ['grupos', 'metricas', 'paginacion', 'filtros']
-                : ['grupos_vouchers', 'metricas_vouchers', 'paginacion', 'filtros'],
+                ? ['grupos', 'metricas', 'paginacion']
+                : ['grupos_vouchers', 'metricas_vouchers', 'paginacion'],
             preserveScroll: true,
             onFinish: () => setCargando(false),
         });
@@ -277,14 +316,13 @@ export default function Index({
 
                 {esPedido && (
                     <div className="space-y-4 md:space-y-6">
-                        {grupos.map((grupo, i) => (
+                        {grupos.map((grupo) => (
                             <GrupoDiaPagos
                                 key={grupo.fecha}
                                 grupo={grupo}
-                                abiertoDefault={i === 0}
                                 auth={auth}
                                 cacheDetalle={cacheDetalle}
-                                onCacheDetalle={(id, data) => setCacheDetalle((c) => ({ ...c, [id]: data }))}
+                                onCacheDetalle={aplicarCacheDetalle}
                                 onRecargarLista={recargarListaAdmin}
                             />
                         ))}

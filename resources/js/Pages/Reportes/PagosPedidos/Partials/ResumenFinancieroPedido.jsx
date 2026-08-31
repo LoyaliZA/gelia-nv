@@ -4,21 +4,18 @@ import {
     ETIQUETA_FIN,
     IMPORTE_FIN,
     META_DETALLE,
+    SEM_TEXTO,
     cardReportePagos,
     fmtFechaHora,
     fmtMxn,
     lineaResultadoCobertura,
     RADIUS_PEDIDO_CARD,
     DETALLE_PAD,
+    BLOQUE_GAP,
 } from './pagosPedidosStyles';
 import { fmtFechaReporte } from '@/utils/fechasPagoReporte';
 
-const TONO_VALOR = {
-    exito: 'text-emerald-600 dark:text-emerald-400',
-    advertencia: 'text-amber-700 dark:text-amber-400',
-    critico: 'text-red-600 dark:text-red-400',
-    info: 'text-sky-700 dark:text-sky-400',
-};
+const TONO_VALOR = SEM_TEXTO;
 
 function FilaConciliacion({ label, valor, tono, destacado = false, resta = false }) {
     const valorFmt = typeof valor === 'string' ? valor : (resta ? `−${fmtMxn(valor)}` : fmtMxn(valor));
@@ -58,7 +55,7 @@ export default function ResumenFinancieroPedido({ cierre, financiero }) {
     const tolerancia = Number(financiero.tolerancia_aplicada ?? 0);
 
     return (
-        <div className="space-y-4">
+        <div className={BLOQUE_GAP}>
             <header className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                     <h3 className={SECCION_TITULO}>Cierre financiero</h3>

@@ -46,7 +46,9 @@ class ListarReportePagosPedidosService
                     'vendedor:id,name',
                     'departamento:id,nombre',
                     'validadoPor:id,name',
-                    'items:id,pedido_bma_cierre_pago_id,admin_estado',
+                    'items:id,pedido_bma_cierre_pago_id,admin_estado,admin_confirmado_at,admin_confirmado_por_id,admin_error_reportado_at,admin_error_reportado_por_id',
+                    'items.adminConfirmadoPor:id,name',
+                    'items.adminErrorReportadoPor:id,name',
                     'adminPedidoErrorReportadoPor:id,name',
                 ])
                 ->withCount([
