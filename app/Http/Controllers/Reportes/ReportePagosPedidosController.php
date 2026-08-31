@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Reportes;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Reportes\FiltrarReportePagosPedidosRequest;
 use App\Http\Requests\Reportes\ReportarErrorAdminReportePagosRequest;
 use App\Models\Almacen;
 use App\Models\CatalogoBanco;

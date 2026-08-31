@@ -28,3 +28,4 @@ Thumbs.db
 /documentacion
 /scripts/backup-snapshot-local.sh
 /snapshots/
+/tests
