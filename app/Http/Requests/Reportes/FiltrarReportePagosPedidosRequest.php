@@ -56,8 +56,20 @@ class FiltrarReportePagosPedidosRequest extends FormRequest
             'incluir_referencias_remision' => 'nullable|in:0,1',
             'incluir_observaciones_historial' => 'nullable|in:0,1',
             'orden' => 'nullable|in:asc,desc',
-            'agrupar_por' => 'nullable|in:dia,banco,vendedora',
+            'agrupar_por' => 'nullable|in:dia,banco,vendedora,movimiento,forma_pago',
             'formato' => 'nullable|in:pdf,csv_resumen,csv_detalle',
+            'fecha_incompleta' => 'nullable|in:pedido,pago,reportada,validacion',
+            'tipo_reporte' => 'nullable|in:pedido,vouchers',
+            'reportado_posteriormente' => 'nullable|in:0,1',
+            'posible_duplicado' => 'nullable|in:0,1',
+            'con_saf_relacionado' => 'nullable|in:0,1',
+            'con_observaciones' => 'nullable|in:0,1',
+            'capturado_por_id' => 'nullable|integer|exists:users,id',
+            'validado_por_id' => 'nullable|integer|exists:users,id',
+            'monto_desde' => 'nullable|numeric|min:0',
+            'monto_hasta' => 'nullable|numeric|min:0',
+            'folio_pedido' => 'nullable|string|max:80',
+            'folio_remision' => 'nullable|string|max:80',
         ];
     }
 
@@ -65,8 +77,11 @@ class FiltrarReportePagosPedidosRequest extends FormRequest
     public function filtrosNormalizados(): array
     {
         $data = $this->validated();
+        $tipoReporte = $data['tipo_reporte'] ?? 'pedido';
+
         $out = [
             'page' => $data['page'] ?? 1,
+            'tipo_reporte' => $tipoReporte,
             'tipo_fecha' => $data['tipo_fecha'] ?? null,
             'busqueda' => isset($data['busqueda']) ? trim($data['busqueda']) : null,
             'departamento_id' => $data['departamento_id'] ?? null,
@@ -88,15 +103,27 @@ class FiltrarReportePagosPedidosRequest extends FormRequest
             'incluir_referencias_remision' => ($data['incluir_referencias_remision'] ?? '1') !== '0',
             'incluir_observaciones_historial' => ($data['incluir_observaciones_historial'] ?? '1') !== '0',
             'orden' => $data['orden'] ?? 'desc',
-            'agrupar_por' => $data['agrupar_por'] ?? 'dia',
+            'agrupar_por' => $data['agrupar_por'] ?? ($tipoReporte === 'vouchers' ? 'movimiento' : 'dia'),
+            'fecha_incompleta' => $data['fecha_incompleta'] ?? null,
+            'reportado_posteriormente' => ($data['reportado_posteriormente'] ?? '0') === '1',
+            'posible_duplicado' => ($data['posible_duplicado'] ?? '0') === '1',
+            'con_saf_relacionado' => ($data['con_saf_relacionado'] ?? '0') === '1',
+            'con_observaciones' => ($data['con_observaciones'] ?? '0') === '1',
+            'capturado_por_id' => $data['capturado_por_id'] ?? null,
+            'validado_por_id' => $data['validado_por_id'] ?? null,
+            'monto_desde' => isset($data['monto_desde']) ? (string) $data['monto_desde'] : null,
+            'monto_hasta' => isset($data['monto_hasta']) ? (string) $data['monto_hasta'] : null,
+            'folio_pedido' => isset($data['folio_pedido']) ? trim($data['folio_pedido']) : null,
+            'folio_remision' => isset($data['folio_remision']) ? trim($data['folio_remision']) : null,
+            'banco_id' => $data['banco_id'] ?? null,
         ];
 
         $out = array_merge($out, $this->normalizarFechas($data));
 
         if (empty($out['tipo_fecha'])) {
-            $out['tipo_fecha'] = 'validacion';
-            if (! empty($out['fecha_pedido_desde']) || ! empty($out['fecha_pedido_hasta'])) {
-                $out['tipo_fecha'] = 'pedido';
+            $out['tipo_fecha'] = $tipoReporte === 'vouchers' ? 'pago' : 'pedido';
+            if (! empty($out['fecha_validacion_desde']) || ! empty($out['fecha_validacion_hasta'])) {
+                $out['tipo_fecha'] = 'validacion';
             } elseif (! empty($out['fecha_reportada_desde']) || ! empty($out['fecha_reportada_hasta'])) {
                 $out['tipo_fecha'] = 'reportada';
             } elseif (! empty($out['fecha_pago_desde']) || ! empty($out['fecha_pago_hasta'])) {
@@ -104,7 +131,10 @@ class FiltrarReportePagosPedidosRequest extends FormRequest
             }
         }
 
-        return array_filter($out, fn ($v) => $v !== null && $v !== '' && $v !== [] && $v !== false);
+        $filtrado = array_filter($out, fn ($v) => $v !== null && $v !== '' && $v !== [] && $v !== false);
+        $filtrado['tipo_reporte'] = $tipoReporte;
+
+        return $filtrado;
     }
 
     /** @param  array<string, mixed>  $data

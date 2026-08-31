@@ -292,10 +292,11 @@
             padding: 8px 10px 7px;
             border-left: 3px solid #ec4899;
             background: #fafafa;
-            page-break-inside: avoid;
+            page-break-inside: auto;
         }
 
         .dia-fecha {
+            page-break-after: avoid;
             font-size: 11px;
             font-weight: bold;
             color: #171717;
@@ -324,13 +325,42 @@
         }
 
         /* ── Ficha por pedido ── */
-        .pedido-ficha {
+        .order-block {
             margin-bottom: 12px;
+            page-break-inside: auto;
+        }
+
+        .order-header,
+        .financial-card {
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            page-break-after: avoid;
+        }
+
+        .payment-table thead {
+            display: table-header-group;
+        }
+
+        .payment-table tr {
+            page-break-inside: avoid;
+        }
+
+        .pedido-ficha {
+            margin-bottom: 0;
             border: 1px solid #e5e5e5;
             border-left: 3px solid #ec4899;
-            border-radius: 4px;
+            border-radius: 4px 4px 0 0;
             overflow: hidden;
-            page-break-inside: avoid;
+        }
+
+        .financial-card {
+            border: 1px solid #e5e5e5;
+            border-top: none;
+            border-left: 3px solid #ec4899;
+            border-radius: 0;
+            overflow: hidden;
         }
 
         .pedido-meta-grid {
@@ -473,6 +503,11 @@
         /* ── Exhibiciones ── */
         .exhibiciones-block {
             margin-bottom: 10px;
+            border: 1px solid #e5e5e5;
+            border-top: none;
+            border-left: 3px solid #ec4899;
+            border-radius: 0 0 4px 4px;
+            padding: 8px 10px 6px;
         }
 
         .exhibiciones-titulo {
@@ -561,7 +596,6 @@
             border-collapse: collapse;
             table-layout: fixed;
             margin-bottom: 8px;
-            page-break-inside: avoid;
         }
 
         .anexo-grid-cell {
@@ -579,16 +613,11 @@
         }
 
         .anexo-pagina-completa {
-            page-break-inside: avoid;
             margin-bottom: 8px;
         }
 
-        .anexo-pagina-completa--salto,
-        .anexo-grid--salto {
-            page-break-before: always;
-        }
-
-        .anexo-voucher-card {
+        .anexo-voucher-card,
+        .voucher-card {
             border: 1px solid #d4d4d4;
             border-radius: 3px;
             overflow: hidden;
@@ -643,14 +672,14 @@
 
         .anexo-voucher-img--medio {
             max-width: 100%;
-            max-height: 300px;
+            max-height: 240px;
             width: auto;
             height: auto;
         }
 
         .anexo-voucher-img--completo {
             max-width: 100%;
-            max-height: 640px;
+            max-height: 480px;
             width: auto;
             height: auto;
         }

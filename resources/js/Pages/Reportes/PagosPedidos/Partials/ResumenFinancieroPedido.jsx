@@ -1,7 +1,5 @@
 import React from 'react';
 import {
-    SEM_BADGE,
-    SEM_TEXTO,
     SECCION_TITULO,
     ETIQUETA_FIN,
     IMPORTE_FIN,
@@ -13,12 +11,13 @@ import {
     RADIUS_PEDIDO_CARD,
     DETALLE_PAD,
 } from './pagosPedidosStyles';
+import { fmtFechaReporte } from '@/utils/fechasPagoReporte';
 
 const TONO_VALOR = {
-    exito: SEM_TEXTO.exito,
-    advertencia: SEM_TEXTO.advertencia,
-    critico: SEM_TEXTO.critico,
-    info: SEM_TEXTO.info,
+    exito: 'text-emerald-600 dark:text-emerald-400',
+    advertencia: 'text-amber-700 dark:text-amber-400',
+    critico: 'text-red-600 dark:text-red-400',
+    info: 'text-sky-700 dark:text-sky-400',
 };
 
 function FilaConciliacion({ label, valor, tono, destacado = false, resta = false }) {
@@ -56,20 +55,23 @@ function BloqueConciliacion({ titulo, children }) {
 export default function ResumenFinancieroPedido({ cierre, financiero }) {
     const resultado = lineaResultadoCobertura(financiero);
     const validador = cierre.validado_por?.name || '—';
+    const tolerancia = Number(financiero.tolerancia_aplicada ?? 0);
 
     return (
         <div className="space-y-4">
             <header className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                     <h3 className={SECCION_TITULO}>Cierre financiero</h3>
-                    <span className={SEM_BADGE.info}>Versión {cierre.version}</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full border theme-border theme-text-muted">
+                        Versión {cierre.version}
+                    </span>
                 </div>
                 <p className={`${META_DETALLE} m-0 leading-relaxed`}>
+                    Pedido: {fmtFechaReporte(cierre.pedido_fecha)}
+                    {' · '}
                     Validado por {validador}
                     {' · '}
                     {fmtFechaHora(cierre.validado_at)}
-                    {' · '}
-                    Tolerancia aplicada: {fmtMxn(financiero.tolerancia_aplicada)}
                 </p>
             </header>
 
@@ -78,12 +80,16 @@ export default function ResumenFinancieroPedido({ cierre, financiero }) {
                     <FilaConciliacion label="Mercancía" valor={financiero.monto_venta} />
                     <FilaConciliacion label="Envío" valor={financiero.monto_envio} />
                     <FilaConciliacion label="Seguro" valor={financiero.monto_seguro} />
-                    <FilaConciliacion label="Total del pedido" valor={financiero.total_pedido} destacado />
+                    <FilaConciliacion label="Total de la remisión" valor={financiero.total_pedido} destacado />
                 </BloqueConciliacion>
 
-                <BloqueConciliacion titulo="Cobertura del pago">
+                <BloqueConciliacion titulo="Cobertura">
                     <FilaConciliacion label="SAF aplicado" valor={financiero.saf_aplicado} resta />
-                    <FilaConciliacion label="Total a cobrar" valor={financiero.total_a_cobrar} destacado />
+                    <FilaConciliacion
+                        label="Importe que debía cubrirse mediante pagos"
+                        valor={financiero.total_a_cobrar}
+                        destacado
+                    />
                     <FilaConciliacion label="Pagos válidos" valor={financiero.pagos_validos} />
                     <FilaConciliacion
                         label={resultado.label}
@@ -91,6 +97,9 @@ export default function ResumenFinancieroPedido({ cierre, financiero }) {
                         tono={resultado.tono}
                         destacado
                     />
+                    {tolerancia > 0 && (
+                        <FilaConciliacion label="Tolerancia aplicada" valor={financiero.tolerancia_aplicada} tono="info" />
+                    )}
                 </BloqueConciliacion>
             </div>
         </div>

@@ -20,10 +20,10 @@ final class ReportePagosPedidosProgreso
 
     /** @var array<string, array{label: string, weight: int, cancelable: bool}> */
     private const ETAPAS = [
-        self::ETAPA_PREPARANDO => ['label' => 'Preparando datos', 'weight' => 8, 'cancelable' => true],
+        self::ETAPA_PREPARANDO => ['label' => 'Preparando información', 'weight' => 8, 'cancelable' => true],
         self::ETAPA_TOTALES => ['label' => 'Calculando totales', 'weight' => 17, 'cancelable' => true],
-        self::ETAPA_VOUCHERS => ['label' => 'Procesando vouchers', 'weight' => 35, 'cancelable' => true],
-        self::ETAPA_PDF => ['label' => 'Construyendo PDF', 'weight' => 35, 'cancelable' => false],
+        self::ETAPA_VOUCHERS => ['label' => 'Procesando evidencias', 'weight' => 35, 'cancelable' => true],
+        self::ETAPA_PDF => ['label' => 'Construyendo documento', 'weight' => 35, 'cancelable' => false],
         self::ETAPA_FINALIZANDO => ['label' => 'Finalizando archivo', 'weight' => 5, 'cancelable' => false],
     ];
 

@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { ImageIcon } from 'lucide-react';
 import ModalVisorArchivo, { payloadArchivoVoucher } from '@/Components/ModalVisorArchivo';
+import { exhibicionesConEvidencia, payloadVisorEnIndice } from '@/utils/visorEvidenciasReporte';
 import {
     badgeCoberturaExhibicion,
-    fmtFechaSolo,
-    fmtHoraSolo,
     fmtMxn,
     labelRevisionEstado,
     tonoRevisionEstado,
     SECCION_TITULO,
     META_DETALLE,
     IMPORTE_FIN,
+    SEM_BADGE,
 } from './pagosPedidosStyles';
 
 const TH = 'text-xs font-semibold uppercase tracking-wide theme-text-main/75 py-3 pr-3 text-left';
@@ -21,46 +21,58 @@ const BTN_VOUCHER =
     'inline-flex items-center justify-center gap-1.5 min-h-9 px-2.5 rounded-lg border theme-border theme-element text-[11px] md:text-xs font-semibold theme-text-main hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0';
 
 function CeldaReferencia({ ex }) {
-    const fecha = fmtFechaSolo(ex.fecha_pago);
     return (
         <div className="min-w-0">
             <span className="font-medium tabular-nums">{ex.referencia || '—'}</span>
-            {fecha && <span className={META}>{fecha}</span>}
             {ex.capturado_por && (
-                <span className={META}>Capturó: {ex.capturado_por}</span>
+                <span className={META}>Reportado por: {ex.capturado_por}</span>
+            )}
+        </div>
+    );
+}
+
+function CeldaFechas({ ex }) {
+    return (
+        <div className="min-w-0 space-y-0.5">
+            <span className={META}>
+                Movimiento: {ex.fecha_pago_label}
+            </span>
+            <span className={META}>
+                Reportado: {ex.capturado_at_label}
+            </span>
+            <span className={META}>
+                Validado: {ex.validado_at_label}
+            </span>
+            {ex.reportado_posteriormente && (
+                <span className={`${SEM_BADGE.advertencia} mt-1`}>Reportado posteriormente</span>
             )}
         </div>
     );
 }
 
 function CeldaRevision({ ex }) {
-    const hora = fmtHoraSolo(ex.revisado_at);
     return (
         <div className="min-w-0">
             <span className={`font-medium ${tonoRevisionEstado(ex.estado_revision)}`}>
                 {labelRevisionEstado(ex.estado_revision)}
             </span>
-            {(ex.revisado_por || hora) && (
-                <span className={META}>
-                    {[ex.revisado_por, hora].filter(Boolean).join(' · ')}
-                </span>
-            )}
-            {!ex.revisado_por && !hora && ex.capturado_at && !ex.revisado_at && (
-                <span className={META}>Sin revisión</span>
+            {ex.revisado_por && (
+                <span className={META}>Revisado por: {ex.revisado_por}</span>
             )}
         </div>
     );
 }
 
-function AccionVoucher({ ex, onVer }) {
+function AccionVoucher({ ex, conEvidencia, onAbrirIndice }) {
     const tieneUrl = Boolean(ex.evidencia?.url);
+    const indice = conEvidencia.findIndex((item) => item.id === ex.id);
 
     return (
         <button
             type="button"
             className={BTN_VOUCHER}
             disabled={!tieneUrl}
-            onClick={() => tieneUrl && onVer(payloadArchivoVoucher(ex))}
+            onClick={() => tieneUrl && onAbrirIndice(indice)}
             title={tieneUrl ? `Ver comprobante — exhibición #${ex.numero_exhibicion}` : 'Sin comprobante adjunto'}
         >
             <ImageIcon className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -69,7 +81,7 @@ function AccionVoucher({ ex, onVer }) {
     );
 }
 
-function TarjetaExhibicionMovil({ ex, exhibiciones, onVer }) {
+function TarjetaExhibicionMovil({ ex, exhibiciones, conEvidencia, onAbrirIndice }) {
     const cobertura = badgeCoberturaExhibicion(ex, exhibiciones);
 
     return (
@@ -89,14 +101,17 @@ function TarjetaExhibicionMovil({ ex, exhibiciones, onVer }) {
                 {ex.forma_pago_label} · {ex.banco || '—'}
             </p>
             <CeldaReferencia ex={ex} />
+            <CeldaFechas ex={ex} />
             <CeldaRevision ex={ex} />
-            <AccionVoucher ex={ex} onVer={onVer} />
+            <AccionVoucher ex={ex} conEvidencia={conEvidencia} onAbrirIndice={onAbrirIndice} />
         </div>
     );
 }
 
 export default function ListaExhibicionesPago({ exhibiciones = [] }) {
-    const [visor, setVisor] = useState(null);
+    const [visorIdx, setVisorIdx] = useState(null);
+    const conEvidencia = exhibicionesConEvidencia(exhibiciones);
+    const visor = payloadVisorEnIndice(exhibiciones, visorIdx);
 
     if (!exhibiciones.length) {
         return <p className="text-xs md:text-[13px] theme-text-muted m-0">Sin exhibiciones registradas.</p>;
@@ -112,13 +127,14 @@ export default function ListaExhibicionesPago({ exhibiciones = [] }) {
                         key={ex.id}
                         ex={ex}
                         exhibiciones={exhibiciones}
-                        onVer={setVisor}
+                        conEvidencia={conEvidencia}
+                        onAbrirIndice={setVisorIdx}
                     />
                 ))}
             </div>
 
             <div className="hidden md:block overflow-x-auto -mx-1 px-1">
-                <table className="w-full min-w-[44rem] text-left border-collapse">
+                <table className="w-full min-w-[52rem] text-left border-collapse">
                     <thead>
                         <tr className="border-b theme-border">
                             <th className={TH}>#</th>
@@ -126,6 +142,7 @@ export default function ListaExhibicionesPago({ exhibiciones = [] }) {
                             <th className={TH}>Forma</th>
                             <th className={TH}>Banco</th>
                             <th className={TH}>Referencia</th>
+                            <th className={TH}>Fechas</th>
                             <th className={TH}>Revisión</th>
                             <th className={TH}>Cobertura</th>
                             <th className={`${TH} pr-0`}>Voucher</th>
@@ -144,13 +161,16 @@ export default function ListaExhibicionesPago({ exhibiciones = [] }) {
                                         <CeldaReferencia ex={ex} />
                                     </td>
                                     <td className={TD}>
+                                        <CeldaFechas ex={ex} />
+                                    </td>
+                                    <td className={TD}>
                                         <CeldaRevision ex={ex} />
                                     </td>
                                     <td className={TD}>
                                         <span className={cobertura.badge}>{cobertura.label}</span>
                                     </td>
                                     <td className={`${TD} pr-0`}>
-                                        <AccionVoucher ex={ex} onVer={setVisor} />
+                                        <AccionVoucher ex={ex} conEvidencia={conEvidencia} onAbrirIndice={setVisorIdx} />
                                     </td>
                                 </tr>
                             );
@@ -160,12 +180,17 @@ export default function ListaExhibicionesPago({ exhibiciones = [] }) {
             </div>
 
             <ModalVisorArchivo
-                abierto={Boolean(visor)}
-                onCerrar={() => setVisor(null)}
+                abierto={visorIdx != null}
+                onCerrar={() => setVisorIdx(null)}
                 url={visor?.url}
                 mimeType={visor?.mimeType}
                 titulo={visor?.titulo}
                 subtitulo={visor?.subtitulo}
+                metadatos={visor?.metadatos}
+                indiceActual={visorIdx ?? 0}
+                totalItems={conEvidencia.length}
+                onAnterior={() => setVisorIdx((i) => Math.max(0, (i ?? 0) - 1))}
+                onSiguiente={() => setVisorIdx((i) => Math.min(conEvidencia.length - 1, (i ?? 0) + 1))}
             />
         </div>
     );

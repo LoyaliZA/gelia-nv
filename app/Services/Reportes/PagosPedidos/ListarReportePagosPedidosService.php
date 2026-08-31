@@ -4,7 +4,7 @@ namespace App\Services\Reportes\PagosPedidos;
 
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use App\Support\Reportes\FechasPagoReporte;
 use Illuminate\Support\Collection;
 
 class ListarReportePagosPedidosService
@@ -27,11 +27,11 @@ class ListarReportePagosPedidosService
         $this->filtros->aplicar($base, $usuario, $params);
 
         $fechas = (clone $base)
-            ->selectRaw('DATE(validado_at) as dia')
+            ->selectRaw('DATE(pedido_fecha) as dia')
             ->distinct()
             ->orderByDesc('dia')
             ->pluck('dia')
-            ->map(fn ($d) => (string) $d);
+            ->map(fn ($d) => $d === null ? FechasPagoReporte::CLAVE_SIN_FECHA : (string) $d);
 
         $totalDias = $fechas->count();
         $offset = ($page - 1) * self::DIAS_POR_PAGINA;
@@ -50,15 +50,21 @@ class ListarReportePagosPedidosService
                     'items',
                     'items as vouchers_count' => fn ($q) => $q->whereNotNull('ruta_archivo_snapshot')->where('ruta_archivo_snapshot', '!=', ''),
                 ])
-                ->whereDate('validado_at', $dia)
+                ->when(
+                    $dia === FechasPagoReporte::CLAVE_SIN_FECHA,
+                    fn ($q) => $q->whereNull('pedido_fecha'),
+                    fn ($q) => $q->whereDate('pedido_fecha', $dia),
+                )
+                ->orderByDesc('pedido_fecha')
                 ->orderByDesc('validado_at')
                 ->get();
 
             $grupos[] = [
                 'fecha' => $dia,
-                'fecha_label' => ucfirst(Carbon::parse($dia)->locale('es')->isoFormat('dddd, D [de] MMMM [de] YYYY')),
+                'fecha_label' => FechasPagoReporte::etiquetaGrupoPedido($dia),
                 'resumen' => [
                     'pedidos' => $cierres->count(),
+                    'total_remisiones' => $this->sum($cierres, 'total_pedido'),
                     'monto_venta' => $this->sum($cierres, 'monto_venta'),
                     'pagos_validos' => $this->sum($cierres, 'pagos_validos'),
                     'saf_aplicado' => $this->sum($cierres, 'saf_aplicado'),
@@ -91,7 +97,10 @@ class ListarReportePagosPedidosService
 
         $orden = ($params['orden'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
 
-        return $query->orderBy('validado_at', $orden)->get();
+        return $query
+            ->orderBy('pedido_fecha', $orden)
+            ->orderBy('validado_at', $orden)
+            ->get();
     }
 
     private function compacto(PedidoBmaCierrePago $c): array
@@ -117,6 +126,8 @@ class ListarReportePagosPedidosService
             'excedente' => $c->excedente,
             'estado_cobertura' => $c->estado_cobertura,
             'num_exhibiciones' => $c->items_count ?? 0,
+            'pedido_fecha' => $c->pedido_fecha?->toDateString(),
+            'pedido_fecha_label' => \App\Support\Reportes\FechasPagoReporte::formatear($c->pedido_fecha),
             'validado_at' => $c->validado_at?->toIso8601String(),
             'validado_por' => $c->validadoPor?->name,
             'tiene_remision' => ! empty($c->metadata_snapshot['remision_documento_id']),

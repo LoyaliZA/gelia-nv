@@ -5,18 +5,33 @@ import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
 import { geliaCardClass } from '../../../utils/geliaTheme';
+import {
+    filtrosAlCambiarTipoReporte,
+    FILTROS_LIMPIOS_VOUCHERS,
+    subtituloAgrupacionVouchers,
+    TIPO_REPORTE_PEDIDO,
+    TIPO_REPORTE_VOUCHERS,
+} from '../../../utils/reportesPagosTipoReporte';
 import BarraConsultaPagosPedidos from './Partials/BarraConsultaPagosPedidos';
+import BarraConsultaVouchersValidados from './Partials/BarraConsultaVouchersValidados';
 import MetricasPagosPedidos from './Partials/MetricasPagosPedidos';
+import MetricasVouchersValidados from './Partials/MetricasVouchersValidados';
 import GrupoDiaPagos from './Partials/GrupoDiaPagos';
+import GrupoVouchersValidados from './Partials/GrupoVouchersValidados';
+import SelectorAgrupacionVouchers from './Partials/SelectorAgrupacionVouchers';
 import MenuExportarPagos from './Partials/MenuExportarPagos';
 import MisReportesPagosPedidos from './Partials/MisReportesPagosPedidos';
 import PagosPedidosReporteFloatingTracker from './Partials/PagosPedidosReporteFloatingTracker';
+import SelectorTipoReportePagos from './Partials/SelectorTipoReportePagos';
 import { puedePermiso } from '../../../utils/permisos';
 
 const cardHeader = geliaCardClass('p-6 md:p-10 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-6');
 
-const FILTROS_LIMPIOS = {
+const FILTROS_LIMPIOS_PEDIDO = {
+    tipo_reporte: TIPO_REPORTE_PEDIDO,
     busqueda: null,
+    fecha_pedido_desde: null,
+    fecha_pedido_hasta: null,
     fecha_validacion_desde: null,
     fecha_validacion_hasta: null,
     estado_cierre: 'vigente',
@@ -24,6 +39,7 @@ const FILTROS_LIMPIOS = {
     forma_pago: null,
     con_remision: null,
     con_evidencia: null,
+    fecha_incompleta: null,
 };
 
 export default function Index({
@@ -31,13 +47,20 @@ export default function Index({
     grupos = [],
     paginacion = {},
     metricas = {},
+    metricas_vouchers = {},
+    grupos_vouchers = [],
+    agrupar_por_vouchers = 'movimiento',
     filtros = {},
+    tipo_reporte = TIPO_REPORTE_PEDIDO,
+    vouchers_disponible = false,
     formas_pago = [],
     bancos = [],
     departamentos = [],
     vendedores = [],
     almacenes = [],
     origenes_pedido = [],
+    capturadores = [],
+    validadores_vouchers = [],
     avisos = {},
     mis_exportaciones = [],
 }) {
@@ -46,9 +69,22 @@ export default function Index({
     const [avisoSegundoPlano, setAvisoSegundoPlano] = useState(false);
     const [jobSeguimiento, setJobSeguimiento] = useState(null);
 
+    const esPedido = tipo_reporte === TIPO_REPORTE_PEDIDO;
+    const esVouchers = tipo_reporte === TIPO_REPORTE_VOUCHERS && vouchers_disponible;
+
     const navegar = useCallback((params) => {
         setCargando(true);
         router.get(route('reportes.pagos_pedidos.index'), { ...filtros, ...params, page: 1 }, {
+            preserveState: true,
+            replace: true,
+            onFinish: () => setCargando(false),
+        });
+    }, [filtros]);
+
+    const cambiarTipoReporte = useCallback((nuevoTipo) => {
+        setCargando(true);
+        const params = filtrosAlCambiarTipoReporte(filtros, nuevoTipo);
+        router.get(route('reportes.pagos_pedidos.index'), params, {
             preserveState: true,
             replace: true,
             onFinish: () => setCargando(false),
@@ -63,15 +99,26 @@ export default function Index({
         });
     };
 
-    const limpiarTodo = () => navegar(FILTROS_LIMPIOS);
+    const limpiarPedido = () => navegar(FILTROS_LIMPIOS_PEDIDO);
+    const limpiarVouchers = () => navegar(FILTROS_LIMPIOS_VOUCHERS);
 
     const puedeCsv = puedePermiso(auth, 'reportes.pagos_pedidos.exportar_csv');
     const puedePdf = puedePermiso(auth, 'reportes.pagos_pedidos.exportar_pdf');
-    const puedeExportar = puedeCsv || puedePdf;
+    const puedeExportar = (esPedido || esVouchers) && (puedeCsv || puedePdf);
+
+    const subtitulo = esPedido
+        ? `Pagos por pedido · Agrupado por fecha del pedido${(puedeCsv || puedePdf) ? ' · Exportación CSV y PDF' : ''}`
+        : esVouchers
+            ? `Vouchers validados · ${subtituloAgrupacionVouchers(agrupar_por_vouchers)}${(puedeCsv || puedePdf) ? ' · Exportación CSV y PDF' : ''}`
+            : 'Vouchers validados · Próximamente';
+
+    const headTitle = esPedido
+        ? 'Reportes administrativos de pagos | GELIA'
+        : 'Vouchers validados | GELIA';
 
     return (
         <AppLayout auth={auth}>
-            <Head title="Pagos de pedidos | GELIA" />
+            <Head title={headTitle} />
             <GeliaPageShell className="space-y-6 md:space-y-8">
                 <header className={cardHeader}>
                     <div className="min-w-0">
@@ -82,18 +129,28 @@ export default function Index({
                             </p>
                         </div>
                         <h1 className="text-2xl sm:text-3xl md:text-5xl font-black italic uppercase tracking-tighter theme-text-main m-0 leading-none">
-                            Pagos de <span style={{ color: 'var(--color-primario)' }}>pedidos</span>
+                            Reportes <span style={{ color: 'var(--color-primario)' }}>administrativos de pagos</span>
                         </h1>
                         <p className="text-[10px] font-bold theme-text-muted uppercase tracking-widest mt-3 m-0">
-                            Validaciones financieras de la Auxiliar · Agrupado por fecha de validación
-                            {(puedeCsv || puedePdf) && ' · Exportación CSV y PDF'}
+                            {subtitulo}
                         </p>
                     </div>
                 </header>
 
-                <MetricasPagosPedidos metricas={metricas} cargando={cargando} />
+                <SelectorTipoReportePagos
+                    tipoActivo={tipo_reporte}
+                    onCambiar={cambiarTipoReporte}
+                />
 
-                {avisos.requiere_backfill && (
+                {esPedido && (
+                    <MetricasPagosPedidos metricas={metricas} cargando={cargando} />
+                )}
+
+                {esVouchers && (
+                    <MetricasVouchersValidados metricas={metricas_vouchers} cargando={cargando} />
+                )}
+
+                {esPedido && avisos.requiere_backfill && (
                     <div className={geliaCardClass('p-4 border-l-4')} style={{ borderLeftColor: 'var(--color-primario)' }}>
                         <p className="text-xs font-bold theme-text-main m-0">
                             Hay pedidos validados sin cierre histórico. Ejecute{' '}
@@ -103,44 +160,85 @@ export default function Index({
                     </div>
                 )}
 
-                <div className={geliaCardClass('p-4 md:p-6 space-y-4')}>
-                    <BarraConsultaPagosPedidos
-                        filtros={filtros}
-                        formasPago={formas_pago}
-                        onAplicar={navegar}
-                        onLimpiarTodo={limpiarTodo}
-                    />
-                    <MenuExportarPagos
-                        filtrosQuery={filtros}
-                        puedeCsv={puedeCsv}
-                        puedePdf={puedePdf}
-                        bancos={bancos}
-                        formasPago={formas_pago}
-                        departamentos={departamentos}
-                        vendedores={vendedores}
-                        almacenes={almacenes}
-                        origenesPedido={origenes_pedido}
-                        onAvisoSegundoPlano={() => setAvisoSegundoPlano(true)}
-                        jobSeguimientoExterno={jobSeguimiento}
-                        onLimpiarSeguimiento={() => setJobSeguimiento(null)}
-                    />
-                    {avisoSegundoPlano && (
-                        <div className="rounded-xl border theme-border px-4 py-3 text-sm theme-text-main" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 8%, transparent)' }}>
-                            El reporte continuará generándose. Te avisaremos cuando esté listo.
-                        </div>
-                    )}
-                </div>
+                {esPedido && (
+                    <div className={geliaCardClass('p-4 md:p-6 space-y-4')}>
+                        <BarraConsultaPagosPedidos
+                            filtros={filtros}
+                            formasPago={formas_pago}
+                            onAplicar={navegar}
+                            onLimpiarTodo={limpiarPedido}
+                        />
+                        <MenuExportarPagos
+                            filtrosQuery={filtros}
+                            puedeCsv={puedeCsv}
+                            puedePdf={puedePdf}
+                            bancos={bancos}
+                            formasPago={formas_pago}
+                            departamentos={departamentos}
+                            vendedores={vendedores}
+                            almacenes={almacenes}
+                            origenesPedido={origenes_pedido}
+                            onAvisoSegundoPlano={() => setAvisoSegundoPlano(true)}
+                            jobSeguimientoExterno={jobSeguimiento}
+                            onLimpiarSeguimiento={() => setJobSeguimiento(null)}
+                        />
+                        {avisoSegundoPlano && (
+                            <div className="rounded-xl border theme-border px-4 py-3 text-sm theme-text-main" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 8%, transparent)' }}>
+                                El reporte continuará generándose. Te avisaremos cuando esté listo.
+                            </div>
+                        )}
+                    </div>
+                )}
 
-                <MisReportesPagosPedidos
-                    exportacionesIniciales={mis_exportaciones}
-                    puedeExportar={puedeExportar}
-                    onVerProgreso={(id) => {
-                        setAvisoSegundoPlano(false);
-                        setJobSeguimiento(id);
-                    }}
-                />
+                {esVouchers && (
+                    <div className={geliaCardClass('p-4 md:p-6 space-y-4')}>
+                        <BarraConsultaVouchersValidados
+                            filtros={filtros}
+                            formasPago={formas_pago}
+                            bancos={bancos}
+                            capturadores={capturadores}
+                            validadores={validadores_vouchers}
+                            onAplicar={navegar}
+                            onLimpiarTodo={limpiarVouchers}
+                        />
+                        <SelectorAgrupacionVouchers
+                            valor={agrupar_por_vouchers}
+                            onCambiar={(agrupar_por) => navegar({ agrupar_por })}
+                        />
+                        <MenuExportarPagos
+                            filtrosQuery={filtros}
+                            puedeCsv={puedeCsv}
+                            puedePdf={puedePdf}
+                            bancos={bancos}
+                            formasPago={formas_pago}
+                            departamentos={departamentos}
+                            vendedores={vendedores}
+                            almacenes={almacenes}
+                            origenesPedido={origenes_pedido}
+                            onAvisoSegundoPlano={() => setAvisoSegundoPlano(true)}
+                            jobSeguimientoExterno={jobSeguimiento}
+                            onLimpiarSeguimiento={() => setJobSeguimiento(null)}
+                        />
+                        {avisoSegundoPlano && (
+                            <div className="rounded-xl border theme-border px-4 py-3 text-sm theme-text-main" style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 8%, transparent)' }}>
+                                El reporte continuará generándose. Te avisaremos cuando esté listo.
+                            </div>
+                        )}
+                    </div>
+                )}
 
-                {grupos.length === 0 && !cargando && (
+                {(esPedido || esVouchers) && (
+                    <MisReportesPagosPedidos
+                        exportacionesIniciales={mis_exportaciones}
+                        puedeExportar={puedeExportar}
+                        onVerProgreso={(id) => {
+                            setAvisoSegundoPlano(false);
+                            setJobSeguimiento(id);
+                        }}
+                    />
+                )}
+
+                {esPedido && grupos.length === 0 && !cargando && (
                     <div className={geliaCardClass('p-10 md:p-14 text-center')}>
                         <div className="inline-flex p-4 rounded-2xl theme-element border theme-border mb-4">
                             <CalendarDays className="w-8 h-8" style={{ color: 'var(--color-primario)' }} />
@@ -152,19 +250,45 @@ export default function Index({
                     </div>
                 )}
 
-                <div className="space-y-4 md:space-y-6">
-                    {grupos.map((grupo, i) => (
-                        <GrupoDiaPagos
-                            key={grupo.fecha}
-                            grupo={grupo}
-                            abiertoDefault={i === 0}
-                            cacheDetalle={cacheDetalle}
-                            onCacheDetalle={(id, data) => setCacheDetalle((c) => ({ ...c, [id]: data }))}
-                        />
-                    ))}
-                </div>
+                {esVouchers && grupos_vouchers.length === 0 && !cargando && (
+                    <div className={geliaCardClass('p-10 md:p-14 text-center')}>
+                        <div className="inline-flex p-4 rounded-2xl theme-element border theme-border mb-4">
+                            <CalendarDays className="w-8 h-8" style={{ color: 'var(--color-primario)' }} />
+                        </div>
+                        <p className="text-sm font-semibold theme-text-main m-0">Sin resultados</p>
+                        <p className="text-xs theme-text-muted mt-2 m-0 max-w-md mx-auto leading-relaxed">
+                            Ajuste el periodo o los filtros. Por defecto se muestran vouchers de ingreso bancario validado.
+                        </p>
+                    </div>
+                )}
 
-                {paginacion.last_page > 1 && (
+                {esPedido && (
+                    <div className="space-y-4 md:space-y-6">
+                        {grupos.map((grupo, i) => (
+                            <GrupoDiaPagos
+                                key={grupo.fecha}
+                                grupo={grupo}
+                                abiertoDefault={i === 0}
+                                cacheDetalle={cacheDetalle}
+                                onCacheDetalle={(id, data) => setCacheDetalle((c) => ({ ...c, [id]: data }))}
+                            />
+                        ))}
+                    </div>
+                )}
+
+                {esVouchers && (
+                    <div className="space-y-4 md:space-y-6">
+                        {grupos_vouchers.map((grupo, i) => (
+                            <GrupoVouchersValidados
+                                key={grupo.clave}
+                                grupo={grupo}
+                                abiertoDefault={i === 0}
+                            />
+                        ))}
+                    </div>
+                )}
+
+                {paginacion.last_page > 1 && (esPedido || esVouchers) && (
                     <GeliaPaginacion
                         paginator={{
                             current_page: paginacion.current_page,

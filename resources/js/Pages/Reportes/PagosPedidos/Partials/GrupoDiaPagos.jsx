@@ -27,9 +27,9 @@ export default function GrupoDiaPagos({ grupo, abiertoDefault, cacheDetalle, onC
                     </p>
                 </div>
                 <div className={GRID_FINANCIERO_MOVIL}>
-                    <CeldaFinanciera label="Venta" valor={fmtMxn(grupo.resumen.monto_venta)} />
-                    <CeldaFinanciera label="Pagos" valor={fmtMxn(grupo.resumen.pagos_validos)} />
+                    <CeldaFinanciera label="Remisiones" valor={fmtMxn(grupo.resumen.total_remisiones)} />
                     <CeldaFinanciera label="SAF" valor={fmtMxn(grupo.resumen.saf_aplicado)} />
+                    <CeldaFinanciera label="Pagos" valor={fmtMxn(grupo.resumen.pagos_validos)} />
                     <CeldaIncidencias count={incidencias} />
                 </div>
             </button>

@@ -11,6 +11,14 @@ const PRESETS = [
     { id: 'PERSONALIZADO', label: 'Rango personalizado' },
 ];
 
+const FECHAS_INCOMPLETAS = [
+    { value: '', label: 'Todas' },
+    { value: 'pedido', label: 'Sin fecha del pedido' },
+    { value: 'pago', label: 'Sin fecha del movimiento' },
+    { value: 'reportada', label: 'Sin fecha reportada' },
+    { value: 'validacion', label: 'Sin fecha de validación' },
+];
+
 function fmt(d) {
     return d.toISOString().slice(0, 10);
 }
@@ -30,30 +38,30 @@ function inferirPreset(desde, hasta) {
 function rangoPreset(preset) {
     const hoy = new Date();
     const hoyStr = fmt(hoy);
-    if (preset === 'TODAS') return { fecha_validacion_desde: null, fecha_validacion_hasta: null };
-    if (preset === 'HOY') return { fecha_validacion_desde: hoyStr, fecha_validacion_hasta: hoyStr };
+    if (preset === 'TODAS') return { fecha_pedido_desde: null, fecha_pedido_hasta: null };
+    if (preset === 'HOY') return { fecha_pedido_desde: hoyStr, fecha_pedido_hasta: hoyStr };
     if (preset === 'AYER') {
         const a = new Date();
         a.setDate(a.getDate() - 1);
         const s = fmt(a);
-        return { fecha_validacion_desde: s, fecha_validacion_hasta: s };
+        return { fecha_pedido_desde: s, fecha_pedido_hasta: s };
     }
     if (preset === 'SEMANA') {
         const d = new Date();
         const day = d.getDay() || 7;
         d.setDate(d.getDate() - day + 1);
-        return { fecha_validacion_desde: fmt(d), fecha_validacion_hasta: hoyStr };
+        return { fecha_pedido_desde: fmt(d), fecha_pedido_hasta: hoyStr };
     }
     if (preset === 'MES') {
         const d = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-        return { fecha_validacion_desde: fmt(d), fecha_validacion_hasta: hoyStr };
+        return { fecha_pedido_desde: fmt(d), fecha_pedido_hasta: hoyStr };
     }
     return null;
 }
 
 const CAMPOS_FILTRO = [
     'estado_cierre', 'estado_cobertura', 'forma_pago', 'con_remision', 'con_evidencia',
-    'departamento_id', 'vendedor_id', 'cliente_id', 'banco_id', 'almacen_id',
+    'fecha_incompleta', 'fecha_validacion_desde', 'fecha_validacion_hasta',
 ];
 
 function contarFiltrosAdicionales(filtros) {
@@ -61,18 +69,20 @@ function contarFiltrosAdicionales(filtros) {
     for (const k of CAMPOS_FILTRO) {
         if (filtros[k] && filtros[k] !== 'vigente') n++;
     }
-    if (filtros.fecha_validacion_desde || filtros.fecha_validacion_hasta) n++;
     return n;
 }
 
 export default function BarraConsultaPagosPedidos({ filtros, formasPago, onAplicar, onLimpiarTodo }) {
     const [busquedaLocal, setBusquedaLocal] = useState(filtros.busqueda || '');
     const [mostrarFiltros, setMostrarFiltros] = useState(contarFiltrosAdicionales(filtros) > 0);
-    const [preset, setPreset] = useState(() => inferirPreset(filtros.fecha_validacion_desde, filtros.fecha_validacion_hasta));
+    const [preset, setPreset] = useState(() => inferirPreset(filtros.fecha_pedido_desde, filtros.fecha_pedido_hasta));
 
     const [local, setLocal] = useState({
+        fecha_pedido_desde: filtros.fecha_pedido_desde || '',
+        fecha_pedido_hasta: filtros.fecha_pedido_hasta || '',
         fecha_validacion_desde: filtros.fecha_validacion_desde || '',
         fecha_validacion_hasta: filtros.fecha_validacion_hasta || '',
+        fecha_incompleta: filtros.fecha_incompleta || '',
         estado_cierre: filtros.estado_cierre || 'vigente',
         estado_cobertura: filtros.estado_cobertura || '',
         forma_pago: filtros.forma_pago || '',
@@ -83,15 +93,18 @@ export default function BarraConsultaPagosPedidos({ filtros, formasPago, onAplic
     useEffect(() => {
         setBusquedaLocal(filtros.busqueda || '');
         setLocal({
+            fecha_pedido_desde: filtros.fecha_pedido_desde || '',
+            fecha_pedido_hasta: filtros.fecha_pedido_hasta || '',
             fecha_validacion_desde: filtros.fecha_validacion_desde || '',
             fecha_validacion_hasta: filtros.fecha_validacion_hasta || '',
+            fecha_incompleta: filtros.fecha_incompleta || '',
             estado_cierre: filtros.estado_cierre || 'vigente',
             estado_cobertura: filtros.estado_cobertura || '',
             forma_pago: filtros.forma_pago || '',
             con_remision: filtros.con_remision ?? '',
             con_evidencia: filtros.con_evidencia ?? '',
         });
-        setPreset(inferirPreset(filtros.fecha_validacion_desde, filtros.fecha_validacion_hasta));
+        setPreset(inferirPreset(filtros.fecha_pedido_desde, filtros.fecha_pedido_hasta));
     }, [filtros]);
 
     const filtrosActivos = useMemo(() => contarFiltrosAdicionales(filtros), [filtros]);
@@ -103,8 +116,11 @@ export default function BarraConsultaPagosPedidos({ filtros, formasPago, onAplic
     const aplicarFiltrosPanel = () => {
         onAplicar({
             ...local,
+            fecha_pedido_desde: local.fecha_pedido_desde || null,
+            fecha_pedido_hasta: local.fecha_pedido_hasta || null,
             fecha_validacion_desde: local.fecha_validacion_desde || null,
             fecha_validacion_hasta: local.fecha_validacion_hasta || null,
+            fecha_incompleta: local.fecha_incompleta || null,
             estado_cobertura: local.estado_cobertura || null,
             forma_pago: local.forma_pago || null,
             con_remision: local.con_remision || null,
@@ -120,16 +136,29 @@ export default function BarraConsultaPagosPedidos({ filtros, formasPago, onAplic
         }
         const rango = rangoPreset(id);
         if (rango) {
-            setLocal((s) => ({ ...s, ...rango, fecha_validacion_desde: rango.fecha_validacion_desde || '', fecha_validacion_hasta: rango.fecha_validacion_hasta || '' }));
-            onAplicar({ ...rango, busqueda: busquedaLocal.trim() || null });
+            setLocal((s) => ({
+                ...s,
+                ...rango,
+                fecha_pedido_desde: rango.fecha_pedido_desde || '',
+                fecha_pedido_hasta: rango.fecha_pedido_hasta || '',
+            }));
+            onAplicar({
+                ...rango,
+                fecha_validacion_desde: null,
+                fecha_validacion_hasta: null,
+                busqueda: busquedaLocal.trim() || null,
+            });
         }
     };
 
     const limpiarFiltros = () => {
         setPreset('TODAS');
         setLocal({
+            fecha_pedido_desde: '',
+            fecha_pedido_hasta: '',
             fecha_validacion_desde: '',
             fecha_validacion_hasta: '',
+            fecha_incompleta: '',
             estado_cierre: 'vigente',
             estado_cobertura: '',
             forma_pago: '',
@@ -146,7 +175,7 @@ export default function BarraConsultaPagosPedidos({ filtros, formasPago, onAplic
             <div className="flex flex-col gap-1.5">
                 <label htmlFor="pagos-pedidos-periodo" className="text-[11px] font-semibold uppercase tracking-wide theme-text-muted flex items-center gap-1.5 m-0">
                     <Calendar className="w-3.5 h-3.5" style={{ color: 'var(--color-primario)' }} />
-                    Periodo de validación
+                    Periodo del pedido
                 </label>
                 <select
                     id="pagos-pedidos-periodo"
@@ -241,21 +270,43 @@ export default function BarraConsultaPagosPedidos({ filtros, formasPago, onAplic
 
                     {preset === 'PERSONALIZADO' && (
                         <RangoFechasPersonalizado
-                            idPrefix="pagos-pedidos-validacion"
-                            fechaInicio={local.fecha_validacion_desde}
-                            fechaFin={local.fecha_validacion_hasta}
+                            idPrefix="pagos-pedidos-pedido"
+                            fechaInicio={local.fecha_pedido_desde}
+                            fechaFin={local.fecha_pedido_hasta}
                             mostrarBotonAplicar={false}
                             onCambio={({ fecha_inicio, fecha_fin }) => {
                                 setLocal((s) => ({
                                     ...s,
-                                    fecha_validacion_desde: fecha_inicio ?? s.fecha_validacion_desde,
-                                    fecha_validacion_hasta: fecha_fin ?? s.fecha_validacion_hasta,
+                                    fecha_pedido_desde: fecha_inicio ?? s.fecha_pedido_desde,
+                                    fecha_pedido_hasta: fecha_fin ?? s.fecha_pedido_hasta,
                                 }));
                             }}
                         />
                     )}
 
+                    <RangoFechasPersonalizado
+                        idPrefix="pagos-pedidos-validacion"
+                        fechaInicio={local.fecha_validacion_desde}
+                        fechaFin={local.fecha_validacion_hasta}
+                        mostrarBotonAplicar={false}
+                        onCambio={({ fecha_inicio, fecha_fin }) => {
+                            setLocal((s) => ({
+                                ...s,
+                                fecha_validacion_desde: fecha_inicio ?? s.fecha_validacion_desde,
+                                fecha_validacion_hasta: fecha_fin ?? s.fecha_validacion_hasta,
+                            }));
+                        }}
+                    />
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <label className="theme-label block">
+                            Fecha incompleta
+                            <select value={local.fecha_incompleta} onChange={(e) => setLocal((s) => ({ ...s, fecha_incompleta: e.target.value }))} className="theme-select block mt-1.5 w-full">
+                                {FECHAS_INCOMPLETAS.map((o) => (
+                                    <option key={o.value || 'todas'} value={o.value}>{o.label}</option>
+                                ))}
+                            </select>
+                        </label>
                         <label className="theme-label block">
                             Estado cierre
                             <select value={local.estado_cierre} onChange={(e) => setLocal((s) => ({ ...s, estado_cierre: e.target.value }))} className="theme-select block mt-1.5 w-full">
@@ -269,9 +320,9 @@ export default function BarraConsultaPagosPedidos({ filtros, formasPago, onAplic
                             <select value={local.estado_cobertura} onChange={(e) => setLocal((s) => ({ ...s, estado_cobertura: e.target.value }))} className="theme-select block mt-1.5 w-full">
                                 <option value="">Todas</option>
                                 <option value="cubierto">Cubierto</option>
-                                <option value="parcial">Parcial</option>
-                                <option value="con_excedente">Excedente</option>
-                                <option value="sin_pago">Sin pago</option>
+                                <option value="parcial">Parcialmente cubierto</option>
+                                <option value="con_excedente">Con excedente</option>
+                                <option value="sin_pago">Pendiente de pago</option>
                             </select>
                         </label>
                         <label className="theme-label block">

@@ -6,6 +6,7 @@ use App\Models\CatalogoBanco;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\Reportes\PedidoBmaCierrePagoItem;
 use App\Models\User;
+use App\Support\Reportes\ClasificacionIngresoBancario;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -112,11 +113,7 @@ class PedidoBmaPago extends Model
 
     public static function formaRequiereBanco(?string $formaPago): bool
     {
-        if ($formaPago === null || $formaPago === '') {
-            return false;
-        }
-
-        return (bool) (self::REQUIERE_BANCO[$formaPago] ?? false);
+        return ClasificacionIngresoBancario::formaRequiereBanco($formaPago);
     }
 
     public static function labelForma(?string $formaPago): ?string
@@ -128,17 +125,10 @@ class PedidoBmaPago extends Model
         return self::LABELS_FORMA_PAGO[$formaPago] ?? $formaPago;
     }
 
-    /** @return list<array{codigo: string, label: string, requiere_banco: bool}> */
+    /** @return list<array{codigo: string, label: string, requiere_banco: bool, clasificacion?: string, clasificacion_label?: string, cuenta_ingreso_bancario?: bool}> */
     public static function formasPagoCatalogo(): array
     {
-        return array_map(
-            fn (string $codigo) => [
-                'codigo' => $codigo,
-                'label' => self::LABELS_FORMA_PAGO[$codigo] ?? $codigo,
-                'requiere_banco' => self::formaRequiereBanco($codigo),
-            ],
-            self::FORMAS_PAGO
-        );
+        return ClasificacionIngresoBancario::catalogoFormasPago();
     }
 
     public function pedido(): BelongsTo

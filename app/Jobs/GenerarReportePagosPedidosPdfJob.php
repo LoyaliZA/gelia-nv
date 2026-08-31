@@ -7,7 +7,9 @@ use App\Models\Reportes\ReportePagosPedidosExportacion;
 use App\Models\User;
 use App\Notifications\ReportePagosPedidosExportacionNotification;
 use App\Services\Reportes\PagosPedidos\ExportarReportePagosPedidosCsvService;
+use App\Services\Reportes\PagosPedidos\ExportarReporteVouchersValidadosCsvService;
 use App\Services\Reportes\PagosPedidos\GenerarReportePagosPedidosPdfService;
+use App\Services\Reportes\PagosPedidos\GenerarReporteVouchersValidadosPdfService;
 use App\Support\Reportes\ReportePagosPedidosProgreso;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -30,15 +32,29 @@ class GenerarReportePagosPedidosPdfJob implements ShouldQueue
 
     public function handle(
         GenerarReportePagosPedidosPdfService $pdf,
+        GenerarReporteVouchersValidadosPdfService $pdfVouchers,
         ExportarReportePagosPedidosCsvService $csv,
+        ExportarReporteVouchersValidadosCsvService $csvVouchers,
     ): void {
-        $progreso = new ReportePagosPedidosProgreso($this->jobId);
+        $modelo = ReportePagosPedidosExportacion::query()->find($this->jobId);
+        if ($modelo && $modelo->estado === ReportePagosPedidosExportacion::ESTADO_PENDING) {
+            $modelo->update([
+                'estado' => ReportePagosPedidosExportacion::ESTADO_PROCESSING,
+                'started_at' => now(),
+            ]);
+        }
+
+        $progreso = ReportePagosPedidosProgreso::iniciar($this->jobId);
         $formato = $this->filtros['formato'] ?? 'pdf';
+        $tipo = $this->filtros['tipo_reporte'] ?? 'pedido';
 
         try {
-            $resultado = match ($formato) {
-                'csv_resumen' => $this->generarCsv($csv, $progreso, 'resumen'),
-                'csv_detalle' => $this->generarCsv($csv, $progreso, 'detalle'),
+            $resultado = match ([$tipo, $formato]) {
+                ['vouchers', 'csv_resumen'] => $this->generarCsvVouchers($csvVouchers, $progreso),
+                ['vouchers', 'pdf'] => $this->generarPdfVouchers($pdfVouchers, $progreso),
+                ['vouchers', 'csv_detalle'] => throw new \InvalidArgumentException('CSV detalle no disponible para vouchers.'),
+                ['pedido', 'csv_resumen'] => $this->generarCsv($csv, $progreso, 'resumen'),
+                ['pedido', 'csv_detalle'] => $this->generarCsv($csv, $progreso, 'detalle'),
                 default => $this->generarPdf($pdf, $progreso),
             };
 
@@ -65,6 +81,25 @@ class GenerarReportePagosPedidosPdfJob implements ShouldQueue
     private function generarPdf(GenerarReportePagosPedidosPdfService $pdf, ReportePagosPedidosProgreso $progreso): array
     {
         return $pdf->generar($this->usuarioSolicitante, $this->filtros, $progreso);
+    }
+
+    private function generarPdfVouchers(GenerarReporteVouchersValidadosPdfService $pdf, ReportePagosPedidosProgreso $progreso): array
+    {
+        return $pdf->generar($this->usuarioSolicitante, $this->filtros, $progreso);
+    }
+
+    private function generarCsvVouchers(ExportarReporteVouchersValidadosCsvService $csv, ReportePagosPedidosProgreso $progreso): array
+    {
+        $progreso->avanzar(ReportePagosPedidosProgreso::ETAPA_PREPARANDO, 0, 0, 1);
+        $progreso->avanzar(ReportePagosPedidosProgreso::ETAPA_TOTALES, 0, 0, 1);
+        $progreso->assertNoCancelado();
+
+        $resultado = $csv->guardar($this->usuarioSolicitante, $this->filtros);
+
+        $progreso->marcarTotalRegistros($resultado['num_registros']);
+        $progreso->avanzar(ReportePagosPedidosProgreso::ETAPA_FINALIZANDO, $resultado['num_registros'], 1, 1);
+
+        return array_merge($resultado, ['num_paginas' => null]);
     }
 
     private function generarCsv(

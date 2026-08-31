@@ -34,6 +34,26 @@ final class EncabezadoReportePagosPedidosPdf
     }
 
     /** @param  array<string, mixed>  $filtros */
+    public static function construirVouchers(User $usuario, array $filtros, int $totalExhibiciones): array
+    {
+        $tipoFecha = self::tipoFecha($filtros);
+
+        return [
+            'folio' => 'RVV-'.now()->format('Ymd-His').'-'.strtoupper(substr(uniqid(), -4)),
+            'titulo' => 'Reporte de vouchers validados',
+            'generado_at' => self::fmtFechaHora(now()),
+            'usuario' => $usuario->name,
+            'periodo' => self::periodoConsultado($filtros, $tipoFecha),
+            'tipo_fecha' => $tipoFecha,
+            'estado_reporte' => 'Ingreso bancario validado',
+            'total_pedidos' => $totalExhibiciones,
+            'total_label' => 'Exhibiciones incluidas',
+            'color_primario' => '#ec4899',
+            'color_franja' => '#fdf2f8',
+        ];
+    }
+
+    /** @param  array<string, mixed>  $filtros */
     public static function tipoFechaPublico(array $filtros): string
     {
         return self::tipoFecha($filtros);
@@ -46,7 +66,8 @@ final class EncabezadoReportePagosPedidosPdf
             'pedido' => 'Fecha del pedido',
             'reportada' => 'Fecha reportada',
             'pago' => 'Fecha del pago',
-            default => 'Fecha de validación',
+            'validacion' => 'Fecha de validación',
+            default => 'Fecha del pedido',
         };
     }
 
@@ -59,7 +80,7 @@ final class EncabezadoReportePagosPedidosPdf
             'Fecha del pago' => ['fecha_pago_desde', 'fecha_pago_hasta'],
             'Fecha de validación' => ['fecha_validacion_desde', 'fecha_validacion_hasta'],
         ];
-        [$desdeKey, $hastaKey] = $map[$tipoFecha] ?? $map['Fecha de validación'];
+        [$desdeKey, $hastaKey] = $map[$tipoFecha] ?? $map['Fecha del pedido'];
         $desde = $filtros[$desdeKey] ?? null;
         $hasta = $filtros[$hastaKey] ?? null;
 

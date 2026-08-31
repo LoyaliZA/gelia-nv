@@ -8,6 +8,7 @@ use App\Support\Reportes\AlcanceExhibicionesReportePagosPedidos;
 use App\Support\Reportes\AnexoEvidenciasReportePagosPedidosPdf;
 use App\Support\Reportes\EncabezadoReportePagosPedidosPdf;
 use App\Support\Reportes\ExhibicionesPedidoReportePagosPedidosPdf;
+use App\Support\Reportes\FechasPagoReporte;
 use App\Support\Reportes\FichaPedidoReportePagosPedidosPdf;
 use App\Support\Reportes\ParametrosAplicadosReportePagosPedidosPdf;
 use App\Support\Reportes\ReportePagosPedidosProgreso;
@@ -90,8 +91,7 @@ class GenerarReportePagosPedidosPdfService
             'anexo' => $anexo,
         ])->setPaper('letter', 'portrait');
 
-        $dompdf = $pdf->getDomPDF();
-        $this->registrarPiePagina($dompdf, $encabezado['folio']);
+        $this->registrarPiePagina($pdf->getDomPDF(), $encabezado['folio']);
         $output = $pdf->output();
         $progreso?->avanzar(ReportePagosPedidosProgreso::ETAPA_PDF, $totalPedidos + $vouchersHechos, 1, 1);
 
@@ -102,9 +102,7 @@ class GenerarReportePagosPedidosPdfService
         $path = 'reportes_pagos_pedidos/'.$nombre;
         Storage::disk('local')->put($path, $output);
 
-        $numPaginas = method_exists($dompdf->getCanvas(), 'get_page_count')
-            ? (int) $dompdf->getCanvas()->get_page_count()
-            : null;
+        $numPaginas = (int) $pdf->getDomPDF()->getCanvas()->get_page_count();
 
         return [
             'path' => $path,
@@ -115,28 +113,34 @@ class GenerarReportePagosPedidosPdfService
         ];
     }
 
-    /** Registra folio y paginación en el pie (y en el bloque de paginación del encabezado, pág. 1). */
+    /** Registra folio y paginación tras el render (DomPDF 3 ejecuta page_script al registrarlo, no al final). */
     private function registrarPiePagina(\Dompdf\Dompdf $dompdf, string $folio): void
     {
-        $dompdf->getCanvas()->page_script(function ($pageNumber, $pageCount, $canvas, $fontMetrics) use ($folio) {
-            $font = $fontMetrics->get_font('DejaVu Sans', 'normal');
-            $fontBold = $fontMetrics->get_font('DejaVu Sans', 'bold');
-            $w = $canvas->get_width();
-            $h = $canvas->get_height();
-            $yLine = $h - 42;
-            $yText = $h - 34;
+        $dompdf->setCallbacks([
+            [
+                'event' => 'end_document',
+                'f' => function (int $pageNumber, int $pageCount, $canvas, $fontMetrics) use ($folio) {
+                    $font = $fontMetrics->get_font('DejaVu Sans', 'normal');
+                    $fontBold = $fontMetrics->get_font('DejaVu Sans', 'bold');
+                    $w = $canvas->get_width();
+                    $h = $canvas->get_height();
+                    $yLine = $h - 42;
+                    $yText = $h - 34;
 
-            $canvas->line(42, $yLine, $w - 42, $yLine, [0.82, 0.82, 0.82], 0.5);
-            $canvas->text(42, $yText, 'Folio: '.$folio, $font, 7, [0.45, 0.45, 0.45]);
+                    $canvas->line(42, $yLine, $w - 42, $yLine, [0.82, 0.82, 0.82], 0.5);
+                    $canvas->text(42, $yText, 'Folio: '.$folio, $font, 7, [0.45, 0.45, 0.45]);
+                    $canvas->text(42, $yText - 10, 'Documento confidencial — Uso administrativo', $font, 6, [0.55, 0.55, 0.55]);
 
-            $pagina = "Página {$pageNumber} de {$pageCount}";
-            $textWidth = $fontMetrics->get_text_width($pagina, $fontBold, 7);
-            $canvas->text($w - 42 - $textWidth, $yText, $pagina, $fontBold, 7, [0.15, 0.15, 0.15]);
+                    $pagina = "Página {$pageNumber} de {$pageCount}";
+                    $textWidth = $fontMetrics->get_text_width($pagina, $fontBold, 7);
+                    $canvas->text($w - 42 - $textWidth, $yText, $pagina, $fontBold, 7, [0.15, 0.15, 0.15]);
 
-            if ($pageNumber === 1) {
-                $canvas->text(290, 112, $pagina, $fontBold, 9, [0.09, 0.09, 0.09]);
-            }
-        });
+                    if ($pageNumber === 1) {
+                        $canvas->text(378, 162, $pagina, $fontBold, 9, [0.09, 0.09, 0.09]);
+                    }
+                },
+            ],
+        ]);
     }
 
     /**
@@ -157,7 +161,7 @@ class GenerarReportePagosPedidosPdfService
 
                 return ($items[0] ?? null)?->banco_snapshot ?? 'Sin banco';
             }),
-            default => $cierres->groupBy(fn ($c) => $c->validado_at?->toDateString()),
+            default => $cierres->groupBy(fn ($c) => FechasPagoReporte::claveAgrupamientoPedido($c)),
         };
 
         $desc = ($params['orden'] ?? 'desc') !== 'asc';
@@ -166,13 +170,13 @@ class GenerarReportePagosPedidosPdfService
         $dias = [];
         foreach ($grupos as $clave => $grupo) {
             $coleccion = $desc
-                ? $grupo->sortByDesc('validado_at')
-                : $grupo->sortBy('validado_at');
+                ? $grupo->sortByDesc(fn ($c) => sprintf('%s|%s', $c->pedido_fecha?->toDateString() ?? '', $c->validado_at?->timestamp ?? 0))->values()
+                : $grupo->sortBy(fn ($c) => sprintf('%s|%s', $c->pedido_fecha?->toDateString() ?? '', $c->validado_at?->timestamp ?? 0))->values();
 
             $fechaLabel = match ($agrupar) {
                 'vendedora' => (string) $clave,
                 'banco' => 'Banco: '.(string) $clave,
-                default => ucfirst(Carbon::parse((string) $clave)->locale('es')->isoFormat('dddd, D [de] MMMM [de] YYYY')),
+                default => FechasPagoReporte::etiquetaGrupoPedido((string) $clave),
             };
 
             $resumenDia = $agrupar === 'dia'

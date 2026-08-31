@@ -4,6 +4,8 @@ import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { reintentarPagosPedidosExportacion } from '../../../../utils/pagosPedidosReporteTracker';
 
 function etiquetaEstado(item) {
+    if (item.estado_label) return item.estado_label;
+    if (item.estado === 'pending') return 'En cola';
     if (item.estado === 'processing') {
         return `Generando ${item.progress ?? 0}%`;
     }
@@ -12,6 +14,31 @@ function etiquetaEstado(item) {
     if (item.estado === 'failed') return 'Error';
     if (item.estado === 'cancelled') return 'Cancelado';
     return item.estado;
+}
+
+function etiquetaPeriodo(item) {
+    const p = item.periodo;
+    if (!p) return '—';
+    const desde = p.desde || '…';
+    const hasta = p.hasta || '…';
+    return `${desde} — ${hasta}`;
+}
+
+function etiquetaFecha(item) {
+    if (!item.completed_at && item.estado === 'processing') return '—';
+    if (item.completed_at) {
+        try {
+            return new Date(item.completed_at).toLocaleString('es-MX', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+            });
+        } catch {
+            return item.completed_at;
+        }
+    }
+    return '—';
 }
 
 export default function MisReportesPagosPedidos({
@@ -55,7 +82,7 @@ export default function MisReportesPagosPedidos({
     const visibles = abierto ? items : items.slice(0, 3);
 
     const accionArchivo = async (item) => {
-        if (item.estado === 'processing') {
+        if (item.estado === 'processing' || item.estado === 'pending') {
             onVerProgreso?.(item.id);
             return;
         }
@@ -71,7 +98,7 @@ export default function MisReportesPagosPedidos({
     };
 
     const labelAccion = (item) => {
-        if (item.estado === 'processing') return 'Ver progreso';
+        if (item.estado === 'processing' || item.estado === 'pending') return 'Ver progreso';
         if (item.puede_descargar) return 'Descargar';
         if (item.puede_reintentar) return 'Generar nuevamente';
         return '—';
@@ -89,29 +116,51 @@ export default function MisReportesPagosPedidos({
             </div>
 
             <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[32rem]">
+                <table className="w-full text-sm min-w-[48rem]">
                     <thead>
                         <tr className="text-[10px] font-black uppercase tracking-widest theme-text-muted border-b theme-border">
-                            <th className="text-left py-2 pr-3">Reporte</th>
+                            <th className="text-left py-2 pr-3">Archivo</th>
+                            <th className="text-left py-2 pr-3">Tipo</th>
+                            <th className="text-left py-2 pr-3">Formato</th>
+                            <th className="text-left py-2 pr-3">Periodo</th>
+                            <th className="text-left py-2 pr-3">Criterio fecha</th>
+                            <th className="text-left py-2 pr-3">Solicitado por</th>
+                            <th className="text-left py-2 pr-3">Solicitud</th>
+                            <th className="text-left py-2 pr-3">Fin</th>
+                            <th className="text-left py-2 pr-3">Tamaño</th>
                             <th className="text-left py-2 pr-3">Estado</th>
-                            <th className="text-left py-2 pr-3">Creado</th>
-                            <th className="text-left py-2">Archivo</th>
+                            <th className="text-left py-2 pr-3">Error</th>
+                            <th className="text-left py-2">Acción</th>
                         </tr>
                     </thead>
                     <tbody>
                         {visibles.map((item) => (
                             <tr key={item.id} className="border-b theme-border last:border-0">
-                                <td className="py-3 pr-3 font-semibold theme-text-main">{item.titulo}</td>
-                                <td className="py-3 pr-3 theme-text-muted">{etiquetaEstado(item)}</td>
-                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap">{item.creado_etiqueta || item.creado_fecha}</td>
+                                <td className="py-3 pr-3 font-semibold theme-text-main max-w-[10rem] truncate" title={item.titulo}>
+                                    {item.nombre_archivo || item.titulo}
+                                </td>
+                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap">{item.tipo_reporte_label || '—'}</td>
+                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap">{item.formato_label || item.formato}</td>
+                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap text-xs">{etiquetaPeriodo(item)}</td>
+                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap text-xs">{item.criterio_fecha || '—'}</td>
+                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap">{item.solicitado_por || '—'}</td>
+                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap text-xs">
+                                    {item.creado_fecha} {item.creado_etiqueta}
+                                </td>
+                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap text-xs">{etiquetaFecha(item)}</td>
+                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap">{item.tamano_etiqueta || '—'}</td>
+                                <td className="py-3 pr-3 theme-text-muted whitespace-nowrap">{etiquetaEstado(item)}</td>
+                                <td className="py-3 pr-3 text-xs text-red-500 max-w-[8rem] truncate" title={item.error || ''}>
+                                    {item.error || '—'}
+                                </td>
                                 <td className="py-3">
-                                    {(item.estado === 'processing' || item.puede_descargar || item.puede_reintentar) ? (
+                                    {(item.estado === 'processing' || item.estado === 'pending' || item.puede_descargar || item.puede_reintentar) ? (
                                         <button
                                             type="button"
                                             onClick={() => accionArchivo(item)}
                                             className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--color-primario)] hover:underline"
                                         >
-                                            {item.puede_descargar ? <Download className="w-3.5 h-3.5" /> : item.estado === 'processing' ? <Eye className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                            {item.puede_descargar ? <Download className="w-3.5 h-3.5" /> : (item.estado === 'processing' || item.estado === 'pending') ? <Eye className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
                                             {labelAccion(item)}
                                         </button>
                                     ) : (

@@ -34,7 +34,11 @@ class CalcularMetricasReportePagosPedidosService
             COALESCE(SUM(pagos_validos), 0) as pagos_validos,
             COALESCE(SUM(CASE WHEN diferencia > 0 THEN diferencia ELSE 0 END), 0) as pendiente_agregado,
             COALESCE(SUM(excedente), 0) as excedente_agregado,
-            SUM(CASE WHEN estado_cobertura IN ('parcial', 'con_excedente', 'sin_pago') THEN 1 ELSE 0 END) as pedidos_observaciones
+            SUM(CASE WHEN estado_cobertura IN ('parcial', 'con_excedente', 'sin_pago') THEN 1 ELSE 0 END) as pedidos_observaciones,
+            SUM(CASE WHEN estado_cobertura = 'cubierto' THEN 1 ELSE 0 END) as pedidos_cubiertos,
+            SUM(CASE WHEN estado_cobertura = 'cubierto' AND saf_aplicado > 0 THEN 1 ELSE 0 END) as pedidos_cubiertos_con_saf,
+            SUM(CASE WHEN estado_cobertura = 'parcial' THEN 1 ELSE 0 END) as pedidos_parciales,
+            SUM(CASE WHEN estado_cobertura = 'con_excedente' THEN 1 ELSE 0 END) as pedidos_con_excedente
         ")->first();
 
         $itemsEnAlcance = $this->queryItemsEnAlcance($query, $params);
@@ -85,6 +89,7 @@ class CalcularMetricasReportePagosPedidosService
         return [
             'pedidos_validados' => (int) ($agg->pedidos_validados ?? 0),
             'total_pedido' => number_format((float) ($agg->total_pedido ?? 0), 2, '.', ''),
+            'total_remisiones' => number_format((float) ($agg->total_pedido ?? 0), 2, '.', ''),
             'pagos_validos' => number_format((float) ($agg->pagos_validos ?? 0), 2, '.', ''),
             'pagos_coincidentes_filtros' => number_format($pagosCoincidentes, 2, '.', ''),
             'pagos_coincidentes_es_pedido_completo' => ! $tieneFiltroExhibicion,
@@ -103,6 +108,11 @@ class CalcularMetricasReportePagosPedidosService
             /** @deprecated Use comprobantes_archivos */
             'vouchers_revisados' => $comprobantesArchivos,
             'pedidos_observaciones' => (int) ($agg->pedidos_observaciones ?? 0),
+            'pedidos_cubiertos' => (int) ($agg->pedidos_cubiertos ?? 0),
+            'pedidos_cubiertos_con_saf' => (int) ($agg->pedidos_cubiertos_con_saf ?? 0),
+            'pedidos_parciales' => (int) ($agg->pedidos_parciales ?? 0),
+            'pedidos_con_excedente' => (int) ($agg->pedidos_con_excedente ?? 0),
+            'cantidad_vouchers' => $comprobantesArchivos,
             'pedidos_historicos_sin_evidencia' => $pedidosHistoricosSinEvidencia,
         ];
     }

@@ -5,6 +5,8 @@ namespace App\Services\Reportes\PagosPedidos;
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\User;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\Reportes\ClasificacionIngresoBancario;
+use App\Support\Reportes\FechasPagoReporte;
 use Illuminate\Auth\Access\AuthorizationException;
 
 class ObtenerDetalleReportePagoPedidoService
@@ -69,8 +71,11 @@ class ObtenerDetalleReportePagoPedidoService
                 'tolerancia_aplicada' => $cierre->tolerancia_aplicada,
                 'estado_cobertura' => $cierre->estado_cobertura,
             ],
-            'exhibiciones' => $cierre->items->map(function ($item) use ($usuario) {
+            'exhibiciones' => $cierre->items->map(function ($item) use ($usuario, $cierre) {
                 $puedeEvidencia = $usuario->can('reportes.pagos_pedidos.ver_evidencias');
+                $fechas = FechasPagoReporte::exhibicion($item, $cierre);
+
+                $clasificacion = ClasificacionIngresoBancario::clasificarItem($item);
 
                 return [
                     'id' => $item->id,
@@ -81,13 +86,23 @@ class ObtenerDetalleReportePagoPedidoService
                     'forma_pago_label' => \App\Models\SaldosAFavor\PedidoBmaPago::labelForma($item->forma_pago_snapshot),
                     'banco' => $item->banco_snapshot,
                     'referencia' => $item->referencia_snapshot,
-                    'fecha_pago' => $item->fecha_pago_snapshot?->toIso8601String(),
+                    'fecha_pago' => $fechas['pago'],
+                    'fecha_pago_label' => $fechas['pago_label'],
+                    'capturado_por' => $item->capturadoPor?->name,
+                    'capturado_at' => $fechas['reportada'],
+                    'capturado_at_label' => $fechas['reportada_label'],
+                    'validado_at' => $fechas['validacion'],
+                    'validado_at_label' => $fechas['validacion_label'],
+                    'pedido_fecha' => $fechas['pedido'],
+                    'pedido_fecha_label' => $fechas['pedido_label'],
+                    'reportado_posteriormente' => $fechas['reportado_posteriormente'],
+                    'clasificacion_ingreso' => $clasificacion,
+                    'clasificacion_ingreso_label' => ClasificacionIngresoBancario::labelClasificacion($clasificacion),
+                    'cuenta_ingreso_bancario' => ClasificacionIngresoBancario::cuentaIngresoBancario($item),
                     'estado_revision' => $item->estado_revision_snapshot,
                     'activo_para_cobertura' => $item->activo_para_cobertura_snapshot,
                     'motivo_rechazo' => $item->motivo_rechazo_snapshot,
                     'reemplaza_pago_id' => $item->reemplaza_pago_id,
-                    'capturado_por' => $item->capturadoPor?->name,
-                    'capturado_at' => $item->capturado_at_snapshot?->toIso8601String(),
                     'revisado_por' => $item->revisadoPor?->name,
                     'revisado_at' => $item->revisado_at_snapshot?->toIso8601String(),
                     'evidencia' => ($puedeEvidencia && $item->ruta_archivo_snapshot) ? [

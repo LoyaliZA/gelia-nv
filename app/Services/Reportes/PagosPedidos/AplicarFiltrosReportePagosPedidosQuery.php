@@ -5,6 +5,7 @@ namespace App\Services\Reportes\PagosPedidos;
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\User;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use App\Support\Reportes\FechasPagoReporte;
 use Illuminate\Database\Eloquent\Builder;
 
 class AplicarFiltrosReportePagosPedidosQuery
@@ -93,6 +94,10 @@ class AplicarFiltrosReportePagosPedidosQuery
                     ->orWhereHas('vendedor', fn (Builder $v) => $v->where('name', 'like', $like))
                     ->orWhereHas('items', fn (Builder $i) => $i->where('referencia_snapshot', 'like', $like));
             });
+        }
+
+        if (! empty($filtros['fecha_incompleta'])) {
+            FechasPagoReporte::aplicarFiltroIncompleta($query, (string) $filtros['fecha_incompleta']);
         }
 
         return $query;

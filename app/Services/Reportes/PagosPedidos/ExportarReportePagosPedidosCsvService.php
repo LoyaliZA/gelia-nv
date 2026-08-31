@@ -5,6 +5,7 @@ namespace App\Services\Reportes\PagosPedidos;
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\User;
+use App\Support\Reportes\FechasPagoReporte;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -72,16 +73,15 @@ class ExportarReportePagosPedidosCsvService
                 ->map(fn ($f) => PedidoBmaPago::labelForma($f) ?? $f)->implode('; ');
 
             return [
-                'Fecha validación' => $c->validado_at?->format('Y-m-d'),
-                'Hora validación' => $c->validado_at?->format('H:i:s'),
+                'Fecha validación' => FechasPagoReporte::formatearFechaHora($c->validado_at),
+                'Fecha pedido' => FechasPagoReporte::formatear($c->pedido_fecha),
                 'Versión cierre' => $c->version,
                 'Estado cierre' => $c->estado,
                 'Folio GELIA' => $c->folio_snapshot,
                 'Folio remisión' => $c->folio_remision_snapshot,
-                'Fecha pedido' => $c->pedido_fecha?->format('Y-m-d'),
                 'Número cliente' => $c->cliente?->numero_cliente,
                 'Cliente' => $c->cliente?->nombre,
-                'Atendió' => $c->vendedor?->name,
+                'Responsable pedido' => $c->vendedor?->name,
                 'Departamento' => $c->departamento?->nombre,
                 'Almacén' => $c->almacen?->nombre,
                 'Origen/modalidad' => $c->metadata_snapshot['origen'] ?? '',
@@ -113,24 +113,27 @@ class ExportarReportePagosPedidosCsvService
         $filas = collect();
         foreach ($cierres as $c) {
             foreach ($c->items as $item) {
+                $fechas = FechasPagoReporte::exhibicion($item, $c);
                 $filas->push([
-                    'Fecha validación' => $c->validado_at?->format('Y-m-d H:i:s'),
+                    'Fecha validación' => $fechas['validacion_label'],
+                    'Fecha pedido' => $fechas['pedido_label'],
                     'Folio GELIA' => $c->folio_snapshot,
                     'Folio remisión' => $c->folio_remision_snapshot,
                     'Cliente' => $c->cliente?->nombre,
-                    'Atendió' => $c->vendedor?->name,
+                    'Responsable pedido' => $c->vendedor?->name,
                     'ID exhibición' => $item->pedido_bma_pago_id,
                     'Número exhibición' => $item->numero_exhibicion,
                     'Monto' => $item->monto_snapshot,
                     'Forma de pago' => PedidoBmaPago::labelForma($item->forma_pago_snapshot),
                     'Banco' => $item->banco_snapshot,
                     'Referencia' => $item->referencia_snapshot,
-                    'Fecha pago' => $item->fecha_pago_snapshot?->format('Y-m-d'),
+                    'Fecha movimiento' => $fechas['pago_label'],
+                    'Fecha reportada' => $fechas['reportada_label'],
+                    'Reportado posteriormente' => $fechas['reportado_posteriormente'] ? 'Sí' : 'No',
                     'Registró' => $item->capturadoPor?->name,
-                    'Registrado en' => $item->capturado_at_snapshot?->format('Y-m-d H:i:s'),
                     'Estado revisión' => $item->estado_revision_snapshot,
                     'Revisó' => $item->revisadoPor?->name,
-                    'Revisado en' => $item->revisado_at_snapshot?->format('Y-m-d H:i:s'),
+                    'Revisado en' => FechasPagoReporte::formatearFechaHora($item->revisado_at_snapshot),
                     'Cuenta cobertura' => $item->activo_para_cobertura_snapshot ? 'Sí' : 'No',
                     'Motivo rechazo' => $item->motivo_rechazo_snapshot,
                     'Pago sustituido ID' => $item->reemplaza_pago_id,

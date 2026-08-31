@@ -14,9 +14,11 @@ use App\Models\Reportes\ReportePagosPedidosExportacion;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\User;
 use App\Services\Reportes\PagosPedidos\CalcularMetricasReportePagosPedidosService;
+use App\Services\Reportes\PagosPedidos\CalcularMetricasReporteVouchersValidadosService;
 use App\Services\Reportes\PagosPedidos\EstimarExportacionReportePagosPedidosService;
 use App\Services\Reportes\PagosPedidos\ExportarReportePagosPedidosCsvService;
 use App\Services\Reportes\PagosPedidos\ListarReportePagosPedidosService;
+use App\Services\Reportes\PagosPedidos\ListarReporteVouchersValidadosService;
 use App\Services\Reportes\PagosPedidos\ObtenerDetalleReportePagoPedidoService;
 use App\Services\Reportes\PagosPedidos\SolicitarExportacionReportePagosPedidosService;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
@@ -36,17 +38,18 @@ class ReportePagosPedidosController extends Controller
     public function index(
         FiltrarReportePagosPedidosRequest $request,
         ListarReportePagosPedidosService $listar,
+        ListarReporteVouchersValidadosService $listarVouchers,
         CalcularMetricasReportePagosPedidosService $metricas,
+        CalcularMetricasReporteVouchersValidadosService $metricasVouchers,
     ): Response {
         Gate::authorize('reportes.pagos_pedidos.ver');
 
         $filtros = $request->filtrosNormalizados();
-        $resultado = $listar->ejecutar(Auth::user(), $filtros);
+        $tipoReporte = $filtros['tipo_reporte'] ?? 'pedido';
 
-        return Inertia::render('Reportes/PagosPedidos/Index', [
-            'grupos' => $resultado['grupos'],
-            'paginacion' => $resultado['paginacion'],
-            'metricas' => $metricas->ejecutar(Auth::user(), $filtros),
+        $propsComunes = [
+            'tipo_reporte' => $tipoReporte,
+            'vouchers_disponible' => false,
             'filtros' => $filtros,
             'formas_pago' => PedidoBmaPago::formasPagoCatalogo(),
             'estados_exhibicion' => PedidoBmaPago::ESTADOS_REVISION,
@@ -69,7 +72,63 @@ class ReportePagosPedidosController extends Controller
                     && PedidoBmaCierrePago::query()->count() === 0,
             ],
             'mis_exportaciones' => $this->listarExportacionesUsuario(Auth::user()),
-        ]);
+        ];
+
+        if ($tipoReporte === 'vouchers') {
+            $resultadoVouchers = $listarVouchers->ejecutar(Auth::user(), $filtros);
+
+            return Inertia::render('Reportes/PagosPedidos/Index', array_merge($propsComunes, [
+                'grupos' => [],
+                'metricas' => [],
+                'grupos_vouchers' => $resultadoVouchers['grupos'],
+                'metricas_vouchers' => $metricasVouchers->ejecutar(Auth::user(), $filtros),
+                'paginacion' => $resultadoVouchers['paginacion'],
+                'agrupar_por_vouchers' => $resultadoVouchers['agrupar_por'],
+                'vouchers_disponible' => true,
+                'capturadores' => $this->usuariosCapturadoresVouchers(),
+                'validadores_vouchers' => $this->usuariosValidadoresVouchers(),
+            ]));
+        }
+
+        $resultado = $listar->ejecutar(Auth::user(), $filtros);
+
+        return Inertia::render('Reportes/PagosPedidos/Index', array_merge($propsComunes, [
+            'grupos' => $resultado['grupos'],
+            'paginacion' => $resultado['paginacion'],
+            'metricas' => $metricas->ejecutar(Auth::user(), $filtros),
+        ]));
+    }
+
+    /** @return list<array{id: int, name: string}> */
+    private function usuariosCapturadoresVouchers(): array
+    {
+        return User::query()
+            ->whereIn('id', \App\Models\Reportes\PedidoBmaCierrePagoItem::query()
+                ->distinct()
+                ->whereNotNull('capturado_por_id')
+                ->pluck('capturado_por_id'))
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->all();
+    }
+
+    /** @return list<array{id: int, name: string}> */
+    private function usuariosValidadoresVouchers(): array
+    {
+        $revisores = \App\Models\Reportes\PedidoBmaCierrePagoItem::query()
+            ->distinct()
+            ->whereNotNull('revisado_por_id')
+            ->pluck('revisado_por_id');
+        $cierreValidadores = PedidoBmaCierrePago::query()
+            ->distinct()
+            ->whereNotNull('validado_por_id')
+            ->pluck('validado_por_id');
+
+        return User::query()
+            ->whereIn('id', $revisores->merge($cierreValidadores)->unique())
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->all();
     }
 
     /** @return list<array<string, mixed>> */
@@ -81,6 +140,7 @@ class ReportePagosPedidosController extends Controller
         }
 
         return ReportePagosPedidosExportacion::query()
+            ->with('user')
             ->where('user_id', $usuario->id)
             ->orderByDesc('created_at')
             ->limit(15)
@@ -180,7 +240,7 @@ class ReportePagosPedidosController extends Controller
             abort(403);
         }
 
-        $filtros = $request->filtrosNormalizados();
+        $filtros = $this->validarExportacion($request->filtrosNormalizados());
         $formato = $request->input('formato', 'pdf');
         if (! in_array($formato, ['pdf', 'csv_resumen', 'csv_detalle'], true)) {
             $formato = 'pdf';
@@ -196,12 +256,14 @@ class ReportePagosPedidosController extends Controller
     ): StreamedResponse {
         Gate::authorize('reportes.pagos_pedidos.exportar_csv');
 
+        $filtros = $this->filtrosSoloReportePedido($request->filtrosNormalizados());
+
         Log::info('reporte_pagos_pedidos.export_csv_resumen', [
             'usuario_id' => Auth::id(),
-            'filtros' => $request->filtrosNormalizados(),
+            'filtros' => $filtros,
         ]);
 
-        return $exportar->resumen(Auth::user(), $request->filtrosNormalizados());
+        return $exportar->resumen(Auth::user(), $filtros);
     }
 
     public function csvDetalle(
@@ -210,19 +272,21 @@ class ReportePagosPedidosController extends Controller
     ): StreamedResponse {
         Gate::authorize('reportes.pagos_pedidos.exportar_csv');
 
+        $filtros = $this->filtrosSoloReportePedido($request->filtrosNormalizados());
+
         Log::info('reporte_pagos_pedidos.export_csv_detalle', [
             'usuario_id' => Auth::id(),
-            'filtros' => $request->filtrosNormalizados(),
+            'filtros' => $filtros,
         ]);
 
-        return $exportar->detalle(Auth::user(), $request->filtrosNormalizados());
+        return $exportar->detalle(Auth::user(), $filtros);
     }
 
     public function solicitarExportacion(
         FiltrarReportePagosPedidosRequest $request,
         SolicitarExportacionReportePagosPedidosService $solicitar,
     ): JsonResponse {
-        $filtros = $request->filtrosNormalizados();
+        $filtros = $this->validarExportacion($request->filtrosNormalizados());
         $formato = $request->input('formato', 'pdf');
         if (! in_array($formato, ['pdf', 'csv_resumen', 'csv_detalle'], true)) {
             $formato = 'pdf';
@@ -343,6 +407,32 @@ class ReportePagosPedidosController extends Controller
             $modelo->ruta_archivo,
             $modelo->nombre_archivo ?: ('pagos_pedidos_'.now()->format('Ymd_His'))
         );
+    }
+
+    /** @param  array<string, mixed>  $filtros
+     * @return array<string, mixed>
+     */
+    private function validarExportacion(array $filtros): array
+    {
+        $tipo = $filtros['tipo_reporte'] ?? 'pedido';
+        if (! in_array($tipo, ['pedido', 'vouchers'], true)) {
+            abort(422, 'Tipo de reporte no válido para exportación.');
+        }
+
+        return $filtros;
+    }
+
+    /** @param  array<string, mixed>  $filtros
+     * @return array<string, mixed>
+     */
+    private function filtrosSoloReportePedido(array $filtros): array
+    {
+        $filtros = $this->validarExportacion($filtros);
+        if (($filtros['tipo_reporte'] ?? 'pedido') !== 'pedido') {
+            abort(422, 'La exportación solo está disponible para Pagos por pedido.');
+        }
+
+        return $filtros;
     }
 
     private function autorizarVerExportacion(string $exportacion): void

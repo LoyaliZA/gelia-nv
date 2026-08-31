@@ -4,7 +4,7 @@
     $enc = $voucher['encabezado'] ?? [];
 @endphp
 
-<div class="anexo-voucher-card anexo-voucher-card--{{ $layout }}">
+<div class="anexo-voucher-card voucher-card anexo-voucher-card--{{ $layout }}">
     <div class="anexo-voucher-header">
         <table class="anexo-voucher-meta">
             @foreach (array_chunk($enc, 2) as $fila)

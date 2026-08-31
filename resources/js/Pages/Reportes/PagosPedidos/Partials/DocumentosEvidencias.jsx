@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, FileText, ZoomIn } from 'lucide-react';
-import ModalVisorArchivo, { payloadArchivoRemision, payloadArchivoVoucher } from '@/Components/ModalVisorArchivo';
+import ModalVisorArchivo, { payloadArchivoRemision } from '@/Components/ModalVisorArchivo';
+import { exhibicionesConEvidencia, payloadVisorEnIndice } from '@/utils/visorEvidenciasReporte';
 import {
     DETALLE_PAD,
     SECCION_TITULO,
@@ -19,7 +20,7 @@ import {
 const BTN_DOC =
     'inline-flex items-center justify-center gap-1.5 min-h-9 px-3 rounded-lg border theme-border theme-element text-xs font-semibold theme-text-main hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
 
-function TarjetaRemision({ remision, onVer }) {
+function TarjetaRemision({ remision, folioPedido, folioRemision, onVer }) {
     if (!remision) {
         return (
             <div className={`${cardReportePagos(DETALLE_PAD, RADIUS_PEDIDO_CARD)} h-full`}>
@@ -47,6 +48,13 @@ function TarjetaRemision({ remision, onVer }) {
             </div>
 
             <p className="text-sm font-semibold theme-text-main m-0">Remisión</p>
+            {(folioPedido || folioRemision) && (
+                <p className="text-xs theme-text-main/80 m-0 mt-1">
+                    {folioPedido ? `Pedido ${folioPedido}` : ''}
+                    {folioPedido && folioRemision ? ' · ' : ''}
+                    {folioRemision ? `Remisión ${folioRemision}` : ''}
+                </p>
+            )}
             <p className="text-xs theme-text-main/70 m-0 mt-1 truncate" title={remision.nombre}>
                 {remision.nombre || 'Documento'}
             </p>
@@ -57,7 +65,7 @@ function TarjetaRemision({ remision, onVer }) {
                     type="button"
                     className={BTN_DOC}
                     disabled={!puedeAbrir}
-                    onClick={() => puedeAbrir && onVer(payloadArchivoRemision(remision))}
+                    onClick={() => puedeAbrir && onVer(payloadArchivoRemision(remision, { folio_pedido: folioPedido, folio_remision: folioRemision }))}
                 >
                     Ver
                 </button>
@@ -74,14 +82,17 @@ function TarjetaRemision({ remision, onVer }) {
     );
 }
 
-function MiniaturaVoucher({ ex, exhibiciones, onVer }) {
+function MiniaturaVoucher({ ex, exhibiciones, conEvidencia, onAbrirIndice }) {
     const cobertura = badgeCoberturaExhibicion(ex, exhibiciones);
     const esImagen = ex.evidencia?.mime_type?.startsWith('image/');
 
     return (
         <button
             type="button"
-            onClick={() => onVer(payloadArchivoVoucher(ex))}
+            onClick={() => {
+                const idx = conEvidencia.findIndex((item) => item.id === ex.id);
+                if (idx >= 0) onAbrirIndice(idx);
+            }}
             className="group w-full max-w-[220px] text-left rounded-xl border theme-border theme-element overflow-hidden hover:border-[var(--color-primario)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)]"
         >
             <div className="relative h-[140px] flex items-center justify-center p-2 bg-[color-mix(in_srgb,var(--theme-element-bg)_55%,transparent)]">
@@ -119,8 +130,8 @@ function MiniaturaVoucher({ ex, exhibiciones, onVer }) {
     );
 }
 
-function ColumnaVouchers({ exhibiciones, todasExhibiciones, onVer }) {
-    const conEvidencia = exhibiciones.filter((e) => e.evidencia?.url);
+function ColumnaVouchers({ exhibiciones, todasExhibiciones, onAbrirIndice }) {
+    const conEvidencia = exhibicionesConEvidencia(exhibiciones);
     const n = conEvidencia.length;
 
     return (
@@ -136,7 +147,8 @@ function ColumnaVouchers({ exhibiciones, todasExhibiciones, onVer }) {
                             key={ex.id}
                             ex={ex}
                             exhibiciones={todasExhibiciones}
-                            onVer={onVer}
+                            conEvidencia={conEvidencia}
+                            onAbrirIndice={onAbrirIndice}
                         />
                     ))}
                 </div>
@@ -145,8 +157,11 @@ function ColumnaVouchers({ exhibiciones, todasExhibiciones, onVer }) {
     );
 }
 
-export default function DocumentosEvidencias({ exhibiciones = [], documentos = {} }) {
-    const [visor, setVisor] = useState(null);
+export default function DocumentosEvidencias({ exhibiciones = [], documentos = {}, folioPedido, folioRemision }) {
+    const [visorIdx, setVisorIdx] = useState(null);
+    const [visorRemision, setVisorRemision] = useState(null);
+    const conEvidencia = exhibicionesConEvidencia(exhibiciones);
+    const visorVoucher = payloadVisorEnIndice(exhibiciones, visorIdx);
     const remision = documentos.remision_vigente;
 
     return (
@@ -154,22 +169,43 @@ export default function DocumentosEvidencias({ exhibiciones = [], documentos = {
             <h3 className={SECCION_TITULO}>Documentos y evidencias</h3>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-                <TarjetaRemision remision={remision} onVer={setVisor} />
+                <TarjetaRemision
+                    remision={remision}
+                    folioPedido={folioPedido}
+                    folioRemision={folioRemision}
+                    onVer={setVisorRemision}
+                />
                 <ColumnaVouchers
                     exhibiciones={exhibiciones}
                     todasExhibiciones={exhibiciones}
-                    onVer={setVisor}
+                    onAbrirIndice={setVisorIdx}
                 />
             </div>
 
             <ModalVisorArchivo
-                abierto={Boolean(visor)}
-                onCerrar={() => setVisor(null)}
-                url={visor?.url}
-                mimeType={visor?.mimeType}
-                titulo={visor?.titulo}
-                subtitulo={visor?.subtitulo}
-                descargarUrl={visor?.url}
+                abierto={visorIdx != null}
+                onCerrar={() => setVisorIdx(null)}
+                url={visorVoucher?.url}
+                mimeType={visorVoucher?.mimeType}
+                titulo={visorVoucher?.titulo}
+                subtitulo={visorVoucher?.subtitulo}
+                metadatos={visorVoucher?.metadatos}
+                descargarUrl={visorVoucher?.url}
+                indiceActual={visorIdx ?? 0}
+                totalItems={conEvidencia.length}
+                onAnterior={() => setVisorIdx((i) => Math.max(0, (i ?? 0) - 1))}
+                onSiguiente={() => setVisorIdx((i) => Math.min(conEvidencia.length - 1, (i ?? 0) + 1))}
+            />
+
+            <ModalVisorArchivo
+                abierto={Boolean(visorRemision)}
+                onCerrar={() => setVisorRemision(null)}
+                url={visorRemision?.url}
+                mimeType={visorRemision?.mimeType}
+                titulo={visorRemision?.titulo}
+                subtitulo={visorRemision?.subtitulo}
+                metadatos={visorRemision?.metadatos}
+                descargarUrl={visorRemision?.url}
             />
         </section>
     );

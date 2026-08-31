@@ -4,7 +4,7 @@ import ModalVisorArchivo, { payloadArchivoRemision } from '@/Components/ModalVis
 import ResumenFinancieroPedido from './ResumenFinancieroPedido';
 import ListaExhibicionesPago from './ListaExhibicionesPago';
 import DocumentosEvidencias from './DocumentosEvidencias';
-import { badgeCobertura, fmtMxn, fmtVouchersLabel, LABEL_COBERTURA, RADIUS_PEDIDO } from './pagosPedidosStyles';
+import { badgeCobertura, fmtMxn, fmtVouchersLabel, labelEstadoCobertura, RADIUS_PEDIDO } from './pagosPedidosStyles';
 import {
     CeldaFinanciera,
     GRID_FILA_PEDIDO,
@@ -100,16 +100,7 @@ export default function PedidoPagoAcordeon({ pedido, cacheDetalle, onCacheDetall
         else cargarDetalle();
     };
 
-    const diferencia = Number(pedido.diferencia || 0);
-    const excedente = Number(pedido.excedente || 0);
-    const diferenciaFmt = fmtMxn(diferencia);
-    const diferenciaPendiente = diferencia > 0.005;
-    const diferenciaCero = diferencia <= 0.005 && excedente <= 0.005;
-    const tonoDiferencia = diferenciaCero
-        ? 'exito'
-        : diferenciaPendiente || excedente > 0.005
-            ? 'advertencia'
-            : null;
+    const numExhibiciones = Number(pedido.num_exhibiciones ?? 0);
 
     return (
         <div
@@ -161,20 +152,21 @@ export default function PedidoPagoAcordeon({ pedido, cacheDetalle, onCacheDetall
                         {pedido.cliente?.nombre || '—'}
                     </p>
                     <p className="text-xs theme-text-muted m-0 truncate leading-snug">
-                        <span className="font-medium">Atendió:</span> {pedido.vendedor || '—'}
+                        <span className="font-medium">Pedido:</span>{' '}
+                        {pedido.pedido_fecha_label || '—'}
+                        {' · '}
+                        <span className="font-medium">Atendido por:</span> {pedido.vendedor || '—'}
                         {pedido.departamento ? ` · ${pedido.departamento}` : ''}
                     </p>
                 </div>
 
                 <div className={PEDIDO_FIN_GRID}>
-                    <CeldaFinanciera label="Total del pedido" valor={fmtMxn(pedido.total_pedido)} />
-                    <CeldaFinanciera label="A cobrar" valor={fmtMxn(pedido.total_a_cobrar)} />
-                    <CeldaFinanciera label="Pagado" valor={fmtMxn(pedido.pagos_validos)} />
+                    <CeldaFinanciera label="Total remisión" valor={fmtMxn(pedido.total_pedido)} />
+                    <CeldaFinanciera label="SAF" valor={fmtMxn(pedido.saf_aplicado)} />
+                    <CeldaFinanciera label="Pagos válidos" valor={fmtMxn(pedido.pagos_validos)} />
                     <CeldaFinanciera
-                        label="Diferencia"
-                        valor={diferenciaFmt}
-                        tono={tonoDiferencia}
-                        confirmado={diferenciaCero}
+                        label="Exhibiciones"
+                        valor={numExhibiciones.toLocaleString('es-MX')}
                     />
                 </div>
 
@@ -226,7 +218,7 @@ export default function PedidoPagoAcordeon({ pedido, cacheDetalle, onCacheDetall
                 </div>
 
                 <span className={`${badgeCobertura(pedido.estado_cobertura)} ${PEDIDO_BADGE}`}>
-                    {LABEL_COBERTURA[pedido.estado_cobertura] || pedido.estado_cobertura}
+                    {labelEstadoCobertura(pedido)}
                 </span>
             </div>
 
@@ -249,6 +241,8 @@ export default function PedidoPagoAcordeon({ pedido, cacheDetalle, onCacheDetall
                                 <DocumentosEvidencias
                                     exhibiciones={detalle.exhibiciones}
                                     documentos={detalle.documentos}
+                                    folioPedido={detalle.cierre?.folio}
+                                    folioRemision={detalle.cierre?.folio_remision}
                                 />
                             </div>
                         </>

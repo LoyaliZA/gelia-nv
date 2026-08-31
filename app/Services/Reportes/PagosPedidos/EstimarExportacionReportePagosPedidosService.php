@@ -11,24 +11,34 @@ use Illuminate\Database\Eloquent\Builder;
 class EstimarExportacionReportePagosPedidosService
 {
     public function __construct(
-        private CalcularMetricasReportePagosPedidosService $metricas,
-        private AplicarFiltrosReportePagosPedidosQuery $filtros,
+        private CalcularMetricasReportePagosPedidosService $metricasPedido,
+        private CalcularMetricasReporteVouchersValidadosService $metricasVouchers,
+        private AplicarFiltrosReportePagosPedidosQuery $filtrosPedido,
+        private AplicarFiltrosReporteVouchersValidadosQuery $filtrosVouchers,
     ) {}
 
     /**
      * @param  array<string, mixed>  $params
-     * @return array{pedidos: int, exhibiciones: int, vouchers: int, tamano_bytes: int, tamano_etiqueta: string, formato: string}
+     * @return array{pedidos: int, exhibiciones: int, vouchers: int, tamano_bytes: int, tamano_etiqueta: string, formato: string, pesado: bool}
      */
     public function ejecutar(User $usuario, array $params): array
     {
         $formato = $params['formato'] ?? 'pdf';
-        $metricas = $this->metricas->ejecutar($usuario, $params);
+        $tipo = $params['tipo_reporte'] ?? 'pedido';
 
-        $pedidos = (int) ($metricas['pedidos_validados'] ?? 0);
-        $exhibiciones = (int) ($metricas['exhibiciones_incluidas'] ?? 0);
-        $vouchers = $this->contarVouchers($usuario, $params);
+        if ($tipo === 'vouchers') {
+            $metricas = $this->metricasVouchers->ejecutar($usuario, $params);
+            $exhibiciones = (int) ($metricas['exhibiciones_visibles'] ?? 0);
+            $vouchers = $this->contarVouchersVouchers($usuario, $params);
+            $pedidos = (int) ($metricas['pedidos_relacionados'] ?? 0);
+        } else {
+            $metricas = $this->metricasPedido->ejecutar($usuario, $params);
+            $pedidos = (int) ($metricas['pedidos_validados'] ?? 0);
+            $exhibiciones = (int) ($metricas['exhibiciones_incluidas'] ?? 0);
+            $vouchers = $this->contarVouchersPedido($usuario, $params);
+        }
 
-        $bytes = $this->estimarTamanoBytes($formato, $params, $pedidos, $exhibiciones, $vouchers);
+        $bytes = $this->estimarTamanoBytes($formato, $params, $pedidos, $exhibiciones, $vouchers, $tipo);
 
         return [
             'pedidos' => $pedidos,
@@ -37,18 +47,20 @@ class EstimarExportacionReportePagosPedidosService
             'tamano_bytes' => $bytes,
             'tamano_etiqueta' => self::formatearTamano($bytes),
             'formato' => $formato,
+            'tipo_reporte' => $tipo,
+            'pesado' => $this->esPesado($pedidos, $exhibiciones, $vouchers, $bytes, $params),
         ];
     }
 
     /** @param  array<string, mixed>  $params */
-    private function contarVouchers(User $usuario, array $params): int
+    private function contarVouchersPedido(User $usuario, array $params): int
     {
         if (($params['incluir_vouchers'] ?? true) === false) {
             return 0;
         }
 
         $query = PedidoBmaCierrePago::query();
-        $this->filtros->aplicar($query, $usuario, $params);
+        $this->filtrosPedido->aplicar($query, $usuario, $params);
 
         $items = PedidoBmaCierrePagoItem::query()
             ->whereIn('pedido_bma_cierre_pago_id', (clone $query)->select('pedido_bma_cierres_pago.id'))
@@ -75,18 +87,44 @@ class EstimarExportacionReportePagosPedidosService
         return $items->count();
     }
 
+    /** @param  array<string, mixed>  $params */
+    private function contarVouchersVouchers(User $usuario, array $params): int
+    {
+        if (($params['incluir_vouchers'] ?? true) === false) {
+            return 0;
+        }
+
+        return count(array_filter(
+            $this->filtrosVouchers->itemsVisibles($usuario, $params),
+            fn ($item) => ! empty($item->ruta_archivo_snapshot)
+        ));
+    }
+
     /**
-     * ponytail: heurística fija; calibrar con exportaciones reales si el PDF crece mucho.
-     *
      * @param  array<string, mixed>  $params
      */
-    private function estimarTamanoBytes(string $formato, array $params, int $pedidos, int $exhibiciones, int $vouchers): int
-    {
+    private function estimarTamanoBytes(
+        string $formato,
+        array $params,
+        int $pedidos,
+        int $exhibiciones,
+        int $vouchers,
+        string $tipo,
+    ): int {
         if ($formato === 'csv_resumen') {
-            return max(512, $pedidos * 1500);
+            return max(512, ($tipo === 'vouchers' ? $exhibiciones : $pedidos) * 1200);
         }
         if ($formato === 'csv_detalle') {
             return max(512, $exhibiciones * 800);
+        }
+
+        if ($tipo === 'vouchers') {
+            $bytes = 200_000 + ($exhibiciones * 3_000);
+            if ($vouchers > 0) {
+                $bytes += $vouchers * (($params['calidad_imagen'] ?? 'normal') === 'alta' ? 800_000 : 500_000);
+            }
+
+            return max(512, $bytes);
         }
 
         $bytes = 250_000 + ($pedidos * 45_000) + ($exhibiciones * 2_000);
@@ -97,8 +135,24 @@ class EstimarExportacionReportePagosPedidosService
         if (($params['incluir_referencias_remision'] ?? true) !== false) {
             $bytes += $pedidos * 500;
         }
+        if (! empty($params['incluir_remisiones_completas'])) {
+            $bytes += $pedidos * 2_000_000;
+        }
 
         return max(512, $bytes);
+    }
+
+    /** @param  array<string, mixed>  $params */
+    private function esPesado(int $pedidos, int $exhibiciones, int $vouchers, int $bytes, array $params): bool
+    {
+        $cfg = config('reportes_pagos.exportacion', []);
+
+        return $pedidos > (int) ($cfg['pesado_pedidos'] ?? 80)
+            || $exhibiciones > (int) ($cfg['pesado_exhibiciones'] ?? 200)
+            || $vouchers > (int) ($cfg['pesado_vouchers'] ?? 150)
+            || $bytes > (int) ($cfg['pesado_bytes'] ?? 15_000_000)
+            || ! empty($params['incluir_remisiones_completas'])
+            || (($params['calidad_imagen'] ?? '') === 'alta' && $vouchers > 30);
     }
 
     public static function formatearTamano(int $bytes): string

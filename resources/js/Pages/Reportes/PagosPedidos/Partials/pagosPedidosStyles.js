@@ -21,10 +21,24 @@ export function cardReportePagos(extra = '', radius = RADIUS_METRICA) {
 
 export const LABEL_COBERTURA = {
     cubierto: 'Cubierto',
-    parcial: 'Parcial',
-    con_excedente: 'Excedente',
-    sin_pago: 'Sin pago',
+    parcial: 'Parcialmente cubierto',
+    con_excedente: 'Con excedente',
+    sin_pago: 'Pendiente de pago',
 };
+
+/** Etiqueta de cobertura con variante SAF cuando aplica. */
+export function labelEstadoCobertura(pedidoOrEstado, safAplicado = 0) {
+    const estado = typeof pedidoOrEstado === 'string' ? pedidoOrEstado : pedidoOrEstado?.estado_cobertura;
+    const saf = typeof pedidoOrEstado === 'object'
+        ? Number(pedidoOrEstado?.saf_aplicado ?? 0)
+        : Number(safAplicado ?? 0);
+
+    if (estado === 'cubierto' && saf > 0.005) {
+        return 'Cubierto con saldo a favor';
+    }
+
+    return LABEL_COBERTURA[estado] || estado || '—';
+}
 
 export const LABEL_ESTADO_REVISION = {
     pendiente: 'Pendiente',
@@ -158,6 +172,8 @@ if (import.meta.env?.DEV) {
     console.assert(cubierto.tono === 'exito' && cubierto.texto.includes('Cubierto'), 'lineaResultadoCobertura:cubierto');
     const exc = lineaResultadoCobertura({ diferencia: -250, excedente: 250, tolerancia_aplicada: 0.44, estado_cobertura: 'con_excedente' });
     console.assert(exc.label === 'Excedente', 'lineaResultadoCobertura:excedente');
+    console.assert(labelEstadoCobertura({ estado_cobertura: 'cubierto', saf_aplicado: 100 }) === 'Cubierto con saldo a favor', 'labelEstadoCobertura:saf');
+    console.assert(labelEstadoCobertura('parcial') === 'Parcialmente cubierto', 'labelEstadoCobertura:parcial');
 }
 
 export const fmtContador = (n, unidad) => {

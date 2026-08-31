@@ -10,7 +10,11 @@ final class TituloReportePagosPedidos
     /** @param  array<string, mixed>  $filtros */
     public static function desdeFiltros(array $filtros): string
     {
-        $partes = ['Pagos'];
+        if (($filtros['tipo_reporte'] ?? 'pedido') === 'vouchers') {
+            $partes = ['Vouchers'];
+        } else {
+            $partes = ['Pagos'];
+        }
 
         $bancoIds = $filtros['banco_ids'] ?? [];
         if (count($bancoIds) === 1) {

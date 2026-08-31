@@ -14,9 +14,11 @@ import {
 } from '../../../../utils/pagosPedidosReporteTracker';
 import {
     AGRUPACIONES,
+    AGRUPACIONES_VOUCHERS,
     ESTADOS_COBERTURA,
     ESTADOS_EXHIBICION,
     FORMATOS_EXPORT,
+    FORMATOS_VOUCHERS_EXPORT,
     PRESETS_RAPIDOS,
     TIPOS_FECHA,
     estadoInicialExport,
@@ -34,12 +36,15 @@ function toggleLista(lista, valor) {
     return lista.includes(valor) ? lista.filter((v) => v !== valor) : [...lista, valor];
 }
 
-function etiquetaEstimacion(est) {
+function etiquetaEstimacion(est, esVouchers) {
     if (!est) return null;
-    const pedidos = (est.pedidos ?? 0).toLocaleString('es-MX');
     const exhibiciones = (est.exhibiciones ?? 0).toLocaleString('es-MX');
     const vouchers = (est.vouchers ?? 0).toLocaleString('es-MX');
     const tamano = est.tamano_etiqueta || '—';
+    if (esVouchers) {
+        return `${exhibiciones} exhibiciones · ${vouchers} vouchers · Tamaño estimado: ${tamano}`;
+    }
+    const pedidos = (est.pedidos ?? 0).toLocaleString('es-MX');
     return `${pedidos} pedidos · ${exhibiciones} exhibiciones · ${vouchers} vouchers · Tamaño estimado: ${tamano}`;
 }
 
@@ -89,7 +94,9 @@ export default function ModalExportarPagosPedidos({
         setCancelando(false);
     }, [abierto, filtrosConsulta, jobIdSeguimiento]);
 
-    const formatosDisponibles = FORMATOS_EXPORT.filter((f) => {
+    const esVouchers = (estado.tipo_reporte || filtrosConsulta?.tipo_reporte) === 'vouchers';
+
+    const formatosDisponibles = (esVouchers ? FORMATOS_VOUCHERS_EXPORT : FORMATOS_EXPORT).filter((f) => {
         if (f.value === 'pdf') return puedePdf;
         return puedeCsv;
     });
@@ -189,6 +196,9 @@ export default function ModalExportarPagosPedidos({
             });
             setVista('generating');
             startPagosPedidosReporteTracking(data.job_id);
+            if (estimacion?.pesado) {
+                continuarSegundoPlano();
+            }
         } catch (err) {
             setProgresoPdf({ status: 'failed', error: err.message || 'No se pudo iniciar la generación' });
             setVista('generating');
@@ -237,7 +247,10 @@ export default function ModalExportarPagosPedidos({
 
     const textoEstimacion = estimacionCargando
         ? 'Calculando alcance del reporte…'
-        : (etiquetaEstimacion(estimacion) || 'Sin datos para estimar con los filtros actuales');
+        : (etiquetaEstimacion(estimacion, esVouchers) || 'Sin datos para estimar con los filtros actuales');
+
+    const sinRangoFechas = !estado.fecha_desde && !estado.fecha_hasta;
+    const advertenciaPesado = estimacion?.pesado;
 
     return createPortal(
         <div className={THEME_MODAL_OVERLAY} role="dialog" aria-modal="true" aria-labelledby="export-pagos-titulo">
@@ -245,7 +258,7 @@ export default function ModalExportarPagosPedidos({
                 <div className="flex justify-between items-start gap-4 p-6 border-b theme-border shrink-0">
                     <div>
                         <h2 id="export-pagos-titulo" className="text-xl font-black italic tracking-tighter uppercase theme-text-main m-0">
-                            {completado ? 'Reporte listo' : generando ? 'Generando reporte' : 'Generar reporte de pagos'}
+                            {completado ? 'Reporte listo' : generando ? 'Generando reporte' : (esVouchers ? 'Generar reporte de vouchers' : 'Generar reporte de pagos')}
                         </h2>
                         <p className="text-xs theme-text-muted mt-1 m-0">
                             {completado
@@ -412,6 +425,7 @@ export default function ModalExportarPagosPedidos({
                             </div>
                         </div>
 
+                        {!esVouchers && (
                         <div>
                             <span className={LABEL}>Cobertura</span>
                             <div className="flex flex-wrap gap-3">
@@ -431,6 +445,7 @@ export default function ModalExportarPagosPedidos({
                                 ))}
                             </div>
                         </div>
+                        )}
 
                         <label className="block">
                             <span className={LABEL}>Referencia bancaria</span>
@@ -444,7 +459,7 @@ export default function ModalExportarPagosPedidos({
                         </label>
                     </section>
 
-                    {/* ── Alcance ── */}
+                    {!esVouchers && (
                     <section className="space-y-4">
                         <p className={SECCION}>Alcance</p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -456,9 +471,9 @@ export default function ModalExportarPagosPedidos({
                                 </select>
                             </label>
                             <label className="block">
-                                <span className={LABEL}>Vendedora</span>
+                                <span className={LABEL}>Responsable del pedido</span>
                                 <select className={INPUT} value={estado.vendedor_id} onChange={(e) => setEstado((s) => ({ ...s, vendedor_id: e.target.value }))}>
-                                    <option value="">Todas</option>
+                                    <option value="">Todos</option>
                                     {vendedores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                                 </select>
                             </label>
@@ -513,6 +528,7 @@ export default function ModalExportarPagosPedidos({
                             </label>
                         </div>
                     </section>
+                    )}
 
                     {/* ── Contenido y formato ── */}
                     <section className="space-y-4">
@@ -541,16 +557,27 @@ export default function ModalExportarPagosPedidos({
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {[
-                                ['incluir_vouchers', 'Incluir vouchers'],
-                                ['incluir_evidencias_rechazadas_sustituidas', 'Incluir evidencias rechazadas o sustituidas'],
-                                ['incluir_referencias_remision', 'Incluir referencias de remisión'],
-                                ['incluir_observaciones_historial', 'Incluir observaciones e historial'],
-                            ].map(([key, label]) => (
+                            {esVouchers ? (
+                                [
+                                    ['incluir_vouchers', 'Incluir vouchers en anexo'],
+                                    ['reportado_posteriormente', 'Solo reportados posteriormente'],
+                                    ['posible_duplicado', 'Solo posibles duplicados'],
+                                    ['con_observaciones', 'Solo con observaciones'],
+                                ]
+                            ) : (
+                                [
+                                    ['incluir_desglose_financiero', 'Incluir desglose financiero'],
+                                    ['incluir_vouchers', 'Incluir exhibiciones y vouchers'],
+                                    ['incluir_referencias_remision', 'Incluir referencias de remisión'],
+                                    ...(formatoActual === 'pdf' ? [['incluir_remisiones_completas', 'Incluir remisiones completas (PDF)']] : []),
+                                    ['incluir_observaciones_historial', 'Incluir observaciones e historial'],
+                                    ['incluir_evidencias_rechazadas_sustituidas', 'Incluir evidencias rechazadas o sustituidas'],
+                                ]
+                            ).map(([key, label]) => (
                                 <label key={key} className={CHECK}>
                                     <input
                                         type="checkbox"
-                                        checked={estado[key]}
+                                        checked={Boolean(estado[key])}
                                         onChange={(e) => setEstado((s) => ({ ...s, [key]: e.target.checked }))}
                                         className="rounded accent-[var(--color-primario)]"
                                     />
@@ -558,6 +585,20 @@ export default function ModalExportarPagosPedidos({
                                 </label>
                             ))}
                         </div>
+
+                        {esVouchers && formatoActual === 'pdf' && (
+                            <label className="block">
+                                <span className={LABEL}>Calidad de imágenes en anexo</span>
+                                <select
+                                    className={INPUT}
+                                    value={estado.calidad_imagen}
+                                    onChange={(e) => setEstado((s) => ({ ...s, calidad_imagen: e.target.value }))}
+                                >
+                                    <option value="normal">Normal</option>
+                                    <option value="alta">Alta (archivo más pesado)</option>
+                                </select>
+                            </label>
+                        )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <label className="block">
@@ -570,7 +611,7 @@ export default function ModalExportarPagosPedidos({
                             <label className="block">
                                 <span className={LABEL}>Agrupar por</span>
                                 <select className={INPUT} value={estado.agrupar_por} onChange={(e) => setEstado((s) => ({ ...s, agrupar_por: e.target.value }))}>
-                                    {AGRUPACIONES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+                                    {(esVouchers ? AGRUPACIONES_VOUCHERS : AGRUPACIONES).map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
                                 </select>
                             </label>
                         </div>
@@ -578,6 +619,18 @@ export default function ModalExportarPagosPedidos({
                 </div>
 
                 <div className="p-6 border-t theme-border shrink-0 space-y-4">
+                    {(sinRangoFechas || advertenciaPesado) && (
+                        <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm space-y-1">
+                            {sinRangoFechas && (
+                                <p className="m-0 theme-text-main">Sin rango de fechas: el reporte puede incluir muchos registros.</p>
+                            )}
+                            {advertenciaPesado && (
+                                <p className="m-0 font-semibold theme-text-main">
+                                    Reporte pesado: puede tardar varios minutos. Use «Continuar en segundo plano» al generar.
+                                </p>
+                            )}
+                        </div>
+                    )}
                     <div
                         className="rounded-xl border theme-border px-4 py-3 text-sm theme-text-main flex items-center gap-2"
                         style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 6%, transparent)' }}

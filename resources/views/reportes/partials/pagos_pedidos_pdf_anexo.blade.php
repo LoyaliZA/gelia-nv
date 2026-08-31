@@ -36,17 +36,27 @@
             </div>
         @endif
 
-        @php $primeraPaginaVoucher = true; @endphp
+        @foreach ($anexo['remisiones_embebidas'] ?? [] as $rem)
+            <div class="anexo-pagina-completa anexo-remision-embebida">
+                <p class="anexo-subtitulo">Remisión completa — pedido {{ $rem['folio_pedido'] }} · {{ $rem['folio_remision'] }}</p>
+                <p class="anexo-nota">{{ $rem['nombre'] }}</p>
+                <embed
+                    type="application/pdf"
+                    src="{{ $rem['pdf_path'] }}"
+                    class="anexo-remision-pdf"
+                />
+            </div>
+        @endforeach
+
         @foreach ($anexo['paginas'] ?? [] as $pagina)
             @if (($pagina['tipo'] ?? '') === 'completo')
                 @foreach ($pagina['vouchers'] ?? [] as $voucher)
-                    <div class="anexo-pagina-completa {{ $primeraPaginaVoucher ? '' : 'anexo-pagina-completa--salto' }}">
+                    <div class="anexo-pagina-completa">
                         @include('reportes.partials.pagos_pedidos_pdf_anexo_voucher', ['voucher' => $voucher])
                     </div>
-                    @php $primeraPaginaVoucher = false; @endphp
                 @endforeach
             @else
-                <table class="anexo-grid {{ $primeraPaginaVoucher ? '' : 'anexo-grid--salto' }}">
+                <table class="anexo-grid">
                     <tr>
                         @foreach ($pagina['vouchers'] ?? [] as $voucher)
                             <td class="anexo-grid-cell">
@@ -58,7 +68,6 @@
                         @endif
                     </tr>
                 </table>
-                @php $primeraPaginaVoucher = false; @endphp
             @endif
         @endforeach
     </div>

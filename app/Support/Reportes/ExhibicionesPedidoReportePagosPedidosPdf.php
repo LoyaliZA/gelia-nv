@@ -5,7 +5,6 @@ namespace App\Support\Reportes;
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\Reportes\PedidoBmaCierrePagoItem;
 use App\Models\SaldosAFavor\PedidoBmaPago;
-use Illuminate\Support\Carbon;
 
 /** Tabla de exhibiciones en el PDF por pedido. */
 final class ExhibicionesPedidoReportePagosPedidosPdf
@@ -49,8 +48,12 @@ final class ExhibicionesPedidoReportePagosPedidosPdf
                 'forma' => PedidoBmaPago::labelForma($item->forma_pago_snapshot),
                 'banco' => $item->banco_snapshot ?: '—',
                 'referencia' => $item->referencia_snapshot ?: '—',
-                'fecha_reportada' => self::fmtFecha($item->capturado_at_snapshot),
-                'fecha_pago' => self::fmtFecha($item->fecha_pago_snapshot),
+                'fecha_pago' => FechasPagoReporte::formatear($item->fecha_pago_snapshot),
+                'fecha_reportada' => FechasPagoReporte::formatearFechaHora($item->capturado_at_snapshot),
+                'reportado_posteriormente' => FechasPagoReporte::reportadoPosteriormente(
+                    $item->fecha_pago_snapshot,
+                    $item->capturado_at_snapshot,
+                ) ? 'Sí' : 'No',
                 'estado' => self::labelEstado($item->estado_revision_snapshot),
                 'revisor' => $item->revisadoPor?->name ?? '—',
                 'cobertura' => $cobertura['label'],
@@ -107,14 +110,5 @@ final class ExhibicionesPedidoReportePagosPedidosPdf
     private static function fmtMxn(float $monto): string
     {
         return '$'.number_format($monto, 2, '.', ',');
-    }
-
-    private static function fmtFecha(?Carbon $fecha): string
-    {
-        if ($fecha === null) {
-            return '—';
-        }
-
-        return $fecha->copy()->locale('es')->isoFormat('D MMM YYYY');
     }
 }

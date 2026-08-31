@@ -57,6 +57,69 @@ final class ParametrosAplicadosReportePagosPedidosPdf
         return $filas;
     }
 
+    /**
+     * @param  array<string, mixed>  $filtros
+     * @return list<array{parametro: string, seleccion: string}>
+     */
+    public static function filasVouchers(array $filtros): array
+    {
+        $tipoFecha = EncabezadoReportePagosPedidosPdf::tipoFechaPublico($filtros);
+        $agrupar = match ($filtros['agrupar_por'] ?? 'movimiento') {
+            'banco' => 'Banco',
+            'forma_pago' => 'Forma de pago',
+            default => 'Fecha del movimiento',
+        };
+
+        $filas = [
+            ['parametro' => 'Periodo', 'seleccion' => self::periodoVouchers($filtros, $tipoFecha)],
+            ['parametro' => 'Fecha utilizada', 'seleccion' => $tipoFecha],
+            ['parametro' => 'Bancos', 'seleccion' => self::bancos($filtros)],
+            ['parametro' => 'Formas de pago', 'seleccion' => self::formasPago($filtros)],
+            ['parametro' => 'Estados', 'seleccion' => self::estados($filtros)],
+            ['parametro' => 'Evidencias', 'seleccion' => self::evidencias($filtros)],
+            ['parametro' => 'Agrupación', 'seleccion' => $agrupar],
+        ];
+
+        if (! empty($filtros['reportado_posteriormente'])) {
+            $filas[] = ['parametro' => 'Reportado posteriormente', 'seleccion' => 'Sí'];
+        }
+        if (! empty($filtros['posible_duplicado'])) {
+            $filas[] = ['parametro' => 'Posibles duplicados', 'seleccion' => 'Sí'];
+        }
+        if (! empty($filtros['con_saf_relacionado'])) {
+            $filas[] = ['parametro' => 'Con SAF relacionado', 'seleccion' => 'Sí'];
+        }
+
+        foreach (self::filasAdicionales($filtros) as $extra) {
+            $filas[] = $extra;
+        }
+
+        return $filas;
+    }
+
+    /** @param  array<string, mixed>  $filtros */
+    private static function periodoVouchers(array $filtros, string $tipoFecha): string
+    {
+        $map = [
+            'Fecha del pedido' => ['fecha_pedido_desde', 'fecha_pedido_hasta'],
+            'Fecha reportada' => ['fecha_reportada_desde', 'fecha_reportada_hasta'],
+            'Fecha del pago' => ['fecha_pago_desde', 'fecha_pago_hasta'],
+            'Fecha de validación' => ['fecha_validacion_desde', 'fecha_validacion_hasta'],
+        ];
+        [$desdeKey, $hastaKey] = $map[$tipoFecha] ?? $map['Fecha del pago'];
+        $filtrosCopia = $filtros;
+        if (! empty($filtros[$desdeKey]) || ! empty($filtros[$hastaKey])) {
+            return self::periodoCompacto([
+                'fecha_pedido_desde' => $filtros[$desdeKey] ?? null,
+                'fecha_pedido_hasta' => $filtros[$hastaKey] ?? null,
+                'fecha_validacion_desde' => $filtros[$desdeKey] ?? null,
+                'fecha_validacion_hasta' => $filtros[$hastaKey] ?? null,
+            ], $tipoFecha === 'Fecha del pedido' ? 'Fecha del pedido' : 'Fecha de validación');
+        }
+
+        return 'Sin rango (histórico completo)';
+    }
+
     /** @param  array<string, mixed>  $filtros */
     private static function periodoCompacto(array $filtros, string $tipoFecha): string
     {

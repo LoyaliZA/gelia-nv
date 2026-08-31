@@ -25,19 +25,17 @@ class SolicitarExportacionReportePagosPedidosService
             'user_id' => $usuario->id,
             'titulo' => TituloReportePagosPedidos::desdeFiltros($filtros),
             'formato' => $formato,
-            'estado' => ReportePagosPedidosExportacion::ESTADO_PROCESSING,
+            'tipo_reporte' => $filtros['tipo_reporte'] ?? 'pedido',
+            'estado' => ReportePagosPedidosExportacion::ESTADO_PENDING,
             'filtros' => $filtros,
             'expira_at' => now()->addHours(48),
-            'started_at' => now(),
         ]);
-
-        ReportePagosPedidosProgreso::iniciar($jobId);
 
         GenerarReportePagosPedidosPdfJob::dispatch($filtros, $usuario, $jobId);
 
         return [
             'job_id' => $jobId,
-            'exportacion' => $exportacion->fresh()->paraApi(),
+            'exportacion' => $exportacion->fresh(['user'])->paraApi(),
         ];
     }
 }

@@ -5,15 +5,16 @@ namespace App\Support\Reportes;
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\Reportes\PedidoBmaCierrePagoItem;
 use App\Models\SaldosAFavor\PedidoBmaPago;
-use Illuminate\Support\Carbon;
+use App\Support\Reportes\FechasPagoReporte;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 /** Anexo A — vouchers incrustados y remisiones referenciadas. */
 final class AnexoEvidenciasReportePagosPedidosPdf
 {
-    private const ALTURA_COMPLETA = 900;
+    private const ALTURA_COMPLETA = 1200;
 
-    private const RATIO_COMPLETA = 1.35;
+    private const RATIO_COMPLETA = 1.55;
 
     /**
      * @param  Collection<int, PedidoBmaCierrePago>  $cierres
@@ -31,15 +32,24 @@ final class AnexoEvidenciasReportePagosPedidosPdf
         $incluirVouchers = ($params['incluir_vouchers'] ?? true) !== false;
         $incluirRemisiones = ($params['incluir_referencias_remision'] ?? true) !== false;
         $incluirRechazadas = ($params['incluir_evidencias_rechazadas_sustituidas'] ?? true) !== false;
+        $incluirRemisionesCompletas = ! empty($params['incluir_remisiones_completas']);
 
         $vouchers = [];
         $remisiones = [];
+        $remisionesEmbebidas = [];
 
         foreach ($cierres as $cierre) {
             if ($incluirRemisiones) {
                 $remision = self::remisionReferencia($cierre);
                 if ($remision !== null) {
                     $remisiones[$cierre->id] = $remision;
+                }
+            }
+
+            if ($incluirRemisionesCompletas) {
+                $embebida = self::remisionEmbebida($cierre);
+                if ($embebida !== null) {
+                    $remisionesEmbebidas[] = $embebida;
                 }
             }
 
@@ -78,8 +88,9 @@ final class AnexoEvidenciasReportePagosPedidosPdf
         return [
             'titulo' => 'Anexo A — Vouchers y comprobantes',
             'paginas' => $incluirVouchers ? self::agruparPaginas($vouchers) : [],
-            'remisiones' => array_values($remisiones),
-            'vacio' => count($vouchers) === 0 && count($remisiones) === 0,
+            'remisiones' => $incluirRemisiones && ! $incluirRemisionesCompletas ? array_values($remisiones) : [],
+            'remisiones_embebidas' => $incluirRemisionesCompletas ? $remisionesEmbebidas : [],
+            'vacio' => count($vouchers) === 0 && count($remisiones) === 0 && count($remisionesEmbebidas) === 0,
         ];
     }
 
@@ -125,13 +136,36 @@ final class AnexoEvidenciasReportePagosPedidosPdf
             ['label' => 'Exhibición', 'valor' => '#'.$item->numero_exhibicion],
             ['label' => 'Monto', 'valor' => self::fmtMxn((float) $item->monto_snapshot)],
             ['label' => 'Banco', 'valor' => $item->banco_snapshot ?: '—'],
-            ['label' => 'Forma de pago', 'valor' => PedidoBmaPago::labelForma($item->forma_pago_snapshot)],
-            ['label' => 'Fecha reportada', 'valor' => self::fmtFecha($item->capturado_at_snapshot)],
+            ['label' => 'Fecha del movimiento', 'valor' => FechasPagoReporte::formatear($item->fecha_pago_snapshot)],
+            ['label' => 'Fecha reportada', 'valor' => FechasPagoReporte::formatearFechaHora($item->capturado_at_snapshot)],
             ['label' => 'Estado', 'valor' => self::labelEstado($item->estado_revision_snapshot)],
-            [
-                'label' => 'Suma a cobertura',
-                'valor' => $item->activo_para_cobertura_snapshot ? 'Sí' : 'No',
-            ],
+        ];
+    }
+
+    /** @return ?array{folio_pedido: string, folio_remision: string, nombre: string, pdf_path: string} */
+    private static function remisionEmbebida(PedidoBmaCierrePago $cierre): ?array
+    {
+        $meta = $cierre->metadata_snapshot ?? [];
+        if (empty($meta['remision_documento_id']) && empty($cierre->folio_remision_snapshot)) {
+            return null;
+        }
+
+        $remisionDoc = $cierre->pedido?->remision->first();
+        $ruta = $remisionDoc?->ruta_archivo;
+        if (! $ruta || ! Storage::disk('public')->exists($ruta)) {
+            return null;
+        }
+
+        $abs = Storage::disk('public')->path($ruta);
+        if (! is_readable($abs)) {
+            return null;
+        }
+
+        return [
+            'folio_pedido' => $cierre->folio_snapshot ?: '—',
+            'folio_remision' => $cierre->folio_remision_snapshot ?: '—',
+            'nombre' => $meta['remision_nombre'] ?? ($remisionDoc?->nombre_original ?? '—'),
+            'pdf_path' => $abs,
         ];
     }
 
@@ -144,13 +178,12 @@ final class AnexoEvidenciasReportePagosPedidosPdf
         }
 
         $remisionDoc = $cierre->pedido?->remision->first();
-        $fecha = $remisionDoc?->created_at ?? $cierre->validado_at;
 
         return [
             'folio_pedido' => $cierre->folio_snapshot ?: '—',
             'folio_remision' => $cierre->folio_remision_snapshot ?: '—',
             'nombre' => $meta['remision_nombre'] ?? ($remisionDoc?->nombre_original ?? '—'),
-            'fecha' => self::fmtFecha($fecha instanceof Carbon ? $fecha : ($fecha ? Carbon::parse($fecha) : null)),
+            'fecha' => FechasPagoReporte::formatear($remisionDoc?->created_at),
         ];
     }
 
@@ -199,14 +232,5 @@ final class AnexoEvidenciasReportePagosPedidosPdf
     private static function fmtMxn(float $monto): string
     {
         return '$'.number_format($monto, 2, '.', ',');
-    }
-
-    private static function fmtFecha(?Carbon $fecha): string
-    {
-        if ($fecha === null) {
-            return '—';
-        }
-
-        return $fecha->copy()->locale('es')->isoFormat('D MMM YYYY');
     }
 }

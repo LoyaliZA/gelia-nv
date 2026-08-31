@@ -41,6 +41,17 @@ export const AGRUPACIONES = [
     { value: 'vendedora', label: 'Por vendedora' },
 ];
 
+export const FORMATOS_VOUCHERS_EXPORT = [
+    { value: 'pdf', label: 'PDF vouchers validados' },
+    { value: 'csv_resumen', label: 'CSV por exhibición' },
+];
+
+export const AGRUPACIONES_VOUCHERS = [
+    { value: 'movimiento', label: 'Por fecha del movimiento' },
+    { value: 'banco', label: 'Por banco' },
+    { value: 'forma_pago', label: 'Por forma de pago' },
+];
+
 function fmt(d) {
     return d.toISOString().slice(0, 10);
 }
@@ -111,7 +122,10 @@ export function estadoInicialExport(filtrosConsulta = {}) {
         ? [...filtrosConsulta.estados_cobertura]
         : (filtrosConsulta.estado_cobertura ? [filtrosConsulta.estado_cobertura] : []);
 
+    const tipoReporte = filtrosConsulta.tipo_reporte || 'pedido';
+
     return {
+        tipo_reporte: tipoReporte,
         tipo_fecha: tipoFecha,
         fecha_desde: fechaDesde,
         fecha_hasta: fechaHasta,
@@ -135,13 +149,21 @@ export function estadoInicialExport(filtrosConsulta = {}) {
         incluir_referencias_remision: filtrosConsulta.incluir_referencias_remision !== false,
         incluir_observaciones_historial: filtrosConsulta.incluir_observaciones_historial !== false,
         orden: filtrosConsulta.orden || 'desc',
-        agrupar_por: filtrosConsulta.agrupar_por || 'dia',
+        agrupar_por: filtrosConsulta.agrupar_por || (tipoReporte === 'vouchers' ? 'movimiento' : 'dia'),
+        reportado_posteriormente: Boolean(filtrosConsulta.reportado_posteriormente),
+        posible_duplicado: Boolean(filtrosConsulta.posible_duplicado),
+        con_saf_relacionado: Boolean(filtrosConsulta.con_saf_relacionado),
+        con_observaciones: Boolean(filtrosConsulta.con_observaciones),
+        calidad_imagen: filtrosConsulta.calidad_imagen || 'normal',
+        incluir_desglose_financiero: filtrosConsulta.incluir_desglose_financiero !== false,
+        incluir_remisiones_completas: Boolean(filtrosConsulta.incluir_remisiones_completas),
     };
 }
 
 /** @param {ReturnType<typeof estadoInicialExport>} estado */
 export function payloadExport(estado) {
     const params = {
+        tipo_reporte: estado.tipo_reporte || 'pedido',
         tipo_fecha: estado.tipo_fecha,
         fecha_desde: estado.fecha_desde || null,
         fecha_hasta: estado.fecha_hasta || null,
@@ -166,6 +188,13 @@ export function payloadExport(estado) {
         orden: estado.orden,
         agrupar_por: estado.agrupar_por,
         formato: estado.formato,
+        reportado_posteriormente: estado.reportado_posteriormente ? '1' : null,
+        posible_duplicado: estado.posible_duplicado ? '1' : null,
+        con_saf_relacionado: estado.con_saf_relacionado ? '1' : null,
+        con_observaciones: estado.con_observaciones ? '1' : null,
+        calidad_imagen: estado.calidad_imagen || null,
+        incluir_desglose_financiero: estado.incluir_desglose_financiero ? '1' : '0',
+        incluir_remisiones_completas: estado.incluir_remisiones_completas ? '1' : null,
     };
 
     return Object.fromEntries(

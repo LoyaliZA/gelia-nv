@@ -61,7 +61,7 @@
         </tr>
         <tr>
             <td class="meta-cell">
-                <span class="meta-label">Pedidos incluidos</span>
+                <span class="meta-label">{{ $h['total_label'] ?? 'Pedidos incluidos' }}</span>
                 <span class="meta-value">{{ number_format((int) ($h['total_pedidos'] ?? 0)) }}</span>
             </td>
             <td class="meta-cell meta-pagination-cell">

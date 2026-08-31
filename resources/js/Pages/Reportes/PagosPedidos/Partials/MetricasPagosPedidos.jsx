@@ -1,37 +1,26 @@
 import React from 'react';
-import { CheckCircle2, DollarSign, Receipt, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { DollarSign, Receipt, Wallet, ShieldCheck } from 'lucide-react';
 import { cardMetricaClass, cardReportePagos, fmtContador, fmtMxn, RADIUS_DESGLOSE, RADIUS_METRICA, ACCENT_MARCA, SEM_TEXTO } from './pagosPedidosStyles';
 
-const SALDO_CONFIG = {
-    pendiente: { label: 'Pendiente por cubrir', icon: TrendingDown },
-    excedente: { label: 'Excedente', icon: TrendingUp },
-    cubierto: { label: 'Cubierto', icon: CheckCircle2 },
-};
-
 const DESTACADAS = [
-    { key: 'pedidos_validados', label: 'Pedidos validados', icon: Receipt, money: false },
-    { key: 'total_pedido', label: 'Total del pedido', icon: DollarSign, money: true },
-    { key: 'pagos_validos', label: 'Pagos válidos', icon: Wallet, money: true },
+    { key: 'pedidos_validados', label: 'Pedidos incluidos', icon: Receipt, money: false },
+    { key: 'total_remisiones', label: 'Total de remisiones', icon: DollarSign, money: true },
+    { key: 'pagos_validos', label: 'Total cubierto con pagos', icon: Wallet, money: true },
+    { key: 'saf_aplicado', label: 'SAF aplicado', icon: ShieldCheck, money: true },
 ];
 
-/** @type {Array<{key: string, label: string, hint?: string, money?: boolean, unit?: 'archivos'|'pedidos'}>} */
+/** @type {Array<{key: string, label: string, money?: boolean, unit?: string}>} */
 const DESGLOSE = [
-    { key: 'monto_venta', label: 'Monto de venta', money: true },
+    { key: 'monto_venta', label: 'Mercancía', money: true },
     { key: 'monto_envio', label: 'Envío', money: true },
     { key: 'monto_seguro', label: 'Seguro', money: true },
     { key: 'saf_aplicado', label: 'SAF aplicado', money: true },
-    {
-        key: 'comprobantes_archivos',
-        label: 'Comprobantes adjuntos',
-        hint: 'Archivos por exhibición',
-        unit: 'archivos',
-    },
-    {
-        key: 'pedidos_observaciones',
-        label: 'Con observaciones',
-        hint: 'Cobertura incompleta o excedente',
-        unit: 'pedidos',
-    },
+    { key: 'pedidos_cubiertos', label: 'Pedidos cubiertos', unit: 'pedidos' },
+    { key: 'pedidos_cubiertos_con_saf', label: 'Cubiertos con SAF', unit: 'pedidos' },
+    { key: 'pedidos_parciales', label: 'Parcialmente cubiertos', unit: 'pedidos' },
+    { key: 'pedidos_con_excedente', label: 'Con excedente', unit: 'pedidos' },
+    { key: 'pedidos_observaciones', label: 'Con observaciones', unit: 'pedidos' },
+    { key: 'cantidad_vouchers', label: 'Vouchers', unit: 'vouchers' },
 ];
 
 function Tarjeta({ label, value, icon: Icon, money, cargando, accent }) {
@@ -55,27 +44,6 @@ function Tarjeta({ label, value, icon: Icon, money, cargando, accent }) {
     );
 }
 
-function TarjetaSaldo({ metricas, cargando }) {
-    const cfg = SALDO_CONFIG[metricas?.saldo_etiqueta] || SALDO_CONFIG.cubierto;
-    const Icon = cfg.icon;
-    const accent = metricas?.saldo_etiqueta === 'pendiente'
-        ? '#d97706'
-        : metricas?.saldo_etiqueta === 'excedente'
-            ? '#d97706'
-            : '#059669';
-
-    return (
-        <Tarjeta
-            label={cfg.label}
-            value={metricas?.saldo_valor}
-            icon={Icon}
-            money
-            cargando={cargando}
-            accent={accent}
-        />
-    );
-}
-
 function valorDesglose(item, metricas, cargando) {
     if (cargando) return '…';
     const raw = metricas?.[item.key];
@@ -90,17 +58,16 @@ function DesglosePeriodo({ metricas, cargando }) {
             <h3 className="text-sm font-semibold theme-text-main m-0 mb-1.5 leading-tight">
                 Desglose del periodo
             </h3>
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-0 lg:h-[68px] items-stretch">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-0 items-stretch">
                 {DESGLOSE.map((item, index) => (
                     <div
                         key={item.key}
                         className={[
                             'flex flex-col justify-center py-1.5 px-3 min-w-0',
                             index % 2 === 1 ? 'border-l border-[color-mix(in_srgb,var(--theme-border)_65%,transparent)]' : '',
-                            index >= 2 ? 'max-lg:border-t max-lg:border-[color-mix(in_srgb,var(--theme-border)_65%,transparent)]' : '',
-                            index > 0 ? 'lg:border-l lg:border-[color-mix(in_srgb,var(--theme-border)_65%,transparent)]' : '',
+                            index >= 2 ? 'max-sm:border-t max-sm:border-[color-mix(in_srgb,var(--theme-border)_65%,transparent)]' : '',
+                            index > 0 ? 'sm:border-l sm:border-[color-mix(in_srgb,var(--theme-border)_65%,transparent)]' : '',
                         ].join(' ')}
-                        title={item.hint}
                     >
                         <p className="text-[11px] md:text-xs font-medium theme-text-muted m-0 leading-snug truncate mb-1">
                             {item.label}
@@ -108,18 +75,14 @@ function DesglosePeriodo({ metricas, cargando }) {
                         <p
                             className={[
                                 'text-base md:text-lg font-semibold m-0 tabular-nums leading-tight truncate',
-                                item.key === 'pedidos_observaciones' && !cargando && Number(metricas?.[item.key] ?? 0) > 0
+                                ['pedidos_observaciones', 'pedidos_parciales', 'pedidos_con_excedente'].includes(item.key)
+                                    && !cargando && Number(metricas?.[item.key] ?? 0) > 0
                                     ? SEM_TEXTO.advertencia
                                     : 'theme-text-main',
                             ].join(' ')}
                         >
                             {valorDesglose(item, metricas, cargando)}
                         </p>
-                        {item.key === 'comprobantes_archivos' && !cargando && (
-                            <p className="text-[11px] font-medium theme-text-muted m-0 mt-1 tabular-nums leading-snug">
-                                en {(metricas?.pedidos_con_comprobante ?? 0).toLocaleString('es-MX')} pedidos
-                            </p>
-                        )}
                     </div>
                 ))}
             </div>
@@ -134,7 +97,6 @@ export default function MetricasPagosPedidos({ metricas, cargando }) {
                 {DESTACADAS.map(({ key, ...tarjeta }) => (
                     <Tarjeta key={key} {...tarjeta} value={metricas?.[key]} cargando={cargando} />
                 ))}
-                <TarjetaSaldo metricas={metricas} cargando={cargando} />
             </div>
             <DesglosePeriodo metricas={metricas} cargando={cargando} />
         </div>
