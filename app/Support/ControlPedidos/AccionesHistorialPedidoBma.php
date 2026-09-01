@@ -42,6 +42,7 @@ final class AccionesHistorialPedidoBma
     public const RESGUARDO = 'resguardo';
     public const LIBERAR_RESGUARDO = 'liberar_resguardo';
     public const CAMBIO_DIRECCION = 'cambio_direccion';
+    public const CAMBIO_SUCURSAL_DESTINO = 'cambio_sucursal_destino';
     public const ALTA_EXHIBICION_PAGO = 'alta_exhibicion_pago';
     public const EDICION_EXHIBICION_PAGO = 'edicion_exhibicion_pago';
     public const BAJA_EXHIBICION_PAGO = 'baja_exhibicion_pago';
@@ -128,6 +129,7 @@ final class AccionesHistorialPedidoBma
         self::RESGUARDO => 'Resguardo / apartado',
         self::LIBERAR_RESGUARDO => 'Liberación de resguardo',
         self::CAMBIO_DIRECCION => 'Cambio de dirección',
+        self::CAMBIO_SUCURSAL_DESTINO => 'Cambio de sucursal destino',
         self::ALTA_EXHIBICION_PAGO => 'Alta de exhibición de pago',
         self::EDICION_EXHIBICION_PAGO => 'Edición de exhibición de pago',
         self::BAJA_EXHIBICION_PAGO => 'Baja de exhibición de pago',

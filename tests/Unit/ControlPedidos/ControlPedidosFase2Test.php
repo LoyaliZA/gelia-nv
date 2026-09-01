@@ -31,6 +31,7 @@ class ControlPedidosFase2Test extends TestCase
     {
         $pedido = $this->crearPedidoBase([
             'origen_id' => $this->origenMostrador()->id,
+            'sucursal_destino_id' => \App\Models\Sucursal::factory()->create()->id,
             'catalogo_paqueteria_id' => null,
             'catalogo_tipo_caja_id' => null,
             'catalogo_tipo_guia_id' => null,

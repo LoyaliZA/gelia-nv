@@ -4,6 +4,7 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use Illuminate\Validation\ValidationException;
 
 trait ValidacionCamposPedidoBma
 {
@@ -57,6 +58,22 @@ trait ValidacionCamposPedidoBma
         }
         if (! $pedido->almacen_id) {
             $faltantes[] = 'almacén de salida';
+        }
+        $pedido->loadMissing(['origen', 'tareaPreparacionVigente.modalidad', 'sucursalDestino']);
+        if ($pedido->requiereSucursalDestino() && ! $pedido->sucursal_destino_id) {
+            $faltantes[] = 'sucursal destino';
+        } elseif ($pedido->sucursal_destino_id || $pedido->prohibeSucursalDestino()) {
+            try {
+                app(ValidarSucursalDestinoPedidoBma::class)->ejecutar(
+                    $pedido,
+                    $pedido->sucursal_destino_id !== null ? (int) $pedido->sucursal_destino_id : null
+                );
+            } catch (ValidationException $e) {
+                $mensaje = collect($e->errors())->flatten()->first();
+                if (is_string($mensaje) && $mensaje !== '') {
+                    $faltantes[] = $mensaje;
+                }
+            }
         }
         // Pedido final: monto obligatorio al enviar (solo se llega aquí con consulta cerrada, salvo complemento).
         if ((float) $pedido->total_mercancia <= 0) {

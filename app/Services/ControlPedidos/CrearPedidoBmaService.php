@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoTipoOperacionEnvio;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Models\User;
 use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use Illuminate\Http\UploadedFile;
@@ -22,6 +23,7 @@ class CrearPedidoBmaService
         private RegistrarHistorialPedidoService $historialService,
         private SincronizarAplicacionesPedidoSafService $safPedido,
         private CrearSnapshotDireccionPedido $crearSnapshot,
+        private AsignarSucursalDestinoPedidoService $asignarDestino,
     ) {}
 
     public function ejecutar(array $datos, int $vendedorId): PedidoBma
@@ -75,6 +77,20 @@ class CrearPedidoBmaService
 
             $this->historialService->registrarCreacion($pedido->id, $vendedorId, $estatusBorrador->id);
 
+            $destExplicito = array_key_exists('sucursal_destino_id', $datos);
+            $dest = $destExplicito
+                ? ($datos['sucursal_destino_id'] !== null && $datos['sucursal_destino_id'] !== ''
+                    ? (int) $datos['sucursal_destino_id']
+                    : null)
+                : ($principal?->sucursal_destino_id !== null ? (int) $principal->sucursal_destino_id : null);
+
+            if ($destExplicito || $dest !== null) {
+                $vendedor = User::query()->find($vendedorId);
+                if ($vendedor) {
+                    $this->asignarDestino->ejecutar($pedido, $vendedor, $dest);
+                }
+            }
+
             if ($principal) {
                 $this->historialService->ejecutar(
                     $pedido->id,
@@ -86,7 +102,7 @@ class CrearPedidoBmaService
                 );
             }
 
-            return $pedido->load(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'principal']);
+            return $pedido->load(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'principal', 'sucursalDestino']);
         });
     }
 

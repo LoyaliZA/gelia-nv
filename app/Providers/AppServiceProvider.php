@@ -40,6 +40,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(
+            \App\Contracts\PuntoVenta\ResuelveAlcancePdv::class,
+            \App\Services\PuntoVenta\AlcancePdv::class
+        );
+
         $this->app->singleton(\App\Services\GeliaAi\Acciones\AccionRegistry::class, function ($app) {
             return new \App\Services\GeliaAi\Acciones\AccionRegistry([
                 $app->make(\App\Services\GeliaAi\Acciones\ImportarCostosAccion::class),

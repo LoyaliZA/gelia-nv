@@ -699,6 +699,12 @@ export const etiquetaAlmacen = (almacen) => {
     return almacen.nombre || '—';
 };
 
+export const etiquetaSucursal = (sucursal) => {
+    if (!sucursal) return '—';
+    if (sucursal.codigo) return `${sucursal.codigo} - ${sucursal.nombre}`;
+    return sucursal.nombre || '—';
+};
+
 /** Etiqueta 1/3… para varias revisiones del mismo SKU/producto (por orden). */
 export const etiquetasInstanciaRevision = (revisiones) => {
     const grupos = {};

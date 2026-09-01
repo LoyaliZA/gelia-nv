@@ -17,6 +17,7 @@ abstract class PedidoBmaRequestBase extends FormRequest
             'folio_remision' => ['nullable', 'string', 'max:100'],
             'fecha' => ['nullable', 'date'],
             'almacen_id' => ['nullable', 'exists:almacenes,id'],
+            'sucursal_destino_id' => ['nullable', 'integer', 'exists:sucursales,id'],
             'catalogo_banco_id' => ['nullable', 'exists:catalogo_bancos,id'],
             'aplica_saldo_favor' => ['nullable', 'boolean'],
             'saldo_a_favor' => ['nullable', 'numeric', 'min:0'],

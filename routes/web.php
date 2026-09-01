@@ -29,6 +29,7 @@ Route::middleware(['auth'])->group(function () {
     require __DIR__.'/web/modules/gestion-interna.php';
     require __DIR__.'/web/modules/rh.php';
     require __DIR__.'/web/modules/control-pedidos/index.php';
+    require __DIR__.'/web/modules/punto-venta/index.php';
 
     Route::prefix('admin')->name('admin.')->group(function () {
         require __DIR__.'/web/admin/index.php';

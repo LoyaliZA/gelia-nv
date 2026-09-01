@@ -20,6 +20,7 @@ import {
     esCotizacionLista,
     formatearMoneda,
     etiquetaAlmacen,
+    etiquetaSucursal,
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
     THEME_LABEL,
@@ -65,6 +66,12 @@ import {
 import SeccionPagosExhibicion from './SeccionPagosExhibicion';
 import ModalConfirmarAccion from './ModalConfirmarAccion';
 import { CAMPOS_ERROR_DATOS } from './ModalReportarErrorDatos';
+import {
+    destinoSucursalParaPayload,
+    modalidadesRequierenDestino,
+    requiereCapturaDestinoSucursal,
+    resolverCodigoModalidadEfectiva,
+} from './destinoSucursalPedido';
 
 const STORAGE_BORRADOR = 'control_pedidos.borrador_pedido_v2';
 /** Autoguardado local: rápido, no satura red. Constante frontend documentada (no regla de negocio). */
@@ -173,6 +180,7 @@ function formDefaults(pedido = null, tiposOperacion = []) {
         fecha: pedido?.fecha?.slice?.(0, 10) || new Date().toISOString().slice(0, 10),
         catalogo_banco_id: pedido?.catalogo_banco_id || '',
         almacen_id: pedido?.almacen_id ?? pedido?.almacen?.id ?? '',
+        sucursal_destino_id: pedido?.sucursal_destino_id ?? pedido?.sucursal_destino?.id ?? '',
         catalogo_tipo_caja_id: pedido?.catalogo_tipo_caja_id || '',
         numero_cajas: pedido?.numero_cajas ?? '',
         peso_real_kg: pedido?.peso_real_kg ?? '',
@@ -420,6 +428,17 @@ export default function ModalFormPedidoLegado({
         || tareaPreparacion?.modalidad?.codigo === 'RECOGE_TIENDA_TRANSFERENCIA';
     const esModalidadBodega = String(codigoModalidadPreparacion || tareaPreparacion?.modalidad?.codigo || '').startsWith('ENVIO_BODEGA');
     const esModalidadMunicipio = (codigoModalidadPreparacion || tareaPreparacion?.modalidad?.codigo) === 'ENVIO_MUNICIPIO';
+    const codigoModalidadEfectiva = resolverCodigoModalidadEfectiva({
+        codigoModalidadPreparacion,
+        tareaPreparacion,
+    });
+    const modalidadesDestinoSucursal = modalidadesRequierenDestino(catalogos);
+    const muestraDestinoSucursal = requiereCapturaDestinoSucursal({
+        requiereLogistica,
+        codigoModalidad: codigoModalidadEfectiva,
+        modalidadesRequierenDestino: modalidadesDestinoSucursal,
+    });
+    const sucursalesDestino = catalogos.sucursales || [];
     const progresoTraslado = tareaPreparacion?.progreso_traslado || [];
     const progresoCaratula = tareaPreparacion?.progreso_caratula || [];
     const trasladoCedisPendiente = Boolean(pedido?.tiene_traslado_cedis_pendiente);
@@ -451,6 +470,11 @@ export default function ModalFormPedidoLegado({
             setConsultaPendienteLocal(false);
         }
     }, [pedido?.id, pedido?.estatus_envio]);
+
+    useEffect(() => {
+        if (!abierto || muestraDestinoSucursal || !data.sucursal_destino_id) return;
+        setData('sucursal_destino_id', '');
+    }, [abierto, muestraDestinoSucursal, data.sucursal_destino_id, setData]);
 
     const tienePesajeRespondido = Boolean(pedido?.pesaje_respondido_at)
         || pedido?.estatus_envio === 'pesaje_listo'
@@ -567,7 +591,8 @@ export default function ModalFormPedidoLegado({
     });
     const enviarPedidoListo = validacionEnvio.valido
         && !(esResguardoComplementario && !data.pedido_principal_id)
-        && !pendientePesaje;
+        && !pendientePesaje
+        && (!muestraDestinoSucursal || Boolean(data.sucursal_destino_id));
 
     const cambiarTipoPedido = (nuevoId) => {
         if (String(nuevoId) === String(data.origen_id)) return;
@@ -801,6 +826,7 @@ export default function ModalFormPedidoLegado({
         const origenId = pedido.origen_id ?? pedido.origen?.id ?? null;
         setData((prev) => {
             const almId = pedido.almacen_id ?? pedido.almacen?.id ?? prev.almacen_id ?? '';
+            const destId = pedido.sucursal_destino_id ?? pedido.sucursal_destino?.id ?? prev.sucursal_destino_id ?? '';
             const paqId = pedido.catalogo_paqueteria_id ?? pedido.paqueteria?.id ?? prev.catalogo_paqueteria_id ?? '';
             const zonaId = pedido.catalogo_zona_id || prev.catalogo_zona_id || '';
             const cp = prev.codigo_postal || pedido.codigo_postal || '';
@@ -822,6 +848,7 @@ export default function ModalFormPedidoLegado({
                 ...prev,
                 ...(origenId ? { origen_id: origenId } : {}),
                 ...(almId !== '' && almId != null ? { almacen_id: almId } : {}),
+                ...(destId !== '' && destId != null ? { sucursal_destino_id: destId } : {}),
                 peso_real_kg: pedido.peso_real_kg ?? '',
                 numero_cajas: pedido.numero_cajas ?? '',
                 peso_cobrado_guia_kg: pedido.peso_cobrado_guia_kg ?? '',
@@ -922,6 +949,12 @@ export default function ModalFormPedidoLegado({
                     payload[k] = v === '' ? null : v;
                 }
             });
+            delete payload.sucursal_destino_id;
+            Object.assign(payload, destinoSucursalParaPayload({
+                muestra: muestraDestinoSucursal,
+                sucursalDestinoId: data.sucursal_destino_id,
+                esAutoguardado: true,
+            }));
             if (!data.cliente_proporciona_guia && !data.envio_por_cobrar) {
                 payload.costo_envio = costoEnvioParaPersistir(data.costo_envio, costoReexpedicion);
             }
@@ -983,6 +1016,13 @@ export default function ModalFormPedidoLegado({
                     tipo: 'error',
                     mensaje: err.response.data?.message || 'El pedido cambió en otro lugar. Recargue antes de seguir.',
                 });
+            } else if (err?.response?.status === 422) {
+                setEstadoAuto((s) => ({ ...s, bd: 'Servidor · error de validación' }));
+                setAvisoForm({
+                    tipo: 'error',
+                    mensaje: mensajeAxios(err, 'No se pudo guardar la sucursal destino.'),
+                });
+                return null;
             }
             throw err;
         } finally {
@@ -1590,6 +1630,14 @@ export default function ModalFormPedidoLegado({
                 });
                 return;
             }
+            if (muestraDestinoSucursal && !data.sucursal_destino_id) {
+                setAvisoForm({ tipo: 'error', mensaje: 'Indique la sucursal destino.' });
+                requestAnimationFrame(() => {
+                    cuerpoFormRef.current?.querySelector('[data-campo="sucursal_destino"]')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+                return;
+            }
         }
 
         const idDestino = modoEdicion ? pedido.id : pedidoBdIdRef.current;
@@ -1600,6 +1648,11 @@ export default function ModalFormPedidoLegado({
                 : undefined;
             return conDireccionManual({
                 ...d,
+                ...destinoSucursalParaPayload({
+                    muestra: muestraDestinoSucursal,
+                    sucursalDestinoId: d.sucursal_destino_id,
+                    esAutoguardado: false,
+                }),
                 costo_envio: omitEnvio
                     ? (d.costo_envio === '' || d.costo_envio == null ? '' : 0)
                     : costoEnvioParaPersistir(d.costo_envio, costoReexpedicion),
@@ -1934,7 +1987,12 @@ export default function ModalFormPedidoLegado({
     const wrapIncorrecto = (key) => (esCampoIncorrecto(key)
         ? 'rounded-xl ring-2 ring-orange-500/70 bg-orange-500/10 p-2'
         : '');
-    const esCampoFaltante = (clave) => intentoEnviar && (validacionEnvio.claves || []).includes(clave);
+    const esCampoFaltante = (clave) => {
+        if (clave === 'sucursal_destino') {
+            return intentoEnviar && muestraDestinoSucursal && !data.sucursal_destino_id;
+        }
+        return intentoEnviar && (validacionEnvio.claves || []).includes(clave);
+    };
     const wrapFaltante = (clave) => (esCampoFaltante(clave) ? WRAP_FALTANTE : '');
     const wrapCampo = (clave, claveIncorrecto = clave) => wrapFaltante(clave) || wrapIncorrecto(claveIncorrecto);
     const etiquetasIncorrectas = Object.fromEntries(
@@ -2223,6 +2281,35 @@ export default function ModalFormPedidoLegado({
                                     ))}
                                 </select>
                             </div>
+                            {muestraDestinoSucursal && (
+                            <div className={wrapCampo('sucursal_destino')} data-campo="sucursal_destino">
+                                <label className={SECCION}>Sucursal destino{muestraDestinoSucursal ? ' *' : ''}</label>
+                                <select
+                                    value={data.sucursal_destino_id === '' || data.sucursal_destino_id == null ? '' : String(data.sucursal_destino_id)}
+                                    disabled={logisticaBloqueada}
+                                    onChange={(e) => setData('sucursal_destino_id', e.target.value)}
+                                    className={`${THEME_SELECT} w-full py-3 ${logisticaBloqueada ? 'opacity-50' : ''}`}
+                                >
+                                    <option value="">Seleccionar...</option>
+                                    {sucursalesDestino.map((s) => (
+                                        <option key={s.id} value={String(s.id)}>{etiquetaSucursal(s)}</option>
+                                    ))}
+                                </select>
+                                {sucursalesDestino.length === 0 && (
+                                    <p className="text-[10px] font-bold text-amber-600 m-0 mt-1.5" role="status">
+                                        No hay sucursales activas en el catálogo.
+                                    </p>
+                                )}
+                                {(errors.sucursal_destino_id || errors.sucursal_destino) && (
+                                    <p className="text-[10px] text-red-500 font-bold mt-1 m-0" role="alert">
+                                        {errors.sucursal_destino_id || errors.sucursal_destino}
+                                    </p>
+                                )}
+                                <p className="text-[10px] font-bold theme-text-muted m-0 mt-1.5">
+                                    Tienda donde se custodiará o entregará la mercancía. Distinto del almacén de salida.
+                                </p>
+                            </div>
+                            )}
                             {flujoPreparacionTienda && !usaPreparacionTienda && (
                             <div className="md:col-span-2">
                                 <label className={SECCION}>Modalidad de recolección</label>

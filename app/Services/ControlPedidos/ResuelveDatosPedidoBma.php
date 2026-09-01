@@ -334,6 +334,7 @@ trait ResuelveDatosPedidoBma
         $datos['cliente_id'] = $principal->cliente_id;
         $datos['origen_id'] = $principal->origen_id;
         $datos['almacen_id'] = $principal->almacen_id;
+        $datos['sucursal_destino_id'] = $principal->sucursal_destino_id;
         $datos['cliente_direccion_id'] = $principal->cliente_direccion_id;
         $datos['domicilio_entrega'] = $principal->domicilio_entrega;
         $datos['codigo_postal'] = $principal->codigo_postal;

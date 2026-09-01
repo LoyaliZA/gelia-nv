@@ -4,6 +4,8 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\Almacen;
 use App\Models\CatalogoBanco;
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
+use App\Models\Sucursal;
 use App\Models\CatalogoBancoDepartamento;
 use App\Models\ControlPedidos\CatalogoEnvioTienda;
 use App\Models\SaldosAFavor\PedidoBmaPago;
@@ -47,6 +49,13 @@ class ObtenerCatalogosPedidoBmaService
                 ->where('visible_en_pedidos', true)
                 ->orderBy('nombre')
                 ->get(['id', 'codigo', 'nombre']),
+            'sucursales' => Sucursal::query()
+                ->where('activo', true)
+                ->orderBy('nombre')
+                ->get(['id', 'codigo', 'nombre']),
+            'destino_sucursal_config' => [
+                'modalidades_requieren_destino' => CatalogoModalidadPreparacionPedido::CODIGOS_FASE4,
+            ],
             'bancos' => $this->bancosParaDepartamentos($departamentoIds),
             'formas_pago' => PedidoBmaPago::formasPagoCatalogo(),
             'tipos_caja' => CatalogoTipoCajaPedido::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'peso_volumetrico', 'medidas', 'largo', 'ancho', 'alto']),

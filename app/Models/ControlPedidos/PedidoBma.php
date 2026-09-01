@@ -5,6 +5,7 @@ namespace App\Models\ControlPedidos;
 use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\Cliente;
+use App\Models\Sucursal;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafIncidencia;
 use App\Models\SaldosAFavor\SafPedidoAplicacion;
@@ -55,6 +56,7 @@ class PedidoBma extends Model
         'tipo_operacion_envio_id',
         'pedido_principal_id',
         'almacen_id',
+        'sucursal_destino_id',
         'catalogo_banco_id',
         'saldo_a_favor',
         'catalogo_tipo_caja_id',
@@ -397,6 +399,43 @@ class PedidoBma extends Model
     public function almacen(): BelongsTo
     {
         return $this->belongsTo(Almacen::class, 'almacen_id');
+    }
+
+    /** Sucursal de custodia/entrega PDV. Distinta de `almacen_id` (origen/preparación). */
+    public function sucursalDestino(): BelongsTo
+    {
+        return $this->belongsTo(Sucursal::class, 'sucursal_destino_id');
+    }
+
+    public function codigoModalidadPreparacionVigente(): ?string
+    {
+        $this->loadMissing('tareaPreparacionVigente.modalidad');
+
+        return $this->tareaPreparacionVigente?->modalidad?->codigo;
+    }
+
+    public function requiereSucursalDestino(?string $codigoModalidad = null): bool
+    {
+        $codigo = $codigoModalidad ?? $this->codigoModalidadPreparacionVigente();
+        if ($codigo !== null) {
+            return in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true);
+        }
+
+        $this->loadMissing('origen');
+
+        return $this->origen !== null && ! $this->origen->requiere_logistica;
+    }
+
+    public function prohibeSucursalDestino(?string $codigoModalidad = null): bool
+    {
+        $codigo = $codigoModalidad ?? $this->codigoModalidadPreparacionVigente();
+        if ($codigo !== null) {
+            return ! in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true);
+        }
+
+        $this->loadMissing('origen');
+
+        return $this->origen !== null && (bool) $this->origen->requiere_logistica;
     }
 
     public function banco(): BelongsTo

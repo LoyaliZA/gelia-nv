@@ -78,6 +78,13 @@ class CrearTareaPreparacionService
             ->where('activo', true)
             ->firstOrFail();
 
+        app(ValidarSucursalDestinoPedidoBma::class)->ejecutar(
+            $pedido,
+            $pedido->sucursal_destino_id !== null ? (int) $pedido->sucursal_destino_id : null,
+            $modalidad->codigo,
+            $modalidad->esDestinoSucursal()
+        );
+
         $datosMunicipio = [];
         if ($modalidad->esEnvioMunicipio()) {
             if (! $usuario->can('control_pedidos.preparacion.destinatario')

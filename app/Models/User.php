@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -146,6 +147,82 @@ class User extends Authenticatable
         return $this->belongsToMany(Conversacion::class, 'conversacion_participantes')
             ->withPivot(['rol', 'ultimo_leido_at', 'silenciado'])
             ->withTimestamps();
+    }
+
+    public function sucursales(): BelongsToMany
+    {
+        return $this->belongsToMany(Sucursal::class, 'sucursal_user')
+            ->using(SucursalUser::class)
+            ->withPivot(['es_principal', 'activo'])
+            ->withTimestamps();
+    }
+
+    public function sucursalesOperables(): BelongsToMany
+    {
+        return $this->sucursales()
+            ->wherePivot('activo', true)
+            ->where('sucursales.activo', true);
+    }
+
+    /**
+     * Contrato 0B: principal marcada entre asignaciones operables;
+     * si hay exactamente una operable, esa es la principal por defecto.
+     */
+    public function sucursalPrincipal(): ?Sucursal
+    {
+        $this->loadMissing('sucursales');
+
+        $operables = $this->sucursales->filter(
+            static fn (Sucursal $sucursal): bool => $sucursal->activo && (bool) $sucursal->pivot->activo
+        );
+
+        $marcada = $operables->first(
+            static fn (Sucursal $sucursal): bool => (bool) $sucursal->pivot->es_principal
+        );
+
+        if ($marcada instanceof Sucursal) {
+            return $marcada;
+        }
+
+        if ($operables->count() === 1) {
+            return $operables->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * @return Collection<int, int>
+     */
+    public function idsSucursalesOperables(): Collection
+    {
+        $this->loadMissing('sucursales');
+
+        return $this->sucursales
+            ->filter(static fn (Sucursal $sucursal): bool => $sucursal->activo && (bool) $sucursal->pivot->activo)
+            ->pluck('id')
+            ->values();
+    }
+
+    public function concederAccesoSucursal(Sucursal $sucursal, bool $esPrincipal = false, bool $activo = true): void
+    {
+        DB::transaction(function () use ($sucursal, $esPrincipal, $activo): void {
+            if ($esPrincipal && $activo) {
+                $this->sucursales()->newPivotQuery()
+                    ->where('user_id', $this->id)
+                    ->update(['es_principal' => false]);
+            }
+
+            $this->sucursales()->syncWithoutDetaching([
+                $sucursal->id => [
+                    'es_principal' => $esPrincipal,
+                    'activo' => $activo,
+                ],
+            ]);
+        });
+
+        $this->unsetRelation('sucursales');
+        $this->unsetRelation('sucursalesOperables');
     }
 
     public function mensajes(): HasMany

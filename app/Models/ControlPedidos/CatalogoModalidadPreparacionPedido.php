@@ -64,6 +64,11 @@ class CatalogoModalidadPreparacionPedido extends Model
         return $this->hasMany(PedidoBmaTareaPreparacion::class, 'catalogo_modalidad_preparacion_id');
     }
 
+    public function esDestinoSucursal(): bool
+    {
+        return in_array($this->codigo, self::CODIGOS_FASE4, true);
+    }
+
     public function esTransferencia(): bool
     {
         return $this->codigo === self::CODIGO_RECOGE_TIENDA_TRANSFERENCIA;

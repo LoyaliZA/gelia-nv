@@ -29,6 +29,7 @@ class ListarPedidosBmaService
             'anexosEnvio.registradoPor',
             'envioTienda',
             'almacen',
+            'sucursalDestino',
             'banco',
             'tipoCaja',
             'cajas.tipoCaja', 'cajas.tipoGuia',

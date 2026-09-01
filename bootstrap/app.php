@@ -47,6 +47,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'log.api' => \App\Http\Middleware\LogApiRequest::class,
             'api.resource' => \App\Http\Middleware\CheckApiResourcePermission::class,
             'require.json' => \App\Http\Middleware\RequireJsonAccept::class,
+            'pdv.piso' => \App\Http\Middleware\AsegurarSucursalActivaPdv::class,
+            'pdv.modulo' => \App\Http\Middleware\AsegurarModuloPuntoVenta::class,
+            'pdv.permiso' => \App\Http\Middleware\AsegurarPermisoPdv::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

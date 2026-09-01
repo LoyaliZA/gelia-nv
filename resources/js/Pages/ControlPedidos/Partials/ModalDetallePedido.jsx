@@ -8,6 +8,7 @@ import {
     etiquetaEstatusPedido,
     formatearMoneda,
     etiquetaAlmacen,
+    etiquetaSucursal,
     formatearFechaNegocio,
     formatearFechaHoraAuditoria,
     tieneGuiaLista,
@@ -110,6 +111,16 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <Campo label="Status" value={etiquetaEstatusPedido(pedido.estatus, { esResguardo: pedido.es_resguardo })} />
                             <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
                             <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
+                            {(pedido.sucursal_destino || pedido.sucursal_destino_id) && (
+                                <Campo
+                                    label="Sucursal destino"
+                                    value={etiquetaSucursal(pedido.sucursal_destino || {
+                                        id: pedido.sucursal_destino_id,
+                                        nombre: pedido.sucursal_destino_nombre,
+                                        codigo: pedido.sucursal_destino_codigo,
+                                    })}
+                                />
+                            )}
                             <Campo
                                 label="Pagos / bancos"
                                 value={(pedido.fuentes_pago?.length

@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\Cliente;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Models\User;
 use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use Illuminate\Http\UploadedFile;
@@ -20,6 +21,7 @@ class ActualizarPedidoBmaService
         private CrearSnapshotDireccionPedido $crearSnapshot,
         private ActualizarCostosCajasPedidoBmaService $actualizarCostosCajas,
         private CalcularTotalesEnvioPedidoService $totalesEnvio,
+        private AsignarSucursalDestinoPedidoService $asignarDestino,
     ) {}
 
     public function ejecutar(PedidoBma $pedido, array $datos, int $usuarioId): PedidoBma
@@ -84,6 +86,16 @@ class ActualizarPedidoBmaService
                 ]
             ));
 
+            if (array_key_exists('sucursal_destino_id', $datos)) {
+                $actor = User::query()->find($usuarioId);
+                if ($actor) {
+                    $dest = $datos['sucursal_destino_id'] !== null && $datos['sucursal_destino_id'] !== ''
+                        ? (int) $datos['sucursal_destino_id']
+                        : null;
+                    $this->asignarDestino->ejecutar($pedido->fresh(['origen', 'tareaPreparacionVigente.modalidad']), $actor, $dest);
+                }
+            }
+
             if ($tieneDesgloseCajas) {
                 $this->actualizarCostosCajas->ejecutar(
                     $pedido->fresh(['cajas', 'zona', 'estatus']),
@@ -118,7 +130,7 @@ class ActualizarPedidoBmaService
                 );
             }
 
-            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja', 'cajas.tipoGuia', 'direccionVigente']);
+            return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja', 'cajas.tipoGuia', 'direccionVigente', 'sucursalDestino']);
         });
     }
 
