@@ -4,7 +4,6 @@ namespace App\Services\Reportes\PagosPedidos;
 
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\User;
-use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 use App\Support\Reportes\FechasPagoReporte;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,11 +15,6 @@ class AplicarFiltrosReportePagosPedidosQuery
      */
     public function aplicar(Builder $query, User $usuario, array $filtros): Builder
     {
-        $idsVendedores = VisibilidadPedidoBma::idsVendedoresVisibles($usuario);
-        if ($idsVendedores !== null) {
-            $query->whereIn('vendedor_id', $idsVendedores);
-        }
-
         $estadoCierre = $filtros['estado_cierre'] ?? 'vigente';
         if ($estadoCierre === 'vigente') {
             $query->where('estado', PedidoBmaCierrePago::ESTADO_VIGENTE);

@@ -4,11 +4,9 @@ namespace App\Services\Reportes\PagosPedidos;
 
 use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\User;
-use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 use App\Support\Reportes\ClasificacionIngresoBancario;
 use App\Support\Reportes\FechasPagoReporte;
-use Illuminate\Auth\Access\AuthorizationException;
 
 class ObtenerDetalleReportePagoPedidoService
 {
@@ -30,10 +28,6 @@ class ObtenerDetalleReportePagoPedidoService
             'items.adminErrorReportadoPor',
             'adminPedidoErrorReportadoPor',
         ]);
-
-        if ($cierre->pedido && ! VisibilidadPedidoBma::puedeConsultar($usuario, $cierre->pedido)) {
-            throw new AuthorizationException('No tiene acceso a este cierre.');
-        }
 
         $remisionVigente = $cierre->pedido?->remision()->first();
         $remisionesHistoricas = $incluirHistorico && $usuario->can('reportes.pagos_pedidos.ver_historico')

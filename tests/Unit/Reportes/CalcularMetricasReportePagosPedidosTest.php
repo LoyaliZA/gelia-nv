@@ -163,4 +163,24 @@ class CalcularMetricasReportePagosPedidosTest extends TestCase
         $this->assertSame(2, $metricas['pedidos_observaciones']);
         $this->assertSame(1, $metricas['cantidad_vouchers']);
     }
+
+    public function test_usuario_con_permiso_reporte_ve_cierres_de_otras_vendedoras(): void
+    {
+        Permission::findOrCreate('reportes.pagos_pedidos.ver');
+
+        $vendedora = User::factory()->create();
+        $lector = User::factory()->create();
+        $lector->givePermissionTo('reportes.pagos_pedidos.ver');
+
+        $pedido = $this->crearPedido($vendedora);
+        $this->crearCierre($pedido, $vendedora, 'cubierto', 0, 1500);
+
+        $metricas = app(CalcularMetricasReportePagosPedidosService::class)->ejecutar($lector, [
+            'estado_cierre' => 'vigente',
+            'tipo_reporte' => 'pedido',
+        ]);
+
+        $this->assertSame(1, $metricas['pedidos_validados']);
+        $this->assertSame('1500.00', $metricas['total_remisiones']);
+    }
 }

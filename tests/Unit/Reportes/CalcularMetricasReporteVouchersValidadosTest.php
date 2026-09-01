@@ -163,4 +163,26 @@ class CalcularMetricasReporteVouchersValidadosTest extends TestCase
         $this->assertSame('150.00', $metricas['total_saf_relacionado']);
         $this->assertSame(1, $metricas['remisiones_con_saf']);
     }
+
+    public function test_usuario_con_permiso_reporte_ve_vouchers_de_otras_vendedoras(): void
+    {
+        Permission::findOrCreate('reportes.pagos_pedidos.ver');
+
+        $vendedora = User::factory()->create();
+        $lector = User::factory()->create();
+        $lector->givePermissionTo('reportes.pagos_pedidos.ver');
+
+        $banco = CatalogoBanco::query()->create(['nombre' => 'Banco Test', 'activo' => true]);
+        $pedido = $this->crearPedido($vendedora);
+        $cierre = $this->crearCierre($pedido, $vendedora);
+        $this->crearItem($cierre, 'transferencia', 750, PedidoBmaPago::REVISION_VERIFICADO, $banco, 'REF-OTRA');
+
+        $metricas = app(CalcularMetricasReporteVouchersValidadosService::class)->ejecutar($lector, [
+            'tipo_reporte' => 'vouchers',
+            'estado_cierre' => 'vigente',
+        ]);
+
+        $this->assertSame('750.00', $metricas['total_ingreso_bancario']);
+        $this->assertSame(1, $metricas['vouchers_validados']);
+    }
 }

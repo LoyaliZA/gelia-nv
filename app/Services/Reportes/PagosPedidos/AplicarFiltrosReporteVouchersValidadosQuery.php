@@ -6,7 +6,6 @@ use App\Models\Reportes\PedidoBmaCierrePago;
 use App\Models\Reportes\PedidoBmaCierrePagoItem;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\User;
-use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\Reportes\AdminEstadoReportePagosPedidos;
 use App\Support\Reportes\AlcanceExhibicionesReportePagosPedidos;
 use App\Support\Reportes\ClasificacionIngresoBancario;
@@ -120,11 +119,6 @@ class AplicarFiltrosReporteVouchersValidadosQuery
             ->whereHas('cierre', function (Builder $q) {
                 $q->where('estado', PedidoBmaCierrePago::ESTADO_VIGENTE);
             });
-
-        $idsVendedores = VisibilidadPedidoBma::idsVendedoresVisibles($usuario);
-        if ($idsVendedores !== null) {
-            $query->whereHas('cierre', fn (Builder $q) => $q->whereIn('vendedor_id', $idsVendedores));
-        }
 
         $this->aplicarFechas($query, $params);
         AlcanceExhibicionesReportePagosPedidos::aplicarEnQuery($query, $params);

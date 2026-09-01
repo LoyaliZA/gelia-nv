@@ -24,7 +24,6 @@ use App\Services\Reportes\PagosPedidos\ObtenerDetalleReportePagoPedidoService;
 use App\Services\Reportes\PagosPedidos\ConfirmarExhibicionAdminReportePagosService;
 use App\Services\Reportes\PagosPedidos\ConfirmarPedidoAdminReportePagosService;
 use App\Services\Reportes\PagosPedidos\ReportarErrorAdminReportePagosService;
-use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\Reportes\ReportePagosPedidosProgreso;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -229,9 +228,6 @@ class ReportePagosPedidosController extends Controller
         Gate::authorize('reportes.pagos_pedidos.ver_evidencias');
 
         $pago->load('pedido');
-        if (! $pago->pedido || ! VisibilidadPedidoBma::puedeConsultar(Auth::user(), $pago->pedido)) {
-            abort(403);
-        }
 
         if (! $pago->ruta_archivo || ! Storage::disk('public')->exists($pago->ruta_archivo)) {
             abort(404);
@@ -258,9 +254,6 @@ class ReportePagosPedidosController extends Controller
         Gate::authorize('reportes.pagos_pedidos.ver_evidencias');
 
         $documento->load('pedido');
-        if (! $documento->pedido || ! VisibilidadPedidoBma::puedeConsultar(Auth::user(), $documento->pedido)) {
-            abort(403);
-        }
 
         if (! Storage::disk('public')->exists($documento->ruta_archivo)) {
             abort(404);
