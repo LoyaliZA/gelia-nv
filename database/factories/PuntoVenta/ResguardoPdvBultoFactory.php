@@ -4,6 +4,7 @@ namespace Database\Factories\PuntoVenta;
 
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvBulto;
+use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,6 +18,7 @@ class ResguardoPdvBultoFactory extends Factory
     {
         return [
             'resguardo_id' => ResguardoPdv::factory(),
+            'codigo_etiqueta' => GeneradorCodigoEtiquetaResguardoPdv::generar(),
             'tipo' => ResguardoPdvBulto::TIPO_CAJA,
             'estado' => ResguardoPdvBulto::ESTADO_ESPERADO,
             'version' => 1,

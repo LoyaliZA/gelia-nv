@@ -59,6 +59,7 @@ final class EtiquetasResguardoPdv
             ResguardoPdvEvento::TIPO_INCIDENCIA_FOLIO_NO_ENCONTRADO => 'Incidencia: folio no encontrado',
             ResguardoPdvEvento::TIPO_INCIDENCIA_DANO => 'Incidencia: daño',
             ResguardoPdvEvento::TIPO_INCIDENCIA_FALTANTE => 'Incidencia: faltante',
+            ResguardoPdvEvento::TIPO_INCIDENCIA_CERRADA => 'Incidencia cerrada',
             ResguardoPdvEvento::TIPO_INCIDENCIA_ENTREGA_AUTORIZADA => 'Entrega autorizada con incidencia',
             ResguardoPdvEvento::TIPO_ENTREGA_TITULAR => 'Entrega al titular',
             ResguardoPdvEvento::TIPO_ENTREGA_TERCERO => 'Entrega a tercero',
@@ -69,6 +70,8 @@ final class EtiquetasResguardoPdv
             ResguardoPdvEvento::TIPO_MARCADO_REZAGADO => 'Marcado como rezagado',
             ResguardoPdvEvento::TIPO_CANCELACION_RECIBIDA => 'Cancelación recibida',
             ResguardoPdvEvento::TIPO_DEVOLUCION_CONFIRMADA => 'Devolución confirmada',
+            ResguardoPdvEvento::TIPO_CORRECCION_ADMINISTRATIVA => 'Corrección administrativa',
+            ResguardoPdvEvento::TIPO_ETIQUETAS_GENERADAS => 'Etiquetas generadas',
         ];
     }
 
@@ -92,6 +95,18 @@ final class EtiquetasResguardoPdv
             ResguardoPdvIncidencia::TIPO_FOLIO_NO_ENCONTRADO => 'Folio no encontrado',
             ResguardoPdvIncidencia::TIPO_DANO => 'Daño',
             ResguardoPdvIncidencia::TIPO_FALTANTE => 'Faltante',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function estadosIncidencia(): array
+    {
+        return [
+            ResguardoPdvIncidencia::ESTADO_ABIERTA => 'Abierta',
+            ResguardoPdvIncidencia::ESTADO_AUTORIZADA => 'Autorizada',
+            ResguardoPdvIncidencia::ESTADO_CERRADA => 'Cerrada',
         ];
     }
 

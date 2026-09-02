@@ -64,7 +64,9 @@ class UiBandejasResguardoPdvTest extends TestCase
                 ->where('filtros.q', 'REM-UI')
                 ->has('catalogos.bandejas')
                 ->has('catalogos.estados')
-                ->has('permisos.ver_vencidos'));
+                ->has('permisos.ver_vencidos')
+                ->where('sucursal_activa.nombre', 'Sucursal Norte')
+                ->where('operativa.antiguedad_configurada', true));
     }
 
     public function test_index_json_sigue_disponible(): void
@@ -126,6 +128,25 @@ class UiBandejasResguardoPdvTest extends TestCase
             ->assertJsonPath('filtros.bandeja', BandejaResguardoPdv::EN_CUSTODIA)
             ->assertJsonPath('filtros.antiguedad', 'proximo_a_vencer')
             ->assertJsonPath('filtros.q', 'folio-test');
+    }
+
+    public function test_show_expone_clasificaciones_y_plazos_del_backend(): void
+    {
+        $resguardo = $this->crearResguardo($this->sucursalA, [
+            'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
+            'recepcion_fisica_at' => now()->subDays(12),
+            'snapshot_folio' => 'REM-PLAZO-001',
+        ]);
+
+        $this->actingAs($this->usuario)
+            ->get(route('punto_venta.resguardos.show', $resguardo))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('PuntoVenta/Resguardos/Show', false)
+                ->has('resguardo.clasificaciones')
+                ->has('resguardo.fecha_limite_custodia')
+                ->where('resguardo.antiguedad_configurada', true)
+                ->has('catalogos.antiguedades'));
     }
 
     /**

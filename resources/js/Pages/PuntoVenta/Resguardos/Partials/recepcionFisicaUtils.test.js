@@ -1,11 +1,18 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import {
     armarFormDataRecepcion,
+    cantidadBultosPendiente,
+    cantidadBultosRecibida,
     claveIdempotenciaRecepcion,
     crearBultosVacios,
+    esRecepcionComplementaria,
     extraerFolioEscaneado,
+    foliosBultosRecibidos,
     limpiarClaveIdempotenciaRecepcion,
+    mensajeConfirmacionRecepcion,
     mensajeErrorRecepcion,
+    resguardoAdmiteEntregaTotal,
+    resguardoAdmiteRecepcion,
     validarFormularioRecepcion,
     esConflictoVersion,
 } from './recepcionFisicaUtils';
@@ -13,6 +20,16 @@ import {
 describe('recepcionFisicaUtils', () => {
     const storage = new Map();
     let uuidSeq = 0;
+
+    const resguardoBase = {
+        id: 1,
+        estado: 'pendiente_recepcion',
+        cantidad_bultos_esperada: 3,
+        cantidad_bultos_recibida: 1,
+        cantidad_bultos_pendiente: 2,
+        recepcion_completa: false,
+        bultos_recibidos: [{ id: 10, folio: 'CJA-001', tipo: 'caja', recepcion_at: '2026-09-02T10:00:00Z' }],
+    };
 
     beforeEach(() => {
         storage.clear();
@@ -29,6 +46,8 @@ describe('recepcionFisicaUtils', () => {
     it('extrae folio desde QR o URL', () => {
         expect(extraerFolioEscaneado('REM-123')).toBe('REM-123');
         expect(extraerFolioEscaneado('https://app/folio=REM-456')).toBe('REM-456');
+        expect(extraerFolioEscaneado('https://app/punto-venta/resguardos/etiquetas/resolver/Ab3CdEfGhJkL')).toBe('Ab3CdEfGhJkL');
+        expect(extraerFolioEscaneado('codigo=Ab3CdEfGhJkL')).toBe('Ab3CdEfGhJkL');
     });
 
     it('crea filas de bultos según cantidad esperada', () => {
@@ -37,16 +56,66 @@ describe('recepcionFisicaUtils', () => {
         expect(bultos[0]).toMatchObject({ tipo: 'caja', condicion: 'bueno', piezas: 1 });
     });
 
-    it('valida campos obligatorios y cantidad exacta de bultos', () => {
-        const errores = validarFormularioRecepcion({
-            almacenId: null,
-            cantidadEsperada: 1,
-            bultos: [{ folio: '', tipo: 'caja', condicion: '', piezas: 0 }],
+    it('lee cantidades desde backend sin recalcular cuando vienen serializadas', () => {
+        expect(cantidadBultosRecibida(resguardoBase)).toBe(1);
+        expect(cantidadBultosPendiente(resguardoBase)).toBe(2);
+        expect(esRecepcionComplementaria(resguardoBase)).toBe(true);
+        expect(foliosBultosRecibidos(resguardoBase)).toEqual(['CJA-001']);
+    });
+
+    it('valida llegada parcial entre 1 y pendiente', () => {
+        const erroresVacios = validarFormularioRecepcion({
+            almacenId: 1,
+            cantidadPendiente: 2,
+            bultos: [],
         });
-        expect(errores.almacen_id).toBeTruthy();
-        expect(errores['bultos.0.folio']).toBeTruthy();
-        expect(errores['bultos.0.condicion']).toBeTruthy();
-        expect(errores['bultos.0.piezas']).toBeTruthy();
+        expect(erroresVacios.bultos).toBeTruthy();
+
+        const erroresExceso = validarFormularioRecepcion({
+            almacenId: 1,
+            cantidadPendiente: 2,
+            bultos: crearBultosVacios(3),
+        });
+        expect(erroresExceso.bultos).toContain('Solo faltan 2 bulto(s)');
+
+        const erroresOk = validarFormularioRecepcion({
+            almacenId: 1,
+            cantidadPendiente: 2,
+            bultos: [{ folio: 'CJA-002', tipo: 'caja', condicion: 'bueno', piezas: 1 }],
+            foliosRecibidos: ['CJA-001'],
+        });
+        expect(erroresOk).toEqual({});
+    });
+
+    it('rechaza folio duplicado de llegada anterior', () => {
+        const errores = validarFormularioRecepcion({
+            almacenId: 1,
+            cantidadPendiente: 2,
+            bultos: [{ folio: 'CJA-001', tipo: 'caja', condicion: 'bueno', piezas: 1 }],
+            foliosRecibidos: ['CJA-001'],
+        });
+        expect(errores['bultos.0.folio']).toContain('llegada anterior');
+    });
+
+    it('genera mensajes de confirmación para parcial y complemento final', () => {
+        expect(mensajeConfirmacionRecepcion({
+            cantidadLlegada: 1,
+            cantidadPendiente: 3,
+            esComplementaria: false,
+        }).titulo).toBe('Confirmar llegada parcial');
+
+        expect(mensajeConfirmacionRecepcion({
+            cantidadLlegada: 2,
+            cantidadPendiente: 2,
+            esComplementaria: true,
+        }).titulo).toBe('Confirmar llegada final');
+    });
+
+    it('usa flags backend para admitir recepción y entrega total', () => {
+        expect(resguardoAdmiteRecepcion(resguardoBase, true)).toBe(true);
+        expect(resguardoAdmiteRecepcion({ ...resguardoBase, recepcion_completa: true }, false)).toBe(false);
+        expect(resguardoAdmiteEntregaTotal({ recepcion_completa: true })).toBe(true);
+        expect(resguardoAdmiteEntregaTotal(resguardoBase)).toBe(false);
     });
 
     it('reutiliza clave de idempotencia por resguardo en la sesión', () => {
@@ -75,9 +144,15 @@ describe('recepcionFisicaUtils', () => {
         expect(form.get('evidencias[0]')).toBe(archivo);
     });
 
-    it('traduce errores HTTP de concurrencia y validación', () => {
-        expect(mensajeErrorRecepcion({ response: { status: 409, data: { message: 'Ya recibido' } } }))
-            .toBe('Ya recibido');
+    it('traduce errores HTTP de concurrencia, exceso y validación', () => {
+        expect(mensajeErrorRecepcion({ response: { status: 409, data: { message: 'Ya completo' } } }))
+            .toBe('Ya completo');
+        expect(mensajeErrorRecepcion({
+            response: {
+                status: 422,
+                data: { errors: { bultos: ['Solo faltan 1 bulto(s) por recibir.'] } },
+            },
+        })).toBe('Solo faltan 1 bulto(s) por recibir.');
         expect(mensajeErrorRecepcion({
             response: {
                 status: 422,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2, AlertTriangle, Package } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertTriangle, Package, PackagePlus } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
@@ -8,6 +8,11 @@ import { THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import FormularioRecepcionFisica from './Partials/FormularioRecepcionFisica';
 import useRecepcionFisica from './Partials/useRecepcionFisica';
 import { BTN_SECONDARY, badgeEstadoResguardo } from './Partials/resguardosStyles';
+import {
+    cantidadBultosPendiente,
+    cantidadBultosRecibida,
+    resguardoAdmiteRecepcion,
+} from './Partials/recepcionFisicaUtils';
 
 export default function Recepcion({
     auth,
@@ -17,15 +22,18 @@ export default function Recepcion({
     puede_recibir: puedeRecibir = false,
 }) {
     const titulo = resguardo?.snapshot_folio || `Resguardo #${resguardo?.id}`;
+    const admiteRecepcion = resguardoAdmiteRecepcion(resguardo, puedeRecibir);
     const {
         enviar,
         enviando,
         progreso,
         error,
         exito,
+        llegadaParcial,
         irADetalle,
         irABandeja,
         recargarFormulario,
+        continuarComplemento,
     } = useRecepcionFisica({
         resguardoId: resguardo.id,
         versionInicial: resguardo.version,
@@ -48,7 +56,7 @@ export default function Recepcion({
                             <Package className="w-5 h-5 shrink-0" style={{ color: 'var(--color-primario)' }} />
                             <div className="min-w-0">
                                 <h1 className="text-xl font-black italic uppercase theme-text-main m-0 truncate">
-                                    Recepción física
+                                    {cantidadBultosRecibida(resguardo) > 0 ? 'Llegada complementaria' : 'Recepción física'}
                                 </h1>
                                 <p className="text-sm font-bold theme-text-muted m-0 truncate">{titulo}</p>
                             </div>
@@ -61,7 +69,13 @@ export default function Recepcion({
 
                 {exito ? (
                     <ResultadoExito onDetalle={irADetalle} onBandeja={irABandeja} />
-                ) : !puedeRecibir ? (
+                ) : llegadaParcial ? (
+                    <ResultadoParcial
+                        resguardo={llegadaParcial}
+                        onContinuar={continuarComplemento}
+                        onDetalle={irADetalle}
+                    />
+                ) : !admiteRecepcion ? (
                     <EstadoNoDisponible
                         resguardo={resguardo}
                         catalogos={catalogos}
@@ -94,7 +108,7 @@ export default function Recepcion({
                     />
                 )}
 
-                {error && error.includes('modificó este resguardo') && puedeRecibir && !exito && (
+                {error && error.includes('modificó este resguardo') && admiteRecepcion && !exito && !llegadaParcial && (
                     <button
                         type="button"
                         onClick={recargarFormulario}
@@ -113,9 +127,9 @@ function ResultadoExito({ onDetalle, onBandeja }) {
         <div className={`${geliaCardClass()} p-8 text-center space-y-4`}>
             <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500" />
             <div className="space-y-2">
-                <h2 className="text-lg font-black uppercase theme-text-main m-0">Recepción registrada</h2>
+                <h2 className="text-lg font-black uppercase theme-text-main m-0">Recepción completa</h2>
                 <p className="text-sm theme-text-muted m-0">
-                    El resguardo quedó en custodia. Puedes revisar el detalle actualizado o volver a la bandeja.
+                    Todos los bultos quedaron en custodia. Puedes revisar el detalle actualizado o volver a la bandeja.
                 </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 justify-center">
@@ -130,9 +144,38 @@ function ResultadoExito({ onDetalle, onBandeja }) {
     );
 }
 
+function ResultadoParcial({ resguardo, onContinuar, onDetalle }) {
+    const recibida = cantidadBultosRecibida(resguardo);
+    const pendiente = cantidadBultosPendiente(resguardo);
+    const esperada = resguardo.cantidad_bultos_esperada;
+
+    return (
+        <div className={`${geliaCardClass()} p-8 text-center space-y-4 border border-amber-500/30`}>
+            <PackagePlus className="w-12 h-12 mx-auto text-amber-500" />
+            <div className="space-y-2">
+                <h2 className="text-lg font-black uppercase theme-text-main m-0">Llegada registrada</h2>
+                <p className="text-sm theme-text-muted m-0">
+                    Se guardó esta llegada parcial. Hay {recibida} de {esperada} bulto(s) recibidos
+                    {pendiente > 0 ? ` y ${pendiente} pendiente(s).` : '.'}
+                </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                {pendiente > 0 && (
+                    <button type="button" onClick={onContinuar} className={`${THEME_BTN_PRIMARY} min-h-[48px] px-6`}>
+                        Registrar otra llegada
+                    </button>
+                )}
+                <button type="button" onClick={onDetalle} className={`${BTN_SECONDARY} min-h-[48px] px-6`}>
+                    Ver detalle actualizado
+                </button>
+            </div>
+        </div>
+    );
+}
+
 function EstadoNoDisponible({ resguardo, catalogos, onDetalle }) {
     const etiqueta = resguardo.estado_etiqueta || catalogos.estados?.[resguardo.estado] || resguardo.estado;
-    const enCustodia = resguardo.estado === 'en_custodia';
+    const recepcionCompleta = resguardo.recepcion_completa === true;
 
     return (
         <div className={`${geliaCardClass()} p-5 space-y-3 border border-amber-500/30`}>
@@ -140,11 +183,11 @@ function EstadoNoDisponible({ resguardo, catalogos, onDetalle }) {
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
                 <div className="space-y-2">
                     <p className="text-sm font-black theme-text-main m-0">
-                        {enCustodia
-                            ? 'Este resguardo ya fue recibido físicamente.'
+                        {recepcionCompleta
+                            ? 'Este resguardo ya recibió todos los bultos esperados.'
                             : `No se puede recibir en estado «${etiqueta}».`}
                     </p>
-                    {enCustodia && (
+                    {recepcionCompleta && (
                         <p className="text-sm theme-text-muted m-0">
                             Si otra terminal completó la recepción, consulta el detalle actualizado.
                         </p>

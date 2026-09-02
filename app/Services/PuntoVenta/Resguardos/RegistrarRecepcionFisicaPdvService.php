@@ -11,6 +11,8 @@ use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\PuntoVenta\ResguardoPdvEvidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
@@ -21,6 +23,12 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class RegistrarRecepcionFisicaPdvService
 {
+    /** @var list<string> */
+    private const TIPOS_EVENTO_RECEPCION = [
+        ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA,
+        ResguardoPdvEvento::TIPO_RECEPCION_PARCIAL,
+    ];
+
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
     ) {}
@@ -58,6 +66,7 @@ class RegistrarRecepcionFisicaPdvService
                 &$pathsEscritos,
             ) {
                 $resguardo = ResguardoPdv::query()
+                    ->with('bultos')
                     ->lockForUpdate()
                     ->findOrFail($resguardo->id);
 
@@ -66,38 +75,55 @@ class RegistrarRecepcionFisicaPdvService
                     return $reintento;
                 }
 
+                $estadoAnterior = $resguardo->estado;
                 $this->assertVersionYEstado($resguardo, $versionEsperada);
                 $almacen = $this->resolverAlmacenUbicacion($resguardo, $almacenId);
                 $bultosNormalizados = $this->normalizarBultosRecepcion($resguardo, $bultos);
 
+                $recibidosAntes = EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo);
+                $esperada = (int) $resguardo->cantidad_bultos_esperada;
                 $ahora = now();
 
-                $bultosCreados = [];
                 foreach ($bultosNormalizados as $dato) {
-                    $bultosCreados[] = ResguardoPdvBulto::query()->create([
-                        'resguardo_id' => $resguardo->id,
-                        'pedido_bma_id' => $resguardo->pedido_bma_id,
-                        'folio' => $dato['folio'],
-                        'tipo' => $dato['tipo'],
-                        'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO,
-                        'recepcion_at' => $ahora,
-                        'recepcion_por_id' => $actor->id,
-                        'version' => 1,
-                    ]);
+                    try {
+                        ResguardoPdvBulto::query()->create([
+                            'resguardo_id' => $resguardo->id,
+                            'pedido_bma_id' => $resguardo->pedido_bma_id,
+                            'folio' => $dato['folio'],
+                            'codigo_etiqueta' => GeneradorCodigoEtiquetaResguardoPdv::generar(),
+                            'tipo' => $dato['tipo'],
+                            'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO,
+                            'recepcion_at' => $ahora,
+                            'recepcion_por_id' => $actor->id,
+                            'version' => 1,
+                        ]);
+                    } catch (UniqueConstraintViolationException) {
+                        throw ValidationException::withMessages([
+                            'bultos' => 'Uno o más folios ya fueron recibidos en este resguardo.',
+                        ]);
+                    }
                 }
 
-                $resguardo->update([
+                $totalRecibida = $recibidosAntes + count($bultosNormalizados);
+                $tipoEvento = $totalRecibida >= $esperada
+                    ? ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA
+                    : ResguardoPdvEvento::TIPO_RECEPCION_PARCIAL;
+
+                $actualizacion = [
                     'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
-                    'recepcion_fisica_at' => $ahora,
                     'almacen_id' => $almacen->id,
                     'version' => $resguardo->version + 1,
-                ]);
+                ];
+                if ($resguardo->recepcion_fisica_at === null) {
+                    $actualizacion['recepcion_fisica_at'] = $ahora;
+                }
+                $resguardo->update($actualizacion);
 
                 try {
                     $evento = ResguardoPdvEvento::query()->create([
                         'resguardo_id' => $resguardo->id,
-                        'tipo_evento' => ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA,
-                        'estado_anterior' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+                        'tipo_evento' => $tipoEvento,
+                        'estado_anterior' => $estadoAnterior,
                         'estado_nuevo' => ResguardoPdv::ESTADO_EN_CUSTODIA,
                         'actor_id' => $actor->id,
                         'ocurrido_at' => $ahora,
@@ -105,7 +131,11 @@ class RegistrarRecepcionFisicaPdvService
                             'almacen_id' => $almacen->id,
                             'almacen_codigo' => $almacen->codigo,
                             'bultos' => $bultosNormalizados,
-                            'cantidad_recibida' => count($bultosNormalizados),
+                            'cantidad_llegada' => count($bultosNormalizados),
+                            'cantidad_recibida' => $totalRecibida,
+                            'cantidad_esperada' => $esperada,
+                            'cantidad_pendiente' => max(0, $esperada - $totalRecibida),
+                            'recepcion_completa' => $totalRecibida >= $esperada,
                         ],
                         'idempotency_key' => $idempotencyKey,
                     ]);
@@ -159,7 +189,7 @@ class RegistrarRecepcionFisicaPdvService
             ]);
         }
 
-        if ($evento->tipo_evento !== ResguardoPdvEvento::TIPO_RECEPCION_COMPLETA) {
+        if (! in_array($evento->tipo_evento, self::TIPOS_EVENTO_RECEPCION, true)) {
             throw ValidationException::withMessages([
                 'idempotency_key' => 'La clave de idempotencia corresponde a otra transición.',
             ]);
@@ -176,11 +206,11 @@ class RegistrarRecepcionFisicaPdvService
             ]);
         }
 
-        if ($resguardo->estado === ResguardoPdv::ESTADO_EN_CUSTODIA) {
-            throw new ConflictHttpException('Este resguardo ya fue recibido físicamente.');
-        }
+        if (! EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo)) {
+            if (EstadoRecepcionResguardoPdv::recepcionCompleta($resguardo)) {
+                throw new ConflictHttpException('Este resguardo ya recibió todos los bultos esperados.');
+            }
 
-        if ($resguardo->estado !== ResguardoPdv::ESTADO_PENDIENTE_RECEPCION) {
             throw ValidationException::withMessages([
                 'estado' => 'El resguardo no admite recepción física desde su estado actual.',
             ]);
@@ -222,9 +252,14 @@ class RegistrarRecepcionFisicaPdvService
         }
 
         $esperada = (int) $resguardo->cantidad_bultos_esperada;
-        if (count($bultos) !== $esperada) {
+        $pendientes = EstadoRecepcionResguardoPdv::cantidadPendiente($resguardo);
+        $foliosExistentes = EstadoRecepcionResguardoPdv::bultosRecibidos($resguardo)
+            ->pluck('folio')
+            ->all();
+
+        if (count($bultos) > $pendientes) {
             throw ValidationException::withMessages([
-                'bultos' => "La recepción total requiere exactamente {$esperada} bulto(s).",
+                'bultos' => "Solo faltan {$pendientes} bulto(s) por recibir; no se puede exceder la cantidad esperada.",
             ]);
         }
 
@@ -236,6 +271,12 @@ class RegistrarRecepcionFisicaPdvService
             if ($folio === '') {
                 throw ValidationException::withMessages([
                     "bultos.{$indice}.folio" => 'El folio del bulto es obligatorio.',
+                ]);
+            }
+
+            if (in_array($folio, $foliosExistentes, true)) {
+                throw ValidationException::withMessages([
+                    "bultos.{$indice}.folio" => 'El folio ya fue recibido en una llegada anterior.',
                 ]);
             }
 
@@ -273,6 +314,12 @@ class RegistrarRecepcionFisicaPdvService
                 'condicion' => $condicion,
                 'piezas' => $piezas,
             ];
+        }
+
+        if ($pendientes === 0 && $esperada > 0) {
+            throw ValidationException::withMessages([
+                'bultos' => 'Este resguardo ya recibió todos los bultos esperados.',
+            ]);
         }
 
         return $normalizados;

@@ -90,6 +90,8 @@ final class AccionesHistorialPedidoBma
     public const ERROR_ADMIN_REPORTE_PAGO = 'error_admin_reporte_pago';
     public const ENTREGA_PDV = 'entrega_pdv';
 
+    public const DEVOLUCION_PDV = 'devolucion_pdv';
+
     /** @var array<string, string> */
     public const ETIQUETAS = [
         self::CREACION_BORRADOR => 'Creación del borrador',
@@ -174,6 +176,7 @@ final class AccionesHistorialPedidoBma
         self::CONFIRMACION_ADMIN_PEDIDO => 'Confirmación administrativa del pedido',
         self::ERROR_ADMIN_REPORTE_PAGO => 'Error reportado por Administración (pagos)',
         self::ENTREGA_PDV => 'Entrega presencial en sucursal (Punto de venta)',
+        self::DEVOLUCION_PDV => 'Devolución física confirmada en sucursal (Punto de venta)',
     ];
 
     public static function etiqueta(?string $accion): ?string

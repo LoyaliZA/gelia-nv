@@ -46,6 +46,7 @@ Schedule::command('saldos-favor:notificar-vencimientos')->dailyAt('01:30');
 Schedule::command('control-pedidos:recordatorio-vencimiento-preparacion-tienda')->dailyAt('11:00');
 Schedule::command('control-pedidos:evaluar-vencimiento-espera-preparacion')->hourly();
 Schedule::command('control-pedidos:reconciliar-traslados-preparacion')->hourly();
+Schedule::command('pdv:evaluar-vencimientos-resguardos')->hourly();
 
 // Hora de recordatorio desde config (si difiere de 11:00).
 try {

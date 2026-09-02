@@ -1,10 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { Camera, ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import { Camera, ImagePlus, Loader2, Plus, Trash2 } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import ModalConfirmarAccion from '../../../ControlPedidos/Partials/ModalConfirmarAccion';
 import { BTN_SECONDARY, THEME_INPUT, THEME_SELECT } from './resguardosStyles';
-import { crearBultosVacios } from './recepcionFisicaUtils';
+import ResumenRecepcionParcial from './ResumenRecepcionParcial';
+import {
+    cantidadBultosPendiente,
+    crearBultosVacios,
+    esRecepcionComplementaria,
+    foliosBultosRecibidos,
+    mensajeConfirmacionRecepcion,
+} from './recepcionFisicaUtils';
 
 export default function FormularioRecepcionFisica({
     resguardo,
@@ -15,21 +22,40 @@ export default function FormularioRecepcionFisica({
     error = null,
     onEnviar,
 }) {
+    const cantidadPendiente = cantidadBultosPendiente(resguardo);
+    const esComplementaria = esRecepcionComplementaria(resguardo);
     const [almacenId, setAlmacenId] = useState(almacenes.length === 1 ? String(almacenes[0].id) : '');
-    const [bultos, setBultos] = useState(() => crearBultosVacios(resguardo.cantidad_bultos_esperada));
+    const [bultos, setBultos] = useState(() => crearBultosVacios(1, `llegada-${resguardo.id}`));
     const [evidencias, setEvidencias] = useState([]);
     const [confirmar, setConfirmar] = useState(false);
 
     const tiposBulto = catalogos.tipos_bulto || {};
     const condiciones = catalogos.condiciones_bulto || {};
+    const foliosRecibidos = foliosBultosRecibidos(resguardo);
 
     const previews = useMemo(() => evidencias.map((archivo) => ({
         archivo,
         url: URL.createObjectURL(archivo),
     })), [evidencias]);
 
+    const confirmacion = useMemo(() => mensajeConfirmacionRecepcion({
+        cantidadLlegada: bultos.length,
+        cantidadPendiente,
+        esComplementaria,
+    }), [bultos.length, cantidadPendiente, esComplementaria]);
+
     const actualizarBulto = (indice, campo, valor) => {
         setBultos((prev) => prev.map((bulto, i) => (i === indice ? { ...bulto, [campo]: valor } : bulto)));
+    };
+
+    const agregarBultoLlegada = () => {
+        if (bultos.length >= cantidadPendiente) return;
+        setBultos((prev) => [...prev, ...crearBultosVacios(1, `llegada-${resguardo.id}`)]);
+    };
+
+    const quitarBultoLlegada = (indice) => {
+        if (bultos.length <= 1) return;
+        setBultos((prev) => prev.filter((_, i) => i !== indice));
     };
 
     const agregarEvidencias = (archivos) => {
@@ -53,18 +79,20 @@ export default function FormularioRecepcionFisica({
             almacenId: almacenId ? Number(almacenId) : null,
             bultos,
             evidencias,
-            cantidadEsperada: resguardo.cantidad_bultos_esperada,
+            cantidadPendiente,
+            foliosRecibidos,
         });
     };
 
     return (
         <form onSubmit={solicitarConfirmacion} className="space-y-6">
+            <ResumenRecepcionParcial resguardo={resguardo} catalogos={catalogos} />
+
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
                 <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Datos del resguardo</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <CampoSoloLectura label="Folio" value={resguardo.snapshot_folio || `#${resguardo.id}`} />
                     <CampoSoloLectura label="Cliente" value={resguardo.referencia_cliente} />
-                    <CampoSoloLectura label="Bultos esperados" value={resguardo.cantidad_bultos_esperada} />
                     {resguardo.pedido?.folio && (
                         <CampoSoloLectura label="Pedido" value={resguardo.pedido.folio} />
                     )}
@@ -93,13 +121,42 @@ export default function FormularioRecepcionFisica({
             </div>
 
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
-                <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Bultos recibidos</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">
+                        Bultos de esta llegada
+                    </h2>
+                    {bultos.length < cantidadPendiente && (
+                        <button
+                            type="button"
+                            onClick={agregarBultoLlegada}
+                            className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] text-[10px] font-black uppercase`}
+                            disabled={enviando}
+                        >
+                            <Plus className="w-4 h-4" /> Agregar bulto
+                        </button>
+                    )}
+                </div>
+                <p className="text-sm theme-text-muted m-0">
+                    Registra entre 1 y {cantidadPendiente} bulto(s) que llegan ahora.
+                </p>
                 <div className="space-y-4">
                     {bultos.map((bulto, indice) => (
                         <div key={bulto.key} className="rounded-2xl border theme-border p-4 space-y-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
-                                Bulto {indice + 1} de {bultos.length}
-                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
+                                    Bulto {indice + 1} de esta llegada
+                                </p>
+                                {bultos.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => quitarBultoLlegada(indice)}
+                                        className="text-[10px] font-black uppercase text-red-600 dark:text-red-300 min-h-[44px] px-2"
+                                        disabled={enviando}
+                                    >
+                                        Quitar
+                                    </button>
+                                )}
+                            </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <label className="space-y-1.5 sm:col-span-2">
                                     <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Folio del bulto</span>
@@ -240,14 +297,18 @@ export default function FormularioRecepcionFisica({
                 disabled={enviando}
                 className={`${THEME_BTN_PRIMARY} w-full min-h-[48px] text-[10px] font-black uppercase tracking-widest disabled:opacity-50`}
             >
-                {enviando ? 'Procesando…' : 'Confirmar recepción física'}
+                {enviando
+                    ? 'Procesando…'
+                    : esComplementaria
+                        ? 'Registrar llegada complementaria'
+                        : 'Confirmar recepción física'}
             </button>
 
             <ModalConfirmarAccion
                 abierto={confirmar}
-                titulo="Confirmar recepción"
-                mensaje={`Se registrará la recepción total de ${resguardo.cantidad_bultos_esperada} bulto(s) en custodia. Esta acción no se puede deshacer.`}
-                etiquetaConfirmar="Sí, recibir resguardo"
+                titulo={confirmacion.titulo}
+                mensaje={confirmacion.mensaje}
+                etiquetaConfirmar={confirmacion.etiquetaConfirmar}
                 variante="primary"
                 onClose={() => setConfirmar(false)}
                 onConfirm={confirmarEnvio}

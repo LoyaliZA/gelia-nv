@@ -28,24 +28,6 @@ services:
             - meilisearch
             - mailpit
             - selenium
-    vite:
-        image: 'sail-8.4/app'
-        restart: unless-stopped
-        extra_hosts:
-            - 'host.docker.internal:host-gateway'
-        ports:
-            - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
-        environment:
-            WWWUSER: '${WWWUSER}'
-            LARAVEL_SAIL: 1
-            VITE_PORT: '${VITE_PORT:-5173}'
-        volumes:
-            - '.:/var/www/html'
-        networks:
-            - sail
-        depends_on:
-            - laravel.test
-        command: npm run dev
     reverb:
         image: 'sail-8.4/app'
         restart: unless-stopped

@@ -7,37 +7,126 @@ export function extraerFolioEscaneado(codigo) {
     const desdeUrl = valor.match(/(?:folio|remision|resguardo)[=/:]([^/?&#\s]+)/i);
     if (desdeUrl?.[1]) return desdeUrl[1].trim();
 
+    const desdeEtiqueta = valor.match(/(?:etiquetas\/resolver\/|codigo[=:])([A-Za-z0-9]+)/i);
+    if (desdeEtiqueta?.[1]) return desdeEtiqueta[1].trim();
+
     return valor;
 }
 
-export function crearBultosVacios(cantidad) {
+export function crearBultosVacios(cantidad, prefijo = 'bulto') {
     const total = Math.max(0, Number(cantidad) || 0);
+    const base = Date.now();
     return Array.from({ length: total }, (_, indice) => ({
         folio: '',
         tipo: 'caja',
         condicion: 'bueno',
         piezas: 1,
-        key: `bulto-${indice}`,
+        key: `${prefijo}-${base}-${indice}`,
     }));
 }
 
-export function validarFormularioRecepcion({ almacenId, bultos, cantidadEsperada }) {
+export function foliosBultosRecibidos(resguardo) {
+    if (Array.isArray(resguardo?.bultos_recibidos)) {
+        return resguardo.bultos_recibidos
+            .map((bulto) => String(bulto.folio || '').trim())
+            .filter(Boolean);
+    }
+
+    if (Array.isArray(resguardo?.bultos)) {
+        return resguardo.bultos
+            .filter((bulto) => bulto.estado === 'recibido')
+            .map((bulto) => String(bulto.folio || '').trim())
+            .filter(Boolean);
+    }
+
+    return [];
+}
+
+export function cantidadBultosRecibida(resguardo) {
+    if (typeof resguardo?.cantidad_bultos_recibida === 'number') {
+        return resguardo.cantidad_bultos_recibida;
+    }
+
+    return foliosBultosRecibidos(resguardo).length;
+}
+
+export function cantidadBultosPendiente(resguardo) {
+    if (typeof resguardo?.cantidad_bultos_pendiente === 'number') {
+        return resguardo.cantidad_bultos_pendiente;
+    }
+
+    const esperada = Number(resguardo?.cantidad_bultos_esperada) || 0;
+
+    return Math.max(0, esperada - cantidadBultosRecibida(resguardo));
+}
+
+export function esRecepcionComplementaria(resguardo) {
+    return cantidadBultosRecibida(resguardo) > 0;
+}
+
+export function resguardoAdmiteRecepcion(resguardo, puedeRecibir = null) {
+    if (typeof puedeRecibir === 'boolean') {
+        return puedeRecibir;
+    }
+
+    if (typeof resguardo?.puede_recibir === 'boolean') {
+        return resguardo.puede_recibir;
+    }
+
+    const estadoPermitido = ['pendiente_recepcion', 'en_custodia'].includes(resguardo?.estado);
+
+    return estadoPermitido && cantidadBultosPendiente(resguardo) > 0;
+}
+
+export function resguardoAdmiteEntregaTotal(resguardo) {
+    if (typeof resguardo?.recepcion_completa === 'boolean') {
+        return resguardo.recepcion_completa;
+    }
+
+    const esperada = Number(resguardo?.cantidad_bultos_esperada) || 0;
+
+    return esperada > 0 && cantidadBultosRecibida(resguardo) >= esperada;
+}
+
+export function validarFormularioRecepcion({
+    almacenId,
+    bultos,
+    cantidadPendiente,
+    foliosRecibidos = [],
+}) {
     const errores = {};
 
     if (!almacenId) {
         errores.almacen_id = 'Selecciona la ubicación de custodia.';
     }
 
-    const esperada = Number(cantidadEsperada) || 0;
-    if (!Array.isArray(bultos) || bultos.length !== esperada) {
-        errores.bultos = `Debes registrar exactamente ${esperada} bulto(s).`;
+    const pendiente = Number(cantidadPendiente) || 0;
+    if (pendiente < 1) {
+        errores.bultos = 'Este resguardo ya no tiene bultos pendientes por recibir.';
         return errores;
     }
 
+    if (!Array.isArray(bultos) || bultos.length < 1) {
+        errores.bultos = 'Registra al menos un bulto de esta llegada.';
+        return errores;
+    }
+
+    if (bultos.length > pendiente) {
+        errores.bultos = `Solo faltan ${pendiente} bulto(s); no puedes registrar más en esta llegada.`;
+        return errores;
+    }
+
+    const foliosPrevios = new Set(foliosRecibidos.map((folio) => String(folio).trim()).filter(Boolean));
+
     bultos.forEach((bulto, indice) => {
-        if (!String(bulto.folio || '').trim()) {
+        const folio = String(bulto.folio || '').trim();
+
+        if (!folio) {
             errores[`bultos.${indice}.folio`] = 'El folio del bulto es obligatorio.';
+        } else if (foliosPrevios.has(folio)) {
+            errores[`bultos.${indice}.folio`] = 'El folio ya fue recibido en una llegada anterior.';
         }
+
         if (!bulto.tipo) {
             errores[`bultos.${indice}.tipo`] = 'Selecciona el tipo de bulto.';
         }
@@ -52,10 +141,51 @@ export function validarFormularioRecepcion({ almacenId, bultos, cantidadEsperada
 
     const folios = bultos.map((b) => String(b.folio || '').trim()).filter(Boolean);
     if (folios.length !== new Set(folios).size) {
-        errores.bultos = 'Los folios de bulto deben ser únicos.';
+        errores.bultos = 'Los folios de bulto deben ser únicos en esta llegada.';
     }
 
     return errores;
+}
+
+export function mensajeConfirmacionRecepcion({
+    cantidadLlegada,
+    cantidadPendiente,
+    esComplementaria,
+}) {
+    const llegada = Number(cantidadLlegada) || 0;
+    const pendiente = Number(cantidadPendiente) || 0;
+    const restante = Math.max(0, pendiente - llegada);
+    const completaResguardo = restante === 0;
+
+    if (esComplementaria && !completaResguardo) {
+        return {
+            titulo: 'Confirmar llegada parcial',
+            mensaje: `Se registrará una llegada complementaria de ${llegada} bulto(s). Quedarán ${restante} pendiente(s) por recibir.`,
+            etiquetaConfirmar: 'Sí, registrar llegada parcial',
+        };
+    }
+
+    if (esComplementaria && completaResguardo) {
+        return {
+            titulo: 'Confirmar llegada final',
+            mensaje: `Se registrarán los últimos ${llegada} bulto(s) pendientes y se completará la recepción del resguardo.`,
+            etiquetaConfirmar: 'Sí, completar recepción',
+        };
+    }
+
+    if (!completaResguardo) {
+        return {
+            titulo: 'Confirmar llegada parcial',
+            mensaje: `Se registrará una llegada parcial de ${llegada} bulto(s). Quedarán ${restante} pendiente(s) por recibir.`,
+            etiquetaConfirmar: 'Sí, registrar llegada parcial',
+        };
+    }
+
+    return {
+        titulo: 'Confirmar recepción',
+        mensaje: `Se registrará la recepción total de ${llegada} bulto(s) en custodia. Esta acción no se puede deshacer.`,
+        etiquetaConfirmar: 'Sí, recibir resguardo',
+    };
 }
 
 export function claveIdempotenciaRecepcion(resguardoId) {
@@ -105,11 +235,23 @@ export function mensajeErrorRecepcion(error) {
     const data = error?.response?.data;
 
     if (status === 409) {
-        return data?.message || 'Este resguardo ya fue recibido desde otra terminal.';
+        return data?.message || 'Este resguardo ya recibió todos los bultos esperados.';
     }
 
     if (status === 422 && data?.errors) {
-        const primer = Object.values(data.errors).flat()[0];
+        const errores = data.errors;
+        const prioridad = ['bultos', 'version', 'idempotency_key', 'estado', 'almacen_id'];
+        for (const campo of prioridad) {
+            const mensaje = errores[campo]?.[0];
+            if (typeof mensaje === 'string') return mensaje;
+        }
+
+        const folioError = Object.entries(errores).find(([clave]) => clave.startsWith('bultos.'));
+        if (folioError?.[1]?.[0]) {
+            return folioError[1][0];
+        }
+
+        const primer = Object.values(errores).flat()[0];
         if (typeof primer === 'string') return primer;
     }
 

@@ -3,14 +3,18 @@
 namespace App\Services\PuntoVenta\Resguardos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
+use App\Contracts\PuntoVenta\ResuelvePlazosCustodiaResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvIncidencia;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\AntiguedadOperativaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\BandejaResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class ConsultaBandejasResguardoPdvService
 {
@@ -18,6 +22,8 @@ class ConsultaBandejasResguardoPdvService
 
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly ResuelvePlazosCustodiaResguardoPdv $plazos,
+        private readonly CalcularAntiguedadOperativaResguardoPdvService $antiguedad,
     ) {}
 
     /**
@@ -50,7 +56,7 @@ class ConsultaBandejasResguardoPdvService
         $bandeja = $this->normalizarBandeja($filtros['bandeja'] ?? BandejaResguardoPdv::POR_RECIBIR);
         $filtrosNormalizados = $this->normalizarFiltros($filtros, $bandeja);
         $query = $this->queryBandeja($user, $bandeja);
-        $this->aplicarFiltrosComunes($query, $user, $filtrosNormalizados);
+        $this->aplicarFiltrosComunes($query, $user, $filtrosNormalizados, $bandeja);
         $this->aplicarOrdenBandeja($query, $bandeja);
 
         $perPage = (int) ($filtrosNormalizados['per_page'] ?? self::PER_PAGE);
@@ -73,11 +79,59 @@ class ConsultaBandejasResguardoPdvService
         $metricas = [];
         foreach (BandejaResguardoPdv::valores() as $bandeja) {
             $query = $this->queryBandeja($user, $bandeja);
-            $this->aplicarFiltrosComunes($query, $user, $filtrosBase);
+            $this->aplicarFiltrosComunes($query, $user, $filtrosBase, $bandeja, aplicarAntiguedad: false, excluirVencidos: false);
             $metricas[$bandeja] = $query->count();
         }
 
-        return $metricas;
+        return array_merge($metricas, $this->metricasAntiguedad($user, $filtrosBase));
+    }
+
+    public function antiguedadConfigurada(): bool
+    {
+        $global = $this->plazos->obtenerGlobal();
+
+        return $global !== null && $global['activo'];
+    }
+
+    /**
+     * @param  array<string, mixed>  $filtros
+     */
+    public function contarParaExportacion(User $user, array $filtros = []): int
+    {
+        $bandeja = $this->normalizarBandeja($filtros['bandeja'] ?? BandejaResguardoPdv::POR_RECIBIR);
+        $filtrosNormalizados = $this->normalizarFiltros($filtros, $bandeja);
+        unset($filtrosNormalizados['page'], $filtrosNormalizados['per_page']);
+
+        $query = $this->queryBandeja($user, $bandeja);
+        $this->aplicarFiltrosComunes($query, $user, $filtrosNormalizados, $bandeja);
+
+        return $query->count();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filtros
+     * @return list<array<string, mixed>>
+     */
+    public function filasParaExportacion(User $user, array $filtros = []): array
+    {
+        $bandeja = $this->normalizarBandeja($filtros['bandeja'] ?? BandejaResguardoPdv::POR_RECIBIR);
+        $filtrosNormalizados = $this->normalizarFiltros($filtros, $bandeja);
+        unset($filtrosNormalizados['page'], $filtrosNormalizados['per_page']);
+
+        $query = $this->queryBandeja($user, $bandeja);
+        $this->aplicarFiltrosComunes($query, $user, $filtrosNormalizados, $bandeja);
+        $this->aplicarOrdenBandeja($query, $bandeja);
+
+        $filas = [];
+
+        (clone $query)
+            ->chunkById(200, function (Collection $resguardos) use (&$filas, $bandeja) {
+                foreach ($resguardos as $resguardo) {
+                    $filas[] = $this->serializarResguardoParaExportacion($resguardo, $bandeja);
+                }
+            });
+
+        return $filas;
     }
 
     private function queryBandeja(User $user, string $bandeja): Builder
@@ -122,19 +176,131 @@ class ConsultaBandejasResguardoPdvService
     /**
      * @param  array<string, mixed>  $filtros
      */
-    private function aplicarFiltrosComunes(Builder $query, User $user, array $filtros): void
-    {
+    private function aplicarFiltrosComunes(
+        Builder $query,
+        User $user,
+        array $filtros,
+        string $bandeja,
+        bool $aplicarAntiguedad = true,
+        bool $excluirVencidos = true,
+    ): void {
         $this->validarSucursalFiltro($user, $filtros['sucursal_id'] ?? null);
 
         if (! empty($filtros['estado'])) {
             $query->where('estado', $filtros['estado']);
         }
 
-        // ponytail: antiguedad se persiste en URL/UI; el cálculo depende de 3G (plazos configurables).
+        if ($this->antiguedadConfigurada()) {
+            if ($excluirVencidos
+                && $bandeja === BandejaResguardoPdv::EN_CUSTODIA
+                && ! $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_VENCIDOS)) {
+                $this->restringirIdsPorEvaluacion($query, function (ResguardoPdv $resguardo) {
+                    return ! $this->antiguedad->debeExcluirDeVistaPrincipal($resguardo);
+                });
+            }
+
+            if ($aplicarAntiguedad && ! empty($filtros['antiguedad'])) {
+                $antiguedad = (string) $filtros['antiguedad'];
+                $this->restringirIdsPorEvaluacion($query, function (ResguardoPdv $resguardo) use ($antiguedad) {
+                    return $this->antiguedad->coincideConFiltro($resguardo, $antiguedad);
+                });
+            }
+        }
 
         if (! empty($filtros['q'])) {
             $this->aplicarBusqueda($query, (string) $filtros['q']);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $filtrosBase
+     * @return array<string, int>
+     */
+    private function metricasAntiguedad(User $user, array $filtrosBase): array
+    {
+        if (! $this->antiguedadConfigurada()) {
+            return [];
+        }
+
+        $metricas = [
+            AntiguedadOperativaResguardoPdv::REZAGADO => 0,
+            AntiguedadOperativaResguardoPdv::PROXIMO_A_VENCER => 0,
+            AntiguedadOperativaResguardoPdv::VENCIDO => 0,
+        ];
+
+        $queryRezagado = $this->queryBandeja($user, BandejaResguardoPdv::POR_RECIBIR);
+        $this->aplicarFiltrosComunes($queryRezagado, $user, $filtrosBase, BandejaResguardoPdv::POR_RECIBIR, aplicarAntiguedad: false, excluirVencidos: false);
+        $metricas[AntiguedadOperativaResguardoPdv::REZAGADO] = $this->contarPorClasificacion(
+            $queryRezagado,
+            AntiguedadOperativaResguardoPdv::REZAGADO
+        );
+
+        $queryCustodia = $this->queryBandeja($user, BandejaResguardoPdv::EN_CUSTODIA);
+        $this->aplicarFiltrosComunes($queryCustodia, $user, $filtrosBase, BandejaResguardoPdv::EN_CUSTODIA, aplicarAntiguedad: false, excluirVencidos: false);
+        $metricas[AntiguedadOperativaResguardoPdv::PROXIMO_A_VENCER] = $this->contarPorClasificacion(
+            $queryCustodia,
+            AntiguedadOperativaResguardoPdv::PROXIMO_A_VENCER
+        );
+        $metricas[AntiguedadOperativaResguardoPdv::VENCIDO] = $this->contarPorClasificacion(
+            $queryCustodia,
+            AntiguedadOperativaResguardoPdv::VENCIDO
+        );
+
+        return $metricas;
+    }
+
+    private function contarPorClasificacion(Builder $query, string $clasificacion): int
+    {
+        $total = 0;
+
+        (clone $query)
+            ->select(['id', 'sucursal_id', 'estado', 'salida_cedis_at', 'recepcion_fisica_at', 'entrega_completada_at', 'devolucion_confirmada_at', 'vencido_repuesto_at'])
+            ->orderBy('id')
+            ->chunkById(200, function (Collection $resguardos) use ($clasificacion, &$total) {
+                foreach ($resguardos as $resguardo) {
+                    if ($this->antiguedad->coincideConFiltro($resguardo, $clasificacion)) {
+                        $total++;
+                    }
+                }
+            });
+
+        return $total;
+    }
+
+    /**
+     * @param  callable(ResguardoPdv): bool  $acepta
+     */
+    private function restringirIdsPorEvaluacion(Builder $query, callable $acepta): void
+    {
+        $ids = (clone $query)->pluck('id');
+        if ($ids->isEmpty()) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $permitidos = ResguardoPdv::query()
+            ->whereIn('id', $ids)
+            ->get([
+                'id',
+                'sucursal_id',
+                'estado',
+                'salida_cedis_at',
+                'recepcion_fisica_at',
+                'entrega_completada_at',
+                'devolucion_confirmada_at',
+                'vencido_repuesto_at',
+            ])
+            ->filter($acepta)
+            ->pluck('id');
+
+        if ($permitidos->isEmpty()) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->whereIn('id', $permitidos->all());
     }
 
     private function validarSucursalFiltro(User $user, mixed $sucursalId): void
@@ -165,6 +331,10 @@ class ConsultaBandejasResguardoPdvService
         $query->where(function (Builder $q) use ($like, $termino) {
             $q->where('snapshot_folio', 'like', $like)
                 ->orWhere('snapshot_cliente_nombre', 'like', $like)
+                ->orWhereHas('bultos', function (Builder $bultos) use ($termino) {
+                    $bultos->where('codigo_etiqueta', $termino)
+                        ->orWhere('folio', 'like', '%'.$termino.'%');
+                })
                 ->orWhereHas('pedido', function (Builder $pedido) use ($like, $termino) {
                     $pedido->where('folio', 'like', $like)
                         ->orWhere('folio_remision', 'like', $like);
@@ -209,6 +379,22 @@ class ConsultaBandejasResguardoPdvService
      */
     private function serializarResguardo(ResguardoPdv $resguardo): array
     {
+        $evaluacion = $this->antiguedadConfigurada()
+            ? $this->antiguedad->evaluar($resguardo)
+            : [
+                'clasificaciones' => $this->antiguedad->clasificacionesVacias(),
+                'fecha_limite_custodia' => null,
+                'fecha_limite_rezago' => null,
+                'plazos_snapshot' => null,
+            ];
+
+        $clasificacionesEtiquetas = [];
+        foreach ($evaluacion['clasificaciones'] as $clave => $activa) {
+            if ($activa) {
+                $clasificacionesEtiquetas[] = EtiquetasResguardoPdv::antiguedades()[$clave] ?? $clave;
+            }
+        }
+
         return [
             'id' => $resguardo->id,
             'estado' => $resguardo->estado,
@@ -220,6 +406,10 @@ class ConsultaBandejasResguardoPdvService
             'recepcion_fisica_at' => $resguardo->recepcion_fisica_at?->toIso8601String(),
             'entrega_bloqueada' => $resguardo->entrega_bloqueada,
             'incidencias_abiertas_count' => (int) ($resguardo->incidencias_abiertas_count ?? 0),
+            'clasificaciones' => $evaluacion['clasificaciones'],
+            'clasificaciones_etiquetas' => $clasificacionesEtiquetas,
+            'fecha_limite_custodia' => $evaluacion['fecha_limite_custodia'],
+            'fecha_limite_rezago' => $evaluacion['fecha_limite_rezago'],
             'sucursal' => $resguardo->sucursal ? [
                 'id' => $resguardo->sucursal->id,
                 'nombre' => $resguardo->sucursal->nombre,
@@ -261,5 +451,47 @@ class ConsultaBandejasResguardoPdvService
         return in_array($bandeja, BandejaResguardoPdv::valores(), true)
             ? $bandeja
             : BandejaResguardoPdv::POR_RECIBIR;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializarResguardoParaExportacion(ResguardoPdv $resguardo, string $bandeja): array
+    {
+        $serializado = $this->serializarResguardo($resguardo);
+
+        return [
+            'id' => $serializado['id'],
+            'bandeja' => EtiquetasResguardoPdv::bandejas()[$bandeja] ?? $bandeja,
+            'folio' => $serializado['snapshot_folio'],
+            'estado' => EtiquetasResguardoPdv::etiquetaEstado((string) $serializado['estado']),
+            'sucursal' => $serializado['sucursal']['nombre'] ?? '',
+            'numero_cliente' => $serializado['cliente']['numero_cliente'] ?? '',
+            'cliente' => $serializado['snapshot_cliente_nombre'] ?? ($serializado['cliente']['nombre'] ?? ''),
+            'pedido_id' => $serializado['pedido']['id'] ?? $serializado['pedido_bma_id'] ?? '',
+            'pedido_folio' => $serializado['pedido']['folio'] ?? '',
+            'pedido_remision' => $serializado['pedido']['folio_remision'] ?? '',
+            'bultos_esperados' => $serializado['cantidad_bultos_esperada'],
+            'incidencias_abiertas' => $serializado['incidencias_abiertas_count'],
+            'salida_cedis' => $this->formatearFechaExportacion($serializado['salida_cedis_at'] ?? null),
+            'recepcion_fisica' => $this->formatearFechaExportacion($serializado['recepcion_fisica_at'] ?? null),
+            'clasificaciones' => implode('; ', $serializado['clasificaciones_etiquetas'] ?? []),
+            'fecha_limite_custodia' => $this->formatearFechaExportacion($serializado['fecha_limite_custodia'] ?? null),
+            'fecha_limite_rezago' => $this->formatearFechaExportacion($serializado['fecha_limite_rezago'] ?? null),
+            'entrega_bloqueada' => ! empty($serializado['entrega_bloqueada']) ? 'Sí' : 'No',
+        ];
+    }
+
+    private function formatearFechaExportacion(mixed $valor): string
+    {
+        if ($valor === null || $valor === '') {
+            return '';
+        }
+
+        try {
+            return \Carbon\Carbon::parse($valor)->timezone(config('app.timezone'))->format('Y-m-d H:i');
+        } catch (\Throwable) {
+            return (string) $valor;
+        }
     }
 }

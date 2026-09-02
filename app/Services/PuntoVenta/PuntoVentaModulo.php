@@ -30,6 +30,8 @@ final class PuntoVentaModulo
 
     public const PERMISO_RESGUARDOS_CONFIRMAR_DEVOLUCION = 'pdv.resguardos.confirmar_devolucion';
 
+    public const PERMISO_RESGUARDOS_CORREGIR = 'pdv.resguardos.corregir';
+
     public const PERMISO_REPORTES_EXPORTAR = 'pdv.reportes.exportar';
 
     /**
@@ -49,6 +51,7 @@ final class PuntoVentaModulo
             self::PERMISO_RESGUARDOS_REPONER_VENCIDO,
             self::PERMISO_RESGUARDOS_AUTORIZAR_ENTREGA_INCIDENCIA,
             self::PERMISO_RESGUARDOS_CONFIRMAR_DEVOLUCION,
+            self::PERMISO_RESGUARDOS_CORREGIR,
             AlcancePdv::PERMISO_ALCANCE_GLOBAL,
             self::PERMISO_REPORTES_EXPORTAR,
         ];

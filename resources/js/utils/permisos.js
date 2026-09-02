@@ -266,6 +266,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'pdv.resguardos.reponer_vencido': 'Permite reponer un resguardo vencido en custodia.',
     'pdv.resguardos.autorizar_entrega_incidencia': 'Permite autorizar entrega con incidencia abierta.',
     'pdv.resguardos.confirmar_devolucion': 'Permite confirmar la devolución de mercancía en custodia.',
+    'pdv.resguardos.corregir': 'Permite aplicar correcciones administrativas auditadas sobre resguardos.',
     'pdv.alcance.global': 'Permite operar y consultar en todas las sucursales asignadas (alcance global).',
     'pdv.reportes.exportar': 'Permite exportar reportes del punto de venta.',
 };
@@ -311,6 +312,7 @@ export const ETIQUETAS_PERMISOS = {
     'pdv.resguardos.reponer_vencido': 'reponer vencido',
     'pdv.resguardos.autorizar_entrega_incidencia': 'autorizar entrega con incidencia',
     'pdv.resguardos.confirmar_devolucion': 'confirmar devolución',
+    'pdv.resguardos.corregir': 'corregir resguardo',
     'pdv.alcance.global': 'alcance global',
     'pdv.reportes.exportar': 'exportar reportes',
 };
@@ -1149,6 +1151,7 @@ export const SUBMODULOS_UI_POR_MODULO = {
                 'pdv.resguardos.reponer_vencido',
                 'pdv.resguardos.autorizar_entrega_incidencia',
                 'pdv.resguardos.confirmar_devolucion',
+                'pdv.resguardos.corregir',
             ],
         },
         {

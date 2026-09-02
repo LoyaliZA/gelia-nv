@@ -21,6 +21,8 @@ class ResguardoPdvEvento extends Model
 
     public const TIPO_INCIDENCIA_FALTANTE = 'resguardo.incidencia_faltante';
 
+    public const TIPO_INCIDENCIA_CERRADA = 'resguardo.incidencia_cerrada';
+
     public const TIPO_INCIDENCIA_ENTREGA_AUTORIZADA = 'resguardo.incidencia_entrega_autorizada';
 
     public const TIPO_ENTREGA_TITULAR = 'resguardo.entrega_titular';
@@ -40,6 +42,10 @@ class ResguardoPdvEvento extends Model
     public const TIPO_CANCELACION_RECIBIDA = 'resguardo.cancelacion_recibida';
 
     public const TIPO_DEVOLUCION_CONFIRMADA = 'resguardo.devolucion_confirmada';
+
+    public const TIPO_CORRECCION_ADMINISTRATIVA = 'resguardo.correccion_administrativa';
+
+    public const TIPO_ETIQUETAS_GENERADAS = 'resguardo.etiquetas_generadas';
 
     protected $table = 'pdv_resguardo_eventos';
 

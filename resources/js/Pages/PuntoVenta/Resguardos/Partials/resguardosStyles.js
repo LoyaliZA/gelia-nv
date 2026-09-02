@@ -33,6 +33,15 @@ export function badgeEstadoResguardo(estado) {
     return mapa[estado] || 'bg-black/5 dark:bg-white/10 theme-text-muted';
 }
 
+export function badgeEstadoIncidencia(estado) {
+    const mapa = {
+        abierta: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+        autorizada: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+        cerrada: 'bg-slate-500/15 text-slate-700 dark:text-slate-300',
+    };
+    return mapa[estado] || 'bg-black/5 dark:bg-white/10 theme-text-muted';
+}
+
 export function badgeAntiguedad(clave) {
     const mapa = {
         rezagado: 'bg-orange-500/15 text-orange-700 dark:text-orange-300',

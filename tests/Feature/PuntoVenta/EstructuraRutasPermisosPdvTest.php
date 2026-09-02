@@ -28,7 +28,12 @@ class EstructuraRutasPermisosPdvTest extends TestCase
     {
         $this->assertTrue(Route::has('punto_venta.resguardos.index'));
         $this->assertTrue(Route::has('punto_venta.resguardos.listado'));
+        $this->assertTrue(Route::has('punto_venta.resguardos.exportaciones.store'));
+        $this->assertTrue(Route::has('punto_venta.resguardos.exportaciones.descargar'));
+        $this->assertTrue(Route::has('punto_venta.resguardos.auditoria'));
         $this->assertTrue(Route::has('punto_venta.resguardos.show'));
+        $this->assertTrue(Route::has('punto_venta.resguardos.etiquetas.descargar'));
+        $this->assertTrue(Route::has('punto_venta.resguardos.etiquetas.resolver'));
         $this->assertTrue(Route::has('punto_venta.reportes.index'));
         $this->assertTrue(Route::has('control_pedidos.index'));
 

@@ -7,6 +7,7 @@ use App\Models\Almacen;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
@@ -37,6 +38,7 @@ class ConsultaFormularioRecepcionFisicaPdvService
             'sucursal:id,nombre',
             'cliente:id,numero_cliente',
             'pedido:id,folio,folio_remision',
+            'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
         ]);
 
         $almacenes = Almacen::query()
@@ -61,7 +63,7 @@ class ConsultaFormularioRecepcionFisicaPdvService
                 'condiciones_bulto' => EtiquetasResguardoPdv::condicionesBulto(),
                 'estados' => EtiquetasResguardoPdv::estados(),
             ],
-            'puede_recibir' => $resguardo->estado === ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+            'puede_recibir' => EstadoRecepcionResguardoPdv::admiteRecepcion($resguardo),
         ];
     }
 
@@ -78,7 +80,17 @@ class ConsultaFormularioRecepcionFisicaPdvService
             'snapshot_folio' => $resguardo->snapshot_folio,
             'referencia_cliente' => $this->referenciaCliente($resguardo),
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
+            'cantidad_bultos_recibida' => EstadoRecepcionResguardoPdv::cantidadRecibida($resguardo),
+            'cantidad_bultos_pendiente' => EstadoRecepcionResguardoPdv::cantidadPendiente($resguardo),
+            'recepcion_completa' => EstadoRecepcionResguardoPdv::recepcionCompleta($resguardo),
             'salida_cedis_at' => $resguardo->salida_cedis_at?->toIso8601String(),
+            'bultos_recibidos' => EstadoRecepcionResguardoPdv::bultosRecibidos($resguardo)
+                ->map(fn ($bulto) => [
+                    'id' => $bulto->id,
+                    'folio' => $bulto->folio,
+                    'tipo' => $bulto->tipo,
+                    'recepcion_at' => $bulto->recepcion_at?->toIso8601String(),
+                ])->values()->all(),
             'sucursal' => $resguardo->sucursal ? [
                 'id' => $resguardo->sucursal->id,
                 'nombre' => $resguardo->sucursal->nombre,

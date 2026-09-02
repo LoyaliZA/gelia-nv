@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Head } from '@inertiajs/react';
-import { Package, Loader2, AlertTriangle } from 'lucide-react';
+import { Package, Loader2, AlertTriangle, MapPin } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
@@ -9,16 +9,11 @@ import { geliaCardClass, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } f
 import FiltrosResguardos from './Partials/FiltrosResguardos';
 import ListadoResguardos from './Partials/ListadoResguardos';
 import BusquedaRapidaRecepcion from './Partials/BusquedaRapidaRecepcion';
+import AlertasCustodiaResguardo from './Partials/AlertasCustodiaResguardo';
 import useListadoResguardos from './Partials/useListadoResguardos';
-import { paramsListadoResguardos } from './Partials/resguardosUtils';
+import { antiguedadValidaEnBandeja, paramsListadoResguardos } from './Partials/resguardosUtils';
 
 const BANDEJAS = ['por_recibir', 'en_custodia', 'incidencias'];
-
-const METRICAS_ANTIGUEDAD = [
-    { key: 'rezagado', tone: 'text-orange-600' },
-    { key: 'proximo_a_vencer', tone: 'text-amber-600' },
-    { key: 'vencido', tone: 'text-red-600' },
-];
 
 export default function Index({
     auth,
@@ -28,7 +23,11 @@ export default function Index({
     bandeja: bandejaInicial,
     catalogos = {},
     permisos = {},
+    sucursal_activa: sucursalActiva = null,
+    operativa = {},
 }) {
+    const antiguedadConfigurada = Boolean(operativa.antiguedad_configurada);
+
     const {
         resguardos: resguardosVista,
         metricas: metricasVista,
@@ -70,7 +69,18 @@ export default function Index({
 
     const onBandeja = (nuevaBandeja) => {
         setBandejaActiva(nuevaBandeja);
-        recargar({ bandeja: nuevaBandeja, page: 1 });
+        const extra = { bandeja: nuevaBandeja, page: 1 };
+
+        if (nuevaBandeja === 'por_recibir' && estado) {
+            setEstado('');
+            extra.estado = undefined;
+        }
+        if (!antiguedadValidaEnBandeja(nuevaBandeja, antiguedad)) {
+            setAntiguedad('');
+            extra.antiguedad = undefined;
+        }
+
+        recargar(extra);
     };
 
     const onBusqueda = (valor) => {
@@ -115,52 +125,80 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Resguardos | Punto de Venta" />
-            <GeliaPageShell className="space-y-6">
+            <GeliaPageShell className="space-y-5">
                 <GeliaTituloCard
                     eyebrow="Punto de Venta"
                     title="Resguardos"
                     titleHighlight="en sucursal"
-                    description="Consulta recepciones esperadas, custodia e incidencias de la sucursal activa."
-                    icon={Package}
-                />
+                    icon={null}
+                    aside={(
+                        <div className="p-2.5 rounded-xl theme-element border theme-border flex items-center justify-center shrink-0 self-start md:self-center">
+                            <Package className="w-5 h-5" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                        </div>
+                    )}
+                    className="!p-4 md:!p-5 lg:!p-6 !gap-3 md:!gap-4 [&_h1]:!text-2xl sm:[&_h1]:!text-3xl md:[&_h1]:!text-3xl"
+                >
+                    {sucursalActiva?.nombre && (
+                        <p className="text-[10px] md:text-[11px] font-bold theme-text-muted uppercase tracking-widest m-0 flex items-center gap-1.5 flex-wrap">
+                            <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                            <span>
+                                Sucursal:{' '}
+                                <span className="theme-text-main">{sucursalActiva.nombre}</span>
+                            </span>
+                        </p>
+                    )}
+                </GeliaTituloCard>
 
                 <BusquedaRapidaRecepcion puedeRecibir={Boolean(permisos.recibir)} />
 
-                <div className={`${geliaCardClass()} p-2`}>
-                    <div className={GELIA_SEGMENT_TABS_SCROLL}>
-                        <div className={GELIA_SEGMENT_TABS_TRACK}>
-                            {metricasBandeja.map(({ clave, etiqueta, total }) => (
+                <div className={GELIA_SEGMENT_TABS_SCROLL}>
+                    <div
+                        className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK} p-1 shadow-sm`}
+                        role="tablist"
+                        aria-label="Bandejas de resguardos"
+                    >
+                        {metricasBandeja.map(({ clave, etiqueta, total }) => {
+                            const activa = bandejaRender === clave;
+                            return (
                                 <button
                                     key={clave}
                                     type="button"
+                                    role="tab"
+                                    aria-selected={activa}
+                                    data-active={activa}
                                     onClick={() => onBandeja(clave)}
-                                    className={`gelia-segment-tab ${bandejaRender === clave ? 'gelia-segment-tab--active' : ''}`}
+                                    className="gelia-segment-btn whitespace-nowrap gap-2"
                                 >
                                     <span>{etiqueta}</span>
-                                    <span className="tabular-nums opacity-80">({total})</span>
+                                    <span
+                                        className={`text-[9px] font-black px-1.5 py-0.5 rounded-md tabular-nums border ${
+                                            activa
+                                                ? 'border-[var(--color-primario)]/30 bg-[var(--color-primario)]/10 text-[var(--color-primario)]'
+                                                : 'theme-element theme-border theme-text-muted'
+                                        }`}
+                                    >
+                                        {total}
+                                    </span>
                                 </button>
-                            ))}
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {METRICAS_ANTIGUEDAD.map(({ key, tone }) => {
-                        if (key === 'vencido' && !permisos.ver_vencidos) return null;
-                        return (
-                            <div key={key} className={`${geliaCardClass()} p-4`}>
-                                <p className="text-[9px] font-black uppercase tracking-widest theme-text-muted m-0">
-                                    {catalogos.antiguedades?.[key] || key}
-                                </p>
-                                <p className={`text-2xl font-black m-0 mt-1 tabular-nums ${tone}`}>
-                                    {metricasVista?.[key] ?? 0}
-                                </p>
-                            </div>
-                        );
-                    })}
-                </div>
+                {(bandejaRender === 'en_custodia' || bandejaRender === 'por_recibir') && (
+                    <AlertasCustodiaResguardo
+                        bandeja={bandejaRender}
+                        catalogos={catalogos}
+                        metricas={metricasVista}
+                        antiguedadActiva={antiguedad}
+                        onAntiguedad={onAntiguedad}
+                        antiguedadConfigurada={antiguedadConfigurada}
+                        puedeVerVencidos={Boolean(permisos.ver_vencidos)}
+                    />
+                )}
 
                 <FiltrosResguardos
+                    bandeja={bandejaRender}
                     busqueda={busqueda}
                     onBusqueda={onBusqueda}
                     estado={estado}
@@ -169,6 +207,7 @@ export default function Index({
                     onAntiguedad={onAntiguedad}
                     catalogos={catalogos}
                     puedeVerVencidos={Boolean(permisos.ver_vencidos)}
+                    antiguedadConfigurada={antiguedadConfigurada}
                     cargando={cargando}
                     hayFiltrosActivos={hayFiltrosActivos}
                     onLimpiar={onLimpiar}

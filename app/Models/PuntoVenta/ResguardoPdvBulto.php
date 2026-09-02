@@ -38,6 +38,7 @@ class ResguardoPdvBulto extends Model
         'resguardo_id',
         'pedido_bma_id',
         'folio',
+        'codigo_etiqueta',
         'tipo',
         'estado',
         'recepcion_at',

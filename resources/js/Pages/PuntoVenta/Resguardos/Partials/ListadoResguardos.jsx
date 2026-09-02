@@ -14,6 +14,7 @@ import {
     claseVistaTarjetas,
     etiquetasClasificacionActivas,
     mensajeVacioBandeja,
+    plazosOperativosResguardo,
     referenciaCliente,
 } from './resguardosUtils';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
@@ -44,7 +45,31 @@ function BadgesResguardo({ resguardo, catalogos }) {
     );
 }
 
-function FechaOperativa({ resguardo, bandeja }) {
+function claseTextoPlazo(clasificacion) {
+    if (clasificacion === 'vencido') return 'font-bold text-red-700 dark:text-red-300';
+    if (clasificacion === 'rezagado') return 'font-bold text-orange-700 dark:text-orange-300';
+    if (clasificacion === 'proximo_a_vencer') return 'font-bold text-amber-700 dark:text-amber-300';
+    return 'theme-text-muted';
+}
+
+function FechasOperativasResguardo({ resguardo, bandeja }) {
+    const plazos = plazosOperativosResguardo(resguardo);
+
+    if (plazos.length > 0) {
+        return (
+            <div className="space-y-0.5">
+                {plazos.map(({ id, etiqueta, fecha, clasificacion }) => (
+                    <p
+                        key={id}
+                        className={`text-[10px] m-0 ${claseTextoPlazo(clasificacion)}`}
+                    >
+                        {etiqueta}: {formatearFechaOperativa(fecha)}
+                    </p>
+                ))}
+            </div>
+        );
+    }
+
     if (bandeja === 'en_custodia') {
         return (
             <p className="text-[10px] theme-text-muted m-0">
@@ -77,7 +102,7 @@ function TarjetaResguardo({ resguardo, bandeja, catalogos, puedeRecibir, puedeEn
                     <p className="text-[10px] font-bold theme-text-muted m-0">
                         Cliente {referenciaCliente(resguardo)}
                     </p>
-                    <FechaOperativa resguardo={resguardo} bandeja={bandeja} />
+                    <FechasOperativasResguardo resguardo={resguardo} bandeja={bandeja} />
                 </div>
                 <p className="text-[10px] font-black theme-text-muted m-0 shrink-0">
                     {resguardo.cantidad_bultos_esperada} bulto{resguardo.cantidad_bultos_esperada === 1 ? '' : 's'}
@@ -135,7 +160,7 @@ function FilaTablaResguardo({ resguardo, bandeja, catalogos, puedeRecibir, puede
                 {clasificaciones.length > 0 ? clasificaciones.join(' · ') : '—'}
             </td>
             <td className="px-4 py-3 text-[10px] theme-text-muted whitespace-nowrap">
-                <FechaOperativa resguardo={resguardo} bandeja={bandeja} />
+                <FechasOperativasResguardo resguardo={resguardo} bandeja={bandeja} />
             </td>
             <td className="px-4 py-3 text-right">
                 <div className="flex flex-wrap justify-end gap-2">
@@ -182,7 +207,7 @@ export default function ListadoResguardos({
         return (
             <div className={`${geliaCardClass()} p-10 md:p-16 text-center space-y-3`}>
                 <p className="text-sm theme-text-muted font-bold uppercase tracking-widest m-0">
-                    {mensajeVacioBandeja(bandeja, catalogos.bandejas)}
+                    {mensajeVacioBandeja(bandeja, catalogos.bandejas, hayFiltrosActivos)}
                 </p>
                 {hayFiltrosActivos && onLimpiarFiltros && (
                     <button type="button" onClick={onLimpiarFiltros} className={`${BTN_SECONDARY} text-xs`}>

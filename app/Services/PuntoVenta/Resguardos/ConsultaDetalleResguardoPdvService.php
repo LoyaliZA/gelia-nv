@@ -4,16 +4,19 @@ namespace App\Services\PuntoVenta\Resguardos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\ResguardoPdv;
-use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
+use App\Support\PuntoVenta\Resguardos\SerializadorIncidenciaResguardoPdv;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class ConsultaDetalleResguardoPdvService
 {
     public function __construct(
         private readonly ResuelveAlcancePdv $alcance,
+        private readonly CalcularAntiguedadOperativaResguardoPdvService $antiguedad,
+        private readonly PlazosCustodiaResguardoPdvConfig $plazos,
+        private readonly ConsultaAuditoriaResguardoPdvService $auditoria,
     ) {}
 
     /**
@@ -33,19 +36,21 @@ class ConsultaDetalleResguardoPdvService
             'cliente:id,numero_cliente',
             'pedido:id,folio,folio_remision',
             'bultos' => fn ($q) => $q->orderBy('folio')->orderBy('id'),
-            'incidencias' => fn ($q) => $q->orderByDesc('reportado_at')->orderByDesc('id'),
-            'eventos' => fn ($q) => $q
-                ->with('actor:id,username')
-                ->orderByDesc('ocurrido_at')
+            'incidencias' => fn ($q) => $q
+                ->with([
+                    'evidencias',
+                    'reportadoPor:id,username',
+                    'autorizadoPor:id,username',
+                ])
+                ->orderByDesc('reportado_at')
                 ->orderByDesc('id'),
         ]);
 
+        $auditoria = $this->auditoria->obtener($user, $resguardo);
+
         return [
             'resguardo' => $this->serializarResguardo($resguardo),
-            'timeline' => $resguardo->eventos
-                ->map(fn (ResguardoPdvEvento $evento) => $this->serializarEvento($evento))
-                ->values()
-                ->all(),
+            'timeline' => $auditoria['timeline'],
         ];
     }
 
@@ -54,8 +59,26 @@ class ConsultaDetalleResguardoPdvService
      */
     private function serializarResguardo(ResguardoPdv $resguardo): array
     {
+        $antiguedadConfigurada = $this->antiguedadConfigurada();
+        $evaluacion = $antiguedadConfigurada
+            ? $this->antiguedad->evaluar($resguardo)
+            : [
+                'clasificaciones' => $this->antiguedad->clasificacionesVacias(),
+                'fecha_limite_custodia' => null,
+                'fecha_limite_rezago' => null,
+                'plazos_snapshot' => null,
+            ];
+
+        $clasificacionesEtiquetas = [];
+        foreach ($evaluacion['clasificaciones'] as $clave => $activa) {
+            if ($activa) {
+                $clasificacionesEtiquetas[] = EtiquetasResguardoPdv::antiguedades()[$clave] ?? $clave;
+            }
+        }
+
         return [
             'id' => $resguardo->id,
+            'version' => (int) $resguardo->version,
             'estado' => $resguardo->estado,
             'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
             'pedido_bma_id' => $resguardo->pedido_bma_id,
@@ -67,6 +90,11 @@ class ConsultaDetalleResguardoPdvService
             'entrega_completada_at' => $resguardo->entrega_completada_at?->toIso8601String(),
             'devolucion_confirmada_at' => $resguardo->devolucion_confirmada_at?->toIso8601String(),
             'entrega_bloqueada' => $resguardo->entrega_bloqueada,
+            'clasificaciones' => $evaluacion['clasificaciones'],
+            'clasificaciones_etiquetas' => $clasificacionesEtiquetas,
+            'fecha_limite_custodia' => $evaluacion['fecha_limite_custodia'],
+            'fecha_limite_rezago' => $evaluacion['fecha_limite_rezago'],
+            'antiguedad_configurada' => $antiguedadConfigurada,
             'sucursal' => $resguardo->sucursal ? [
                 'id' => $resguardo->sucursal->id,
                 'nombre' => $resguardo->sucursal->nombre,
@@ -79,41 +107,16 @@ class ConsultaDetalleResguardoPdvService
             'bultos' => $resguardo->bultos->map(fn ($bulto) => [
                 'id' => $bulto->id,
                 'folio' => $bulto->folio,
+                'codigo_etiqueta' => $bulto->codigo_etiqueta,
                 'tipo' => $bulto->tipo,
                 'estado' => $bulto->estado,
                 'recepcion_at' => $bulto->recepcion_at?->toIso8601String(),
                 'entrega_at' => $bulto->entrega_at?->toIso8601String(),
             ])->values()->all(),
-            'incidencias' => $resguardo->incidencias->map(fn ($incidencia) => [
-                'id' => $incidencia->id,
-                'tipo' => $incidencia->tipo,
-                'tipo_etiqueta' => EtiquetasResguardoPdv::tiposIncidencia()[$incidencia->tipo] ?? $incidencia->tipo,
-                'estado' => $incidencia->estado,
-                'descripcion' => $incidencia->descripcion,
-                'reportado_at' => $incidencia->reportado_at?->toIso8601String(),
-            ])->values()->all(),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializarEvento(ResguardoPdvEvento $evento): array
-    {
-        return [
-            'id' => $evento->id,
-            'tipo_evento' => $evento->tipo_evento,
-            'tipo_etiqueta' => EtiquetasResguardoPdv::etiquetaEvento($evento->tipo_evento),
-            'estado_anterior' => $evento->estado_anterior,
-            'estado_nuevo' => $evento->estado_nuevo,
-            'estado_anterior_etiqueta' => $evento->estado_anterior
-                ? EtiquetasResguardoPdv::etiquetaEstado($evento->estado_anterior)
-                : null,
-            'estado_nuevo_etiqueta' => $evento->estado_nuevo
-                ? EtiquetasResguardoPdv::etiquetaEstado($evento->estado_nuevo)
-                : null,
-            'ocurrido_at' => $evento->ocurrido_at?->toIso8601String(),
-            'actor_referencia' => $this->referenciaActor($evento->actor),
+            'incidencias' => $resguardo->incidencias
+                ->map(fn ($incidencia) => SerializadorIncidenciaResguardoPdv::incidencia($incidencia))
+                ->values()
+                ->all(),
         ];
     }
 
@@ -128,16 +131,10 @@ class ConsultaDetalleResguardoPdvService
         return $resguardo->snapshot_folio ?: 'Sin referencia';
     }
 
-    private function referenciaActor(?User $actor): ?string
+    private function antiguedadConfigurada(): bool
     {
-        if (! $actor instanceof User) {
-            return null;
-        }
+        $global = $this->plazos->obtenerGlobal();
 
-        if (filled($actor->username)) {
-            return '@'.$actor->username;
-        }
-
-        return 'Colaborador';
+        return $global !== null && $global['activo'];
     }
 }

@@ -79,6 +79,81 @@ class NotificarResguardoPdvService
         );
     }
 
+    public function proximoAVencer(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
+    {
+        $this->enviar(
+            $resguardo,
+            $sucursalId,
+            $idempotencyKey,
+            AlertaResguardoPdvNotification::TIPO_PROXIMO_A_VENCER,
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_VER],
+            'Próximo a vencer',
+            "Resguardo {$this->folio($resguardo)} está por vencer su plazo de custodia."
+        );
+    }
+
+    public function vencido(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
+    {
+        $this->enviar(
+            $resguardo,
+            $sucursalId,
+            $idempotencyKey,
+            AlertaResguardoPdvNotification::TIPO_VENCIDO,
+            [
+                PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_VER_VENCIDOS,
+            ],
+            'Custodia vencida',
+            "Resguardo {$this->folio($resguardo)} superó el plazo de custodia."
+        );
+    }
+
+    public function escalamientoVencido(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
+    {
+        $this->enviar(
+            $resguardo,
+            $sucursalId,
+            $idempotencyKey,
+            AlertaResguardoPdvNotification::TIPO_ESCALAMIENTO,
+            [PuntoVentaModulo::PERMISO_RESGUARDOS_REPONER_VENCIDO],
+            'Escalamiento por vencimiento',
+            "Resguardo {$this->folio($resguardo)} requiere atención por custodia vencida.",
+            ['escalamiento_contexto' => 'vencido'],
+        );
+    }
+
+    public function escalamientoRezago(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
+    {
+        $this->enviar(
+            $resguardo,
+            $sucursalId,
+            $idempotencyKey,
+            AlertaResguardoPdvNotification::TIPO_ESCALAMIENTO,
+            [
+                PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR,
+                PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
+            ],
+            'Escalamiento por rezago',
+            "Resguardo {$this->folio($resguardo)} lleva demasiado tiempo sin recepción física.",
+            ['escalamiento_contexto' => 'rezagado'],
+        );
+    }
+
+    /**
+     * @param  list<string>  $permisos
+     */
+    public function requiereNotificacion(
+        int $sucursalId,
+        array $permisos,
+        string $idempotencyKey,
+        string $tipoAlerta,
+    ): bool {
+        $claveNotificacion = $this->claveNotificacion($tipoAlerta, $idempotencyKey);
+        $destinatarios = $this->resolverDestinatarios($sucursalId, $permisos);
+
+        return $this->excluirDuplicados($destinatarios, $claveNotificacion)->isNotEmpty();
+    }
+
     /**
      * @param  list<string>  $permisos
      * @param  array<string, mixed>  $extras

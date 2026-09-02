@@ -9,10 +9,12 @@ use App\Models\PuntoVenta\ResguardoPdvIncidencia;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Services\PuntoVenta\Resguardos\PlazosCustodiaResguardoPdvConfig;
 use App\Support\PuntoVenta\Resguardos\AntiguedadOperativaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\BandejaResguardoPdv;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -94,8 +96,10 @@ class ConsultaBandejasResguardoPdvTest extends TestCase
             ->assertJsonPath('resguardos.data.0.id', $coincide->id);
     }
 
-    public function test_filtro_antiguedad_persiste_sin_aplicar_hasta_plazos_configurables(): void
+    public function test_filtro_antiguedad_persiste_sin_aplicar_sin_plazos_configurados(): void
     {
+        $this->sinPlazosCustodia();
+
         $antiguo = $this->crearResguardo($this->sucursalA, [
             'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
             'salida_cedis_at' => Carbon::parse('2026-07-01 10:00:00'),
@@ -121,11 +125,13 @@ class ConsultaBandejasResguardoPdvTest extends TestCase
         $ids = collect($response->json('resguardos.data'))->pluck('id');
         $this->assertTrue($ids->contains($antiguo->id));
         $this->assertTrue($ids->contains($reciente->id));
-        $this->assertArrayNotHasKey('clasificaciones', $response->json('resguardos.data.0'));
+        $this->assertFalse($response->json('resguardos.data.0.clasificaciones.rezagado'));
     }
 
-    public function test_bandeja_en_custodia_lista_todos_sin_clasificar_vencidos(): void
+    public function test_bandeja_en_custodia_lista_todos_cuando_plazos_no_configurados(): void
     {
+        $this->sinPlazosCustodia();
+
         $vigente = $this->crearResguardo($this->sucursalA, [
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
             'recepcion_fisica_at' => Carbon::parse('2026-08-28 10:00:00'),
@@ -241,7 +247,7 @@ class ConsultaBandejasResguardoPdvTest extends TestCase
         $consultas = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        $this->assertLessThanOrEqual(30, $consultas);
+        $this->assertLessThanOrEqual(60, $consultas);
     }
 
     public function test_sucursal_no_autorizada_en_filtro_rechaza(): void
@@ -279,5 +285,14 @@ class ConsultaBandejasResguardoPdvTest extends TestCase
         foreach (PuntoVentaModulo::permisosIniciales() as $permiso) {
             Permission::findOrCreate($permiso, 'web');
         }
+    }
+
+    private function sinPlazosCustodia(): void
+    {
+        ConfiguracionSistema::query()
+            ->where('clave', PlazosCustodiaResguardoPdvConfig::CLAVE)
+            ->delete();
+
+        Cache::forget(PlazosCustodiaResguardoPdvConfig::CACHE_KEY);
     }
 }

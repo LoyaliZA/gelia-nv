@@ -36,6 +36,61 @@ export function etiquetasClasificacionActivas(resguardo, catalogoAntiguedades = 
         .map(([clave]) => catalogoAntiguedades[clave] || clave);
 }
 
+const ANTIGUEDAD_POR_BANDEJA = {
+    por_recibir: ['rezagado'],
+    en_custodia: ['proximo_a_vencer', 'vencido'],
+};
+
+export function antiguedadValidaEnBandeja(bandeja, antiguedad) {
+    if (!antiguedad) return true;
+    const claves = ANTIGUEDAD_POR_BANDEJA[bandeja] || [];
+    return claves.includes(antiguedad);
+}
+
+export function antiguedadesVisiblesPorBandeja(bandeja, catalogoAntiguedades = {}, puedeVerVencidos = false) {
+    const claves = ANTIGUEDAD_POR_BANDEJA[bandeja] || [];
+    return Object.entries(catalogoAntiguedades)
+        .filter(([clave]) => claves.includes(clave))
+        .filter(([clave]) => clave !== 'vencido' || puedeVerVencidos);
+}
+
+export function metricasAntiguedadClaves(bandeja, puedeVerVencidos = false) {
+    const claves = ANTIGUEDAD_POR_BANDEJA[bandeja] || [];
+    return claves.filter((clave) => clave !== 'vencido' || puedeVerVencidos);
+}
+
+/**
+ * Plazos calculados por backend; la UI solo presenta fecha y categoría.
+ * @returns {Array<{ id: string, etiqueta: string, fecha: string, clasificacion: string|null }>}
+ */
+export function plazosOperativosResguardo(resguardo) {
+    const clasificaciones = resguardo?.clasificaciones || {};
+    const items = [];
+
+    if (resguardo?.fecha_limite_rezago && resguardo?.estado === 'pendiente_recepcion') {
+        items.push({
+            id: 'rezago',
+            etiqueta: 'Límite recepción',
+            fecha: resguardo.fecha_limite_rezago,
+            clasificacion: clasificaciones.rezagado ? 'rezagado' : null,
+        });
+    }
+
+    if (resguardo?.fecha_limite_custodia && resguardo?.estado === 'en_custodia') {
+        const clasificacion = clasificaciones.vencido
+            ? 'vencido'
+            : (clasificaciones.proximo_a_vencer ? 'proximo_a_vencer' : null);
+        items.push({
+            id: 'custodia',
+            etiqueta: 'Límite custodia',
+            fecha: resguardo.fecha_limite_custodia,
+            clasificacion,
+        });
+    }
+
+    return items;
+}
+
 export function claseVistaTarjetas() {
     return 'lg:hidden';
 }
@@ -44,7 +99,16 @@ export function claseVistaTabla() {
     return 'hidden lg:block';
 }
 
-export function mensajeVacioBandeja(bandeja, catalogoBandejas = {}) {
-    const etiqueta = catalogoBandejas[bandeja] || 'esta bandeja';
-    return `No hay resguardos en ${etiqueta.toLowerCase()}`;
+const MENSAJES_VACIO_BANDEJA = {
+    por_recibir: 'No hay resguardos pendientes de recepción en esta sucursal.',
+    en_custodia: 'No hay resguardos en custodia en esta sucursal.',
+    incidencias: 'No hay resguardos con incidencias abiertas en esta sucursal.',
+};
+
+export function mensajeVacioBandeja(bandeja, catalogoBandejas = {}, hayFiltrosActivos = false) {
+    if (hayFiltrosActivos) {
+        return 'No hay resguardos que coincidan con los filtros aplicados.';
+    }
+    return MENSAJES_VACIO_BANDEJA[bandeja]
+        || `No hay resguardos en ${(catalogoBandejas[bandeja] || 'esta bandeja').toLowerCase()}`;
 }

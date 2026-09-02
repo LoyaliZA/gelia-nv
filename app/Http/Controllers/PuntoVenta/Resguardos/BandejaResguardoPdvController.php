@@ -5,6 +5,7 @@ namespace App\Http\Controllers\PuntoVenta\Resguardos;
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PuntoVenta\Resguardos\ConsultarBandejasResguardoPdvRequest;
+use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Resguardos\ConsultaBandejasResguardoPdvService;
@@ -44,7 +45,32 @@ class BandejaResguardoPdvController extends Controller
                 'recibir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR),
                 'entregar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR),
             ],
+            'sucursal_activa' => fn () => $this->serializarSucursalActiva($user, $alcance),
+            'operativa' => fn () => [
+                'antiguedad_configurada' => $consulta->antiguedadConfigurada(),
+            ],
         ]);
+    }
+
+    /**
+     * @return array{id: int, nombre: string}|null
+     */
+    private function serializarSucursalActiva(User $user, ResuelveAlcancePdv $alcance): ?array
+    {
+        $activaId = $alcance->sucursalActivaId($user);
+        if ($activaId === null) {
+            return null;
+        }
+
+        $sucursal = Sucursal::query()->find($activaId, ['id', 'nombre']);
+        if ($sucursal === null) {
+            return null;
+        }
+
+        return [
+            'id' => $sucursal->id,
+            'nombre' => $sucursal->nombre,
+        ];
     }
 
     public function listado(

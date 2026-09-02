@@ -20,6 +20,12 @@ class AlertaResguardoPdvNotification extends Notification implements ShouldQueue
 
     public const TIPO_ENTREGA = 'pdv.resguardo.entrega';
 
+    public const TIPO_PROXIMO_A_VENCER = 'pdv.resguardo.proximo_a_vencer';
+
+    public const TIPO_VENCIDO = 'pdv.resguardo.vencido';
+
+    public const TIPO_ESCALAMIENTO = 'pdv.resguardo.escalamiento';
+
     /**
      * @param  array<string, mixed>  $extras
      */

@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { router } from '@inertiajs/react';
 import { ScanLine, Loader2, AlertTriangle } from 'lucide-react';
-import InputConEscanner from '../../../../Components/Escanner/InputConEscanner';
-import { geliaCardClass } from '../../../../utils/geliaTheme';
-import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
+import ModalEscanearCodigo from '../../../../Components/Escanner/ModalEscanearCodigo';
+import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY } from '../../../../utils/geliaTheme';
 import { THEME_INPUT } from './resguardosStyles';
 import { extraerFolioEscaneado } from './recepcionFisicaUtils';
 
@@ -12,13 +11,14 @@ export default function BusquedaRapidaRecepcion({ puedeRecibir = false }) {
     const [codigo, setCodigo] = useState('');
     const [buscando, setBuscando] = useState(false);
     const [mensaje, setMensaje] = useState(null);
+    const [modalEscaneoAbierto, setModalEscaneoAbierto] = useState(false);
 
     if (!puedeRecibir) return null;
 
     const buscar = async (valor) => {
         const folio = extraerFolioEscaneado(valor);
         if (!folio) {
-            setMensaje('Ingresa o escanea un folio, QR o código de barras.');
+            setMensaje('Ingresa o escanea un folio, remisión o código de barras.');
             return;
         }
 
@@ -61,42 +61,56 @@ export default function BusquedaRapidaRecepcion({ puedeRecibir = false }) {
     return (
         <div className={`${geliaCardClass()} p-4 md:p-5 space-y-3`}>
             <div className="flex items-center gap-2">
-                <ScanLine className="w-5 h-5 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                <div>
-                    <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Recepción rápida</h2>
-                    <p className="text-[10px] theme-text-muted font-bold m-0 mt-1">
-                        Escanea o escribe folio, QR o código de barras para abrir el formulario.
-                    </p>
-                </div>
+                <ScanLine className="w-4 h-4 shrink-0" style={{ color: 'var(--color-primario)' }} aria-hidden />
+                <h2 className="text-xs font-black uppercase tracking-widest theme-text-main m-0">Recepción rápida</h2>
             </div>
 
-            <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-2">
-                <InputConEscanner
+            <form onSubmit={onSubmit} className="flex flex-col lg:flex-row gap-2 lg:items-stretch">
+                <input
+                    type="text"
                     value={codigo}
                     onChange={(e) => setCodigo(e.target.value)}
-                    label="resguardo"
-                    className={THEME_INPUT}
-                    inputProps={{
-                        placeholder: 'Folio, remisión o código escaneado…',
-                        'aria-label': 'Buscar resguardo para recepción',
-                        disabled: buscando,
-                    }}
+                    placeholder="Folio, remisión o código de barras"
+                    aria-label="Buscar resguardo para recepción"
+                    disabled={buscando}
+                    className={`${THEME_INPUT} flex-1 min-w-0 min-h-[48px]`}
+                    autoComplete="off"
                 />
+                <button
+                    type="button"
+                    onClick={() => setModalEscaneoAbierto(true)}
+                    disabled={buscando}
+                    className={`${THEME_BTN_SECONDARY} min-h-[48px] px-4 inline-flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest shrink-0`}
+                >
+                    <ScanLine className="w-4 h-4" aria-hidden />
+                    Escanear
+                </button>
                 <button
                     type="submit"
                     disabled={buscando || !codigo.trim()}
-                    className={`${THEME_BTN_PRIMARY} min-h-[48px] px-5 text-[10px] font-black uppercase tracking-widest disabled:opacity-50 shrink-0`}
+                    className={`${THEME_BTN_PRIMARY} min-h-[48px] px-5 text-[10px] font-black uppercase tracking-widest disabled:opacity-50 shrink-0 inline-flex items-center justify-center gap-2`}
                 >
-                    {buscando ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Abrir recepción'}
+                    {buscando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : 'Continuar recepción'}
                 </button>
             </form>
 
             {mensaje && (
                 <p className="text-xs font-bold text-amber-700 dark:text-amber-300 m-0 flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
                     {mensaje}
                 </p>
             )}
+
+            <ModalEscanearCodigo
+                abierto={modalEscaneoAbierto}
+                onCerrar={() => setModalEscaneoAbierto(false)}
+                titulo="Escanear resguardo"
+                descripcion="Apunta la cámara al código de barras o QR del folio o remisión."
+                onEscaneado={(valor) => {
+                    setCodigo(valor);
+                    setModalEscaneoAbierto(false);
+                }}
+            />
         </div>
     );
 }

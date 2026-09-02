@@ -1,15 +1,31 @@
 import React from 'react';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Package, AlertTriangle, PackageCheck, Truck } from 'lucide-react';
+import { ArrowLeft, Package, AlertTriangle, PackageCheck, Truck, Printer } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
-import TimelineResguardo from './Partials/TimelineResguardo';
-import { badgeEstadoResguardo, formatearFechaOperativa, BTN_SECONDARY } from './Partials/resguardosStyles';
+import PanelIncidenciasResguardo from './Partials/PanelIncidenciasResguardo';
+import PanelExcepcionesResguardo from './Partials/PanelExcepcionesResguardo';
+import PanelAuditoriaResguardo from './Partials/PanelAuditoriaResguardo';
+import { badgeAntiguedad, badgeEstadoResguardo, formatearFechaOperativa, BTN_SECONDARY } from './Partials/resguardosStyles';
 import { THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
+import {
+    cantidadBultosPendiente,
+    cantidadBultosRecibida,
+    resguardoAdmiteEntregaTotal,
+    resguardoAdmiteRecepcion,
+} from './Partials/recepcionFisicaUtils';
+import { plazosOperativosResguardo } from './Partials/resguardosUtils';
 
-export default function Show({ auth, resguardo, timeline = [], catalogos = {}, permisos = {} }) {
+export default function Show({ auth, resguardo, timeline = [], catalogos = {}, permisos = {}, almacenes = [] }) {
     const titulo = resguardo?.snapshot_folio || `Resguardo #${resguardo?.id}`;
+    const plazos = plazosOperativosResguardo(resguardo);
+    const clasificacionesActivas = Object.entries(resguardo?.clasificaciones || {})
+        .filter(([, activa]) => activa)
+        .map(([clave]) => ({
+            clave,
+            etiqueta: catalogos.antiguedades?.[clave] || clave,
+        }));
 
     return (
         <AppLayout auth={auth}>
@@ -47,12 +63,12 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
                         </span>
                     </div>
 
-                    {resguardo.clasificaciones_etiquetas?.length > 0 && (
+                    {clasificacionesActivas.length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                            {resguardo.clasificaciones_etiquetas.map((etiqueta) => (
+                            {clasificacionesActivas.map(({ clave, etiqueta }) => (
                                 <span
-                                    key={etiqueta}
-                                    className="inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                                    key={clave}
+                                    className={`inline-flex px-2 py-1 rounded-lg text-[9px] font-black uppercase ${badgeAntiguedad(clave)}`}
                                 >
                                     {etiqueta}
                                 </span>
@@ -60,11 +76,26 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
                         </div>
                     )}
 
+                    {!resguardo.antiguedad_configurada && (
+                        <p className="text-xs theme-text-muted m-0">
+                            Los plazos operativos de custodia no están configurados; las clasificaciones de antigüedad no aplican.
+                        </p>
+                    )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <DetalleCampo label="Bultos esperados" value={resguardo.cantidad_bultos_esperada} />
+                        <DetalleCampo label="Bultos recibidos" value={cantidadBultosRecibida(resguardo)} />
+                        <DetalleCampo label="Bultos pendientes" value={cantidadBultosPendiente(resguardo)} />
                         <DetalleCampo label="Salida CEDIS" value={formatearFechaOperativa(resguardo.salida_cedis_at)} />
                         <DetalleCampo label="Recepción física" value={formatearFechaOperativa(resguardo.recepcion_fisica_at)} />
                         <DetalleCampo label="Entrega completada" value={formatearFechaOperativa(resguardo.entrega_completada_at)} />
+                        {plazos.map(({ id, etiqueta, fecha }) => (
+                            <DetalleCampo
+                                key={id}
+                                label={etiqueta}
+                                value={formatearFechaOperativa(fecha)}
+                            />
+                        ))}
                     </div>
 
                     {resguardo.pedido && (
@@ -113,32 +144,41 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
                     </div>
                 )}
 
-                {resguardo.incidencias?.length > 0 && (
-                    <div className={`${geliaCardClass()} p-5 md:p-6 space-y-3`}>
-                        <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Incidencias</h2>
-                        {resguardo.incidencias.map((incidencia) => (
-                            <div key={incidencia.id} className="rounded-2xl border theme-border p-4 space-y-1">
-                                <p className="text-sm font-black theme-text-main m-0">
-                                    {incidencia.tipo_etiqueta}
-                                    <span className="text-[10px] font-bold theme-text-muted ml-2 uppercase">
-                                        ({incidencia.estado})
-                                    </span>
-                                </p>
-                                {incidencia.descripcion && (
-                                    <p className="text-sm theme-text-muted m-0">{incidencia.descripcion}</p>
-                                )}
-                                <p className="text-[10px] theme-text-muted m-0">
-                                    {formatearFechaOperativa(incidencia.reportado_at)}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                <PanelExcepcionesResguardo
+                    resguardo={resguardo}
+                    timeline={timeline}
+                    catalogos={catalogos}
+                    permisos={permisos}
+                />
 
-                <TimelineResguardo eventos={timeline} />
+                <PanelIncidenciasResguardo
+                    key={resguardo.version}
+                    resguardo={resguardo}
+                    timeline={timeline}
+                    catalogos={catalogos}
+                    permisos={permisos}
+                    almacenes={almacenes}
+                />
+
+                <PanelAuditoriaResguardo
+                    resguardoId={resguardo.id}
+                    timelineInicial={timeline}
+                    catalogos={catalogos}
+                />
 
                 <div className="flex flex-wrap justify-end gap-2">
-                    {permisos.entregar && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada && (
+                    {resguardo.bultos?.length > 0 && permisos.ver_etiquetas && (
+                        <a
+                            href={route('punto_venta.resguardos.etiquetas.descargar', resguardo.id)}
+                            className={`${BTN_SECONDARY} inline-flex items-center gap-2 min-h-[44px] px-5 text-[10px] font-black uppercase tracking-widest`}
+                        >
+                            <Printer className="w-4 h-4" /> Imprimir etiquetas
+                        </a>
+                    )}
+                    {permisos.entregar
+                        && resguardo.estado === 'en_custodia'
+                        && !resguardo.entrega_bloqueada
+                        && resguardoAdmiteEntregaTotal(resguardo) && (
                         <Link
                             href={route('punto_venta.resguardos.entrega.create', resguardo.id)}
                             className={`${THEME_BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px] px-5 text-[10px] font-black uppercase tracking-widest`}
@@ -146,12 +186,13 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
                             <Truck className="w-4 h-4" /> Entregar
                         </Link>
                     )}
-                    {permisos.recibir && resguardo.estado === 'pendiente_recepcion' && (
+                    {permisos.recibir && resguardoAdmiteRecepcion(resguardo) && (
                         <Link
                             href={route('punto_venta.resguardos.recepcion.create', resguardo.id)}
                             className={`${THEME_BTN_PRIMARY} inline-flex items-center gap-2 min-h-[44px] px-5 text-[10px] font-black uppercase tracking-widest`}
                         >
-                            <PackageCheck className="w-4 h-4" /> Recibir físicamente
+                            <PackageCheck className="w-4 h-4" />
+                            {resguardo.estado === 'en_custodia' ? 'Recibir complemento' : 'Recibir físicamente'}
                         </Link>
                     )}
                     <Link href={route('punto_venta.resguardos.index')} className={`${BTN_SECONDARY} inline-flex items-center gap-2`}>
