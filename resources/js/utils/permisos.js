@@ -255,6 +255,19 @@ export const DESCRIPCIONES_PERMISOS = {
     'rh.catalogos.bonos': 'Permite administrar el catálogo de bonos.',
     'rh.catalogos.tipos_faltas': 'Permite administrar el catálogo de tipos de faltas.',
     'rh.catalogos.incidencias_generales': 'Permite administrar el catálogo de incidencias generales.',
+    'punto_venta.acceder': 'Permite acceder al módulo de punto de venta.',
+    'pdv.resguardos.ver': 'Permite consultar la bandeja de resguardos en piso.',
+    'pdv.resguardos.recibir': 'Permite registrar la recepción física de resguardos.',
+    'pdv.resguardos.incidencia_folio': 'Permite reportar incidencia de folio en recepción.',
+    'pdv.resguardos.incidencia_dano': 'Permite reportar daño en bultos recibidos.',
+    'pdv.resguardos.incidencia_faltante': 'Permite reportar faltantes en recepción.',
+    'pdv.resguardos.entregar': 'Permite registrar la entrega de resguardos al cliente.',
+    'pdv.resguardos.ver_vencidos': 'Permite consultar resguardos vencidos en custodia.',
+    'pdv.resguardos.reponer_vencido': 'Permite reponer un resguardo vencido en custodia.',
+    'pdv.resguardos.autorizar_entrega_incidencia': 'Permite autorizar entrega con incidencia abierta.',
+    'pdv.resguardos.confirmar_devolucion': 'Permite confirmar la devolución de mercancía en custodia.',
+    'pdv.alcance.global': 'Permite operar y consultar en todas las sucursales asignadas (alcance global).',
+    'pdv.reportes.exportar': 'Permite exportar reportes del punto de venta.',
 };
 
 /** Etiqueta corta en la UI de permisos (evita repetir solo «productos» / «inventarios» / «costos»). */
@@ -287,6 +300,19 @@ export const ETIQUETAS_PERMISOS = {
     'control_pedidos.cancelar': 'cancelar pedido',
     'control_pedidos.reabrir': 'reabrir envío',
     'control_pedidos.liberar_resguardo': 'liberar resguardo',
+    'punto_venta.acceder': 'acceder al módulo',
+    'pdv.resguardos.ver': 'ver bandeja',
+    'pdv.resguardos.recibir': 'recibir físico',
+    'pdv.resguardos.incidencia_folio': 'incidencia folio',
+    'pdv.resguardos.incidencia_dano': 'incidencia daño',
+    'pdv.resguardos.incidencia_faltante': 'incidencia faltante',
+    'pdv.resguardos.entregar': 'entregar al cliente',
+    'pdv.resguardos.ver_vencidos': 'ver vencidos',
+    'pdv.resguardos.reponer_vencido': 'reponer vencido',
+    'pdv.resguardos.autorizar_entrega_incidencia': 'autorizar entrega con incidencia',
+    'pdv.resguardos.confirmar_devolucion': 'confirmar devolución',
+    'pdv.alcance.global': 'alcance global',
+    'pdv.reportes.exportar': 'exportar reportes',
 };
 
 /** Permisos de excepción / estados avanzados (resalte en permisos específicos). */
@@ -297,6 +323,9 @@ export const PERMISOS_EXCEPCION = new Set([
     'control_pedidos.liberar_resguardo',
     'control_pedidos.cedis.enviar',
     'control_pedidos.delegado.importar',
+    'pdv.resguardos.autorizar_entrega_incidencia',
+    'pdv.resguardos.reponer_vencido',
+    'pdv.alcance.global',
 ]);
 
 export function esPermisoExcepcion(permisoName) {
@@ -1096,6 +1125,45 @@ export const SUBMODULOS_UI_POR_MODULO = {
             permisos: ['mensajeria.eliminar'],
         },
     ],
+    punto_venta: [
+        {
+            id: 'acceso',
+            label: 'Acceso',
+            descripcion: 'Entrada al módulo de punto de venta',
+            permisos: ['punto_venta.acceder'],
+        },
+    ],
+    pdv: [
+        {
+            id: 'resguardos',
+            label: 'Resguardos',
+            descripcion: 'Recepción, custodia, incidencias y entrega en piso',
+            permisos: [
+                'pdv.resguardos.ver',
+                'pdv.resguardos.recibir',
+                'pdv.resguardos.incidencia_folio',
+                'pdv.resguardos.incidencia_dano',
+                'pdv.resguardos.incidencia_faltante',
+                'pdv.resguardos.entregar',
+                'pdv.resguardos.ver_vencidos',
+                'pdv.resguardos.reponer_vencido',
+                'pdv.resguardos.autorizar_entrega_incidencia',
+                'pdv.resguardos.confirmar_devolucion',
+            ],
+        },
+        {
+            id: 'reportes',
+            label: 'Reportes',
+            descripcion: 'Exportación de reportes del punto de venta',
+            permisos: ['pdv.reportes.exportar'],
+        },
+        {
+            id: 'alcance',
+            label: 'Alcance',
+            descripcion: 'Consulta y operación multi-sucursal',
+            permisos: ['pdv.alcance.global'],
+        },
+    ],
 };
 
 function agruparPorEntidadComoSubmodulos(permisosDeModulo) {
@@ -1173,6 +1241,12 @@ export const SECCIONES_SIDEBAR_PERMISOS = [
         ],
     },
     {
+        id: 'punto_venta',
+        label: 'Punto de venta',
+        descripcion: 'Resguardos, reportes y operación en piso',
+        modulos: ['punto_venta', 'pdv'],
+    },
+    {
         id: 'finanzas',
         label: 'Finanzas',
         descripcion: 'Contabilidad, facturas, cobranza y saldos a favor',
@@ -1235,6 +1309,8 @@ export const ETIQUETAS_MODULO_UI = {
     mis_clientes: 'Mis clientes',
     entregas: 'Entregas / mapa logístico',
     control_pedidos: 'Gestión de pedidos',
+    punto_venta: 'Acceso al módulo',
+    pdv: 'Operación en piso',
     saldos_favor: 'Saldos a favor',
     contabilidad: 'Contabilidad',
     facturas: 'Facturas',

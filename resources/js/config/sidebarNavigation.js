@@ -253,6 +253,17 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
         },
     ].filter(Boolean);
 
+    const puntoVentaChildren = [
+        can('punto_venta.acceder') && can('pdv.resguardos.ver') && {
+            type: 'link',
+            id: 'punto_venta_resguardos',
+            label: 'Resguardos',
+            icon: Shield,
+            href: () => routeHref('punto_venta.resguardos.index', '/punto-venta/resguardos'),
+            active: (url) => url.startsWith('/punto-venta/resguardos'),
+        },
+    ].filter(Boolean);
+
     const operacionesChildren = [
         solicitudesChildren.length > 0 && {
             type: 'group',
@@ -553,6 +564,13 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             label: 'Operaciones',
             icon: Briefcase,
             children: operacionesChildren,
+        },
+        puntoVentaChildren.length > 0 && {
+            type: 'group',
+            id: 'punto_venta',
+            label: 'Punto de venta',
+            icon: Store,
+            children: puntoVentaChildren,
         },
         finanzasChildren.length > 0 && {
             type: 'group',

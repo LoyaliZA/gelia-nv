@@ -5,6 +5,7 @@ namespace App\Models\ControlPedidos;
 use App\Models\Almacen;
 use App\Models\CatalogoBanco;
 use App\Models\Cliente;
+use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\Sucursal;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafIncidencia;
@@ -405,6 +406,11 @@ class PedidoBma extends Model
     public function sucursalDestino(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class, 'sucursal_destino_id');
+    }
+
+    public function resguardosPdv(): HasMany
+    {
+        return $this->hasMany(ResguardoPdv::class, 'pedido_bma_id');
     }
 
     public function codigoModalidadPreparacionVigente(): ?string

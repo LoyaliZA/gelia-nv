@@ -22,7 +22,16 @@ final class AlcancePdv implements ResuelveAlcancePdv
      */
     public function idsSucursalesOperables(User $user): Collection
     {
-        return $user->idsSucursalesOperables();
+        $asignadas = $user->idsSucursalesOperables();
+
+        if (! $this->tieneAlcanceGlobal($user)) {
+            return $asignadas;
+        }
+
+        return $this->idsSucursalesElegibles()
+            ->merge($asignadas)
+            ->unique()
+            ->values();
     }
 
     /**
@@ -40,6 +49,11 @@ final class AlcancePdv implements ResuelveAlcancePdv
     public function sucursalActivaId(User $user): ?int
     {
         $operables = $this->idsSucursalesOperables($user);
+
+        if ($operables->isEmpty()) {
+            return null;
+        }
+
         $sesionId = session(self::SESSION_SUCURSAL_ACTIVA);
 
         if (is_numeric($sesionId) && $operables->contains((int) $sesionId)) {
@@ -47,8 +61,20 @@ final class AlcancePdv implements ResuelveAlcancePdv
         }
 
         $principal = $user->sucursalPrincipal();
+        if ($principal instanceof Sucursal && $operables->contains($principal->id)) {
+            return $principal->id;
+        }
 
-        return $principal?->id;
+        if ($operables->count() === 1) {
+            return (int) $operables->first();
+        }
+
+        // ponytail: sin selector de piso, alcance global usa la primera sucursal elegible
+        if ($this->tieneAlcanceGlobal($user)) {
+            return (int) $operables->first();
+        }
+
+        return null;
     }
 
     public function establecerSucursalActiva(User $user, int $sucursalId): void

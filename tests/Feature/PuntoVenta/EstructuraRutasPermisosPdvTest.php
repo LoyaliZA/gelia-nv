@@ -27,6 +27,8 @@ class EstructuraRutasPermisosPdvTest extends TestCase
     public function test_rutas_registradas_con_prefijo_y_nombres_consistentes(): void
     {
         $this->assertTrue(Route::has('punto_venta.resguardos.index'));
+        $this->assertTrue(Route::has('punto_venta.resguardos.listado'));
+        $this->assertTrue(Route::has('punto_venta.resguardos.show'));
         $this->assertTrue(Route::has('punto_venta.reportes.index'));
         $this->assertTrue(Route::has('control_pedidos.index'));
 
@@ -86,9 +88,16 @@ class EstructuraRutasPermisosPdvTest extends TestCase
         $sinVer->concederAccesoSucursal(Sucursal::factory()->create(), esPrincipal: true);
         $this->actingAs($sinVer)->get(route('punto_venta.resguardos.index'))->assertForbidden();
 
+        $this->withoutVite();
         $this->actingAs($this->usuarioPiso())
             ->get(route('punto_venta.resguardos.index'))
-            ->assertNoContent();
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('PuntoVenta/Resguardos/Index', false));
+
+        $this->actingAs($this->usuarioPiso())
+            ->getJson(route('punto_venta.resguardos.index'))
+            ->assertOk()
+            ->assertJsonStructure(['bandeja', 'resguardos', 'metricas', 'filtros']);
     }
 
     public function test_reportes_global_sin_sucursal_y_sin_permiso_global_se_niega(): void

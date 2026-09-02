@@ -122,6 +122,7 @@ final class MaquinaEstadosPedidoBma
         ],
         CatalogoEstatusPedido::FASE_ENVIADO => [
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+            CatalogoEstatusPedido::FASE_ENTREGADO,
         ],
         CatalogoEstatusPedido::FASE_ENTREGADO => [],
         CatalogoEstatusPedido::FASE_CANCELADO => [],

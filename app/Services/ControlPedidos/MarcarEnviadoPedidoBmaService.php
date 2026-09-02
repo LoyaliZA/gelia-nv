@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCaja;
+use App\Services\PuntoVenta\Resguardos\CrearRecepcionEsperadaPdvService;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
@@ -14,6 +15,7 @@ class MarcarEnviadoPedidoBmaService
     public function __construct(
         private RegistrarHistorialPedidoService $historialService,
         private NotificarPedidoBmaService $notificarService,
+        private CrearRecepcionEsperadaPdvService $crearRecepcionEsperadaPdv,
     ) {}
 
     /**
@@ -134,7 +136,12 @@ class MarcarEnviadoPedidoBmaService
             $pedido = $pedido->fresh([
                 'cliente', 'estatus', 'documentos', 'almacen', 'cajas',
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'empacadoPor', 'vendedor',
+                'origen', 'sucursalDestino', 'tareaPreparacionVigente.modalidad',
             ]);
+
+            if ($pedido->requiereSucursalDestino()) {
+                $this->crearRecepcionEsperadaPdv->ejecutar($pedido, $usuarioId);
+            }
 
             $this->notificarService->ejecutar(
                 $pedido,

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\PuntoVenta\ResguardoPdv;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -91,6 +92,11 @@ class Cliente extends Model
     public function listaDescuento(): BelongsTo
     {
         return $this->belongsTo(CatalogoListaDescuento::class, 'lista_actual_id');
+    }
+
+    public function resguardosPdv(): HasMany
+    {
+        return $this->hasMany(ResguardoPdv::class);
     }
 
     public function solicitudes(): HasMany

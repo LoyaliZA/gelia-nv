@@ -130,4 +130,17 @@ describe('agruparModulosPorSeccionSidebar', () => {
         expect(secciones[1].modulos.map((m) => m.modulo)).toEqual(['facturas', 'saldos_favor']);
         expect(secciones.some((s) => s.id === 'otros')).toBe(false);
     });
+
+    it('agrupa permisos PDV bajo sección Punto de venta', () => {
+        const agrupados = {
+            punto_venta: [{ name: 'punto_venta.acceder' }],
+            pdv: [{ name: 'pdv.resguardos.ver' }],
+            facturas: [{ name: 'facturas.ver_listado' }],
+        };
+        const secciones = agruparModulosPorSeccionSidebar(agrupados);
+        const puntoVenta = secciones.find((s) => s.id === 'punto_venta');
+        expect(puntoVenta?.label).toBe('Punto de venta');
+        expect(puntoVenta?.modulos.map((m) => m.modulo)).toEqual(['punto_venta', 'pdv']);
+        expect(secciones.some((s) => s.id === 'otros')).toBe(false);
+    });
 });

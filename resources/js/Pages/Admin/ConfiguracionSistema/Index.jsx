@@ -1,21 +1,26 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Head, useForm } from '@inertiajs/react';
 import { Settings, Plus, Edit2, Trash2, Mail, Check, X, AlertCircle, Shield } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import { geliaCardClass, THEME_INPUT, THEME_SELECT, THEME_TEXTAREA, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 
+const esBooleanoVerdadero = (valor) => valor === true || valor === 'true' || valor === '1' || valor === 1;
+const normalizarBooleanoParaEdicion = (valor) => (esBooleanoVerdadero(valor) ? 'true' : 'false');
+
 const SimpleModal = ({ show, onClose, title, children }) => {
-    if (!show) return null;
-    return (
+    if (!show || typeof document === 'undefined') return null;
+    return createPortal(
         <div className={THEME_MODAL_OVERLAY} onClick={onClose}>
-            <div className={`${THEME_MODAL_SHELL} max-w-lg w-full mx-4`} onClick={e => e.stopPropagation()}>
-                <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-gray-900 rounded-t-xl">
+            <div className={`${THEME_MODAL_SHELL} max-w-lg w-full modal-pop`} onClick={e => e.stopPropagation()}>
+                <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
                     <h2 className="text-xl font-bold theme-text-main">{title}</h2>
                     <button type="button" onClick={onClose} className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full"><X className="w-5 h-5"/></button>
                 </div>
-                <div className="p-6 bg-white dark:bg-gray-900 rounded-b-xl max-h-[80vh] overflow-y-auto">{children}</div>
+                <div className="p-6 max-h-[80vh] overflow-y-auto">{children}</div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 };
 
@@ -47,10 +52,13 @@ export default function ConfiguracionSistema({ auth, configuracionesGrupos, conf
 
     const openModalEdit = (configuracion) => {
         setIsEditing(true);
+        const valorEdit = configuracion.tipo === 'boolean'
+            ? normalizarBooleanoParaEdicion(configuracion.valor)
+            : (configuracion.valor || '');
         setData({
             id: configuracion.id,
             clave: configuracion.clave,
-            valor: configuracion.valor || '',
+            valor: valorEdit,
             tipo: configuracion.tipo,
             descripcion: configuracion.descripcion || '',
             grupo: configuracion.grupo || '',
@@ -190,7 +198,7 @@ export default function ConfiguracionSistema({ auth, configuracionesGrupos, conf
                                                 
                                                 <div className="p-3 bg-gray-50 dark:bg-black/40 rounded-xl border border-gray-100 dark:border-gray-800 break-all font-mono text-sm text-gray-700 dark:text-gray-300">
                                                     {config.tipo === 'boolean' ? (
-                                                        (config.valor === 'true' || config.valor === '1' || config.valor === true) ? (
+                                                        esBooleanoVerdadero(config.valor) ? (
                                                             <span className="flex items-center gap-1 text-green-600 dark:text-green-400 font-bold"><Check className="w-4 h-4"/> TRUE</span>
                                                         ) : (
                                                             <span className="flex items-center gap-1 text-red-600 dark:text-red-400 font-bold"><X className="w-4 h-4"/> FALSE</span>
@@ -265,11 +273,11 @@ export default function ConfiguracionSistema({ auth, configuracionesGrupos, conf
                     <div>
                         <label className="block text-sm font-bold theme-text-main mb-1">Valor</label>
                         {data.tipo === 'boolean' ? (
-                            <select
-                                value={data.valor}
-                                onChange={e => setData('valor', e.target.value)}
-                                className={THEME_SELECT}
-                            >
+                        <select
+                            value={data.tipo === 'boolean' ? normalizarBooleanoParaEdicion(data.valor) : data.valor}
+                            onChange={e => setData('valor', e.target.value)}
+                            className={THEME_SELECT}
+                        >
                                 <option value="true">True (Verdadero)</option>
                                 <option value="false">False (Falso)</option>
                             </select>

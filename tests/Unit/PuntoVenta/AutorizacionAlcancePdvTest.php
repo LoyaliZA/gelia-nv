@@ -118,6 +118,24 @@ class AutorizacionAlcancePdvTest extends TestCase
         $this->alcance->asegurarMutacionPiso($usuario, self::PERMISO_PISO, $elegible->id);
     }
 
+    public function test_alcance_global_con_permiso_piso_resuelve_sucursal_activa(): void
+    {
+        $usuario = User::factory()->create();
+        $usuario->givePermissionTo([
+            AlcancePdv::PERMISO_ALCANCE_GLOBAL,
+            self::PERMISO_PISO,
+        ]);
+        $primera = Sucursal::factory()->create();
+        $segunda = Sucursal::factory()->create();
+
+        $operables = $this->alcance->idsSucursalesOperables($usuario);
+
+        $this->assertTrue($this->alcance->permiteConsultaPiso($usuario, self::PERMISO_PISO));
+        $this->assertSame($operables->first(), $this->alcance->sucursalActivaId($usuario));
+        $this->assertTrue($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $operables->first()));
+        $this->assertFalse($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $segunda->id === $operables->first() ? $primera->id : $segunda->id));
+    }
+
     public function test_super_admin_sin_permiso_directo_no_tiene_alcance_pdv(): void
     {
         $admin = User::factory()->create();

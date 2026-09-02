@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\PuntoVenta\ResguardoPdv;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -29,6 +30,11 @@ class Sucursal extends Model
     public function almacenes(): HasMany
     {
         return $this->hasMany(Almacen::class);
+    }
+
+    public function resguardosPdv(): HasMany
+    {
+        return $this->hasMany(ResguardoPdv::class);
     }
 
     public function users(): BelongsToMany

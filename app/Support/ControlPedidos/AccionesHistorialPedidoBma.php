@@ -88,6 +88,7 @@ final class AccionesHistorialPedidoBma
     public const CONFIRMACION_ADMIN_EXHIBICION = 'confirmacion_admin_exhibicion';
     public const CONFIRMACION_ADMIN_PEDIDO = 'confirmacion_admin_pedido';
     public const ERROR_ADMIN_REPORTE_PAGO = 'error_admin_reporte_pago';
+    public const ENTREGA_PDV = 'entrega_pdv';
 
     /** @var array<string, string> */
     public const ETIQUETAS = [
@@ -172,6 +173,7 @@ final class AccionesHistorialPedidoBma
         self::CONFIRMACION_ADMIN_EXHIBICION => 'Confirmación administrativa de exhibición',
         self::CONFIRMACION_ADMIN_PEDIDO => 'Confirmación administrativa del pedido',
         self::ERROR_ADMIN_REPORTE_PAGO => 'Error reportado por Administración (pagos)',
+        self::ENTREGA_PDV => 'Entrega presencial en sucursal (Punto de venta)',
     ];
 
     public static function etiqueta(?string $accion): ?string

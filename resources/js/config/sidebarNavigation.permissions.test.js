@@ -55,6 +55,30 @@ describe('buildSidebarNavigation permissions', () => {
         expect(ids).not.toContain('control_pedidos_auditar');
     });
 
+    it('usuario con permiso PDV ve enlace de resguardos', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['punto_venta.acceder', 'pdv.resguardos.ver']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).toContain('punto_venta_resguardos');
+        const puntoVenta = tree.find((n) => n?.id === 'punto_venta');
+        expect(puntoVenta?.label).toBe('Punto de venta');
+    });
+
+    it('usuario sin permiso PDV no ve enlace de resguardos', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith(['control_pedidos.ver_listado']),
+            showAdminMenu: false,
+            manualesHubVisible: false,
+            geliaAiVisible: false,
+        });
+        const ids = collectLinkIds(tree);
+        expect(ids).not.toContain('punto_venta_resguardos');
+    });
+
     it('abre antecesores de una ruta anidada activa', () => {
         const tree = buildSidebarNavigation({
             can: canWith(['control_pedidos.ver_listado', 'control_pedidos.auditar'], true),

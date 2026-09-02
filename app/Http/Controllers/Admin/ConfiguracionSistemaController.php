@@ -26,7 +26,7 @@ class ConfiguracionSistemaController extends Controller
     public function index()
     {
         $configuraciones = ConfiguracionSistema::orderBy('grupo')->orderBy('clave')->get();
-        
+
         $grupos = $configuraciones->groupBy('grupo');
 
         return Inertia::render('Admin/ConfiguracionSistema/Index', [
@@ -48,6 +48,10 @@ class ConfiguracionSistemaController extends Controller
             'descripcion' => 'nullable|string',
             'grupo' => 'nullable|string',
         ]);
+
+        if ($validated['tipo'] === 'boolean') {
+            $validated['valor'] = $this->normalizarValorBooleano((string) ($validated['valor'] ?? 'false'));
+        }
 
         ConfiguracionSistema::create($validated);
 
@@ -72,6 +76,10 @@ class ConfiguracionSistemaController extends Controller
         ]);
 
         $valorAnterior = $configuracion->valor;
+
+        if ($validated['tipo'] === 'boolean') {
+            $validated['valor'] = $this->normalizarValorBooleano((string) ($validated['valor'] ?? 'false'));
+        }
 
         $configuracion->update($validated);
 
@@ -129,5 +137,10 @@ class ConfiguracionSistemaController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->withErrors(['error' => 'Error al enviar el correo: ' . $e->getMessage()]);
         }
+    }
+
+    private function normalizarValorBooleano(string $valor): string
+    {
+        return filter_var($valor, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false';
     }
 }
