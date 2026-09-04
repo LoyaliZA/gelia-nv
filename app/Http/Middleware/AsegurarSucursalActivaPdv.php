@@ -17,10 +17,22 @@ class AsegurarSucursalActivaPdv
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        if (! $user instanceof User || $this->alcance->sucursalActivaId($user) === null) {
+        if (! $user instanceof User) {
             abort(403, 'No tiene sucursal activa para operar en piso.');
         }
 
-        return $next($request);
+        if ($this->alcance->sucursalActivaId($user) !== null) {
+            return $next($request);
+        }
+
+        if ($request->expectsJson()) {
+            $mensaje = $this->alcance->idsSucursalesOperables($user)->isEmpty()
+                ? 'No tiene sucursal asignada para operar en piso.'
+                : 'Debe seleccionar una sucursal activa para operar en piso.';
+
+            abort(403, $mensaje);
+        }
+
+        return redirect()->route('punto_venta.alcance.configurar');
     }
 }

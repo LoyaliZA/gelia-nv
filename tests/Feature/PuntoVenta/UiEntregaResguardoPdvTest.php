@@ -66,6 +66,7 @@ class UiEntregaResguardoPdvTest extends TestCase
                 ->where('puede_entregar', true)
                 ->where('motivo_no_entregable', null)
                 ->has('resguardo.bultos', 1)
+                ->has('resguardo.cantidad_bultos_en_custodia')
                 ->has('catalogos.relaciones')
                 ->where('catalogos.metodo_validacion', RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FIRMA));
     }
@@ -127,6 +128,27 @@ class UiEntregaResguardoPdvTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('permisos.entregar', true));
+    }
+
+    public function test_formulario_entrega_multiple_requiere_dos_resguardos_entregables(): void
+    {
+        $a = $this->crearResguardoEnCustodia();
+        $b = $this->crearResguardoEnCustodia(['snapshot_folio' => 'REM-ENT-UI-B']);
+
+        $this->actingAs($this->usuario)
+            ->get(route('punto_venta.resguardos.entregas_multiples.create', ['ids' => [$a->id, $b->id]]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('PuntoVenta/Resguardos/EntregaMultiple', false)
+                ->where('puede_entregar', true)
+                ->has('resguardos.0.id')
+                ->has('resguardos.1.id'));
+
+        $this->actingAs($this->usuario)
+            ->get(route('punto_venta.resguardos.entregas_multiples.create', ['ids' => [$a->id]]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('puede_entregar', false));
     }
 
     /**

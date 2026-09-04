@@ -49,7 +49,7 @@ class GenerarCsvExportacionResguardoPdvService
     private function generarAuditoria(User $usuario, array $filtros, string $exportacionId): array
     {
         $resguardo = ResguardoPdv::query()->findOrFail((int) ($filtros['resguardo_id'] ?? 0));
-        $payload = $this->auditoria->obtener($usuario, $resguardo, $this->filtrosAuditoria($filtros));
+        $payload = $this->auditoria->obtenerParaExportacion($usuario, $resguardo, $this->filtrosAuditoria($filtros));
 
         $filas = array_map(
             fn (array $item) => $this->filaAuditoria($resguardo, $item),

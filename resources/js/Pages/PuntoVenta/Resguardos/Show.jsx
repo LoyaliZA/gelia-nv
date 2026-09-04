@@ -6,6 +6,7 @@ import GeliaPageShell from '../../../Components/GeliaPageShell';
 import { geliaCardClass } from '../../../utils/geliaTheme';
 import PanelIncidenciasResguardo from './Partials/PanelIncidenciasResguardo';
 import PanelExcepcionesResguardo from './Partials/PanelExcepcionesResguardo';
+import PanelReponerVencidoResguardo from './Partials/PanelReponerVencidoResguardo';
 import PanelAuditoriaResguardo from './Partials/PanelAuditoriaResguardo';
 import { badgeAntiguedad, badgeEstadoResguardo, formatearFechaOperativa, BTN_SECONDARY } from './Partials/resguardosStyles';
 import { THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
@@ -107,7 +108,10 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
 
                     {resguardo.entrega_bloqueada && (
                         <p className="text-[10px] font-black uppercase text-red-600 dark:text-red-300 m-0 flex items-center gap-2">
-                            <AlertTriangle className="w-4 h-4" /> Entrega bloqueada
+                            <AlertTriangle className="w-4 h-4 shrink-0" />
+                            {resguardo.cancelacion_recibida
+                                ? 'Pedido cancelado. Entrega bloqueada; se requiere devolución al origen.'
+                                : 'Entrega bloqueada'}
                         </p>
                     )}
                 </div>
@@ -143,6 +147,11 @@ export default function Show({ auth, resguardo, timeline = [], catalogos = {}, p
                         </div>
                     </div>
                 )}
+
+                <PanelReponerVencidoResguardo
+                    resguardo={resguardo}
+                    permisos={permisos}
+                />
 
                 <PanelExcepcionesResguardo
                     resguardo={resguardo}

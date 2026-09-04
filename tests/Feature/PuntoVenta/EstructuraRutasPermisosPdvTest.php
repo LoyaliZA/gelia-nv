@@ -27,6 +27,8 @@ class EstructuraRutasPermisosPdvTest extends TestCase
     public function test_rutas_registradas_con_prefijo_y_nombres_consistentes(): void
     {
         $this->assertTrue(Route::has('punto_venta.resguardos.index'));
+        $this->assertTrue(Route::has('punto_venta.sucursal_activa.establecer'));
+        $this->assertTrue(Route::has('punto_venta.alcance.configurar'));
         $this->assertTrue(Route::has('punto_venta.resguardos.listado'));
         $this->assertTrue(Route::has('punto_venta.resguardos.exportaciones.store'));
         $this->assertTrue(Route::has('punto_venta.resguardos.exportaciones.descargar'));
@@ -86,7 +88,8 @@ class EstructuraRutasPermisosPdvTest extends TestCase
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
         ]);
-        $this->actingAs($sinSucursal)->get(route('punto_venta.resguardos.index'))->assertForbidden();
+        $this->actingAs($sinSucursal)->get(route('punto_venta.resguardos.index'))
+            ->assertRedirect(route('punto_venta.alcance.configurar'));
 
         $sinVer = User::factory()->create();
         $sinVer->givePermissionTo(PuntoVentaModulo::PERMISO_ACCEDER);

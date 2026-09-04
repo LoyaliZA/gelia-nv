@@ -9,6 +9,7 @@ use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\PuntoVenta\ResguardoPdvExportacion;
 use App\Models\Sucursal;
 use App\Models\User;
+use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Resguardos\ResguardoPdvExportacionTipo;
 use App\Support\PuntoVenta\Resguardos\BandejaResguardoPdv;
@@ -173,7 +174,7 @@ class ExportacionResguardoPdvTest extends TestCase
         $this->assertTrue(Storage::disk('local')->exists($ruta));
     }
 
-    public function test_exportacion_auditoria_respeta_filtros_y_omite_sucursal_ajena(): void
+    public function test_exportacion_auditoria_respeta_filtros_y_accede_multisucursal(): void
     {
         config(['punto_venta.resguardos.exportacion.pesado_registros' => 50]);
 
@@ -226,7 +227,57 @@ class ExportacionResguardoPdvTest extends TestCase
         $this->actingAs($this->otroExportador)->post(route('punto_venta.resguardos.exportaciones.store'), [
             'tipo' => ResguardoPdvExportacionTipo::AUDITORIA,
             'resguardo_id' => $resguardo->id,
-        ])->assertNotFound();
+        ])->assertOk();
+    }
+
+    public function test_exportacion_solo_piso_sin_alcance_global_rechaza(): void
+    {
+        $usuario = User::factory()->create();
+        $usuario->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
+            PuntoVentaModulo::PERMISO_REPORTES_EXPORTAR,
+        ]);
+        $usuario->concederAccesoSucursal($this->sucursalA, esPrincipal: true);
+
+        $this->actingAs($usuario)->postJson(route('punto_venta.resguardos.exportaciones.store'), [
+            'tipo' => ResguardoPdvExportacionTipo::LISTADO,
+            'bandeja' => BandejaResguardoPdv::POR_RECIBIR,
+        ])->assertForbidden();
+    }
+
+    public function test_exportacion_global_supervision_incluye_multisucursal(): void
+    {
+        config(['punto_venta.resguardos.exportacion.pesado_registros' => 50]);
+
+        $this->crearResguardo($this->sucursalA, [
+            'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+            'snapshot_folio' => 'REM-NORTE-001',
+        ]);
+        $this->crearResguardo($this->sucursalB, [
+            'estado' => ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
+            'snapshot_folio' => 'REM-SUR-001',
+        ]);
+
+        $response = $this->actingAs($this->exportador)->post(route('punto_venta.resguardos.exportaciones.store'), [
+            'tipo' => ResguardoPdvExportacionTipo::LISTADO,
+            'bandeja' => BandejaResguardoPdv::POR_RECIBIR,
+        ]);
+
+        $response->assertOk();
+
+        $exportacion = ResguardoPdvExportacion::query()->firstOrFail();
+        $contenido = Storage::disk('local')->get($exportacion->ruta_archivo);
+        $this->assertNotNull($contenido);
+
+        $lineas = array_values(array_filter(
+            preg_split('/\r\n|\n|\r/', ltrim($contenido, "\xEF\xBB\xBF")),
+            static fn ($linea) => $linea !== ''
+        ));
+
+        $this->assertCount(3, $lineas);
+        $this->assertStringContainsString('REM-NORTE-001', $contenido);
+        $this->assertStringContainsString('REM-SUR-001', $contenido);
     }
 
     public function test_sin_permiso_exportar_rechaza(): void
@@ -250,6 +301,7 @@ class ExportacionResguardoPdvTest extends TestCase
         $usuario->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
+            AlcancePdv::PERMISO_ALCANCE_GLOBAL,
             PuntoVentaModulo::PERMISO_REPORTES_EXPORTAR,
         ]);
         $usuario->concederAccesoSucursal($sucursal, esPrincipal: true);

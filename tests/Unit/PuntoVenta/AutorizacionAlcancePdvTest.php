@@ -118,22 +118,82 @@ class AutorizacionAlcancePdvTest extends TestCase
         $this->alcance->asegurarMutacionPiso($usuario, self::PERMISO_PISO, $elegible->id);
     }
 
-    public function test_alcance_global_con_permiso_piso_resuelve_sucursal_activa(): void
+    public function test_caso_a_sin_sucursal_asignada_bloquea_piso(): void
+    {
+        $usuario = User::factory()->create();
+        $usuario->givePermissionTo(self::PERMISO_PISO);
+        Sucursal::factory()->create();
+
+        $this->assertTrue($this->alcance->idsSucursalesOperables($usuario)->isEmpty());
+        $this->assertNull($this->alcance->sucursalActivaId($usuario));
+        $this->assertFalse($this->alcance->permiteConsultaPiso($usuario, self::PERMISO_PISO));
+        $this->assertFalse($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO));
+    }
+
+    public function test_caso_b_una_sucursal_asignada_opera_solo_esa(): void
+    {
+        [$usuario, $sucursal] = $this->usuarioConPiso();
+
+        $this->assertSame([$sucursal->id], $this->alcance->idsSucursalesOperables($usuario)->all());
+        $this->assertSame($sucursal->id, $this->alcance->sucursalActivaId($usuario));
+        $this->assertTrue($this->alcance->permiteConsultaPiso($usuario, self::PERMISO_PISO));
+        $this->assertTrue($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $sucursal->id));
+    }
+
+    public function test_caso_c_varias_sucursales_solo_opera_la_activa(): void
+    {
+        $usuario = User::factory()->create();
+        $usuario->givePermissionTo(self::PERMISO_PISO);
+        $principal = Sucursal::factory()->create(['nombre' => 'Principal']);
+        $otra = Sucursal::factory()->create(['nombre' => 'Otra']);
+        $usuario->concederAccesoSucursal($principal, esPrincipal: true);
+        $usuario->concederAccesoSucursal($otra);
+
+        $this->assertSame($principal->id, $this->alcance->sucursalActivaId($usuario));
+        $this->assertTrue($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $principal->id));
+        $this->assertFalse($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $otra->id));
+
+        $this->alcance->establecerSucursalActiva($usuario, $otra->id);
+
+        $this->assertSame($otra->id, $this->alcance->sucursalActivaId($usuario));
+        $this->assertTrue($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $otra->id));
+        $this->assertFalse($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $principal->id));
+    }
+
+    public function test_alcance_global_sin_asignacion_no_habilita_piso(): void
     {
         $usuario = User::factory()->create();
         $usuario->givePermissionTo([
             AlcancePdv::PERMISO_ALCANCE_GLOBAL,
             self::PERMISO_PISO,
         ]);
-        $primera = Sucursal::factory()->create();
-        $segunda = Sucursal::factory()->create();
+        Sucursal::factory()->create();
+        Sucursal::factory()->create();
+
+        $this->assertTrue($this->alcance->idsSucursalesOperables($usuario)->isEmpty());
+        $this->assertNull($this->alcance->sucursalActivaId($usuario));
+        $this->assertFalse($this->alcance->permiteConsultaPiso($usuario, self::PERMISO_PISO));
+        $this->assertFalse($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO));
+    }
+
+    public function test_alcance_global_con_asignacion_no_amplia_operables(): void
+    {
+        $usuario = User::factory()->create();
+        $usuario->givePermissionTo([
+            AlcancePdv::PERMISO_ALCANCE_GLOBAL,
+            self::PERMISO_PISO,
+        ]);
+        $asignada = Sucursal::factory()->create();
+        $noAsignada = Sucursal::factory()->create();
+        $usuario->concederAccesoSucursal($asignada, esPrincipal: true);
 
         $operables = $this->alcance->idsSucursalesOperables($usuario);
 
+        $this->assertSame([$asignada->id], $operables->all());
         $this->assertTrue($this->alcance->permiteConsultaPiso($usuario, self::PERMISO_PISO));
-        $this->assertSame($operables->first(), $this->alcance->sucursalActivaId($usuario));
-        $this->assertTrue($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $operables->first()));
-        $this->assertFalse($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $segunda->id === $operables->first() ? $primera->id : $segunda->id));
+        $this->assertSame($asignada->id, $this->alcance->sucursalActivaId($usuario));
+        $this->assertTrue($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $asignada->id));
+        $this->assertFalse($this->alcance->permiteMutacionPiso($usuario, self::PERMISO_PISO, $noAsignada->id));
     }
 
     public function test_super_admin_sin_permiso_directo_no_tiene_alcance_pdv(): void

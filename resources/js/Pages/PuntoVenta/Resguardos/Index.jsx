@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Head } from '@inertiajs/react';
-import { Package, Loader2, AlertTriangle, MapPin } from 'lucide-react';
+import { Head, router } from '@inertiajs/react';
+import { Package, Loader2, AlertTriangle, Truck } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaTituloCard from '../../../Components/GeliaTituloCard';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
-import { geliaCardClass, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK } from '../../../utils/geliaTheme';
+import { geliaCardClass, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import FiltrosResguardos from './Partials/FiltrosResguardos';
 import ListadoResguardos from './Partials/ListadoResguardos';
 import BusquedaRapidaRecepcion from './Partials/BusquedaRapidaRecepcion';
 import AlertasCustodiaResguardo from './Partials/AlertasCustodiaResguardo';
+import SelectorSucursalActivaPdv from './Partials/SelectorSucursalActivaPdv';
 import useListadoResguardos from './Partials/useListadoResguardos';
 import { antiguedadValidaEnBandeja, paramsListadoResguardos } from './Partials/resguardosUtils';
 
@@ -24,6 +25,7 @@ export default function Index({
     catalogos = {},
     permisos = {},
     sucursal_activa: sucursalActiva = null,
+    sucursales_asignadas: sucursalesAsignadas = [],
     operativa = {},
 }) {
     const antiguedadConfigurada = Boolean(operativa.antiguedad_configurada);
@@ -47,6 +49,7 @@ export default function Index({
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [estado, setEstado] = useState(filtros.estado || '');
     const [antiguedad, setAntiguedad] = useState(filtros.antiguedad || '');
+    const [idsSeleccionados, setIdsSeleccionados] = useState([]);
     const debounceBusqueda = useRef(null);
 
     useEffect(() => {
@@ -81,6 +84,7 @@ export default function Index({
         }
 
         recargar(extra);
+        setIdsSeleccionados([]);
     };
 
     const onBusqueda = (valor) => {
@@ -108,7 +112,21 @@ export default function Index({
         recargar({ q: undefined, estado: undefined, antiguedad: undefined, page: 1 });
     };
 
-    const onIrAPagina = (page) => recargar({ page });
+    const onIrAPagina = (page) => {
+        recargar({ page });
+        setIdsSeleccionados([]);
+    };
+
+    const toggleSeleccion = (id) => {
+        setIdsSeleccionados((prev) => (
+            prev.includes(id) ? prev.filter((actual) => actual !== id) : [...prev, id]
+        ));
+    };
+
+    const irAEntregaMultiple = () => {
+        if (idsSeleccionados.length < 2) return;
+        router.visit(route('punto_venta.resguardos.entregas_multiples.create', { ids: idsSeleccionados }));
+    };
 
     const hayFiltrosActivos = Boolean(busqueda || estado || antiguedad);
 
@@ -138,15 +156,10 @@ export default function Index({
                     )}
                     className="!p-4 md:!p-5 lg:!p-6 !gap-3 md:!gap-4 [&_h1]:!text-2xl sm:[&_h1]:!text-3xl md:[&_h1]:!text-3xl"
                 >
-                    {sucursalActiva?.nombre && (
-                        <p className="text-[10px] md:text-[11px] font-bold theme-text-muted uppercase tracking-widest m-0 flex items-center gap-1.5 flex-wrap">
-                            <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--color-primario)' }} aria-hidden />
-                            <span>
-                                Sucursal:{' '}
-                                <span className="theme-text-main">{sucursalActiva.nombre}</span>
-                            </span>
-                        </p>
-                    )}
+                    <SelectorSucursalActivaPdv
+                        sucursalActiva={sucursalActiva}
+                        sucursalesAsignadas={sucursalesAsignadas}
+                    />
                 </GeliaTituloCard>
 
                 <BusquedaRapidaRecepcion puedeRecibir={Boolean(permisos.recibir)} />
@@ -230,11 +243,32 @@ export default function Index({
                         resguardos={resguardosVista}
                         bandeja={bandejaRender}
                         catalogos={catalogos}
+                        permisos={permisos}
                         hayFiltrosActivos={hayFiltrosActivos}
                         onLimpiarFiltros={onLimpiar}
                         puedeRecibir={Boolean(permisos.recibir)}
                         puedeEntregar={Boolean(permisos.entregar)}
+                        idsSeleccionados={idsSeleccionados}
+                        onToggleSeleccion={permisos.entregar && bandejaRender === 'en_custodia' ? toggleSeleccion : undefined}
+                        onReponerExito={() => recargar({ page: resguardosVista?.current_page || 1 })}
                     />
+                )}
+
+                {Boolean(permisos.entregar) && bandejaRender === 'en_custodia' && idsSeleccionados.length > 0 && (
+                    <div className={`${geliaCardClass()} p-4 sticky bottom-3 z-10 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between`}>
+                        <p className="text-sm font-bold theme-text-main m-0">
+                            {idsSeleccionados.length} seleccionado{idsSeleccionados.length === 1 ? '' : 's'} para entrega conjunta
+                        </p>
+                        <button
+                            type="button"
+                            onClick={irAEntregaMultiple}
+                            disabled={idsSeleccionados.length < 2}
+                            className={`${THEME_BTN_PRIMARY} min-h-[48px] inline-flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest disabled:opacity-50`}
+                        >
+                            <Truck className="w-4 h-4" />
+                            Entregar seleccionados
+                        </button>
+                    </div>
                 )}
 
                 <GeliaPaginacion paginator={resguardosVista} onIrAPagina={onIrAPagina} />

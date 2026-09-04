@@ -43,6 +43,8 @@ class RegistrarEntregaResguardoPdvRequest extends PdvOperacionPisoRequest
             'firma' => ['required', 'file', 'image', 'max:10240'],
             'evidencias' => ['sometimes', 'array'],
             'evidencias.*' => ['file', 'image', 'max:10240'],
+            'bulto_ids' => ['sometimes', 'array', 'min:1'],
+            'bulto_ids.*' => ['integer', 'distinct', 'min:1'],
         ];
     }
 

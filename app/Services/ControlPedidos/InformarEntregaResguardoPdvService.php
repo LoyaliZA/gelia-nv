@@ -20,6 +20,10 @@ class InformarEntregaResguardoPdvService
 
     public function ejecutar(ResguardoPdv $resguardo, ResguardoPdvEntrega $entrega, int $actorId): bool
     {
+        if ($resguardo->estado !== ResguardoPdv::ESTADO_ENTREGADO) {
+            return true;
+        }
+
         if ($this->integracionCompletada($entrega)) {
             return true;
         }

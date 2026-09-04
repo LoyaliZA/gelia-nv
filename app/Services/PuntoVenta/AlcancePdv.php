@@ -22,16 +22,7 @@ final class AlcancePdv implements ResuelveAlcancePdv
      */
     public function idsSucursalesOperables(User $user): Collection
     {
-        $asignadas = $user->idsSucursalesOperables();
-
-        if (! $this->tieneAlcanceGlobal($user)) {
-            return $asignadas;
-        }
-
-        return $this->idsSucursalesElegibles()
-            ->merge($asignadas)
-            ->unique()
-            ->values();
+        return $user->idsSucursalesOperables();
     }
 
     /**
@@ -66,11 +57,6 @@ final class AlcancePdv implements ResuelveAlcancePdv
         }
 
         if ($operables->count() === 1) {
-            return (int) $operables->first();
-        }
-
-        // ponytail: sin selector de piso, alcance global usa la primera sucursal elegible
-        if ($this->tieneAlcanceGlobal($user)) {
             return (int) $operables->first();
         }
 

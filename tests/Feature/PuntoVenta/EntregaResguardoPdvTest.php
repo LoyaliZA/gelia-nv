@@ -377,6 +377,167 @@ class EntregaResguardoPdvTest extends TestCase
         Storage::disk('local')->assertDirectoryEmpty('pdv/resguardos/'.$resguardo->id);
     }
 
+    public function test_entrega_parcial_deja_custodia_sin_integrar_pedido(): void
+    {
+        Event::fake([EntregaResguardoPdvCompletada::class]);
+
+        $pedido = $this->crearPedidoEnviado();
+        $resguardo = $this->crearResguardoEnCustodia($pedido, 2);
+        $bultoEntregar = ResguardoPdvBulto::query()->where('resguardo_id', $resguardo->id)->orderBy('id')->first();
+        $bultoRestante = ResguardoPdvBulto::query()->where('resguardo_id', $resguardo->id)->orderByDesc('id')->first();
+
+        $this->actingAs($this->usuario)->putJson(
+            route('punto_venta.resguardos.entrega', $resguardo),
+            $this->payloadEntrega($resguardo, bultoIds: [$bultoEntregar->id])
+        )->assertOk()
+            ->assertJsonPath('resguardo.estado', ResguardoPdv::ESTADO_EN_CUSTODIA);
+
+        $resguardo->refresh();
+        $this->assertNull($resguardo->entrega_completada_at);
+        $this->assertSame(ResguardoPdvBulto::ESTADO_ENTREGADO, $bultoEntregar->fresh()->estado);
+        $this->assertSame(ResguardoPdvBulto::ESTADO_RECIBIDO, $bultoRestante->fresh()->estado);
+
+        $evento = ResguardoPdvEvento::query()->where('resguardo_id', $resguardo->id)->first();
+        $this->assertSame(ResguardoPdvEvento::TIPO_ENTREGA_PARCIAL, $evento->tipo_evento);
+        Event::assertNotDispatched(EntregaResguardoPdvCompletada::class);
+
+        $entrega = ResguardoPdvEntrega::query()->where('resguardo_id', $resguardo->id)->firstOrFail();
+        app(InformarEntregaResguardoPdvService::class)->ejecutar(
+            $resguardo->fresh(),
+            $entrega->fresh(),
+            $this->usuario->id
+        );
+
+        $pedido->refresh()->load('estatus');
+        $this->assertSame(CatalogoEstatusPedido::FASE_ENVIADO, $pedido->estatus?->fase_ciclo);
+        $this->assertSame(0, PedidoBmaHistorialEstado::query()->where('pedido_bma_id', $pedido->id)->count());
+    }
+
+    public function test_entrega_multiple_completa_pedidos_con_firmas_independientes(): void
+    {
+        Event::fake([EntregaResguardoPdvCompletada::class]);
+
+        $pedidoA = $this->crearPedidoEnviado();
+        $pedidoB = $this->crearPedidoEnviado();
+        $resguardoA = $this->crearResguardoEnCustodia($pedidoA);
+        $resguardoB = $this->crearResguardoEnCustodia($pedidoB);
+
+        $this->actingAs($this->usuario)->post(
+            route('punto_venta.resguardos.entregas_multiples.store'),
+            [
+                'entregas' => [
+                    [
+                        'resguardo_id' => $resguardoA->id,
+                        'version' => 1,
+                        'idempotency_key' => 'pdv:em:a:'.$resguardoA->id,
+                        'relacion' => ResguardoPdvEntrega::RELACION_TITULAR,
+                        'nombre_quien_retira' => 'Persona A',
+                        'metodo_validacion' => RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FIRMA,
+                        'firma' => UploadedFile::fake()->image('firma-a.png'),
+                    ],
+                    [
+                        'resguardo_id' => $resguardoB->id,
+                        'version' => 1,
+                        'idempotency_key' => 'pdv:em:b:'.$resguardoB->id,
+                        'relacion' => ResguardoPdvEntrega::RELACION_TERCERO,
+                        'nombre_quien_retira' => 'Persona B',
+                        'metodo_validacion' => RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FIRMA,
+                        'firma' => UploadedFile::fake()->image('firma-b.png'),
+                    ],
+                ],
+            ]
+        )->assertOk()
+            ->assertJsonPath('resguardos.0.estado', ResguardoPdv::ESTADO_ENTREGADO)
+            ->assertJsonPath('resguardos.1.estado', ResguardoPdv::ESTADO_ENTREGADO);
+
+        $this->assertSame(2, ResguardoPdvEntrega::query()->count());
+        $this->assertSame(2, ResguardoPdvEvento::query()->where('tipo_evento', ResguardoPdvEvento::TIPO_ENTREGA_MULTIPLE)->count());
+        $this->assertSame(ResguardoPdvEntrega::RELACION_TITULAR, ResguardoPdvEntrega::query()->where('resguardo_id', $resguardoA->id)->value('relacion'));
+        $this->assertSame(ResguardoPdvEntrega::RELACION_TERCERO, ResguardoPdvEntrega::query()->where('resguardo_id', $resguardoB->id)->value('relacion'));
+        Event::assertDispatchedTimes(EntregaResguardoPdvCompletada::class, 2);
+
+        foreach ([$resguardoA, $resguardoB] as $resguardo) {
+            $entrega = ResguardoPdvEntrega::query()->where('resguardo_id', $resguardo->id)->firstOrFail();
+            app(InformarEntregaResguardoPdvService::class)->ejecutar(
+                $resguardo->fresh(),
+                $entrega->fresh(),
+                $this->usuario->id
+            );
+        }
+
+        $this->assertSame(CatalogoEstatusPedido::FASE_ENTREGADO, $pedidoA->fresh()->load('estatus')->estatus?->fase_ciclo);
+        $this->assertSame(CatalogoEstatusPedido::FASE_ENTREGADO, $pedidoB->fresh()->load('estatus')->estatus?->fase_ciclo);
+    }
+
+    public function test_entrega_multiple_exige_permiso_entregar_y_sucursal_activa(): void
+    {
+        $resguardoA = $this->crearResguardoEnCustodia();
+        $resguardoB = $this->crearResguardoEnCustodia();
+
+        $sinEntregar = User::factory()->create();
+        $sinEntregar->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_VER,
+        ]);
+        $sinEntregar->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+
+        $this->actingAs($sinEntregar)->post(
+            route('punto_venta.resguardos.entregas_multiples.store'),
+            $this->payloadEntregaMultiple($resguardoA, $resguardoB)
+        )->assertForbidden();
+
+        $otra = Sucursal::factory()->create(['nombre' => 'Otra sucursal']);
+        $ajeno = ResguardoPdv::factory()->create([
+            'sucursal_id' => $otra->id,
+            'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
+            'cantidad_bultos_esperada' => 1,
+            'version' => 1,
+        ]);
+        ResguardoPdvBulto::query()->create([
+            'resguardo_id' => $ajeno->id,
+            'folio' => 'CJA-AJENO',
+            'tipo' => ResguardoPdvBulto::TIPO_CAJA,
+            'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO,
+            'recepcion_at' => now(),
+            'recepcion_por_id' => $this->usuario->id,
+            'version' => 1,
+        ]);
+
+        $this->actingAs($this->usuario)->post(
+            route('punto_venta.resguardos.entregas_multiples.store'),
+            $this->payloadEntregaMultiple($resguardoA, $ajeno)
+        )->assertForbidden();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function payloadEntregaMultiple(ResguardoPdv $a, ResguardoPdv $b): array
+    {
+        return [
+            'entregas' => [
+                [
+                    'resguardo_id' => $a->id,
+                    'version' => (int) $a->version,
+                    'idempotency_key' => 'pdv:em:a:'.$a->id,
+                    'relacion' => ResguardoPdvEntrega::RELACION_TITULAR,
+                    'nombre_quien_retira' => 'Persona A',
+                    'metodo_validacion' => RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FIRMA,
+                    'firma' => UploadedFile::fake()->image('firma-a.png'),
+                ],
+                [
+                    'resguardo_id' => $b->id,
+                    'version' => (int) $b->version,
+                    'idempotency_key' => 'pdv:em:b:'.$b->id,
+                    'relacion' => ResguardoPdvEntrega::RELACION_TITULAR,
+                    'nombre_quien_retira' => 'Persona B',
+                    'metodo_validacion' => RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FIRMA,
+                    'firma' => UploadedFile::fake()->image('firma-b.png'),
+                ],
+            ],
+        ];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -385,8 +546,9 @@ class EntregaResguardoPdvTest extends TestCase
         ?string $clave = null,
         string $relacion = ResguardoPdvEntrega::RELACION_TITULAR,
         string $nombre = 'Persona titular',
+        ?array $bultoIds = null,
     ): array {
-        return [
+        $payload = [
             'version' => (int) $resguardo->version,
             'idempotency_key' => $clave ?? 'pdv:ent:'.$resguardo->id.':default',
             'relacion' => $relacion,
@@ -394,31 +556,39 @@ class EntregaResguardoPdvTest extends TestCase
             'metodo_validacion' => RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FIRMA,
             'firma' => UploadedFile::fake()->image('firma.png'),
         ];
+
+        if ($bultoIds !== null) {
+            $payload['bulto_ids'] = $bultoIds;
+        }
+
+        return $payload;
     }
 
-    private function crearResguardoEnCustodia(?PedidoBma $pedido = null): ResguardoPdv
+    private function crearResguardoEnCustodia(?PedidoBma $pedido = null, int $bultos = 1): ResguardoPdv
     {
         $resguardo = ResguardoPdv::factory()->create([
             'pedido_bma_id' => $pedido?->id,
             'sucursal_id' => $this->sucursal->id,
             'almacen_id' => $this->almacen->id,
             'estado' => ResguardoPdv::ESTADO_EN_CUSTODIA,
-            'cantidad_bultos_esperada' => 1,
+            'cantidad_bultos_esperada' => $bultos,
             'recepcion_fisica_at' => now()->subHour(),
             'entrega_bloqueada' => false,
             'version' => 1,
         ]);
 
-        ResguardoPdvBulto::query()->create([
-            'resguardo_id' => $resguardo->id,
-            'pedido_bma_id' => $pedido?->id,
-            'folio' => 'CJA-'.$resguardo->id,
-            'tipo' => ResguardoPdvBulto::TIPO_CAJA,
-            'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO,
-            'recepcion_at' => now()->subHour(),
-            'recepcion_por_id' => $this->usuario->id,
-            'version' => 1,
-        ]);
+        for ($i = 1; $i <= $bultos; $i++) {
+            ResguardoPdvBulto::query()->create([
+                'resguardo_id' => $resguardo->id,
+                'pedido_bma_id' => $pedido?->id,
+                'folio' => 'CJA-'.$resguardo->id.'-'.$i,
+                'tipo' => ResguardoPdvBulto::TIPO_CAJA,
+                'estado' => ResguardoPdvBulto::ESTADO_RECIBIDO,
+                'recepcion_at' => now()->subHour(),
+                'recepcion_por_id' => $this->usuario->id,
+                'version' => 1,
+            ]);
+        }
 
         return $resguardo;
     }

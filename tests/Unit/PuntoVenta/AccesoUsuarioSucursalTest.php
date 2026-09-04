@@ -102,4 +102,35 @@ class AccesoUsuarioSucursalTest extends TestCase
         $this->assertFalse($operable->users()->where('users.id', $usuario->id)->exists());
         $this->assertTrue($operable->users()->withTrashed()->where('users.id', $usuario->id)->exists());
     }
+
+    public function test_sincronizar_sucursales_asignadas_reemplaza_y_marca_principal(): void
+    {
+        $usuario = User::factory()->create();
+        $norte = Sucursal::factory()->create(['nombre' => 'Norte']);
+        $sur = Sucursal::factory()->create(['nombre' => 'Sur']);
+        $este = Sucursal::factory()->create(['nombre' => 'Este']);
+
+        $usuario->sincronizarSucursalesAsignadas([$norte->id, $sur->id], $sur->id);
+
+        $this->assertSame(
+            [$norte->id, $sur->id],
+            $usuario->fresh()->idsSucursalesOperables()->sort()->values()->all()
+        );
+        $this->assertTrue($sur->is($usuario->fresh()->sucursalPrincipal()));
+
+        $usuario->sincronizarSucursalesAsignadas([$este->id], null);
+
+        $this->assertSame([$este->id], $usuario->fresh()->idsSucursalesOperables()->all());
+        $this->assertTrue($este->is($usuario->fresh()->sucursalPrincipal()));
+    }
+
+    public function test_sincronizar_vacio_elimina_asignaciones(): void
+    {
+        $usuario = User::factory()->create();
+        $usuario->concederAccesoSucursal(Sucursal::factory()->create(), esPrincipal: true);
+
+        $usuario->sincronizarSucursalesAsignadas([], null);
+
+        $this->assertTrue($usuario->fresh()->idsSucursalesOperables()->isEmpty());
+    }
 }

@@ -46,7 +46,9 @@ class AutorizacionAlcancePdvHttpTest extends TestCase
         $sinSucursal = User::factory()->create();
         $sinSucursal->givePermissionTo(self::PERMISO_PISO);
 
-        $this->actingAs($sinSucursal)->get('/__pdv/piso')->assertForbidden();
+        $this->actingAs($sinSucursal)->get('/__pdv/piso')
+            ->assertRedirect(route('punto_venta.alcance.configurar'));
+        $this->actingAs($sinSucursal)->getJson('/__pdv/piso')->assertForbidden();
 
         $conSucursal = User::factory()->create();
         $conSucursal->concederAccesoSucursal(Sucursal::factory()->create(), esPrincipal: true);

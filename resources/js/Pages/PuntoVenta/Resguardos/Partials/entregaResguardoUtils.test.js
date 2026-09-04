@@ -6,6 +6,7 @@ import {
     limpiarClaveIdempotenciaEntrega,
     mensajeErrorEntrega,
     validarFormularioEntrega,
+    validarPasoBultos,
     validarPasoReceptor,
     validarPasoEvidencia,
     esConflictoVersion,
@@ -55,8 +56,10 @@ describe('entregaResguardoUtils', () => {
             relacion: 'titular',
             nombreQuienRetira: 'Titular',
             tieneFirma: true,
+            bultoIds: [1],
         });
         expect(errores).toEqual({});
+        expect(validarPasoBultos({ bultoIds: [] }).bulto_ids).toBeTruthy();
     });
 
     it('bloquea avance de receptor sin nombre', () => {
@@ -89,6 +92,7 @@ describe('entregaResguardoUtils', () => {
             observaciones: 'Sin novedad',
             firma: fichero,
             evidencias: [],
+            bultoIds: [11, 12],
         });
 
         expect(form.get('version')).toBe('2');
@@ -98,6 +102,8 @@ describe('entregaResguardoUtils', () => {
         expect(form.get('metodo_validacion')).toBe('firma');
         expect(form.get('observaciones')).toBe('Sin novedad');
         expect(form.get('firma')).toBe(fichero);
+        expect(form.get('bulto_ids[0]')).toBe('11');
+        expect(form.get('bulto_ids[1]')).toBe('12');
     });
 
     it('traduce errores HTTP de concurrencia, conflicto y validación', () => {

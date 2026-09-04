@@ -27,6 +27,10 @@ class RegistrarEntregaResguardoPdvService
         private readonly ResuelveAlcancePdv $alcance,
     ) {}
 
+    /**
+     * @param  list<int>|null  $bultoIds
+     * @param  list<UploadedFile>  $evidencias
+     */
     public function ejecutar(
         ResguardoPdv $resguardo,
         User $actor,
@@ -38,13 +42,9 @@ class RegistrarEntregaResguardoPdvService
         UploadedFile $firma,
         ?string $observaciones = null,
         array $evidencias = [],
+        ?array $bultoIds = null,
+        bool $operacionMultiple = false,
     ): ResguardoPdv {
-        $this->alcance->asegurarMutacionPiso(
-            $actor,
-            PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR,
-            (int) $resguardo->sucursal_id
-        );
-
         $pathsEscritos = [];
 
         try {
@@ -59,141 +59,25 @@ class RegistrarEntregaResguardoPdvService
                 $firma,
                 $observaciones,
                 $evidencias,
+                $bultoIds,
+                $operacionMultiple,
                 &$pathsEscritos,
             ) {
-                $resguardo = ResguardoPdv::query()
-                    ->with(['bultos'])
-                    ->lockForUpdate()
-                    ->findOrFail($resguardo->id);
-
-                $reintento = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
-                if ($reintento !== null) {
-                    return $reintento;
-                }
-
-                $this->assertVersionYEstado($resguardo, $versionEsperada);
-                $this->assertEntregable($resguardo);
-                $this->assertMetodoValidacion($metodoValidacion);
-
-                $bultosEntregables = $this->bultosEntregables($resguardo);
-                $ahora = now();
-                $tipoEvento = $relacion === ResguardoPdvEntrega::RELACION_TERCERO
-                    ? ResguardoPdvEvento::TIPO_ENTREGA_TERCERO
-                    : ResguardoPdvEvento::TIPO_ENTREGA_TITULAR;
-
-                $snapshotEntrega = [
-                    'receptor' => [
-                        'nombre' => $nombreQuienRetira,
-                        'relacion' => $relacion,
-                    ],
-                    'metodo_validacion' => $metodoValidacion,
-                    'observaciones' => $observaciones,
-                    'bultos' => $bultosEntregables->map(fn (ResguardoPdvBulto $bulto) => [
-                        'id' => $bulto->id,
-                        'folio' => $bulto->folio,
-                        'tipo' => $bulto->tipo,
-                    ])->values()->all(),
-                    'integracion_cp' => [
-                        'estado' => 'pendiente',
-                        'idempotency_key' => $idempotencyKey,
-                        'intentos' => 0,
-                    ],
-                ];
-
-                try {
-                    $entrega = ResguardoPdvEntrega::query()->create([
-                        'resguardo_id' => $resguardo->id,
-                        'pedido_bma_id' => $resguardo->pedido_bma_id,
-                        'relacion' => $relacion,
-                        'nombre_quien_retira' => $nombreQuienRetira,
-                        'entregado_por_id' => $actor->id,
-                        'entregado_at' => $ahora,
-                        'snapshot_json' => $snapshotEntrega,
-                        'idempotency_key' => $idempotencyKey,
-                        'version' => 1,
-                    ]);
-                } catch (UniqueConstraintViolationException $e) {
-                    $recuperado = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
-                    if ($recuperado !== null) {
-                        return $recuperado;
-                    }
-
-                    throw $e;
-                }
-
-                $entrega->bultos()->attach($bultosEntregables->pluck('id')->all());
-
-                foreach ($bultosEntregables as $bulto) {
-                    $bulto->update([
-                        'estado' => ResguardoPdvBulto::ESTADO_ENTREGADO,
-                        'entrega_at' => $ahora,
-                        'version' => $bulto->version + 1,
-                    ]);
-                }
-
-                $resguardo->update([
-                    'estado' => ResguardoPdv::ESTADO_ENTREGADO,
-                    'entrega_completada_at' => $ahora,
-                    'version' => $resguardo->version + 1,
-                ]);
-
-                try {
-                    $evento = ResguardoPdvEvento::query()->create([
-                        'resguardo_id' => $resguardo->id,
-                        'tipo_evento' => $tipoEvento,
-                        'estado_anterior' => ResguardoPdv::ESTADO_EN_CUSTODIA,
-                        'estado_nuevo' => ResguardoPdv::ESTADO_ENTREGADO,
-                        'actor_id' => $actor->id,
-                        'ocurrido_at' => $ahora,
-                        'snapshot_json' => [
-                            'entrega_id' => $entrega->id,
-                            'receptor' => $snapshotEntrega['receptor'],
-                            'metodo_validacion' => $metodoValidacion,
-                            'observaciones' => $observaciones,
-                            'cantidad_entregada' => $bultosEntregables->count(),
-                        ],
-                        'idempotency_key' => 'evt:'.$idempotencyKey,
-                    ]);
-                } catch (UniqueConstraintViolationException $e) {
-                    $recuperado = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
-                    if ($recuperado !== null) {
-                        return $recuperado;
-                    }
-
-                    throw $e;
-                }
-
-                $this->persistirFirma(
+                return $this->registrar(
                     $resguardo,
-                    $entrega,
-                    $evento,
+                    $actor,
+                    $versionEsperada,
+                    $idempotencyKey,
+                    $relacion,
+                    $nombreQuienRetira,
+                    $metodoValidacion,
                     $firma,
-                    $actor->id,
-                    $ahora,
-                    $pathsEscritos
-                );
-
-                $this->persistirEvidenciasAdicionales(
-                    $resguardo,
-                    $entrega,
-                    $evento,
+                    $observaciones,
                     $evidencias,
-                    $actor->id,
-                    $ahora,
+                    $bultoIds,
+                    $operacionMultiple,
                     $pathsEscritos
                 );
-
-                $resguardo = $resguardo->fresh(['bultos', 'entregas']);
-
-                EntregaResguardoPdvCompletada::dispatch(
-                    $resguardo,
-                    $entrega->fresh(),
-                    $evento,
-                    $actor->id,
-                    (int) $resguardo->sucursal_id
-                );
-
-                return $resguardo;
             });
         } catch (\Throwable $e) {
             $this->eliminarArchivosHuerfanos($pathsEscritos);
@@ -201,7 +85,176 @@ class RegistrarEntregaResguardoPdvService
         }
     }
 
-    private function resolverReintentoIdempotente(ResguardoPdv $resguardo, string $idempotencyKey): ?ResguardoPdv
+    /**
+     * @param  list<int>|null  $bultoIds
+     * @param  list<UploadedFile>  $evidencias
+     * @param  list<string>  $pathsEscritos
+     */
+    public function registrar(
+        ResguardoPdv $resguardo,
+        User $actor,
+        int $versionEsperada,
+        string $idempotencyKey,
+        string $relacion,
+        string $nombreQuienRetira,
+        string $metodoValidacion,
+        UploadedFile $firma,
+        ?string $observaciones,
+        array $evidencias,
+        ?array $bultoIds,
+        bool $operacionMultiple,
+        array &$pathsEscritos,
+    ): ResguardoPdv {
+        $this->alcance->asegurarMutacionPiso(
+            $actor,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR,
+            (int) $resguardo->sucursal_id
+        );
+
+        $resguardo = ResguardoPdv::query()
+            ->with(['bultos'])
+            ->lockForUpdate()
+            ->findOrFail($resguardo->id);
+
+        $reintento = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
+        if ($reintento !== null) {
+            return $reintento;
+        }
+
+        $this->assertVersionYEstado($resguardo, $versionEsperada);
+        $this->assertEntregable($resguardo);
+        $this->assertMetodoValidacion($metodoValidacion);
+
+        $bultosEntregables = $this->resolverBultosSeleccionados($resguardo, $bultoIds);
+        $ahora = now();
+        $entregaCompleta = $this->entregaCompletaElPedido($resguardo, $bultosEntregables);
+        $tipoEvento = $this->tipoEvento($relacion, $entregaCompleta, $operacionMultiple);
+        $estadoNuevo = $entregaCompleta
+            ? ResguardoPdv::ESTADO_ENTREGADO
+            : $this->estadoTrasEntregaParcial($resguardo, $bultosEntregables);
+
+        $snapshotEntrega = [
+            'receptor' => [
+                'nombre' => $nombreQuienRetira,
+                'relacion' => $relacion,
+            ],
+            'metodo_validacion' => $metodoValidacion,
+            'observaciones' => $observaciones,
+            'parcial' => ! $entregaCompleta,
+            'operacion_multiple' => $operacionMultiple,
+            'bultos' => $bultosEntregables->map(fn (ResguardoPdvBulto $bulto) => [
+                'id' => $bulto->id,
+                'folio' => $bulto->folio,
+                'tipo' => $bulto->tipo,
+            ])->values()->all(),
+            'integracion_cp' => [
+                'estado' => $entregaCompleta ? 'pendiente' : 'omitida',
+                'idempotency_key' => $idempotencyKey,
+                'intentos' => 0,
+            ],
+        ];
+
+        try {
+            $entrega = ResguardoPdvEntrega::query()->create([
+                'resguardo_id' => $resguardo->id,
+                'pedido_bma_id' => $resguardo->pedido_bma_id,
+                'relacion' => $relacion,
+                'nombre_quien_retira' => $nombreQuienRetira,
+                'entregado_por_id' => $actor->id,
+                'entregado_at' => $ahora,
+                'snapshot_json' => $snapshotEntrega,
+                'idempotency_key' => $idempotencyKey,
+                'version' => 1,
+            ]);
+        } catch (UniqueConstraintViolationException $e) {
+            $recuperado = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
+            if ($recuperado !== null) {
+                return $recuperado;
+            }
+
+            throw $e;
+        }
+
+        $entrega->bultos()->attach($bultosEntregables->pluck('id')->all());
+
+        foreach ($bultosEntregables as $bulto) {
+            $bulto->update([
+                'estado' => ResguardoPdvBulto::ESTADO_ENTREGADO,
+                'entrega_at' => $ahora,
+                'version' => $bulto->version + 1,
+            ]);
+        }
+
+        $resguardo->update([
+            'estado' => $estadoNuevo,
+            'entrega_completada_at' => $entregaCompleta ? $ahora : $resguardo->entrega_completada_at,
+            'version' => $resguardo->version + 1,
+        ]);
+
+        try {
+            $evento = ResguardoPdvEvento::query()->create([
+                'resguardo_id' => $resguardo->id,
+                'tipo_evento' => $tipoEvento,
+                'estado_anterior' => ResguardoPdv::ESTADO_EN_CUSTODIA,
+                'estado_nuevo' => $estadoNuevo,
+                'actor_id' => $actor->id,
+                'ocurrido_at' => $ahora,
+                'snapshot_json' => [
+                    'entrega_id' => $entrega->id,
+                    'receptor' => $snapshotEntrega['receptor'],
+                    'metodo_validacion' => $metodoValidacion,
+                    'observaciones' => $observaciones,
+                    'cantidad_entregada' => $bultosEntregables->count(),
+                    'parcial' => ! $entregaCompleta,
+                    'operacion_multiple' => $operacionMultiple,
+                ],
+                'idempotency_key' => 'evt:'.$idempotencyKey,
+            ]);
+        } catch (UniqueConstraintViolationException $e) {
+            $recuperado = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
+            if ($recuperado !== null) {
+                return $recuperado;
+            }
+
+            throw $e;
+        }
+
+        $this->persistirFirma(
+            $resguardo,
+            $entrega,
+            $evento,
+            $firma,
+            $actor->id,
+            $ahora,
+            $pathsEscritos
+        );
+
+        $this->persistirEvidenciasAdicionales(
+            $resguardo,
+            $entrega,
+            $evento,
+            $evidencias,
+            $actor->id,
+            $ahora,
+            $pathsEscritos
+        );
+
+        $resguardo = $resguardo->fresh(['bultos', 'entregas']);
+
+        if ($entregaCompleta) {
+            EntregaResguardoPdvCompletada::dispatch(
+                $resguardo,
+                $entrega->fresh(),
+                $evento,
+                $actor->id,
+                (int) $resguardo->sucursal_id
+            );
+        }
+
+        return $resguardo;
+    }
+
+    public function resolverReintentoIdempotente(ResguardoPdv $resguardo, string $idempotencyKey): ?ResguardoPdv
     {
         $entrega = ResguardoPdvEntrega::query()
             ->where('idempotency_key', $idempotencyKey)
@@ -218,6 +271,16 @@ class RegistrarEntregaResguardoPdvService
         }
 
         return $resguardo->fresh(['bultos', 'entregas']);
+    }
+
+    /**
+     * @param  list<string>  $pathsEscritos
+     */
+    public function eliminarArchivosHuerfanos(array $pathsEscritos): void
+    {
+        foreach ($pathsEscritos as $ruta) {
+            Storage::disk('local')->delete($ruta);
+        }
     }
 
     private function assertVersionYEstado(ResguardoPdv $resguardo, int $versionEsperada): void
@@ -262,17 +325,9 @@ class RegistrarEntregaResguardoPdvService
             ]);
         }
 
-        $bultos = $this->bultosEntregables($resguardo);
-        if ($bultos->isEmpty()) {
+        if ($this->bultosEntregables($resguardo)->isEmpty()) {
             throw ValidationException::withMessages([
                 'bultos' => 'No hay bultos en custodia listos para entregar.',
-            ]);
-        }
-
-        $esperada = (int) $resguardo->cantidad_bultos_esperada;
-        if ($bultos->count() !== $esperada) {
-            throw ValidationException::withMessages([
-                'bultos' => "La entrega total requiere exactamente {$esperada} bulto(s) en custodia.",
             ]);
         }
     }
@@ -284,6 +339,97 @@ class RegistrarEntregaResguardoPdvService
                 'metodo_validacion' => 'El método de validación no es válido.',
             ]);
         }
+    }
+
+    /**
+     * @param  list<int>|null  $bultoIds
+     * @return \Illuminate\Support\Collection<int, ResguardoPdvBulto>
+     */
+    private function resolverBultosSeleccionados(ResguardoPdv $resguardo, ?array $bultoIds)
+    {
+        $entregables = $this->bultosEntregables($resguardo);
+
+        if ($bultoIds === null) {
+            return $entregables;
+        }
+
+        $solicitados = collect($bultoIds)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($solicitados->isEmpty()) {
+            throw ValidationException::withMessages([
+                'bulto_ids' => 'Seleccione al menos un bulto para entregar.',
+            ]);
+        }
+
+        $porId = $entregables->keyBy('id');
+        $seleccionados = $solicitados->map(function (int $id) use ($porId) {
+            $bulto = $porId->get($id);
+            if (! $bulto) {
+                throw ValidationException::withMessages([
+                    'bulto_ids' => 'Uno o más bultos no están en custodia o no pertenecen a este resguardo.',
+                ]);
+            }
+
+            return $bulto;
+        });
+
+        return $seleccionados->values();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, ResguardoPdvBulto>  $bultosEntregables
+     */
+    private function entregaCompletaElPedido(ResguardoPdv $resguardo, $bultosEntregables): bool
+    {
+        $idsEntregando = $bultosEntregables->pluck('id')->all();
+        $recibidosRestantes = $resguardo->bultos
+            ->filter(fn (ResguardoPdvBulto $bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO
+                && ! in_array($bulto->id, $idsEntregando, true))
+            ->count();
+
+        if ($recibidosRestantes > 0) {
+            return false;
+        }
+
+        $yaEntregados = $resguardo->bultos
+            ->filter(fn (ResguardoPdvBulto $bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_ENTREGADO)
+            ->count();
+
+        return ($yaEntregados + $bultosEntregables->count()) === (int) $resguardo->cantidad_bultos_esperada;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, ResguardoPdvBulto>  $bultosEntregables
+     */
+    private function estadoTrasEntregaParcial(ResguardoPdv $resguardo, $bultosEntregables): string
+    {
+        $idsEntregando = $bultosEntregables->pluck('id')->all();
+        $quedanEnCustodia = $resguardo->bultos
+            ->filter(fn (ResguardoPdvBulto $bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO
+                && ! in_array($bulto->id, $idsEntregando, true))
+            ->isNotEmpty();
+
+        return $quedanEnCustodia
+            ? ResguardoPdv::ESTADO_EN_CUSTODIA
+            : ResguardoPdv::ESTADO_PENDIENTE_RECEPCION;
+    }
+
+    private function tipoEvento(string $relacion, bool $entregaCompleta, bool $operacionMultiple): string
+    {
+        if ($operacionMultiple) {
+            return ResguardoPdvEvento::TIPO_ENTREGA_MULTIPLE;
+        }
+
+        if (! $entregaCompleta) {
+            return ResguardoPdvEvento::TIPO_ENTREGA_PARCIAL;
+        }
+
+        return $relacion === ResguardoPdvEntrega::RELACION_TERCERO
+            ? ResguardoPdvEvento::TIPO_ENTREGA_TERCERO
+            : ResguardoPdvEvento::TIPO_ENTREGA_TITULAR;
     }
 
     /**
@@ -371,16 +517,6 @@ class RegistrarEntregaResguardoPdvService
                 'inmutable' => true,
                 'metadata_json' => ['origen' => 'entrega_fisica'],
             ]);
-        }
-    }
-
-    /**
-     * @param  list<string>  $pathsEscritos
-     */
-    private function eliminarArchivosHuerfanos(array $pathsEscritos): void
-    {
-        foreach ($pathsEscritos as $ruta) {
-            Storage::disk('local')->delete($ruta);
         }
     }
 }

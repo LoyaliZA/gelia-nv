@@ -31,13 +31,36 @@ class ConsultaAuditoriaResguardoPdvService
      */
     public function obtener(User $user, ResguardoPdv $resguardo, array $filtros = []): array
     {
-        $this->alcance->asegurarConsultaPiso($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+        $this->asegurarAccesoPiso($user, $resguardo);
 
-        $activaId = $this->alcance->sucursalActivaId($user);
-        if ($activaId === null || (int) $resguardo->sucursal_id !== $activaId) {
-            throw (new ModelNotFoundException)->setModel(ResguardoPdv::class, [$resguardo->id]);
-        }
+        return $this->construirPayload($user, $resguardo, $filtros);
+    }
 
+    /**
+     * @param  array<string, mixed>  $filtros
+     * @return array{
+     *     timeline: list<array<string, mixed>>,
+     *     filtros: array<string, mixed>,
+     *     total: int
+     * }
+     */
+    public function obtenerParaExportacion(User $user, ResguardoPdv $resguardo, array $filtros = []): array
+    {
+        $this->asegurarAccesoExportacion($user, $resguardo);
+
+        return $this->construirPayload($user, $resguardo, $filtros);
+    }
+
+    /**
+     * @param  array<string, mixed>  $filtros
+     * @return array{
+     *     timeline: list<array<string, mixed>>,
+     *     filtros: array<string, mixed>,
+     *     total: int
+     * }
+     */
+    private function construirPayload(User $user, ResguardoPdv $resguardo, array $filtros = []): array
+    {
         $filtrosNormalizados = $this->normalizarFiltros($filtros);
         $verDatosOperativos = $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR)
             || $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_CORREGIR);
@@ -115,6 +138,25 @@ class ConsultaAuditoriaResguardoPdvService
             'filtros' => $filtrosNormalizados,
             'total' => count($timeline),
         ];
+    }
+
+    private function asegurarAccesoPiso(User $user, ResguardoPdv $resguardo): void
+    {
+        $this->alcance->asegurarConsultaPiso($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER);
+
+        $activaId = $this->alcance->sucursalActivaId($user);
+        if ($activaId === null || (int) $resguardo->sucursal_id !== $activaId) {
+            throw (new ModelNotFoundException)->setModel(ResguardoPdv::class, [$resguardo->id]);
+        }
+    }
+
+    private function asegurarAccesoExportacion(User $user, ResguardoPdv $resguardo): void
+    {
+        $this->alcance->asegurarConsultaGlobal($user);
+
+        if (! $this->alcance->idsSucursalesElegibles()->contains((int) $resguardo->sucursal_id)) {
+            throw (new ModelNotFoundException)->setModel(ResguardoPdv::class, [$resguardo->id]);
+        }
     }
 
     /**

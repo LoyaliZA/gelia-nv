@@ -5,7 +5,6 @@ namespace App\Services\PuntoVenta\Resguardos;
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\User;
-use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
 
 class EstimarExportacionResguardoPdvService
@@ -26,7 +25,7 @@ class EstimarExportacionResguardoPdvService
         if ($tipo === ResguardoPdvExportacionTipo::AUDITORIA) {
             $resguardo = $this->resolverResguardoAuditoria($usuario, $filtros);
 
-            return $this->auditoria->obtener($usuario, $resguardo, $this->filtrosAuditoria($filtros))['total'];
+            return $this->auditoria->obtenerParaExportacion($usuario, $resguardo, $this->filtrosAuditoria($filtros))['total'];
         }
 
         return $this->bandejas->contarParaExportacion($usuario, $filtros);
@@ -55,9 +54,8 @@ class EstimarExportacionResguardoPdvService
 
         $bandeja = (string) ($filtros['bandeja'] ?? 'por_recibir');
         $etiqueta = EtiquetasResguardoPdv::bandejas()[$bandeja] ?? $bandeja;
-        $sucursalId = $this->alcance->sucursalActivaId($usuario);
 
-        return "Resguardos — {$etiqueta}".($sucursalId ? " — sucursal {$sucursalId}" : '');
+        return "Resguardos — {$etiqueta} — alcance global";
     }
 
     /**
@@ -65,9 +63,16 @@ class EstimarExportacionResguardoPdvService
      */
     private function resolverResguardoAuditoria(User $usuario, array $filtros): ResguardoPdv
     {
-        $this->alcance->asegurarConsultaPiso($usuario, PuntoVentaModulo::PERMISO_REPORTES_EXPORTAR);
+        $this->alcance->asegurarConsultaGlobal($usuario);
 
-        return ResguardoPdv::query()->findOrFail((int) ($filtros['resguardo_id'] ?? 0));
+        $resguardo = ResguardoPdv::query()->findOrFail((int) ($filtros['resguardo_id'] ?? 0));
+
+        if (! $this->alcance->idsSucursalesElegibles()->contains((int) $resguardo->sucursal_id)) {
+            throw (new \Illuminate\Database\Eloquent\ModelNotFoundException)
+                ->setModel(ResguardoPdv::class, [$resguardo->id]);
+        }
+
+        return $resguardo;
     }
 
     /**

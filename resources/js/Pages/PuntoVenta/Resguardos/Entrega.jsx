@@ -23,6 +23,7 @@ export default function Entrega({
         progreso,
         error,
         exito,
+        resguardoResultado,
         irADetalle,
         irABandeja,
         recargarFormulario,
@@ -65,7 +66,11 @@ export default function Entrega({
                 </div>
 
                 {exito ? (
-                    <ResultadoExito onDetalle={irADetalle} onBandeja={irABandeja} />
+                    <ResultadoExito
+                        onDetalle={irADetalle}
+                        onBandeja={irABandeja}
+                        parcial={resguardoResultado?.estado === 'en_custodia' || resguardoResultado?.estado === 'pendiente_recepcion'}
+                    />
                 ) : !puedeEntregar ? (
                     <EstadoNoDisponible
                         resguardo={resguardo}
@@ -99,14 +104,18 @@ export default function Entrega({
     );
 }
 
-function ResultadoExito({ onDetalle, onBandeja }) {
+function ResultadoExito({ onDetalle, onBandeja, parcial = false }) {
     return (
         <div className={`${geliaCardClass()} p-8 text-center space-y-4`}>
             <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500" />
             <div className="space-y-2">
-                <h2 className="text-lg font-black uppercase theme-text-main m-0">Entrega registrada</h2>
+                <h2 className="text-lg font-black uppercase theme-text-main m-0">
+                    {parcial ? 'Entrega parcial registrada' : 'Entrega registrada'}
+                </h2>
                 <p className="text-sm theme-text-muted m-0">
-                    El resguardo quedó en estado Entregado. Puedes revisar el detalle actualizado o volver a la bandeja.
+                    {parcial
+                        ? 'Los bultos restantes permanecen en custodia. El pedido no pasa a Entregado hasta completar el resto.'
+                        : 'El resguardo quedó en estado Entregado. Puedes revisar el detalle actualizado o volver a la bandeja.'}
                 </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 justify-center">

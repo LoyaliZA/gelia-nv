@@ -42,10 +42,12 @@ class BandejaResguardoPdvController extends Controller
             ],
             'permisos' => fn () => [
                 'ver_vencidos' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_VENCIDOS),
+                'reponer_vencido' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_REPONER_VENCIDO),
                 'recibir' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_RECIBIR),
                 'entregar' => $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR),
             ],
             'sucursal_activa' => fn () => $this->serializarSucursalActiva($user, $alcance),
+            'sucursales_asignadas' => fn () => $this->serializarSucursalesAsignadas($user),
             'operativa' => fn () => [
                 'antiguedad_configurada' => $consulta->antiguedadConfigurada(),
             ],
@@ -71,6 +73,24 @@ class BandejaResguardoPdvController extends Controller
             'id' => $sucursal->id,
             'nombre' => $sucursal->nombre,
         ];
+    }
+
+    /**
+     * @return list<array{id: int, nombre: string}>
+     */
+    private function serializarSucursalesAsignadas(User $user): array
+    {
+        $user->loadMissing('sucursales');
+
+        return $user->sucursales
+            ->filter(static fn (Sucursal $sucursal): bool => $sucursal->activo && (bool) $sucursal->pivot->activo)
+            ->sortBy('nombre', SORT_NATURAL | SORT_FLAG_CASE)
+            ->map(static fn (Sucursal $sucursal): array => [
+                'id' => $sucursal->id,
+                'nombre' => $sucursal->nombre,
+            ])
+            ->values()
+            ->all();
     }
 
     public function listado(

@@ -16,6 +16,7 @@ export default function useEntregaResguardo({ resguardoId, versionInicial, metod
     const [progreso, setProgreso] = useState(0);
     const [error, setError] = useState(null);
     const [exito, setExito] = useState(false);
+    const [resguardoResultado, setResguardoResultado] = useState(null);
     const versionRef = useRef(versionInicial);
     const envioBloqueado = useRef(false);
     const idempotencyRef = useRef(claveIdempotenciaEntrega(resguardoId));
@@ -26,6 +27,7 @@ export default function useEntregaResguardo({ resguardoId, versionInicial, metod
         observaciones,
         firmaDataUrl,
         evidencias,
+        bultoIds,
     }) => {
         if (envioBloqueado.current || enviando) {
             return { duplicado: true };
@@ -35,6 +37,7 @@ export default function useEntregaResguardo({ resguardoId, versionInicial, metod
             relacion,
             nombreQuienRetira,
             tieneFirma: Boolean(firmaDataUrl),
+            bultoIds,
         });
         if (Object.keys(erroresLocales).length > 0) {
             setError(Object.values(erroresLocales)[0]);
@@ -56,6 +59,7 @@ export default function useEntregaResguardo({ resguardoId, versionInicial, metod
             observaciones,
             firma,
             evidencias,
+            bultoIds,
         });
 
         try {
@@ -73,6 +77,7 @@ export default function useEntregaResguardo({ resguardoId, versionInicial, metod
 
             setProgreso(100);
             setExito(true);
+            setResguardoResultado(data?.resguardo || null);
             limpiarClaveIdempotenciaEntrega(resguardoId);
             return { ok: true, resguardo: data?.resguardo };
         } catch (err) {
@@ -117,6 +122,7 @@ export default function useEntregaResguardo({ resguardoId, versionInicial, metod
         progreso,
         error,
         exito,
+        resguardoResultado,
         setError,
         irADetalle,
         irABandeja,

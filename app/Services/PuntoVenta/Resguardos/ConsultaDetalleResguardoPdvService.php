@@ -4,6 +4,7 @@ namespace App\Services\PuntoVenta\Resguardos;
 
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\ResguardoPdv;
+use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\PuntoVenta\Resguardos\EtiquetasResguardoPdv;
@@ -87,9 +88,13 @@ class ConsultaDetalleResguardoPdvService
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
             'salida_cedis_at' => $resguardo->salida_cedis_at?->toIso8601String(),
             'recepcion_fisica_at' => $resguardo->recepcion_fisica_at?->toIso8601String(),
+            'vencido_repuesto_at' => $resguardo->vencido_repuesto_at?->toIso8601String(),
             'entrega_completada_at' => $resguardo->entrega_completada_at?->toIso8601String(),
             'devolucion_confirmada_at' => $resguardo->devolucion_confirmada_at?->toIso8601String(),
             'entrega_bloqueada' => $resguardo->entrega_bloqueada,
+            'cancelacion_recibida' => $resguardo->eventos()
+                ->where('tipo_evento', ResguardoPdvEvento::TIPO_CANCELACION_RECIBIDA)
+                ->exists(),
             'clasificaciones' => $evaluacion['clasificaciones'],
             'clasificaciones_etiquetas' => $clasificacionesEtiquetas,
             'fecha_limite_custodia' => $evaluacion['fecha_limite_custodia'],

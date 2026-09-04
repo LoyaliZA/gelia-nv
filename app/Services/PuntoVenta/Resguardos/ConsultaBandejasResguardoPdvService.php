@@ -98,12 +98,14 @@ class ConsultaBandejasResguardoPdvService
      */
     public function contarParaExportacion(User $user, array $filtros = []): int
     {
+        $this->alcance->asegurarConsultaGlobal($user);
+
         $bandeja = $this->normalizarBandeja($filtros['bandeja'] ?? BandejaResguardoPdv::POR_RECIBIR);
         $filtrosNormalizados = $this->normalizarFiltros($filtros, $bandeja);
         unset($filtrosNormalizados['page'], $filtrosNormalizados['per_page']);
 
-        $query = $this->queryBandeja($user, $bandeja);
-        $this->aplicarFiltrosComunes($query, $user, $filtrosNormalizados, $bandeja);
+        $query = $this->queryBandejaExportacion($user, $bandeja);
+        $this->aplicarFiltrosExportacion($query, $user, $filtrosNormalizados, $bandeja);
 
         return $query->count();
     }
@@ -114,12 +116,14 @@ class ConsultaBandejasResguardoPdvService
      */
     public function filasParaExportacion(User $user, array $filtros = []): array
     {
+        $this->alcance->asegurarConsultaGlobal($user);
+
         $bandeja = $this->normalizarBandeja($filtros['bandeja'] ?? BandejaResguardoPdv::POR_RECIBIR);
         $filtrosNormalizados = $this->normalizarFiltros($filtros, $bandeja);
         unset($filtrosNormalizados['page'], $filtrosNormalizados['per_page']);
 
-        $query = $this->queryBandeja($user, $bandeja);
-        $this->aplicarFiltrosComunes($query, $user, $filtrosNormalizados, $bandeja);
+        $query = $this->queryBandejaExportacion($user, $bandeja);
+        $this->aplicarFiltrosExportacion($query, $user, $filtrosNormalizados, $bandeja);
         $this->aplicarOrdenBandeja($query, $bandeja);
 
         $filas = [];
@@ -132,6 +136,23 @@ class ConsultaBandejasResguardoPdvService
             });
 
         return $filas;
+    }
+
+    private function queryBandejaExportacion(User $user, string $bandeja): Builder
+    {
+        $query = $this->queryAutorizadaExportacion($user);
+
+        match ($bandeja) {
+            BandejaResguardoPdv::POR_RECIBIR => $query->where('estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION),
+            BandejaResguardoPdv::EN_CUSTODIA => $query->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA),
+            BandejaResguardoPdv::INCIDENCIAS => $query->whereHas(
+                'incidencias',
+                fn (Builder $incidencias) => $incidencias->where('estado', ResguardoPdvIncidencia::ESTADO_ABIERTA)
+            ),
+            default => null,
+        };
+
+        return $query;
     }
 
     private function queryBandeja(User $user, string $bandeja): Builder
@@ -149,6 +170,27 @@ class ConsultaBandejasResguardoPdvService
         };
 
         return $query;
+    }
+
+    private function queryAutorizadaExportacion(User $user): Builder
+    {
+        $this->alcance->asegurarConsultaGlobal($user);
+
+        $query = ResguardoPdv::query()
+            ->with([
+                'sucursal:id,nombre',
+                'cliente:id,numero_cliente,nombre',
+                'pedido:id,folio,folio_remision,cliente_id',
+            ])
+            ->withCount([
+                'incidencias as incidencias_abiertas_count' => fn (Builder $q) => $q
+                    ->where('estado', ResguardoPdvIncidencia::ESTADO_ABIERTA),
+            ]);
+
+        return $this->alcance->aplicarConsultaGlobal(
+            $query,
+            $user
+        );
     }
 
     private function queryAutorizada(User $user): Builder
@@ -303,6 +345,49 @@ class ConsultaBandejasResguardoPdvService
         $query->whereIn('id', $permitidos->all());
     }
 
+    /**
+     * @param  array<string, mixed>  $filtros
+     */
+    private function aplicarFiltrosExportacion(
+        Builder $query,
+        User $user,
+        array $filtros,
+        string $bandeja,
+        bool $aplicarAntiguedad = true,
+        bool $excluirVencidos = true,
+    ): void {
+        $this->validarSucursalFiltroExportacion($filtros['sucursal_id'] ?? null);
+
+        if (! empty($filtros['sucursal_id'])) {
+            $query->where('sucursal_id', (int) $filtros['sucursal_id']);
+        }
+
+        if (! empty($filtros['estado'])) {
+            $query->where('estado', $filtros['estado']);
+        }
+
+        if ($this->antiguedadConfigurada()) {
+            if ($excluirVencidos
+                && $bandeja === BandejaResguardoPdv::EN_CUSTODIA
+                && ! $this->alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_RESGUARDOS_VER_VENCIDOS)) {
+                $this->restringirIdsPorEvaluacion($query, function (ResguardoPdv $resguardo) {
+                    return ! $this->antiguedad->debeExcluirDeVistaPrincipal($resguardo);
+                });
+            }
+
+            if ($aplicarAntiguedad && ! empty($filtros['antiguedad'])) {
+                $antiguedad = (string) $filtros['antiguedad'];
+                $this->restringirIdsPorEvaluacion($query, function (ResguardoPdv $resguardo) use ($antiguedad) {
+                    return $this->antiguedad->coincideConFiltro($resguardo, $antiguedad);
+                });
+            }
+        }
+
+        if (! empty($filtros['q'])) {
+            $this->aplicarBusqueda($query, (string) $filtros['q']);
+        }
+    }
+
     private function validarSucursalFiltro(User $user, mixed $sucursalId): void
     {
         if ($sucursalId === null || $sucursalId === '') {
@@ -315,6 +400,21 @@ class ConsultaBandejasResguardoPdvService
 
         $activa = $this->alcance->sucursalActivaId($user);
         if ($activa === null || (int) $sucursalId !== $activa) {
+            throw new AuthorizationException('Sucursal no autorizada.');
+        }
+    }
+
+    private function validarSucursalFiltroExportacion(mixed $sucursalId): void
+    {
+        if ($sucursalId === null || $sucursalId === '') {
+            return;
+        }
+
+        if (! is_numeric($sucursalId)) {
+            throw new AuthorizationException('Sucursal no autorizada.');
+        }
+
+        if (! $this->alcance->idsSucursalesElegibles()->contains((int) $sucursalId)) {
             throw new AuthorizationException('Sucursal no autorizada.');
         }
     }
@@ -397,6 +497,7 @@ class ConsultaBandejasResguardoPdvService
 
         return [
             'id' => $resguardo->id,
+            'version' => (int) $resguardo->version,
             'estado' => $resguardo->estado,
             'pedido_bma_id' => $resguardo->pedido_bma_id,
             'snapshot_folio' => $resguardo->snapshot_folio,
@@ -404,6 +505,7 @@ class ConsultaBandejasResguardoPdvService
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
             'salida_cedis_at' => $resguardo->salida_cedis_at?->toIso8601String(),
             'recepcion_fisica_at' => $resguardo->recepcion_fisica_at?->toIso8601String(),
+            'vencido_repuesto_at' => $resguardo->vencido_repuesto_at?->toIso8601String(),
             'entrega_bloqueada' => $resguardo->entrega_bloqueada,
             'incidencias_abiertas_count' => (int) ($resguardo->incidencias_abiertas_count ?? 0),
             'clasificaciones' => $evaluacion['clasificaciones'],

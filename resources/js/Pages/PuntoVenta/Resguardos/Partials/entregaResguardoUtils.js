@@ -51,8 +51,17 @@ export function validarPasoEvidencia({ tieneFirma }) {
     return errores;
 }
 
+export function validarPasoBultos({ bultoIds }) {
+    const errores = {};
+    if (!Array.isArray(bultoIds) || bultoIds.length === 0) {
+        errores.bulto_ids = 'Selecciona al menos un bulto en custodia para entregar.';
+    }
+    return errores;
+}
+
 export function validarFormularioEntrega(datos) {
     return {
+        ...validarPasoBultos(datos),
         ...validarPasoReceptor(datos),
         ...validarPasoEvidencia(datos),
     };
@@ -78,6 +87,7 @@ export function armarFormDataEntrega({
     observaciones,
     firma,
     evidencias = [],
+    bultoIds = [],
 }) {
     const form = new FormData();
     form.append('version', String(version));
@@ -92,6 +102,36 @@ export function armarFormDataEntrega({
 
     evidencias.forEach((archivo, indice) => {
         form.append(`evidencias[${indice}]`, archivo);
+    });
+
+    bultoIds.forEach((id, indice) => {
+        form.append(`bulto_ids[${indice}]`, String(id));
+    });
+
+    return form;
+}
+
+export function armarFormDataEntregaMultiple(entregas) {
+    const form = new FormData();
+
+    entregas.forEach((entrega, indice) => {
+        const prefijo = `entregas[${indice}]`;
+        form.append(`${prefijo}[resguardo_id]`, String(entrega.resguardoId));
+        form.append(`${prefijo}[version]`, String(entrega.version));
+        form.append(`${prefijo}[idempotency_key]`, entrega.idempotencyKey);
+        form.append(`${prefijo}[relacion]`, entrega.relacion);
+        form.append(`${prefijo}[nombre_quien_retira]`, String(entrega.nombreQuienRetira).trim());
+        form.append(`${prefijo}[metodo_validacion]`, entrega.metodoValidacion);
+        if (entrega.observaciones?.trim()) {
+            form.append(`${prefijo}[observaciones]`, entrega.observaciones.trim());
+        }
+        form.append(`${prefijo}[firma]`, entrega.firma);
+        (entrega.bultoIds || []).forEach((id, bultoIndice) => {
+            form.append(`${prefijo}[bulto_ids][${bultoIndice}]`, String(id));
+        });
+        (entrega.evidencias || []).forEach((archivo, evidenciaIndice) => {
+            form.append(`${prefijo}[evidencias][${evidenciaIndice}]`, archivo);
+        });
     });
 
     return form;
@@ -127,6 +167,9 @@ export function indicePaso(pasoId) {
 }
 
 export function puedeAvanzarPaso(pasoId, datos) {
+    if (pasoId === 'revisar') {
+        return Object.keys(validarPasoBultos(datos)).length === 0;
+    }
     if (pasoId === 'receptor') {
         return Object.keys(validarPasoReceptor(datos)).length === 0;
     }
@@ -134,4 +177,24 @@ export function puedeAvanzarPaso(pasoId, datos) {
         return Object.keys(validarPasoEvidencia(datos)).length === 0;
     }
     return true;
+}
+
+export function claveIdempotenciaEntregaMultiple(resguardoIds) {
+    const firma = [...resguardoIds].sort((a, b) => a - b).join('-');
+    const claveAlmacen = `${STORAGE_IDEMPOTENCY}:multi:${firma}`;
+    const almacenada = sessionStorage.getItem(claveAlmacen);
+    if (almacenada) return almacenada;
+
+    const terminal = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const lote = `pdv:em:${terminal}`;
+    sessionStorage.setItem(claveAlmacen, lote);
+    return lote;
+}
+
+export function limpiarClaveIdempotenciaEntregaMultiple(resguardoIds) {
+    const firma = [...resguardoIds].sort((a, b) => a - b).join('-');
+    sessionStorage.removeItem(`${STORAGE_IDEMPOTENCY}:multi:${firma}`);
+    resguardoIds.forEach((id) => limpiarClaveIdempotenciaEntrega(id));
 }

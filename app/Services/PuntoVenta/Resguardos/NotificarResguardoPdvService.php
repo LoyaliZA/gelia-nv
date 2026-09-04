@@ -66,6 +66,21 @@ class NotificarResguardoPdvService
         );
     }
 
+    public function cancelacionRecibida(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
+    {
+        $this->enviar(
+            $resguardo,
+            $sucursalId,
+            $idempotencyKey,
+            AlertaResguardoPdvNotification::TIPO_CANCELACION,
+            [
+                PuntoVentaModulo::PERMISO_RESGUARDOS_CONFIRMAR_DEVOLUCION,
+            ],
+            'Pedido cancelado en custodia',
+            "El pedido del resguardo {$this->folio($resguardo)} fue cancelado. La entrega está bloqueada; se requiere devolución al origen."
+        );
+    }
+
     public function entrega(ResguardoPdv $resguardo, int $sucursalId, string $idempotencyKey): void
     {
         $this->enviar(

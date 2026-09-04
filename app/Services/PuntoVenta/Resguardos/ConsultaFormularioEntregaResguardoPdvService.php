@@ -90,14 +90,8 @@ class ConsultaFormularioEntregaResguardoPdvService
         $bultosRecibidos = $resguardo->bultos
             ->filter(fn ($bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO);
 
-        $esperada = (int) $resguardo->cantidad_bultos_esperada;
-
         if ($bultosRecibidos->isEmpty()) {
             return [false, 'No hay bultos en custodia listos para entregar.'];
-        }
-
-        if ($bultosRecibidos->count() !== $esperada) {
-            return [false, "La entrega total requiere exactamente {$esperada} bulto(s) en custodia."];
         }
 
         return [true, null];
@@ -116,6 +110,9 @@ class ConsultaFormularioEntregaResguardoPdvService
             'snapshot_folio' => $resguardo->snapshot_folio,
             'referencia_cliente' => $this->referenciaCliente($resguardo),
             'cantidad_bultos_esperada' => $resguardo->cantidad_bultos_esperada,
+            'cantidad_bultos_en_custodia' => $resguardo->bultos
+                ->filter(fn ($bulto) => $bulto->estado === ResguardoPdvBulto::ESTADO_RECIBIDO)
+                ->count(),
             'recepcion_fisica_at' => $resguardo->recepcion_fisica_at?->toIso8601String(),
             'entrega_bloqueada' => $resguardo->entrega_bloqueada,
             'sucursal' => $resguardo->sucursal ? [

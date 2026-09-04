@@ -225,6 +225,51 @@ class User extends Authenticatable
         $this->unsetRelation('sucursalesOperables');
     }
 
+    /**
+     * @param  list<int>  $sucursalIds
+     */
+    public function sincronizarSucursalesAsignadas(array $sucursalIds, ?int $sucursalPrincipalId = null): void
+    {
+        $ids = collect($sucursalIds)
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            $this->sucursales()->detach();
+            $this->unsetRelation('sucursales');
+            $this->unsetRelation('sucursalesOperables');
+
+            return;
+        }
+
+        $validIds = Sucursal::query()
+            ->whereIn('id', $ids)
+            ->where('activo', true)
+            ->pluck('id');
+
+        $principalId = $sucursalPrincipalId;
+        if ($principalId !== null && ! $validIds->contains($principalId)) {
+            $principalId = null;
+        }
+
+        if ($validIds->count() === 1) {
+            $principalId = (int) $validIds->first();
+        }
+
+        $sync = [];
+        foreach ($validIds as $id) {
+            $sync[(int) $id] = [
+                'es_principal' => $principalId !== null && (int) $id === $principalId,
+                'activo' => true,
+            ];
+        }
+
+        $this->sucursales()->sync($sync);
+        $this->unsetRelation('sucursales');
+        $this->unsetRelation('sucursalesOperables');
+    }
+
     public function mensajes(): HasMany
     {
         return $this->hasMany(Mensaje::class);

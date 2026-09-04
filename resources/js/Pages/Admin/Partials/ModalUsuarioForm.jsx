@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
     ShieldCheck, X, Briefcase, Check, Network, User, Lock, Smartphone,
-    Save, Layers, Mail, AtSign,
+    Save, Layers, Mail, AtSign, MapPin,
 } from 'lucide-react';
 import PermisosAtomicos from './PermisosAtomicos';
 import { GELIA_SEGMENT_TABS_TRACK_COMPACT, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
@@ -21,6 +21,7 @@ export default function ModalUsuarioForm({
     setData,
     errors,
     departamentos,
+    sucursales = [],
     posiblesGerentes,
     rolesJerarquia,
     rolesGrupos,
@@ -40,6 +41,7 @@ export default function ModalUsuarioForm({
     toggleSelection,
     areasSeleccionadas,
     departamentosSeleccionados,
+    sucursalesSeleccionadas = [],
     resolverAreaPrincipalFormulario,
     resolverPrincipalFormulario,
 }) {
@@ -414,8 +416,71 @@ export default function ModalUsuarioForm({
                                 )}
                             </div>
 
+                            <div className="space-y-2 border-t theme-border pt-6">
+                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2 flex items-center gap-1.5">
+                                    <MapPin className="w-3.5 h-3.5" style={{ color: 'var(--color-primario)' }} />
+                                    5. Sucursales PDV (Múltiple)
+                                </label>
+                                {(sucursales || []).length === 0 ? (
+                                    <p className="text-[10px] theme-text-muted italic px-2">
+                                        No hay sucursales activas en el catálogo.
+                                    </p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-2 p-3 border theme-border rounded-2xl theme-element bg-transparent">
+                                        {(sucursales || []).map((sucursal) => (
+                                            <button
+                                                key={`sucursal-${sucursal.id}`}
+                                                type="button"
+                                                onClick={() => toggleSelection('sucursales', sucursal.id)}
+                                                className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-1.5 ${data.sucursales.includes(sucursal.id) ? 'shadow-sm text-white' : 'theme-element theme-border theme-text-muted'}`}
+                                                style={data.sucursales.includes(sucursal.id) ? { borderColor: 'var(--color-primario)', backgroundColor: 'var(--color-primario)' } : {}}
+                                            >
+                                                {data.sucursales.includes(sucursal.id) && <Check className="w-3 h-3" />}
+                                                {sucursal.nombre}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {errors.sucursales && (
+                                    <p className="text-[9px] text-red-500 font-bold ml-2 mt-1">{errors.sucursales}</p>
+                                )}
+                            </div>
+
                             <div className="space-y-2">
-                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">5. Reporta a (Gerentes / Líderes)</label>
+                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">
+                                    6. Sucursal Principal PDV
+                                </label>
+                                <select
+                                    value={data.sucursal_principal_id || ''}
+                                    onChange={(e) => setData('sucursal_principal_id', e.target.value)}
+                                    disabled={sucursalesSeleccionadas.length === 0}
+                                    required={sucursalesSeleccionadas.length > 1}
+                                    className="w-full px-4 py-3 rounded-2xl theme-element theme-border border text-[11px] font-bold theme-text-main outline-none appearance-none transition-all focus:ring-1 focus:ring-transparent disabled:opacity-50"
+                                    style={{ '--tw-ring-color': 'var(--color-primario)' }}
+                                >
+                                    <option value="">
+                                        {sucursalesSeleccionadas.length === 0
+                                            ? 'Sin sucursales asignadas'
+                                            : sucursalesSeleccionadas.length === 1
+                                                ? 'Se asignará automáticamente'
+                                                : 'Selecciona la sucursal principal...'}
+                                    </option>
+                                    {sucursalesSeleccionadas.map((sucursal) => (
+                                        <option key={`sucursal-principal-${sucursal.id}`} value={sucursal.id}>
+                                            {sucursal.nombre}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-[9px] theme-text-muted ml-2 leading-relaxed">
+                                    Requerida para operar en Punto de Venta. Define la sucursal activa por defecto al ingresar al módulo.
+                                </p>
+                                {errors.sucursal_principal_id && (
+                                    <p className="text-[9px] text-red-500 font-bold ml-2 mt-1">{errors.sucursal_principal_id}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-black uppercase tracking-widest theme-text-muted ml-2">7. Reporta a (Gerentes / Líderes)</label>
                                 <div className="flex flex-wrap gap-2 p-3 border theme-border rounded-2xl theme-element bg-transparent max-h-32 overflow-y-auto custom-scrollbar">
                                     {(posiblesGerentes || []).length === 0 ? (
                                         <span className="text-xs theme-text-muted italic px-2">No hay gerentes disponibles.</span>

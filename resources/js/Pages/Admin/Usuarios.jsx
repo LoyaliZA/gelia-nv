@@ -283,6 +283,7 @@ export default function Usuarios({
     todosLosPermisos = [],
     catalogoPermisos = [],
     sexos = [],
+    sucursales = [],
     esSuperAdmin = false,
     permisosUsuario = [],
 }) {
@@ -349,6 +350,8 @@ export default function Usuarios({
         permisos_individuales: [],
         plantilla_origen: '',
         plantilla_por_permiso: {},
+        sucursales: [],
+        sucursal_principal_id: '',
     });
     
     // --- ANIMACIONES ---
@@ -465,6 +468,9 @@ export default function Usuarios({
             setPlantillaPorPermiso(plantillaMap);
             setProcedenciaActual(procMap);
 
+            const sucursalIds = usuario.sucursales ? usuario.sucursales.map((s) => s.id) : [];
+            const sucursalPrincipalMarcada = (usuario.sucursales || []).find((s) => s.es_principal);
+
             setData({
                 name: (usuario.name || '').trim(),
                 apellido_paterno: (usuario.apellido_paterno || '').trim(),
@@ -490,6 +496,11 @@ export default function Usuarios({
                 permisos_individuales: usuario.permissions ? usuario.permissions.map(p => p.name) : [],
                 plantilla_origen: '',
                 plantilla_por_permiso: plantillaMap,
+                sucursales: sucursalIds,
+                sucursal_principal_id: resolverPrincipalFormulario(
+                    sucursalIds,
+                    sucursalPrincipalMarcada?.id ?? '',
+                ),
             });
         } else {
             setPlantillaSeleccionada('');
@@ -521,6 +532,9 @@ export default function Usuarios({
         if (campo === 'departamentos') {
             setData('departamento_id', resolverPrincipalFormulario(nuevos, data.departamento_id));
         }
+        if (campo === 'sucursales') {
+            setData('sucursal_principal_id', resolverPrincipalFormulario(nuevos, data.sucursal_principal_id));
+        }
     };
 
     const areasSeleccionadas = (departamentos || [])
@@ -529,6 +543,9 @@ export default function Usuarios({
 
     const departamentosSeleccionados = (departamentos || [])
         .filter((depto) => (data.departamentos || []).includes(depto.id));
+
+    const sucursalesSeleccionadas = (sucursales || [])
+        .filter((sucursal) => (data.sucursales || []).includes(sucursal.id));
 
     const aplicarPlantilla = (nombreGrupo) => {
         if (plantillaSeleccionada === nombreGrupo) {
@@ -620,6 +637,7 @@ export default function Usuarios({
         clearErrors();
         const areaPrincipalId = resolverAreaPrincipalFormulario(data.areas, data.area_id);
         const departamentoPrincipalId = resolverPrincipalFormulario(data.departamentos, data.departamento_id);
+        const sucursalPrincipalId = resolverPrincipalFormulario(data.sucursales, data.sucursal_principal_id);
         if ((data.areas || []).length > 1 && !areaPrincipalId) {
             setError('area_id', 'Selecciona el área principal cuando el colaborador tiene varias áreas asignadas.');
             return;
@@ -628,11 +646,16 @@ export default function Usuarios({
             setError('departamento_id', 'Selecciona el departamento principal cuando el colaborador tiene varios departamentos asignados.');
             return;
         }
+        if ((data.sucursales || []).length > 1 && !sucursalPrincipalId) {
+            setError('sucursal_principal_id', 'Selecciona la sucursal principal cuando el colaborador tiene varias sucursales asignadas.');
+            return;
+        }
 
         const payload = {
             ...data,
             area_id: areaPrincipalId || null,
             departamento_id: departamentoPrincipalId || null,
+            sucursal_principal_id: sucursalPrincipalId || null,
             permisos_individuales: permisosLimpios,
             plantilla_origen: plantillaSeleccionada || null,
             plantilla_por_permiso: plantillaPorPermiso,
@@ -846,6 +869,7 @@ export default function Usuarios({
                                 setData={setData}
                                 errors={errors}
                                 departamentos={departamentos}
+                                sucursales={sucursales}
                                 posiblesGerentes={posiblesGerentes}
                                 rolesJerarquia={rolesJerarquia}
                                 rolesGrupos={rolesGrupos}
@@ -865,6 +889,7 @@ export default function Usuarios({
                                 toggleSelection={toggleSelection}
                                 areasSeleccionadas={areasSeleccionadas}
                                 departamentosSeleccionados={departamentosSeleccionados}
+                                sucursalesSeleccionadas={sucursalesSeleccionadas}
                                 resolverAreaPrincipalFormulario={resolverAreaPrincipalFormulario}
                                 resolverPrincipalFormulario={resolverPrincipalFormulario}
                             />

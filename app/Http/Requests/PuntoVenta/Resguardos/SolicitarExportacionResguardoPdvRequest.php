@@ -22,10 +22,10 @@ class SolicitarExportacionResguardoPdvRequest extends FormRequest
             return false;
         }
 
-        return app(ResuelveAlcancePdv::class)->permiteConsultaPiso(
-            $user,
-            PuntoVentaModulo::PERMISO_REPORTES_EXPORTAR
-        );
+        $alcance = app(ResuelveAlcancePdv::class);
+
+        return $alcance->tieneAlcanceGlobal($user)
+            && $alcance->tienePermisoPdv($user, PuntoVentaModulo::PERMISO_REPORTES_EXPORTAR);
     }
 
     /**

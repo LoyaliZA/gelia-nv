@@ -4,6 +4,7 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Services\PuntoVenta\Resguardos\RecibirCancelacionPedidoResguardoPdvService;
 use App\Services\SaldosAFavor\SincronizarAplicacionesPedidoSafService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
@@ -28,6 +29,7 @@ class CancelarPedidoBmaService
         private RegistrarHistorialPedidoService $historialService,
         private SincronizarAplicacionesPedidoSafService $safPedido,
         private NotificarPedidoBmaService $notificarService,
+        private RecibirCancelacionPedidoResguardoPdvService $recibirCancelacionPdv,
     ) {}
 
     /**
@@ -42,6 +44,8 @@ class CancelarPedidoBmaService
         $pedido->loadMissing(['estatus', 'pagosExhibicion', 'documentos']);
 
         if ($pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_CANCELADO || $pedido->cancelado_at) {
+            $this->notificarResguardoPdv($pedido, $usuarioId, $pedido->motivo_cancelacion);
+
             return $pedido;
         }
 
@@ -87,6 +91,8 @@ class CancelarPedidoBmaService
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $pedido->loadMissing('estatus');
             if ($pedido->cancelado_at || $pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_CANCELADO) {
+                $this->notificarResguardoPdv($pedido, $usuarioId, $pedido->motivo_cancelacion);
+
                 return $pedido;
             }
 
@@ -134,8 +140,12 @@ class CancelarPedidoBmaService
                 AccionesHistorialPedidoBma::CANCELACION
             );
 
+            $pedidoCancelado = $pedido->fresh(['cliente', 'estatus', 'canceladoPor', 'pagosExhibicion']);
+
+            $this->notificarResguardoPdv($pedidoCancelado, $usuarioId, $motivo);
+
             $this->notificarService->ejecutar(
-                $pedido->fresh(),
+                $pedidoCancelado,
                 'pedido_cancelado',
                 'Pedido cancelado',
                 [],
@@ -144,7 +154,7 @@ class CancelarPedidoBmaService
                 ['url' => '/control-pedidos']
             );
 
-            return $pedido->fresh(['cliente', 'estatus', 'canceladoPor', 'pagosExhibicion']);
+            return $pedidoCancelado;
         });
     }
 
@@ -188,5 +198,14 @@ class CancelarPedidoBmaService
             'tiene_apartado' => (bool) $pedido->resguardo_apartado_at,
             'fase' => $pedido->estatus?->fase_ciclo,
         ];
+    }
+
+    private function notificarResguardoPdv(PedidoBma $pedido, int $usuarioId, ?string $motivoClave): void
+    {
+        $motivo = $motivoClave !== null && isset(self::MOTIVOS[$motivoClave])
+            ? self::MOTIVOS[$motivoClave]
+            : $motivoClave;
+
+        $this->recibirCancelacionPdv->ejecutar($pedido, $usuarioId, $motivo);
     }
 }

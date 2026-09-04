@@ -18,6 +18,7 @@ import {
     referenciaCliente,
 } from './resguardosUtils';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
+import AccionReponerVencidoResguardo from './AccionReponerVencidoResguardo';
 
 function BadgesResguardo({ resguardo, catalogos }) {
     const estadoEtiqueta = catalogos.estados?.[resguardo.estado] || resguardo.estado;
@@ -39,6 +40,12 @@ function BadgesResguardo({ resguardo, catalogos }) {
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide bg-purple-500/15 text-purple-700 dark:text-purple-300">
                     <AlertTriangle className="w-3 h-3" />
                     {resguardo.incidencias_abiertas_count} incidencia{resguardo.incidencias_abiertas_count === 1 ? '' : 's'}
+                </span>
+            )}
+            {resguardo.entrega_bloqueada && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide bg-red-500/15 text-red-700 dark:text-red-300">
+                    <AlertTriangle className="w-3 h-3" />
+                    Entrega bloqueada
                 </span>
             )}
         </div>
@@ -91,11 +98,32 @@ function FechasOperativasResguardo({ resguardo, bandeja }) {
     );
 }
 
-function TarjetaResguardo({ resguardo, bandeja, catalogos, puedeRecibir, puedeEntregar }) {
+function TarjetaResguardo({
+    resguardo,
+    bandeja,
+    catalogos,
+    permisos = {},
+    puedeRecibir,
+    puedeEntregar,
+    seleccionable = false,
+    seleccionado = false,
+    onToggleSeleccion,
+    onReponerExito,
+}) {
     return (
         <div className={tarjetaResguardoClass(resguardo)}>
             <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
+                <div className="flex items-start gap-3 min-w-0">
+                    {seleccionable && (
+                        <input
+                            type="checkbox"
+                            className="mt-1 h-5 w-5 shrink-0"
+                            checked={seleccionado}
+                            onChange={() => onToggleSeleccion?.(resguardo.id)}
+                            aria-label={`Seleccionar ${resguardo.snapshot_folio || `resguardo ${resguardo.id}`} para entrega conjunta`}
+                        />
+                    )}
+                    <div className="min-w-0 space-y-1">
                     <p className="text-sm font-black theme-text-main m-0 truncate">
                         {resguardo.snapshot_folio || `Resguardo #${resguardo.id}`}
                     </p>
@@ -103,6 +131,7 @@ function TarjetaResguardo({ resguardo, bandeja, catalogos, puedeRecibir, puedeEn
                         Cliente {referenciaCliente(resguardo)}
                     </p>
                     <FechasOperativasResguardo resguardo={resguardo} bandeja={bandeja} />
+                    </div>
                 </div>
                 <p className="text-[10px] font-black theme-text-muted m-0 shrink-0">
                     {resguardo.cantidad_bultos_esperada} bulto{resguardo.cantidad_bultos_esperada === 1 ? '' : 's'}
@@ -126,6 +155,11 @@ function TarjetaResguardo({ resguardo, bandeja, catalogos, puedeRecibir, puedeEn
                         <PackageCheck className="w-4 h-4" /> Recibir
                     </Link>
                 )}
+                <AccionReponerVencidoResguardo
+                    resguardo={resguardo}
+                    permisos={permisos}
+                    onExito={onReponerExito}
+                />
                 <Link
                     href={route('punto_venta.resguardos.show', resguardo.id)}
                     className={`${BTN_SECONDARY} w-full inline-flex items-center justify-center gap-2`}
@@ -137,11 +171,33 @@ function TarjetaResguardo({ resguardo, bandeja, catalogos, puedeRecibir, puedeEn
     );
 }
 
-function FilaTablaResguardo({ resguardo, bandeja, catalogos, puedeRecibir, puedeEntregar }) {
+function FilaTablaResguardo({
+    resguardo,
+    bandeja,
+    catalogos,
+    permisos = {},
+    puedeRecibir,
+    puedeEntregar,
+    seleccionable = false,
+    seleccionado = false,
+    onToggleSeleccion,
+    onReponerExito,
+}) {
     const clasificaciones = etiquetasClasificacionActivas(resguardo, catalogos.antiguedades);
 
     return (
         <tr className="border-b theme-border hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
+            {seleccionable && (
+                <td className="px-4 py-3">
+                    <input
+                        type="checkbox"
+                        className="h-5 w-5"
+                        checked={seleccionado}
+                        onChange={() => onToggleSeleccion?.(resguardo.id)}
+                        aria-label={`Seleccionar ${resguardo.snapshot_folio || `resguardo ${resguardo.id}`} para entrega conjunta`}
+                    />
+                </td>
+            )}
             <td className="px-4 py-3 text-sm font-black theme-text-main">
                 {resguardo.snapshot_folio || `#${resguardo.id}`}
             </td>
@@ -180,6 +236,11 @@ function FilaTablaResguardo({ resguardo, bandeja, catalogos, puedeRecibir, puede
                             <PackageCheck className="w-4 h-4" /> Recibir
                         </Link>
                     )}
+                    <AccionReponerVencidoResguardo
+                        resguardo={resguardo}
+                        permisos={permisos}
+                        onExito={onReponerExito}
+                    />
                     <Link
                         href={route('punto_venta.resguardos.show', resguardo.id)}
                         className={`${BTN_SECONDARY} inline-flex items-center gap-2`}
@@ -196,12 +257,17 @@ export default function ListadoResguardos({
     resguardos,
     bandeja,
     catalogos = {},
+    permisos = {},
     hayFiltrosActivos = false,
     onLimpiarFiltros,
     puedeRecibir = false,
     puedeEntregar = false,
+    idsSeleccionados = [],
+    onToggleSeleccion,
+    onReponerExito,
 }) {
     const items = resguardos?.data || [];
+    const seleccionable = puedeEntregar && bandeja === 'en_custodia' && Boolean(onToggleSeleccion);
 
     if (items.length === 0) {
         return (
@@ -227,8 +293,13 @@ export default function ListadoResguardos({
                         resguardo={resguardo}
                         bandeja={bandeja}
                         catalogos={catalogos}
+                        permisos={permisos}
                         puedeRecibir={puedeRecibir}
                         puedeEntregar={puedeEntregar}
+                        seleccionable={seleccionable && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada}
+                        seleccionado={idsSeleccionados.includes(resguardo.id)}
+                        onToggleSeleccion={onToggleSeleccion}
+                        onReponerExito={onReponerExito}
                     />
                 ))}
             </div>
@@ -237,9 +308,9 @@ export default function ListadoResguardos({
                 <table className="w-full border-collapse min-w-[900px]">
                     <thead>
                         <tr className="border-b-2 border-[var(--color-primario)]/30">
-                            {['Folio', 'Cliente', 'Bultos', 'Estado', 'Antigüedad', 'Fecha operativa', ''].map((col) => (
+                            {(seleccionable ? ['', 'Folio', 'Cliente', 'Bultos', 'Estado', 'Antigüedad', 'Fecha operativa', ''] : ['Folio', 'Cliente', 'Bultos', 'Estado', 'Antigüedad', 'Fecha operativa', '']).map((col, idx) => (
                                 <th
-                                    key={col || 'acciones'}
+                                    key={`${col || 'acciones'}-${idx}`}
                                     className={`px-4 py-4 text-[9px] font-black uppercase tracking-widest theme-text-muted ${col === '' ? 'text-right' : 'text-left'}`}
                                 >
                                     {col}
@@ -249,14 +320,19 @@ export default function ListadoResguardos({
                     </thead>
                     <tbody>
                         {items.map((resguardo) => (
-                            <FilaTablaResguardo
-                                key={resguardo.id}
-                                resguardo={resguardo}
-                                bandeja={bandeja}
-                                catalogos={catalogos}
-                                puedeRecibir={puedeRecibir}
-                                puedeEntregar={puedeEntregar}
-                            />
+                        <FilaTablaResguardo
+                            key={resguardo.id}
+                            resguardo={resguardo}
+                            bandeja={bandeja}
+                            catalogos={catalogos}
+                            permisos={permisos}
+                            puedeRecibir={puedeRecibir}
+                            puedeEntregar={puedeEntregar}
+                            seleccionable={seleccionable && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada}
+                            seleccionado={idsSeleccionados.includes(resguardo.id)}
+                            onToggleSeleccion={onToggleSeleccion}
+                            onReponerExito={onReponerExito}
+                        />
                         ))}
                     </tbody>
                 </table>

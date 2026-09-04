@@ -32,6 +32,7 @@ class EntregaResguardoPdvController extends Controller
             $request->file('firma'),
             isset($datos['observaciones']) ? (string) $datos['observaciones'] : null,
             $request->file('evidencias', []) ?? [],
+            isset($datos['bulto_ids']) ? array_map('intval', $datos['bulto_ids']) : null,
         );
 
         $entrega = $resguardo->entregas->sortByDesc('id')->first();

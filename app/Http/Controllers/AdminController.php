@@ -172,6 +172,7 @@ class AdminController extends Controller
             'permissions',
             'permisoProcedencia.permission',
             'permisoProcedencia.asignadoPor',
+            'sucursales',
         ];
 
         if ($isGlobalAdmin) {
@@ -221,6 +222,10 @@ class AdminController extends Controller
             'todosLosPermisos' => $todosLosPermisos,
             'catalogoPermisos' => $catalogoPermisos ?? $todosLosPermisos,
             'sexos' => CatalogoSexo::all() ?? [],
+            'sucursales' => Sucursal::query()
+                ->where('activo', true)
+                ->orderBy('nombre')
+                ->get(['id', 'nombre', 'codigo']),
             'esSuperAdmin' => $user->hasRole('Super Admin'),
             'permisosUsuario' => ValidarAsignacionPermisosService::permisosDelUsuario($user),
         ]);
@@ -323,6 +328,9 @@ class AdminController extends Controller
             'permisos_individuales' => 'array',
             'plantilla_origen' => 'nullable|string|max:100',
             'plantilla_por_permiso' => 'nullable|array',
+            'sucursales' => 'nullable|array',
+            'sucursales.*' => 'integer|exists:sucursales,id',
+            'sucursal_principal_id' => 'nullable|integer|exists:sucursales,id',
         ]);
 
         $rolesJerarquicos = collect($data['roles_asignados'] ?? [])
@@ -338,6 +346,7 @@ class AdminController extends Controller
 
         $areaPrincipalId = $this->resolverAreaPrincipal($data);
         $departamentoPrincipalId = $this->resolverDepartamentoPrincipal($data);
+        [$sucursalIds, $sucursalPrincipalId] = $this->resolverSucursalesUsuario($data);
 
         $usuario = User::create([
             'name' => $data['name'],
@@ -356,6 +365,7 @@ class AdminController extends Controller
         if (isset($data['departamentos'])) $usuario->departamentos()->sync($data['departamentos']);
         if (isset($data['areas'])) $usuario->areas()->sync($data['areas']);
         if (isset($data['gerentes'])) $usuario->gerentes()->sync($data['gerentes']);
+        $usuario->sincronizarSucursalesAsignadas($sucursalIds, $sucursalPrincipalId);
 
         $this->sincronizarAreaRhColaborador($usuario, $areaPrincipalId);
 
@@ -370,6 +380,7 @@ class AdminController extends Controller
         );
 
         $obtenerNombresAreas = fn($ids) => \App\Models\Area::whereIn('id', $ids)->pluck('nombre')->toArray();
+        $obtenerNombresSucursales = fn($ids) => Sucursal::whereIn('id', $ids)->pluck('nombre')->toArray();
         $obtenerNombresDeptos = fn($ids) => \App\Models\Departamento::whereIn('id', $ids)->pluck('nombre')->toArray();
         $nombreArea = fn($id) => $id ? \App\Models\Area::find($id)?->nombre : null;
 
@@ -400,6 +411,12 @@ class AdminController extends Controller
         if (!empty($data['departamentos'])) {
             $detallesAuditoria['departamentos'] = [
                 'asignados' => $obtenerNombresDeptos($data['departamentos'])
+            ];
+        }
+
+        if (!empty($sucursalIds)) {
+            $detallesAuditoria['sucursales'] = [
+                'asignadas' => $obtenerNombresSucursales($sucursalIds),
             ];
         }
 
@@ -435,6 +452,9 @@ class AdminController extends Controller
             'permisos_individuales' => 'array',
             'plantilla_origen' => 'nullable|string|max:100',
             'plantilla_por_permiso' => 'nullable|array',
+            'sucursales' => 'nullable|array',
+            'sucursales.*' => 'integer|exists:sucursales,id',
+            'sucursal_principal_id' => 'nullable|integer|exists:sucursales,id',
         ]);
 
         $rolesJerarquicos = collect($data['roles_asignados'] ?? [])
@@ -442,12 +462,16 @@ class AdminController extends Controller
             ->values()
             ->all();
 
-        $user->loadMissing(['permissions', 'areas', 'departamentos', 'roles']);
+        $user->loadMissing(['permissions', 'areas', 'departamentos', 'roles', 'sucursales']);
         
         // --- CAPTURA DE ESTADO ANTERIOR PARA AUDITORÍA ---
         $permisosActuales = $user->permissions->pluck('name')->toArray();
         $areasActualesIds = $user->areas->pluck('id')->toArray();
         $deptosActualesIds = $user->departamentos->pluck('id')->toArray();
+        $sucursalesActualesIds = $user->sucursales
+            ->filter(static fn (Sucursal $sucursal): bool => $sucursal->activo && (bool) $sucursal->pivot->activo)
+            ->pluck('id')
+            ->all();
         $rolesActuales = $user->roles->pluck('name')->toArray();
         $areaPrincipalActualId = $user->area_id;
 
@@ -474,6 +498,7 @@ class AdminController extends Controller
 
         $areaPrincipalId = $this->resolverAreaPrincipal($data);
         $departamentoPrincipalId = $this->resolverDepartamentoPrincipal($data);
+        [$sucursalIds, $sucursalPrincipalId] = $this->resolverSucursalesUsuario($data);
 
         $user->update([
             'name' => $data['name'],
@@ -495,6 +520,7 @@ class AdminController extends Controller
         $user->departamentos()->sync($data['departamentos'] ?? []);
         $user->areas()->sync($data['areas'] ?? []);
         $user->gerentes()->sync($data['gerentes'] ?? []);
+        $user->sincronizarSucursalesAsignadas($sucursalIds, $sucursalPrincipalId);
 
         $this->sincronizarAreaRhColaborador($user, $areaPrincipalId);
 
@@ -512,12 +538,15 @@ class AdminController extends Controller
         // --- CÁLCULO DE DIFERENCIAS PARA AUDITORÍA ---
         $obtenerNombresAreas = fn($ids) => \App\Models\Area::whereIn('id', $ids)->pluck('nombre')->toArray();
         $obtenerNombresDeptos = fn($ids) => \App\Models\Departamento::whereIn('id', $ids)->pluck('nombre')->toArray();
+        $obtenerNombresSucursales = fn($ids) => Sucursal::whereIn('id', $ids)->pluck('nombre')->toArray();
         $nombreArea = fn($id) => $id ? \App\Models\Area::find($id)?->nombre : null;
 
         $areasAsignadasIds = array_diff($data['areas'] ?? [], $areasActualesIds);
         $areasRetiradasIds = array_diff($areasActualesIds, $data['areas'] ?? []);
         $deptosAsignadosIds = array_diff($data['departamentos'] ?? [], $deptosActualesIds);
         $deptosRetiradosIds = array_diff($deptosActualesIds, $data['departamentos'] ?? []);
+        $sucursalesAsignadasIds = array_diff($sucursalIds, $sucursalesActualesIds);
+        $sucursalesRetiradasIds = array_diff($sucursalesActualesIds, $sucursalIds);
         
         $permisosAsignados = array_diff($permisosFinales, $permisosActuales);
         $permisosRetirados = array_diff($permisosActuales, $permisosFinales);
@@ -560,6 +589,13 @@ class AdminController extends Controller
             $detallesAuditoria['departamentos'] = [
                 'asignados' => $obtenerNombresDeptos($deptosAsignadosIds),
                 'retirados' => $obtenerNombresDeptos($deptosRetiradosIds),
+            ];
+        }
+
+        if (!empty($sucursalesAsignadasIds) || !empty($sucursalesRetiradasIds)) {
+            $detallesAuditoria['sucursales'] = [
+                'asignadas' => $obtenerNombresSucursales($sucursalesAsignadasIds),
+                'retiradas' => $obtenerNombresSucursales($sucursalesRetiradasIds),
             ];
         }
 
@@ -778,6 +814,16 @@ class AdminController extends Controller
         $data['departamentos'] = $usuario->departamentos->toArray();
         $data['areas'] = $usuario->areas->toArray();
         $data['gerentes'] = $usuario->gerentes->toArray();
+        $data['sucursales'] = $usuario->sucursales
+            ->filter(static fn (Sucursal $sucursal): bool => $sucursal->activo && (bool) $sucursal->pivot->activo)
+            ->map(static fn (Sucursal $sucursal): array => [
+                'id' => $sucursal->id,
+                'nombre' => $sucursal->nombre,
+                'codigo' => $sucursal->codigo,
+                'es_principal' => (bool) $sucursal->pivot->es_principal,
+            ])
+            ->values()
+            ->all();
 
         $data['permisos_procedencia'] = $usuario->permisoProcedencia->map(function ($proc) {
             $asignador = $proc->asignadoPor;
@@ -863,6 +909,51 @@ class AdminController extends Controller
         }
 
         return $deptoId;
+    }
+
+    /**
+     * @return array{0: list<int>, 1: ?int}
+     */
+    private function resolverSucursalesUsuario(array $data): array
+    {
+        $sucursales = collect($data['sucursales'] ?? [])
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $principalId = isset($data['sucursal_principal_id']) && $data['sucursal_principal_id'] !== ''
+            ? (int) $data['sucursal_principal_id']
+            : null;
+
+        if ($principalId !== null && ! $sucursales->contains($principalId)) {
+            throw ValidationException::withMessages([
+                'sucursal_principal_id' => 'La sucursal principal debe estar incluida en las sucursales asignadas.',
+            ]);
+        }
+
+        if ($principalId === null && $sucursales->count() === 1) {
+            $principalId = $sucursales->first();
+        }
+
+        if ($sucursales->count() > 1 && $principalId === null) {
+            throw ValidationException::withMessages([
+                'sucursal_principal_id' => 'Selecciona la sucursal principal cuando el colaborador tiene varias sucursales asignadas.',
+            ]);
+        }
+
+        $activas = Sucursal::query()
+            ->whereIn('id', $sucursales)
+            ->where('activo', true)
+            ->pluck('id');
+
+        if ($activas->count() !== $sucursales->count()) {
+            throw ValidationException::withMessages([
+                'sucursales' => 'Solo se pueden asignar sucursales activas del catálogo.',
+            ]);
+        }
+
+        return [$sucursales->all(), $principalId];
     }
 
     private function sincronizarAreaRhColaborador(User $usuario, ?int $areaId): void
