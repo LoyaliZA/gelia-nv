@@ -34,6 +34,18 @@ final class PuntoVentaModulo
 
     public const PERMISO_REPORTES_EXPORTAR = 'pdv.reportes.exportar';
 
+    public const PERMISO_TURNOS_VER = 'pdv.turnos.ver';
+
+    public const PERMISO_TURNOS_ALTA = 'pdv.turnos.alta';
+
+    public const PERMISO_TURNOS_MARCAR_PRIORIDAD = 'pdv.turnos.marcar_prioridad';
+
+    public const PERMISO_TURNOS_BAJA_COLA = 'pdv.turnos.baja_cola';
+
+    public const PERMISO_TURNOS_CERRAR_ATENCION = 'pdv.turnos.cerrar_atencion';
+
+    public const PERMISO_TURNOS_TRANSFERIR = 'pdv.turnos.transferir';
+
     /**
      * @return list<string>
      */
@@ -52,6 +64,12 @@ final class PuntoVentaModulo
             self::PERMISO_RESGUARDOS_AUTORIZAR_ENTREGA_INCIDENCIA,
             self::PERMISO_RESGUARDOS_CONFIRMAR_DEVOLUCION,
             self::PERMISO_RESGUARDOS_CORREGIR,
+            self::PERMISO_TURNOS_VER,
+            self::PERMISO_TURNOS_ALTA,
+            self::PERMISO_TURNOS_MARCAR_PRIORIDAD,
+            self::PERMISO_TURNOS_BAJA_COLA,
+            self::PERMISO_TURNOS_CERRAR_ATENCION,
+            self::PERMISO_TURNOS_TRANSFERIR,
             AlcancePdv::PERMISO_ALCANCE_GLOBAL,
             self::PERMISO_REPORTES_EXPORTAR,
         ];

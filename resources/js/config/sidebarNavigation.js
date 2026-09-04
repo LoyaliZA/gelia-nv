@@ -262,6 +262,22 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('punto_venta.resguardos.index', '/punto-venta/resguardos'),
             active: (url) => url.startsWith('/punto-venta/resguardos'),
         },
+        can('punto_venta.acceder') && (can('pdv.turnos.ver') || can('pdv.turnos.alta')) && {
+            type: 'link',
+            id: 'punto_venta_turnos_recepcion',
+            label: 'Recepción turnos',
+            icon: ClipboardList,
+            href: () => routeHref('punto_venta.turnos.recepcion', '/punto-venta/turnos/recepcion'),
+            active: (url) => url.startsWith('/punto-venta/turnos/recepcion'),
+        },
+        can('punto_venta.acceder') && can('pdv.turnos.ver') && {
+            type: 'link',
+            id: 'punto_venta_turnos_ventas',
+            label: 'Tablero ventas',
+            icon: ClipboardList,
+            href: () => routeHref('punto_venta.turnos.ventas', '/punto-venta/turnos/ventas'),
+            active: (url) => url.startsWith('/punto-venta/turnos/ventas'),
+        },
     ].filter(Boolean);
 
     const operacionesChildren = [

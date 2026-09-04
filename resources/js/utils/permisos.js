@@ -267,6 +267,9 @@ export const DESCRIPCIONES_PERMISOS = {
     'pdv.resguardos.autorizar_entrega_incidencia': 'Permite autorizar entrega con incidencia abierta.',
     'pdv.resguardos.confirmar_devolucion': 'Permite confirmar la devolución de mercancía en custodia.',
     'pdv.resguardos.corregir': 'Permite aplicar correcciones administrativas auditadas sobre resguardos.',
+    'pdv.turnos.ver': 'Permite consultar la cola y turnos de la sucursal activa.',
+    'pdv.turnos.alta': 'Permite dar de alta turnos en recepción.',
+    'pdv.turnos.marcar_prioridad': 'Permite marcar prioridad de adulto mayor o discapacidad en el alta.',
     'pdv.alcance.global': 'Permite operar y consultar en todas las sucursales asignadas (alcance global).',
     'pdv.reportes.exportar': 'Permite exportar reportes del punto de venta.',
 };
@@ -313,6 +316,9 @@ export const ETIQUETAS_PERMISOS = {
     'pdv.resguardos.autorizar_entrega_incidencia': 'autorizar entrega con incidencia',
     'pdv.resguardos.confirmar_devolucion': 'confirmar devolución',
     'pdv.resguardos.corregir': 'corregir resguardo',
+    'pdv.turnos.ver': 'ver turnos',
+    'pdv.turnos.alta': 'alta de turno',
+    'pdv.turnos.marcar_prioridad': 'marcar prioridad',
     'pdv.alcance.global': 'alcance global',
     'pdv.reportes.exportar': 'exportar reportes',
 };
@@ -1152,6 +1158,16 @@ export const SUBMODULOS_UI_POR_MODULO = {
                 'pdv.resguardos.autorizar_entrega_incidencia',
                 'pdv.resguardos.confirmar_devolucion',
                 'pdv.resguardos.corregir',
+            ],
+        },
+        {
+            id: 'turnos',
+            label: 'Turnos',
+            descripcion: 'Alta y gestión de fila de atención en piso',
+            permisos: [
+                'pdv.turnos.ver',
+                'pdv.turnos.alta',
+                'pdv.turnos.marcar_prioridad',
             ],
         },
         {

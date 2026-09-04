@@ -270,6 +270,16 @@ class User extends Authenticatable
         $this->unsetRelation('sucursalesOperables');
     }
 
+    public function jornadasPdv(): HasMany
+    {
+        return $this->hasMany(PuntoVenta\JornadaPdv::class);
+    }
+
+    public function intervalosOperativosPdv(): HasMany
+    {
+        return $this->hasMany(PuntoVenta\IntervaloOperativoPdv::class);
+    }
+
     public function mensajes(): HasMany
     {
         return $this->hasMany(Mensaje::class);
