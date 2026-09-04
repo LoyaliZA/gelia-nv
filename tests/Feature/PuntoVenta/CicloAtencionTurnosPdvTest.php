@@ -11,6 +11,8 @@ use App\Jobs\PuntoVenta\Turnos\AlertaProrrogaAtencionTurnoPdvJob;
 use App\Jobs\PuntoVenta\Turnos\EjecutarMatchmakerTurnosPdvJob;
 use App\Jobs\PuntoVenta\Turnos\VencerVentanaReatencionTurnoPdvJob;
 use App\Models\ConfiguracionSistema;
+use App\Models\PuntoVenta\IntervaloOperativoPdv;
+use App\Models\PuntoVenta\JornadaPdv;
 use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
@@ -18,9 +20,13 @@ use App\Models\PuntoVenta\TurnoPdvProrroga;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
+use App\Services\PuntoVenta\Operacion\AbrirJornadaPdvService;
+use App\Services\PuntoVenta\Operacion\CerrarJornadaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Turnos\MatchmakerTurnosPdvService;
 use App\Services\PuntoVenta\Turnos\PlazosTurnosPdvConfig;
+use App\Support\PuntoVenta\Operacion\EstadoJornadaPdv;
+use App\Support\PuntoVenta\Operacion\TipoIntervaloOperativoPdv;
 use App\Support\PuntoVenta\Turnos\MotivosBajaColaTurnoPdv;
 use App\Support\PuntoVenta\Turnos\MotivosCierreAtencionTurnoPdv;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -72,6 +78,8 @@ class CicloAtencionTurnosPdvTest extends TestCase
         $this->vendedor->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
+            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR,
         ]);
         $this->recepcion->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
@@ -335,6 +343,37 @@ class CicloAtencionTurnosPdvTest extends TestCase
         Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class);
     }
 
+    public function test_cerrar_atencion_completa_jornada_cerrada_con_atencion(): void
+    {
+        app(AbrirJornadaPdvService::class)->ejecutar($this->vendedor, now());
+        $jornada = JornadaPdv::query()->sole();
+
+        $contexto = $this->crearTurnoAsignado();
+
+        IntervaloOperativoPdv::query()
+            ->where('jornada_id', $jornada->id)
+            ->whereNull('fin_at')
+            ->update(['tipo' => TipoIntervaloOperativoPdv::EnAtencion]);
+
+        app(CerrarJornadaPdvService::class)->ejecutar($this->vendedor, $jornada->version, now());
+
+        $jornada->refresh();
+        $this->assertSame(EstadoJornadaPdv::CerradaConAtencion, $jornada->estado);
+
+        $this->actingAs($this->vendedor)->postJson(
+            route('punto_venta.turnos.cerrar_atencion', $contexto['turno']),
+            [
+                'version' => $contexto['turno']->version,
+                'idempotency_key' => 'pdv:cerrar:jornada-completa',
+                'motivo' => MotivosCierreAtencionTurnoPdv::VENTA,
+            ],
+        )->assertOk();
+
+        $jornada->refresh();
+        $this->assertSame(EstadoJornadaPdv::Cerrada, $jornada->estado);
+        $this->assertNull(IntervaloOperativoPdv::query()->whereNull('fin_at')->first());
+    }
+
     public function test_version_obsoleta_rechazada(): void
     {
         $contexto = $this->crearTurnoAsignado();
@@ -460,6 +499,11 @@ class CicloAtencionTurnosPdvTest extends TestCase
                     }
 
                     return null;
+                }
+
+                public function esDisponible(User $user, int $sucursalId, bool $paraAltaNueva = false): bool
+                {
+                    return $this->primeraDisponible($sucursalId, 'ventas')?->is($user) ?? false;
                 }
             }
         );

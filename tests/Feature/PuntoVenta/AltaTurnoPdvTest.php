@@ -448,6 +448,11 @@ class AltaTurnoPdvTest extends TestCase
             {
                 return $this->persona;
             }
+
+            public function esDisponible(User $user, int $sucursalId, bool $paraAltaNueva = false): bool
+            {
+                return $user->is($this->persona);
+            }
         });
     }
 }

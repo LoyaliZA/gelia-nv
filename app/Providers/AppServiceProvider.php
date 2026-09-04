@@ -52,7 +52,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(
             \App\Contracts\PuntoVenta\ConsultaPersonaDisponiblePdv::class,
-            \App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvPendiente::class
+            \App\Services\PuntoVenta\Operacion\ConsultaPersonaDisponiblePdvService::class
         );
 
         $this->app->singleton(\App\Services\GeliaAi\Acciones\AccionRegistry::class, function ($app) {

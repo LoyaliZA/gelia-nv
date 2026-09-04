@@ -12,13 +12,21 @@ use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Models\PuntoVenta\TurnoPdvEvento;
 use App\Models\Sucursal;
 use App\Models\User;
+use App\Services\PuntoVenta\AlcancePdv;
+use App\Services\PuntoVenta\Operacion\AbrirJornadaPdvService;
+use App\Services\PuntoVenta\Operacion\FinalizarPausaPdvService;
+use App\Services\PuntoVenta\Operacion\IniciarPausaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Services\PuntoVenta\Turnos\MatchmakerTurnosPdvService;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class MatchmakerTurnosPdvTest extends TestCase
@@ -30,6 +38,12 @@ class MatchmakerTurnosPdvTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Role::findOrCreate('Super Admin', 'web');
+        $this->withoutMiddleware([
+            ValidateCsrfToken::class,
+            PreventRequestForgery::class,
+        ]);
 
         ConfiguracionSistema::query()->updateOrCreate(
             ['clave' => PuntoVentaModulo::CLAVE_FLAG],
@@ -227,6 +241,81 @@ class MatchmakerTurnosPdvTest extends TestCase
         Event::assertDispatched(TurnoAsignado::class, 1);
     }
 
+    public function test_abrir_jornada_asigna_turno_en_cola_con_disponibilidad_real(): void
+    {
+        Event::fake([TurnoAsignado::class]);
+
+        $ventas = $this->crearVendedorOperacion('Vendedor Jornada');
+        $turno = $this->crearTurnoEnCola('Esperando jornada');
+
+        app(AbrirJornadaPdvService::class)->ejecutar($ventas, now());
+
+        $turno->refresh();
+        $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turno->estado);
+        $this->assertSame($ventas->id, TurnoPdvAtencion::query()->value('user_id'));
+        Event::assertDispatched(TurnoAsignado::class, 1);
+    }
+
+    public function test_finalizar_pausa_asigna_turno_en_cola_con_disponibilidad_real(): void
+    {
+        Event::fake([TurnoAsignado::class]);
+
+        $ventas = $this->crearVendedorOperacion('Vendedor Pausa');
+        app(AbrirJornadaPdvService::class)->ejecutar($ventas, now());
+        app(IniciarPausaPdvService::class)->ejecutar($ventas, now());
+
+        $turno = $this->crearTurnoEnCola('Esperando fin de pausa');
+
+        app(FinalizarPausaPdvService::class)->ejecutar($ventas, now());
+
+        $turno->refresh();
+        $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $turno->estado);
+        Event::assertDispatched(TurnoAsignado::class, 1);
+    }
+
+    public function test_abrir_jornada_dispara_job_matchmaker(): void
+    {
+        Queue::fake([EjecutarMatchmakerTurnosPdvJob::class]);
+
+        $ventas = $this->crearVendedorOperacion('Vendedor Job');
+
+        app(AbrirJornadaPdvService::class)->ejecutar($ventas, now());
+
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, function (EjecutarMatchmakerTurnosPdvJob $job): bool {
+            return $job->sucursalId === $this->sucursal->id
+                && $job->origenDisparador === 'jornada.abierta';
+        });
+    }
+
+    public function test_finalizar_pausa_dispara_job_matchmaker(): void
+    {
+        $ventas = $this->crearVendedorOperacion('Vendedor Pausa Job');
+        app(AbrirJornadaPdvService::class)->ejecutar($ventas, now());
+        app(IniciarPausaPdvService::class)->ejecutar($ventas, now());
+
+        Queue::fake([EjecutarMatchmakerTurnosPdvJob::class]);
+
+        app(FinalizarPausaPdvService::class)->ejecutar($ventas, now());
+
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, function (EjecutarMatchmakerTurnosPdvJob $job): bool {
+            return $job->sucursalId === $this->sucursal->id
+                && $job->origenDisparador === 'pausa.finalizada';
+        });
+    }
+
+    public function test_get_estado_no_dispara_matchmaker(): void
+    {
+        Queue::fake([EjecutarMatchmakerTurnosPdvJob::class]);
+
+        $ventas = $this->crearVendedorOperacion('Vendedor Lectura');
+        $this->crearTurnoEnCola('Solo lectura');
+
+        $this->actingAs($ventas)->getJson(route('punto_venta.operacion.estado'))->assertOk();
+
+        Queue::assertNotPushed(EjecutarMatchmakerTurnosPdvJob::class);
+        $this->assertSame(TurnoPdv::ESTADO_EN_COLA, TurnoPdv::query()->value('estado'));
+    }
+
     /**
      * @param  list<User>  $personas
      */
@@ -257,6 +346,11 @@ class MatchmakerTurnosPdvTest extends TestCase
 
                     return null;
                 }
+
+                public function esDisponible(User $user, int $sucursalId, bool $paraAltaNueva = false): bool
+                {
+                    return $this->primeraDisponible($sucursalId, 'ventas')?->is($user) ?? false;
+                }
             }
         );
     }
@@ -274,5 +368,22 @@ class MatchmakerTurnosPdvTest extends TestCase
             'alta_at' => $altaAt ?? now(),
             'atencion_actual_id' => null,
         ]);
+    }
+
+    private function crearVendedorOperacion(string $nombre): User
+    {
+        $usuario = User::factory()->create(['name' => $nombre]);
+        $usuario->givePermissionTo([
+            PuntoVentaModulo::PERMISO_ACCEDER,
+            PuntoVentaModulo::PERMISO_TURNOS_VER,
+            PuntoVentaModulo::PERMISO_TURNOS_CERRAR_ATENCION,
+            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_ABRIR,
+            PuntoVentaModulo::PERMISO_OPERACION_JORNADA_CERRAR,
+            PuntoVentaModulo::PERMISO_OPERACION_PAUSA,
+        ]);
+        $usuario->concederAccesoSucursal($this->sucursal, esPrincipal: true);
+        app(AlcancePdv::class)->establecerSucursalActiva($usuario, $this->sucursal->id);
+
+        return $usuario;
     }
 }

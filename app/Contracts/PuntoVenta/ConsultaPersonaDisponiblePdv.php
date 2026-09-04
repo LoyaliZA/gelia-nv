@@ -17,4 +17,10 @@ interface ConsultaPersonaDisponiblePdv
      * El desempate debe ser determinista (contrato Turnos §7).
      */
     public function primeraDisponible(int $sucursalId, string $servicio): ?User;
+
+    /**
+     * Evalúa las condiciones de Operación §5.
+     * Cuando $paraAltaNueva es true, exige además que la sucursal acepte altas (§5.6).
+     */
+    public function esDisponible(User $user, int $sucursalId, bool $paraAltaNueva = false): bool;
 }

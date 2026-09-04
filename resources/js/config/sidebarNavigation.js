@@ -272,6 +272,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
         },
         can('punto_venta.acceder') && can('pdv.turnos.ver') && {
             type: 'link',
+            id: 'punto_venta_operacion',
+            label: 'Operación',
+            icon: Clock,
+            href: () => routeHref('punto_venta.operacion.index', '/punto-venta/operacion'),
+            active: (url) => url.startsWith('/punto-venta/operacion'),
+        },
+        can('punto_venta.acceder') && can('pdv.turnos.ver') && {
+            type: 'link',
             id: 'punto_venta_turnos_ventas',
             label: 'Tablero ventas',
             icon: ClipboardList,

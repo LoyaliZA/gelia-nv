@@ -46,6 +46,16 @@ final class PuntoVentaModulo
 
     public const PERMISO_TURNOS_TRANSFERIR = 'pdv.turnos.transferir';
 
+    public const PERMISO_OPERACION_JORNADA_ABRIR = 'pdv.operacion.jornada_abrir';
+
+    public const PERMISO_OPERACION_JORNADA_CERRAR = 'pdv.operacion.jornada_cerrar';
+
+    public const PERMISO_OPERACION_JORNADA_CERRAR_SUCURSAL = 'pdv.operacion.jornada_cerrar_sucursal';
+
+    public const PERMISO_OPERACION_JORNADA_AMPLIAR = 'pdv.operacion.jornada_ampliar';
+
+    public const PERMISO_OPERACION_PAUSA = 'pdv.operacion.pausa';
+
     /**
      * @return list<string>
      */
@@ -70,6 +80,11 @@ final class PuntoVentaModulo
             self::PERMISO_TURNOS_BAJA_COLA,
             self::PERMISO_TURNOS_CERRAR_ATENCION,
             self::PERMISO_TURNOS_TRANSFERIR,
+            self::PERMISO_OPERACION_JORNADA_ABRIR,
+            self::PERMISO_OPERACION_JORNADA_CERRAR,
+            self::PERMISO_OPERACION_JORNADA_CERRAR_SUCURSAL,
+            self::PERMISO_OPERACION_JORNADA_AMPLIAR,
+            self::PERMISO_OPERACION_PAUSA,
             AlcancePdv::PERMISO_ALCANCE_GLOBAL,
             self::PERMISO_REPORTES_EXPORTAR,
         ];

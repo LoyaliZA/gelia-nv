@@ -9,5 +9,6 @@ Route::middleware(['pdv.modulo'])
         require __DIR__.'/alcance.php';
         require __DIR__.'/resguardos.php';
         require __DIR__.'/turnos.php';
+        require __DIR__.'/operacion.php';
         require __DIR__.'/reportes.php';
     });

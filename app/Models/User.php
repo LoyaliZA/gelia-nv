@@ -280,6 +280,11 @@ class User extends Authenticatable
         return $this->hasMany(PuntoVenta\IntervaloOperativoPdv::class);
     }
 
+    public function atencionesTurnoPdv(): HasMany
+    {
+        return $this->hasMany(PuntoVenta\TurnoPdvAtencion::class);
+    }
+
     public function mensajes(): HasMany
     {
         return $this->hasMany(Mensaje::class);

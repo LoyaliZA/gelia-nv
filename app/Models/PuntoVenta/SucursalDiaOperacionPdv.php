@@ -8,6 +8,7 @@ use Database\Factories\PuntoVenta\SucursalDiaOperacionPdvFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SucursalDiaOperacionPdv extends Model
 {
@@ -60,6 +61,19 @@ class SucursalDiaOperacionPdv extends Model
         return $this->belongsTo(User::class, 'ampliacion_por_id');
     }
 
+    public function eventos(): HasMany
+    {
+        return $this->hasMany(OperacionPdvEvento::class, 'sucursal_dia_id');
+    }
+
+    public function aplicarCierreHorario(
+        \DateTimeInterface $ocurridoAt,
+        string $horaCierreSnapshot,
+    ): void {
+        $this->acepta_altas = false;
+        $this->hora_cierre = $horaCierreSnapshot;
+    }
+
     public function aplicaCierreManual(
         User $actor,
         ?\DateTimeInterface $ocurridoAt = null
@@ -70,5 +84,20 @@ class SucursalDiaOperacionPdv extends Model
         $this->cierre_manual_por_id = $actor->id;
         $this->cierre_automatico_invalidado = true;
         $this->acepta_altas = false;
+    }
+
+    public function aplicarAmpliacion(
+        User $actor,
+        \DateTimeInterface $hasta,
+        ?\DateTimeInterface $ocurridoAt = null
+    ): void {
+        $ocurridoAt = $ocurridoAt ?? now();
+
+        $this->ampliacion_hasta_at = $hasta;
+        $this->ampliacion_por_id = $actor->id;
+        $this->cierre_automatico_invalidado = true;
+        $this->acepta_altas = true;
+        $this->cierre_manual_at = null;
+        $this->cierre_manual_por_id = null;
     }
 }
