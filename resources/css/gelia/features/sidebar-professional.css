@@ -839,6 +839,16 @@
     animation: geliaProFlyoutIn 0.22s var(--gelia-pro-ease) both;
 }
 
+/* Puente invisible hacia el rail para hover sin cerrar el flyout */
+.gelia-pro-flyout--hover::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    inset-inline-start: -12px;
+    width: 12px;
+}
+
 @keyframes geliaProFlyoutIn {
     from {
         opacity: 0;

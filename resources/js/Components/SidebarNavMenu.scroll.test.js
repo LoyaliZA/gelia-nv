@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sidebarExpandScrollDelta } from './SidebarNavMenu';
+import { sidebarExpandScrollDelta } from './Sidebar/sidebarAccordionScroll';
 
 describe('sidebarExpandScrollDelta', () => {
     const scroller = { top: 100, bottom: 400, height: 300 };

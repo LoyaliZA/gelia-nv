@@ -11,7 +11,12 @@ export default function SidebarGroup({
     flyoutOpen = false,
     onToggle,
     onCollapsedClick,
+    onCollapsedHoverEnter,
+    onCollapsedHoverLeave,
+    onNestedHoverEnter,
+    onNestedHoverLeave,
     triggerRef,
+    groupRef,
     children,
     depth = 0,
     inFlyout = false,
@@ -24,11 +29,32 @@ export default function SidebarGroup({
             onCollapsedClick?.(id, event);
             return;
         }
-        onToggle(id);
+        onToggle?.();
+    };
+
+    const handleMouseEnter = (event) => {
+        if (collapsed && !inFlyout) {
+            onCollapsedHoverEnter?.(id, event);
+            return;
+        }
+        if (inFlyout) {
+            onNestedHoverEnter?.(id);
+        }
+    };
+
+    const handleMouseLeave = () => {
+        if (collapsed && !inFlyout) {
+            onCollapsedHoverLeave?.();
+            return;
+        }
+        if (inFlyout) {
+            onNestedHoverLeave?.();
+        }
     };
 
     return (
         <div
+            ref={groupRef}
             className={`gelia-pro-sidebar__group ${isRoot ? 'gelia-pro-sidebar__group--root' : 'gelia-pro-sidebar__group--nested'}`}
             data-group-id={id}
             data-depth={depth}
@@ -46,6 +72,8 @@ export default function SidebarGroup({
                 ].filter(Boolean).join(' ')}
                 aria-expanded={isExpanded || flyoutOpen}
                 onClick={handleClick}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
                 data-tip={collapsed && !inFlyout ? label : ''}
             >
                 {Icon ? <Icon className="gelia-pro-sidebar__row-icon" aria-hidden /> : null}

@@ -18,6 +18,9 @@ export default function SidebarCollapsedFlyout({
     anchorRect,
     title,
     onClose,
+    onMouseEnter,
+    onMouseLeave,
+    hoverMode = false,
     children,
 }) {
     const panelRef = useRef(null);
@@ -50,6 +53,7 @@ export default function SidebarCollapsedFlyout({
         };
 
         const onPointer = (event) => {
+            if (hoverMode) return;
             if (panelRef.current?.contains(event.target)) return;
             onClose?.();
         };
@@ -61,16 +65,18 @@ export default function SidebarCollapsedFlyout({
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('mousedown', onPointer);
         };
-    }, [open, onClose]);
+    }, [open, onClose, hoverMode]);
 
     if (!open || !anchorRect || typeof document === 'undefined') return null;
 
     return createPortal(
         <>
-            <div className="gelia-pro-flyout-backdrop" onClick={onClose} aria-hidden />
+            {!hoverMode && (
+                <div className="gelia-pro-flyout-backdrop" onClick={onClose} aria-hidden />
+            )}
             <div
                 ref={panelRef}
-                className="gelia-pro-flyout"
+                className={`gelia-pro-flyout ${hoverMode ? 'gelia-pro-flyout--hover' : ''}`}
                 style={style || {
                     top: `${anchorRect.top}px`,
                     left: `${anchorRect.right + 8}px`,
@@ -78,6 +84,8 @@ export default function SidebarCollapsedFlyout({
                 }}
                 role="dialog"
                 aria-label={title}
+                onMouseEnter={onMouseEnter}
+                onMouseLeave={onMouseLeave}
             >
                 <div className="gelia-pro-flyout__header">
                     <span className="gelia-pro-flyout__title">{title}</span>

@@ -2,13 +2,12 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { ChevronRight } from 'lucide-react';
 import { buildSidebarNavigation, collectOpenGroupIdsForUrl } from '../config/sidebarNavigation';
 import SidebarNavLeafLink from './SidebarNavLeafLink';
+import { trackExpandScroll } from './Sidebar/sidebarAccordionScroll';
 
 /** Sangría: raíz (caja), nivel 2, nivel 3 */
 const PADDING_LINK = { 1: 'pl-10', 2: 'pl-14', 3: 'pl-16' };
 const PADDING_SUBGROUP = { 1: 'pl-10', 2: 'pl-14' };
-const SCROLL_PAD_PX = 8;
-/** Alineado con --gelia-sidebar-widget-ms (Sidebar.jsx) + margen de transición */
-const EXPAND_SCROLL_WATCH_MS = 360;
+const LEGACY_SCROLL_SELECTOR = '.gelia-sidebar-access-scroll';
 
 function resolveHref(item) {
     if (typeof item?.href === 'function') return item.href();
@@ -22,54 +21,6 @@ function groupHasActiveDescendant(node, url) {
         return node.children?.some((child) => groupHasActiveDescendant(child, url)) ?? false;
     }
     return false;
-}
-
-/** Delta de scrollTop para revelar el bloque en el scroller (0 = ya visible). */
-export function sidebarExpandScrollDelta(scrollerRect, blockRect, pad = SCROLL_PAD_PX) {
-    const usableHeight = scrollerRect.height - pad * 2;
-
-    if (blockRect.height > usableHeight) {
-        return blockRect.top - scrollerRect.top - pad;
-    }
-    if (blockRect.bottom > scrollerRect.bottom - pad) {
-        return blockRect.bottom - scrollerRect.bottom + pad;
-    }
-    if (blockRect.top < scrollerRect.top + pad) {
-        return blockRect.top - scrollerRect.top - pad;
-    }
-    return 0;
-}
-
-/** Ajusta el scroll del panel para ver el bloque expandido completo (o el tope si no cabe). */
-function ensureBlockVisibleInSidebarScroll(blockEl) {
-    const scroller = blockEl?.closest?.('.gelia-sidebar-access-scroll');
-    if (!scroller || !blockEl) return;
-
-    const delta = sidebarExpandScrollDelta(
-        scroller.getBoundingClientRect(),
-        blockEl.getBoundingClientRect()
-    );
-    if (Math.abs(delta) > 1) scroller.scrollTop += delta;
-}
-
-/** Durante la animación de apertura, mantiene el bloque a la vista; suelta al terminar. */
-function trackExpandScroll(blockEl) {
-    if (!blockEl) return () => {};
-
-    ensureBlockVisibleInSidebarScroll(blockEl);
-
-    if (typeof ResizeObserver === 'undefined') {
-        const t = setTimeout(() => ensureBlockVisibleInSidebarScroll(blockEl), EXPAND_SCROLL_WATCH_MS);
-        return () => clearTimeout(t);
-    }
-
-    const ro = new ResizeObserver(() => ensureBlockVisibleInSidebarScroll(blockEl));
-    ro.observe(blockEl);
-    const t = setTimeout(() => ro.disconnect(), EXPAND_SCROLL_WATCH_MS);
-    return () => {
-        clearTimeout(t);
-        ro.disconnect();
-    };
 }
 
 export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVisible = false, geliaAiVisible = false, saldosFavorPendientes = 0, onNavigate }) {
@@ -113,7 +64,7 @@ export default function SidebarNavMenu({ url, can, showAdminMenu, manualesHubVis
         if (!id || !openGroups[id]) return;
         pendingScrollGroupIdRef.current = null;
         stopExpandScrollRef.current?.();
-        stopExpandScrollRef.current = trackExpandScroll(groupRefs.current.get(id));
+        stopExpandScrollRef.current = trackExpandScroll(groupRefs.current.get(id), LEGACY_SCROLL_SELECTOR);
     }, [openGroups]);
 
     const toggleGroup = useCallback((id) => {

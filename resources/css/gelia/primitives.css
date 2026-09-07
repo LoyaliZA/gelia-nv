@@ -274,6 +274,27 @@ html.glass-active .theme-element:not(.theme-no-blur) {
         padding-top: 1rem;
         padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
     }
+
+    .gelia-app-shell[data-sidebar-layout='mobile-bottom'] .gelia-modal-overlay {
+        padding-bottom: max(
+            calc(var(--gelia-mobile-nav-offset) + env(safe-area-inset-bottom, 0px)),
+            1rem
+        );
+    }
+
+    .gelia-app-shell[data-sidebar-layout='mobile-bottom'] .gelia-modal-shell {
+        max-height: min(
+            90dvh,
+            calc(100dvh - var(--gelia-mobile-nav-offset) - 2rem - env(safe-area-inset-bottom, 0px))
+        );
+    }
+}
+
+@media (min-width: 768px) {
+    .gelia-app-shell[data-sidebar-layout='professional-left'] .gelia-modal-overlay {
+        padding-inline-start: max(1rem, var(--gelia-main-inset-inline-start));
+        padding-inline-end: max(1rem, var(--gelia-main-inset-inline-end));
+    }
 }
 
 .gelia-modal-shell {
@@ -295,6 +316,13 @@ html.glass-active .theme-element:not(.theme-no-blur) {
         max-height: min(
             90dvh,
             calc(100dvh - 2rem - env(safe-area-inset-bottom, 0px))
+        );
+    }
+
+    .gelia-app-shell[data-sidebar-layout='mobile-bottom'] .gelia-modal-shell {
+        max-height: min(
+            90dvh,
+            calc(100dvh - var(--gelia-mobile-nav-offset) - 2rem - env(safe-area-inset-bottom, 0px))
         );
     }
 }

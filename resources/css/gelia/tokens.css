@@ -108,4 +108,9 @@
     --gelia-main-inset-inline-end: 0px;
     --gelia-main-inset-block-start: 0px;
     --gelia-main-inset-block-end: 0px;
+    --gelia-content-safe-inline-start: var(--gelia-main-inset-inline-start);
+    --gelia-content-safe-inline-end: var(--gelia-main-inset-inline-end);
+    --gelia-content-safe-width: calc(
+        100vw - var(--gelia-main-inset-inline-start) - var(--gelia-main-inset-inline-end)
+    );
 }

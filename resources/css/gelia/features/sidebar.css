@@ -171,6 +171,11 @@
     .gelia-sidebar-mobile-bottom-panel.sidebar-profile-menu--open .sidebar-menu-content {
         transform: translate3d(0, 0, 0);
     }
+
+    html:has(.gelia-modal-overlay) .gelia-sidebar-mount--mobile-bottom .gelia-sidebar-widget {
+        pointer-events: none;
+        opacity: 0.35;
+    }
 }
 
 /* Cluster widget + menús flotantes — separación exterior única */

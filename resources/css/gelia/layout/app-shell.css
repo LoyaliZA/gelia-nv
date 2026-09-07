@@ -57,6 +57,26 @@ body {
     box-sizing: border-box;
 }
 
+/* Evita bleed accidental (100vw / w-screen) bajo el rail profesional */
+.gelia-app-shell[data-sidebar-layout='professional-left'] .gelia-app-body {
+    --gelia-content-safe-inline-start: var(--gelia-main-inset-inline-start);
+    --gelia-content-safe-inline-end: var(--gelia-main-inset-inline-end);
+    --gelia-content-safe-width: calc(
+        100vw - var(--gelia-main-inset-inline-start) - var(--gelia-main-inset-inline-end)
+    );
+}
+
+.gelia-app-shell[data-sidebar-layout='professional-left'] .gelia-app-main,
+.gelia-app-shell[data-sidebar-layout='professional-left'] .gelia-app-content-inner {
+    max-width: min(100%, var(--gelia-content-safe-width));
+}
+
+.gelia-app-shell[data-sidebar-layout='professional-left'] .gelia-app-body [class*='w-screen'],
+.gelia-app-shell[data-sidebar-layout='professional-left'] .gelia-app-body .overflow-x-auto {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
 /* Centrado simétrico del bloque de página (escritorio y móvil) */
 .gelia-app-shell:not([data-page-fullscreen='true']) .gelia-app-content-inner {
     max-width: var(--gelia-content-max);
@@ -181,8 +201,25 @@ body {
 
 /* Móvil: barra inferior flotante (default) o topbar + drawer lateral */
 @media (max-width: 767px) {
+    .gelia-app-shell[data-sidebar-layout='mobile-bottom'] {
+        --gelia-main-inset-block-end: max(
+            var(--gelia-mobile-nav-offset),
+            calc(env(safe-area-inset-bottom, 0px) + 4.5rem)
+        );
+    }
+
     .gelia-app-shell[data-sidebar-layout='mobile-bottom'] .gelia-app-main--default {
-        padding-bottom: max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem));
+        padding-bottom: max(
+            var(--gelia-mobile-nav-offset),
+            calc(env(safe-area-inset-bottom, 0px) + 4.5rem)
+        );
+    }
+
+    .gelia-app-shell[data-sidebar-layout='mobile-bottom'] .gelia-app-main {
+        padding-bottom: max(
+            var(--gelia-mobile-nav-offset),
+            calc(env(safe-area-inset-bottom, 0px) + 1.5rem)
+        );
     }
 
     .gelia-app-shell[data-sidebar-layout='mobile-topbar'] .gelia-app-main--default {
