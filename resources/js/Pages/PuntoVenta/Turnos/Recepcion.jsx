@@ -53,9 +53,9 @@ export default function Recepcion({
                 <RecepcionRealtimeSync refrescarBandeja={refrescarBandeja} habilitado={puedeVerBandeja} />
                 <GeliaPageShell className="max-w-[720px] space-y-5" data-recepcion-turno-root>
                 <GeliaTituloCard
-                    titulo="Recepción de turnos"
-                    subtitulo="Cola, asignados y alta en mostrador"
-                    icono={Ticket}
+                    title="Recepción de turnos"
+                    description="Cola, asignados y alta en mostrador"
+                    icon={Ticket}
                 />
 
                 <SelectorSucursalActivaPdv

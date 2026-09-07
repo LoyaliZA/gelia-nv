@@ -65,9 +65,9 @@ export default function Index({
                 <OperacionRealtimeSync refrescar={manejarActualizado} />
                 <GeliaPageShell className="max-w-[720px] space-y-5" data-operacion-root>
                 <GeliaTituloCard
-                    titulo="Operación de piso"
-                    subtitulo="Jornada, pausa y estado de sucursal"
-                    icono={Clock}
+                    title="Operación de piso"
+                    description="Jornada, pausa y estado de sucursal"
+                    icon={Clock}
                 />
 
                 <SelectorSucursalActivaPdv

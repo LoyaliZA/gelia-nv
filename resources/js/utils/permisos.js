@@ -1174,7 +1174,7 @@ export const SUBMODULOS_UI_POR_MODULO = {
         {
             id: 'reportes',
             label: 'Reportes',
-            descripcion: 'Exportación de reportes del punto de venta',
+            descripcion: 'Consulta y exportación de métricas del punto de venta',
             permisos: ['pdv.reportes.exportar'],
         },
         {

@@ -209,10 +209,12 @@ class GenerarListadoDesdeRutasService
                         $plataformas = $pg * $multiplicadores['plataformas'];
                         $fila['Costo Full'] = round(PorcentajesListadoService::calcularCostoMeli(
                             $plataformas,
-                            $multiplicadores['meli_factor_base'],
-                            $multiplicadores['meli_full_multiplicador'],
                             $multiplicadores['meli_full_fijo_1'],
-                            $multiplicadores['meli_full_fijo_2']
+                            $multiplicadores['meli_full_fijo_2'],
+                            $multiplicadores['meli_full_pct_1'],
+                            $multiplicadores['meli_full_pct_2'],
+                            $multiplicadores['meli_pct_iva'],
+                            $multiplicadores['meli_factor_iva']
                         ), 2);
                         break;
                     }
@@ -220,10 +222,12 @@ class GenerarListadoDesdeRutasService
                         $plataformas = $pg * $multiplicadores['plataformas'];
                         $fila['Costo MSI'] = round(PorcentajesListadoService::calcularCostoMeli(
                             $plataformas,
-                            $multiplicadores['meli_factor_base'],
-                            $multiplicadores['meli_msi_multiplicador'],
                             $multiplicadores['meli_msi_fijo_1'],
-                            $multiplicadores['meli_msi_fijo_2']
+                            $multiplicadores['meli_msi_fijo_2'],
+                            $multiplicadores['meli_msi_pct_1'],
+                            $multiplicadores['meli_msi_pct_2'],
+                            $multiplicadores['meli_pct_iva'],
+                            $multiplicadores['meli_factor_iva']
                         ), 2);
                         break;
                     }

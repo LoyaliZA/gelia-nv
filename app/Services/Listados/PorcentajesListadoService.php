@@ -8,26 +8,42 @@ use Illuminate\Support\Facades\DB;
 class PorcentajesListadoService
 {
     public const MELI_DEFAULTS = [
-        'meli_factor_base' => 1.1,
-        'meli_full_multiplicador' => 1.13,
         'meli_full_fijo_1' => 45.0,
         'meli_full_fijo_2' => 90.0,
-        'meli_msi_multiplicador' => 1.175,
         'meli_msi_fijo_1' => 90.0,
         'meli_msi_fijo_2' => 90.0,
+        'meli_full_pct_1' => 14.0,
+        'meli_full_pct_2' => 8.0,
+        'meli_msi_pct_1' => 17.5,
+        'meli_msi_pct_2' => 8.0,
+        'meli_pct_iva' => 2.5,
+        'meli_factor_iva' => 1.16,
     ];
 
     /**
-     * Costo MELI = ((Plataformas * factor_base) * multiplicador) + fijo_1 + fijo_2
+     * Costo MELI = (Plataformas + fijo_1 + fijo_2) / (1 - pct_1% - pct_2% - pct_iva%/factor_iva)
      */
     public static function calcularCostoMeli(
         float $plataformas,
-        float $factorBase,
-        float $multiplicador,
         float $fijo1,
-        float $fijo2
+        float $fijo2,
+        float $pct1,
+        float $pct2,
+        float $pctIva,
+        float $factorIva
     ): float {
-        return (($plataformas * $factorBase) * $multiplicador) + $fijo1 + $fijo2;
+        $numerador = $plataformas + $fijo1 + $fijo2;
+
+        $denominador = 1
+            - ($pct1 / 100)
+            - ($pct2 / 100)
+            - (($pctIva / 100) / $factorIva);
+
+        if ($denominador <= 0) {
+            return 0.0;
+        }
+
+        return $numerador / $denominador;
     }
 
     /**

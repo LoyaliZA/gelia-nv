@@ -28,8 +28,11 @@ const PCT_KEYS = [
 ];
 
 const MELI_KEYS = [
-    'meli_factor_base', 'meli_full_multiplicador', 'meli_full_fijo_1', 'meli_full_fijo_2',
-    'meli_msi_multiplicador', 'meli_msi_fijo_1', 'meli_msi_fijo_2',
+    'meli_full_fijo_1', 'meli_full_fijo_2',
+    'meli_msi_fijo_1', 'meli_msi_fijo_2',
+    'meli_full_pct_1', 'meli_full_pct_2',
+    'meli_msi_pct_1', 'meli_msi_pct_2',
+    'meli_pct_iva', 'meli_factor_iva',
 ];
 
 const CONFIGURACION_POR_DEFECTO = {
@@ -37,13 +40,16 @@ const CONFIGURACION_POR_DEFECTO = {
     pct_diamante: 17.65, pct_plataformas: 23.00,
     pct_lista3: 14.28, pct_lista4: 17.71, pct_venta_especial: 25.00,
     pct_boutique: 25.00,
-    meli_factor_base: 1.1,
-    meli_full_multiplicador: 1.13,
     meli_full_fijo_1: 45,
     meli_full_fijo_2: 90,
-    meli_msi_multiplicador: 1.175,
     meli_msi_fijo_1: 90,
     meli_msi_fijo_2: 90,
+    meli_full_pct_1: 14,
+    meli_full_pct_2: 8,
+    meli_msi_pct_1: 17.5,
+    meli_msi_pct_2: 8,
+    meli_pct_iva: 2.5,
+    meli_factor_iva: 1.16,
 };
 
 const COLUMNAS_DISPONIBLES = [

@@ -113,14 +113,14 @@ class EstructuraRutasPermisosPdvTest extends TestCase
         $this->activarModulo();
 
         $soloPiso = $this->usuarioPiso();
-        $this->actingAs($soloPiso)->get(route('punto_venta.reportes.index'))->assertForbidden();
+        $this->actingAs($soloPiso)->get(route('punto_venta.reportes.resguardos'))->assertForbidden();
 
         $global = User::factory()->create();
         $global->givePermissionTo([
             PuntoVentaModulo::PERMISO_ACCEDER,
             AlcancePdv::PERMISO_ALCANCE_GLOBAL,
         ]);
-        $this->actingAs($global)->get(route('punto_venta.reportes.index'))->assertNoContent();
+        $this->actingAs($global)->get(route('punto_venta.reportes.index'))->assertForbidden();
     }
 
     public function test_super_admin_sin_permiso_directo_no_accede(): void

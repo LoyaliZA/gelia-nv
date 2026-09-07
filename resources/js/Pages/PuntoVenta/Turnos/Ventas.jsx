@@ -71,9 +71,9 @@ export default function Ventas({
                 <VentasRealtimeSync refrescar={aplicarRespuestaMutacion} />
                 <GeliaPageShell className="max-w-[720px] space-y-5" data-ventas-tablero-root>
                 <GeliaTituloCard
-                    titulo="Tablero de ventas"
-                    subtitulo="Turno asignado y atención en curso"
-                    icono={Monitor}
+                    title="Tablero de ventas"
+                    description="Turno asignado y atención en curso"
+                    icon={Monitor}
                 />
 
                 <SelectorSucursalActivaPdv

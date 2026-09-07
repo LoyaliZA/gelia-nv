@@ -286,6 +286,17 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('punto_venta.turnos.ventas', '/punto-venta/turnos/ventas'),
             active: (url) => url.startsWith('/punto-venta/turnos/ventas'),
         },
+        can('punto_venta.acceder') && (
+            can('pdv.turnos.ver')
+            || (can('pdv.resguardos.ver') && can('pdv.alcance.global'))
+        ) && {
+            type: 'link',
+            id: 'punto_venta_reportes',
+            label: 'Reportes',
+            icon: BarChart3,
+            href: () => routeHref('punto_venta.reportes.index', '/punto-venta/reportes'),
+            active: (url) => url.startsWith('/punto-venta/reportes'),
+        },
     ].filter(Boolean);
 
     const operacionesChildren = [
