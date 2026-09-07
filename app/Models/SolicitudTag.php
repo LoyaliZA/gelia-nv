@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUsuario;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SolicitudTag extends Model
 {
-    use SoftDeletes;
+    use BelongsToUsuario, SoftDeletes;
 
     // Explicitamos la tabla ya que Laravel en plural podría buscar "solicitud_tags"
     protected $table = 'solicitudes_tags';
@@ -70,7 +71,7 @@ class SolicitudTag extends Model
 
     // Relaciones (BelongsTo) hacia los catálogos y entidades
     public function cliente(): BelongsTo { return $this->belongsTo(Cliente::class); }
-    public function vendedor(): BelongsTo { return $this->belongsTo(User::class, 'vendedor_id'); }
+    public function vendedor(): BelongsTo { return $this->belongsToUsuario('vendedor_id'); }
     public function departamento(): BelongsTo { return $this->belongsTo(Departamento::class); }
     public function proceso(): BelongsTo { return $this->belongsTo(CatalogoProceso::class, 'catalogo_proceso_id'); }
     public function estado(): BelongsTo { return $this->belongsTo(CatalogoEstadoSolicitud::class, 'catalogo_estado_solicitud_id'); }

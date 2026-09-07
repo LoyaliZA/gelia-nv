@@ -10,6 +10,7 @@ use App\Models\Sucursal;
 use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\SaldosAFavor\SafIncidencia;
 use App\Models\SaldosAFavor\SafPedidoAplicacion;
+use App\Models\Concerns\BelongsToUsuario;
 use App\Models\User;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use Illuminate\Database\Eloquent\Model;
@@ -20,7 +21,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PedidoBma extends Model
 {
-    use SoftDeletes;
+    use BelongsToUsuario, SoftDeletes;
 
     protected $table = 'pedidos_bma';
 
@@ -166,7 +167,7 @@ class PedidoBma extends Model
 
     public function vendedor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'vendedor_id');
+        return $this->belongsToUsuario('vendedor_id');
     }
 
     public function cliente(): BelongsTo
@@ -476,7 +477,7 @@ class PedidoBma extends Model
 
     public function eliminacionRegistroPor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'eliminacion_registro_por_id');
+        return $this->belongsToUsuario('eliminacion_registro_por_id');
     }
 
     public function auditoriasRegistro(): HasMany
@@ -626,7 +627,7 @@ class PedidoBma extends Model
 
     public function pesajeRespondidoPor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'pesaje_respondido_por_id');
+        return $this->belongsToUsuario('pesaje_respondido_por_id');
     }
 
     public function tienePesajeRespondido(): bool
@@ -843,37 +844,37 @@ class PedidoBma extends Model
 
     public function pagoValidadoPor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'pago_validado_por_id');
+        return $this->belongsToUsuario('pago_validado_por_id');
     }
 
     public function canceladoPor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'cancelado_por_id');
+        return $this->belongsToUsuario('cancelado_por_id');
     }
 
     public function empacadoPor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'empacado_por_id');
+        return $this->belongsToUsuario('empacado_por_id');
     }
 
     public function incidenciaEmpaquePor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'incidencia_empaque_por_id');
+        return $this->belongsToUsuario('incidencia_empaque_por_id');
     }
 
     public function guiaCorregidaPor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'guia_corregida_por_id');
+        return $this->belongsToUsuario('guia_corregida_por_id');
     }
 
     public function errorDatosPor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'error_datos_por_id');
+        return $this->belongsToUsuario('error_datos_por_id');
     }
 
     public function resguardoApartadoPor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'resguardo_apartado_por_id');
+        return $this->belongsToUsuario('resguardo_apartado_por_id');
     }
 
     public function puedeMarcarResguardoApartado(): bool

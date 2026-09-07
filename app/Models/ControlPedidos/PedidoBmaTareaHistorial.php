@@ -2,12 +2,15 @@
 
 namespace App\Models\ControlPedidos;
 
+use App\Models\Concerns\BelongsToUsuario;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PedidoBmaTareaHistorial extends Model
 {
+    use BelongsToUsuario;
+
     protected $table = 'pedido_bma_tarea_historial';
 
     protected $fillable = [
@@ -34,6 +37,6 @@ class PedidoBmaTareaHistorial extends Model
 
     public function usuario(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsToUsuario('usuario_id');
     }
 }

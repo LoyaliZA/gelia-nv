@@ -14,6 +14,7 @@ import {
     etiquetasPrioridadTurno,
 } from './Partials/altaTurnoUtils';
 import { badgeEstadoTurno, badgePrioridadTurno } from './Partials/turnosStyles';
+import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 
 export default function Recepcion({
     auth,
@@ -44,7 +45,13 @@ export default function Recepcion({
     return (
         <AppLayout auth={auth}>
             <Head title="Recepción de turnos | Punto de venta" />
-            <GeliaPageShell className="max-w-[720px] space-y-5" data-recepcion-turno-root>
+            <PdvAlertProvider
+                sucursalId={sucursalActiva?.id}
+                userId={auth?.user?.id}
+                habilitado={Boolean(sucursalActiva?.id)}
+            >
+                <RecepcionRealtimeSync refrescarBandeja={refrescarBandeja} habilitado={puedeVerBandeja} />
+                <GeliaPageShell className="max-w-[720px] space-y-5" data-recepcion-turno-root>
                 <GeliaTituloCard
                     titulo="Recepción de turnos"
                     subtitulo="Cola, asignados y alta en mostrador"
@@ -85,9 +92,19 @@ export default function Recepcion({
                 ) : !puedeVerBandeja ? (
                     <EstadoSinPermiso />
                 ) : null}
-            </GeliaPageShell>
+                </GeliaPageShell>
+            </PdvAlertProvider>
         </AppLayout>
     );
+}
+
+function RecepcionRealtimeSync({ refrescarBandeja, habilitado }) {
+    usePdvAlertReload({
+        dominio: 'turnos',
+        refrescar: refrescarBandeja,
+        habilitado,
+    });
+    return null;
 }
 
 function EstadoSinPermiso() {

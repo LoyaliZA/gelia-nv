@@ -176,7 +176,10 @@ class AdminController extends Controller
         ];
 
         if ($isGlobalAdmin) {
-            $queryUsuarios = User::with($relaciones);
+            $estado = request('estado', 'activos');
+            $queryUsuarios = $estado === 'archivados'
+                ? User::onlyTrashed()->with($relaciones)
+                : User::with($relaciones);
             $departamentos = Departamento::with('areas')->where('activo', true)->get();
             $posiblesGerentes = User::role(['Super Admin', 'Administrador', 'Gerente'])
                 ->select('id', 'name', 'apellido_paterno')
@@ -187,7 +190,9 @@ class AdminController extends Controller
             $todosLosPermisos = Permission::all();
             $catalogoPermisos = $todosLosPermisos;
         } else {
-            $queryUsuarios = User::whereHas('gerentes', function ($query) use ($user) {
+            $estado = request('estado', 'activos');
+            $queryUsuarios = ($estado === 'archivados' ? User::onlyTrashed() : User::query())
+                ->whereHas('gerentes', function ($query) use ($user) {
                 $query->where('gerente_id', $user->id);
             })->with($relaciones);
 
@@ -214,6 +219,7 @@ class AdminController extends Controller
             'filtros' => [
                 'busqueda' => trim((string) request('busqueda', '')),
                 'gerente_id' => request()->filled('gerente_id') ? (int) request('gerente_id') : null,
+                'estado' => request('estado', 'activos'),
             ],
             'departamentos' => $departamentos,
             'posiblesGerentes' => $posiblesGerentes,
@@ -806,6 +812,7 @@ class AdminController extends Controller
     private function serializarUsuarioConProcedencia(User $usuario): array
     {
         $data = $usuario->toArray();
+        $data['deleted_at'] = $usuario->deleted_at?->toIso8601String();
         $data['roles'] = $usuario->roles->toArray();
         $data['permissions'] = $usuario->permissions->map(fn ($p) => [
             'id' => $p->id,
@@ -990,29 +997,40 @@ class AdminController extends Controller
             'telefono' => $user->telefono,
         ];
 
-        $user->update([
-            'email' => $user->email . $suffix,
-            'username' => $user->username . $suffix,
-            'telefono' => $user->telefono ? $user->telefono . $suffix : null,
-        ]);
+        DB::transaction(function () use ($user, $suffix, $oldData, $request) {
+            $user->update([
+                'email' => $user->email . $suffix,
+                'username' => $user->username . $suffix,
+                'telefono' => $user->telefono ? $user->telefono . $suffix : null,
+            ]);
 
-        $user->delete();
+            $user->delete();
 
-        \App\Services\Auditoria\RegistrarAuditoriaConfiguracionService::ejecutar(
-            'Usuarios',
-            'Archivado de cuenta (Deshabilitación)',
-            [
-                'descripcion' => 'Se archivó el usuario, desvinculando sus credenciales de acceso para liberar los correos y teléfonos.',
-                'motivo_archivado' => $request->motivo,
-                'datos_anteriores' => $oldData,
-                'usuario_afectado' => [
-                    'id' => $user->id,
-                    'nombre' => "{$user->name} {$user->apellido_paterno} {$user->apellido_materno}",
-                ]
-            ],
-            $user->id
-        );
+            \App\Services\Auditoria\RegistrarAuditoriaConfiguracionService::ejecutar(
+                'Usuarios',
+                'Archivado de cuenta (Deshabilitación)',
+                [
+                    'descripcion' => 'Se archivó el usuario, desvinculando sus credenciales de acceso para liberar los correos y teléfonos.',
+                    'motivo_archivado' => $request->motivo,
+                    'datos_anteriores' => $oldData,
+                    'usuario_afectado' => [
+                        'id' => $user->id,
+                        'nombre' => "{$user->name} {$user->apellido_paterno} {$user->apellido_materno}",
+                    ]
+                ],
+                $user->id
+            );
+        });
 
         return back()->with('success', 'El colaborador ha sido archivado exitosamente. Se ha registrado el motivo en la auditoría y sus datos (correo, teléfono) han quedado libres para reasignación.');
+    }
+
+    public function restaurarUsuario(User $user, \App\Services\Usuarios\RestaurarUsuarioArchivadoService $restaurarService)
+    {
+        Gate::authorize('usuarios.restaurar');
+
+        $restaurarService->ejecutar($user);
+
+        return back()->with('success', 'El colaborador ha sido restaurado exitosamente. Sus credenciales de acceso están activas nuevamente.');
     }
 }

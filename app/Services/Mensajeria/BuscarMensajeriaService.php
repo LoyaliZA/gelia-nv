@@ -70,7 +70,7 @@ class BuscarMensajeriaService
         array $idsConversaciones,
         ?int $conversacionId
     ): array {
-        $query = User::query()
+        $query = User::withTrashed()
             ->select('users.id', 'users.name', 'users.username', 'users.foto_perfil')
             ->join('conversacion_participantes as cp', 'cp.user_id', '=', 'users.id')
             ->whereIn('cp.conversacion_id', $idsConversaciones)

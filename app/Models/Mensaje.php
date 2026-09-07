@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUsuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Mensaje extends Model
 {
-    use SoftDeletes;
+    use BelongsToUsuario, SoftDeletes;
 
     public const TIPO_TEXTO = 'texto';
     public const TIPO_IMAGEN = 'imagen';
@@ -35,7 +36,7 @@ class Mensaje extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsToUsuario('user_id');
     }
 
     public function replyTo(): BelongsTo

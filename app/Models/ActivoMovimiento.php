@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUsuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ActivoMovimiento extends Model
 {
+    use BelongsToUsuario;
     protected $table = 'activo_movimientos';
 
     protected $fillable = [
@@ -34,12 +36,12 @@ class ActivoMovimiento extends Model
 
     public function usuario(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'usuario_id');
+        return $this->belongsToUsuario('usuario_id');
     }
 
     public function userDestino(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'user_destino_id');
+        return $this->belongsToUsuario('user_destino_id');
     }
 
     public function departamentoOrigen(): BelongsTo

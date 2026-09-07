@@ -2,6 +2,7 @@
 
 namespace App\Models\ControlPedidos;
 
+use App\Models\Concerns\BelongsToUsuario;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Database\Eloquent\Model;
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PedidoBmaHistorialEstado extends Model
 {
+    use BelongsToUsuario;
+
     protected $table = 'pedido_bma_historial_estados';
 
     protected $fillable = [
@@ -40,7 +43,7 @@ class PedidoBmaHistorialEstado extends Model
 
     public function usuario(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'usuario_id');
+        return $this->belongsToUsuario('usuario_id');
     }
 
     public function estatusAnterior(): BelongsTo

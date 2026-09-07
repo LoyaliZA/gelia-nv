@@ -37,6 +37,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'usuarios.gestionar': 'Permite administrar usuarios del sistema.',
     'usuarios.generar_permisos': 'Permite asignar permisos a otros usuarios.',
     'usuarios.archivar': 'Permite archivar usuarios del sistema.',
+    'usuarios.restaurar': 'Permite restaurar usuarios archivados del sistema.',
     'catalogos.gestionar': 'Permite administrar catálogos globales del sistema.',
     'catalogos.comisiones.ver': 'Permite consultar el catálogo de comisiones.',
     'catalogos.comisiones.gestionar': 'Permite editar el catálogo de comisiones.',
@@ -1030,7 +1031,7 @@ export const SUBMODULOS_UI_POR_MODULO = {
             id: 'cuentas',
             label: 'Usuarios',
             descripcion: 'Administrar cuentas de usuario',
-            permisos: ['usuarios.gestionar', 'usuarios.archivar'],
+            permisos: ['usuarios.gestionar', 'usuarios.archivar', 'usuarios.restaurar'],
         },
         {
             id: 'enlaces',

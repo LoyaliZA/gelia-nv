@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Package, Loader2, AlertTriangle, Truck } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
@@ -13,6 +13,7 @@ import AlertasCustodiaResguardo from './Partials/AlertasCustodiaResguardo';
 import SelectorSucursalActivaPdv from './Partials/SelectorSucursalActivaPdv';
 import useListadoResguardos from './Partials/useListadoResguardos';
 import { antiguedadValidaEnBandeja, paramsListadoResguardos } from './Partials/resguardosUtils';
+import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 
 const BANDEJAS = ['por_recibir', 'en_custodia', 'incidencias'];
 
@@ -69,6 +70,15 @@ export default function Index({
     });
 
     const recargar = (extra = {}, opts) => cargar(paramsActuales(extra), opts);
+    const recargarRef = useRef(recargar);
+
+    useEffect(() => {
+        recargarRef.current = recargar;
+    });
+
+    const recargarSilencioso = useCallback(() => {
+        recargarRef.current({ page: resguardosVista?.current_page || 1 }, { silencioso: true });
+    }, [resguardosVista?.current_page]);
 
     const onBandeja = (nuevaBandeja) => {
         setBandejaActiva(nuevaBandeja);
@@ -143,7 +153,13 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Resguardos | Punto de Venta" />
-            <GeliaPageShell className="space-y-5">
+            <PdvAlertProvider
+                sucursalId={sucursalActiva?.id}
+                userId={auth?.user?.id}
+                habilitado={Boolean(sucursalActiva?.id)}
+            >
+                <ResguardosRealtimeSync refrescar={recargarSilencioso} />
+                <GeliaPageShell className="space-y-5">
                 <GeliaTituloCard
                     eyebrow="Punto de Venta"
                     title="Resguardos"
@@ -272,7 +288,16 @@ export default function Index({
                 )}
 
                 <GeliaPaginacion paginator={resguardosVista} onIrAPagina={onIrAPagina} />
-            </GeliaPageShell>
+                </GeliaPageShell>
+            </PdvAlertProvider>
         </AppLayout>
     );
+}
+
+function ResguardosRealtimeSync({ refrescar }) {
+    usePdvAlertReload({
+        dominio: 'resguardos',
+        refrescar,
+    });
+    return null;
 }

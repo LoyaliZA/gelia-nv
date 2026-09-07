@@ -106,13 +106,13 @@ class User extends Authenticatable
     // Quiénes son los gerentes de este usuario
     public function gerentes()
     {
-        return $this->belongsToMany(User::class, 'gerente_colaborador', 'colaborador_id', 'gerente_id');
+        return $this->belongsToMany(User::class, 'gerente_colaborador', 'colaborador_id', 'gerente_id')->withTrashed();
     }
 
     // Quiénes son los colaboradores a cargo de este gerente
     public function colaboradores()
     {
-        return $this->belongsToMany(User::class, 'gerente_colaborador', 'gerente_id', 'colaborador_id');
+        return $this->belongsToMany(User::class, 'gerente_colaborador', 'gerente_id', 'colaborador_id')->withTrashed();
     }
 
     public function colaboradoresRhAsignados(): BelongsToMany

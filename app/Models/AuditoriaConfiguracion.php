@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUsuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuditoriaConfiguracion extends Model
 {
+    use BelongsToUsuario;
     protected $table = 'auditorias_configuraciones';
 
     protected $fillable = [
@@ -29,7 +31,7 @@ class AuditoriaConfiguracion extends Model
      */
     public function usuario(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'user_id');
+        return $this->belongsToUsuario('user_id');
     }
 
     /**
@@ -37,6 +39,6 @@ class AuditoriaConfiguracion extends Model
      */
     public function usuarioAfectado(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'target_user_id');
+        return $this->belongsToUsuario('target_user_id');
     }
 }

@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUsuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuditoriaSolicitudFactura extends Model
 {
+    use BelongsToUsuario;
     protected $table = 'auditorias_solicitudes_facturas';
 
     protected $fillable = [
@@ -29,7 +31,7 @@ class AuditoriaSolicitudFactura extends Model
 
     public function usuario(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'usuario_id');
+        return $this->belongsToUsuario('usuario_id');
     }
 
     public function estadoAnterior(): BelongsTo

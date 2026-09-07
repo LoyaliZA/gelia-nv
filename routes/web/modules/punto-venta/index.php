@@ -7,6 +7,7 @@ Route::middleware(['pdv.modulo'])
     ->name('punto_venta.')
     ->group(function () {
         require __DIR__.'/alcance.php';
+        require __DIR__.'/alertas.php';
         require __DIR__.'/resguardos.php';
         require __DIR__.'/turnos.php';
         require __DIR__.'/operacion.php';

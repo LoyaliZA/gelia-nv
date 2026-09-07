@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUsuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConsultaSolicitud extends Model
 {
+    use BelongsToUsuario;
     protected $table = 'consultas_solicitud';
 
     protected $fillable = [
@@ -37,11 +39,11 @@ class ConsultaSolicitud extends Model
 
     public function vendedor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'vendedor_id');
+        return $this->belongsToUsuario('vendedor_id');
     }
 
     public function encargada(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'encargada_id');
+        return $this->belongsToUsuario('encargada_id');
     }
 }

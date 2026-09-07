@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUsuario;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class CobranzaBitacora extends Model
 {
-    use HasFactory;
+    use BelongsToUsuario, HasFactory;
 
     protected $table = 'cobranza_bitacoras';
 
@@ -34,6 +35,6 @@ class CobranzaBitacora extends Model
 
     public function usuario()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsToUsuario('usuario_id');
     }
 }

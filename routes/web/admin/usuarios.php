@@ -16,6 +16,12 @@ Route::middleware(['can:usuarios.archivar'])->group(function () {
     Route::delete('/usuarios/{user}/archivar', [AdminController::class, 'archivarUsuario'])->name('usuarios.archivar');
 });
 
+Route::middleware(['can:usuarios.restaurar'])->group(function () {
+    Route::post('/usuarios/{user}/restaurar', [AdminController::class, 'restaurarUsuario'])
+        ->withTrashed()
+        ->name('usuarios.restaurar');
+});
+
 Route::middleware(['can:usuarios.generar_permisos'])->group(function () {
     Route::get('/enlaces', [AdminController::class, 'enlaces'])->name('enlaces');
     Route::post('/generar-enlace-registro', [RegistroController::class, 'generarEnlaceInvitacion'])->name('enlaces.generar');

@@ -76,7 +76,7 @@ final class VisibilidadPedidoBma
         if ($usuario->hasRole('Gerente') || $usuario->can('control_pedidos.auditar')) {
             $deptos = self::idsDepartamentos($usuario);
             if ($deptos !== []) {
-                $deptoUsers = User::query()
+                $deptoUsers = User::withTrashed()
                     ->where(function ($q) use ($deptos) {
                         $q->whereIn('departamento_id', $deptos)
                             ->orWhereHas('departamentos', fn ($d) => $d->whereIn('departamentos.id', $deptos));

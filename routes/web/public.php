@@ -6,6 +6,7 @@ use App\Http\Controllers\Clientes\Direcciones\SolicitudDireccionPublicaControlle
 use App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaPublicaController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaEvidenciaTiendaPublicaController;
 use App\Http\Controllers\Facturas\DatosFiscalesPublicosController;
+use App\Http\Controllers\PuntoVenta\Pantallas\PantallaSalaPdvController;
 use App\Http\Controllers\TiendanubeWebhookController;
 use App\Http\Middleware\HardenSolicitudDireccionPublica;
 
@@ -16,6 +17,13 @@ Route::get('/', function () {
 Route::middleware('throttle:60,1')->group(function () {
     Route::get('/activos/consulta/{token}', [ActivoController::class, 'consultaPublica'])->name('activos.consulta.publica');
     Route::get('/activos/consulta/{token}/qr.svg', [ActivoController::class, 'consultaQr'])->name('activos.consulta.qr');
+
+    Route::get('/sala-turnos/{sucursal}', [PantallaSalaPdvController::class, 'show'])
+        ->whereNumber('sucursal')
+        ->name('sala_turnos.publica.show');
+    Route::get('/sala-turnos/{sucursal}/estado', [PantallaSalaPdvController::class, 'estado'])
+        ->whereNumber('sucursal')
+        ->name('sala_turnos.publica.estado');
 });
 
 Route::middleware(['throttle:30,1', HardenSolicitudDireccionPublica::class])->group(function () {

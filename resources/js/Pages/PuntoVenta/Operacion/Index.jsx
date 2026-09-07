@@ -11,6 +11,7 @@ import TarjetaEstadoJornada from './Partials/TarjetaEstadoJornada';
 import TarjetaGerenciaOperacion from './Partials/TarjetaGerenciaOperacion';
 import useEstadoOperacion from './Partials/useEstadoOperacion';
 import { mensajeAvisoSucursal } from './Partials/operacionUtils';
+import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 
 export default function Index({
     auth,
@@ -56,7 +57,13 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Operación | Punto de venta" />
-            <GeliaPageShell className="max-w-[720px] space-y-5" data-operacion-root>
+            <PdvAlertProvider
+                sucursalId={sucursalActiva?.id}
+                userId={auth?.user?.id}
+                habilitado={Boolean(sucursalActiva?.id)}
+            >
+                <OperacionRealtimeSync refrescar={manejarActualizado} />
+                <GeliaPageShell className="max-w-[720px] space-y-5" data-operacion-root>
                 <GeliaTituloCard
                     titulo="Operación de piso"
                     subtitulo="Jornada, pausa y estado de sucursal"
@@ -141,9 +148,18 @@ export default function Index({
                         </section>
                     </>
                 )}
-            </GeliaPageShell>
+                </GeliaPageShell>
+            </PdvAlertProvider>
         </AppLayout>
     );
+}
+
+function OperacionRealtimeSync({ refrescar }) {
+    usePdvAlertReload({
+        dominio: 'operacion',
+        refrescar,
+    });
+    return null;
 }
 
 function EstadoSinPermiso() {

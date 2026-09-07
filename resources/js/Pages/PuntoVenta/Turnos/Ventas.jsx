@@ -14,6 +14,7 @@ import {
     formatearCronometro,
     milisegundosRestantes,
 } from './Partials/tableroVentasUtils';
+import PdvAlertProvider, { usePdvAlertReload } from '../../../Components/PuntoVenta/PdvAlertProvider';
 
 export default function Ventas({
     auth,
@@ -62,7 +63,13 @@ export default function Ventas({
     return (
         <AppLayout auth={auth}>
             <Head title="Tablero ventas | Punto de venta" />
-            <GeliaPageShell className="max-w-[720px] space-y-5" data-ventas-tablero-root>
+            <PdvAlertProvider
+                sucursalId={sucursalActiva?.id}
+                userId={auth?.user?.id}
+                habilitado={Boolean(sucursalActiva?.id)}
+            >
+                <VentasRealtimeSync refrescar={aplicarRespuestaMutacion} />
+                <GeliaPageShell className="max-w-[720px] space-y-5" data-ventas-tablero-root>
                 <GeliaTituloCard
                     titulo="Tablero de ventas"
                     subtitulo="Turno asignado y atención en curso"
@@ -163,9 +170,18 @@ export default function Ventas({
                         </ul>
                     </section>
                 )}
-            </GeliaPageShell>
+                </GeliaPageShell>
+            </PdvAlertProvider>
         </AppLayout>
     );
+}
+
+function VentasRealtimeSync({ refrescar }) {
+    usePdvAlertReload({
+        dominio: 'turnos',
+        refrescar,
+    });
+    return null;
 }
 
 function EstadoSinPermiso() {

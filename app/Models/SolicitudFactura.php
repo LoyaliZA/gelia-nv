@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToUsuario;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SolicitudFactura extends Model
 {
-    use SoftDeletes;
+    use BelongsToUsuario, SoftDeletes;
 
     protected $table = 'solicitudes_facturas';
 
@@ -61,7 +62,7 @@ class SolicitudFactura extends Model
 
     public function vendedor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'vendedor_id');
+        return $this->belongsToUsuario('vendedor_id');
     }
 
     public function departamento(): BelongsTo
@@ -86,7 +87,7 @@ class SolicitudFactura extends Model
 
     public function respondidaPor(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'respondida_por_id');
+        return $this->belongsToUsuario('respondida_por_id');
     }
 
     public function vouchers(): HasMany

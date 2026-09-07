@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\ConversacionParticipante;
+use App\Support\PuntoVenta\Broadcast\AutorizaCanalesPdv;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
@@ -48,6 +49,14 @@ Broadcast::channel('soporte.ticket.{ticketId}', function ($user, $ticketId) {
     }
 
     return $user->can('soporte.gestionar');
+});
+
+Broadcast::channel('pdv.sucursal.{sucursalId}', function ($user, $sucursalId) {
+    return app(AutorizaCanalesPdv::class)->puedeSucursal($user, (int) $sucursalId);
+});
+
+Broadcast::channel('pdv.usuario.{userId}', function ($user, $userId) {
+    return app(AutorizaCanalesPdv::class)->puedeUsuario($user, (int) $userId);
 });
 
 Broadcast::channel('pedido-bma.{pedidoId}.evidencias', function ($user, $pedidoId) {

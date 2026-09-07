@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import axios from 'axios';
 
 import {
-    Users, UserPlus, Search, Edit3, Archive,
+    Users, UserPlus, Search, Edit3, Archive, RotateCcw,
     MapPin, Mail, AtSign, UserCog,
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -93,10 +93,13 @@ function usuarioEsSuperAdmin(usuario) {
     return (usuario.roles || []).some((rol) => rol.name === 'Super Admin');
 }
 
-function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, usuarioActualId, esCabezaEquipo = false }) {
-    const mostrarArchivar = puedeArchivar
+function TarjetaUsuarioMobile({
+    usuario, onEditar, onArchivar, onRestaurar, puedeArchivar, puedeRestaurar, usuarioActualId, esCabezaEquipo = false, vistaArchivados = false,
+}) {
+    const mostrarArchivar = !vistaArchivados && puedeArchivar
         && usuario.id !== usuarioActualId
         && !usuarioEsSuperAdmin(usuario);
+    const mostrarRestaurar = vistaArchivados && puedeRestaurar;
     return (
         <article className="fade-in-user theme-surface border theme-border rounded-[1.75rem] p-4 sm:p-5 space-y-3 transition-shadow hover:shadow-md">
             <div className="flex items-start gap-3">
@@ -141,7 +144,14 @@ function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, us
 
             <RolesChips roles={usuario.roles} maxVisible={3} />
 
+            {vistaArchivados && usuario.deleted_at && (
+                <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                    Archivado: {new Date(usuario.deleted_at).toLocaleString('es-MX')}
+                </p>
+            )}
+
             <div className="flex gap-2 pt-3 border-t theme-border">
+                {!vistaArchivados && (
                 <button
                     type="button"
                     onClick={() => onEditar(usuario)}
@@ -152,6 +162,7 @@ function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, us
                     <Edit3 className="w-4 h-4 shrink-0" />
                     Editar
                 </button>
+                )}
                 {mostrarArchivar && (
                     <button
                         type="button"
@@ -162,15 +173,28 @@ function TarjetaUsuarioMobile({ usuario, onEditar, onArchivar, puedeArchivar, us
                         Archivar
                     </button>
                 )}
+                {mostrarRestaurar && (
+                    <button
+                        type="button"
+                        onClick={() => onRestaurar(usuario)}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl theme-element border theme-border theme-text-muted text-[10px] font-black uppercase tracking-widest transition-colors hover:bg-teal-500 hover:text-white hover:border-transparent"
+                    >
+                        <RotateCcw className="w-4 h-4 shrink-0" />
+                        Restaurar
+                    </button>
+                )}
             </div>
         </article>
     );
 }
 
-function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usuarioActualId, esCabezaEquipo = false }) {
-    const mostrarArchivar = puedeArchivar
+function FilaUsuarioDesktop({
+    usuario, onEditar, onArchivar, onRestaurar, puedeArchivar, puedeRestaurar, usuarioActualId, esCabezaEquipo = false, vistaArchivados = false,
+}) {
+    const mostrarArchivar = !vistaArchivados && puedeArchivar
         && usuario.id !== usuarioActualId
         && !usuarioEsSuperAdmin(usuario);
+    const mostrarRestaurar = vistaArchivados && puedeRestaurar;
     return (
         <tr className="border-b theme-border hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors">
             <td className="px-4 py-4">
@@ -186,6 +210,11 @@ function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usua
                         {esCabezaEquipo && (
                             <p className="text-[8px] font-black uppercase tracking-widest mt-1 text-[var(--color-primario)]">
                                 Gerente del equipo
+                            </p>
+                        )}
+                        {vistaArchivados && usuario.deleted_at && (
+                            <p className="text-[8px] font-black uppercase tracking-widest mt-1 text-amber-600 dark:text-amber-400">
+                                Archivado {new Date(usuario.deleted_at).toLocaleDateString('es-MX')}
                             </p>
                         )}
                     </div>
@@ -211,6 +240,7 @@ function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usua
             </td>
             <td className="px-4 py-4 text-right">
                 <div className="flex justify-end gap-2">
+                    {!vistaArchivados && (
                     <button
                         type="button"
                         onClick={() => onEditar(usuario)}
@@ -221,6 +251,7 @@ function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usua
                     >
                         <Edit3 className="w-4 h-4" />
                     </button>
+                    )}
                     {mostrarArchivar && (
                         <button
                             type="button"
@@ -229,6 +260,16 @@ function FilaUsuarioDesktop({ usuario, onEditar, onArchivar, puedeArchivar, usua
                             aria-label="Archivar usuario"
                         >
                             <Archive className="w-4 h-4" />
+                        </button>
+                    )}
+                    {mostrarRestaurar && (
+                        <button
+                            type="button"
+                            onClick={() => onRestaurar(usuario)}
+                            className="p-2.5 rounded-xl theme-element border theme-border theme-text-muted hover:bg-teal-500 hover:text-white hover:border-transparent transition-colors"
+                            aria-label="Restaurar usuario"
+                        >
+                            <RotateCcw className="w-4 h-4" />
                         </button>
                     )}
                 </div>
@@ -264,18 +305,19 @@ function resolverAreaPrincipalFormulario(areas = [], areaId = null) {
     return resolverPrincipalFormulario(areas, areaId);
 }
 
-function paramsListadoUsuarios({ busqueda, gerenteId, page }) {
+function paramsListadoUsuarios({ busqueda, gerenteId, estado, page }) {
     const params = { page: page ?? 1 };
     const termino = (busqueda || '').trim();
     if (termino) params.busqueda = termino;
     if (gerenteId) params.gerente_id = Number(gerenteId);
+    if (estado && estado !== 'activos') params.estado = estado;
     return params;
 }
 
 export default function Usuarios({
     auth,
     usuarios = { data: [], current_page: 1, last_page: 1, per_page: 12, total: 0, from: 0, to: 0 },
-    filtros = { busqueda: '', gerente_id: null },
+    filtros = { busqueda: '', gerente_id: null, estado: 'activos' },
     departamentos = [],
     posiblesGerentes = [],
     roles = [],
@@ -300,9 +342,24 @@ export default function Usuarios({
     const lista = usuariosState?.data ?? [];
     const busquedaInicial = filtros?.busqueda ?? '';
     const gerenteInicial = filtros?.gerente_id ? String(filtros.gerente_id) : '';
+    const estadoInicial = filtros?.estado ?? 'activos';
     const debounceRef = useRef(null);
+    const [busqueda, setBusqueda] = useState(busquedaInicial);
+    const [gerenteId, setGerenteId] = useState(gerenteInicial);
+    const [estado, setEstado] = useState(estadoInicial);
 
     const puedeArchivar = esSuperAdmin || (auth?.user?.permissions || []).includes('usuarios.archivar');
+    const puedeRestaurar = esSuperAdmin || (auth?.user?.permissions || []).includes('usuarios.restaurar');
+    const vistaArchivados = estado === 'archivados';
+
+    const mensajeErrorRestauracion = (errors) => {
+        const partes = [];
+        if (errors?.email) partes.push(errors.email);
+        if (errors?.username) partes.push(errors.username);
+        if (errors?.usuario) partes.push(errors.usuario);
+        if (errors?.error) partes.push(errors.error);
+        return partes.join('\n') || 'No se pudo restaurar el usuario. Verifica que el correo y el nombre de usuario no estén en uso.';
+    };
 
     const archivarUsuario = (usuario) => {
         const motivo = window.prompt(
@@ -322,8 +379,18 @@ export default function Usuarios({
         });
     };
 
-    const [busqueda, setBusqueda] = useState(busquedaInicial);
-    const [gerenteId, setGerenteId] = useState(gerenteInicial);
+    const restaurarUsuario = (usuario) => {
+        if (!window.confirm(`¿Confirmas restaurar la cuenta de ${nombreCompleto(usuario)}? Se reactivarán sus credenciales de acceso.`)) {
+            return;
+        }
+        router.post(route('admin.usuarios.restaurar', usuario.id), {}, {
+            preserveScroll: true,
+            onError: (errors) => {
+                alert(mensajeErrorRestauracion(errors));
+            },
+        });
+    };
+
     const [showModal, setShowModal] = useState(false);
     const [usuarioEditando, setUsuarioEditando] = useState(null);
     const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
@@ -373,6 +440,10 @@ export default function Usuarios({
         setGerenteId(gerenteInicial);
     }, [gerenteInicial]);
 
+    useEffect(() => {
+        setEstado(estadoInicial);
+    }, [estadoInicial]);
+
     const recargarUsuarios = useCallback(async (params, { actualizarUrl } = {}) => {
         if (abortRef.current) abortRef.current.abort();
         const controller = new AbortController();
@@ -402,6 +473,11 @@ export default function Usuarios({
                 } else {
                     url.searchParams.delete('gerente_id');
                 }
+                if (params.estado && params.estado !== 'activos') {
+                    url.searchParams.set('estado', params.estado);
+                } else {
+                    url.searchParams.delete('estado');
+                }
                 url.searchParams.set('page', String(params.page ?? 1));
                 window.history.replaceState({}, '', url.pathname + url.search);
             }
@@ -422,21 +498,23 @@ export default function Usuarios({
         debounceRef.current = setTimeout(() => {
             const nextBusqueda = overrides.busqueda !== undefined ? overrides.busqueda : busqueda;
             const nextGerente = overrides.gerenteId !== undefined ? overrides.gerenteId : gerenteId;
+            const nextEstado = overrides.estado !== undefined ? overrides.estado : estado;
             recargarUsuarios(
                 paramsListadoUsuarios({
                     busqueda: nextBusqueda,
                     gerenteId: nextGerente,
+                    estado: nextEstado,
                     page: 1,
                 }),
                 { actualizarUrl: true },
             );
         }, overrides.inmediato ? 0 : 350);
-    }, [busqueda, gerenteId, recargarUsuarios]);
+    }, [busqueda, gerenteId, estado, recargarUsuarios]);
 
     const irAPagina = (pagina) => {
         if (pagina < 1 || pagina > (usuariosState.last_page || 1)) return;
         recargarUsuarios(
-            paramsListadoUsuarios({ busqueda, gerenteId, page: pagina }),
+            paramsListadoUsuarios({ busqueda, gerenteId, estado, page: pagina }),
             { actualizarUrl: true },
         ).then(() => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -742,6 +820,7 @@ export default function Usuarios({
                                 type="button"
                                 onClick={() => abrirModal()}
                                 className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact shrink-0`}
+                                disabled={vistaArchivados}
                             >
                                 <UserPlus className="w-4 h-4" /> Nuevo ingreso
                             </button>
@@ -777,13 +856,48 @@ export default function Usuarios({
                     />
                 )}
 
+                {(puedeArchivar || puedeRestaurar) && (
+                    <div className="flex gap-2 mb-4">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEstado('activos');
+                                aplicarFiltros({ estado: 'activos', inmediato: true });
+                            }}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-colors ${
+                                estado === 'activos'
+                                    ? 'border-[var(--color-primario)] text-[var(--color-primario)] bg-[var(--color-primario)]/10'
+                                    : 'theme-border theme-text-muted'
+                            }`}
+                        >
+                            Activos
+                        </button>
+                        {puedeRestaurar && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setEstado('archivados');
+                                    aplicarFiltros({ estado: 'archivados', inmediato: true });
+                                }}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-colors ${
+                                    estado === 'archivados'
+                                        ? 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/10'
+                                        : 'theme-border theme-text-muted'
+                                }`}
+                            >
+                                Archivados
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 <div className={`lg:hidden space-y-3 transition-opacity duration-200 ${buscando ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                     {lista.length === 0 ? (
                         <div className={`${geliaCardClass()} text-center py-14 px-6 border-dashed`}>
                             <Users className="w-12 h-12 theme-text-muted mx-auto mb-4 opacity-50" />
                             <h3 className="text-base font-black italic uppercase theme-text-main">Sin resultados</h3>
                             <p className="text-[10px] font-bold theme-text-muted mt-2 uppercase tracking-widest">
-                                Ajusta la búsqueda o registra un nuevo colaborador
+                                {vistaArchivados ? 'No hay colaboradores archivados con estos filtros' : 'Ajusta la búsqueda o registra un nuevo colaborador'}
                             </p>
                         </div>
                     ) : (
@@ -793,9 +907,12 @@ export default function Usuarios({
                                 usuario={usuario}
                                 onEditar={abrirModal}
                                 onArchivar={archivarUsuario}
+                                onRestaurar={restaurarUsuario}
                                 puedeArchivar={puedeArchivar}
+                                puedeRestaurar={puedeRestaurar}
                                 usuarioActualId={auth?.user?.id}
                                 esCabezaEquipo={gerenteFiltroId != null && Number(usuario.id) === gerenteFiltroId}
+                                vistaArchivados={vistaArchivados}
                             />
                         ))
                     )}
@@ -824,7 +941,7 @@ export default function Usuarios({
                                             <Users className="w-10 h-10 theme-text-muted mx-auto mb-3 opacity-50" />
                                             <p className="font-black italic uppercase theme-text-main text-sm">Sin resultados</p>
                                             <p className="text-[10px] font-bold theme-text-muted mt-1 uppercase tracking-widest">
-                                                Ajusta la búsqueda o crea un nuevo ingreso
+                                                {vistaArchivados ? 'No hay colaboradores archivados con estos filtros' : 'Ajusta la búsqueda o crea un nuevo ingreso'}
                                             </p>
                                         </td>
                                     </tr>
@@ -835,9 +952,12 @@ export default function Usuarios({
                                             usuario={usuario}
                                             onEditar={abrirModal}
                                             onArchivar={archivarUsuario}
+                                            onRestaurar={restaurarUsuario}
                                             puedeArchivar={puedeArchivar}
+                                            puedeRestaurar={puedeRestaurar}
                                             usuarioActualId={auth?.user?.id}
                                             esCabezaEquipo={gerenteFiltroId != null && Number(usuario.id) === gerenteFiltroId}
+                                            vistaArchivados={vistaArchivados}
                                         />
                                     ))
                                 )}

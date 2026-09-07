@@ -2,12 +2,15 @@
 
 namespace App\Models\ControlPedidos;
 
+use App\Models\Concerns\BelongsToUsuario;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuditoriaPedidoBma extends Model
 {
+    use BelongsToUsuario;
+
     public const ACCION_ELIMINACION = 'eliminacion';
 
     public const ACCION_RESTAURACION = 'restauracion';
@@ -37,6 +40,6 @@ class AuditoriaPedidoBma extends Model
 
     public function usuario(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'usuario_id');
+        return $this->belongsToUsuario('usuario_id');
     }
 }

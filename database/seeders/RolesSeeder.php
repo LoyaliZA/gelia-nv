@@ -40,7 +40,8 @@ class RolesSeeder extends Seeder
             'soporte.administrar',
             'mensajeria.monitorear',
             'mensajeria.eliminar',
-            'usuarios.archivar'
+            'usuarios.archivar',
+            'usuarios.restaurar'
         ];
 
         foreach ($permisos as $permiso) {

@@ -182,6 +182,8 @@ class AppServiceProvider extends ServiceProvider
         // EnviarWebPushTrasNotificacion se registra por discovery (App\Listeners).
         // NO usar Event::listen aquí: duplicaba cada push (2x blast).
         Event::listen(CommandStarting::class, PreventDestructiveDatabaseCommands::class);
+        Event::subscribe(\App\Listeners\PuntoVenta\Broadcast\TransmitirCambioPdvRealtimeSubscriber::class);
+        Event::subscribe(\App\Listeners\PuntoVenta\NotificarTurnoPdvSubscriber::class);
 
         Route::bind('factura', fn (string $value) => SolicitudFactura::where('id', $value)->orWhere('folio', $value)->firstOrFail());
         Route::bind('traspaso', fn (string $value) => SolicitudTraspaso::where('id', $value)->orWhere('folio', $value)->firstOrFail());
